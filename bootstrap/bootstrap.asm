@@ -149,3 +149,11 @@ _bootstrap64:
 	hlt
 
 stack resq 0x4000
+
+; convenience functions
+[global outb]
+outb:
+	mov dx,		di
+	mov ax,		si
+	out dx,		ax
+	ret

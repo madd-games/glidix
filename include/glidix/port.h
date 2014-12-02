@@ -26,10 +26,9 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/console.h>
+#ifndef __glidix_port_h
+#define __glidix_port_h
 
-void kmain()
-{
-	initConsole();
-	kprintf("Hello, %s!\n", "world");
-};
+void outb(unsigned int port, unsigned int value);
+
+#endif

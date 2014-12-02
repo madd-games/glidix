@@ -69,7 +69,7 @@ for cfile in os.listdir("src"):
 
 def opCreateBuildMK():
 	f = open("build.mk", "wb")
-	f.write("CFLAGS=-ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common\n")
+	f.write("CFLAGS=-ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -I include -Wall -Werror\n")
 	f.write("out/vmglidix: build/bootstrap.o %s\n" % (" ".join(objectFiles)))
 	f.write("\tx86_64-elf-gcc -T linker.ld -o $@ -ffreestanding -O2 -nostdlib $^ -lgcc\n")
 	f.write("-include %s\n" % (" ".join(depFiles)))
@@ -88,5 +88,6 @@ def opCreateISO():
 
 doOperation("creating build.mk...", opCreateBuildMK)
 sys.stderr.write("running the build...\n")
-os.system("make -f build.mk")
+if os.system("make -f build.mk") != 0:
+	sys.exit(1)
 opCreateISO()

@@ -26,10 +26,14 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/console.h>
+#ifndef __glidix_console_h
+#define __glidix_console_h
 
-void kmain()
-{
-	initConsole();
-	kprintf("Hello, %s!\n", "world");
-};
+#include <stdarg.h>
+
+void initConsole();
+void kputs(const char *str);
+void kvprintf(const char *fmt, va_list ap);
+void kprintf(const char *fmt, ...);
+
+#endif
