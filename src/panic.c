@@ -26,11 +26,19 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/console.h>
 #include <glidix/common.h>
+#include <glidix/console.h>
+#include <stdarg.h>
 
-void kmain()
+void _panic(const char *filename, int lineno, const char *funcname, ...)
 {
-	initConsole();
-	panic("Hello, world!");
+	va_list ap;
+	va_start(ap, funcname);
+
+	ASM ("cli");
+	kprintf("In function %s at %s:%d\n", funcname, filename, lineno);
+	kvprintf("Kernel panic: %s", ap);
+	ASM ("hlt");
+
+	/* no need for cleanup because the CPU is halted */
 };

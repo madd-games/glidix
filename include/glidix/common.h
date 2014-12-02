@@ -26,11 +26,16 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/console.h>
-#include <glidix/common.h>
+#ifndef __glidix_common_h
+#define __glidix_common_h
 
-void kmain()
-{
-	initConsole();
-	panic("Hello, world!");
-};
+/**
+ * Some common routines used by various parts of the kernel.
+ */
+
+#define	ASM			__asm__ __volatile__
+#define	panic(...)		_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
+
+void _panic(const char *filename, int lineno, const char *funcname, ...);
+
+#endif

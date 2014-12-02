@@ -110,6 +110,28 @@ void kputs(const char *str)
 	updateVGACursor();
 };
 
+static void put_d(int d)
+{
+	if (d < 0)
+	{
+		kputch('-');
+		d = -d;
+	};
+
+	char buffer[20];
+	buffer[19] = 0;
+
+	char *ptr = &buffer[18];
+	do
+	{
+		*ptr = '0' + (d % 10);
+		ptr--;
+		d /= 10;
+	} while (d != 0);
+
+	kputs(ptr+1);
+};
+
 void kvprintf(const char *fmt, va_list ap)
 {
 	while (*fmt != 0)
@@ -130,6 +152,11 @@ void kvprintf(const char *fmt, va_list ap)
 			{
 				const char *str = va_arg(ap, char*);
 				kputs(str);
+			}
+			else if (c == 'd')
+			{
+				int d = va_arg(ap, int);
+				put_d(d);
 			};
 		};
 	};
