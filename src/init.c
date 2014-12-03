@@ -28,9 +28,22 @@
 
 #include <glidix/console.h>
 #include <glidix/common.h>
+#include <glidix/idt.h>
+
+extern int _bootstrap_stack;
+extern int end;
 
 void kmain()
 {
 	initConsole();
-	panic("Hello, world!");
+	kprintf("Successfully booted into 64-bit mode\n");
+#if 0
+	uint64_t tmp = (uint64_t) (&_bootstrap_stack);
+	kprintf("Bootstrap stack: %d\n", (int) (tmp));
+	tmp = (uint64_t) &end;
+	kprintf("End of memory: %d\n", (int) tmp);
+#endif
+	kprintf("Initializing the IDT... ");
+	initIDT();
+	kprintf("%$\x02OK%#\n");
 };

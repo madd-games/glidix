@@ -26,27 +26,16 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_common_h
-#define __glidix_common_h
+#ifndef __glidix_string_h
+#define __glidix_string_h
 
-#include <stdint.h>
+#include <stddef.h>
 
 /**
- * Some common routines used by various parts of the kernel.
+ * String and memory operations for the kernel. Implemented in string.asm.
  */
 
-#define	ASM			__asm__ __volatile__
-#define	panic(...)		_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
-#define	PACKED			__attribute__ ((packed))
-
-void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
-
-typedef struct {
-	uint64_t ds;
-	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
-	uint64_t  intNo;
-	uint64_t errCode;
-	uint64_t rip, cs, rflags, rsp, ss;
-} PACKED Regs;
+void memcpy(void *dst, void *src, size_t size);
+void memset(void *dst, char c, size_t size);
 
 #endif

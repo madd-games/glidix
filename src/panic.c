@@ -30,14 +30,15 @@
 #include <glidix/console.h>
 #include <stdarg.h>
 
-void _panic(const char *filename, int lineno, const char *funcname, ...)
+void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...)
 {
 	va_list ap;
-	va_start(ap, funcname);
+	va_start(ap, fmt);
 
 	ASM ("cli");
 	kprintf("In function %s at %s:%d\n", funcname, filename, lineno);
-	kvprintf("Kernel panic: %s", ap);
+	kprintf("Kernel panic: ");
+	kvprintf(fmt, ap);
 	ASM ("hlt");
 
 	/* no need for cleanup because the CPU is halted */

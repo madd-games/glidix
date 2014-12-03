@@ -67,15 +67,21 @@ def makeRule(cfile):
 for cfile in os.listdir("src"):
 	makeRule("src/"+cfile)
 
+for asmfile in os.listdir("asm"):
+	if asmfile.endswith(".asm"):
+		asmfile = asmfile[:-4]
+		rule = "build/asm_%s.o: asm/%s.asm\n" % (asmfile, asmfile)
+		rule += "\tnasm -felf64 -o $@ $<\n"
+		objectFiles.append("build/asm_%s.o" % asmfile)
+		rules.append(rule)
+
 def opCreateBuildMK():
 	f = open("build.mk", "wb")
-	f.write("CFLAGS=-ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -I include -Wall -Werror\n")
-	f.write("out/vmglidix: build/bootstrap.o %s\n" % (" ".join(objectFiles)))
+	f.write("CFLAGS=-ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -I include -Wall -Werror\n")
+	f.write("out/vmglidix: %s\n" % (" ".join(objectFiles)))
 	f.write("\tx86_64-elf-gcc -T linker.ld -o $@ -ffreestanding -O2 -nostdlib $^ -lgcc\n")
 	f.write("-include %s\n" % (" ".join(depFiles)))
 	f.write("\n")
-	f.write("build/bootstrap.o: bootstrap/bootstrap.asm\n")
-	f.write("\tnasm bootstrap/bootstrap.asm -o build/bootstrap.o -felf64\n")
 	f.write("\n".join(rules))
 	f.close()
 

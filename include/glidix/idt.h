@@ -26,27 +26,32 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_common_h
-#define __glidix_common_h
+#ifndef __glidix_idt_h
+#define __glidix_idt_h
 
+#include <glidix/common.h>
 #include <stdint.h>
 
+typedef struct
+{
+	uint16_t limit;
+	uint64_t addr;
+} PACKED IDTPointer;
+
 /**
- * Some common routines used by various parts of the kernel.
+ * I think the person at Intel designing this was high on something.
  */
+typedef struct
+{
+	uint16_t offsetLow;
+	uint16_t codeSegment;
+	uint8_t  reservedIst;
+	uint8_t  flags;
+	uint16_t offsetMiddle;
+	uint32_t offsetHigh;
+	uint32_t reserved;
+} PACKED IDTEntry;
 
-#define	ASM			__asm__ __volatile__
-#define	panic(...)		_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
-#define	PACKED			__attribute__ ((packed))
-
-void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
-
-typedef struct {
-	uint64_t ds;
-	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
-	uint64_t  intNo;
-	uint64_t errCode;
-	uint64_t rip, cs, rflags, rsp, ss;
-} PACKED Regs;
+void initIDT();
 
 #endif

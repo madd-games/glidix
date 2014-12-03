@@ -29,11 +29,13 @@
 #ifndef __glidix_console_h
 #define __glidix_console_h
 
+#include <glidix/common.h>
 #include <stdarg.h>
 
 void initConsole();
 void kputs(const char *str);
 void kvprintf(const char *fmt, va_list ap);
 void kprintf(const char *fmt, ...);
+void kdumpregs(Regs *regs);
 
 #endif

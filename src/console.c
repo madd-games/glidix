@@ -132,6 +132,27 @@ static void put_d(int d)
 	kputs(ptr+1);
 };
 
+static void put_a(uint64_t addr)
+{
+	kputs("0x");
+	int count = 16;
+	while (count--)
+	{
+		uint8_t hexd = (uint8_t) (addr >> 60);
+		if (hexd < 10)
+		{
+			kputch('0'+hexd);
+		}
+		else
+		{
+			kputch('A'+(hexd-10));
+		};
+		addr <<= 4;
+	};
+
+	updateVGACursor();
+};
+
 void kvprintf(const char *fmt, va_list ap)
 {
 	while (*fmt != 0)
@@ -157,6 +178,20 @@ void kvprintf(const char *fmt, va_list ap)
 			{
 				int d = va_arg(ap, int);
 				put_d(d);
+			}
+			else if (c == 'a')			// 64-bit unsigned
+			{
+				uint64_t d = va_arg(ap, uint64_t);
+				put_a(d);
+			}
+			else if (c == '$')
+			{
+				c = *fmt++;
+				consoleState.curColor = c;
+			}
+			else if (c == '#')
+			{
+				consoleState.curColor = 0x07;
 			};
 		};
 	};
@@ -170,4 +205,23 @@ void kprintf(const char *fmt, ...)
 	va_start(ap, fmt);
 	kvprintf(fmt, ap);
 	va_end(ap);
+};
+
+void kdumpregs(Regs *regs)
+{
+	kprintf("DS : %d\n", regs->ds);
+	kprintf("RDI: %d\n", regs->rdi);
+	kprintf("RSI: %d\n", regs->rsi);
+	kprintf("RBP: %d\n", regs->rbp);
+	kprintf("RBX: %d\n", regs->rbx);
+	kprintf("RDX: %d\n", regs->rdx);
+	kprintf("RCX: %d\n", regs->rcx);
+	kprintf("RAX: %d\n", regs->rax);
+	kprintf("INO: %d\n", regs->intNo);
+	kprintf("ERR: %d\n", regs->errCode);
+	kprintf("RIP: %d\n", regs->rip);
+	kprintf("CS : %d\n", regs->cs);
+	kprintf("RFL: %d\n", regs->rflags);
+	kprintf("RSP: %d\n", regs->rsp);
+	kprintf("SS : %d\n", regs->ss);
 };
