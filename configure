@@ -33,7 +33,12 @@ def assertCommand(cmd, msg = None):
 	sys.stderr.write(msg)
 	sys.stderr.flush()
 
-	output = subprocess.check_output("command -v %s" % cmd, shell=True) 
+	output = ""
+	try:
+		output = subprocess.check_output("command -v %s" % cmd, shell=True)
+	except:
+		pass
+
 	if output == "":
 		sys.stderr.write("\n%s: command not found: %s\n" % (sys.argv[0], cmd))
 		sys.exit(1)
