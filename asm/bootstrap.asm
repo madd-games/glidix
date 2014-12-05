@@ -27,12 +27,13 @@
 section .bootstrap32
 bits 32
 
+MB_FLAGS equ (1 << 0) | (1 << 1) | (1 << 16)
 ; multiboot header
 dd 0x1BADB002
-dd 65539
-dd -(0x1BADB002 + 65539)
-dd 0x10000			; base addr
-dd 0x10000			; phys base addr
+dd MB_FLAGS
+dd -(0x1BADB002 + MB_FLAGS)
+dd 0x100000			; base addr
+dd 0x100000			; phys base addr
 dd 0
 dd 0
 dd _start
@@ -41,6 +42,9 @@ dd _start
 [global _start]
 _start:
 	cli
+
+	; remember the pointer to the multiboot information structure.
+	mov esi,	ebx
 
 	; clear the screen first.
 	mov edi,	0xB8000
@@ -171,7 +175,10 @@ _bootstrap64:
 	mov rsp,	_bootstrap_stack
 	add rsp,	0x4000
 
-	; go to the C part.
+	; go to the C part, pass the previously-saved pointer to the multiboot info structure
+	; as the argument to kmain.
+	xor rdi,	rdi
+	mov edi,	esi
 	call		kmain
 
 	; if the C kernel returns, halt the CPU.

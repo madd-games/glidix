@@ -26,15 +26,49 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
+#ifndef __glidix_memory_h
+#define __glidix_memory_h
 
 #include <glidix/common.h>
-#include <stdarg.h>
+#include <stddef.h>
 
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-void kprintf(const char *fmt, ...);
-void kdumpregs(Regs *regs);
+/**
+ * Routines for dynamic memory allocation and deallocation.
+ */
+
+#define	MEM_PAGEALIGN			1
+
+void initMemoryPhase1();
+void initMemoryPhase2();
+void *kxmalloc(size_t size, int flags);
+void *kmalloc(size_t size);
+void kfree(void *block);
+void heapDump();
+
+/**
+ * Private heap structures.
+ */
+
+#define	HEAP_HEADER_MAGIC		0xDEADBEEF
+#define	HEAP_FOOTER_MAGIC		0xBAD00BAD
+
+// flags
+#define	HEAP_BLOCK_TAKEN		1		// shared flag
+#define	HEAP_BLOCK_HAS_LEFT		2		// header flag
+#define	HEAP_BLOCK_HAS_RIGHT		4		// footer flag
+
+typedef struct
+{
+	uint32_t magic;
+	uint64_t size;
+	uint8_t  flags;
+} PACKED HeapHeader;
+
+typedef struct
+{
+	uint32_t magic;
+	uint64_t size;
+	uint8_t  flags;
+} PACKED HeapFooter;
 
 #endif

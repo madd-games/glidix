@@ -26,15 +26,17 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
+#ifndef __glidix_spinlock_h
+#define __glidix_spinlock_h
 
 #include <glidix/common.h>
-#include <stdarg.h>
 
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-void kprintf(const char *fmt, ...);
-void kdumpregs(Regs *regs);
+typedef struct
+{
+	unsigned char _;
+} PACKED Spinlock;
+
+void spinlockAcquire(Spinlock *spinlock);
+void spinlockRelease(Spinlock *spinlock);
 
 #endif

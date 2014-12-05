@@ -29,11 +29,14 @@
 #include <glidix/console.h>
 #include <glidix/common.h>
 #include <glidix/idt.h>
+#include <glidix/physmem.h>
+#include <glidix/memory.h>
+#include <glidix/pagetab.h>
 
 extern int _bootstrap_stack;
 extern int end;
 
-void kmain()
+void kmain(MultibootInfo *info)
 {
 	initConsole();
 	kprintf("Successfully booted into 64-bit mode\n");
@@ -45,5 +48,44 @@ void kmain()
 #endif
 	kprintf("Initializing the IDT... ");
 	initIDT();
-	kprintf("%$\x02OK%#\n");
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Checking amount of memory... ");
+	int memSize = info->memLower + info->memUpper;
+	if (info->flags & 1)
+	{
+		kprintf("%$\x01%dMB%#\n", (memSize/1024));
+	}
+	else
+	{
+		kprintf("%$\x04" "Failed%#\n");
+		memSize = 1024 * 64;
+		kprintf("w: Assuming 64MB of RAM\n");
+	};
+
+	kprintf("Initializing memory allocation phase 1... ");
+	initMemoryPhase1();
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing the physical memory manager... ");
+	initPhysMem(memSize/4);
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing memory allocation phase 2... ");
+	initMemoryPhase2();
+	kprintf("%$\x02" "Done%#\n");
+
+	heapDump();
+	kprintf("Alloc 16 bytes (block A)\n");
+	void *a = kmalloc(16);
+	heapDump();
+	kprintf("Alloc 16 bytes (block B)\n");
+	void *b = kmalloc(16);
+	heapDump();
+	kprintf("Free block A\n");
+	kfree(a);
+	heapDump();
+	kprintf("Free block B\n");
+	kfree(b);
+	heapDump();
 };

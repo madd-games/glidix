@@ -26,15 +26,56 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
-
+#include <glidix/physmem.h>
+#include <glidix/memory.h>
+#include <glidix/spinlock.h>
 #include <glidix/common.h>
-#include <stdarg.h>
 
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-void kprintf(const char *fmt, ...);
-void kdumpregs(Regs *regs);
+static Spinlock  physmemLock;
+static uint64_t *frameStack;
+static uint64_t  frameStackPointer;
+static uint64_t  nextFrame;
+static uint64_t  numSystemFrames;
 
-#endif
+void initPhysMem(uint64_t numPages)
+{
+	frameStackPointer = 0;
+	nextFrame = 0x200;
+	numSystemFrames = numPages;
+	spinlockRelease(&physmemLock);
+};
+
+void initPhysMem2()
+{
+	frameStack = kmalloc(8*numSystemFrames);
+};
+
+uint64_t phmAllocFrame()
+{
+	spinlockAcquire(&physmemLock);
+	uint64_t out;
+	if (frameStackPointer == 0)
+	{
+		if (nextFrame == numSystemFrames)
+		{
+			panic("out of physical memory!\n");
+		};
+
+		out = nextFrame;
+		nextFrame++;
+	}
+	else
+	{
+		out = frameStack[--frameStackPointer];
+	};
+
+	spinlockRelease(&physmemLock);
+	return out;
+};
+
+void phmFreeFrame(uint64_t frame)
+{
+	spinlockAcquire(&physmemLock);
+	frameStack[frameStackPointer++] = frame;
+	spinlockRelease(&physmemLock);
+};

@@ -28,19 +28,23 @@
 
 #include <glidix/console.h>
 #include <glidix/port.h>
+#include <glidix/spinlock.h>
 #include <stdint.h>
 
-struct
+static struct
 {
 	uint64_t curX, curY;
 	uint64_t curColor;
 } consoleState;
+
+static Spinlock consoleLock;
 
 void initConsole()
 {
 	consoleState.curX = 0;
 	consoleState.curY = 0;
 	consoleState.curColor = 0x07;
+	spinlockRelease(&consoleLock);
 };
 
 static void updateVGACursor()
@@ -100,7 +104,7 @@ static void kputch(char c)
 	};
 };
 
-void kputs(const char *str)
+static void kputs(const char *str)
 {
 	while (*str != 0)
 	{
@@ -155,6 +159,8 @@ static void put_a(uint64_t addr)
 
 void kvprintf(const char *fmt, va_list ap)
 {
+	spinlockAcquire(&consoleLock);
+
 	while (*fmt != 0)
 	{
 		char c = *fmt++;
@@ -197,6 +203,8 @@ void kvprintf(const char *fmt, va_list ap)
 	};
 
 	updateVGACursor();
+
+	spinlockRelease(&consoleLock);
 };
 
 void kprintf(const char *fmt, ...)
@@ -209,19 +217,19 @@ void kprintf(const char *fmt, ...)
 
 void kdumpregs(Regs *regs)
 {
-	kprintf("DS : %d\n", regs->ds);
-	kprintf("RDI: %d\n", regs->rdi);
-	kprintf("RSI: %d\n", regs->rsi);
-	kprintf("RBP: %d\n", regs->rbp);
-	kprintf("RBX: %d\n", regs->rbx);
-	kprintf("RDX: %d\n", regs->rdx);
-	kprintf("RCX: %d\n", regs->rcx);
-	kprintf("RAX: %d\n", regs->rax);
-	kprintf("INO: %d\n", regs->intNo);
-	kprintf("ERR: %d\n", regs->errCode);
-	kprintf("RIP: %d\n", regs->rip);
-	kprintf("CS : %d\n", regs->cs);
-	kprintf("RFL: %d\n", regs->rflags);
-	kprintf("RSP: %d\n", regs->rsp);
-	kprintf("SS : %d\n", regs->ss);
+	kprintf("DS : %a\n", regs->ds);
+	kprintf("RDI: %a\n", regs->rdi);
+	kprintf("RSI: %a\n", regs->rsi);
+	kprintf("RBP: %a\n", regs->rbp);
+	kprintf("RBX: %a\n", regs->rbx);
+	kprintf("RDX: %a\n", regs->rdx);
+	kprintf("RCX: %a\n", regs->rcx);
+	kprintf("RAX: %a\n", regs->rax);
+	kprintf("INO: %a\n", regs->intNo);
+	kprintf("ERR: %a\n", regs->errCode);
+	kprintf("RIP: %a\n", regs->rip);
+	kprintf("CS : %a\n", regs->cs);
+	kprintf("RFL: %a\n", regs->rflags);
+	kprintf("RSP: %a\n", regs->rsp);
+	kprintf("SS : %a\n", regs->ss);
 };

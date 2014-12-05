@@ -38,6 +38,7 @@
 #define	ASM			__asm__ __volatile__
 #define	panic(...)		_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
 #define	PACKED			__attribute__ ((packed))
+#define	BREAKPOINT()		ASM ("xchg %bx, %bx")
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
@@ -48,5 +49,12 @@ typedef struct {
 	uint64_t errCode;
 	uint64_t rip, cs, rflags, rsp, ss;
 } PACKED Regs;
+
+typedef struct
+{
+	uint32_t flags;
+	uint32_t memLower;
+	uint32_t memUpper;
+} PACKED MultibootInfo;
 
 #endif

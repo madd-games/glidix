@@ -124,5 +124,5 @@ void initIDT()
 void isrHandler(Regs *regs)
 {
 	kdumpregs(regs);
-	kprintf("Caught interrupt %d, rsp=%d\n", regs->intNo, regs->rsp);
+	panic("Caught interrupt %d, rsp=%d\n", regs->intNo, regs->rsp);
 };

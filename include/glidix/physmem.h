@@ -26,15 +26,23 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
+#ifndef __glidix_physmem_h
+#define __glidix_physmem_h
 
-#include <glidix/common.h>
-#include <stdarg.h>
+#include <stdint.h>
 
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-void kprintf(const char *fmt, ...);
-void kdumpregs(Regs *regs);
+void initPhysMem(uint64_t numPages);
+void initPhysMem2();
+
+/**
+ * Finds any free frame, marks it as used, and returns the frame index. The return value shifted
+ * left by 12 bits gives the physical address of the first byte of this frame.
+ */
+uint64_t phmAllocFrame();
+
+/**
+ * NOTE: Do not free frames until the heap is set up and initPhysMem2() was called.
+ */
+void phmFreeFrame(uint64_t frame);
 
 #endif
