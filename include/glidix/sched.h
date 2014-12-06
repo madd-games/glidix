@@ -26,57 +26,66 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_memory_h
-#define __glidix_memory_h
+#ifndef __glidix_sched_h
+#define __glidix_sched_h
+
+/**
+ * The thread scheduler.
+ */
 
 #include <glidix/common.h>
+#include <stdint.h>
 #include <stddef.h>
 
+typedef struct _Thread
+{
+	/**
+	 * The thread's registers.
+	 */
+	Regs				regs;
+
+	/**
+	 * The thread's stack and its size. Must be kfree()'d when the thread terminates.
+	 */
+	void				*stack;
+	size_t				stackSize;
+
+	/**
+	 * Thread name (for debugging).
+	 */
+	const char			*name;
+
+	/**
+	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
+	 */
+	struct _Thread			*prev;
+	struct _Thread			*next;
+} Thread;
+
+void initSched();
+void switchContext(Regs *regs);
+void dumpRunqueue();
+
 /**
- * Routines for dynamic memory allocation and deallocation.
+ * Prototype for a kernel thread entry point.
  */
-
-#define	MEM_PAGEALIGN			1
-
-void initMemoryPhase1();
-void initMemoryPhase2();
-void *kxmalloc(size_t size, int flags);
-void *kmalloc(size_t size);
-void kfree(void *block);
-void heapDump();
+typedef void (*KernelThreadEntry)(void *data);
 
 /**
- * If you're going to disable interrupts and use kmalloc() and kfree() during that time,
- * make sure you call this function to acquire heap access, THEN disable interrupts, and
- * then release your heap access, and THEN you can use kmalloc()/kfree().
+ * Parameters for a new kernel thread (passed to CreateKernelThread() ).
  */
-void acquireHeap();
-void releaseHeap();
-
-/**
- * Private heap structures.
- */
-
-#define	HEAP_HEADER_MAGIC		0xDEADBEEF
-#define	HEAP_FOOTER_MAGIC		0xBAD00BAD
-
-// flags
-#define	HEAP_BLOCK_TAKEN		1		// shared flag
-#define	HEAP_BLOCK_HAS_LEFT		2		// header flag
-#define	HEAP_BLOCK_HAS_RIGHT		4		// footer flag
-
 typedef struct
 {
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-} PACKED HeapHeader;
+	size_t				stackSize;
+	const char			*name;
+} KernelThreadParams;
 
-typedef struct
-{
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-} PACKED HeapFooter;
+/**
+ * Create a new kernel thread.
+ * @param entry Thread entry point.
+ * @param params Thread initialization params (may be NULL).
+ * @param data An arbitrary pointer to pass to the thread.
+ */
+void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, void *data);
 
 #endif

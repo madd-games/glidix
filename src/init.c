@@ -35,6 +35,7 @@
 #include <glidix/isp.h>
 #include <glidix/string.h>
 #include <glidix/port.h>
+#include <glidix/sched.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -97,6 +98,7 @@ void kmain(MultibootInfo *info)
 	outb(0x40, h);
 	kprintf("%$\x02" "Done%#\n");
 
-	ASM("sti");
-	while (1);
+	kprintf("Initializing the scheduler... ");
+	initSched();
+	// "Done" will be displayed by initSched()
 };

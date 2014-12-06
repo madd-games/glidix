@@ -7,11 +7,11 @@
 ;	modification, are permitted provided that the following conditions are met:
 ;	
 ;	* Redistributions of source code must retain the above copyright notice, this
-;	  list of conditions and the following disclaimer.
+;		list of conditions and the following disclaimer.
 ;	
 ;	* Redistributions in binary form must reproduce the above copyright notice,
-;	  this list of conditions and the following disclaimer in the documentation
-;	  and/or other materials provided with the distribution.
+;		this list of conditions and the following disclaimer in the documentation
+;		and/or other materials provided with the distribution.
 ;	
 ;	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ;	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -27,33 +27,34 @@
 section .text
 bits 64
 
-[global spinlockAcquire]
-[global spinlockRelease]
-
-spinlockAcquire:
-.acq:
-	mov	al,	1
-	xchg	al,	[rdi]
-	test	al,	al
-	jnz	.acq
-
-	ret
-
-spinlockRelease:
-	xor	rax,	rax
-	xchg	al,	[rdi]
-
-	; we don't want to starve other processes of resources, so we must reschedule whenever this function
-	; is called, in case spinlockAcquire() is called straight afterwards. But obviously, we only want to
-	; do it if IF=1, because if interrupts are disabled then we are already in a critical section, and also
-	; the scheduler may not be initialized (interrupts are ony enabled once initSched() is called).
+[global getFlagsRegister]
+getFlagsRegister:
 	pushfq
-	pop	rax
-	test	rax,	(1 << 9)		; test the IF bit.
-	jz	.end				; interrupts are disabled.
-
-	; interrupts are enabled, so halt and wait for a reschedule.
-	hlt
-
-.end:
+	pop rax
 	ret
+
+[global switchContext]
+switchContext:
+	; The argument is stored in RDI, and is the address of a Regs structure.
+	; If we move the stack there, we can easily do a context switch with a
+	; bunch of pops.
+	mov	rsp,		rdi
+
+	; first we switch the DS
+	pop	rax
+	mov	ds,		ax
+
+	; GPRs
+	pop	rdi
+	pop	rsi
+	pop	rbp
+	pop	rbx
+	pop	rdx
+	pop	rcx
+	pop	rax
+
+	; ignore "intNo" and "errCode"
+	add	rsp,		16
+
+	; the rest is popped by an interrupt return
+	iretq

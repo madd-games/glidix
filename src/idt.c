@@ -209,6 +209,8 @@ static void onPageFault(Regs *regs)
 	panic("#PF in kernel");
 };
 
+void switchTask(Regs *regs);		// sched.c
+
 void isrHandler(Regs *regs)
 {
 #if 0
@@ -230,7 +232,7 @@ void isrHandler(Regs *regs)
 	switch (regs->intNo)
 	{
 	case IRQ0:
-		// TODO: scheduler
+		switchTask(regs);
 		break;
 	case 14:
 		onPageFault(regs);

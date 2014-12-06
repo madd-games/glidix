@@ -436,3 +436,13 @@ void heapDump()
 	};
 	kprintf("---\n");
 };
+
+void acquireHeap()
+{
+	spinlockAcquire(&heapLock);
+};
+
+void releaseHeap()
+{
+	spinlockRelease(&heapLock);
+};
