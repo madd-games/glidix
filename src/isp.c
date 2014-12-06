@@ -26,49 +26,59 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_idt_h
-#define __glidix_idt_h
-
+#include <glidix/isp.h>
 #include <glidix/common.h>
+#include <glidix/pagetab.h>
+#include <glidix/memory.h>
+#include <glidix/string.h>
 #include <stdint.h>
 
-#define	IRQ0	32
-#define	IRQ1	33
-#define	IRQ2	34
-#define	IRQ3	35
-#define	IRQ4	36
-#define	IRQ5	37
-#define	IRQ6	38
-#define	IRQ7	39
-#define	IRQ8	40
-#define	IRQ9	41
-#define	IRQ10	42
-#define	IRQ11	43
-#define	IRQ12	44
-#define	IRQ13	45
-#define	IRQ14	46
-#define	IRQ15	47
+static PTe *ispPTE;
 
-typedef struct
+void ispInit()
 {
-	uint16_t limit;
-	uint64_t addr;
-} PACKED IDTPointer;
+	// TODO: xd (execute disable, not the stupid face), we'll look at that shit in a bit.
 
-/**
- * I think the person at Intel designing this was high on something.
- */
-typedef struct
+	// note that for now, kxmalloc() returns physical addresses,
+	// so we can be sure that the virtual address returned is equal
+	// to the physical address.
+	PML4 *pml4 = getPML4();
+	PDPT *pdpt = kxmalloc(sizeof(PDPT), MEM_PAGEALIGN);
+	memset(pdpt, 0, sizeof(PDPT));
+	PD *pd = kxmalloc(sizeof(PD), MEM_PAGEALIGN);
+	memset(pd, 0, sizeof(PD));
+	pdpt->entries[0].present = 1;
+	pdpt->entries[0].rw = 1;
+	pdpt->entries[0].pdPhysAddr = ((uint64_t)pd >> 12);
+
+	PT *pt = kxmalloc(sizeof(PT), MEM_PAGEALIGN);
+	memset(pt, 0, sizeof(PT));
+	pd->entries[0].present = 1;
+	pd->entries[0].rw = 1;
+	pd->entries[0].ptPhysAddr = ((uint64_t)pt >> 12);
+
+	// get the page for virtual address 0x18000000000.
+	ispPTE = &pt->entries[0];
+	ispPTE->present = 1;
+	ispPTE->rw = 1;
+	ispPTE->framePhysAddr = 0;
+
+	// set it in the PML4 (so it maps from 0x18000000000 up).
+	pml4->entries[3].present = 1;
+	pml4->entries[3].rw = 1;
+	pml4->entries[3].pdptPhysAddr = ((uint64_t)pdpt >> 12);
+
+	// refresh the address space
+	refreshAddrSpace();
+};
+
+void *ispGetPointer()
 {
-	uint16_t offsetLow;
-	uint16_t codeSegment;
-	uint8_t  reservedIst;
-	uint8_t  flags;
-	uint16_t offsetMiddle;
-	uint32_t offsetHigh;
-	uint32_t reserved;
-} PACKED IDTEntry;
+	return (void*) 0x18000000000;
+};
 
-void initIDT();
-
-#endif
+void ispSetFrame(uint64_t frame)
+{
+	ispPTE->framePhysAddr = frame;
+	refreshAddrSpace();
+};

@@ -43,6 +43,9 @@ dd _start
 _start:
 	cli
 
+	; is this needed?
+	finit
+
 	; remember the pointer to the multiboot information structure.
 	mov esi,	ebx
 
@@ -91,10 +94,17 @@ _start:
 	add edi, 0x1000              ; Add 0x1000 to the destination index.
 
 	mov ebx, 0x00000003          ; Set the B-register to 0x00000003.
-	mov ecx, 512                 ; Set the C-register to 512.
- 
+	mov ecx, 511                 ; Set the C-register to 511.
+
+	; the first 4KB of the address space will not be present, else we will not
+	; get page fault on NULL-refences.
+	mov dword [edi], 0
+	add ebx, 0x1000
+	add edi, 8
+
+	; the rest (above 4KB up to 2MB) is mapped.
 	.SetEntry:
-	mov DWORD [edi], ebx         ; Set the double word at the destination index to the B-register.
+	mov dword [edi], ebx         ; Set the double word at the destination index to the B-register.
 	add ebx, 0x1000              ; Add 0x1000 to the B-register.
 	add edi, 8                   ; Add eight to the destination index.
 	loop .SetEntry               ; Set the next entry.

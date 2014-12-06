@@ -32,6 +32,7 @@
 #include <glidix/pagetab.h>
 #include <glidix/string.h>
 #include <glidix/physmem.h>
+#include <glidix/isp.h>
 #include <stdint.h>
 
 static Spinlock heapLock;
@@ -39,7 +40,8 @@ static Spinlock heapLock;
 extern int end;			// the type is not important
 static uint64_t placement;
 static int readyForDynamic;
-static PDPT *pdptHeap;
+static PD *pdHeap;
+static int nextHeapTable;
 
 void initMemoryPhase1()
 {
@@ -57,7 +59,7 @@ void initMemoryPhase2()
 	// to the physical address.
 	PML4 *pml4 = getPML4();
 	PDPT *pdpt = kxmalloc(sizeof(PDPT), MEM_PAGEALIGN);
-	pdptHeap = pdpt;
+	nextHeapTable = 1;
 	memset(pdpt, 0, sizeof(PDPT));
 	PD *pd = kxmalloc(sizeof(PD), MEM_PAGEALIGN);
 	memset(pd, 0, sizeof(PD));
@@ -71,6 +73,7 @@ void initMemoryPhase2()
 	pd->entries[0].present = 1;
 	pd->entries[0].rw = 1;
 	pd->entries[0].ptPhysAddr = ((uint64_t)pt >> 12);
+	pdHeap = pd;
 
 	// map the first 2MB to physical addresses.
 	int i;
@@ -102,6 +105,84 @@ void initMemoryPhase2()
 	readyForDynamic = 1;
 };
 
+static HeapHeader *heapHeaderFromFooter(HeapFooter *foot)
+{
+	uint64_t footerAddr = (uint64_t) foot;
+	uint64_t headerAddr = footerAddr - foot->size - sizeof(HeapHeader);
+	return (HeapHeader*) headerAddr;
+};
+
+static HeapFooter *heapFooterFromHeader(HeapHeader *head)
+{
+	uint64_t headerAddr = (uint64_t) head;
+	uint64_t footerAddr = headerAddr + sizeof(HeapHeader) + head->size;
+	return (HeapFooter*) footerAddr;
+};
+
+void expandHeap()
+{
+	// expand the heap by 1 table
+	if (nextHeapTable == 512)
+	{
+		panic("ran out of heap memory (expanding beyond 1GB)");
+	};
+
+	uint64_t frame = phmAllocFrame();
+	ispSetFrame(frame);
+	PT *pt = (PT*) ispGetPointer();
+	memset(pt, 0, sizeof(PT));
+
+	int i;
+	for (i=0; i<512; i++)
+	{
+		pt->entries[i].present = 1;
+		pt->entries[i].rw = 1;
+		pt->entries[i].framePhysAddr = phmAllocFrame();
+	};
+
+	pdHeap->entries[nextHeapTable].present = 1;
+	pdHeap->entries[nextHeapTable].rw = 1;
+	pdHeap->entries[nextHeapTable].ptPhysAddr = frame;
+	nextHeapTable++;
+
+	refreshAddrSpace();
+
+	// address of the end of the heap before expansion
+	uint64_t addr = 0x10000000000 + (0x200000 * (nextHeapTable-1));
+
+	// if the current last block is free, we'll extend it;
+	// otherwise, we add a new 2MB block to fill this new space
+	HeapFooter *lastFoot = (HeapFooter*) (addr - sizeof(HeapFooter));
+	HeapHeader *lastHead = heapHeaderFromFooter(lastFoot);
+
+	if (lastHead->flags & HEAP_BLOCK_TAKEN)
+	{
+		// taken, so make a new block, and tell the previous-last footer that
+		// it now has a friend on the right.
+		lastFoot->flags |= HEAP_BLOCK_HAS_RIGHT;
+
+		HeapHeader *head = (HeapHeader*) addr;
+		head->magic = HEAP_HEADER_MAGIC;
+		head->size = 0x200000 - sizeof(HeapHeader) - sizeof(HeapFooter);
+		head->flags = HEAP_BLOCK_HAS_LEFT;
+
+		HeapFooter *foot = (HeapFooter*) (addr + head->size + sizeof(HeapHeader));
+		foot->magic = HEAP_FOOTER_MAGIC;
+		foot->size = head->size;
+		foot->flags = 0;
+	}
+	else
+	{
+		// not taken, so expand
+		lastHead->size += 0x200000;
+
+		HeapFooter *foot = (HeapFooter*) (addr + 0x200000 - sizeof(HeapHeader));
+		foot->magic = HEAP_FOOTER_MAGIC;
+		foot->size = lastHead->size;
+		foot->flags = 0;
+	};
+};
+
 static HeapHeader *heapWalkRight(HeapHeader *head)
 {
 	uint64_t addr = (uint64_t) head;
@@ -110,8 +191,7 @@ static HeapHeader *heapWalkRight(HeapHeader *head)
 	HeapFooter *foot = (HeapFooter*) (addr - sizeof(HeapFooter));
 	if ((foot->flags & HEAP_BLOCK_HAS_RIGHT) == 0)
 	{
-		// TODO: expand the heap if possible.
-		panic("ran out of heap memory!");
+		return NULL;
 	};
 
 	HeapHeader *nextHead = (HeapHeader*) addr;
@@ -163,7 +243,24 @@ static void *kxmallocDynamic(size_t size, int flags)
 	HeapHeader *head = (HeapHeader*) 0x10000000000;
 	while ((head->flags & HEAP_BLOCK_TAKEN) || (head->size < size))
 	{
-		head = heapWalkRight(head);
+		HeapHeader *nextHead = heapWalkRight(head);
+		if (nextHead == NULL)
+		{
+			if (head->flags & HEAP_BLOCK_TAKEN)
+			{
+				expandHeap();
+				head = heapWalkRight(head);
+			};
+
+			while (head->size < size)
+			{
+				expandHeap();
+			};
+		}
+		else
+		{
+			head = nextHead;
+		};
 	};
 
 	if (head->size > (size+sizeof(HeapHeader)+sizeof(HeapFooter)+8))
@@ -176,20 +273,6 @@ static void *kxmallocDynamic(size_t size, int flags)
 
 	spinlockRelease(&heapLock);
 	return retAddr;
-};
-
-static HeapHeader *heapHeaderFromFooter(HeapFooter *foot)
-{
-	uint64_t footerAddr = (uint64_t) foot;
-	uint64_t headerAddr = footerAddr - foot->size - sizeof(HeapHeader);
-	return (HeapHeader*) headerAddr;
-};
-
-static HeapFooter *heapFooterFromHeader(HeapHeader *head)
-{
-	uint64_t headerAddr = (uint64_t) head;
-	uint64_t footerAddr = headerAddr + sizeof(HeapHeader) + head->size;
-	return (HeapFooter*) footerAddr;
 };
 
 void *kxmalloc(size_t size, int flags)

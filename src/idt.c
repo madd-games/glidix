@@ -30,6 +30,7 @@
 #include <glidix/string.h>
 #include <glidix/console.h>
 #include <glidix/common.h>
+#include <glidix/port.h>
 
 IDTEntry idt[256];
 IDTPointer idtPtr;
@@ -67,6 +68,22 @@ extern void isr28();
 extern void isr29();
 extern void isr30();
 extern void isr31();
+extern void irq0();
+extern void irq1();
+extern void irq2();
+extern void irq3();
+extern void irq4();
+extern void irq5();
+extern void irq6();
+extern void irq7();
+extern void irq8();
+extern void irq9();
+extern void irq10();
+extern void irq11();
+extern void irq12();
+extern void irq13();
+extern void irq14();
+extern void irq15();
 
 static void setGate(int index, void *isr)
 {
@@ -82,6 +99,18 @@ static void setGate(int index, void *isr)
 
 void initIDT()
 {
+	// remap the IRQs
+	outb(0x20, 0x11);
+	outb(0xA0, 0x11);
+	outb(0x21, 0x20);
+	outb(0xA1, 0x28);
+	outb(0x21, 0x04);
+	outb(0xA1, 0x02);
+	outb(0x21, 0x01);
+	outb(0xA1, 0x01);
+	outb(0x21, 0x0);
+	outb(0xA1, 0x0);
+
 	memset(idt, 0, 256*sizeof(IDTEntry));
 	setGate(0, isr0);
 	setGate(1, isr1);
@@ -115,14 +144,99 @@ void initIDT()
 	setGate(29, isr29);
 	setGate(30, isr30);
 	setGate(31, isr31);
+	setGate(32, irq0);
+	setGate(33, irq1);
+	setGate(34, irq2);
+	setGate(35, irq3);
+	setGate(36, irq4);
+	setGate(37, irq5);
+	setGate(38, irq6);
+	setGate(39, irq7);
+	setGate(40, irq8);
+	setGate(41, irq9);
+	setGate(42, irq10);
+	setGate(43, irq11);
+	setGate(44, irq12);
+	setGate(45, irq13);
+	setGate(46, irq14);
+	setGate(47, irq15);
 
 	idtPtr.addr = (uint64_t) &idt[0];
 	idtPtr.limit = (sizeof(IDTEntry) * 256) - 1;
 	loadIDT();
 };
 
+static void onPageFault(Regs *regs)
+{
+	uint64_t faultAddr;
+	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
+
+	kprintf("A page fault occured\n");
+	if ((regs->errCode & 1) == 0)
+	{
+		kprintf("[non-present]");
+	};
+
+	if (regs->errCode & 2)
+	{
+		kprintf("[write]");
+	}
+	else
+	{
+		kprintf("[read]");
+	};
+
+	if (regs->errCode & 4)
+	{
+		kprintf("[user]");
+	}
+	else
+	{
+		kprintf("[kernel]");
+	};
+
+	if (regs->errCode & 8)
+	{
+		kprintf("[reserved]");
+	};
+
+	if (regs->errCode & 16)
+	{
+		kprintf("[fetch]");
+	};
+
+	kprintf("\nVirtual address: %a\n", faultAddr);
+	panic("#PF in kernel");
+};
+
 void isrHandler(Regs *regs)
 {
+#if 0
 	kdumpregs(regs);
 	panic("Caught interrupt %d, rsp=%d\n", regs->intNo, regs->rsp);
+#endif
+
+	if (regs->intNo >= 32)
+	{
+		// IRQ
+		if (regs->intNo >= 40)
+		{
+			// slave
+			outb(0xA0, 0x20);
+		};
+		outb(0x20, 0x20);
+	};
+
+	switch (regs->intNo)
+	{
+	case IRQ0:
+		// TODO: scheduler
+		break;
+	case 14:
+		onPageFault(regs);
+		break;
+	default:
+		panic("Unhandled interrupt: %d\n", regs->intNo);
+		break;
+	};
 };

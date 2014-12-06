@@ -32,9 +32,14 @@
 #include <glidix/physmem.h>
 #include <glidix/memory.h>
 #include <glidix/pagetab.h>
+#include <glidix/isp.h>
+#include <glidix/string.h>
+#include <glidix/port.h>
 
 extern int _bootstrap_stack;
 extern int end;
+
+void expandHeap();
 
 void kmain(MultibootInfo *info)
 {
@@ -71,21 +76,27 @@ void kmain(MultibootInfo *info)
 	initPhysMem(memSize/4);
 	kprintf("%$\x02" "Done%#\n");
 
+	kprintf("Initializing the ISP... ");
+	ispInit();
+	kprintf("%$\x02" "Done%#\n");
+
 	kprintf("Initializing memory allocation phase 2... ");
 	initMemoryPhase2();
 	kprintf("%$\x02" "Done%#\n");
 
-	heapDump();
-	kprintf("Alloc 16 bytes (block A)\n");
-	void *a = kmalloc(16);
-	heapDump();
-	kprintf("Alloc 16 bytes (block B)\n");
-	void *b = kmalloc(16);
-	heapDump();
-	kprintf("Free block A\n");
-	kfree(a);
-	heapDump();
-	kprintf("Free block B\n");
-	kfree(b);
-	heapDump();
+	kprintf("Initializing the frame stack... ");
+	initPhysMem2();
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing the PIT... ");
+	uint16_t divisor = 1193180 / 50;		// 50 Hz
+	outb(0x43, 0x36);
+	uint8_t l = (uint8_t)(divisor & 0xFF);
+	uint8_t h = (uint8_t)( (divisor>>8) & 0xFF );
+	outb(0x40, l);
+	outb(0x40, h);
+	kprintf("%$\x02" "Done%#\n");
+
+	ASM("sti");
+	while (1);
 };

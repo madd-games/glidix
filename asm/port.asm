@@ -31,5 +31,5 @@ bits 64
 outb:
 	mov dx,		di
 	mov ax,		si
-	out dx,		ax
+	out dx,		al
 	ret
