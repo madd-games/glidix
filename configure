@@ -27,6 +27,19 @@ import sys, os
 import subprocess
 import json
 
+sysroot = ""
+host = ""
+
+for param in sys.argv[1:]:
+	if param.startswith("--sysroot="):
+		sysroot = param[len("--sysroot="):]
+	elif param.startswith("--host="):
+		host = param[len("--host="):]
+
+compiler = "gcc"
+if host != "":
+	compiler = host + "-gcc"
+
 def assertCommand(cmd, msg = None):
 	if msg is None:
 		msg = "checking for %s... " % cmd
@@ -46,10 +59,21 @@ def assertCommand(cmd, msg = None):
 		sys.stderr.write(output)
 
 # Make sure all the tools we need are here
-assertCommand("x86_64-elf-gcc")
+assertCommand(compiler)
 assertCommand("nasm")
 
-config = {}
+sys.stderr.write("checking build system type... ")
+sys.stderr.flush()
+systype = subprocess.check_output(compiler + " -dumpmachine", shell=True)[:-1]	# discard the newline at the end
+sys.stderr.write(systype+"\n")
+if systype != "x86_64-glidix":
+	sys.stderr.write("%s: error: the compiler %s does not target x86_64-glidix\n" % (sys.argv[0], compiler))
+	sys.exit(1)
+
+config = {
+	"compiler":	compiler,
+	"sysroot":	sysroot
+}
 
 # Write the configuration to config.json
 f = open("config.json", "wb")

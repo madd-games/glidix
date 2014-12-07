@@ -1,8 +1,8 @@
 %DEPFILE%: %CFILE%
 	set -e; rm -f $@; \
-	x86_64-elf-gcc -M $(CFLAGS) $< > $@.$$$$; \
+	$(TARGET_CC) -M $(CFLAGS) $< > $@.$$$$; \
 	sed 's,%REPLACE%[ :]*,%OBJFILE% $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 %OBJFILE%: %CFILE%
-	x86_64-elf-gcc -c $< -o $@ $(CFLAGS)
+	$(TARGET_CC) -c $< -o $@ $(CFLAGS)

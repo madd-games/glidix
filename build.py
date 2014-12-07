@@ -77,9 +77,10 @@ for asmfile in os.listdir("asm"):
 
 def opCreateBuildMK():
 	f = open("build.mk", "wb")
+	f.write("TARGET_CC=%s\n" % config["compiler"])
 	f.write("CFLAGS=-ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -I include -Wall -Werror\n")
 	f.write("out/vmglidix: %s\n" % (" ".join(objectFiles)))
-	f.write("\tx86_64-elf-gcc -T linker.ld -o $@ -ffreestanding -O2 -nostdlib $^ -lgcc\n")
+	f.write("\t%s -T linker.ld -o $@ -ffreestanding -O2 -nostdlib $^ -lgcc\n" % config["compiler"])
 	f.write("-include %s\n" % (" ".join(depFiles)))
 	f.write("\n")
 	f.write("\n".join(rules))
