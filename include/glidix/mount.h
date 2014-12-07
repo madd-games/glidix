@@ -26,57 +26,46 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_memory_h
-#define __glidix_memory_h
-
-#include <glidix/common.h>
-#include <stddef.h>
+#ifndef __glidix_mount_h
+#define __glidix_mount_h
 
 /**
- * Routines for dynamic memory allocation and deallocation.
+ * Managing a list of mount points.
  */
 
-#define	MEM_PAGEALIGN			1
-
-void initMemoryPhase1(uint64_t placement);
-void initMemoryPhase2();
-void *kxmalloc(size_t size, int flags);
-void *kmalloc(size_t size);
-void kfree(void *block);
-void heapDump();
+#include <glidix/vfs.h>
 
 /**
- * If you're going to disable interrupts and use kmalloc() and kfree() during that time,
- * make sure you call this function to acquire heap access, THEN disable interrupts, and
- * then release your heap access, and THEN you can use kmalloc()/kfree().
+ * Errors returned by mount() and unmount().
  */
-void acquireHeap();
-void releaseHeap();
+#define	MOUNT_BAD_FLAGS		-1
+#define MOUNT_BAD_PREFIX	-2
 
-/**
- * Private heap structures.
- */
+typedef struct _MountPoint
+{
+	// mountpoint prefix (the directory in which the filesystem is mounted), must start and end
+	// with "/".
+	char			prefix[512];
 
-#define	HEAP_HEADER_MAGIC		0xDEADBEEF
-#define	HEAP_FOOTER_MAGIC		0xBAD00BAD
+	// The filesystem mounted here.
+	FileSystem		*fs;
 
-// flags
-#define	HEAP_BLOCK_TAKEN		1		// shared flag
-#define	HEAP_BLOCK_HAS_LEFT		2		// header flag
-#define	HEAP_BLOCK_HAS_RIGHT		4		// footer flag
+	// Previous and next mountpoint.
+	// They are sorted from longest prefix to shortest prefix btw.
+	struct _MountPoint	*prev;
+	struct _MountPoint	*next;
+} MountPoint;
 
 typedef struct
 {
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-} PACKED HeapHeader;
+	FileSystem		*fs;
+	char			filename[512];
+} SplitPath;
 
-typedef struct
-{
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-} PACKED HeapFooter;
+void initMount();
+int mount(const char *prefix, FileSystem *fs, int flags);
+void unmount(const char *prefix);
+int resolveMounts(const char *path, SplitPath *out);
+void dumpMountTable();
 
 #endif

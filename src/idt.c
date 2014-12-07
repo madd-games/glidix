@@ -234,6 +234,9 @@ void isrHandler(Regs *regs)
 	case IRQ0:
 		switchTask(regs);
 		break;
+	case IRQ1:
+		// ignore
+		break;
 	case 14:
 		onPageFault(regs);
 		break;

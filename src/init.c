@@ -36,6 +36,8 @@
 #include <glidix/string.h>
 #include <glidix/port.h>
 #include <glidix/sched.h>
+#include <glidix/mount.h>
+#include <glidix/initrdfs.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -46,12 +48,11 @@ void kmain(MultibootInfo *info)
 {
 	initConsole();
 	kprintf("Successfully booted into 64-bit mode\n");
-#if 0
-	uint64_t tmp = (uint64_t) (&_bootstrap_stack);
-	kprintf("Bootstrap stack: %d\n", (int) (tmp));
-	tmp = (uint64_t) &end;
-	kprintf("End of memory: %d\n", (int) tmp);
-#endif
+	if (info->modsCount != 1)
+	{
+		panic("the initrd was not loaded");
+	};
+
 	kprintf("Initializing the IDT... ");
 	initIDT();
 	kprintf("%$\x02" "Done%#\n");
@@ -69,8 +70,10 @@ void kmain(MultibootInfo *info)
 		kprintf("w: Assuming 64MB of RAM\n");
 	};
 
-	kprintf("Initializing memory allocation phase 1... ");
-	initMemoryPhase1();
+	MultibootModule *mod = (MultibootModule*) (uint64_t) info->modsAddr;
+	
+	kprintf("Initializing memory allocation phase 1 (base=%a)... ", (uint64_t) mod->modEnd);
+	initMemoryPhase1((uint64_t) mod->modEnd);
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the physical memory manager... ");
@@ -89,6 +92,10 @@ void kmain(MultibootInfo *info)
 	initPhysMem2();
 	kprintf("%$\x02" "Done%#\n");
 
+	kprintf("Initializing the initrdfs... ");
+	initInitrdfs(info);
+	kprintf("%$\x02" "Done%#\n");
+
 	kprintf("Initializing the PIT... ");
 	uint16_t divisor = 1193180 / 50;		// 50 Hz
 	outb(0x43, 0x36);
@@ -100,5 +107,10 @@ void kmain(MultibootInfo *info)
 
 	kprintf("Initializing the scheduler... ");
 	initSched();
-	// "Done" will be displayed by initSched()
+	// "Done" will be displayed by initSched(), and then kmain2() will be called.
+};
+
+void kmain2()
+{
+	initMount();
 };

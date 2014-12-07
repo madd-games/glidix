@@ -35,7 +35,12 @@
  * String and memory operations for the kernel. Implemented in string.asm.
  */
 
-void memcpy(void *dst, void *src, size_t size);
-void memset(void *dst, char c, size_t size);
+void   memcpy(void *dst, const void *src, size_t size);
+void   memset(void *dst, char c, size_t size);
+void   strcpy(char *dst, const char *src);
+size_t strlen(const char *str);
+int    memcmp(const void *a, const void *b, size_t size);
+int    strcmp(const char *a, const char *b);
+void   strcat(char *dst, const char *a);
 
 #endif

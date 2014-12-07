@@ -26,57 +26,86 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_memory_h
-#define __glidix_memory_h
-
+#include <glidix/semaphore.h>
+#include <glidix/spinlock.h>
 #include <glidix/common.h>
-#include <stddef.h>
+#include <glidix/memory.h>
 
-/**
- * Routines for dynamic memory allocation and deallocation.
- */
-
-#define	MEM_PAGEALIGN			1
-
-void initMemoryPhase1(uint64_t placement);
-void initMemoryPhase2();
-void *kxmalloc(size_t size, int flags);
-void *kmalloc(size_t size);
-void kfree(void *block);
-void heapDump();
-
-/**
- * If you're going to disable interrupts and use kmalloc() and kfree() during that time,
- * make sure you call this function to acquire heap access, THEN disable interrupts, and
- * then release your heap access, and THEN you can use kmalloc()/kfree().
- */
-void acquireHeap();
-void releaseHeap();
-
-/**
- * Private heap structures.
- */
-
-#define	HEAP_HEADER_MAGIC		0xDEADBEEF
-#define	HEAP_FOOTER_MAGIC		0xBAD00BAD
-
-// flags
-#define	HEAP_BLOCK_TAKEN		1		// shared flag
-#define	HEAP_BLOCK_HAS_LEFT		2		// header flag
-#define	HEAP_BLOCK_HAS_RIGHT		4		// footer flag
-
-typedef struct
+void semInit(Semaphore *sem)
 {
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-} PACKED HeapHeader;
+	spinlockRelease(&sem->lock);
+	sem->owner = NULL;
+	sem->first = NULL;
+	sem->last = NULL;
+};
 
-typedef struct
+void semWait(Semaphore *sem)
 {
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-} PACKED HeapFooter;
+	spinlockAcquire(&sem->lock);
+	Thread *me = getCurrentThread();
 
-#endif
+	if (sem->owner != NULL)
+	{
+		if (sem->owner == me)
+		{
+			panic("a thread attempted to wait for a semaphore that it already acquired");
+		};
+
+		SemWaitThread *thwait = (SemWaitThread*) kmalloc(sizeof(SemWaitThread));
+		thwait->thread = me;
+		thwait->next = NULL;
+
+		if (sem->last == NULL)
+		{
+			sem->first = thwait;
+			sem->last = thwait;
+		}
+		else
+		{
+			sem->last->next = thwait;
+			sem->last = thwait;
+		};
+
+		// wait without hanging up the whole system
+		while (sem->owner != me)
+		{
+			spinlockRelease(&sem->lock);
+			waitThread(me);
+			ASM("hlt");
+			spinlockAcquire(&sem->lock);
+		};
+	}
+	else
+	{
+		sem->owner = me;
+	};
+
+	spinlockRelease(&sem->lock);
+};
+
+void semSignal(Semaphore *sem)
+{
+	spinlockAcquire(&sem->lock);
+
+	if (sem->first == NULL)
+	{
+		sem->owner = NULL;
+	}
+	else
+	{
+		SemWaitThread *thwait = sem->first;
+		if (sem->last == thwait)
+		{
+			sem->last = NULL;
+		};
+
+		Thread *thread = thwait->thread;
+		sem->first = thwait->next;
+		kfree(thwait);
+
+		sem->owner = thread;
+		signalThread(thread);
+	};
+
+	spinlockRelease(&sem->lock);
+};

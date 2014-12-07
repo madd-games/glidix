@@ -55,6 +55,28 @@ typedef struct
 	uint32_t flags;
 	uint32_t memLower;
 	uint32_t memUpper;
+	uint32_t bootDevice;
+	uint32_t cmdLine;
+	uint32_t modsCount;
+	uint32_t modsAddr;
 } PACKED MultibootInfo;
+
+typedef struct
+{
+	uint32_t		modStart;
+	uint32_t		modEnd;
+} PACKED MultibootModule;
+
+typedef	uint64_t			dev_t;
+typedef	uint64_t			ino_t;
+typedef	uint64_t			mode_t;
+typedef	uint64_t			nlink_t;
+typedef	uint64_t			uid_t;
+typedef	uint64_t			gid_t;
+typedef	uint64_t			blksize_t;
+typedef	uint64_t			blkcnt_t;
+typedef	uint64_t			time_t;
+typedef	int64_t				off_t;
+typedef	int64_t				ssize_t;
 
 #endif

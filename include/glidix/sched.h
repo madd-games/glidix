@@ -37,6 +37,12 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/**
+ * If this flag is set, then a thread is waiting for something and should not be scheduled
+ * until signalled.
+ */
+#define	THREAD_WAITING			(1 << 0)
+
 typedef struct _Thread
 {
 	/**
@@ -54,6 +60,11 @@ typedef struct _Thread
 	 * Thread name (for debugging).
 	 */
 	const char			*name;
+
+	/**
+	 * Flags (see above).
+	 */
+	uint64_t			flags;
 
 	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
@@ -87,5 +98,20 @@ typedef struct
  * @param data An arbitrary pointer to pass to the thread.
  */
 void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, void *data);
+
+/**
+ * Return the current thread on this CPU.
+ */
+Thread *getCurrentThread();
+
+/**
+ * Mark a thread as waiting.
+ */
+void waitThread(Thread *thread);
+
+/**
+ * Signal a thread to stop waiting.
+ */
+void signalThread(Thread *thread);
 
 #endif

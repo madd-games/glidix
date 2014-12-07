@@ -26,57 +26,13 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_memory_h
-#define __glidix_memory_h
+#ifndef __glidix_initrdfs_h
+#define __glidix_initrdfs_h
 
 #include <glidix/common.h>
-#include <stddef.h>
+#include <glidix/vfs.h>
 
-/**
- * Routines for dynamic memory allocation and deallocation.
- */
-
-#define	MEM_PAGEALIGN			1
-
-void initMemoryPhase1(uint64_t placement);
-void initMemoryPhase2();
-void *kxmalloc(size_t size, int flags);
-void *kmalloc(size_t size);
-void kfree(void *block);
-void heapDump();
-
-/**
- * If you're going to disable interrupts and use kmalloc() and kfree() during that time,
- * make sure you call this function to acquire heap access, THEN disable interrupts, and
- * then release your heap access, and THEN you can use kmalloc()/kfree().
- */
-void acquireHeap();
-void releaseHeap();
-
-/**
- * Private heap structures.
- */
-
-#define	HEAP_HEADER_MAGIC		0xDEADBEEF
-#define	HEAP_FOOTER_MAGIC		0xBAD00BAD
-
-// flags
-#define	HEAP_BLOCK_TAKEN		1		// shared flag
-#define	HEAP_BLOCK_HAS_LEFT		2		// header flag
-#define	HEAP_BLOCK_HAS_RIGHT		4		// footer flag
-
-typedef struct
-{
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-} PACKED HeapHeader;
-
-typedef struct
-{
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-} PACKED HeapFooter;
+void initInitrdfs(MultibootInfo *info);
+FileSystem *getInitrdfs();
 
 #endif

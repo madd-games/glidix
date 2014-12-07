@@ -37,15 +37,14 @@
 
 static Spinlock heapLock;
 
-extern int end;			// the type is not important
 static uint64_t placement;
 static int readyForDynamic;
 static PD *pdHeap;
 static int nextHeapTable;
 
-void initMemoryPhase1()
+void initMemoryPhase1(uint64_t pc)
 {
-	placement = (uint64_t) &end;
+	placement = pc;
 	spinlockRelease(&heapLock);
 	readyForDynamic = 0;
 };

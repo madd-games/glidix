@@ -25,9 +25,15 @@
 ;	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 section .text
+bits 64
 
 global memcpy
 global memset
+global strcpy
+global strlen
+global memcmp
+global strcmp
+global strcat
 
 memcpy:
 	mov	rcx,	rdx
@@ -39,3 +45,75 @@ memset:
 	mov	rcx,	rdx
 	rep	stosb
 	ret
+
+strcpy:
+	lodsb
+	test	al,	al
+	stosb
+	jnz	strcpy
+	ret
+
+strlen:
+	xor	rcx,	rcx
+	mov	rsi,	rdi
+.next:
+	lodsb
+	test	al,	al
+	jz	.end
+	inc	rcx
+	jmp	.next
+.end:
+	mov	rax,	rcx
+	ret
+
+memcmp:
+	mov	rcx,	rdx
+	test	rcx,	rcx
+	jz	.ok
+	dec	rcx
+.next:
+	mov	al,	[rdi]
+	mov	bl,	[rsi]
+	inc	rdi
+	inc	rsi
+	cmp	al,	bl
+	jnz	.not_equal
+	loop	.next
+.ok:
+	xor	rax,	rax
+	ret
+.not_equal:
+	mov	rax,	1
+	ret
+
+strcmp:
+	mov	al,	[rdi]
+	mov	bl,	[rsi]
+	inc	rdi
+	inc	rsi
+	cmp	al,	bl
+	jnz	.not_equal
+
+	test	al,	al
+	jz	.end
+
+	test	bl,	bl
+	jz	.end
+
+	jmp strcmp
+.not_equal:
+	mov	rax,	1
+	ret
+
+.end:
+	xor	rax,	rax
+	ret
+
+strcat:
+	; find the NUL character in dst (rdi) and then just strcpy()
+.next:
+	mov	al,	[rdi]
+	test	al,	al
+	jz	strcpy
+	inc	rdi
+	jmp	.next

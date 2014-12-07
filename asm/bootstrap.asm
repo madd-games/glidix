@@ -27,6 +27,7 @@
 section .bootstrap32
 bits 32
 
+[extern end]
 MB_FLAGS equ (1 << 0) | (1 << 1) | (1 << 16)
 ; multiboot header
 dd 0x1BADB002
@@ -35,7 +36,7 @@ dd -(0x1BADB002 + MB_FLAGS)
 dd 0x100000			; base addr
 dd 0x100000			; phys base addr
 dd 0
-dd 0
+dd end
 dd _start
 
 [extern kmain]

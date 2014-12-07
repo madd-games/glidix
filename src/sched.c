@@ -35,6 +35,7 @@ static Thread firstThread;
 static Thread *currentThread;
 
 extern uint64_t getFlagsRegister();
+void kmain2();
 
 void dumpRunqueue()
 {
@@ -49,6 +50,7 @@ void dumpRunqueue()
 static void startupThread()
 {
 	kprintf("%$\x02" "Done%#\n");
+	kmain2();
 
 	while (1);		// never return! the stack below us is invalid.
 };
@@ -69,8 +71,9 @@ void initSched()
 	firstThread.regs.ss = 0;
 	firstThread.regs.rflags = getFlagsRegister() | (1 << 9);		// enable interrupts
 
-	// name
+	// other stuff
 	firstThread.name = "Startup thread";
+	firstThread.flags = 0;
 
 	// linking
 	firstThread.prev = &firstThread;
@@ -87,7 +90,10 @@ void switchTask(Regs *regs)
 	memcpy(&currentThread->regs, regs, sizeof(Regs));
 
 	// get the next thread
-	currentThread = currentThread->next;
+	do
+	{
+		currentThread = currentThread->next;
+	} while (currentThread->flags & THREAD_WAITING);
 
 	// switch context
 	switchContext(&currentThread->regs);
@@ -144,6 +150,7 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	thread->regs.ss = 0;
 	thread->regs.rflags = getFlagsRegister() | (1 << 9);				// enable interrupts in that thread
 	thread->name = name;
+	thread->flags = 0;
 
 	// this will simulate a call from kernelThreadExit() to "entry()"
 	// this is so that when entry() returns, the thread can safely exit.
@@ -158,5 +165,24 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	currentThread->next = thread;
 	// there is no need to update currentThread->prev, it will only be broken for the init
 	// thread, which never exits, and therefore its prev will never need to be valid.
+	ASM("sti");
+};
+
+Thread *getCurrentThread()
+{
+	return currentThread;
+};
+
+void waitThread(Thread *thread)
+{
+	ASM("cli");
+	thread->flags |= THREAD_WAITING;
+	ASM("sti");
+};
+
+void signalThread(Thread *thread)
+{
+	ASM("cli");
+	thread->flags &= ~THREAD_WAITING;
 	ASM("sti");
 };
