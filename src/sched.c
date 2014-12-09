@@ -30,9 +30,12 @@
 #include <glidix/memory.h>
 #include <glidix/string.h>
 #include <glidix/console.h>
+#include <glidix/spinlock.h>
 
 static Thread firstThread;
 static Thread *currentThread;
+static Spinlock schedLock;		// for PID and stuff
+static int nextPid;
 
 extern uint64_t getFlagsRegister();
 void kmain2();
@@ -57,6 +60,8 @@ static void startupThread()
 
 void initSched()
 {
+	nextPid = 1;
+
 	// create a new stack for this initial process
 	firstThread.stack = kmalloc(0x4000);
 	firstThread.stackSize = 0x4000;
@@ -74,6 +79,9 @@ void initSched()
 	// other stuff
 	firstThread.name = "Startup thread";
 	firstThread.flags = 0;
+	firstThread.pm = NULL;
+	firstThread.pid = 0;
+	firstThread.ftab = NULL;
 
 	// linking
 	firstThread.prev = &firstThread;
@@ -94,6 +102,9 @@ void switchTask(Regs *regs)
 	{
 		currentThread = currentThread->next;
 	} while (currentThread->flags & THREAD_WAITING);
+
+	// switch address space
+	if (currentThread->pm != NULL) SetProcessMemory(currentThread->pm);
 
 	// switch context
 	switchContext(&currentThread->regs);
@@ -151,6 +162,9 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	thread->regs.rflags = getFlagsRegister() | (1 << 9);				// enable interrupts in that thread
 	thread->name = name;
 	thread->flags = 0;
+	thread->pm = NULL;
+	thread->pid = 0;
+	thread->ftab = NULL;
 
 	// this will simulate a call from kernelThreadExit() to "entry()"
 	// this is so that when entry() returns, the thread can safely exit.
@@ -185,4 +199,90 @@ void signalThread(Thread *thread)
 	ASM("cli");
 	thread->flags &= ~THREAD_WAITING;
 	ASM("sti");
+};
+
+int threadClone(Regs *regs, int flags, MachineState *state)
+{
+	Thread *thread = (Thread*) kmalloc(sizeof(Thread));
+	memcpy(&thread->regs, regs, sizeof(Regs));
+	thread->regs.rax = 0;
+
+	if (state != NULL)
+	{
+		thread->regs.rdi = state->rdi;
+		thread->regs.rsi = state->rsi;
+		thread->regs.rbp = state->rbp;
+		thread->regs.rbx = state->rbx;
+		thread->regs.rdx = state->rdx;
+		thread->regs.rcx = state->rcx;
+		thread->regs.rax = state->rax;
+		thread->regs.r8  = state->r8 ;
+		thread->regs.r9  = state->r9 ;
+		thread->regs.r10 = state->r10;
+		thread->regs.r11 = state->r11;
+		thread->regs.r12 = state->r12;
+		thread->regs.r13 = state->r13;
+		thread->regs.r14 = state->r14;
+		thread->regs.r15 = state->r15;
+		thread->regs.rip = state->rip;
+		thread->regs.rsp = state->rsp;
+	};
+
+	// no kernel stack really.
+	thread->stack = NULL;
+	thread->stackSize = 0;
+
+	thread->name = "";
+	thread->flags = 0;
+
+	// process memory
+	if (flags & CLONE_SHARE_MEMORY)
+	{
+		UprefProcessMemory(currentThread->pm);
+		thread->pm = currentThread->pm;
+	}
+	else
+	{
+		if (currentThread->pm != NULL)
+		{
+			thread->pm = DuplicateProcessMemory(currentThread->pm);
+		}
+		else
+		{
+			thread->pm = CreateProcessMemory();
+		};
+	};
+
+	// assign pid
+	spinlockAcquire(&schedLock);
+	thread->pid = nextPid++;
+	spinlockRelease(&schedLock);
+
+	// file table
+	if (flags & CLONE_SHARE_FTAB)
+	{
+		ftabUpref(currentThread->ftab);
+		thread->ftab = currentThread->ftab;
+	}
+	else
+	{
+		if (currentThread->ftab != NULL)
+		{
+			thread->ftab = ftabDup(currentThread->ftab);
+		}
+		else
+		{
+			thread->ftab = ftabCreate();
+		};
+	};
+
+	// link into the runqueue (disable interrupts for the duration of this).
+	ASM("cli");
+	currentThread->next->prev = thread;
+	thread->next = currentThread->next;
+	thread->prev = currentThread;
+	currentThread->next = thread;
+	ASM("sti");
+
+	return 0;
 };

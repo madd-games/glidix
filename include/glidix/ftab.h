@@ -26,20 +26,33 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_isp_h
-#define __glidix_isp_h
-
-#include <stdint.h>
+#ifndef __glidix_ftab_h
+#define __glidix_ftab_h
 
 /**
- * The Interprocess Streaming Page (ISP) allows for you to send data to arbitrary locations
- * in physical memory.
+ * A structure that describes a process table.
  */
 
-void ispInit();
-void *ispGetPointer();
-void ispSetFrame(uint64_t frame);
-void ispLock();
-void ispUnlock();
+#include <glidix/common.h>
+#include <glidix/vfs.h>
+#include <glidix/spinlock.h>
+
+/**
+ * Maximum number of files that can be opened per file table. Some threads may share
+ * a single table. We should probably adjust this value later.
+ */
+#define	MAX_OPEN_FILES					64
+
+typedef struct
+{
+	int						refcount;			// number of threads using this table.
+	File*						entries[MAX_OPEN_FILES];
+	Spinlock					spinlock;
+} FileTable;
+
+FileTable *ftabCreate();
+void ftabUpref(FileTable *ftab);
+void ftabDownref(FileTable *ftab);
+FileTable *ftabDup(FileTable *ftab);
 
 #endif

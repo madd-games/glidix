@@ -34,8 +34,20 @@
  */
 
 #include <glidix/common.h>
+#include <glidix/procmem.h>
+#include <glidix/ftab.h>
 #include <stdint.h>
 #include <stddef.h>
+
+typedef struct
+{
+	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
+	uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
+	uint64_t rip, rsp;
+} PACKED MachineState;
+
+#define	CLONE_SHARE_MEMORY		(1 << 0)
+#define	CLONE_SHARE_FTAB		(1 << 1)
 
 /**
  * If this flag is set, then a thread is waiting for something and should not be scheduled
@@ -52,6 +64,7 @@ typedef struct _Thread
 
 	/**
 	 * The thread's stack and its size. Must be kfree()'d when the thread terminates.
+	 * If stack is NULL then no stack needs to be freed.
 	 */
 	void				*stack;
 	size_t				stackSize;
@@ -65,6 +78,22 @@ typedef struct _Thread
 	 * Flags (see above).
 	 */
 	uint64_t			flags;
+
+	/**
+	 * The ProcMem object attached to this thread, or NULL if no process memory is
+	 * assigned (i.e. it's a kernel thread).
+	 */
+	ProcMem				*pm;
+
+	/**
+	 * The pid is 0 for all kernel threads. New pids are assigned by _glidix_clone() and fork().
+	 */
+	int				pid;
+
+	/**
+	 * The file table used by this process.
+	 */
+	FileTable			*ftab;
 
 	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
@@ -113,5 +142,13 @@ void waitThread(Thread *thread);
  * Signal a thread to stop waiting.
  */
 void signalThread(Thread *thread);
+
+/**
+ * This function is used to create new user threads and processes, it can be used to implement
+ * pthread_create() as well as fork(), by passing the appropriate options.
+ * The passed regs structure is for the parent.
+ * This function returns 0 on success, or negative numbers on error.
+ */
+int threadClone(Regs *regs, int flags, MachineState *state);
 
 #endif

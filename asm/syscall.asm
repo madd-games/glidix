@@ -7,11 +7,11 @@
 ;	modification, are permitted provided that the following conditions are met:
 ;	
 ;	* Redistributions of source code must retain the above copyright notice, this
-;		list of conditions and the following disclaimer.
+;	  list of conditions and the following disclaimer.
 ;	
 ;	* Redistributions in binary form must reproduce the above copyright notice,
-;		this list of conditions and the following disclaimer in the documentation
-;		and/or other materials provided with the distribution.
+;	  this list of conditions and the following disclaimer in the documentation
+;	  and/or other materials provided with the distribution.
 ;	
 ;	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ;	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -27,42 +27,13 @@
 section .text
 bits 64
 
-[global getFlagsRegister]
-getFlagsRegister:
-	pushfq
-	pop rax
-	ret
+global _jmp_usbs
+_jmp_usbs:
+	; move the stack to a userspace area.
+	mov		rsp,		0x8000002000
 
-[global switchContext]
-switchContext:
-	; The argument is stored in RDI, and is the address of a Regs structure.
-	; If we move the stack there, we can easily do a context switch with a
-	; bunch of pops.
-	mov	rsp,		rdi
-
-	; first we switch the DS
-	pop	rax
-	mov	ds,		ax
-
-	; GPRs
-	pop	rdi
-	pop	rsi
-	pop	rbp
-	pop	rbx
-	pop	rdx
-	pop	rcx
-	pop	rax
-	pop	r8
-	pop	r9
-	pop	r10
-	pop	r11
-	pop	r12
-	pop	r13
-	pop	r14
-	pop	r15
-
-	; ignore "intNo" and "errCode"
-	add	rsp,		16
-
-	; the rest is popped by an interrupt return
-	iretq
+	; jump to the first byte of /initrd/usbs
+	; NASM seems to output a relocation when jumping to an aboluste address, so we must
+	; store it in a register first. Weird.
+	mov		rax,		0x8000000000
+	jmp		rax

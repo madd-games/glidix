@@ -154,6 +154,11 @@ void expandHeap()
 	HeapFooter *lastFoot = (HeapFooter*) (addr - sizeof(HeapFooter));
 	HeapHeader *lastHead = heapHeaderFromFooter(lastFoot);
 
+	if (lastFoot->magic != HEAP_FOOTER_MAGIC)
+	{
+		panic("the last footer has invalid magic (located at %a)", lastFoot);
+	};
+
 	if (lastHead->flags & HEAP_BLOCK_TAKEN)
 	{
 		// taken, so make a new block, and tell the previous-last footer that
@@ -196,7 +201,8 @@ static HeapHeader *heapWalkRight(HeapHeader *head)
 	HeapHeader *nextHead = (HeapHeader*) addr;
 	if (nextHead->magic != HEAP_HEADER_MAGIC)
 	{
-		panic("detected heap corruption (invalid header magic)");
+		heapDump();
+		panic("detected heap corruption (invalid header magic at %a, stepping from %a)", nextHead, head);
 	};
 
 	return nextHead;
@@ -232,7 +238,7 @@ static void heapSplitBlock(HeapHeader *head, size_t size)
 	newFooter->size = size;
 };
 
-static void *kxmallocDynamic(size_t size, int flags)
+static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno)
 {
 	// TODO: don't ignore the flags!
 	void *retAddr = NULL;
@@ -269,16 +275,18 @@ static void *kxmallocDynamic(size_t size, int flags)
 
 	retAddr = &head[1];		// the memory right after the header is the free block.
 	head->flags |= HEAP_BLOCK_TAKEN;
+	head->aid = aid;
+	head->lineno = lineno;
 
 	spinlockRelease(&heapLock);
 	return retAddr;
 };
 
-void *kxmalloc(size_t size, int flags)
+void *_kxmalloc(size_t size, int flags, const char *aid, int lineno)
 {
 	if (readyForDynamic)
 	{
-		return kxmallocDynamic(size, flags);
+		return kxmallocDynamic(size, flags, aid, lineno);
 	};
 
 	spinlockAcquire(&heapLock);
@@ -303,13 +311,41 @@ void *kxmalloc(size_t size, int flags)
 	return ret;
 };
 
-void *kmalloc(size_t size)
+void *_kmalloc(size_t size, const char *aid, int lineno)
 {
-	return kxmalloc(size, 0);
+	return _kxmalloc(size, 0, aid, lineno);
+};
+
+void *krealloc(void *block, size_t size)
+{
+	if (block == NULL) return kmalloc(size);
+
+	uint64_t addr = (uint64_t)block - sizeof(HeapHeader);
+	HeapHeader *head = (HeapHeader*) addr;
+
+	if (head->magic != HEAP_HEADER_MAGIC)
+	{
+		panic("heap corruption detected: block header at %a has invalid magic", addr);
+	};
+
+	void *ret = kmalloc(size);
+	if (size < head->size)
+	{
+		memcpy(ret, block, size);
+	}
+	else
+	{
+		memcpy(ret, block, head->size);
+	};
+
+	kfree(block);
+	return ret;
 };
 
 void kfree(void *block)
 {
+	// kfree()ing NULL is perfectly acceptable.
+	if (block == NULL) return;
 	spinlockAcquire(&heapLock);
 
 	uint64_t addr = (uint64_t) block;
@@ -407,6 +443,7 @@ void kfree(void *block)
 void heapDump()
 {
 	// dump the list of blocks to the console.
+	uint64_t heapsz = 0;
 	HeapHeader *head = (HeapHeader*) 0x10000000000;
 	kprintf("---\n");
 	kprintf("ADDR                   STAT     SIZE\n");
@@ -421,9 +458,27 @@ void heapDump()
 			stat = "%$\x04" "USED%#";
 		};
 		kprintf(stat);
-		kprintf("     %d\n", head->size);
-
+		kprintf("     %d", head->size);
 		HeapFooter *foot = heapFooterFromHeader(head);
+
+		kprintf(" %$\x0E");
+		if (head->magic != HEAP_HEADER_MAGIC)
+		{
+			kprintf("H");
+		};
+		if (foot->magic != HEAP_FOOTER_MAGIC)
+		{
+			kprintf("F");
+		};
+		kprintf("%#");
+
+		if (head->flags & HEAP_BLOCK_TAKEN)
+		{
+			kprintf(" [%s:%d]", head->aid, head->lineno);
+		};
+		kprintf("\n");
+
+		heapsz += head->size + sizeof(HeapHeader) + sizeof(HeapFooter);
 		if (foot->flags & HEAP_BLOCK_HAS_RIGHT)
 		{
 			head = (HeapHeader*) &foot[1];
@@ -433,6 +488,10 @@ void heapDump()
 			break;
 		};
 	};
+
+	uint64_t heapszMB = heapsz / 1024 / 1024;
+	uint64_t heapszPercent = heapsz * 100 / 0x40000000;
+	kprintf("Total heap usage: %d/1024MB (%d%%)\n", heapszMB, heapszPercent);
 	kprintf("---\n");
 };
 

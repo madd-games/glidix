@@ -181,6 +181,14 @@ static void fileClose(File *file)
 	kfree(file->fsdata);
 };
 
+static int dup(File *me, File *file, size_t szFile)
+{
+	memcpy(file, me, sizeof(File));
+	file->fsdata = kmalloc(sizeof(TarFile));
+	memcpy(file->fsdata, me->fsdata, sizeof(TarFile));
+	return 0;
+};
+
 static off_t seek(File *file, off_t offset, int whence)
 {
 	TarFile *tf = (TarFile*) file->fsdata;
@@ -238,6 +246,7 @@ static int openfile(Dir *me, File *file, size_t szfile)
 	file->read = read;
 	file->close = fileClose;
 	file->seek = seek;
+	file->dup = dup;
 
 	return 0;
 };

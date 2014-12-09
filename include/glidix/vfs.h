@@ -81,7 +81,7 @@ struct dirent
 };
 
 /**
- * Describes an open file. All of itsmember functions may be NULL.
+ * Describes an open file. All of its member functions may be NULL.
  */
 typedef struct _File
 {
@@ -109,6 +109,20 @@ typedef struct _File
 	 * Close the file. Do not free this structure! The kernel will do that for you.
 	 */
 	void (*close)(struct _File *file);
+
+	/**
+	 * Duplicate the file description into another File structure. Both description must
+	 * be initially identical, but may become different when read(), write(), seek() and
+	 * other functions are called on them. Return 0 if the duplication was successful; -1
+	 * if this description cannot be duplicated for whatever reason. If this entry is NULL,
+	 * the file description is considered impossible to duplicate.
+	 *
+	 * If a file description cannot be duplicated, the dup() and dup2() system calls return
+	 * errors, and the fork() and _glidix_clone() (when creating a new file table) system calls
+	 * shall make the child process see the file descriptor referring to this description as
+	 * closed.
+	 */
+	int (*dup)(struct _File *me, struct _File *file, size_t szFile);
 } File;
 
 /**

@@ -100,7 +100,7 @@ typedef struct
 {
 	uint64_t			present:1;
 	uint64_t			rw:1;
-	uint64_t			us:1;
+	uint64_t			user:1;
 	uint64_t			pwt:1;
 	uint64_t			pcd:1;
 	uint64_t			accessed:1;

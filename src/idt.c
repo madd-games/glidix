@@ -171,7 +171,7 @@ static void onPageFault(Regs *regs)
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 
-	kprintf("A page fault occured\n");
+	kprintf("A page fault occured (rip=%a)\n", regs->rip);
 	if ((regs->errCode & 1) == 0)
 	{
 		kprintf("[non-present]");
@@ -211,6 +211,22 @@ static void onPageFault(Regs *regs)
 
 void switchTask(Regs *regs);		// sched.c
 
+typedef struct
+{
+	uint16_t			ud2;		// must be 0x0B0F
+	uint16_t			num;		// syscall number
+} PACKED SyscallOpcode;
+
+void onInvalidOpcodeOrSyscall(Regs *regs)
+{
+	SyscallOpcode *syscall = (SyscallOpcode*) regs->rip;
+	if (syscall->ud2 == 0x0B0F)
+	{
+		kdumpregs(regs);
+		panic("SYSTEM CALL: %d\n", syscall->num);
+	};
+};
+
 void isrHandler(Regs *regs)
 {
 #if 0
@@ -236,6 +252,9 @@ void isrHandler(Regs *regs)
 		break;
 	case IRQ1:
 		// ignore
+		break;
+	case 6:
+		onInvalidOpcodeOrSyscall(regs);
 		break;
 	case 14:
 		onPageFault(regs);

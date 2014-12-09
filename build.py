@@ -33,6 +33,7 @@ f.close()
 
 os.system("mkdir -p build")
 os.system("mkdir -p out")
+os.system("mkdir -p initrd")
 
 def doOperation(msg, op):
 	sys.stderr.write(msg + " ")
@@ -77,6 +78,8 @@ for asmfile in os.listdir("asm"):
 
 def opCreateBuildMK():
 	f = open("build.mk", "wb")
+	f.write(".PHONY: all\n")
+	f.write("all: out/vmglidix out/vmglidix.tar\n")
 	f.write("TARGET_CC=%s\n" % config["compiler"])
 	f.write("CFLAGS=-ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -I include -Wall -Werror\n")
 	f.write("out/vmglidix: %s\n" % (" ".join(objectFiles)))
@@ -84,11 +87,17 @@ def opCreateBuildMK():
 	f.write("-include %s\n" % (" ".join(depFiles)))
 	f.write("\n")
 	f.write("\n".join(rules))
+	f.write("out/vmglidix.tar: initrd/usbs\n")
+	f.write("\trm -f out/vmglidix.tar\n")
+	f.write("\tcd initrd && tar -cf ../out/vmglidix.tar *\n")
+	f.write("initrd/usbs: utils/usbs.asm\n")
+	f.write("\tnasm $< -o $@ -fbin\n")
 	f.close()
 
 def opCreateISO():
 	os.system("mkdir -p isodir/boot")
 	os.system("cp out/vmglidix isodir/boot/vmglidix")
+	os.system("cp out/vmglidix.tar isodir/boot/vmglidix.tar")
 	os.system("mkdir -p isodir/boot/grub")
 	os.system("cp grub.cfg isodir/boot/grub/grub.cfg")
 	os.system("grub-mkrescue -o out/glidix.iso isodir")

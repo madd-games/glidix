@@ -31,9 +31,11 @@
 #include <glidix/pagetab.h>
 #include <glidix/memory.h>
 #include <glidix/string.h>
+#include <glidix/spinlock.h>
 #include <stdint.h>
 
 static PTe *ispPTE;
+static Spinlock ispSpinlock;
 
 void ispInit()
 {
@@ -70,6 +72,8 @@ void ispInit()
 
 	// refresh the address space
 	refreshAddrSpace();
+
+	spinlockRelease(&ispSpinlock);
 };
 
 void *ispGetPointer()
@@ -81,4 +85,14 @@ void ispSetFrame(uint64_t frame)
 {
 	ispPTE->framePhysAddr = frame;
 	refreshAddrSpace();
+};
+
+void ispLock()
+{
+	spinlockAcquire(&ispSpinlock);
+};
+
+void ispUnlock()
+{
+	spinlockRelease(&ispSpinlock);
 };

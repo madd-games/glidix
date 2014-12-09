@@ -40,10 +40,14 @@
 
 void initMemoryPhase1(uint64_t placement);
 void initMemoryPhase2();
-void *kxmalloc(size_t size, int flags);
-void *kmalloc(size_t size);
+void *_kxmalloc(size_t size, int flags, const char *aid, int lineno);
+void *_kmalloc(size_t size, const char *aid, int lineno);
+void *krealloc(void *block, size_t size);
 void kfree(void *block);
 void heapDump();
+
+#define	kmalloc(size)			_kmalloc((size), __FILE__, __LINE__)
+#define	kxmalloc(size, flags)		_kxmalloc((size), (flags), "", 0)
 
 /**
  * If you're going to disable interrupts and use kmalloc() and kfree() during that time,
@@ -70,6 +74,8 @@ typedef struct
 	uint32_t magic;
 	uint64_t size;
 	uint8_t  flags;
+	const char *aid;				// allocator string (filename and lineno of kmalloc(), for debugging)
+	int lineno;
 } PACKED HeapHeader;
 
 typedef struct

@@ -38,6 +38,8 @@
 #include <glidix/sched.h>
 #include <glidix/mount.h>
 #include <glidix/initrdfs.h>
+#include <glidix/procmem.h>
+#include <glidix/vfs.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -110,7 +112,55 @@ void kmain(MultibootInfo *info)
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
 };
 
+extern void _jmp_usbs();
+static void spawnProc()
+{
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Allocating memory for bootstrap... ");
+	FrameList *fl = palloc(2);
+	AddSegment(getCurrentThread()->pm, 0, fl, PROT_READ | PROT_WRITE | PROT_EXEC);
+	pdownref(fl);
+	SetProcessMemory(getCurrentThread()->pm);
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Loading /initrd/usbs... ");
+	File *file = vfsOpen("/initrd/usbs", 0);
+	if (file == NULL)
+	{
+		kprintf("%$\x04" "Failed%#\n");
+		panic("failed to open /initrd/usbs");
+	};
+	ssize_t count = vfsRead(file, (void*) 0x8000000000, 0x1000);
+	if (count < 1)
+	{
+		kprintf("%$\x04" "Failed%#\n");
+		panic("read() /initrd/usbs: %d\n", count);
+	};
+	vfsClose(file);
+	kprintf("%$\x02" "%d bytes%#\n", count);
+
+	kprintf("Control will be transferred to usbs now.\n");
+	_jmp_usbs();
+	while (1); // no return
+};
+
+extern uint64_t getFlagsRegister();
+
 void kmain2()
 {
 	initMount();
+
+	kprintf("Starting the spawn process... ");
+	MachineState state;
+	void *spawnStack = kmalloc(0x1000);
+	state.rip = (uint64_t) &spawnProc;
+	state.rsp = (uint64_t) spawnStack + 0x1000;
+	Regs regs;
+	regs.cs = 8;
+	regs.ds = 16;
+	regs.rflags = getFlagsRegister() | (1 << 9);
+	regs.ss = 0;
+	threadClone(&regs, 0, &state);
+	// "Done" is displayed by the spawnProc() and that's our job done pretty much.
 };

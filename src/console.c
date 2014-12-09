@@ -225,6 +225,14 @@ void kdumpregs(Regs *regs)
 	kprintf("RDX: %a\n", regs->rdx);
 	kprintf("RCX: %a\n", regs->rcx);
 	kprintf("RAX: %a\n", regs->rax);
+	kprintf("R8:  %a\n", regs->r8);
+	kprintf("R9:  %a\n", regs->r9);
+	kprintf("R10: %a\n", regs->r10);
+	kprintf("R11: %a\n", regs->r11);
+	kprintf("R12: %a\n", regs->r12);
+	kprintf("R13: %a\n", regs->r13);
+	kprintf("R14: %a\n", regs->r14);
+	kprintf("R15: %a\n", regs->r15);
 	kprintf("INO: %a\n", regs->intNo);
 	kprintf("ERR: %a\n", regs->errCode);
 	kprintf("RIP: %a\n", regs->rip);
