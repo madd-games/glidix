@@ -180,7 +180,7 @@ void expandHeap()
 		// not taken, so expand
 		lastHead->size += 0x200000;
 
-		HeapFooter *foot = (HeapFooter*) (addr + 0x200000 - sizeof(HeapHeader));
+		HeapFooter *foot = (HeapFooter*) (addr + 0x200000 - sizeof(HeapFooter));
 		foot->magic = HEAP_FOOTER_MAGIC;
 		foot->size = lastHead->size;
 		foot->flags = 0;
