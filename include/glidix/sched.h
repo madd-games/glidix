@@ -64,7 +64,6 @@ typedef struct _Thread
 
 	/**
 	 * The thread's stack and its size. Must be kfree()'d when the thread terminates.
-	 * If stack is NULL then no stack needs to be freed.
 	 */
 	void				*stack;
 	size_t				stackSize;
@@ -101,6 +100,17 @@ typedef struct _Thread
 	struct _Thread			*prev;
 	struct _Thread			*next;
 } Thread;
+
+/**
+ * We need this to switch kernel stacks.
+ */
+typedef struct
+{
+	uint32_t ignore;
+	uint64_t rsp0;
+} PACKED TSS;
+
+extern TSS _tss;
 
 void initSched();
 void switchContext(Regs *regs);

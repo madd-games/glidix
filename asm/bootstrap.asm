@@ -143,7 +143,7 @@ _crash:
 
 	hlt
 
-GDT64:                           ; Global Descriptor Table (64-bit).
+GDT64:                               ; Global Descriptor Table (64-bit).
 	.Null: equ $ - GDT64         ; The null descriptor.
 	dw 0                         ; Limit (low).
 	dw 0                         ; Base (low).
@@ -165,11 +165,40 @@ GDT64:                           ; Global Descriptor Table (64-bit).
 	db 10010000b                 ; Access.
 	db 00000000b                 ; Granularity.
 	db 0                         ; Base (high).
+	.UserCode: equ $ - GDT64
+	dw 0xFFFF
+	dw 0
+	db 0
+	db 11111000b                 ; Access.
+	db 00100000b                 ; Granularity.
+	db 0xF                       ; Base (high).
+	.UserData: equ $ - GDT64
+	dw 0                         ; Limit (low).
+	dw 0                         ; Base (low).
+	db 0                         ; Base (middle)
+	db 11110010b                 ; Access.
+	db 00000000b                 ; Granularity.
+	db 0                         ; Base (high).
+	; The TSS
+	.TSS: equ $ - GDT64
+	.TSS_limitLow: dw 0
+	.TSS_baseLow: dw 0
+	.TSS_baseMiddle: db 0
+	.TSS_Access: db 11101001b
+	.TSS_limitHigh: dw 0
+	.TSS_baseMiddleHigh: db 0
+	.TSS_baseHigh: dd 0
+	dd 0
 	.Pointer:                    ; The GDT-pointer.
 	dw $ - GDT64 - 1             ; Limit.
 	dq GDT64                     ; Base.
 
 bits 64
+global _tss
+_tss:
+resb 192
+_tss_limit:
+
 _bootstrap64:
 	; load 64-bit data segments.
 	mov ax,		GDT64.Data
@@ -182,10 +211,33 @@ _bootstrap64:
 	xor ax,		ax
 	mov ss,		ax
 
+	; clear the TSS
+	mov rdi,	_tss
+	mov rcx,	192
+	mov al,		0
+	rep stosb
+
 	; set up a stack.
 	mov rsp,	_bootstrap_stack
 	add rsp,	0x4000
 
+	; fill in the TSS segment
+	mov rax,			_tss
+	mov [GDT64.TSS_baseLow],	ax
+	shr rax,			16
+	mov [GDT64.TSS_baseMiddle],	al
+	mov [GDT64.TSS_baseMiddleHigh],	ah
+	shr rax,			16
+	mov [GDT64.TSS_baseHigh],	eax
+
+	mov rax,			_tss_limit
+	mov rbx,			_tss
+	sub rax,			rbx
+	mov [GDT64.TSS_limitLow],	ax
+	shr rax,			16
+	or  rax,			(1 << 5)
+	mov [GDT64.TSS_limitHigh],	ax
+	
 	; go to the C part, pass the previously-saved pointer to the multiboot info structure
 	; as the argument to kmain.
 	xor rdi,	rdi
@@ -195,6 +247,12 @@ _bootstrap64:
 	; if the C kernel returns, halt the CPU.
 	cli
 	hlt
+
+[global _tss_reload_access]
+_tss_reload_access:
+	mov al,		11101001b
+	mov [GDT64.TSS_Access], al
+	ret
 
 [global _bootstrap_stack]
 _bootstrap_stack resq 0x4000

@@ -48,9 +48,11 @@
 #define	VFS_MODE_DIRECTORY		(1 << 11)
 
 /**
- * Errors from openroot()/opendir().
+ * Errors.
  */
 #define	VFS_EMPTY_DIRECTORY		-1		/* the directory was empty */
+#define	VFS_BAD_FD			-2		/* bad file descriptor */
+#define	VFS_PERM			-3		/* permission denied */
 
 /**
  * Errors from parsePath().
@@ -98,7 +100,7 @@ typedef struct _File
 	/**
 	 * Write to the file.
 	 */
-	ssize_t (*write)(struct _File *file, void *buffer, size_t size);
+	ssize_t (*write)(struct _File *file, const void *buffer, size_t size);
 
 	/**
 	 * Seek to a different position in the file.

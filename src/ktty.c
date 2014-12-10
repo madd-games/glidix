@@ -26,17 +26,32 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
+#include <glidix/ktty.h>
+#include <glidix/memory.h>
+#include <glidix/vfs.h>
+#include <glidix/string.h>
+#include <glidix/console.h>
 
-#include <glidix/common.h>
-#include <stdarg.h>
-#include <stddef.h>
+static ssize_t termWrite(File *file, const void *buffer, size_t size)
+{
+	kputbuf((const char*) buffer, size);
+	return size;
+};
 
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-void kprintf(const char *fmt, ...);
-void kputbuf(const char *buf, size_t size);
-void kdumpregs(Regs *regs);
+static int termDup(File *old, File *new, size_t szfile)
+{
+	memcpy(new, old, szfile);
+	return 0;
+};
 
-#endif
+void setupTerminal(FileTable *ftab)
+{
+	File *termout = (File*) kmalloc(sizeof(File));
+	memset(termout, 0, sizeof(File));
+
+	termout->write = &termWrite;
+	termout->dup = &termDup;
+
+	ftab->entries[1] = termout;
+	ftab->entries[2] = termout;
+};

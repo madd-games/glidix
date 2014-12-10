@@ -66,3 +66,11 @@ switchContext:
 
 	; the rest is popped by an interrupt return
 	iretq
+
+[global reloadTR]
+[extern _tss_reload_access]
+reloadTR:
+	call	_tss_reload_access
+	mov	rax,		0x2b
+	ltr	ax
+	ret

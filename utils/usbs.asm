@@ -25,10 +25,16 @@
 ;	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 bits 64
+org 0x8000000000
 
 ; usbs.asm -- Userspace bootstrap.
-; This file is loaded into one page at startup. to help transfer controlto userspace
+; This file is loaded into one page at startup to help transfer control to userspace
 ; from pid 1.
 
+mov rdi, str_path
 ud2
-dw 69
+dw 2
+
+jmp $
+
+str_path db '/initrd/test', 0

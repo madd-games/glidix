@@ -26,17 +26,16 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
+#ifndef __glidix_ktty_h
+#define __glidix_ktty_h
 
-#include <glidix/common.h>
-#include <stdarg.h>
-#include <stddef.h>
+/**
+ * Provides file descriptions for stdin, stdout and stderr of the initial process,
+ * so that it can write to the kernel console.
+ */
 
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-void kprintf(const char *fmt, ...);
-void kputbuf(const char *buf, size_t size);
-void kdumpregs(Regs *regs);
+#include <glidix/ftab.h>
+
+void setupTerminal(FileTable *ftab);
 
 #endif

@@ -92,6 +92,23 @@ void initSched()
 	switchContext(&firstThread.regs);
 };
 
+extern void reloadTR();
+
+static void jumpToTask()
+{
+	// switch kernel stack
+	_tss.rsp0 = (uint64_t) currentThread->stack + currentThread->stackSize;
+
+	// reload the TSS
+	reloadTR();
+
+	// switch address space
+	if (currentThread->pm != NULL) SetProcessMemory(currentThread->pm);
+
+	// switch context
+	switchContext(&currentThread->regs);
+};
+
 void switchTask(Regs *regs)
 {
 	// remember the context of this thread.
@@ -103,11 +120,7 @@ void switchTask(Regs *regs)
 		currentThread = currentThread->next;
 	} while (currentThread->flags & THREAD_WAITING);
 
-	// switch address space
-	if (currentThread->pm != NULL) SetProcessMemory(currentThread->pm);
-
-	// switch context
-	switchContext(&currentThread->regs);
+	jumpToTask();
 };
 
 static void kernelThreadExit()
@@ -117,6 +130,8 @@ static void kernelThreadExit()
 	{
 		panic("kernel startup thread tried to exit (this is a bug)");
 	};
+
+	Thread *nextThread = currentThread->next;
 
 	// we need to do all of this with interrupts disabled, else if this gets interrupted
 	// half way though, we might get a memory leak due to something not being kfree()'d.
@@ -129,9 +144,9 @@ static void kernelThreadExit()
 	kfree(currentThread->stack);
 	kfree(currentThread);
 
-	// enable interrupt then halt, effectively waiting for a context switch that will
-	// never return to this thread.
-	ASM("sti; hlt");
+	// switch tasks
+	currentThread = nextThread;
+	jumpToTask();
 };
 
 void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, void *data)
@@ -228,9 +243,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 		thread->regs.rsp = state->rsp;
 	};
 
-	// no kernel stack really.
-	thread->stack = NULL;
-	thread->stackSize = 0;
+	// kernel stack
+	thread->stack = kmalloc(0x1000);
+	thread->stackSize = 0x1000;
 
 	thread->name = "";
 	thread->flags = 0;

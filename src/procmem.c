@@ -354,6 +354,7 @@ void DownrefProcessMemory(ProcMem *pm)
 	pm->refcount--;
 	if (pm->refcount == 0)
 	{
+		spinlockRelease(&pm->lock);
 		DeleteProcessMemory(pm);
 		return;				// not need to unlock because nobody will try locking ever again.
 	};

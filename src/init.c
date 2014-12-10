@@ -40,6 +40,7 @@
 #include <glidix/initrdfs.h>
 #include <glidix/procmem.h>
 #include <glidix/vfs.h>
+#include <glidix/ktty.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -112,8 +113,8 @@ void kmain(MultibootInfo *info)
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
 };
 
-extern void _jmp_usbs();
-static void spawnProc()
+extern void _jmp_usbs(void *stack);
+static void spawnProc(void *stack)
 {
 	kprintf("%$\x02" "Done%#\n");
 
@@ -122,6 +123,10 @@ static void spawnProc()
 	AddSegment(getCurrentThread()->pm, 0, fl, PROT_READ | PROT_WRITE | PROT_EXEC);
 	pdownref(fl);
 	SetProcessMemory(getCurrentThread()->pm);
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Setting up the terminal... ");
+	setupTerminal(getCurrentThread()->ftab);
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Loading /initrd/usbs... ");
@@ -141,8 +146,7 @@ static void spawnProc()
 	kprintf("%$\x02" "%d bytes%#\n", count);
 
 	kprintf("Control will be transferred to usbs now.\n");
-	_jmp_usbs();
-	while (1); // no return
+	_jmp_usbs(stack);
 };
 
 extern uint64_t getFlagsRegister();
@@ -156,6 +160,7 @@ void kmain2()
 	void *spawnStack = kmalloc(0x1000);
 	state.rip = (uint64_t) &spawnProc;
 	state.rsp = (uint64_t) spawnStack + 0x1000;
+	state.rdi = (uint64_t) spawnStack;
 	Regs regs;
 	regs.cs = 8;
 	regs.ds = 16;

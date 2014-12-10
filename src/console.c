@@ -215,6 +215,17 @@ void kprintf(const char *fmt, ...)
 	va_end(ap);
 };
 
+void kputbuf(const char *buf, size_t size)
+{
+	spinlockAcquire(&consoleLock);
+	while (size--)
+	{
+		kputch(*buf++);
+	};
+	updateVGACursor();
+	spinlockRelease(&consoleLock);
+};
+
 void kdumpregs(Regs *regs)
 {
 	kprintf("DS : %a\n", regs->ds);

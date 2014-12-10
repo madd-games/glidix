@@ -31,6 +31,7 @@
 #include <glidix/console.h>
 #include <glidix/common.h>
 #include <glidix/port.h>
+#include <glidix/syscall.h>
 
 IDTEntry idt[256];
 IDTPointer idtPtr;
@@ -222,8 +223,11 @@ void onInvalidOpcodeOrSyscall(Regs *regs)
 	SyscallOpcode *syscall = (SyscallOpcode*) regs->rip;
 	if (syscall->ud2 == 0x0B0F)
 	{
-		kdumpregs(regs);
-		panic("SYSTEM CALL: %d\n", syscall->num);
+		syscallDispatch(regs, syscall->num);
+	}
+	else
+	{
+		panic("invalid opcode");
 	};
 };
 

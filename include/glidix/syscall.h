@@ -26,17 +26,11 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
+#ifndef __glidix_syscall_h
+#define __glidix_syscall_h
 
 #include <glidix/common.h>
-#include <stdarg.h>
-#include <stddef.h>
 
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-void kprintf(const char *fmt, ...);
-void kputbuf(const char *buf, size_t size);
-void kdumpregs(Regs *regs);
+void syscallDispatch(Regs *regs, uint16_t num);
 
 #endif

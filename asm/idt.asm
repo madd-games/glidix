@@ -100,7 +100,7 @@ isrCommon:
 %macro ISR_NOERRCODE 1
 	global isr%1
 	isr%1:
-		cli
+		;cli
 		push qword 0 
 		push qword %1
 		jmp isrCommon
@@ -109,7 +109,7 @@ isrCommon:
 %macro ISR_ERRCODE 1
 	global isr%1
 	isr%1:
-		cli
+		;cli
 		push qword %1
 		jmp isrCommon
 %endmacro
@@ -117,7 +117,7 @@ isrCommon:
 %macro IRQ 2
 	global irq%1
 	irq%1:
-		cli
+		;cli
 		push qword 0
 		push qword %2
 		jmp isrCommon

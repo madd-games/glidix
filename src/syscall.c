@@ -26,17 +26,61 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
+#include <glidix/syscall.h>
+#include <glidix/sched.h>
+#include <glidix/ftab.h>
+#include <glidix/vfs.h>
+#include <glidix/elf64.h>
 
-#include <glidix/common.h>
-#include <stdarg.h>
-#include <stddef.h>
+static uint64_t sys_write(int fd, const void *buf, size_t size)
+{
+	ssize_t out;
+	if (fd >= MAX_OPEN_FILES)
+	{
+		out = VFS_BAD_FD;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			out = VFS_BAD_FD;
+		}
+		else
+		{
+			if (fp->write == NULL)
+			{
+				spinlockRelease(&ftab->spinlock);
+				out = VFS_PERM;
+			}
+			else
+			{
+				out = fp->write(fp, buf, size);
+				spinlockRelease(&ftab->spinlock);
+			};
+		};
+	};
 
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-void kprintf(const char *fmt, ...);
-void kputbuf(const char *buf, size_t size);
-void kdumpregs(Regs *regs);
+	return *((uint64_t*)&out);
+};
 
-#endif
+void syscallDispatch(Regs *regs, uint16_t num)
+{
+	regs->rip += 4;
+
+	switch (num)
+	{
+	case 1:
+		regs->rax = sys_write(*((int*)&regs->rdi), (const void*) regs->rsi, *((size_t*)&regs->rdx));
+		break;
+	case 2:
+		regs->rax = elfExec(regs, (const char*) regs->rdi);
+		break;
+	default:
+		panic("invalid syscall: %d\n", num);
+		break;
+	};
+};
