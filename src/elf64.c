@@ -210,6 +210,10 @@ int elfExec(Regs *regs, const char *path)
 		vfsRead(fp, (void*) segments[i].loadAddr, segments[i].fileSize);
 	};
 
+	// close the ELF64 file.
+	vfsClose(fp);
+
+	// make sure we jump to the entry upon return
 	regs->rip = elfHeader.e_entry;
 
 	return 0;

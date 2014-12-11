@@ -264,6 +264,10 @@ void isrHandler(Regs *regs)
 		onPageFault(regs);
 		break;
 	default:
+		if (regs->intNo >= IRQ0)
+		{
+			break;
+		};
 		panic("Unhandled interrupt: %d\n", regs->intNo);
 		break;
 	};
