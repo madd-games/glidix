@@ -100,7 +100,7 @@ void kmain(MultibootInfo *info)
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the PIT... ");
-	uint16_t divisor = 1193180 / 50;		// 50 Hz
+	uint16_t divisor = 1193180 / 1000;		// 1000 Hz
 	outb(0x43, 0x36);
 	uint8_t l = (uint8_t)(divisor & 0xFF);
 	uint8_t h = (uint8_t)( (divisor>>8) & 0xFF );
