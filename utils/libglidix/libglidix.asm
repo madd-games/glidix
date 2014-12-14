@@ -1,4 +1,4 @@
-;	Glidix kernel
+;	Glidix
 ;
 ;	Copyright (c) 2014, Madd Games.
 ;	All rights reserved.
@@ -24,17 +24,20 @@
 ;	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ;	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+section .text
 bits 64
-org 0x1000
 
-; usbs.asm -- Userspace bootstrap.
-; This file is loaded into one page at startup to help transfer control to userspace
-; from pid 1.
+%macro GLIDIX_SYSCALL 2			; syscall num, syscall name
+[global %2]
+%2:
+	ud2
+	dw %1
+	ret
+%endmacro
 
-mov rdi, str_path
-ud2
-dw 2
+GLIDIX_SYSCALL		1,	write
+GLIDIX_SYSCALL		2,	_glidix_exec
+GLIDIX_SYSCALL		3,	read
+GLIDIX_SYSCALL		4,	_glidix_open
+GLIDIX_SYSCALL		5,	close
 
-jmp $
-
-str_path db '/initrd/test', 0

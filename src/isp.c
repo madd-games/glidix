@@ -41,9 +41,8 @@ void ispInit()
 {
 	// TODO: xd (execute disable, not the stupid face), we'll look at that shit in a bit.
 
-	// note that for now, kxmalloc() returns physical addresses,
-	// so we can be sure that the virtual address returned is equal
-	// to the physical address.
+	// note that for now, kxmalloc() returns physical addresses with the virtual base
+	// added.
 	PML4 *pml4 = getPML4();
 	PDPT *pdpt = kxmalloc(sizeof(PDPT), MEM_PAGEALIGN);
 	memset(pdpt, 0, sizeof(PDPT));
@@ -51,13 +50,13 @@ void ispInit()
 	memset(pd, 0, sizeof(PD));
 	pdpt->entries[0].present = 1;
 	pdpt->entries[0].rw = 1;
-	pdpt->entries[0].pdPhysAddr = ((uint64_t)pd >> 12);
+	pdpt->entries[0].pdPhysAddr = (((uint64_t)pd-0xFFFF800000000000) >> 12);
 
 	PT *pt = kxmalloc(sizeof(PT), MEM_PAGEALIGN);
 	memset(pt, 0, sizeof(PT));
 	pd->entries[0].present = 1;
 	pd->entries[0].rw = 1;
-	pd->entries[0].ptPhysAddr = ((uint64_t)pt >> 12);
+	pd->entries[0].ptPhysAddr = (((uint64_t)pt-0xFFFF800000000000) >> 12);
 
 	// get the page for virtual address 0x18000000000.
 	ispPTE = &pt->entries[0];
@@ -65,10 +64,10 @@ void ispInit()
 	ispPTE->rw = 1;
 	ispPTE->framePhysAddr = 0;
 
-	// set it in the PML4 (so it maps from 0x18000000000 up).
-	pml4->entries[3].present = 1;
-	pml4->entries[3].rw = 1;
-	pml4->entries[3].pdptPhysAddr = ((uint64_t)pdpt >> 12);
+	// set it in the PML4 (so it maps from 0xFFFF808000000000 up).
+	pml4->entries[257].present = 1;
+	pml4->entries[257].rw = 1;
+	pml4->entries[257].pdptPhysAddr = (((uint64_t)pdpt-0xFFFF800000000000) >> 12);
 
 	// refresh the address space
 	refreshAddrSpace();
@@ -78,7 +77,7 @@ void ispInit()
 
 void *ispGetPointer()
 {
-	return (void*) 0x18000000000;
+	return (void*) 0xFFFF808000000000;
 };
 
 void ispSetFrame(uint64_t frame)

@@ -35,6 +35,8 @@
 #include <glidix/isp.h>
 #include <stdint.h>
 
+#define	HEAP_BASE_ADDR				0xFFFF810000000000
+
 static Spinlock heapLock;
 
 static uint64_t placement;
@@ -64,14 +66,14 @@ void initMemoryPhase2()
 	memset(pd, 0, sizeof(PD));
 	pdpt->entries[0].present = 1;
 	pdpt->entries[0].rw = 1;
-	pdpt->entries[0].pdPhysAddr = ((uint64_t)pd >> 12);
+	pdpt->entries[0].pdPhysAddr = (((uint64_t)pd-0xFFFF800000000000) >> 12);
 
 	// page table for the first 2MB.
 	PT *pt = kxmalloc(sizeof(PT), MEM_PAGEALIGN);
 	memset(pt, 0, sizeof(PT));
 	pd->entries[0].present = 1;
 	pd->entries[0].rw = 1;
-	pd->entries[0].ptPhysAddr = ((uint64_t)pt >> 12);
+	pd->entries[0].ptPhysAddr = (((uint64_t)pt-0xFFFF800000000000) >> 12);
 	pdHeap = pd;
 
 	// map the first 2MB to physical addresses.
@@ -83,20 +85,20 @@ void initMemoryPhase2()
 		pt->entries[i].framePhysAddr = phmAllocFrame();
 	};
 
-	// set it in the PML4 (so it maps from 0x10000000000 up).
-	pml4->entries[2].present = 1;
-	pml4->entries[2].rw = 1;
-	pml4->entries[2].pdptPhysAddr = ((uint64_t)pdpt >> 12);
+	// set it in the PML4 (so it maps from HEAP_BASE_ADDR up).
+	pml4->entries[258].present = 1;
+	pml4->entries[258].rw = 1;
+	pml4->entries[258].pdptPhysAddr = (((uint64_t)pdpt-0xFFFF800000000000) >> 12);
 
 	refreshAddrSpace();
 
 	// create one giant (2MB) block for the heap.
-	HeapHeader *head = (HeapHeader*) 0x10000000000;
+	HeapHeader *head = (HeapHeader*) HEAP_BASE_ADDR;
 	head->magic = HEAP_HEADER_MAGIC;
 	head->size = 0x200000 - sizeof(HeapHeader) - sizeof(HeapFooter);
 	head->flags = 0;		// this block is free.
 
-	HeapFooter *foot = (HeapFooter*) (0x10000200000 - sizeof(HeapFooter));
+	HeapFooter *foot = (HeapFooter*) (HEAP_BASE_ADDR + 0x200000 - sizeof(HeapFooter));
 	foot->magic = HEAP_FOOTER_MAGIC;
 	foot->size = head->size;
 	foot->flags = 0;
@@ -147,7 +149,7 @@ void expandHeap()
 	refreshAddrSpace();
 
 	// address of the end of the heap before expansion
-	uint64_t addr = 0x10000000000 + (0x200000 * (nextHeapTable-1));
+	uint64_t addr = HEAP_BASE_ADDR + (0x200000 * (nextHeapTable-1));
 
 	// if the current last block is free, we'll extend it;
 	// otherwise, we add a new 2MB block to fill this new space
@@ -245,7 +247,7 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 	spinlockAcquire(&heapLock);
 
 	// find the first free block.
-	HeapHeader *head = (HeapHeader*) 0x10000000000;
+	HeapHeader *head = (HeapHeader*) HEAP_BASE_ADDR;
 	while ((head->flags & HEAP_BLOCK_TAKEN) || (head->size < size))
 	{
 		HeapHeader *nextHead = heapWalkRight(head);
@@ -303,7 +305,7 @@ void *_kxmalloc(size_t size, int flags, const char *aid, int lineno)
 
 	void *ret = (void*) placement;
 	placement += size;
-	if (placement > 0x200000)
+	if (placement > 0xFFFF800000200000)
 	{
 		panic("placement allocation went beyond 2MB mark!");
 	};
@@ -349,7 +351,7 @@ void kfree(void *block)
 	spinlockAcquire(&heapLock);
 
 	uint64_t addr = (uint64_t) block;
-	if (addr < (0x10000000000 + sizeof(HeapHeader)))
+	if (addr < (HEAP_BASE_ADDR + sizeof(HeapHeader)))
 	{
 		panic("invalid pointer passed to kfree(): %a: below heap start", addr);
 	};
@@ -444,7 +446,7 @@ void heapDump()
 {
 	// dump the list of blocks to the console.
 	uint64_t heapsz = 0;
-	HeapHeader *head = (HeapHeader*) 0x10000000000;
+	HeapHeader *head = (HeapHeader*) HEAP_BASE_ADDR;
 	kprintf("---\n");
 	kprintf("ADDR                   STAT     SIZE\n");
 	while (1)

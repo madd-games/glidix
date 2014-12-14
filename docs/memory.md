@@ -3,7 +3,9 @@ Glidix Memory Map
 
 Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divided into 512GB blocks, each with a different purpose. Here is the specific memory map:
 
- * `0x0000000000000000`-`0x0000007FFFFFFFFF` - kernel code and data, and the bootstrap stack. Inaccessible to userspace code (not even readable).
- * `0x0000008000000000`-`0x000000FFFFFFFFFF` - Userspace code, data, stack, etc. All of the userspace code is here. There is also a kernel stack area which is used upon interrupts. This is the only 512GB block which gets changed between each process.
- * `0x0000010000000000`-`0x0000017FFFFFFFFF` - The kernel heap. Inaccessible to userspace code.
- * `0x0000018000000000`-`0x0000018000001000` - The Interprocess Streaming Page (ISP), this is a single page that gets remapped to different adresses to send data to different address spaces etc.
+ * `pml4[0]` (except the first page) is for userspace processes.
+ * `pml4[256]` is the static kernel image (code, data, bss, symbols, etc).
+ * `pml4[257]` is the Interprocess Streaming Page (ISP), this is a single page that gets remapped to different addresses to send data to different address spaces etc. There may be more things in this PML4e in the future.
+ * `pml4[258]` is the kernel heap.
+
+The rest of the address space is reserved.

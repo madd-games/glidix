@@ -83,6 +83,14 @@ void initSched()
 	firstThread.pid = 0;
 	firstThread.ftab = NULL;
 
+	// UID/GID stuff
+	firstThread.euid = 0;
+	firstThread.suid = 0;
+	firstThread.ruid = 0;
+	firstThread.egid = 0;
+	firstThread.sgid = 0;
+	firstThread.rgid = 0;
+
 	// linking
 	firstThread.prev = &firstThread;
 	firstThread.next = &firstThread;
@@ -180,6 +188,14 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	thread->pm = NULL;
 	thread->pid = 0;
 	thread->ftab = NULL;
+
+	// kernel threads always run as root
+	thread->euid = 0;
+	thread->suid = 0;
+	thread->ruid = 0;
+	thread->egid = 0;
+	thread->sgid = 0;
+	thread->rgid = 0;
 
 	// this will simulate a call from kernelThreadExit() to "entry()"
 	// this is so that when entry() returns, the thread can safely exit.
@@ -290,6 +306,14 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 			thread->ftab = ftabCreate();
 		};
 	};
+
+	// inherit UIDs/GIDs from the parent
+	thread->euid = currentThread->euid;
+	thread->suid = currentThread->suid;
+	thread->ruid = currentThread->ruid;
+	thread->egid = currentThread->egid;
+	thread->sgid = currentThread->sgid;
+	thread->rgid = currentThread->rgid;
 
 	// link into the runqueue (disable interrupts for the duration of this).
 	ASM("cli");

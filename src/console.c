@@ -31,6 +31,8 @@
 #include <glidix/spinlock.h>
 #include <stdint.h>
 
+#define	VRAM_BASE 0xFFFF8000000B8000
+
 static struct
 {
 	uint64_t curX, curY;
@@ -58,7 +60,7 @@ static void updateVGACursor()
 
 static void scroll()
 {
-	uint8_t *vidmem = (uint8_t*) 0xB8000;
+	uint8_t *vidmem = (uint8_t*) VRAM_BASE;
 
 	uint64_t i;
 	for (i=0; i<2*80*24; i++)
@@ -90,7 +92,7 @@ static void kputch(char c)
 	}
 	else
 	{
-		uint8_t *vidmem = (uint8_t*) (0xB8000 + 2 * (consoleState.curY * 80 + consoleState.curX));
+		uint8_t *vidmem = (uint8_t*) (VRAM_BASE + 2 * (consoleState.curY * 80 + consoleState.curX));
 		*vidmem++ = c;
 		*vidmem++ = consoleState.curColor;
 		consoleState.curX++;

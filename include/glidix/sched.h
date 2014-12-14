@@ -95,6 +95,12 @@ typedef struct _Thread
 	FileTable			*ftab;
 
 	/**
+	 * UID/GID stuff.
+	 */
+	uid_t				euid, suid, ruid;
+	gid_t				egid, sgid, rgid;
+
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;

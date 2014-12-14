@@ -221,7 +221,7 @@ static off_t seek(File *file, off_t offset, int whence)
 static ssize_t read(File *file, void *buffer, size_t size)
 {
 	TarFile *tf = (TarFile*) file->fsdata;
-	if (size > ((size_t)tf->pos + tf->size))
+	if (((size_t)tf->pos + size) > tf->size)
 	{
 		size = tf->size - (size_t) tf->pos;
 	};
@@ -293,11 +293,11 @@ void initInitrdfs(MultibootInfo *info)
 	initrdfs->fsname = "initrdfs";
 	initrdfs->openroot = openroot;
 
-	uint64_t modsAddr = (uint64_t) info->modsAddr;
+	uint64_t modsAddr = ((uint64_t) info->modsAddr + 0xFFFF800000000000);
 	MultibootModule *mod = (MultibootModule*) modsAddr;
 
-	initrdEnd = (uint64_t) mod->modEnd;
-	masterHeader = (TarHeader*) (uint64_t) mod->modStart;
+	initrdEnd = ((uint64_t) mod->modEnd + 0xFFFF800000000000);
+	masterHeader = (TarHeader*) ((uint64_t) mod->modStart + 0xFFFF800000000000);
 };
 
 FileSystem *getInitrdfs()

@@ -31,6 +31,7 @@
 #include <glidix/string.h>
 #include <glidix/mount.h>
 #include <glidix/memory.h>
+#include <glidix/sched.h>
 
 static void dumpDir(Dir *dir, int prefix)
 {
@@ -88,8 +89,33 @@ void dumpFS(FileSystem *fs)
 	if (dir.close != NULL) dir.close(&dir);
 };
 
-Dir *parsePath(const char *path, int flags)
+int vfsCanCurrentThread(struct stat *st, mode_t mask)
 {
+	Thread *thread = getCurrentThread();
+
+	// the root special case (he can do literally anything).
+	if (thread->euid == 0)
+	{
+		return 1;
+	};
+
+	if (thread->euid == st->st_uid)
+	{
+		return ((st->st_mode >> 6) & mask) != 0;
+	}
+	else if (thread->egid == st->st_gid)
+	{
+		return ((st->st_mode >> 3) & mask) != 0;
+	}
+	else
+	{
+		return (st->st_mode & mask) != 0;
+	};
+};
+
+Dir *parsePath(const char *path, int flags, int *error)
+{
+	*error = VFS_NO_FILE;			// default error
 	// TODO: relative paths
 	if (path[0] != '/')
 	{
@@ -158,6 +184,14 @@ Dir *parsePath(const char *path, int flags)
 				return NULL;
 			};
 
+			if ((!vfsCanCurrentThread(&dir->stat, 1)) && (flags & VFS_CHECK_ACCESS))
+			{
+				if (dir->close != NULL) dir->close(dir);
+				kfree(dir);
+				*error = VFS_PERM;
+				return NULL;
+			};
+
 			Dir *subdir = (Dir*) kmalloc(sizeof(Dir));
 			memset(subdir, 0, sizeof(Dir));
 
@@ -182,9 +216,24 @@ Dir *parsePath(const char *path, int flags)
 	};
 };
 
-File *vfsOpen(const char *path, int flags)
+int vfsStat(const char *path, struct stat *st)
 {
-	Dir *dir = parsePath(path, flags);
+	int error;
+	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
+	if (dir == NULL)
+	{
+		return error;
+	};
+
+	memcpy(st, &dir->stat, sizeof(struct stat));
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+	return 0;
+};
+
+File *vfsOpen(const char *path, int flags, int *error)
+{
+	Dir *dir = parsePath(path, flags, error);
 	if (dir == NULL)
 	{
 		return NULL;

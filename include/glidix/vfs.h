@@ -53,11 +53,21 @@
 #define	VFS_EMPTY_DIRECTORY		-1		/* the directory was empty */
 #define	VFS_BAD_FD			-2		/* bad file descriptor */
 #define	VFS_PERM			-3		/* permission denied */
+#define	VFS_NO_FILE			-4
+#define	VFS_FILE_LIMIT_EXCEEDED		-5		/* MAX_OPEN_FILES limit exceeded */
 
 /**
- * Errors from parsePath().
+ * Flags to parsePath()/vfsOpen().
  */
-#define	VFS_NO_FILE			-2
+#define	VFS_CHECK_ACCESS		(1 << 0)
+
+/**
+ * Flags for the open() system call.
+ */
+#define	O_WRONLY			(1 << 0)
+#define	O_RDONLY			(1 << 1)
+#define	O_RDWR				(O_WRONLY | O_RDONLY)
+#define	O_APPEND			(1 << 2)
 
 struct stat
 {
@@ -197,13 +207,15 @@ typedef struct _FileSystem
 } FileSystem;
 
 void dumpFS(FileSystem *fs);
+int vfsCanCurrentThread(struct stat *st, mode_t mask);
 
 /**
  * Construct the Dir such that it points to the file of the specified path. Returns NULL on error.
  */
-Dir *parsePath(const char *path, int flags);
+Dir *parsePath(const char *path, int flags, int *error);
 
-File *vfsOpen(const char *path, int flags);
+int vfsStat(const char *path, struct stat *st);
+File *vfsOpen(const char *path, int flags, int *error);
 ssize_t vfsRead(File *file, void *buffer, size_t size);
 void vfsClose(File *file);
 

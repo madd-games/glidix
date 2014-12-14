@@ -174,6 +174,9 @@ static void findPageTable(ProcMem *pm, uint64_t index, uint64_t *ptPhysFramePTR,
 
 int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 {
+	// the first page is not allowed to be mapped
+	if (start == 0) return MEM_SEGMENT_COLLISION;
+
 	spinlockAcquire(&pm->lock);
 
 	// ensure that this segment wouldn't clash with another segment
@@ -226,7 +229,7 @@ int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 		};
 
 		pt->entries[pageIndex].present = 1;
-		pt->entries[pageIndex].rw = (flags & PROT_WRITE);
+		pt->entries[pageIndex].rw = !!(flags & PROT_WRITE);
 		pt->entries[pageIndex].user = 1;
 		pt->entries[pageIndex].framePhysAddr = frames->frames[i];
 	};
@@ -295,10 +298,10 @@ int DeleteSegment(ProcMem *pm, uint64_t start)
 void SetProcessMemory(ProcMem *pm)
 {
 	PML4 *pml4 = getPML4();
-	pml4->entries[1].present = 1;
-	pml4->entries[1].rw = 1;
-	pml4->entries[1].user = 1;
-	pml4->entries[1].pdptPhysAddr = pm->pdptPhysFrame;
+	pml4->entries[0].present = 1;
+	pml4->entries[0].rw = 1;
+	pml4->entries[0].user = 1;
+	pml4->entries[0].pdptPhysAddr = pm->pdptPhysFrame;
 };
 
 static void DeleteProcessMemory(ProcMem *pm)

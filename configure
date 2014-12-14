@@ -37,8 +37,16 @@ for param in sys.argv[1:]:
 		host = param[len("--host="):]
 
 compiler = "gcc"
+ar = "ar"
+ranlib = "ranlib"
 if host != "":
 	compiler = host + "-gcc"
+	ar = host + "-ar"
+	ranlib = host + "-ranlib"
+
+if (host != "") and (sysroot == ""):
+	sys.stderr.write("%s: error: you must specify a --sysroot when cross-compiling the kernel\n" % sys.argv[0])
+	sys.exit(1)
 
 def assertCommand(cmd, msg = None):
 	if msg is None:
@@ -60,6 +68,8 @@ def assertCommand(cmd, msg = None):
 
 # Make sure all the tools we need are here
 assertCommand(compiler)
+assertCommand(ar)
+assertCommand(ranlib)
 assertCommand("nasm")
 
 sys.stderr.write("checking build system type... ")
@@ -72,7 +82,9 @@ if systype != "x86_64-glidix":
 
 config = {
 	"compiler":	compiler,
-	"sysroot":	sysroot
+	"sysroot":	sysroot,
+	"ar":		ar,
+	"ranlib":	ranlib
 }
 
 # Write the configuration to config.json
@@ -82,7 +94,13 @@ f.close()
 
 # Create a Makefile
 f = open("Makefile", "wb")
-f.write(".PHONY: all\n")
+f.write(".PHONY: all install clean distclean\n")
 f.write("all:\n")
 f.write("\tpython build.py\n")
+f.write("install:\n")
+f.write("\tsh install.sh %s\n" % sysroot)
+f.write("clean:\n")
+f.write("\trm -rf build isodir build.mk config.json Makefile\n")
+f.write("distclean:\n")
+f.write("\trm -rf build isodir build.mk config.json Makefile initrd out\n")
 f.close()

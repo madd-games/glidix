@@ -46,10 +46,21 @@ typedef struct
 
 int elfExec(Regs *regs, const char *path)
 {
-	// TODO: permissions!
 	// TODO: don't panic on errors.
 
-	File *fp = vfsOpen(path, 0);
+	struct stat st;
+	if (vfsStat(path, &st) != 0)
+	{
+		panic("exec: stat() failed on %s", path);
+	};
+
+	if (!vfsCanCurrentThread(&st, 1))
+	{
+		panic("exec: this file is not executable");
+	};
+
+	int error;
+	File *fp = vfsOpen(path, VFS_CHECK_ACCESS, &error);
 	if (fp == NULL)
 	{
 		panic("exec: failed to open %s", path);
@@ -123,20 +134,20 @@ int elfExec(Regs *regs, const char *path)
 		}
 		else if (proghead.p_type == PT_LOAD)
 		{
-			if (proghead.p_vaddr < 0x8000000000)
+			if (proghead.p_vaddr < 0x1000)
 			{
 				vfsClose(fp);
 				panic("exec: a program header has an address that's too low");
 			};
 
-			if ((proghead.p_vaddr+proghead.p_memsz) > 0x10000000000)
+			if ((proghead.p_vaddr+proghead.p_memsz) > 0x8000000000)
 			{
 				vfsClose(fp);
 				panic("exec: a program header has an address that's too high");
 			};
 
 			uint64_t start = proghead.p_vaddr;
-			segments[i].index = (start-0x8000000000)/0x1000;
+			segments[i].index = (start)/0x1000;
 
 			uint64_t end = proghead.p_vaddr + proghead.p_memsz;
 			uint64_t size = end - start;

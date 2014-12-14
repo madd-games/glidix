@@ -30,5 +30,5 @@
 
 PML4 *getPML4()
 {
-	return (PML4*) 0x1000;
+	return (PML4*) 0xFFFF800000001000;
 };

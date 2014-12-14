@@ -30,7 +30,8 @@ bits 64
 [global loadIDT]
 [extern idtPtr]
 loadIDT:
-	lidt [idtPtr]
+	mov rax, qword idtPtr
+	lidt [rax]
 	ret
 
 %macro pushAll 0

@@ -36,8 +36,8 @@ dd -(0x1BADB002 + MB_FLAGS)
 dd 0x100000			; base addr
 dd 0x100000			; phys base addr
 dd 0
-dd end
-dd _start
+dd (end -    0xFFFF800000100000 + 0x100000)
+dd (_start - 0xFFFF800000100000 + 0x100000)
 
 [extern kmain]
 [global _start]
@@ -83,8 +83,8 @@ _start:
 	mov edi, 0x1000    ; Set the destination index to 0x1000.
 	mov cr3, edi       ; Set control register 3 to the destination index.
 	xor eax, eax       ; Nullify the A-register.
-	mov ecx, 4096      ; Set the C-register to 4096.
-	rep stosd          ; Clear the memory.
+	mov ecx, 0x9000    ; Set the C-register to 4096.
+	rep stosb          ; Clear the memory.
 	mov edi, cr3       ; Set the destination index to control register 3.
 
 	mov dword [edi], 0x2003      ; Set the double word at the destination index to 0x2003.
@@ -98,17 +98,40 @@ _start:
 	mov ecx, 511                 ; Set the C-register to 511.
 
 	; the first 4KB of the address space will not be present, else we will not
-	; get page fault on NULL-refences.
+	; get page fault on NULL-references.
 	mov dword [edi], 0
 	add ebx, 0x1000
 	add edi, 8
 
 	; the rest (above 4KB up to 2MB) is mapped.
-	.SetEntry:
+	SetEntry:
 	mov dword [edi], ebx         ; Set the double word at the destination index to the B-register.
 	add ebx, 0x1000              ; Add 0x1000 to the B-register.
 	add edi, 8                   ; Add eight to the destination index.
-	loop .SetEntry               ; Set the next entry.
+	loop SetEntry               ; Set the next entry.
+
+	; 256th PML4e
+	mov edi, 0x1800
+	mov dword [edi], 0x5003
+	mov edi, 0x5000
+	mov dword [edi], 0x6003
+	add edi, 0x1000
+	mov dword [edi], 0x7003
+	add edi, 0x1000
+
+	mov ebx, 0x00000003          ; Set the B-register to 0x00000003.
+	mov ecx, 511                 ; Set the C-register to 511.
+
+	mov dword [edi], 0
+	add ebx, 0x1000
+	add edi, 8
+
+	; the rest (above 4KB up to 2MB) is mapped.
+	SetEntry2:
+	mov dword [edi], ebx         ; Set the double word at the destination index to the B-register.
+	add ebx, 0x1000              ; Add 0x1000 to the B-register.
+	add edi, 8                   ; Add eight to the destination index.
+	loop SetEntry2               ; Set the next entry.
 
 	; enable PAE paging
 	mov eax, cr4                 ; Set the A-register to control register 4.
@@ -127,8 +150,8 @@ _start:
 	mov cr0, eax                 ; Set control register 0 to the A-register.
 
 	; go to 64-bit long mode.
-	lgdt [GDT64.Pointer]
-	jmp GDT64.Code:_bootstrap64
+	lgdt [(GDT64.Pointer - 0xFFFF800000100000 + 0x100000)]
+	jmp 0x08:(_bootstrap64 - 0xFFFF800000100000 + 0x100000)
 
 	hlt
 
@@ -166,12 +189,12 @@ GDT64:                               ; Global Descriptor Table (64-bit).
 	db 00000000b                 ; Granularity.
 	db 0                         ; Base (high).
 	.UserCode: equ $ - GDT64
-	dw 0xFFFF
+	dw 0
 	dw 0
 	db 0
 	db 11111000b                 ; Access.
 	db 00100000b                 ; Granularity.
-	db 0xF                       ; Base (high).
+	db 0                         ; Base (high).
 	.UserData: equ $ - GDT64
 	dw 0                         ; Limit (low).
 	dw 0                         ; Base (low).
@@ -185,13 +208,13 @@ GDT64:                               ; Global Descriptor Table (64-bit).
 	.TSS_baseLow: dw 0
 	.TSS_baseMiddle: db 0
 	.TSS_Access: db 11101001b
-	.TSS_limitHigh: dw 0
+	.TSS_limitHigh: db 0
 	.TSS_baseMiddleHigh: db 0
 	.TSS_baseHigh: dd 0
 	dd 0
 	.Pointer:                    ; The GDT-pointer.
 	dw $ - GDT64 - 1             ; Limit.
-	dq GDT64                     ; Base.
+	.Addr64: dq (GDT64 - 0xFFFF800000100000 + 0x100000)                     ; Base.
 
 bits 64
 global _tss
@@ -212,7 +235,7 @@ _bootstrap64:
 	mov ss,		ax
 
 	; clear the TSS
-	mov rdi,	_tss
+	mov rdi,	qword _tss
 	mov rcx,	192
 	mov al,		0
 	rep stosb
@@ -222,26 +245,59 @@ _bootstrap64:
 	add rsp,	0x4000
 
 	; fill in the TSS segment
-	mov rax,			_tss
-	mov [GDT64.TSS_baseLow],	ax
+	;mov rax,			qword (_tss - 0xFFFF800000100000 + 0x100000)
+	mov rax,			qword _tss
+	mov rdi,			qword GDT64.TSS_baseLow
+	stosw
 	shr rax,			16
-	mov [GDT64.TSS_baseMiddle],	al
-	mov [GDT64.TSS_baseMiddleHigh],	ah
+	mov rdi,			qword GDT64.TSS_baseMiddle
+	stosb
+	mov rdi,			qword GDT64.TSS_baseMiddleHigh
+	shr ax,				8
+	stosb
+	mov rdi,			qword GDT64.TSS_baseHigh
 	shr rax,			16
-	mov [GDT64.TSS_baseHigh],	eax
+	stosd
 
-	mov rax,			_tss_limit
-	mov rbx,			_tss
+	mov rax,			qword _tss_limit
+	mov rbx,			qword _tss
 	sub rax,			rbx
-	mov [GDT64.TSS_limitLow],	ax
+	mov rdi,			qword GDT64.TSS_limitLow
+	stosw
 	shr rax,			16
 	or  rax,			(1 << 5)
-	mov [GDT64.TSS_limitHigh],	ax
-	
+	mov rdi,			qword GDT64.TSS_limitHigh
+	stosw
+
+	; change the RIP so that it is in the upper part of memory,
+	; since we were called from 32-bit mode and are still using the
+	; physical RIP.
+	mov rax,			_bootstrap64_upper
+	jmp rax
+
+_bootstrap64_upper:
+	; load the 64-bit GDT with the proper address
+	mov rax,			qword GDT64
+	mov rdi,			qword GDT64.Addr64
+	stosq
+	mov rax,			qword GDT64.Pointer
+	lgdt [rax]
+
+	; unmap the bottom 2MB
+	mov rdi,			0x1000
+	xor rax,			rax
+	stosq
+
+	; reload the PML4
+	mov rax,			cr0
+	mov cr0,			rax
+
 	; go to the C part, pass the previously-saved pointer to the multiboot info structure
-	; as the argument to kmain.
+	; as the argument to kmain. Remember to convert it to the correct address, of course.
 	xor rdi,	rdi
 	mov edi,	esi
+	mov rax,	0xFFFF800000000000
+	add rdi,	rax
 	call		kmain
 
 	; if the C kernel returns, halt the CPU.
@@ -251,7 +307,8 @@ _bootstrap64:
 [global _tss_reload_access]
 _tss_reload_access:
 	mov al,		11101001b
-	mov [GDT64.TSS_Access], al
+	mov rdi,	qword GDT64.TSS_Access
+	stosb
 	ret
 
 [global _bootstrap_stack]

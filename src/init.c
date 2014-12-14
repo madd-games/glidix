@@ -73,10 +73,11 @@ void kmain(MultibootInfo *info)
 		kprintf("w: Assuming 64MB of RAM\n");
 	};
 
-	MultibootModule *mod = (MultibootModule*) (uint64_t) info->modsAddr;
-	
-	kprintf("Initializing memory allocation phase 1 (base=%a)... ", (uint64_t) mod->modEnd);
-	initMemoryPhase1((uint64_t) mod->modEnd);
+	MultibootModule *mod = (MultibootModule*) ((uint64_t) info->modsAddr + 0xFFFF800000000000);
+	uint64_t end = (uint64_t) mod->modEnd + 0xFFFF800000000000;
+
+	kprintf("Initializing memory allocation phase 1 (base=%a)... ", end);
+	initMemoryPhase1(end);
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the physical memory manager... ");
@@ -120,7 +121,7 @@ static void spawnProc(void *stack)
 
 	kprintf("Allocating memory for bootstrap... ");
 	FrameList *fl = palloc(2);
-	AddSegment(getCurrentThread()->pm, 0, fl, PROT_READ | PROT_WRITE | PROT_EXEC);
+	AddSegment(getCurrentThread()->pm, 1, fl, PROT_READ | PROT_WRITE | PROT_EXEC);
 	pdownref(fl);
 	SetProcessMemory(getCurrentThread()->pm);
 	kprintf("%$\x02" "Done%#\n");
@@ -130,13 +131,14 @@ static void spawnProc(void *stack)
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Loading /initrd/usbs... ");
-	File *file = vfsOpen("/initrd/usbs", 0);
+	int err;
+	File *file = vfsOpen("/initrd/usbs", VFS_CHECK_ACCESS, &err);
 	if (file == NULL)
 	{
 		kprintf("%$\x04" "Failed%#\n");
 		panic("failed to open /initrd/usbs");
 	};
-	ssize_t count = vfsRead(file, (void*) 0x8000000000, 0x1000);
+	ssize_t count = vfsRead(file, (void*) 0x1000, 0x1000);
 	if (count < 1)
 	{
 		kprintf("%$\x04" "Failed%#\n");

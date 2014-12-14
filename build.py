@@ -78,12 +78,15 @@ for asmfile in os.listdir("asm"):
 
 def opCreateBuildMK():
 	f = open("build.mk", "wb")
-	f.write(".PHONY: all\n")
-	f.write("all: out/vmglidix out/vmglidix.tar\n")
+	f.write(".PHONY: all install clean distclean\n")
+	f.write("all: out/vmglidix out/vmglidix.tar out/libglidix.a\n")
 	f.write("TARGET_CC=%s\n" % config["compiler"])
+	f.write("TARGET_AR=%s\n" % config["ar"])
+	f.write("TARGET_RANLIB=%s\n" % config["ranlib"])
+	f.write("SYSROOT=%s\n" % config["sysroot"])
 	f.write("CFLAGS=-ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -I include -Wall -Werror\n")
-	f.write("out/vmglidix: %s\n" % (" ".join(objectFiles)))
-	f.write("\t%s -T linker.ld -o $@ -ffreestanding -O2 -nostdlib $^ -lgcc\n" % config["compiler"])
+	f.write("out/vmglidix: linker.ld %s\n" % (" ".join(objectFiles)))
+	f.write("\t%s -T linker.ld -o $@ -ffreestanding -O2 -nostdlib %s -lgcc\n" % (config["compiler"], " ".join(objectFiles)))
 	f.write("-include %s\n" % (" ".join(depFiles)))
 	f.write("\n")
 	f.write("\n".join(rules))
@@ -92,6 +95,10 @@ def opCreateBuildMK():
 	f.write("\tcd initrd && tar -cf ../out/vmglidix.tar *\n")
 	f.write("initrd/usbs: utils/usbs.asm\n")
 	f.write("\tnasm $< -o $@ -fbin\n")
+	f.write("out/libglidix.a: utils/libglidix/libglidix.asm\n")
+	f.write("\tnasm $< -o out/libglidix.o -felf64\n")
+	f.write("\t$(TARGET_AR) rvs $@ out/libglidix.o\n")
+	f.write("\t$(TARGET_RANLIB) $@\n")
 	f.close()
 
 def opCreateISO():

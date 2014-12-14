@@ -32,15 +32,15 @@ extern heapDump
 global _jmp_usbs
 _jmp_usbs:
 	; move the stack to a userspace area.
-	mov		rsp,		0x8000002000
+	mov		rsp,		0x3000
 
 	; free the temporary stack (passed to us as an argument, which we'll now, effectively,
 	; pass to kfree).
 	call		kfree
 
+	cli
 	; magic time!
 	; we're going to jump to user mode, into the first byte of the loaded /initrd/usbs
-	cli
 	mov		ax,		0x23
 	mov		ds,		ax
 	mov		es,		ax
@@ -48,13 +48,13 @@ _jmp_usbs:
 	mov		gs,		ax
 
 	push qword	0x23			; SS
-	mov rax,	0x8000002000
+	mov rax,	0x3000
 	push rax				; RSP (we're loading it again)
 	pushfq
 	pop rax
 	or rax, (1 << 9)			; enable interrupts
 	push rax
 	push qword	0x1B			; CS (usermode)
-	mov  rax,	0x8000000000
+	mov  rax,	0x1000
 	push rax				; RIP
 	iretq
