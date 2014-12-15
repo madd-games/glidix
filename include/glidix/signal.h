@@ -26,59 +26,81 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_common_h
-#define __glidix_common_h
+#ifndef __glidix_signal_h
+#define __glidix_signal_h
 
-#include <stdint.h>
+#include <glidix/common.h>
+
+#define	SIGHUP		1
+#define	SIGINT		2
+#define	SIGQUIT		3
+#define	SIGILL		4
+#define	SIGTRAP		5
+#define	SIGABRT		6
+#define	SIGEMT		7
+#define	SIGFPE		8
+#define	SIGKILL		9
+#define	SIGBUS		10
+#define	SIGSEGV		11
+#define	SIGSYS		12
+#define	SIGPIPE		13
+#define	SIGALRM		14
+#define	SIGTERM		15
+#define	SIGUSR1		16
+#define	SIGUSR2		17
+#define	SIGCHLD		18
+#define	SIGPWR		19
+#define	SIGWINCH	20
+#define	SIGURG		21
+#define	SIGPOLL		22
+#define	SIGSTOP		23
+#define	SIGTSTP		24
+#define	SIGCONT		25
+#define	SIGTTIN		26
+#define	SIGTTOU		27
+#define	SIGVTALRM	28
+#define	SIGPROF		29
+#define	SIGXCPU		30
+#define	SIGXFSZ		31
+#define	SIGWAITING	32
+#define	SIGLWP		33
+#define	SIGAIO		34
+#define	SIG_NUM		35
 
 /**
- * Some common routines used by various parts of the kernel.
+ * si_code for SIGSEGV
  */
+#define	SEGV_MAPERR	1
+#define	SEGV_ACCERR	2
 
-#define	ASM			__asm__ __volatile__
-#define	panic(...)		_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
-#define	PACKED			__attribute__ ((packed))
-#define	BREAKPOINT()		ASM ("xchg %bx, %bx")
-
-void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
-
-typedef struct {
-	uint64_t ds;
-	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
-	uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
-	uint64_t intNo;
-	uint64_t errCode;
-	uint64_t rip, cs, rflags, rsp, ss;
-} PACKED Regs;
+union sigval
+{
+	int		sival_int;
+	void*		sival_ptr;
+};
 
 typedef struct
 {
-	uint32_t flags;
-	uint32_t memLower;
-	uint32_t memUpper;
-	uint32_t bootDevice;
-	uint32_t cmdLine;
-	uint32_t modsCount;
-	uint32_t modsAddr;
-} PACKED MultibootInfo;
+	int		si_signo;
+	int		si_code;
+	int		si_errno;
+	pid_t		si_pid;
+	uid_t		si_uid;
+	void*		si_addr;
+	int		si_status;
+	long		si_band;
+	union sigval	si_value;
+} siginfo_t;
 
-typedef struct
+typedef struct _sigq
 {
-	uint32_t		modStart;
-	uint32_t		modEnd;
-} PACKED MultibootModule;
+	siginfo_t	si;
+	struct _sigq	*next;
+} SignalQueue;
 
-typedef	uint64_t			dev_t;
-typedef	uint64_t			ino_t;
-typedef	uint64_t			mode_t;
-typedef	uint64_t			nlink_t;
-typedef	uint64_t			uid_t;
-typedef	uint64_t			gid_t;
-typedef	uint64_t			blksize_t;
-typedef	uint64_t			blkcnt_t;
-typedef	uint64_t			time_t;
-typedef	int64_t				off_t;
-typedef	int64_t				ssize_t;
-typedef int				pid_t;
+struct _Thread;
+void dispatchSignal(struct _Thread *thread);
+void sendSignal(struct _Thread *thread, siginfo_t *siginfo);
+void sigret(Regs *regs, void *ret);
 
 #endif

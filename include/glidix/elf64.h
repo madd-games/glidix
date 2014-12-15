@@ -30,6 +30,7 @@
 #define __glidix_elf64_h
 
 #include <glidix/common.h>
+#include <stddef.h>
 
 typedef	uint64_t			Elf64_Addr;
 typedef	uint16_t			Elf64_Half;
@@ -104,6 +105,6 @@ typedef struct
 	Elf64_Xword			p_align;
 } Elf64_Phdr;
 
-int elfExec(Regs *regs, const char *path);
+int elfExec(Regs *regs, const char *path, const char *execPars, size_t parsz);
 
 #endif

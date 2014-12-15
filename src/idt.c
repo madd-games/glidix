@@ -32,6 +32,9 @@
 #include <glidix/common.h>
 #include <glidix/port.h>
 #include <glidix/syscall.h>
+#include <glidix/sched.h>
+#include <glidix/signal.h>
+#include <glidix/memory.h>
 
 IDTEntry idt[256];
 IDTPointer idtPtr;
@@ -172,42 +175,67 @@ static void onPageFault(Regs *regs)
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 
-	kprintf("A page fault occured (rip=%a)\n", regs->rip);
-	if ((regs->errCode & 1) == 0)
+	if (getCurrentThread() == NULL)
 	{
-		kprintf("[non-present]");
-	};
+		kprintf("A page fault occured (rip=%a)\n", regs->rip);
+		if ((regs->errCode & 1) == 0)
+		{
+			kprintf("[non-present]");
+		};
 
-	if (regs->errCode & 2)
-	{
-		kprintf("[write]");
+		if (regs->errCode & 2)
+		{
+			kprintf("[write]");
+		}
+		else
+		{
+			kprintf("[read]");
+		};
+
+		if (regs->errCode & 4)
+		{
+			kprintf("[user]");
+		}
+		else
+		{
+			kprintf("[kernel]");
+		};
+
+		if (regs->errCode & 8)
+		{
+			kprintf("[reserved]");
+		};
+
+		if (regs->errCode & 16)
+		{
+			kprintf("[fetch]");
+		};
+
+		kprintf("\nVirtual address: %a\n", faultAddr);
+		panic("#PF in kernel");
 	}
 	else
 	{
-		kprintf("[read]");
-	};
+		Thread *thread = getCurrentThread();
 
-	if (regs->errCode & 4)
-	{
-		kprintf("[user]");
-	}
-	else
-	{
-		kprintf("[kernel]");
-	};
+		siginfo_t siginfo;
+		siginfo.si_signo = SIGSEGV;
+		if ((regs->errCode & 1) == 0)
+		{
+			siginfo.si_code = SEGV_MAPERR;
+		}
+		else
+		{
+			siginfo.si_code = SEGV_ACCERR;
+		};
+		siginfo.si_addr = (void*) faultAddr;
 
-	if (regs->errCode & 8)
-	{
-		kprintf("[reserved]");
+		acquireHeap();
+		ASM("cli");
+		releaseHeap();
+		sendSignal(thread, &siginfo);
+		switchTask(regs);
 	};
-
-	if (regs->errCode & 16)
-	{
-		kprintf("[fetch]");
-	};
-
-	kprintf("\nVirtual address: %a\n", faultAddr);
-	panic("#PF in kernel");
 };
 
 void switchTask(Regs *regs);		// sched.c

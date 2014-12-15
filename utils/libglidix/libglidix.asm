@@ -40,4 +40,15 @@ GLIDIX_SYSCALL		2,	_glidix_exec
 GLIDIX_SYSCALL		3,	read
 GLIDIX_SYSCALL		4,	_glidix_open
 GLIDIX_SYSCALL		5,	close
-
+GLIDIX_SYSCALL		6,	getpid
+GLIDIX_SYSCALL		7,	getuid
+GLIDIX_SYSCALL		8,	geteuid
+GLIDIX_SYSCALL		9,	_glidix_getsuid
+GLIDIX_SYSCALL		10,	getgid
+GLIDIX_SYSCALL		11,	getegid
+GLIDIX_SYSCALL		12,	_glidix_getsgid
+GLIDIX_SYSCALL		13,	_glidix_sighandler
+GLIDIX_SYSCALL		14,	_glidix_sysret
+GLIDIX_SYSCALL		15,	stat
+GLIDIX_SYSCALL		16,	_glidix_getparsz
+GLIDIX_SYSCALL		17,	_glidix_getpars

@@ -26,59 +26,12 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_common_h
-#define __glidix_common_h
-
-#include <stdint.h>
+#ifndef __glidix_errno_h
+#define __glidix_errno_h
 
 /**
- * Some common routines used by various parts of the kernel.
+ * Error numbers as reported to userspace.
  */
-
-#define	ASM			__asm__ __volatile__
-#define	panic(...)		_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
-#define	PACKED			__attribute__ ((packed))
-#define	BREAKPOINT()		ASM ("xchg %bx, %bx")
-
-void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
-
-typedef struct {
-	uint64_t ds;
-	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
-	uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
-	uint64_t intNo;
-	uint64_t errCode;
-	uint64_t rip, cs, rflags, rsp, ss;
-} PACKED Regs;
-
-typedef struct
-{
-	uint32_t flags;
-	uint32_t memLower;
-	uint32_t memUpper;
-	uint32_t bootDevice;
-	uint32_t cmdLine;
-	uint32_t modsCount;
-	uint32_t modsAddr;
-} PACKED MultibootInfo;
-
-typedef struct
-{
-	uint32_t		modStart;
-	uint32_t		modEnd;
-} PACKED MultibootModule;
-
-typedef	uint64_t			dev_t;
-typedef	uint64_t			ino_t;
-typedef	uint64_t			mode_t;
-typedef	uint64_t			nlink_t;
-typedef	uint64_t			uid_t;
-typedef	uint64_t			gid_t;
-typedef	uint64_t			blksize_t;
-typedef	uint64_t			blkcnt_t;
-typedef	uint64_t			time_t;
-typedef	int64_t				off_t;
-typedef	int64_t				ssize_t;
-typedef int				pid_t;
+#define	EIO					1
 
 #endif

@@ -44,78 +44,75 @@ typedef struct
 	int			flags;
 } ProgramSegment;
 
-int elfExec(Regs *regs, const char *path)
+int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 {
-	// TODO: don't panic on errors.
-
 	struct stat st;
 	if (vfsStat(path, &st) != 0)
 	{
-		panic("exec: stat() failed on %s", path);
+		return -1;
 	};
 
 	if (!vfsCanCurrentThread(&st, 1))
 	{
-		panic("exec: this file is not executable");
+		return -1;
 	};
 
 	int error;
 	File *fp = vfsOpen(path, VFS_CHECK_ACCESS, &error);
 	if (fp == NULL)
 	{
-		panic("exec: failed to open %s", path);
+		return -1;
 	};
 
 	if (fp->seek == NULL)
 	{
 		vfsClose(fp);
-		panic("exec: the filesystem containing the executable cannot seek");
+		return -1;
 	};
 
 	Elf64_Ehdr elfHeader;
 	if (vfsRead(fp, &elfHeader, sizeof(Elf64_Ehdr)) < sizeof(Elf64_Ehdr))
 	{
 		vfsClose(fp);
-		panic("exec: not an ELF64 file: too small to read header");
+		return -1;
 	};
 
 	if (memcmp(elfHeader.e_ident, "\x7f" "ELF", 4) != 0)
 	{
 		vfsClose(fp);
-		panic("exec: invalid ELF64 file: bad magic");
+		return -1;
 	};
 
 	if (elfHeader.e_ident[EI_CLASS] != ELFCLASS64)
 	{
 		vfsClose(fp);
-		panic("exec: invalid ELF64 file: this is an ELF32 file");
+		return -1;
 	};
 
 	if (elfHeader.e_ident[EI_DATA] != ELFDATA2LSB)
 	{
 		vfsClose(fp);
-		panic("exec: invalid ELF64: data is big-endian");
+		return -1;
 	};
 
 	if (elfHeader.e_ident[EI_VERSION] != 1)
 	{
 		vfsClose(fp);
-		panic("exec: invalid ELF64: EI_VERSION should be 1 but is %d", elfHeader.e_ident[EI_VERSION]);
+		return -1;
 	};
 
 	if (elfHeader.e_type != ET_EXEC)
 	{
 		vfsClose(fp);
-		panic("exec: this ELF64 is not executable");
+		return -1;
 	};
 
 	if (elfHeader.e_phentsize < sizeof(Elf64_Phdr))
 	{
 		vfsClose(fp);
-		panic("exec: e_phentsize is too small (%d), should be at least %d", elfHeader.e_phentsize, sizeof(Elf64_Phdr));
+		return -1;
 	};
 
-	//kprintf("number of program headers: %d\n", elfHeader.e_phnum);
 	ProgramSegment *segments = (ProgramSegment*) kmalloc(sizeof(ProgramSegment)*(elfHeader.e_phnum));
 
 	unsigned int i;
@@ -125,7 +122,8 @@ int elfExec(Regs *regs, const char *path)
 		Elf64_Phdr proghead;
 		if (vfsRead(fp, &proghead, sizeof(Elf64_Phdr)) < sizeof(Elf64_Phdr))
 		{
-			panic("exec: EOF while reading program header");
+			kfree(segments);
+			return -1;
 		};
 
 		if (proghead.p_type == PT_NULL)
@@ -137,13 +135,15 @@ int elfExec(Regs *regs, const char *path)
 			if (proghead.p_vaddr < 0x1000)
 			{
 				vfsClose(fp);
-				panic("exec: a program header has an address that's too low");
+				kfree(segments);
+				return -1;
 			};
 
 			if ((proghead.p_vaddr+proghead.p_memsz) > 0x8000000000)
 			{
 				vfsClose(fp);
-				panic("exec: a program header has an address that's too high");
+				kfree(segments);
+				return -1;
 			};
 
 			uint64_t start = proghead.p_vaddr;
@@ -178,12 +178,18 @@ int elfExec(Regs *regs, const char *path)
 		}
 		else
 		{
-			panic("exec: unrecognised program header type: %d", proghead.p_type);
+			kfree(segments);
+			return -1;
 		};
 	};
 
-	// delete the current addr space
+	// set the execPars
 	Thread *thread = getCurrentThread();
+	thread->execPars = (char*) kmalloc(parsz);
+	thread->szExecPars = parsz;
+	memcpy(thread->execPars, pars, parsz);
+
+	// delete the current addr space
 	ProcMem *pm = thread->pm;
 	ASM("cli");
 	thread->pm = NULL;
@@ -200,9 +206,9 @@ int elfExec(Regs *regs, const char *path)
 		FrameList *fl = palloc(segments[i].count);
 		if (AddSegment(pm, segments[i].index, fl, segments[i].flags) != 0)
 		{
-			pdownref(fl);
-			DownrefProcessMemory(pm);
-			panic("exec: AddSegment failed");
+			// the memory is now severely broken, but still try running the program because YOLO
+			// TODO: perhaps we should send a signal like SIGILL?
+			break;
 		};
 		pdownref(fl);
 	};
@@ -226,6 +232,9 @@ int elfExec(Regs *regs, const char *path)
 
 	// make sure we jump to the entry upon return
 	regs->rip = elfHeader.e_entry;
+
+	// set the signal handler to default.
+	getCurrentThread()->rootSigHandler = 0;
 
 	return 0;
 };

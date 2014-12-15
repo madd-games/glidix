@@ -286,6 +286,8 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 
 void *_kxmalloc(size_t size, int flags, const char *aid, int lineno)
 {
+	if (size == 0) return NULL;
+
 	if (readyForDynamic)
 	{
 		return kxmallocDynamic(size, flags, aid, lineno);

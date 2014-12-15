@@ -36,6 +36,7 @@
 #include <glidix/common.h>
 #include <glidix/procmem.h>
 #include <glidix/ftab.h>
+#include <glidix/signal.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -54,6 +55,11 @@ typedef struct
  * until signalled.
  */
 #define	THREAD_WAITING			(1 << 0)
+
+/**
+ * If this flag is set, the thread is currently handling a signal.
+ */
+#define	THREAD_SIGNALLED		(1 << 1)
 
 typedef struct _Thread
 {
@@ -90,6 +96,12 @@ typedef struct _Thread
 	int				pid;
 
 	/**
+	 * The parent's pid. This value must be ignored for kernel threads (which have pid 0). If
+	 * a process dies, its children's parent pid shall be set to 1.
+	 */
+	int				pidParent;
+
+	/**
 	 * The file table used by this process.
 	 */
 	FileTable			*ftab;
@@ -99,6 +111,34 @@ typedef struct _Thread
 	 */
 	uid_t				euid, suid, ruid;
 	gid_t				egid, sgid, rgid;
+
+	/**
+	 * This RIP is jumped to when a signal is caught and shall be a C function with the prototype:
+	 * void rootSigHandler(void *retptr, singinfo_t *siginfo);
+	 * It must never return! Instead, it shall call _glidix_sysret() to do the returning.
+	 * The retptr argument must be passed on to _glidix_sysret().
+	 */
+	uint64_t			rootSigHandler;
+
+	/**
+	 * This thread's signal queue.
+	 */
+	SignalQueue			*sigq;
+
+	/**
+	 * Points to this thread's argv and initial environment string.
+	 * The format of this string is as follows:
+	 * First, there is a list of command-line arguments, separated by NUL chars.
+	 * This is terminated by a double-NUL. Then, there is a list of var=value pairs,
+	 * separated by NUL chars, finally terminated by a double-NUL.
+	 */
+	char				*execPars;
+	size_t				szExecPars;
+
+	/**
+	 * Current error.
+	 */
+	int				therrno;
 
 	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
@@ -121,6 +161,7 @@ extern TSS _tss;
 void initSched();
 void switchContext(Regs *regs);
 void dumpRunqueue();
+void switchTask(Regs *regs);
 
 /**
  * Prototype for a kernel thread entry point.

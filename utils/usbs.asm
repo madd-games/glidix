@@ -32,9 +32,15 @@ org 0x1000
 ; from pid 1.
 
 mov rdi, str_path
+mov rsi, str_execpars
+mov rdx, sz_execpars
 ud2
 dw 2
 
 jmp $
 
 str_path db '/initrd/test', 0
+str_execpars:
+db 'test', 0, 0
+db 'HI=hello', 0, 0
+sz_execpars equ $ - str_execpars

@@ -31,6 +31,11 @@
 #include <glidix/ftab.h>
 #include <glidix/vfs.h>
 #include <glidix/elf64.h>
+#include <glidix/signal.h>
+#include <glidix/memory.h>
+#include <glidix/common.h>
+#include <glidix/errno.h>
+#include <glidix/string.h>
 
 static uint64_t sys_write(int fd, const void *buf, size_t size)
 {
@@ -176,6 +181,20 @@ static void sys_close(int fd)
 	spinlockRelease(&ftab->spinlock);
 };
 
+static int sys_stat(const char *path, struct stat *buf)
+{
+	int status = vfsStat(path, buf);
+	if (status == 0)
+	{
+		return status;
+	}
+	else
+	{
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+};
+
 static int isPointerValid(uint64_t ptr, uint64_t size)
 {
 	if (ptr < 0x1000)
@@ -191,6 +210,32 @@ static int isPointerValid(uint64_t ptr, uint64_t size)
 	return 1;
 };
 
+void signalOnBadPointer(Regs *regs, uint64_t ptr)
+{
+	siginfo_t siginfo;
+	siginfo.si_signo = SIGSEGV;
+	siginfo.si_code = SEGV_ACCERR;
+	siginfo.si_addr = (void*) ptr;
+
+	acquireHeap();
+	ASM("cli");
+	releaseHeap();
+	sendSignal(getCurrentThread(), &siginfo);
+	switchTask(regs);
+};
+
+void signalOnBadSyscall(Regs *regs)
+{
+	siginfo_t si;
+	si.si_signo = SIGSYS;
+
+	acquireHeap();
+	ASM("cli");
+	releaseHeap();
+	sendSignal(getCurrentThread(), &si);
+	switchTask(regs);
+};
+
 void syscallDispatch(Regs *regs, uint16_t num)
 {
 	regs->rip += 4;
@@ -200,19 +245,21 @@ void syscallDispatch(Regs *regs, uint16_t num)
 	case 1:
 		if (!isPointerValid(regs->rsi, regs->rdx))
 		{
-			// TODO: SIGSEGV
-			panic("sys_write: invalid pointer (%a + %d)\n", regs->rsi, regs->rdx);
+			signalOnBadPointer(regs, regs->rsi);
 		};
 		*((ssize_t*)&regs->rax) = sys_write(*((int*)&regs->rdi), (const void*) regs->rsi, *((size_t*)&regs->rdx));
 		break;
 	case 2:
-		regs->rax = elfExec(regs, (const char*) regs->rdi);
+		if (!isPointerValid(regs->rsi, regs->rdx))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		regs->rax = elfExec(regs, (const char*) regs->rdi, (const char*) regs->rsi, regs->rdx);
 		break;
 	case 3:
 		if (!isPointerValid(regs->rsi, regs->rdx))
 		{
-			// TODO: SIGSEGV
-			panic("sys_read: invalid pointer (%a + %d)\n", regs->rsi, regs->rdx);
+			signalOnBadPointer(regs, regs->rsi);
 		};
 		*((ssize_t*)&regs->rax) = sys_read(*((int*)&regs->rdi), (void*) regs->rsi, *((size_t*)&regs->rdx));
 		break;
@@ -223,8 +270,61 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		regs->rax = 0;
 		sys_close((int)regs->rdi);
 		break;
+	case 6:
+		regs->rax = getCurrentThread()->pid;
+		break;
+	case 7:
+		regs->rax = getCurrentThread()->ruid;
+		break;
+	case 8:
+		regs->rax = getCurrentThread()->euid;
+		break;
+	case 9:
+		regs->rax = getCurrentThread()->suid;
+		break;
+	case 10:
+		regs->rax = getCurrentThread()->rgid;
+		break;
+	case 11:
+		regs->rax = getCurrentThread()->egid;
+		break;
+	case 12:
+		regs->rax = getCurrentThread()->sgid;
+		break;
+	case 13:
+		if (!isPointerValid(regs->rdi, 0))
+		{
+			signalOnBadPointer(regs, regs->rdi);
+		};
+		getCurrentThread()->rootSigHandler = regs->rdi;
+		regs->rax = 0;
+		break;
+	case 14:
+		if (!isPointerValid(regs->rdi, 0x1000))
+		{
+			signalOnBadPointer(regs, regs->rdi);
+		};
+		sigret(regs, (void*) regs->rdi);
+		break;
+	case 15:
+		if (!isPointerValid(regs->rsi, sizeof(struct stat)))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		regs->rax = sys_stat((const char*) regs->rdi, (struct stat*) regs->rsi);
+		break;
+	case 16:
+		regs->rax = (uint64_t) getCurrentThread()->szExecPars;
+		break;
+	case 17:
+		if (!isPointerValid(regs->rdi, regs->rsi))
+		{
+			signalOnBadPointer(regs, regs->rdi);
+		};
+		memcpy((void*)regs->rdi, getCurrentThread()->execPars, regs->rsi);
+		break;
 	default:
-		panic("invalid syscall: %d\n", num);
+		signalOnBadSyscall(regs);
 		break;
 	};
 };

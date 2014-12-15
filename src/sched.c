@@ -82,6 +82,8 @@ void initSched()
 	firstThread.pm = NULL;
 	firstThread.pid = 0;
 	firstThread.ftab = NULL;
+	firstThread.rootSigHandler = 0;
+	firstThread.sigq = NULL;
 
 	// UID/GID stuff
 	firstThread.euid = 0;
@@ -113,12 +115,19 @@ static void jumpToTask()
 	// switch address space
 	if (currentThread->pm != NULL) SetProcessMemory(currentThread->pm);
 
+	// make sure IF is set
+	currentThread->regs.rflags |= (1 << 9);
+
 	// switch context
 	switchContext(&currentThread->regs);
 };
 
 void switchTask(Regs *regs)
 {
+	acquireHeap();
+	ASM("cli");
+	releaseHeap();
+
 	// remember the context of this thread.
 	memcpy(&currentThread->regs, regs, sizeof(Regs));
 
@@ -128,6 +137,13 @@ void switchTask(Regs *regs)
 		currentThread = currentThread->next;
 	} while (currentThread->flags & THREAD_WAITING);
 
+	// if there are signals waiting, and not currently being handled, then handle them.
+	if (((currentThread->flags & THREAD_SIGNALLED) == 0) && (currentThread->sigq != NULL))
+	{
+		dispatchSignal(currentThread);
+	};
+
+	ASM("sti");
 	jumpToTask();
 };
 
@@ -188,6 +204,8 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	thread->pm = NULL;
 	thread->pid = 0;
 	thread->ftab = NULL;
+	thread->rootSigHandler = 0;
+	thread->sigq = NULL;
 
 	// kernel threads always run as root
 	thread->euid = 0;
@@ -289,6 +307,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->pid = nextPid++;
 	spinlockRelease(&schedLock);
 
+	// remember parent pid
+	thread->pidParent = currentThread->pid;
+
 	// file table
 	if (flags & CLONE_SHARE_FTAB)
 	{
@@ -314,6 +335,25 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->egid = currentThread->egid;
 	thread->sgid = currentThread->sgid;
 	thread->rgid = currentThread->rgid;
+
+	// inherit the root signal handler
+	thread->rootSigHandler = currentThread->rootSigHandler;
+
+	// empty signal queue
+	thread->sigq = NULL;
+
+	// exec params
+	if (currentThread->pid != 0)
+	{
+		thread->execPars = (char*) kmalloc(currentThread->szExecPars);
+		memcpy(thread->execPars, currentThread->execPars, currentThread->szExecPars);
+		thread->szExecPars = currentThread->szExecPars;
+	}
+	else
+	{
+		thread->execPars = NULL;
+		thread->szExecPars = 0;
+	};
 
 	// link into the runqueue (disable interrupts for the duration of this).
 	ASM("cli");
