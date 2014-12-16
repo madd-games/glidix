@@ -113,13 +113,41 @@ static uint64_t sys_read(int fd, void *buf, size_t size)
 	return *((uint64_t*)&out);
 };
 
+static int sysOpenErrno(int vfsError)
+{
+	switch (fd)
+	{
+	case VFS_PERM:
+		getCurrentThread()->therrno = EACCES;
+		break;
+	case VFS_NO_FILE:
+		getCurrentThread()->therrno = ENOENT;
+		break;
+	case VFS_FILE_LIMIT_EXCEEDED:
+		getCurrentThread()->therrno = EMFILE;
+		break;
+	default:
+		/* fallback in case there are some unhandled errors */
+		getCurrentThread()->therrno = EIO;
+		break;
+	};
+	return -1;
+};
+
 static int sys_open(const char *path, int oflag, mode_t mode)
 {
+	if ((oflag & O_ALL) != oflag)
+	{
+		/* unrecognised bits were set */
+		getCurrentThread()->therrno = EINVAL;
+		return -1;
+	};
+
 	struct stat st;
 	int error = vfsStat(path, &st);
 	if (error != 0)
 	{
-		return error;
+		return sysOpenErrno(error);
 	};
 
 	int neededPerms = 0;
@@ -146,14 +174,14 @@ static int sys_open(const char *path, int oflag, mode_t mode)
 
 	if (i == MAX_OPEN_FILES)
 	{
-		return VFS_FILE_LIMIT_EXCEEDED;
+		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
 	};
 
 	File *fp = vfsOpen(path, VFS_CHECK_ACCESS, &error);
 	if (fp == NULL)
 	{
 		spinlockRelease(&ftab->spinlock);
-		return error;
+		return sysOpenErrno(error);
 	};
 
 	if (oflag & O_APPEND)

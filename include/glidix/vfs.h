@@ -76,7 +76,8 @@
 #define	O_NONBLOCK			(1 << 8)
 #define	O_RSYNC				(1 << 9)
 #define	O_SYNC				(1 << 10)
-#define	O_ACCMODE			0777
+#define	O_ACCMODE			(O_RDWR)
+#define	O_ALL				((1 << 11)-1)
 
 struct stat
 {

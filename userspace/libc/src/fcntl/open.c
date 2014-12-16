@@ -33,12 +33,6 @@
 
 int open(const char *path, int oflag, ...)
 {
-	if ((oflag & _O_ALL) != oflag)
-	{
-		_glidix_seterrno(EINVAL);
-		return -1;
-	};
-
 	mode_t mode = 0;
 	if (oflag & O_CREAT)
 	{
@@ -48,25 +42,5 @@ int open(const char *path, int oflag, ...)
 		va_end(ap);
 	};
 
-	int fd = _glidix_open(path, oflag, mode);
-	if (fd > 0) return fd;
-
-	/* errors */
-	switch (fd)
-	{
-	case -3:			/* VFS_PERM */
-		_glidix_seterrno(EACCES);
-		break;
-	case -4:			/* VFS_NO_FILE */
-		_glidix_seterrno(ENOENT);
-		break;
-	case -5:			/* VFS_FILE_LIMIT_EXCEEDED */
-		_glidix_seterrno(EMFILE);
-		break;
-	default:
-		_glidix_seterrno(ENOENT);
-		break;
-	};
-
-	return -1;
+	return _glidix_open(path, oflag, mode);
 };
