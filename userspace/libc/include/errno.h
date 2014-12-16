@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Runtime
 
 	Copyright (c) 2014, Madd Games.
 	All rights reserved.
@@ -26,12 +26,12 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_errno_h
-#define __glidix_errno_h
+#ifndef	_ERRNO_H
+#define	_ERRNO_H
 
-/**
- * Error numbers as reported to userspace.
- */
+#include <sys/glidix.h>
+#define	errno (_glidix_geterrno())
+
 #define E2BIG                                     1
 #define EACCES                                    2
 #define EADDRINUSE                                3

@@ -1,4 +1,4 @@
-;	Glidix
+;	Glidix Runtime
 ;
 ;	Copyright (c) 2014, Madd Games.
 ;	All rights reserved.
@@ -25,34 +25,19 @@
 ;	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 section .text
-bits 64
+global _start
 
-%macro GLIDIX_SYSCALL 2			; syscall num, syscall name
-[global %2]
-%2:
-	xor rax, rax
-	ud2
-	dw %1
-	ret
-%endmacro
+extern _init
+extern _fini
+extern __glidixrt_init
 
-GLIDIX_SYSCALL		1,	write
-GLIDIX_SYSCALL		2,	_glidix_exec
-GLIDIX_SYSCALL		3,	read
-GLIDIX_SYSCALL		4,	_glidix_open
-GLIDIX_SYSCALL		5,	close
-GLIDIX_SYSCALL		6,	getpid
-GLIDIX_SYSCALL		7,	getuid
-GLIDIX_SYSCALL		8,	geteuid
-GLIDIX_SYSCALL		9,	_glidix_getsuid
-GLIDIX_SYSCALL		10,	getgid
-GLIDIX_SYSCALL		11,	getegid
-GLIDIX_SYSCALL		12,	_glidix_getsgid
-GLIDIX_SYSCALL		13,	_glidix_sighandler
-GLIDIX_SYSCALL		14,	_glidix_sigret
-GLIDIX_SYSCALL		15,	stat
-GLIDIX_SYSCALL		16,	_glidix_getparsz
-GLIDIX_SYSCALL		17,	_glidix_getpars
-GLIDIX_SYSCALL		18,	raise
-GLIDIX_SYSCALL		19,	_glidix_geterrno
-GLIDIX_SYSCALL		20,	_glidix_seterrno
+STACK_SIZE equ 0x100000
+
+_start:
+	mov		rsp, stack + STACK_SIZE
+	call		_init
+	call		__glidixrt_init
+	jmp $
+
+section .bss
+stack resb STACK_SIZE

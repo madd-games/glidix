@@ -42,7 +42,8 @@ static uint64_t sys_write(int fd, const void *buf, size_t size)
 	ssize_t out;
 	if (fd >= MAX_OPEN_FILES)
 	{
-		out = VFS_BAD_FD;
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
 	}
 	else
 	{
@@ -52,14 +53,16 @@ static uint64_t sys_write(int fd, const void *buf, size_t size)
 		if (fp == NULL)
 		{
 			spinlockRelease(&ftab->spinlock);
-			out = VFS_BAD_FD;
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
 		}
 		else
 		{
 			if (fp->write == NULL)
 			{
 				spinlockRelease(&ftab->spinlock);
-				out = VFS_PERM;
+				getCurrentThread()->therrno = EACCES;
+				out = -1;
 			}
 			else
 			{
@@ -77,7 +80,8 @@ static uint64_t sys_read(int fd, void *buf, size_t size)
 	ssize_t out;
 	if (fd >= MAX_OPEN_FILES)
 	{
-		out = VFS_BAD_FD;
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
 	}
 	else
 	{
@@ -87,14 +91,16 @@ static uint64_t sys_read(int fd, void *buf, size_t size)
 		if (fp == NULL)
 		{
 			spinlockRelease(&ftab->spinlock);
-			out = VFS_BAD_FD;
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
 		}
 		else
 		{
 			if (fp->read == NULL)
 			{
 				spinlockRelease(&ftab->spinlock);
-				out = VFS_PERM;
+				getCurrentThread()->therrno = EACCES;
+				out = -1;
 			}
 			else
 			{
@@ -181,6 +187,29 @@ static void sys_close(int fd)
 	spinlockRelease(&ftab->spinlock);
 };
 
+static int sys_raise(Regs *regs, int sig)
+{
+	if ((sig < 0) || (sig >= SIG_NUM))
+	{
+		return -1;
+	};
+
+	siginfo_t siginfo;
+	siginfo.si_signo = sig;
+	siginfo.si_code = 0;
+
+	acquireHeap();
+	ASM("cli");
+	releaseHeap();
+	sendSignal(getCurrentThread(), &siginfo);
+	regs->rax = 0;
+	switchTask(regs);
+
+	// not actually stored in RAX because of the task switch, but libglidix should set
+	// RAX to zero before executing UD2.
+	return 0;
+};
+
 static int sys_stat(const char *path, struct stat *buf)
 {
 	int status = vfsStat(path, buf);
@@ -210,7 +239,7 @@ static int isPointerValid(uint64_t ptr, uint64_t size)
 	return 1;
 };
 
-void signalOnBadPointer(Regs *regs, uint64_t ptr)
+static void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	siginfo_t siginfo;
 	siginfo.si_signo = SIGSEGV;
@@ -224,7 +253,7 @@ void signalOnBadPointer(Regs *regs, uint64_t ptr)
 	switchTask(regs);
 };
 
-void signalOnBadSyscall(Regs *regs)
+static void signalOnBadSyscall(Regs *regs)
 {
 	siginfo_t si;
 	si.si_signo = SIGSYS;
@@ -311,7 +340,7 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		{
 			signalOnBadPointer(regs, regs->rsi);
 		};
-		regs->rax = sys_stat((const char*) regs->rdi, (struct stat*) regs->rsi);
+		*((int*)&regs->rax) = sys_stat((const char*) regs->rdi, (struct stat*) regs->rsi);
 		break;
 	case 16:
 		regs->rax = (uint64_t) getCurrentThread()->szExecPars;
@@ -322,6 +351,15 @@ void syscallDispatch(Regs *regs, uint16_t num)
 			signalOnBadPointer(regs, regs->rdi);
 		};
 		memcpy((void*)regs->rdi, getCurrentThread()->execPars, regs->rsi);
+		break;
+	case 18:
+		*((int*)&regs->rax) = sys_raise(regs, (int) regs->rdi);
+		break;
+	case 19:
+		*((int*)&regs->rax) = getCurrentThread()->therrno;
+		break;
+	case 20:
+		getCurrentThread()->therrno = *((int*)&regs->rdi);
 		break;
 	default:
 		signalOnBadSyscall(regs);
