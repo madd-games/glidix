@@ -26,25 +26,36 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _STRING_H
-#define _STRING_H
+#include <stdio.h>
+#include <string.h>
 
-#include <stddef.h>
+size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
+{
+	size_t ret = size * count;
+	size_t rsz = size * count;
+	if (fp->_bufsiz < rsz)
+	{
+		memcpy(fp->_wrbuf, buf, fp->_bufsiz);
+		fp->_wrbuf += fp->_bufsiz;
+		buf = (void*) ((char*) buf + fp->_bufsiz);
+		rsz -= fp->_bufsiz;
+		fp->_bufsiz = 0;
+		fp->_flush(fp);
+	};
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+	memcpy(fp->_wrbuf, buf, rsz);
+	fp->_wrbuf += rsz;
+	const char *scan = (const char *) buf;
 
-void*  memcpy(void *dst, const void *src, size_t size);
-void*  memset(void *dst, int value, size_t size);
-void*  strcpy(char *dst, const char *src);
-size_t strlen(const char *str);
-int    memcmp(const void *a, const void *b, size_t size);
-int    strcmp(const char *a, const char *b);
-void*  strcat(char *dst, const char *a);
+	while (rsz--)
+	{
+		if (*scan == fp->_trigger)
+		{
+			fp->_flush(fp);
+		};
 
-#ifdef __cplusplus
-}
-#endif
+		scan++;
+	};
 
-#endif
+	return ret;
+};

@@ -26,11 +26,11 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stddef.h>
+#include <stdlib.h>
+#include <unistd.h>
 
-extern int main(int argc, char *argv[], char *envp[]);
-
-void __glidixrt_init()
+void abort()
 {
-	main(0, NULL, NULL);
+	write(2, "ABORT\n", 6);
+	while (1);
 };

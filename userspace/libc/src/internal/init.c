@@ -26,25 +26,13 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _STRING_H
-#define _STRING_H
-
 #include <stddef.h>
+#include <_heap.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+extern int main(int argc, char *argv[], char *envp[]);
 
-void*  memcpy(void *dst, const void *src, size_t size);
-void*  memset(void *dst, int value, size_t size);
-void*  strcpy(char *dst, const char *src);
-size_t strlen(const char *str);
-int    memcmp(const void *a, const void *b, size_t size);
-int    strcmp(const char *a, const char *b);
-void*  strcat(char *dst, const char *a);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+void __glidixrt_init()
+{
+	_heap_init();
+	main(0, NULL, NULL);
+};

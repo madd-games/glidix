@@ -32,6 +32,8 @@
 #include <glidix/physmem.h>
 #include <glidix/isp.h>
 #include <glidix/string.h>
+#include <glidix/errno.h>
+#include <glidix/sched.h>
 
 FrameList *palloc(int count)
 {
@@ -362,4 +364,64 @@ void DownrefProcessMemory(ProcMem *pm)
 		return;				// not need to unlock because nobody will try locking ever again.
 	};
 	spinlockRelease(&pm->lock);
+};
+
+int mprotect(uint64_t addr, uint64_t len, int prot)
+{
+	if ((addr < 0x1000) || ((addr+len) > 0x8000000000))
+	{
+		getCurrentThread()->therrno = ENOMEM;
+		return -1;
+	};
+
+	if ((addr % 0x1000) != 0)
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return -1;
+	};
+
+	if ((prot & PROT_ALL) != prot)
+	{
+		getCurrentThread()->therrno = EACCES;
+		return -1;
+	};
+
+	uint64_t start = addr / 0x1000;
+	uint64_t count = len / 0x1000;
+	if (len % 0x1000) count++;
+
+	ProcMem *pm = getCurrentThread()->pm;
+	if (prot & PROT_ALLOC)
+	{
+		int flags = prot & (PROT_READ | PROT_WRITE | PROT_EXEC);
+		FrameList *fl = palloc(count);
+		if (AddSegment(pm, start, fl, flags) != 0)
+		{
+			pdownref(fl);
+			getCurrentThread()->therrno = ENOMEM;
+			return -1;
+		};
+		pdownref(fl);
+	}
+	else
+	{
+		// NOTE: for now, Glidix will ignore requests to change memory protection.
+		// we may implement it later. Discussion needed.
+		if (prot == 0)
+		{
+			if (DeleteSegment(pm, start) != 0)
+			{
+				getCurrentThread()->therrno = ENOMEM;
+				return -1;
+			};
+		}
+		else
+		{
+			getCurrentThread()->therrno = ENOMEM;
+			return -1;
+		};
+	};
+
+	SetProcessMemory(pm);
+	return 0;
 };

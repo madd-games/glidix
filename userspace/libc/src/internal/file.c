@@ -26,25 +26,41 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _STRING_H
-#define _STRING_H
+#include <stdio.h>
+#include <unistd.h>
 
-#include <stddef.h>
+static char _buf_stdout[128];
+static char _buf_stderr[128];
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+static void _fd_flush(FILE *fp)
+{
+	write(fp->_fd, fp->_rdbuf, (size_t)(fp->_wrbuf - fp->_rdbuf));
+	fp->_wrbuf = fp->_buf;
+	fp->_rdbuf = fp->_rdbuf;
+	fp->_bufsiz = fp->_bufsiz_org;
+};
 
-void*  memcpy(void *dst, const void *src, size_t size);
-void*  memset(void *dst, int value, size_t size);
-void*  strcpy(char *dst, const char *src);
-size_t strlen(const char *str);
-int    memcmp(const void *a, const void *b, size_t size);
-int    strcmp(const char *a, const char *b);
-void*  strcat(char *dst, const char *a);
+static FILE _file_stdout = {
+	._buf = _buf_stdout,
+	._rdbuf = _buf_stdout,
+	._wrbuf = _buf_stdout,
+	._bufsiz = 128,
+	._bufsiz_org = 128,
+	._trigger = '\n',
+	._flush = &_fd_flush,
+	._fd = 1
+};
 
-#ifdef __cplusplus
-}
-#endif
+static FILE _file_stderr = {
+	._buf = _buf_stderr,
+	._rdbuf = _buf_stderr,
+	._wrbuf = _buf_stderr,
+	._bufsiz = 128,
+	._bufsiz_org = 128,
+	._trigger = '\n',
+	._flush = &_fd_flush,
+	._fd = 2
+};
 
-#endif
+FILE *stdout = &_file_stdout;
+FILE *stderr = &_file_stderr;

@@ -26,25 +26,55 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _STRING_H
-#define _STRING_H
+#ifndef __HEAP_H
+#define __HEAP_H
 
-#include <stddef.h>
+#include <sys/types.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void*  memcpy(void *dst, const void *src, size_t size);
-void*  memset(void *dst, int value, size_t size);
-void*  strcpy(char *dst, const char *src);
-size_t strlen(const char *str);
-int    memcmp(const void *a, const void *b, size_t size);
-int    strcmp(const char *a, const char *b);
-void*  strcat(char *dst, const char *a);
+/**
+ * Some stuff about the libc heap.
+ */
+
+#define	_HEAP_BASE_ADDR					0x7C00000000
+#define	_HEAP_HEADER_MAGIC				0xDEADBEEF
+#define	_HEAP_FOOTER_MAGIC				0xBEEF2BAD
+#define	_HEAP_PAGE_SIZE					0x200000
+
+/* header flags */
+#define	_HEAP_BLOCK_USED				(1 << 0)
+#define	_HEAP_BLOCK_HAS_LEFT				(1 << 1)
+
+/* footer flags */
+#define	_HEAP_BLOCK_HAS_RIGHT				(1 << 0)
+
+typedef struct
+{
+	uint32_t magic;
+	size_t size;
+	uint8_t flags;
+} __heap_header;
+
+typedef struct
+{
+	uint32_t magic;
+	size_t size;
+	uint8_t flags;
+} __heap_footer;
+
+void _heap_init();
+__heap_footer* _heap_get_footer(__heap_header *head);
+__heap_header* _heap_get_header(__heap_footer *foot);
+void _heap_split_block(__heap_header *head, size_t newSize);
+void *_heap_malloc(size_t len);
+void _heap_free(void *block);
 
 #ifdef __cplusplus
-}
+}	/* extern "C" */
 #endif
 
 #endif

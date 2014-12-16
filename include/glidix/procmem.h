@@ -41,6 +41,9 @@
 #define	PROT_READ			(1 << 0)
 #define	PROT_WRITE			(1 << 1)
 #define	PROT_EXEC			(1 << 2)
+#define	PROT_ALLOC			(1 << 3)
+
+#define	PROT_ALL			((1 << 4)-1)
 
 #define	MEM_SEGMENT_COLLISION		-1
 #define	MEM_SEGMENT_INVALID		-2
@@ -122,5 +125,10 @@ ProcMem* DuplicateProcessMemory(ProcMem *pm);
 
 void UprefProcessMemory(ProcMem *pm);
 void DownrefProcessMemory(ProcMem *pm);
+
+/**
+ * Userspace.
+ */
+int mprotect(uint64_t addr, uint64_t len, int prot);
 
 #endif

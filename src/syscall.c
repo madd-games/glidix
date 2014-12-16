@@ -36,6 +36,7 @@
 #include <glidix/common.h>
 #include <glidix/errno.h>
 #include <glidix/string.h>
+#include <glidix/procmem.h>
 
 static uint64_t sys_write(int fd, const void *buf, size_t size)
 {
@@ -158,6 +159,11 @@ static int sys_open(const char *path, int oflag, mode_t mode)
 	if (oflag & O_WRONLY)
 	{
 		neededPerms |= 4;
+	};
+
+	if (!vfsCanCurrentThread(&st, neededPerms))
+	{
+		return sysOpenErrno(VFS_PERM);
 	};
 
 	FileTable *ftab = getCurrentThread()->ftab;
@@ -388,6 +394,9 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 20:
 		getCurrentThread()->therrno = *((int*)&regs->rdi);
+		break;
+	case 21:
+		*((int*)&regs->rax) = mprotect(regs->rdi, regs->rsi, (int) regs->rdx);
 		break;
 	default:
 		signalOnBadSyscall(regs);

@@ -26,25 +26,26 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _STRING_H
-#define _STRING_H
+#ifndef _SYS_MMAN_H
+#define _SYS_MMAN_H
 
-#include <stddef.h>
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void*  memcpy(void *dst, const void *src, size_t size);
-void*  memset(void *dst, int value, size_t size);
-void*  strcpy(char *dst, const char *src);
-size_t strlen(const char *str);
-int    memcmp(const void *a, const void *b, size_t size);
-int    strcmp(const char *a, const char *b);
-void*  strcat(char *dst, const char *a);
+#define	PROT_NONE			0
+#define	PROT_READ			(1 << 0)
+#define	PROT_WRITE			(1 << 1)
+#define	PROT_EXEC			(1 << 2)
+#define	PROT_ALLOC			(1 << 3)
+
+/* implemented by libglidix directly */
+int mprotect(void *addr, size_t len, int prot);
 
 #ifdef __cplusplus
-}
+}	/* extern "C" */
 #endif
 
 #endif

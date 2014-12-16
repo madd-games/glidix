@@ -26,25 +26,11 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _STRING_H
-#define _STRING_H
+#include <stdlib.h>
+#include <_heap.h>
 
-#include <stddef.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void*  memcpy(void *dst, const void *src, size_t size);
-void*  memset(void *dst, int value, size_t size);
-void*  strcpy(char *dst, const char *src);
-size_t strlen(const char *str);
-int    memcmp(const void *a, const void *b, size_t size);
-int    strcmp(const char *a, const char *b);
-void*  strcat(char *dst, const char *a);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+void free(void *block)
+{
+	/* TODO: lock */
+	_heap_free(block);
+};

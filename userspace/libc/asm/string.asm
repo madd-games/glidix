@@ -1,4 +1,4 @@
-;	Glidix
+;	Glidix Runtime
 ;
 ;	Copyright (c) 2014, Madd Games.
 ;	All rights reserved.
@@ -27,33 +27,93 @@
 section .text
 bits 64
 
-%macro GLIDIX_SYSCALL 2			; syscall num, syscall name
-[global %2]
-%2:
-	xor rax, rax
-	ud2
-	dw %1
-	ret
-%endmacro
+global memcpy
+global memset
+global strcpy
+global strlen
+global memcmp
+global strcmp
+global strcat
 
-GLIDIX_SYSCALL		1,	write
-GLIDIX_SYSCALL		2,	_glidix_exec
-GLIDIX_SYSCALL		3,	read
-GLIDIX_SYSCALL		4,	_glidix_open
-GLIDIX_SYSCALL		5,	close
-GLIDIX_SYSCALL		6,	getpid
-GLIDIX_SYSCALL		7,	getuid
-GLIDIX_SYSCALL		8,	geteuid
-GLIDIX_SYSCALL		9,	_glidix_getsuid
-GLIDIX_SYSCALL		10,	getgid
-GLIDIX_SYSCALL		11,	getegid
-GLIDIX_SYSCALL		12,	_glidix_getsgid
-GLIDIX_SYSCALL		13,	_glidix_sighandler
-GLIDIX_SYSCALL		14,	_glidix_sigret
-GLIDIX_SYSCALL		15,	stat
-GLIDIX_SYSCALL		16,	_glidix_getparsz
-GLIDIX_SYSCALL		17,	_glidix_getpars
-GLIDIX_SYSCALL		18,	raise
-GLIDIX_SYSCALL		19,	_glidix_geterrno
-GLIDIX_SYSCALL		20,	_glidix_seterrno
-GLIDIX_SYSCALL		21,	mprotect
+memcpy:
+	mov	rcx,	rdx
+	rep	movsb
+	ret
+
+memset:
+	mov	rax,	rsi
+	mov	rcx,	rdx
+	rep	stosb
+	ret
+
+strcpy:
+	lodsb
+	test	al,	al
+	stosb
+	jnz	strcpy
+	ret
+
+strlen:
+	xor	rcx,	rcx
+	mov	rsi,	rdi
+.next:
+	lodsb
+	test	al,	al
+	jz	.end
+	inc	rcx
+	jmp	.next
+.end:
+	mov	rax,	rcx
+	ret
+
+memcmp:
+	mov	rcx,	rdx
+	test	rcx,	rcx
+	jz	.ok
+	dec	rcx
+.next:
+	mov	al,	[rdi]
+	mov	bl,	[rsi]
+	inc	rdi
+	inc	rsi
+	cmp	al,	bl
+	jnz	.not_equal
+	loop	.next
+.ok:
+	xor	rax,	rax
+	ret
+.not_equal:
+	mov	rax,	1
+	ret
+
+strcmp:
+	mov	al,	[rdi]
+	mov	bl,	[rsi]
+	inc	rdi
+	inc	rsi
+	cmp	al,	bl
+	jnz	.not_equal
+
+	test	al,	al
+	jz	.end
+
+	test	bl,	bl
+	jz	.end
+
+	jmp strcmp
+.not_equal:
+	mov	rax,	1
+	ret
+
+.end:
+	xor	rax,	rax
+	ret
+
+strcat:
+	; find the NUL character in dst (rdi) and then just strcpy()
+.next:
+	mov	al,	[rdi]
+	test	al,	al
+	jz	strcpy
+	inc	rdi
+	jmp	.next

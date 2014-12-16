@@ -146,6 +146,7 @@ static int dirNext(Dir *dir)
 		strcpyUntilSlash(dir->dirent.d_name, &state->header->filename[strlen(state->prefix)]);
 		dir->stat.st_ino = dir->dirent.d_ino;
 		dir->stat.st_mode = 0555;
+		if (state->header->filename[strlen(state->header->filename)-1] == '/') dir->stat.st_mode |= VFS_MODE_DIRECTORY;
 		dir->stat.st_size = parseOct(state->header->size);
 		dir->stat.st_blksize = 512;
 		dir->stat.st_blocks = dir->stat.st_size / 512;
@@ -159,11 +160,20 @@ static int dirNext(Dir *dir)
 		};
 
 		// last slash (for directories) does not count.
-		if (state->prefix[strlen(state->prefix)] == '/') numSlashes--;
+		if (state->header->filename[strlen(state->header->filename)-1] == '/') numSlashes--;
 
-		if (numSlashes != state->dirDepth) continue;
-		if (strlen(state->header->filename) < strlen(state->prefix)) continue;
-		if (memcmp(state->header->filename, state->prefix, strlen(state->prefix)) != 0) continue;
+		if (numSlashes != state->dirDepth)
+		{
+			continue;
+		};
+		if (strlen(state->header->filename) < strlen(state->prefix))
+		{
+			continue;
+		};
+		if (memcmp(state->header->filename, state->prefix, strlen(state->prefix)) != 0)
+		{
+			continue;
+		};
 
 		break;
 	};
