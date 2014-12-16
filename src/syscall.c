@@ -115,7 +115,7 @@ static uint64_t sys_read(int fd, void *buf, size_t size)
 
 static int sysOpenErrno(int vfsError)
 {
-	switch (fd)
+	switch (vfsError)
 	{
 	case VFS_PERM:
 		getCurrentThread()->therrno = EACCES;
