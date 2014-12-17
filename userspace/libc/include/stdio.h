@@ -36,7 +36,15 @@
 #define	SEEK_END 1
 #define	SEEK_CUR 2
 
-#define	BUFSIZ		1024
+#define	BUFSIZ				1024
+#define	FILENAME_MAX			128
+#define	FOPEN_MAX			32
+
+#define	TMP_MAX				10000
+
+#define	EOF				-1
+
+typedef uint64_t			fpos_t;
 
 typedef struct __file
 {
