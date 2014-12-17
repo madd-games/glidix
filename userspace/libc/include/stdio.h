@@ -36,6 +36,10 @@
 #define	SEEK_END 1
 #define	SEEK_CUR 2
 
+#define	_IOFBF				0
+#define	_IOLBF				1
+#define	_IONBF				2
+
 #define	BUFSIZ				1024
 #define	FILENAME_MAX			128
 #define	FOPEN_MAX			32
@@ -89,6 +93,7 @@ size_t fread(void*, size_t, size_t, FILE*);
 int fseek(FILE*, long, int);
 long ftell(FILE*);
 size_t fwrite(const void*, size_t, size_t, FILE*);
+int setvbuf(FILE *fp, char *buf, int type, size_t size);
 void setbuf(FILE*, char*);
 int vfprintf(FILE*, const char*, va_list);
 
