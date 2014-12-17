@@ -25,3 +25,11 @@
 	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include <stdio.h>
+#include <string.h>
+
+int fputs(const char *s, FILE *fp)
+{
+	fwrite(s, 1, strlen(s), fp);
+};
