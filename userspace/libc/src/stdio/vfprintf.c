@@ -50,6 +50,10 @@ int vfprintf(FILE *fp, const char *fmt, va_list ap)
 			{
 				const char *s = va_arg(ap, const char*);
 				fputs(s, fp);
+			}
+			else if (c == '%')
+			{
+				fputc((int) '%', fp);
 			};
 		};
 	};
