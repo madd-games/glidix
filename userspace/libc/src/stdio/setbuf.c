@@ -28,11 +28,42 @@
 
 #include <stdio.h>
 
-void setbuf(FILE *fp, char *buf)
+int setvbuf(FILE *fp, char *buf, int type, size_t size)
 {
-	fflush(fp);
 	fp->_buf = buf;
 	fp->_rdbuf = buf;
 	fp->_wrbuf = buf;
-	fp->_bufsiz = BUFSIZ;
+	fp->_bufsiz = size;
+	fp->_bufsiz_org = size;
+	
+	switch (type)
+	{
+	case _IOFBF:
+		fp->_trigger = 0;
+		break;
+	case _IOLBF:
+		fp->_trigger = '\n';
+		break;
+	case _IONBF:
+		fp->_buf = &fp->_nanobuf;
+		fp->_rdbuf = fp->_buf;
+		fp->_wrbuf = fp->_buf;
+		fp->_bufsiz = 1;
+		fp->_bufisz_org = 1;
+		break;
+	};
+	
+	return 0;
+};
+
+void setbuf(FILE *fp, char *buf)
+{
+	if (buf != NULL)
+	{
+		setvbuf(fp, buf, _IOFBF, BUFSIZ);
+	}
+	else
+	{
+		setvbuf(fp, buf, _IONBF, BUFSIZ);
+	};
 };
