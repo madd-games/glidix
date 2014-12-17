@@ -25,3 +25,55 @@
 	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include <stdio.h>
+
+int fputc(int ch, FILE *fp)
+{
+	char c = (char) ch;
+	return fwrite(&c, 1, 1, fp);
+};
+
+int vfprintf(FILE *fp, const char *fmt, va_list ap)
+{
+	while (*fmt != 0)
+	{
+		char c = *fmt++;
+		if (c != '%')
+		{
+			fputc((int) c, fp);
+		}
+		else
+		{
+			c = *fmt++;
+			if (c == 's')
+			{
+				const char *s = va_arg(ap, const char*);
+				fputs(s, fp);
+			};
+		};
+	};
+};
+
+int vprintf(const char *fmt, va_list ap)
+{
+	return vfprintf(stdout, fmt, ap);
+};
+
+int fprintf(FILE *fp, const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	int ret = vfprintf(fp, fmt, ap);
+	va_end(ap);
+	return ret;
+};
+
+int printf(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	int ret = vprintf(fmt, ap);
+	va_end(ap);
+	return ret;
+};
