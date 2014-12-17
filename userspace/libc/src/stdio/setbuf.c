@@ -25,3 +25,14 @@
 	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include <stdio.h>
+
+void setbuf(FILE *fp, char *buf)
+{
+	fflush(fp);
+	fp->_buf = buf;
+	fp->_rdbuf = buf;
+	fp->_wrbuf = buf;
+	fp->_bufsiz = BUFSIZ;
+};
