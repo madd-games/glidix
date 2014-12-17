@@ -221,6 +221,48 @@ static void sys_close(int fd)
 	spinlockRelease(&ftab->spinlock);
 };
 
+static off_t sys_lseek(int fd, off_t offset, int whence)
+{
+	if (fd >= MAX_OPEN_FILES)
+	{
+		getCurrentThread()->therrno = EBADF;
+		return (off_t)-1;
+	};
+
+	if ((whence != SEEK_SET) && (whence != SEEK_CUR) && (whence != SEEK_END))
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return (off_t)-1;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	File *fp = ftab->entries[fd];
+	if (fp == NULL)
+	{
+		getCurrentThread()->therrno = EBADF;
+		spinlockRelease(&ftab->spinlock);
+		return (off_t)-1;
+	};
+
+	if (fp->seek == NULL)
+	{
+		getCurrentThread()->therrno = ESPIPE;
+		spinlockRelease(&ftab->spinlock);
+		return (off_t)-1;
+	};
+
+	off_t ret = fp->seek(fp, offset, whence);
+	if (ret == (off_t)-1)
+	{
+		getCurrentThread()->therrno = EOVERFLOW;
+	};
+
+	spinlockRelease(&ftab->spinlock);
+	return ret;
+};
+
 static int sys_raise(Regs *regs, int sig)
 {
 	if ((sig < 0) || (sig >= SIG_NUM))
@@ -397,6 +439,9 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 21:
 		*((int*)&regs->rax) = mprotect(regs->rdi, regs->rsi, (int) regs->rdx);
+		break;
+	case 22:
+		*((off_t*)&regs->rax) = sys_lseek((int) regs->rdi, *((off_t*)&regs->rsi), (int) regs->rdx);
 		break;
 	default:
 		signalOnBadSyscall(regs);

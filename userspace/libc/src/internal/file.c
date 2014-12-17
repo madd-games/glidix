@@ -48,7 +48,8 @@ static FILE _file_stdout = {
 	._bufsiz_org = 128,
 	._trigger = '\n',
 	._flush = &_fd_flush,
-	._fd = 1
+	._fd = 1,
+	._flags = 0
 };
 
 static FILE _file_stderr = {
@@ -59,7 +60,8 @@ static FILE _file_stderr = {
 	._bufsiz_org = 128,
 	._trigger = '\n',
 	._flush = &_fd_flush,
-	._fd = 2
+	._fd = 2,
+	._flags = 0
 };
 
 FILE *stdout = &_file_stdout;

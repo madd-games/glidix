@@ -300,10 +300,12 @@ int DeleteSegment(ProcMem *pm, uint64_t start)
 void SetProcessMemory(ProcMem *pm)
 {
 	PML4 *pml4 = getPML4();
+	ASM("cli");
 	pml4->entries[0].present = 1;
 	pml4->entries[0].rw = 1;
 	pml4->entries[0].user = 1;
 	pml4->entries[0].pdptPhysAddr = pm->pdptPhysFrame;
+	ASM("sti");
 };
 
 static void DeleteProcessMemory(ProcMem *pm)

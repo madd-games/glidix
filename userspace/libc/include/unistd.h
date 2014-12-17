@@ -30,6 +30,7 @@
 #define _UNISTD_H
 
 #include <sys/types.h>
+#include <stdio.h>		/* SEEK_* */
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +46,7 @@ pid_t fork(void);
 ssize_t	write(int fildes, const void *buf, size_t nbyte);
 ssize_t	read(int fildes, void *buf, size_t nbytes);
 int	close(int fildes);
+off_t	lseek(int fildes, off_t pos, int whence);
 
 #ifdef __cplusplus
 }	/* extern "C" */

@@ -183,6 +183,9 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 		};
 	};
 
+	// set the signal handler to default.
+	getCurrentThread()->rootSigHandler = 0;
+
 	// set the execPars
 	Thread *thread = getCurrentThread();
 	thread->execPars = (char*) kmalloc(parsz);
@@ -232,9 +235,6 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 
 	// make sure we jump to the entry upon return
 	regs->rip = elfHeader.e_entry;
-
-	// set the signal handler to default.
-	getCurrentThread()->rootSigHandler = 0;
 
 	return 0;
 };

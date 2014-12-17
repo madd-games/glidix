@@ -26,57 +26,27 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __HEAP_H
-#define __HEAP_H
+#include <stdio.h>
+#include <unistd.h>
 
-#include <sys/types.h>
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/**
- * Some stuff about the libc heap.
- */
-
-#define	_HEAP_BASE_ADDR					0x7C00000000
-#define	_HEAP_HEADER_MAGIC				0xDEADBEEF
-#define	_HEAP_FOOTER_MAGIC				0xBEEF2BAD
-#define	_HEAP_PAGE_SIZE					0x200000
-
-/* header flags */
-#define	_HEAP_BLOCK_USED				(1 << 0)
-#define	_HEAP_BLOCK_HAS_LEFT				(1 << 1)
-
-/* footer flags */
-#define	_HEAP_BLOCK_HAS_RIGHT				(1 << 0)
-
-typedef struct
+int fseek(FILE *fp, long offset, int whence)
 {
-	uint32_t magic;
-	size_t size;
-	uint8_t flags;
-} __attribute__ ((packed)) __heap_header;
+	off_t ret = lseek(fp->_fd, (off_t) offset, whence);
+	if (ret == (off_t)-1)
+	{
+		fp->_flags |= __FILE_FERROR;
+		return -1;
+	};
+	return 0;
+};
 
-typedef struct
+long ftell(FILE *fp)
 {
-	uint32_t magic;
-	size_t size;
-	uint8_t flags;
-} __attribute__ ((packed)) __heap_footer;
-
-void _heap_init();
-__heap_footer* _heap_get_footer(__heap_header *head);
-__heap_header* _heap_get_header(__heap_footer *foot);
-void _heap_split_block(__heap_header *head, size_t newSize);
-void *_heap_malloc(size_t len);
-void _heap_free(void *block);
-void _heap_dump();
-void _heap_expand();
-
-#ifdef __cplusplus
-}	/* extern "C" */
-#endif
-
-#endif
+	off_t ret = lseek(fp->_fd, 0, SEEK_CUR);
+	if (ret == (off_t)-1)
+	{
+		fp->_flags |= __FILE_FERROR;
+		return -1L;
+	};
+	return (long) ret;
+};

@@ -29,6 +29,7 @@
 #ifndef _STDIO_H
 #define _STDIO_H
 
+#include <sys/types.h>
 #include <stdarg.h>
 #include <stddef.h>
 
@@ -47,6 +48,8 @@
 #define	TMP_MAX				10000
 
 #define	EOF				-1
+
+#define	__FILE_FERROR			(1 << 0)
 
 typedef uint64_t			fpos_t;
 
@@ -79,6 +82,11 @@ typedef struct __file
 	 * This is used as a one-byte buffer when "no buffer" is used.
 	 */
 	char _nanobuf;
+
+	/**
+	 * Flags.
+	 */
+	int _flags;
 } FILE;
 
 #ifdef __cplusplus
@@ -101,7 +109,12 @@ size_t	fwrite(const void*, size_t, size_t, FILE*);
 int	setvbuf(FILE *fp, char *buf, int type, size_t size);
 void	setbuf(FILE*, char*);
 int	vfprintf(FILE*, const char*, va_list);
+int	fprintf(FILE*, const char*, ...);
+int	vprintf(const char*, va_list);
+int	printf(const char*, ...);
 int	fputs(const char *s, FILE *stream);
+int	fputc(int, FILE*);
+int	putchar(int);
 int	puts(const char *s);
 
 #ifdef __cplusplus

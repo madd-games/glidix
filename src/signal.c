@@ -31,6 +31,7 @@
 #include <glidix/common.h>
 #include <glidix/string.h>
 #include <glidix/memory.h>
+#include <glidix/console.h>
 
 typedef struct
 {
@@ -45,8 +46,14 @@ void dispatchSignal(Thread *thread)
 
 	if (thread->rootSigHandler == 0)
 	{
-		// there is no sig handler; TODO: make a default one.
-		// for now, discard the signal.
+		// there is no sig handler; use the default.
+		switch (sigq->si.si_signo)
+		{
+		case SIGSEGV:
+			kprintf("SIGSEGV %a\n", sigq->si.si_addr);
+			break;
+		};
+
 		kfree(sigq);
 		return;
 	};

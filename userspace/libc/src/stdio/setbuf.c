@@ -49,7 +49,7 @@ int setvbuf(FILE *fp, char *buf, int type, size_t size)
 		fp->_rdbuf = fp->_buf;
 		fp->_wrbuf = fp->_buf;
 		fp->_bufsiz = 1;
-		fp->_bufisz_org = 1;
+		fp->_bufsiz_org = 1;
 		break;
 	};
 	
