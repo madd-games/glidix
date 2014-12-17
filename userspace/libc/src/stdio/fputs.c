@@ -31,5 +31,5 @@
 
 int fputs(const char *s, FILE *fp)
 {
-	fwrite(s, 1, strlen(s), fp);
+	return fwrite(s, 1, strlen(s), fp);
 };
