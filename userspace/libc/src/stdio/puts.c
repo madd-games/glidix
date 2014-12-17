@@ -25,3 +25,23 @@
 	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include <stdio.h>
+
+int puts(const char *s)
+{
+	int ret = 0;
+	int tmp = fputs(s, stdout);
+	if (tmp < 0)
+	{
+		return tmp;
+	};
+	ret += tmp;
+	tmp = fputs("\n", stdout);
+	if (tmp < 0)
+	{
+		return tmp;
+	};
+	ret += tmp;
+	return ret;
+}
