@@ -90,17 +90,18 @@ extern FILE* stdout;
 extern FILE* stderr;
 #define stderr stderr
 
-int fclose(FILE*);
-int fflush(FILE*);
-FILE* fopen(const char*, const char*);
-int fprintf(FILE*, const char*, ...);
-size_t fread(void*, size_t, size_t, FILE*);
-int fseek(FILE*, long, int);
-long ftell(FILE*);
-size_t fwrite(const void*, size_t, size_t, FILE*);
-int setvbuf(FILE *fp, char *buf, int type, size_t size);
-void setbuf(FILE*, char*);
-int vfprintf(FILE*, const char*, va_list);
+int	fclose(FILE*);
+int	fflush(FILE*);
+FILE*	fopen(const char*, const char*);
+int	fprintf(FILE*, const char*, ...);
+size_t	fread(void*, size_t, size_t, FILE*);
+int	fseek(FILE*, long, int);
+long	ftell(FILE*);
+size_t	fwrite(const void*, size_t, size_t, FILE*);
+int	setvbuf(FILE *fp, char *buf, int type, size_t size);
+void	setbuf(FILE*, char*);
+int	vfprintf(FILE*, const char*, va_list);
+int	fputs(const char *s, FILE *stream);
 
 #ifdef __cplusplus
 }
