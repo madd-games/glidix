@@ -102,6 +102,7 @@ int	setvbuf(FILE *fp, char *buf, int type, size_t size);
 void	setbuf(FILE*, char*);
 int	vfprintf(FILE*, const char*, va_list);
 int	fputs(const char *s, FILE *stream);
+int	puts(const char *s);
 
 #ifdef __cplusplus
 }
