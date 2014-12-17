@@ -74,6 +74,11 @@ typedef struct __file
 	 * The output file descriptor, if applicable.
 	 */
 	int _fd;
+	
+	/**
+	 * This is used as a one-byte buffer when "no buffer" is used.
+	 */
+	char _nanobuf;
 } FILE;
 
 #ifdef __cplusplus
