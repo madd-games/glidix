@@ -25,3 +25,12 @@
 	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include <stdio.h>
+#include <unistd.h>
+
+size_t fread(void *buf, size_t a, size_t b, FILE *fp)
+{
+	size_t size = a * b;
+	return read(fp->_fd, buf, size) / a;
+};
