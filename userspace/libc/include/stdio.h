@@ -116,6 +116,7 @@ int	fputs(const char *s, FILE *stream);
 int	fputc(int, FILE*);
 int	putchar(int);
 int	puts(const char *s);
+int	ferror(FILE *fp);
 
 #ifdef __cplusplus
 }
