@@ -74,7 +74,7 @@ typedef struct __file
 	void (*_flush)(struct __file *fp);
 
 	/**
-	 * The output file descriptor, if applicable.
+	 * The file descriptor, if applicable.
 	 */
 	int _fd;
 	
