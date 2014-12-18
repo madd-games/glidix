@@ -32,5 +32,13 @@
 size_t fread(void *buf, size_t a, size_t b, FILE *fp)
 {
 	size_t size = a * b;
-	return read(fp->_fd, buf, size) / a;
+	ssize_t ret = read(fp->_fd, buf, size);
+	if (ret >= 0)
+	{
+		return ret / a;
+	}
+	else
+	{
+		return 0;
+	};
 };
