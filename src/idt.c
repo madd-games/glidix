@@ -230,9 +230,7 @@ static void onPageFault(Regs *regs)
 		};
 		siginfo.si_addr = (void*) faultAddr;
 
-		acquireHeap();
 		ASM("cli");
-		releaseHeap();
 		sendSignal(thread, &siginfo);
 		switchTask(regs);
 	};

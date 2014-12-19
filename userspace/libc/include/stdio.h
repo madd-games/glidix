@@ -50,6 +50,9 @@
 #define	EOF				-1
 
 #define	__FILE_FERROR			(1 << 0)
+#define	__FILE_READ			(1 << 1)
+#define	__FILE_WRITE			(1 << 2)
+#define	__FILE_EOF			(1 << 3)
 
 typedef uint64_t			fpos_t;
 
@@ -114,9 +117,11 @@ int	vprintf(const char*, va_list);
 int	printf(const char*, ...);
 int	fputs(const char *s, FILE *stream);
 int	fputc(int, FILE*);
+int	fgetc(FILE*);
 int	putchar(int);
 int	puts(const char *s);
 int	ferror(FILE *fp);
+int	feof(FILE *fp);
 
 #ifdef __cplusplus
 }

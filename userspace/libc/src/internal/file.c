@@ -32,12 +32,24 @@
 static char _buf_stdout[128];
 static char _buf_stderr[128];
 
-static void _fd_flush(FILE *fp)
+void __fd_flush(FILE *fp)
 {
 	write(fp->_fd, fp->_rdbuf, (size_t)(fp->_wrbuf - fp->_rdbuf));
 	fp->_wrbuf = fp->_buf;
 	fp->_rdbuf = fp->_rdbuf;
 	fp->_bufsiz = fp->_bufsiz_org;
+};
+
+static FILE _file_stdin = {
+	._buf = NULL,
+	._rdbuf = NULL,
+	._wrbuf = NULL,
+	._bufsiz = 0,
+	._bufsiz_org = 0,
+	._trigger = 0,
+	._flush = NULL,
+	._fd = 0,
+	._flags = __FILE_READ
 };
 
 static FILE _file_stdout = {
@@ -47,9 +59,9 @@ static FILE _file_stdout = {
 	._bufsiz = 128,
 	._bufsiz_org = 128,
 	._trigger = '\n',
-	._flush = &_fd_flush,
+	._flush = &__fd_flush,
 	._fd = 1,
-	._flags = 0
+	._flags = __FILE_WRITE
 };
 
 static FILE _file_stderr = {
@@ -59,10 +71,11 @@ static FILE _file_stderr = {
 	._bufsiz = 128,
 	._bufsiz_org = 128,
 	._trigger = '\n',
-	._flush = &_fd_flush,
+	._flush = &__fd_flush,
 	._fd = 2,
-	._flags = 0
+	._flags = __FILE_WRITE
 };
 
+FILE *stdin  = &_file_stdin;
 FILE *stdout = &_file_stdout;
 FILE *stderr = &_file_stderr;

@@ -41,6 +41,7 @@
 #include <glidix/procmem.h>
 #include <glidix/vfs.h>
 #include <glidix/ktty.h>
+#include <glidix/symtab.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -156,6 +157,7 @@ extern uint64_t getFlagsRegister();
 void kmain2()
 {
 	initMount();
+	initSymtab();
 
 	kprintf("Starting the spawn process... ");
 	MachineState state;

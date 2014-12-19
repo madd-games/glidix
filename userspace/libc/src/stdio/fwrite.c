@@ -31,6 +31,12 @@
 
 size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 {
+	if ((fp->_flags & __FILE_WRITE) == 0)
+	{
+		fp->_flags |= __FILE_FERROR;
+		return 0;
+	};
+
 	size_t ret = size * count;
 	size_t rsz = size * count;
 	if (fp->_bufsiz < rsz)

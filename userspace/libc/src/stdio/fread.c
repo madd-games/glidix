@@ -31,14 +31,25 @@
 
 size_t fread(void *buf, size_t a, size_t b, FILE *fp)
 {
+	if ((fp->_flags & __FILE_READ) == 0)
+	{
+		fp->_flags |= __FILE_FERROR;
+		return 0;
+	};
+
 	size_t size = a * b;
 	ssize_t ret = read(fp->_fd, buf, size);
 	if (ret >= 0)
 	{
+		if (ret < size)
+		{
+			fp->_flags |= __FILE_EOF;
+		};
 		return ret / a;
 	}
 	else
 	{
+		fp->_flags |= __FILE_FERROR;
 		return 0;
 	};
 };

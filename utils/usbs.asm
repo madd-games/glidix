@@ -39,7 +39,7 @@ dw 2
 
 jmp $
 
-str_path db '/initrd/test', 0
+str_path db '/initrd/init', 0
 str_execpars:
 db 'test', 0, 0
 db 'HI=hello', 0, 0

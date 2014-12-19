@@ -124,9 +124,8 @@ static void jumpToTask()
 
 void switchTask(Regs *regs)
 {
-	acquireHeap();
+	if (currentThread == NULL) return;
 	ASM("cli");
-	releaseHeap();
 
 	// remember the context of this thread.
 	memcpy(&currentThread->regs, regs, sizeof(Regs));
@@ -159,9 +158,7 @@ static void kernelThreadExit()
 
 	// we need to do all of this with interrupts disabled, else if this gets interrupted
 	// half way though, we might get a memory leak due to something not being kfree()'d.
-	acquireHeap();
 	ASM("cli");
-	releaseHeap();
 	currentThread->prev->next = currentThread->next;
 	currentThread->next->prev = currentThread->prev;
 

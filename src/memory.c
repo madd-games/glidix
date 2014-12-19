@@ -244,6 +244,7 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 {
 	// TODO: don't ignore the flags!
 	void *retAddr = NULL;
+	ASM("cli");
 	spinlockAcquire(&heapLock);
 
 	// find the first free block.
@@ -281,6 +282,7 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 	head->lineno = lineno;
 
 	spinlockRelease(&heapLock);
+	ASM("sti");
 	return retAddr;
 };
 
@@ -350,6 +352,7 @@ void kfree(void *block)
 {
 	// kfree()ing NULL is perfectly acceptable.
 	if (block == NULL) return;
+	ASM("cli");
 	spinlockAcquire(&heapLock);
 
 	uint64_t addr = (uint64_t) block;
@@ -442,6 +445,7 @@ void kfree(void *block)
 	// otherwise no joining.
 
 	spinlockRelease(&heapLock);
+	ASM("sti");
 };
 
 void heapDump()
@@ -497,14 +501,4 @@ void heapDump()
 	uint64_t heapszPercent = heapsz * 100 / 0x40000000;
 	kprintf("Total heap usage: %d/1024MB (%d%%)\n", heapszMB, heapszPercent);
 	kprintf("---\n");
-};
-
-void acquireHeap()
-{
-	spinlockAcquire(&heapLock);
-};
-
-void releaseHeap()
-{
-	spinlockRelease(&heapLock);
 };

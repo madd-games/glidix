@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Runtime
 
 	Copyright (c) 2014, Madd Games.
 	All rights reserved.
@@ -26,55 +26,68 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_memory_h
-#define __glidix_memory_h
+#include <stdio.h>
+#include <fcntl.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/glidix.h>
 
-#include <glidix/common.h>
-#include <stddef.h>
+/* internal/file.c */
+void __fd_flush(FILE *fp);
 
-/**
- * Routines for dynamic memory allocation and deallocation.
- */
-
-#define	MEM_PAGEALIGN			1
-
-void initMemoryPhase1(uint64_t placement);
-void initMemoryPhase2();
-void *_kxmalloc(size_t size, int flags, const char *aid, int lineno);
-void *_kmalloc(size_t size, const char *aid, int lineno);
-void *krealloc(void *block, size_t size);
-void kfree(void *block);
-void heapDump();
-
-#define	kmalloc(size)			_kmalloc((size), __FILE__, __LINE__)
-#define	kxmalloc(size, flags)		_kxmalloc((size), (flags), "", 0)
-
-/**
- * Private heap structures.
- */
-
-#define	HEAP_HEADER_MAGIC		0xDEADBEEF
-#define	HEAP_FOOTER_MAGIC		0xBAD00BAD
-
-// flags
-#define	HEAP_BLOCK_TAKEN		1		// shared flag
-#define	HEAP_BLOCK_HAS_LEFT		2		// header flag
-#define	HEAP_BLOCK_HAS_RIGHT		4		// footer flag
-
-typedef struct
+FILE *fopen(const char *path, const char *mode)
 {
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-	const char *aid;				// allocator string (filename and lineno of kmalloc(), for debugging)
-	int lineno;
-} PACKED HeapHeader;
+	int oflags = 0;
+	int fpflags;
+	if (*mode == 'r')
+	{
+		oflags = O_RDONLY;
+		fpflags = __FILE_READ;
+	}
+	else if (*mode == 'w')
+	{
+		oflags = O_WRONLY | O_TRUNC | O_CREAT;
+		fpflags = __FILE_WRITE;
+	}
+	else if (*mode == 'a')
+	{
+		oflags = O_WRONLY | O_APPEND | O_CREAT;
+		fpflags = __FILE_WRITE;
+	}
+	else
+	{
+		_glidix_seterrno(EINVAL);
+		return NULL;
+	};
 
-typedef struct
-{
-	uint32_t magic;
-	uint64_t size;
-	uint8_t  flags;
-} PACKED HeapFooter;
+	mode++;
+	if (*mode == 'b')
+	{
+		mode++;
+	};
 
-#endif
+	if (*mode == '+')
+	{
+		oflags |= O_RDWR;
+		fpflags = __FILE_READ | __FILE_WRITE;
+	};
+
+	int fd = open(path, oflags, 0644);
+	if (fd < 0)
+	{
+		return NULL;
+	};
+
+	FILE *fp = (FILE*) malloc(sizeof(FILE));
+	fp->_buf = &fp->_nanobuf;
+	fp->_rdbuf = fp->_buf;
+	fp->_wrbuf = fp->_wrbuf;
+	fp->_bufsiz = 1;
+	fp->_bufsiz_org = 1;
+	fp->_trigger = 0;
+	fp->_flush = __fd_flush;
+	fp->_fd = fd;
+	fp->_flags = fpflags;
+	return fp;
+};

@@ -1,4 +1,3 @@
-OUTPUT_FORMAT("binary")
 ENTRY(_start)
 phys = 0xFFFF800000100000;
 

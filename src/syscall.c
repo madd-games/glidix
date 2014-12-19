@@ -274,9 +274,7 @@ static int sys_raise(Regs *regs, int sig)
 	siginfo.si_signo = sig;
 	siginfo.si_code = 0;
 
-	acquireHeap();
 	ASM("cli");
-	releaseHeap();
 	sendSignal(getCurrentThread(), &siginfo);
 	regs->rax = 0;
 	switchTask(regs);
@@ -322,9 +320,7 @@ static void signalOnBadPointer(Regs *regs, uint64_t ptr)
 	siginfo.si_code = SEGV_ACCERR;
 	siginfo.si_addr = (void*) ptr;
 
-	acquireHeap();
 	ASM("cli");
-	releaseHeap();
 	sendSignal(getCurrentThread(), &siginfo);
 	switchTask(regs);
 };
@@ -334,9 +330,7 @@ static void signalOnBadSyscall(Regs *regs)
 	siginfo_t si;
 	si.si_signo = SIGSYS;
 
-	acquireHeap();
 	ASM("cli");
-	releaseHeap();
 	sendSignal(getCurrentThread(), &si);
 	switchTask(regs);
 };
