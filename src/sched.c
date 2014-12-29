@@ -31,6 +31,7 @@
 #include <glidix/string.h>
 #include <glidix/console.h>
 #include <glidix/spinlock.h>
+#include <glidix/errno.h>
 
 static Thread firstThread;
 static Thread *currentThread;
@@ -63,8 +64,8 @@ void initSched()
 	nextPid = 1;
 
 	// create a new stack for this initial process
-	firstThread.stack = kmalloc(0x4000);
-	firstThread.stackSize = 0x4000;
+	firstThread.stack = kmalloc(DEFAULT_STACK_SIZE);
+	firstThread.stackSize = DEFAULT_STACK_SIZE;
 
 	// the value of registers do not matter except RSP and RIP,
 	// also the startup function should never return.
@@ -107,13 +108,14 @@ extern void reloadTR();
 static void jumpToTask()
 {
 	// switch kernel stack
-	_tss.rsp0 = (uint64_t) currentThread->stack + currentThread->stackSize;
+	_tss.rsp0 = ((uint64_t) currentThread->stack + currentThread->stackSize) & (uint64_t)~0xF;
 
 	// reload the TSS
 	reloadTR();
 
 	// switch address space
 	if (currentThread->pm != NULL) SetProcessMemory(currentThread->pm);
+	ASM("cli");
 
 	// make sure IF is set
 	currentThread->regs.rflags |= (1 << 9);
@@ -134,12 +136,24 @@ void switchTask(Regs *regs)
 	do
 	{
 		currentThread = currentThread->next;
-	} while (currentThread->flags & THREAD_WAITING);
+	} while (currentThread->flags & THREAD_NOSCHED);
 
 	// if there are signals waiting, and not currently being handled, then handle them.
 	if (((currentThread->flags & THREAD_SIGNALLED) == 0) && (currentThread->sigq != NULL))
 	{
-		dispatchSignal(currentThread);
+		// if the syscall is interruptable, do the switch-back.
+		if (currentThread->flags & THREAD_INT_SYSCALL)
+		{
+			memcpy(&currentThread->regs, &currentThread->intSyscallRegs, sizeof(Regs));
+			*((int64_t*)&currentThread->regs.rax) = -1;
+			currentThread->therrno = EINTR;
+		};
+		
+		// i've found that catching signals in kernel mode is a bad idea
+		if ((currentThread->regs.cs & 3) == 3)
+		{
+			dispatchSignal(currentThread);
+		};
 	};
 
 	ASM("sti");
@@ -173,7 +187,7 @@ static void kernelThreadExit()
 void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, void *data)
 {
 	// params
-	uint64_t stackSize = 0x4000;
+	uint64_t stackSize = DEFAULT_STACK_SIZE;
 	if (params != NULL)
 	{
 		stackSize = params->stackSize;
@@ -191,7 +205,7 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 
 	memset(&thread->regs, 0, sizeof(Regs));
 	thread->regs.rip = (uint64_t) entry;
-	thread->regs.rsp = (uint64_t) thread->stack + thread->stackSize - 8;		// -8 because we'll push the return address...
+	thread->regs.rsp = ((uint64_t) thread->stack + thread->stackSize - 8) & ~0xF;	// -8 because we'll push the return address...
 	thread->regs.cs = 8;
 	thread->regs.ds = 16;
 	thread->regs.ss = 0;
@@ -275,8 +289,8 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	};
 
 	// kernel stack
-	thread->stack = kmalloc(0x1000);
-	thread->stackSize = 0x1000;
+	thread->stack = kmalloc(DEFAULT_STACK_SIZE);
+	thread->stackSize = DEFAULT_STACK_SIZE;
 
 	thread->name = "";
 	thread->flags = 0;
@@ -352,6 +366,8 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 		thread->szExecPars = 0;
 	};
 
+	thread->therrno = 0;
+
 	// link into the runqueue (disable interrupts for the duration of this).
 	ASM("cli");
 	currentThread->next->prev = thread;
@@ -359,6 +375,214 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->prev = currentThread;
 	currentThread->next = thread;
 	ASM("sti");
+
+	return thread->pid;
+};
+
+void threadExit(Thread *thread, int status)
+{
+	if (thread->pid == 0)
+	{
+		panic("a kernel thread tried to threadExit()");
+	};
+
+	if (thread->pid == 1)
+	{
+		panic("init terminated with status %d!", status);
+	};
+
+	// don't break the CPU runqueue
+	ASM("cli");
+
+	// init will adopt all orphans
+	Thread *scan = thread;
+	do
+	{
+		if (scan->pidParent == thread->pid)
+		{
+			scan->pidParent = 1;
+		};
+		scan = scan->next;
+	} while (scan != thread);
+
+	// terminate us
+	thread->status = status;
+	thread->flags |= THREAD_TERMINATED;
+
+	// find the parent
+	Thread *parent = thread;
+	do
+	{
+		parent = parent->next;
+	} while (parent->pid != thread->pidParent);
+
+	// tell the parent that its child has died
+	siginfo_t siginfo;
+	siginfo.si_signo = SIGCHLD;
+	if (status >= 0)
+	{
+		siginfo.si_code = CLD_EXITED;
+	}
+	else
+	{
+		siginfo.si_code = CLD_KILLED;
+	};
+	siginfo.si_pid = thread->pid;
+	siginfo.si_status = status;
+	siginfo.si_uid = thread->ruid;
+	ASM("sti");
+	sendSignal(parent, &siginfo);
+};
+
+int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
+{
+	ASM("cli");
+	Thread *threadToKill = NULL;
+	Thread *thread = currentThread->next;
+	while (thread != currentThread)
+	{
+		if (thread->pidParent == currentThread->pid)
+		{
+			if ((thread->pid == pid) || (pid == -1))
+			{
+				if (thread->flags & THREAD_TERMINATED)
+				{
+					threadToKill = thread;
+					*stat_loc = thread->status;
+
+					// unlink from the runqueue
+					thread->prev->next = thread->next;
+					thread->next->prev = thread->prev;
+
+					break;
+				};
+			};
+		};
+		thread = thread->next;
+	};
+
+	// when WNOHANG is clear
+	if ((threadToKill == NULL) && ((flags & WNOHANG) == 0))
+	{
+		currentThread->flags |= THREAD_WAITING;
+		currentThread->therrno = ECHILD;
+		*((int*)&regs->rax) = -1;
+		switchTask(regs);
+	};
+
+	ASM("sti");
+
+	// when WNOHANG is set
+	if (threadToKill == NULL)
+	{
+		currentThread->therrno = ECHILD;
+		return -1;
+	};
+
+	// there is a process ready to be deleted, it's already removed from the runqueue.
+	kfree(thread->stack);
+	DownrefProcessMemory(thread->pm);
+	ftabDownref(thread->ftab);
+
+	while (thread->sigq != NULL)
+	{
+		SignalQueue *rm = thread->sigq;
+		thread->sigq = rm->next;
+		kfree(rm);
+	};
+
+	if (thread->execPars != NULL) kfree(thread->execPars);
+	int ret = thread->pid;
+	kfree(thread);
+
+	return ret;
+};
+
+static int canSendSignal(Thread *src, Thread *dst, int signo)
+{
+	switch (signo)
+	{
+	// list all signals that can be sent at all
+	case SIGCONT:
+	case SIGHUP:
+	case SIGINT:
+	case SIGKILL:
+	case SIGQUIT:
+	case SIGSTOP:
+	case SIGTERM:
+	case SIGTSTP:
+	case 0:
+		break;
+	default:
+		return 0;
+	};
+
+	if (dst->pid == 0)
+	{
+		return 0;
+	};
+
+	if ((dst->pid == 1) && ((signo == SIGKILL) || (signo == SIGSTOP)))
+	{
+		return 0;
+	};
+
+	if ((src->euid == 0) || (src->ruid == 0))
+	{
+		return 1;
+	};
+
+	if ((src->euid == dst->euid) || (src->ruid == dst->euid) || (src->euid == dst->suid) || (src->ruid == dst->ruid))
+	{
+		return 1;
+	};
+
+	return 0;
+};
+
+int signalPid(int pid, int signo)
+{
+	if (pid == currentThread->pid)
+	{
+		currentThread->therrno = EINVAL;
+		return -1;
+	};
+
+	ASM("cli");
+	Thread *thread = currentThread->next;
+
+	while (thread != currentThread)
+	{
+		if (thread->pid == pid)
+		{
+			break;
+		};
+		thread = thread->next;
+	};
+
+	if (thread->flags & THREAD_TERMINATED)
+	{
+		thread = currentThread;
+	};
+
+	if (thread == currentThread)
+	{
+		currentThread->therrno = ESRCH;
+		ASM("sti");
+		return -1;
+	};
+
+	if (!canSendSignal(currentThread, thread, signo))
+	{
+		currentThread->therrno = EPERM;
+		ASM("sti");
+		return -1;
+	};
+
+	siginfo_t si;
+	si.si_signo = signo;
+	ASM("sti");
+	if (signo != 0) sendSignal(thread, &si);
 
 	return 0;
 };

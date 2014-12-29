@@ -42,17 +42,18 @@
 
 typedef struct
 {
-	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
-	uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
-	uint64_t rip, rsp;
+	uint64_t	rdi, rsi, rbp, rbx, rdx, rcx, rax;
+	uint64_t	r8, r9, r10, r11, r12, r13, r14, r15;
+	uint64_t	rip, rsp;
+	int		therrno;
 } PACKED MachineState;
 
+#define	DEFAULT_STACK_SIZE		0x200000
 #define	CLONE_SHARE_MEMORY		(1 << 0)
 #define	CLONE_SHARE_FTAB		(1 << 1)
 
 /**
- * If this flag is set, then a thread is waiting for something and should not be scheduled
- * until signalled.
+ * If this flag is set, then the thread is waiting for a signal to be received.
  */
 #define	THREAD_WAITING			(1 << 0)
 
@@ -60,6 +61,27 @@ typedef struct
  * If this flag is set, the thread is currently handling a signal.
  */
 #define	THREAD_SIGNALLED		(1 << 1)
+
+/**
+ * If this flag is set, then the thread has terminated and is a zombie process,
+ * and must be removed by a waitpid().
+ */
+#define	THREAD_TERMINATED		(1 << 2)
+
+/**
+ * If this flag is set, then the thread is in the middle of an interruptable system call.
+ */
+#define	THREAD_INT_SYSCALL		(1 << 3)
+
+/**
+ * A bitwise-OR of all flags which stop the process from being scheduled.
+ */
+#define	THREAD_NOSCHED			(THREAD_WAITING | THREAD_TERMINATED)
+
+/**
+ * Flags for pollThread().
+ */
+#define	WNOHANG				(1 << 0)
 
 typedef struct _Thread
 {
@@ -141,6 +163,17 @@ typedef struct _Thread
 	int				therrno;
 
 	/**
+	 * Process exit status (only valid if this is a zombie process).
+	 */
+	int				status;
+
+	/**
+	 * Registers to restore if the current system call is interrupted by a signal;
+	 * This is only valid if the THREAD_INT_SYSCALL flag is said.
+	 */
+	Regs				intSyscallRegs;
+
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;
@@ -207,5 +240,20 @@ void signalThread(Thread *thread);
  * This function returns 0 on success, or negative numbers on error.
  */
 int threadClone(Regs *regs, int flags, MachineState *state);
+
+/**
+ * Exit the thread.
+ */
+void threadExit(Thread *thread, int status);
+
+/**
+ * Poll a thread.
+ */
+int pollThread(Regs *regs, int pid, int *stat_loc, int flags);
+
+/**
+ * Send a signal to a specific pid.
+ */
+int signalPid(int pid, int signal);
 
 #endif

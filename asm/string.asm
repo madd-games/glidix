@@ -73,10 +73,10 @@ memcmp:
 	dec	rcx
 .next:
 	mov	al,	[rdi]
-	mov	bl,	[rsi]
+	mov	dl,	[rsi]
 	inc	rdi
 	inc	rsi
-	cmp	al,	bl
+	cmp	al,	dl
 	jnz	.not_equal
 	loop	.next
 .ok:
@@ -88,16 +88,16 @@ memcmp:
 
 strcmp:
 	mov	al,	[rdi]
-	mov	bl,	[rsi]
+	mov	dl,	[rsi]
 	inc	rdi
 	inc	rsi
-	cmp	al,	bl
+	cmp	al,	dl
 	jnz	.not_equal
 
 	test	al,	al
 	jz	.end
 
-	test	bl,	bl
+	test	dl,	dl
 	jz	.end
 
 	jmp strcmp

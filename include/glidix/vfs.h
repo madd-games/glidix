@@ -46,6 +46,10 @@
 #define	VFS_MODE_SETUID			(1 << 9)
 #define	VFS_MODE_SETGID			(1 << 10)
 #define	VFS_MODE_DIRECTORY		(1 << 11)
+#define	VFS_MODE_CHARDEV		(1 << 12)
+#define	VFS_MODE_BLKDEV			(1 << 13)
+#define	VFS_MODE_FIFO			(1 << 14)
+#define	VFS_MODE_LINK			(1 << 15)
 
 /**
  * Errors.
@@ -55,6 +59,8 @@
 #define	VFS_PERM			-3		/* permission denied */
 #define	VFS_NO_FILE			-4
 #define	VFS_FILE_LIMIT_EXCEEDED		-5		/* MAX_OPEN_FILES limit exceeded */
+#define	VFS_BUSY			-6		/* a file is busy */
+#define	VFS_NOT_DIR			-7		/* not a directory */
 
 /**
  * Flags to parsePath()/vfsOpen().
@@ -133,7 +139,7 @@ typedef struct _File
 	void (*close)(struct _File *file);
 
 	/**
-	 * Duplicate the file description into another File structure. Both description must
+	 * Duplicate the file description into another File structure. Both descriptions must
 	 * be initially identical, but may become different when read(), write(), seek() and
 	 * other functions are called on them. Return 0 if the duplication was successful; -1
 	 * if this description cannot be duplicated for whatever reason. If this entry is NULL,
@@ -145,6 +151,17 @@ typedef struct _File
 	 * closed.
 	 */
 	int (*dup)(struct _File *me, struct _File *file, size_t szFile);
+
+	/**
+	 * This is used to implement the ioctl() interface. The 'cmd' argument must be constructed
+	 * according to the rules from <glidix/ioctl.h>. The last argument is undefined for 0-sized
+	 * commands. Return 0 on success, -1 on error. All ioctl() calls will fail with EINVAL if
+	 * this entry is NULL.
+	 *
+	 * WARNING: Accessing the param structure could throw a #PF which causes the function to be
+	 * interrupted and return the EINTR error; you must be careful with your locks!
+	 */
+	int (*ioctl)(struct _File *file, uint64_t cmd, void *argp);
 } File;
 
 /**
@@ -221,6 +238,8 @@ int vfsCanCurrentThread(struct stat *st, mode_t mask);
 
 /**
  * Construct the Dir such that it points to the file of the specified path. Returns NULL on error.
+ * If the pathname ends with a slash ('/'), then the returned Dir is the actual directory opened,
+ * i.e. it's the first entry in the specified directory.
  */
 Dir *parsePath(const char *path, int flags, int *error);
 

@@ -39,6 +39,8 @@
 #define	panic(...)		_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
 #define	PACKED			__attribute__ ((packed))
 #define	BREAKPOINT()		ASM ("xchg %bx, %bx")
+#define	ALIGN(x)		__attribute__ ((aligned(x)))
+#define	PAGE_ALIGN		ALIGN(0x1000)
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 

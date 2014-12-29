@@ -71,6 +71,7 @@ __heap_footer* _heap_get_footer(__heap_header *head);
 __heap_header* _heap_get_header(__heap_footer *foot);
 void _heap_split_block(__heap_header *head, size_t newSize);
 void *_heap_malloc(size_t len);
+void *_heap_realloc(void *block, size_t newsize);
 void _heap_free(void *block);
 void _heap_dump();
 void _heap_expand();

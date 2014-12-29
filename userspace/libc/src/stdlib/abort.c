@@ -28,9 +28,10 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 
 void abort()
 {
-	write(2, "ABORT\n", 6);
-	while (1);
+	raise(SIGABRT);
+	exit(-SIGABRT);			// if SIGABRT was caught
 };

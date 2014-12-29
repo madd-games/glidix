@@ -28,6 +28,7 @@ section .text
 bits 64
 
 [global spinlockAcquire]
+[global spinlockTry]
 [global spinlockRelease]
 
 spinlockAcquire:
@@ -36,7 +37,12 @@ spinlockAcquire:
 	xchg	al,	[rdi]
 	test	al,	al
 	jnz	.acq
+	ret
 
+spinlockTry:
+	xor	rax,	rax
+	mov	al,	1
+	xchg	al,	[rdi]
 	ret
 
 spinlockRelease:

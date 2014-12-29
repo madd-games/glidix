@@ -69,6 +69,12 @@ typedef struct
 	uint32_t reserved;
 } PACKED IDTEntry;
 
+/**
+ * Takes the IRQ number (0..15) as the argument.
+ */
+typedef void (*IRQHandler)(int);
+
 void initIDT();
+IRQHandler registerIRQHandler(int irq, IRQHandler handler);
 
 #endif

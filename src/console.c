@@ -37,6 +37,7 @@ static struct
 {
 	uint64_t curX, curY;
 	uint64_t curColor;
+	uint8_t putcon;
 } consoleState;
 
 static Spinlock consoleLock;
@@ -46,6 +47,7 @@ void initConsole()
 	consoleState.curX = 0;
 	consoleState.curY = 0;
 	consoleState.curColor = 0x07;
+	consoleState.putcon = 1;
 	spinlockRelease(&consoleLock);
 };
 
@@ -80,6 +82,9 @@ static void scroll()
 
 static void kputch(char c)
 {
+	outb(0xE9, c);
+	if (!consoleState.putcon) return;
+
 	if (c == '\n')
 	{
 		consoleState.curX = 0;
@@ -89,6 +94,29 @@ static void kputch(char c)
 	else if (c == '\r')
 	{
 		consoleState.curX = 0;
+	}
+	else if (c == '\b')
+	{
+		if (consoleState.curX == 0)
+		{
+			if (consoleState.curY == 0) return;
+			consoleState.curY--;
+			consoleState.curX = 80;
+		};
+		consoleState.curX--;
+		uint8_t *vidmem = (uint8_t*) (VRAM_BASE + 2 * (consoleState.curY * 80 + consoleState.curX));
+		*vidmem++ = 0;
+		*vidmem++ = consoleState.curColor;
+	}
+	else if (c == '\t')
+	{
+		consoleState.curX = (consoleState.curX/4+1)*4;
+		if (consoleState.curX >= 80)
+		{
+			consoleState.curY++;
+			consoleState.curX -= 80;
+			if (consoleState.curY == 25) scroll();
+		};
 	}
 	else
 	{
@@ -159,9 +187,10 @@ static void put_a(uint64_t addr)
 	updateVGACursor();
 };
 
-void kvprintf(const char *fmt, va_list ap)
+void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 {
 	spinlockAcquire(&consoleLock);
+	consoleState.putcon = putcon;
 
 	while (*fmt != 0)
 	{
@@ -192,6 +221,11 @@ void kvprintf(const char *fmt, va_list ap)
 				uint64_t d = va_arg(ap, uint64_t);
 				put_a(d);
 			}
+			else if (c == 'c')
+			{
+				char pc = (char) va_arg(ap, int);
+				kputch(pc);
+			}
 			else if (c == '$')
 			{
 				c = *fmt++;
@@ -209,6 +243,11 @@ void kvprintf(const char *fmt, va_list ap)
 	spinlockRelease(&consoleLock);
 };
 
+void kvprintf(const char *fmt, va_list ap)
+{
+	kvprintf_gen(1, fmt, ap);
+};
+
 void kprintf(const char *fmt, ...)
 {
 	va_list ap;
@@ -217,9 +256,23 @@ void kprintf(const char *fmt, ...)
 	va_end(ap);
 };
 
+void kvprintf_debug(const char *fmt, va_list ap)
+{
+	kvprintf_gen(0, fmt, ap);
+};
+
+void kprintf_debug(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	kvprintf_debug(fmt, ap);
+	va_end(ap);
+};
+
 void kputbuf(const char *buf, size_t size)
 {
 	spinlockAcquire(&consoleLock);
+	consoleState.putcon = 1;
 	while (size--)
 	{
 		kputch(*buf++);

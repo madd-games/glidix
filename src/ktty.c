@@ -31,6 +31,16 @@
 #include <glidix/vfs.h>
 #include <glidix/string.h>
 #include <glidix/console.h>
+#include <glidix/spinlock.h>
+
+#define	INPUT_BUFFER_SIZE	256
+
+static volatile char	inputBuffer[256];
+static volatile int	inputPut;
+static volatile int	inputRead;
+static volatile int	lineCount;
+static volatile int	lineCharCount;
+static Spinlock		inputLock;
 
 static ssize_t termWrite(File *file, const void *buffer, size_t size)
 {
@@ -38,10 +48,83 @@ static ssize_t termWrite(File *file, const void *buffer, size_t size)
 	return size;
 };
 
+static char getChar()
+{
+	spinlockAcquire(&inputLock);
+	char c;
+	if (inputPut == inputRead) c = 0;
+	else
+	{
+		c = inputBuffer[inputRead];
+		inputRead++;
+		if (inputRead == INPUT_BUFFER_SIZE) inputRead = 0;
+	};
+	spinlockRelease(&inputLock);
+
+	return c;
+};
+
+static ssize_t termRead(File *fp, void *buffer, size_t size)
+{
+	ssize_t count = 0;
+	char *out = (char*) buffer;
+	while (size--)
+	{
+		while (lineCount == 0);
+		char c;
+		while ((c = getChar()) == 0);
+		*out++ = c;
+		count++;
+		if (c == '\n') lineCount--;
+	};
+
+	return count;
+};
+
 static int termDup(File *old, File *new, size_t szfile)
 {
 	memcpy(new, old, szfile);
 	return 0;
+};
+
+void termPutChar(char c)
+{
+	spinlockAcquire(&inputLock);
+	if (c == '\b')
+	{
+		if (lineCharCount != 0)
+		{
+			lineCharCount--;
+			if (inputPut == 0)
+			{
+				inputPut = INPUT_BUFFER_SIZE - inputPut;
+			}
+			else
+			{
+				inputPut--;
+			};
+			kprintf("\b");
+		};
+
+		spinlockRelease(&inputLock);
+		return;
+	};
+
+	kprintf("%c", c);
+	int newInputPut = inputPut + 1;
+	if (newInputPut == INPUT_BUFFER_SIZE) newInputPut = 0;
+	inputBuffer[inputPut] = c;
+	inputPut = newInputPut;
+	if (c == '\n')
+	{
+		lineCount++;
+		lineCharCount = 0;
+	}
+	else
+	{
+		lineCharCount++;
+	};
+	spinlockRelease(&inputLock);
 };
 
 void setupTerminal(FileTable *ftab)
@@ -52,6 +135,21 @@ void setupTerminal(FileTable *ftab)
 	termout->write = &termWrite;
 	termout->dup = &termDup;
 
+	inputPut = 0;
+	inputRead = 0;
+	lineCount = 0;
+	lineCharCount = 0;
+
+	File *termin = (File*) kmalloc(sizeof(File));
+	memset(termin, 0, sizeof(File));
+	termin->read = &termRead;
+	termin->dup = &termDup;
+
+	ftab->entries[0] = termin;
 	ftab->entries[1] = termout;
-	ftab->entries[2] = termout;
+	File *termerr = (File*) kmalloc(sizeof(File));
+	termDup(termout, termerr, sizeof(File));
+	ftab->entries[2] = termerr;
+
+	spinlockRelease(&inputLock);
 };

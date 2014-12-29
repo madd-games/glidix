@@ -215,6 +215,11 @@ int vfprintf(FILE *fp, const char *fmt, va_list ap)
 				fputc((int) '%', fp);
 				ret++;
 			}
+			else if (c == 'c')
+			{
+				fputc(va_arg(ap, int), fp);
+				ret++;
+			}
 			else if (c == 0)
 			{
 				// that string shouldn't end with a %.

@@ -73,6 +73,16 @@
 #define	SEGV_MAPERR	1
 #define	SEGV_ACCERR	2
 
+/**
+ * si_code for SIGCHLD
+ */
+#define	CLD_EXITED	0
+#define	CLD_KILLED	1
+#define	CLD_DUMPED	2		/* never returned by glidix */
+#define	CLD_TRAPPED	3
+#define	CLD_STOPPED	4
+#define	CLD_CONTINUED	5
+
 union sigval
 {
 	int		sival_int;

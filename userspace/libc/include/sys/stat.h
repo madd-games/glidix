@@ -35,12 +35,12 @@
 extern "C" {
 #endif
 
-#define	S_ISBLK(m)			(0)
-#define	S_ISCHR(m)			(0)
+#define	S_ISBLK(m)			(m & (1 << 13))
+#define	S_ISCHR(m)			(m & (1 << 12))
 #define	S_ISDIR(m)			(m & (1 << 11))
-#define	S_ISFIFO(m)			(0)
-#define	S_ISREG(m)			((m & (1 << 11)) == 0)
-#define	S_ISLNK(m)			(0)
+#define	S_ISFIFO(m)			(m & (1 << 14))
+#define	S_ISREG(m)			(!S_ISBLK(m) && !S_ISCHR(m) && !S_ISDIR(m) && !S_ISFIFO(m) && !S_ISLNK(m))
+#define	S_ISLNK(m)			(m & (1 << 15))
 
 #define	S_TYPEISMQ(m)			(0)
 #define	S_TYPEISSEM(m)			(0)

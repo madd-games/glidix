@@ -26,13 +26,40 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <sys/glidix.h>
 #include <stddef.h>
 #include <_heap.h>
+#include <stdlib.h>
 
 extern int main(int argc, char *argv[], char *envp[]);
 
+void __init_sig();
 void __glidixrt_init()
 {
 	_heap_init();
-	main(0, NULL, NULL);
+	__init_sig();
+
+	// parse the execPars
+	size_t parsz = _glidix_getparsz();
+	char *buffer = (char*) malloc(parsz);
+	_glidix_getpars(buffer, parsz);
+
+	int argc = 0;
+	char **argv = NULL;
+
+	char *scan = buffer;
+	char *prevStart = buffer;
+	while (1)
+	{
+		char c = *scan++;
+		if (c == 0)
+		{
+			if ((scan-prevStart) == 1) break;
+			argv = realloc(argv, sizeof(char*)*(argc+1));
+			argv[argc++] = prevStart;
+			prevStart = scan;
+		};
+	};
+
+	exit(main(argc, argv, NULL));
 };

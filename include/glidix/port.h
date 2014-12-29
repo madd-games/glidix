@@ -30,5 +30,8 @@
 #define __glidix_port_h
 
 void outb(unsigned int port, unsigned int value);
+uint8_t inb(unsigned int port);
+void outd(unsigned int port, uint32_t value);
+uint32_t ind(unsigned int port);
 
 #endif

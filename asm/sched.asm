@@ -38,11 +38,15 @@ switchContext:
 	; The argument is stored in RDI, and is the address of a Regs structure.
 	; If we move the stack there, we can easily do a context switch with a
 	; bunch of pops.
+	cli
 	mov	rsp,		rdi
 
 	; first we switch the DS
-	pop	rax
-	mov	ds,		ax
+	pop	rbx
+	mov	ds,		bx
+	mov	es,		bx
+	mov	fs,		bx
+	mov	gs,		bx
 
 	; GPRs
 	pop	rdi

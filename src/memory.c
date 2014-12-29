@@ -251,6 +251,7 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 	HeapHeader *head = (HeapHeader*) HEAP_BASE_ADDR;
 	while ((head->flags & HEAP_BLOCK_TAKEN) || (head->size < size))
 	{
+		asm volatile ("xchg %ax, %ax");
 		HeapHeader *nextHead = heapWalkRight(head);
 		if (nextHead == NULL)
 		{
@@ -269,6 +270,7 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 		{
 			head = nextHead;
 		};
+		asm volatile("xchg %cx, %cx");
 	};
 
 	if (head->size > (size+sizeof(HeapHeader)+sizeof(HeapFooter)+8))
@@ -373,14 +375,16 @@ void kfree(void *block)
 		panic("heap corruption detected: the header for %a is not linked to a valid footer", addr);
 	};
 
-	if (foot->size != head->size)
-	{
-		panic("heap corruption detected: the header for %a does not agree with the footer on block size", addr);
-	};
-
 	if ((head->flags & HEAP_BLOCK_TAKEN) == 0)
 	{
+		heapDump();
 		panic("invalid pointer passed to kfree(): %a: already free", addr);
+	};
+
+	if (foot->size != head->size)
+	{
+		heapDump();
+		panic("heap corruption detected: the header for %a does not agree with the footer on block size", addr);
 	};
 
 	// mark this block as free
@@ -487,7 +491,7 @@ void heapDump()
 		kprintf("\n");
 
 		heapsz += head->size + sizeof(HeapHeader) + sizeof(HeapFooter);
-		if (foot->flags & HEAP_BLOCK_HAS_RIGHT)
+		if ((foot->flags & HEAP_BLOCK_HAS_RIGHT) || (foot->magic != HEAP_FOOTER_MAGIC))
 		{
 			head = (HeapHeader*) &foot[1];
 		}

@@ -32,6 +32,7 @@
 #include <glidix/string.h>
 #include <glidix/memory.h>
 #include <glidix/console.h>
+#include <glidix/procmem.h>
 
 typedef struct
 {
@@ -44,22 +45,24 @@ void dispatchSignal(Thread *thread)
 	SignalQueue *sigq = thread->sigq;
 	thread->sigq = sigq->next;
 
+	if (sigq->si.si_signo == SIGKILL)
+	{
+		// not allowed to override SIGKILL
+		Regs regs;				// doesn't matter, it will die
+		threadExit(thread, -SIGKILL);
+		ASM("cli");
+		switchTask(&regs);
+	};
+
 	if (thread->rootSigHandler == 0)
 	{
-		// there is no sig handler; use the default.
-		switch (sigq->si.si_signo)
-		{
-		case SIGSEGV:
-			kprintf("SIGSEGV %a\n", sigq->si.si_addr);
-			break;
-		};
-
+		// there is no sig handler; discard.
 		kfree(sigq);
 		return;
 	};
 
-	// try pushing the signal stack frame.
-	uint64_t addr = thread->regs.rsp - sizeof(SignalStackFrame);
+	// try pushing the signal stack frame. also, don't break the red zone!
+	uint64_t addr = thread->regs.rsp - sizeof(SignalStackFrame) - 128;
 	if ((addr < 0x1000) || ((addr+sizeof(SignalStackFrame)) > 0x8000000000))
 	{
 		// extreme case, discard the signal :'(
@@ -67,6 +70,8 @@ void dispatchSignal(Thread *thread)
 		return;
 	};
 
+	SetProcessMemory(thread->pm);
+	ASM("cli");
 	SignalStackFrame *frame = (SignalStackFrame*) addr;
 	frame->mstate.rdi = thread->regs.rdi;
 	frame->mstate.rsi = thread->regs.rsi;
@@ -85,19 +90,24 @@ void dispatchSignal(Thread *thread)
 	frame->mstate.r15 = thread->regs.r15;
 	frame->mstate.rip = thread->regs.rip;
 	frame->mstate.rsp = thread->regs.rsp;
+	frame->mstate.therrno = thread->therrno;
 	memcpy(&frame->si, &sigq->si, sizeof(siginfo_t));
-	kfree(sigq);
 
-	thread->regs.rsp = addr;
+	thread->regs.rsp = addr & ~0xF;
 	thread->regs.rdi = addr;
 	thread->regs.rsi = (uint64_t) (&frame->si);
 	thread->regs.rip = thread->rootSigHandler;
 
 	thread->flags |= THREAD_SIGNALLED;
+
+	ASM("sti");
+	kfree(sigq);
 };
 
 void sendSignal(Thread *thread, siginfo_t *siginfo)
 {
+	if (thread->flags & THREAD_TERMINATED) return;
+
 	SignalQueue *sq = (SignalQueue*) kmalloc(sizeof(SignalQueue));
 	sq->next = NULL;
 	memcpy(&sq->si, siginfo, sizeof(siginfo_t));
@@ -113,6 +123,7 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 		while (last->next != NULL) last = last->next;
 		last->next = sq;
 	};
+	thread->flags &= ~THREAD_WAITING;
 	ASM("sti");
 };
 
@@ -128,6 +139,7 @@ void sigret(Regs *regs, void *ret)
 	regs->rip = frame->mstate.rip;
 	regs->rdi = frame->mstate.rdi;
 	regs->rsi = frame->mstate.rsi;
+	getCurrentThread()->therrno = frame->mstate.therrno;
 
 	ASM("cli");
 	getCurrentThread()->flags &= ~THREAD_SIGNALLED;

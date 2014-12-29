@@ -29,8 +29,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#define	BREAKPOINT() asm volatile ("xchg %bx, %bx")
+
 size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 {
+	//BREAKPOINT();
 	if ((fp->_flags & __FILE_WRITE) == 0)
 	{
 		fp->_flags |= __FILE_FERROR;
@@ -63,5 +66,6 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 		scan++;
 	};
 
+	//BREAKPOINT();
 	return ret;
 };

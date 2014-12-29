@@ -37,6 +37,7 @@ typedef struct
 } PACKED Spinlock;
 
 void spinlockAcquire(Spinlock *spinlock);
+int  spinlockTry(Spinlock *spinlock);		// return 0 if the spinlock has been acquired successfully.
 void spinlockRelease(Spinlock *spinlock);
 
 #endif

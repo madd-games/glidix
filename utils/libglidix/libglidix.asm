@@ -36,6 +36,19 @@ bits 64
 	ret
 %endmacro
 
+global _glidix_pollpid
+_glidix_pollpid:
+	; this syscall is special because it returns the status is RDI!
+	xor rax, rax
+	ud2
+	dw 25
+	test rsi, rsi
+	jz .nopass
+	mov [rsi], edi		; (int = 32 bits)
+	.nopass:
+	ret
+
+GLIDIX_SYSCALL		0,	_exit
 GLIDIX_SYSCALL		1,	write
 GLIDIX_SYSCALL		2,	_glidix_exec
 GLIDIX_SYSCALL		3,	read
@@ -58,3 +71,11 @@ GLIDIX_SYSCALL		19,	_glidix_geterrno
 GLIDIX_SYSCALL		20,	_glidix_seterrno
 GLIDIX_SYSCALL		21,	mprotect
 GLIDIX_SYSCALL		22,	lseek
+GLIDIX_SYSCALL		23,	_glidix_clone
+GLIDIX_SYSCALL		24,	pause
+; system 25 handled in a special way; see above.
+GLIDIX_SYSCALL		26,	kill
+GLIDIX_SYSCALL		27,	_glidix_insmod
+GLIDIX_SYSCALL		28,	_glidix_ioctl
+GLIDIX_SYSCALL		29,	_glidix_fdopendir
+GLIDIX_SYSCALL		30,	_glidix_diag

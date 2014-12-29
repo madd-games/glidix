@@ -82,7 +82,7 @@ FILE *fopen(const char *path, const char *mode)
 	FILE *fp = (FILE*) malloc(sizeof(FILE));
 	fp->_buf = &fp->_nanobuf;
 	fp->_rdbuf = fp->_buf;
-	fp->_wrbuf = fp->_wrbuf;
+	fp->_wrbuf = fp->_buf;
 	fp->_bufsiz = 1;
 	fp->_bufsiz_org = 1;
 	fp->_trigger = 0;

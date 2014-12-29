@@ -115,14 +115,11 @@ int vfsCanCurrentThread(struct stat *st, mode_t mask)
 
 Dir *parsePath(const char *path, int flags, int *error)
 {
+	kprintf_debug("start of parsePath()\n");
+
 	*error = VFS_NO_FILE;			// default error
 	// TODO: relative paths
 	if (path[0] != '/')
-	{
-		return NULL;
-	};
-
-	if (path[strlen(path)-1] == '/')
 	{
 		return NULL;
 	};
@@ -134,6 +131,7 @@ Dir *parsePath(const char *path, int flags, int *error)
 	};
 
 	char token[128];
+	char *end = (char*) &token[127];
 	const char *scan = spath.filename;
 
 	if (spath.fs->openroot == NULL)
@@ -154,12 +152,23 @@ Dir *parsePath(const char *path, int flags, int *error)
 		char *put = token;
 		while ((*scan != 0) && (*scan != '/'))
 		{
+			if (put == end)
+			{
+				*put = 0;
+				panic("parsePath(): token too long: '%s'\n", token);
+			};
 			*put++ = *scan++;
 		};
 		*put = 0;
 
+		kprintf_debug("token '%s'\n", token);
 		if (strlen(token) == 0)
 		{
+			if (*scan == 0)
+			{
+				return dir;
+			};
+
 			if (dir->close != NULL) dir->close(dir);
 			kfree(dir);
 			return NULL;
@@ -179,6 +188,7 @@ Dir *parsePath(const char *path, int flags, int *error)
 		{
 			if ((dir->stat.st_mode & VFS_MODE_DIRECTORY) == 0)
 			{
+				*error = VFS_NOT_DIR;
 				if (dir->close != NULL) dir->close(dir);
 				kfree(dir);
 				return NULL;
@@ -233,6 +243,12 @@ int vfsStat(const char *path, struct stat *st)
 
 File *vfsOpen(const char *path, int flags, int *error)
 {
+	if (path[strlen(path)-1] == '/')
+	{
+		*error = VFS_NO_FILE;
+		return NULL;
+	};
+
 	Dir *dir = parsePath(path, flags, error);
 	if (dir == NULL)
 	{

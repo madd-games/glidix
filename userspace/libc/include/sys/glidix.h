@@ -34,10 +34,23 @@
  */
 
 #include <sys/types.h>
+#include <stddef.h>
+
+typedef struct
+{
+	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
+	uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
+	uint64_t rip, rsp;
+} __attribute__ ((packed)) _glidix_mstate;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define	_GLIDIX_CLONE_SHARE_MEMORY		(1 << 0)
+#define	_GLIDIX_CLONE_SHARE_FTAB		(1 << 1)
+
+#define	_GLIDIX_INSMOD_VERBOSE			(1 << 0)
 
 int	_glidix_exec(const char *path, const char *pars, size_t parsz);
 int	_glidix_open(const char *path, int flags, mode_t mode);
@@ -49,6 +62,12 @@ size_t	_glidix_getparsz();
 void	_glidix_getpars(char *buffer, size_t size);
 int	_glidix_geterrno();
 void	_glidix_seterrno(int _errno);
+pid_t	_glidix_clone(int flags, const _glidix_mstate *state);
+pid_t	_glidix_pollpid(pid_t pid, int *stat_loc, int flags);
+int	_glidix_insmod(const char *modname, const char *path, const char *opt, int flags);
+int	_glidix_ioctl(int fd, unsigned long cmd, void *argp);
+int	_glidix_fdopendir(const char *dirname);
+void	_glidix_diag();
 
 #ifdef __cplusplus
 }	/* extern "C" */

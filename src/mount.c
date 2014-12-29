@@ -32,6 +32,7 @@
 #include <glidix/string.h>
 #include <glidix/memory.h>
 #include <glidix/initrdfs.h>
+#include <glidix/devfs.h>
 
 static Spinlock mountLock;
 static MountPoint *mountTable;
@@ -49,6 +50,15 @@ void initMount()
 	{
 		kprintf("%$\x04" "Failed%#\n");
 		panic("failed to mount the initrdfs (errno %d)", errno);
+	};
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Mounting the devfs at /dev... ");
+	errno = mount("/dev/", getDevfs(), 0);
+	if (errno != 0)
+	{
+		kprintf("%$\x04", "Failed%#\n");
+		panic("failed to mount the devfs (errno %d)", errno);
 	};
 	kprintf("%$\x02" "Done%#\n");
 };
@@ -157,7 +167,7 @@ int resolveMounts(const char *path, SplitPath *out)
 	size_t szpath = strlen(path);
 	while (mp != NULL)
 	{
-		if (strlen(mp->prefix) < szpath)
+		if (strlen(mp->prefix) <= szpath)
 		{
 			if (memcmp(mp->prefix, path, strlen(mp->prefix)) == 0)
 			{

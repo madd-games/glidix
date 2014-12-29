@@ -37,8 +37,18 @@
 #include <glidix/errno.h>
 #include <glidix/string.h>
 #include <glidix/procmem.h>
+#include <glidix/module.h>
+#include <glidix/console.h>
+#include <glidix/fdopendir.h>
 
-static uint64_t sys_write(int fd, const void *buf, size_t size)
+void sys_exit(Regs *regs, int status)
+{
+	threadExit(getCurrentThread(), status);
+	ASM("cli");
+	switchTask(regs);
+};
+
+uint64_t sys_write(int fd, const void *buf, size_t size)
 {
 	ssize_t out;
 	if (fd >= MAX_OPEN_FILES)
@@ -76,7 +86,7 @@ static uint64_t sys_write(int fd, const void *buf, size_t size)
 	return *((uint64_t*)&out);
 };
 
-static uint64_t sys_read(int fd, void *buf, size_t size)
+uint64_t sys_read(int fd, void *buf, size_t size)
 {
 	ssize_t out;
 	if (fd >= MAX_OPEN_FILES)
@@ -114,7 +124,7 @@ static uint64_t sys_read(int fd, void *buf, size_t size)
 	return *((uint64_t*)&out);
 };
 
-static int sysOpenErrno(int vfsError)
+int sysOpenErrno(int vfsError)
 {
 	switch (vfsError)
 	{
@@ -127,6 +137,12 @@ static int sysOpenErrno(int vfsError)
 	case VFS_FILE_LIMIT_EXCEEDED:
 		getCurrentThread()->therrno = EMFILE;
 		break;
+	case VFS_BUSY:
+		getCurrentThread()->therrno = EBUSY;
+		break;
+	case VFS_NOT_DIR:
+		getCurrentThread()->therrno = ENOTDIR;
+		break;
 	default:
 		/* fallback in case there are some unhandled errors */
 		getCurrentThread()->therrno = EIO;
@@ -135,7 +151,7 @@ static int sysOpenErrno(int vfsError)
 	return -1;
 };
 
-static int sys_open(const char *path, int oflag, mode_t mode)
+int sys_open(const char *path, int oflag, mode_t mode)
 {
 	if ((oflag & O_ALL) != oflag)
 	{
@@ -201,7 +217,7 @@ static int sys_open(const char *path, int oflag, mode_t mode)
 	return i;
 };
 
-static void sys_close(int fd)
+void sys_close(int fd)
 {
 	if (fd >= MAX_OPEN_FILES)
 	{
@@ -221,7 +237,38 @@ static void sys_close(int fd)
 	spinlockRelease(&ftab->spinlock);
 };
 
-static off_t sys_lseek(int fd, off_t offset, int whence)
+int sys_ioctl(int fd, uint64_t cmd, void *argp)
+{
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	if (ftab->entries[fd] == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	File *fp = ftab->entries[fd];
+	if (fp->ioctl == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	int ret = fp->ioctl(fp, cmd, argp);
+	spinlockRelease(&ftab->spinlock);
+	return ret;
+};
+
+off_t sys_lseek(int fd, off_t offset, int whence)
 {
 	if (fd >= MAX_OPEN_FILES)
 	{
@@ -263,7 +310,7 @@ static off_t sys_lseek(int fd, off_t offset, int whence)
 	return ret;
 };
 
-static int sys_raise(Regs *regs, int sig)
+int sys_raise(Regs *regs, int sig)
 {
 	if ((sig < 0) || (sig >= SIG_NUM))
 	{
@@ -284,7 +331,7 @@ static int sys_raise(Regs *regs, int sig)
 	return 0;
 };
 
-static int sys_stat(const char *path, struct stat *buf)
+int sys_stat(const char *path, struct stat *buf)
 {
 	int status = vfsStat(path, buf);
 	if (status == 0)
@@ -298,7 +345,16 @@ static int sys_stat(const char *path, struct stat *buf)
 	};
 };
 
-static int isPointerValid(uint64_t ptr, uint64_t size)
+void sys_pause(Regs *regs)
+{
+	ASM("cli");
+	*((int*)&regs->rax) = -1;
+	getCurrentThread()->therrno = EINTR;
+	getCurrentThread()->flags |= THREAD_WAITING;
+	switchTask(regs);
+};
+
+int isPointerValid(uint64_t ptr, uint64_t size)
 {
 	if (ptr < 0x1000)
 	{
@@ -313,19 +369,33 @@ static int isPointerValid(uint64_t ptr, uint64_t size)
 	return 1;
 };
 
-static void signalOnBadPointer(Regs *regs, uint64_t ptr)
+int sys_insmod(const char *modname, const char *path, const char *opt, int flags)
 {
+	if (getCurrentThread()->euid != 0)
+	{
+		// only root can load modules.
+		getCurrentThread()->therrno = EPERM;
+		return -1;
+	};
+
+	return insmod(modname, path, opt, flags);
+};
+
+void signalOnBadPointer(Regs *regs, uint64_t ptr)
+{
+	kdumpregs(regs);
 	siginfo_t siginfo;
 	siginfo.si_signo = SIGSEGV;
 	siginfo.si_code = SEGV_ACCERR;
 	siginfo.si_addr = (void*) ptr;
+	(void)siginfo;
 
 	ASM("cli");
 	sendSignal(getCurrentThread(), &siginfo);
 	switchTask(regs);
 };
 
-static void signalOnBadSyscall(Regs *regs)
+void signalOnBadSyscall(Regs *regs)
 {
 	siginfo_t si;
 	si.si_signo = SIGSYS;
@@ -338,9 +408,13 @@ static void signalOnBadSyscall(Regs *regs)
 void syscallDispatch(Regs *regs, uint16_t num)
 {
 	regs->rip += 4;
+	kprintf_debug("SYSCALL: %d\n", num);
 
 	switch (num)
 	{
+	case 0:
+		sys_exit(regs, (int) regs->rdi);
+		break;					/* never actually reached */
 	case 1:
 		if (!isPointerValid(regs->rsi, regs->rdx))
 		{
@@ -363,7 +437,7 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((ssize_t*)&regs->rax) = sys_read(*((int*)&regs->rdi), (void*) regs->rsi, *((size_t*)&regs->rdx));
 		break;
 	case 4:
-		regs->rax = sys_open((const char*) regs->rdi, (int) regs->rsi, (mode_t) regs->rdx);
+		*((int*)&regs->rax) = sys_open((const char*) regs->rdi, (int) regs->rsi, (mode_t) regs->rdx);
 		break;
 	case 5:
 		regs->rax = 0;
@@ -436,6 +510,38 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 22:
 		*((off_t*)&regs->rax) = sys_lseek((int) regs->rdi, *((off_t*)&regs->rsi), (int) regs->rdx);
+		break;
+	case 23:
+		*((int*)&regs->rax) = threadClone(regs, (int) regs->rdi, (MachineState*) regs->rsi);
+		break;
+	case 24:
+		sys_pause(regs);
+		break;
+	case 25:
+		// yes, the second argument is a pointer to RDI :)
+		*((int*)&regs->rax) = pollThread(regs, *((int*)&regs->rdi), (int*) &regs->rdi, (int) regs->rdx);
+		break;
+	case 26:
+		*((int*)&regs->rax) = signalPid((int) regs->rdi, (int) regs->rsi);
+		break;
+	case 27:
+		*((int*)&regs->rax) = sys_insmod((const char*) regs->rdi, (const char*) regs->rsi, (const char*) regs->rdx, (int) regs->rcx);
+		break;
+	case 28:
+		if (!isPointerValid(regs->rdx, (regs->rsi >> 32) & 0xFFFF))
+		{
+			signalOnBadPointer(regs, regs->rdx);
+		};
+		*((int*)&regs->rax) = sys_ioctl((int) regs->rdi, regs->rsi, (void*) regs->rdx);
+		break;
+	case 29:
+		*((int*)&regs->rax) = sys_fdopendir((const char*) regs->rdi);
+		break;
+	case 30:
+		/* _glidix_diag */
+		heapDump();
+		kdumpregs(regs);
+		BREAKPOINT();
 		break;
 	default:
 		signalOnBadSyscall(regs);

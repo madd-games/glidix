@@ -38,5 +38,6 @@ void kvprintf(const char *fmt, va_list ap);
 void kprintf(const char *fmt, ...);
 void kputbuf(const char *buf, size_t size);
 void kdumpregs(Regs *regs);
+void kprintf_debug(const char *fmt, ...);
 
 #endif

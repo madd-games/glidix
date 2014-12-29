@@ -38,6 +38,7 @@
 
 IDTEntry idt[256];
 IDTPointer idtPtr;
+static IRQHandler irqHandlers[16];
 
 extern void loadIDT();
 extern void isr0();
@@ -168,6 +169,17 @@ void initIDT()
 	idtPtr.addr = (uint64_t) &idt[0];
 	idtPtr.limit = (sizeof(IDTEntry) * 256) - 1;
 	loadIDT();
+
+	memset(irqHandlers, 0, sizeof(IRQHandler)*16);
+};
+
+static void printbyte(uint8_t byte)
+{
+	uint8_t high = (byte >> 4) & 0xF;
+	uint8_t low =  byte & 0xF;
+
+	const char *hexd = "0123456789ABCDEF";
+	kprintf("%c%c ", hexd[high], hexd[low]);
 };
 
 static void onPageFault(Regs *regs)
@@ -175,8 +187,10 @@ static void onPageFault(Regs *regs)
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 
-	if (getCurrentThread() == NULL)
+	if ((getCurrentThread() == NULL) || (1))
 	{
+		//heapDump();
+		kdumpregs(regs);
 		kprintf("A page fault occured (rip=%a)\n", regs->rip);
 		if ((regs->errCode & 1) == 0)
 		{
@@ -212,6 +226,14 @@ static void onPageFault(Regs *regs)
 		};
 
 		kprintf("\nVirtual address: %a\n", faultAddr);
+		kprintf("Peek at RIP: ");
+		uint8_t *peek = (uint8_t*) regs->rip;
+		size_t sz = 16;
+		while (sz--)
+		{
+			printbyte(*peek++);
+		};
+		kprintf("\n");
 		panic("#PF in kernel");
 	}
 	else
@@ -236,6 +258,26 @@ static void onPageFault(Regs *regs)
 	};
 };
 
+static void onGPF(Regs *regs)
+{
+
+	if (1)
+	{
+		//heapDump();
+		kdumpregs(regs);
+		kprintf("GPF (rip=%a)\n", regs->rip);
+		kprintf("Peek at RIP: ");
+		uint8_t *peek = (uint8_t*) regs->rip;
+		size_t sz = 16;
+		while (sz--)
+		{
+			printbyte(*peek++);
+		};
+		kprintf("\n");
+		panic("#PF in kernel");
+	};
+};
+
 void switchTask(Regs *regs);		// sched.c
 
 typedef struct
@@ -249,6 +291,7 @@ void onInvalidOpcodeOrSyscall(Regs *regs)
 	SyscallOpcode *syscall = (SyscallOpcode*) regs->rip;
 	if (syscall->ud2 == 0x0B0F)
 	{
+		ASM("sti");
 		syscallDispatch(regs, syscall->num);
 	}
 	else
@@ -259,11 +302,6 @@ void onInvalidOpcodeOrSyscall(Regs *regs)
 
 void isrHandler(Regs *regs)
 {
-#if 0
-	kdumpregs(regs);
-	panic("Caught interrupt %d, rsp=%d\n", regs->intNo, regs->rsp);
-#endif
-
 	if (regs->intNo >= 32)
 	{
 		// IRQ
@@ -280,11 +318,11 @@ void isrHandler(Regs *regs)
 	case IRQ0:
 		switchTask(regs);
 		break;
-	case IRQ1:
-		// ignore
-		break;
 	case 6:
 		onInvalidOpcodeOrSyscall(regs);
+		break;
+	case 13:
+		onGPF(regs);
 		break;
 	case 14:
 		onPageFault(regs);
@@ -292,9 +330,19 @@ void isrHandler(Regs *regs)
 	default:
 		if (regs->intNo >= IRQ0)
 		{
+			if (irqHandlers[regs->intNo-IRQ0] != NULL) irqHandlers[regs->intNo-IRQ0](regs->intNo-IRQ0);
 			break;
 		};
+		heapDump();
+		kdumpregs(regs);
 		panic("Unhandled interrupt: %d\n", regs->intNo);
 		break;
 	};
+};
+
+IRQHandler registerIRQHandler(int irq, IRQHandler handler)
+{
+	IRQHandler old = irqHandlers[irq];
+	irqHandlers[irq] = handler;
+	return old;
 };

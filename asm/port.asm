@@ -33,3 +33,24 @@ outb:
 	mov ax,		si
 	out dx,		al
 	ret
+
+[global inb]
+inb:
+	mov dx,		di
+	xor rax,	rax
+	in  al,		dx
+	ret
+
+[global outd]
+outd:
+	mov dx,		di
+	mov eax,	esi
+	out dx,		eax
+	ret
+
+[global ind]
+ind:
+	mov dx,		di
+	xor rax,	rax
+	in  eax,	dx
+	ret

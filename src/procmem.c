@@ -305,6 +305,7 @@ void SetProcessMemory(ProcMem *pm)
 	pml4->entries[0].rw = 1;
 	pml4->entries[0].user = 1;
 	pml4->entries[0].pdptPhysAddr = pm->pdptPhysFrame;
+	refreshAddrSpace();
 	ASM("sti");
 };
 
@@ -340,7 +341,7 @@ ProcMem *DuplicateProcessMemory(ProcMem *pm)
 	while (seg != NULL)
 	{
 		FrameList *newList = pdup(seg->fl);
-		AddSegment(pm, seg->start, newList, seg->flags);
+		AddSegment(new, seg->start, newList, seg->flags);
 		pdownref(newList);
 		seg = seg->next;
 	};

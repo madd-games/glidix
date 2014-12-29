@@ -54,7 +54,7 @@ typedef struct
 	char			pad[12];
 } PACKED TarHeader;
 
-static TarHeader *masterHeader;
+TarHeader *masterHeader;
 static uint64_t initrdEnd;
 
 typedef struct
@@ -121,7 +121,7 @@ static int opendir(Dir *me, Dir *dir, size_t szdir)
 	dir->stat.st_blocks = 0;
 
 	// if the directory is empty, this will return -1 as no suitable header will be found,
-	// but if there are files, this will find the firt file and fill in dirent and stat!
+	// but if there are files, this will find the first file and fill in dirent and stat!
 	return dir->next(dir);
 };
 

@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 /**
  * WARNING: Do not implement locks in this code! Instead, go to the definitions of malloc(),
@@ -135,6 +136,25 @@ void* _heap_malloc(size_t len)
 	head->flags |= _HEAP_BLOCK_USED;
 	_heap_split_block(head, len);
 	return (void*) &head[1];
+};
+
+void *_heap_realloc(void *block, size_t newsize)
+{
+	if (block == NULL) return _heap_malloc(newsize);
+	uint64_t addr = (uint64_t) block - sizeof(__heap_header);
+	__heap_header *header = (__heap_header*) addr;
+	void *newblock = malloc(newsize);
+	if (newsize > header->size)
+	{
+		memcpy(newblock, block, header->size);
+	}
+	else
+	{
+		memcpy(block, newblock, newsize);
+	};
+
+	free(block);
+	return newblock;
 };
 
 void _heap_free(void *block)

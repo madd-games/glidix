@@ -27,6 +27,9 @@
 section .text
 bits 64
 
+[global _intCounter]
+_intCounter dq 0
+
 [global loadIDT]
 [extern idtPtr]
 loadIDT:
@@ -85,7 +88,10 @@ isrCommon:
 	mov			gs, ax
 
 	mov			rdi, rsp		; pass a pointer to registers as argument to isrHandler
+	mov			rbx, rsp		; save the RSP (RBX is preserved, remember).
+	and			rsp, ~0xF		; align on 16-byte boundary.
 	call	 		isrHandler
+	mov			rsp, rbx		; restore the real stack
 
 	pop			rbx
 	mov			ds, bx
@@ -101,7 +107,7 @@ isrCommon:
 %macro ISR_NOERRCODE 1
 	global isr%1
 	isr%1:
-		;cli
+		cli
 		push qword 0 
 		push qword %1
 		jmp isrCommon
@@ -110,7 +116,7 @@ isrCommon:
 %macro ISR_ERRCODE 1
 	global isr%1
 	isr%1:
-		;cli
+		cli
 		push qword %1
 		jmp isrCommon
 %endmacro
@@ -118,7 +124,7 @@ isrCommon:
 %macro IRQ 2
 	global irq%1
 	irq%1:
-		;cli
+		cli
 		push qword 0
 		push qword %2
 		jmp isrCommon

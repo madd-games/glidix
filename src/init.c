@@ -42,11 +42,16 @@
 #include <glidix/vfs.h>
 #include <glidix/ktty.h>
 #include <glidix/symtab.h>
+#include <glidix/module.h>
+#include <glidix/devfs.h>
+#include <glidix/pci.h>
+#include <glidix/storage.h>
 
 extern int _bootstrap_stack;
 extern int end;
 
 void expandHeap();
+extern int masterHeader;
 
 void kmain(MultibootInfo *info)
 {
@@ -81,7 +86,7 @@ void kmain(MultibootInfo *info)
 	initMemoryPhase1(end);
 	kprintf("%$\x02" "Done%#\n");
 
-	kprintf("Initializing the physical memory manager... ");
+	kprintf("Initializing the physical memory manager (%d pages)... ", (memSize/4));
 	initPhysMem(memSize/4);
 	kprintf("%$\x02" "Done%#\n");
 
@@ -97,8 +102,22 @@ void kmain(MultibootInfo *info)
 	initPhysMem2();
 	kprintf("%$\x02" "Done%#\n");
 
+	initModuleInterface();
+
 	kprintf("Initializing the initrdfs... ");
 	initInitrdfs(info);
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing the devfs... ");
+	initDevfs();
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing SDI... ");
+	sdInit();
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing PCI... ");
+	pciInit();
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the PIT... ");

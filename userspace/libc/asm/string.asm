@@ -16,7 +16,7 @@
 ;	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ;	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ;	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-;	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+;	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIAdlE
 ;	FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 ;	DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
 ;	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
@@ -73,10 +73,10 @@ memcmp:
 	dec	rcx
 .next:
 	mov	al,	[rdi]
-	mov	bl,	[rsi]
+	mov	dl,	[rsi]
 	inc	rdi
 	inc	rsi
-	cmp	al,	bl
+	cmp	al,	dl
 	jnz	.not_equal
 	loop	.next
 .ok:
@@ -88,16 +88,16 @@ memcmp:
 
 strcmp:
 	mov	al,	[rdi]
-	mov	bl,	[rsi]
+	mov	dl,	[rsi]
 	inc	rdi
 	inc	rsi
-	cmp	al,	bl
+	cmp	al,	dl
 	jnz	.not_equal
 
 	test	al,	al
 	jz	.end
 
-	test	bl,	bl
+	test	dl,	dl
 	jz	.end
 
 	jmp strcmp

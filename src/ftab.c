@@ -29,6 +29,8 @@
 #include <glidix/ftab.h>
 #include <glidix/memory.h>
 #include <glidix/string.h>
+#include <glidix/console.h>
+#include <glidix/common.h>
 
 FileTable *ftabCreate()
 {

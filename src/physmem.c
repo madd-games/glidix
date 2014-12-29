@@ -58,6 +58,7 @@ uint64_t phmAllocFrame()
 	{
 		if (nextFrame == numSystemFrames)
 		{
+			heapDump();
 			panic("out of physical memory!\n");
 		};
 

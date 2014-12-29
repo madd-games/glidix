@@ -35,14 +35,22 @@ for param in sys.argv[1:]:
 		sysroot = param[len("--sysroot="):]
 	elif param.startswith("--host="):
 		host = param[len("--host="):]
+	elif param.startswith("--exec-prefix="):
+		exec_prefix = param[len("--exec-prefix="):]
 
 compiler = "gcc"
 ar = "ar"
 ranlib = "ranlib"
+ld = "ld"
+modcc = "modcc"
+modld = "modld"
 if host != "":
 	compiler = host + "-gcc"
 	ar = host + "-ar"
 	ranlib = host + "-ranlib"
+	ld = host + "-ld"
+	modcc = host + "-modcc"
+	modld = host + "-modld"
 
 if (host != "") and (sysroot == ""):
 	sys.stderr.write("%s: error: you must specify a --sysroot when cross-compiling the kernel\n" % sys.argv[0])
@@ -70,6 +78,7 @@ def assertCommand(cmd, msg = None):
 assertCommand(compiler)
 assertCommand(ar)
 assertCommand(ranlib)
+assertCommand(ld)
 assertCommand("nasm")
 
 sys.stderr.write("checking build system type... ")
@@ -84,8 +93,27 @@ config = {
 	"compiler":	compiler,
 	"sysroot":	sysroot,
 	"ar":		ar,
-	"ranlib":	ranlib
+	"ranlib":	ranlib,
+	"ld":		ld
 }
+
+sys.stderr.write("creating module tools... ")
+sys.stderr.flush()
+f = open("utils/modcc", "wb")
+f.write("#! /bin/sh\n")
+f.write("# USAGE: modcc <input-file> <output-file>\n")
+f.write("%s -c $1 -o $2 -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -I %s/kernel-include -Wall -Werror\n" % (compiler, sysroot))
+f.close()
+
+f = open("utils/modld", "wb")
+f.write("#! /bin/sh\n")
+f.write("# USAGE: modld <output-file> <object-files...>\n")
+f.write("%s -r -T %s/lib/module.ld %s/lib/module_start.o -o $@ %s/lib/module_end.o\n" % (ld, sysroot, sysroot, sysroot))
+f.close()
+
+os.system("chmod +x utils/modcc")
+os.system("chmod +x utils/modld")
+sys.stderr.write("OK\n")
 
 # Write the configuration to config.json
 f = open("config.json", "wb")
@@ -94,11 +122,13 @@ f.close()
 
 # Create a Makefile
 f = open("Makefile", "wb")
-f.write(".PHONY: all install clean distclean\n")
+f.write(".PHONY: all install install-dev clean distclean\n")
 f.write("all:\n")
 f.write("\tpython build.py\n")
-f.write("install:\n")
+f.write("install: install-dev\n")
 f.write("\tsh install.sh %s\n" % sysroot)
+f.write("install-dev:\n")
+f.write("\tsh install-dev.sh %s %s %s\n" % (sysroot, modcc, modld))
 f.write("clean:\n")
 f.write("\trm -rf build isodir build.mk config.json Makefile\n")
 f.write("distclean:\n")

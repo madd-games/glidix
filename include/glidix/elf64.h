@@ -60,8 +60,9 @@ typedef	int64_t				Elf64_Sxword;
 #define	ELFDATA2MSB			2
 
 #define	ET_NONE				0
+#define	ET_REL				1		/* for modules */
 #define	ET_EXEC				2
-#define	DT_DYN				3
+#define	ET_DYN				3
 
 #define	PT_NULL				0
 #define	PT_LOAD				1
@@ -69,6 +70,26 @@ typedef	int64_t				Elf64_Sxword;
 #define	PF_X				0x1
 #define	PF_W				0x2
 #define	PF_R				0x4
+
+#define	SHT_NULL			0
+#define	SHT_PROGBITS			1
+#define	SHT_SYMTAB			2
+#define	SHT_STRTAB			3
+#define	SHT_RELA			4
+#define	SHT_HASH			5
+#define	SHT_DYNAMIC			6
+#define	SHT_NOTE			7
+#define	SHT_NOBITS			8
+#define	SHT_REL				9
+#define	SHT_SHLIB			10
+#define	SHT_DYNSYM			11
+
+#define ELF64_R_SYM(i)			((i) >> 32)
+#define ELF64_R_TYPE(i)			((i) & 0xffffffffL)
+#define ELF64_R_INFO(s, t)		(((s) << 32) + ((t) & 0xffffffffL))
+
+#define	R_X86_64_NONE			0
+#define	R_X86_64_64			1
 
 /**
  * Please remember that all the structures here are NOT packed, because ELF64 has all the
@@ -104,6 +125,37 @@ typedef struct
 	Elf64_Xword			p_memsz;
 	Elf64_Xword			p_align;
 } Elf64_Phdr;
+
+typedef struct
+{
+	Elf64_Word			sh_name;
+	Elf64_Word			sh_type;
+	Elf64_Xword			sh_flags;
+	Elf64_Addr			sh_addr;
+	Elf64_Off			sh_offset;
+	Elf64_Xword			sh_size;
+	Elf64_Word			sh_link;
+	Elf64_Word			sh_info;
+	Elf64_Xword			sh_addralign;
+	Elf64_Xword			sh_entsize;
+} Elf64_Shdr;
+
+typedef struct
+{
+	Elf64_Addr			r_offset;
+	Elf64_Xword			r_info;
+	Elf64_Sxword			r_addend;
+} Elf64_Rela;
+
+typedef struct
+{
+	Elf64_Word			st_name;
+	unsigned char			st_info;
+	unsigned char			st_other;
+	Elf64_Half			st_shndx;
+	Elf64_Addr			st_value;
+	Elf64_Xword			st_size;
+} Elf64_Sym;
 
 int elfExec(Regs *regs, const char *path, const char *execPars, size_t parsz);
 

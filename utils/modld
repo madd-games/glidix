@@ -1,0 +1,3 @@
+#! /bin/sh
+# USAGE: modld <output-file> <object-files...>
+x86_64-glidix-ld -r -T /glidix/lib/module.ld /glidix/lib/module_start.o -o $@ /glidix/lib/module_end.o

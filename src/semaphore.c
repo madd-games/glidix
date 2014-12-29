@@ -70,7 +70,6 @@ void semWait(Semaphore *sem)
 		while (sem->owner != me)
 		{
 			spinlockRelease(&sem->lock);
-			waitThread(me);
 			ASM("hlt");
 			spinlockAcquire(&sem->lock);
 		};
@@ -104,7 +103,6 @@ void semSignal(Semaphore *sem)
 		kfree(thwait);
 
 		sem->owner = thread;
-		signalThread(thread);
 	};
 
 	spinlockRelease(&sem->lock);

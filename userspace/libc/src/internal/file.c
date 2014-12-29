@@ -28,12 +28,20 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 static char _buf_stdout[128];
 static char _buf_stderr[128];
 
 void __fd_flush(FILE *fp)
 {
+	if (fp->_wrbuf < fp->_rdbuf)
+	{
+		fprintf(stderr, "libc: consistency check failed: buffer write is behind a buffer read\n");
+		fprintf(stderr, "fileno: %d; read=%p, write=%p\n", fp->_fd, fp->_rdbuf, fp->_wrbuf);
+		abort();
+	};
+
 	write(fp->_fd, fp->_rdbuf, (size_t)(fp->_wrbuf - fp->_rdbuf));
 	fp->_wrbuf = fp->_buf;
 	fp->_rdbuf = fp->_rdbuf;

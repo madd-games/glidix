@@ -42,6 +42,9 @@ int	atoi(const char*);
 void	free(void*);
 char*	getenv(const char*);
 void*	malloc(size_t);
+void*	realloc(void*, size_t);
+void	exit(int);
+void	_Exit(int);
 
 #ifdef __cplusplus
 }

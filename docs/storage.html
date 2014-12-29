@@ -1,0 +1,55 @@
+<title>Storage Device Interface</title>
+<h1>Glidix Storage Device Interface</h1>
+<p>
+The <i>Storage Device Interface</i> (<i>SDI</i>) allows Glidix to talk to storage devices using their drivers. It has 3 parts: the low-level driver interface, the high-level interface used by userspace utilities (such as <code>mkfs</code>, <code>dd</code>, etc) and filesystem drivers. The third part is the glue that sticks those interfaces together.
+</p>
+
+<h2>The Block Cache</h2>
+<p>
+The <i>block cache</i> is used by the kernel to store a list of blocks waiting to be written to a storage device. When a block needs to be read, it is searched for in the block cache first. The storage device driver has to read blocks from this cache, flush them to disk, and then remove them from this list. There is an API for this, we'll look at it later. The size of a block is decided by the driver.
+</p>
+
+<h2>The <i>"Disk File"</i> Abstraction</h2>
+<p>
+When an SDI driver tells Glidix about the existence of a storage device, the kernel will create a file in the <code>/dev</code> directory for the storage device; it will be called <code>sdX</code>, where X is a lowercase letter of the alphabet; so the first disk is <code>/dev/sda</code>, the second is <code>/dev/sdb</code>, etc. Those are referred to as <i>"disk files"</i>. It is treated as just an ordinary file; because Glidix uses 64-bit offsets within files, the supported disk size limit is 16EB. This is way more than anyone will need in quite some time. Each disk file can only be opened by one process at a time.
+</p>
+
+<p>
+In addition, when an SDI driver reports the existince of a storage device, the kernel will immediately send a request to read the first 512 bytes of it. It will then attempt to read a partition table from this. If a partition table is found, then the kernel will additionally create disk files for each partition, those are designated with a 0-based partition number after the drive name. For example, if the disk <code>/dev/sda</code> has 2 partitions, then <code>/dev/sda0</code> and <code>/dev/sda1</code> will also be created. If a process tries to open the main disk file, then all partition files must be closed. In addition, when the disk file is closed, the kernel will parse the partition table again in case it was changed.
+</p>
+
+<h2>SDI Drivers</h2>
+<p>
+An SDI driver is just a module which controls storage devices. In the <code>MODULE_INIT</code> event, when you detect a supported storage device, you must create an SDI context (a <code>StorageDevice</code> structure). This is done using the <code>sdCreate()</code> function declared in <i>&lt;glidix/storage.h&gt;</i>:
+</p>
+
+<pre>
+StorageDevice*	sdCreate(SDParams *<i>params</i>);
+</pre>
+
+<p>
+The <i>params</i> structure has the following members:
+</p>
+
+<table border="0">
+<tr><td><code>int flags</code></td><td>Flags (see below).</td></tr>
+<tr><td><code>size_t blockSize</code></td><td>How many bytes define a "block" on this device.</td></tr>
+<tr><td><code>size_t totalSize</code></td><td>The device capacity, in bytes.</td></tr>
+</table>
+
+<p>
+For each device, the module should create a new kernel thread (using <code>CreateKernelThread()</code> from <i>&lt;glidix/sched.h&gt;</i>). This thread should read from the command queue, execute the commands, and then mark them as completed. The basic template looks as follows:
+</p>
+
+<pre>
+while (1)
+{
+	SDCommand *cmd = sdPop(sd);
+	// (execute the command)
+	sdPostComplete(cmd);
+};
+</pre>
+
+<p>
+The <code>sdPop()</code> function will wait until a command is received.
+</p>
