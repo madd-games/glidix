@@ -54,3 +54,26 @@ ind:
 	xor rax,	rax
 	in  eax,	dx
 	ret
+
+[global insw]
+insw:
+	mov rcx,	rdx
+	mov dx,		di
+	mov rdi,	rsi
+	rep insw
+	ret
+
+[global outsw]
+outsw:
+	mov rcx,	rdx
+	mov dx,		di
+	rep outsw
+	ret
+
+[global insd]
+insd:
+	mov rcx,	rdx
+	mov dx,		di
+	mov rdi,	rsi
+	rep insd
+	ret

@@ -71,13 +71,13 @@ __heap_footer *_heap_get_footer(__heap_header *head)
 
 __heap_header *_heap_get_header(__heap_footer *foot)
 {
-	uint64_t addr = (uint64_t) foot - foot->size - sizeof(__heap_header);
+	uint64_t addr = (uint64_t) foot - foot->size - (size_t)sizeof(__heap_header);
 	return (__heap_header*) addr;
 };
 
 void _heap_split_block(__heap_header *head, size_t newSize)
 {
-	if (head->size < (sizeof(__heap_header)+sizeof(__heap_footer)+8))
+	if (head->size < (newSize+sizeof(__heap_header)+sizeof(__heap_footer)+8))
 	{
 		// don't split blocks below 8 bytes, there'll be enough heap fragmentation from
 		// malloc() calls below 8 bytes.
@@ -92,8 +92,13 @@ void _heap_split_block(__heap_header *head, size_t newSize)
 	newFoot->size = newSize;
 	newFoot->flags = _HEAP_BLOCK_HAS_RIGHT;
 
-	foot->size -= (newSize + sizeof(__heap_header) + sizeof(__heap_footer));
+	foot->size -= (newSize + (size_t)sizeof(__heap_header) + (size_t)sizeof(__heap_footer));
 	__heap_header *newHead = _heap_get_header(foot);
+	if (newHead < (__heap_header*)_HEAP_BASE_ADDR)
+	{
+		fprintf(stderr, "libc: splitting block at %p, size %u, gives a header %p, below %p (below heap)\n", head, (unsigned int)newSize, newHead, (void*)_HEAP_BASE_ADDR);
+		abort();
+	};
 	newHead->magic = _HEAP_HEADER_MAGIC;
 	newHead->size = foot->size;
 	newHead->flags = _HEAP_BLOCK_HAS_LEFT;

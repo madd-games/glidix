@@ -39,6 +39,7 @@
 IDTEntry idt[256];
 IDTPointer idtPtr;
 static IRQHandler irqHandlers[16];
+static volatile int uptime;
 
 extern void loadIDT();
 extern void isr0();
@@ -89,6 +90,11 @@ extern void irq12();
 extern void irq13();
 extern void irq14();
 extern void irq15();
+
+int getUptime()						// <glidix/time.h>
+{
+	return uptime;
+};
 
 static void setGate(int index, void *isr)
 {
@@ -171,6 +177,7 @@ void initIDT()
 	loadIDT();
 
 	memset(irqHandlers, 0, sizeof(IRQHandler)*16);
+	uptime = 0;
 };
 
 static void printbyte(uint8_t byte)
@@ -187,7 +194,7 @@ static void onPageFault(Regs *regs)
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 
-	if ((getCurrentThread() == NULL) || (1))
+	if ((getCurrentThread() == NULL) || (regs->cs == 8))
 	{
 		//heapDump();
 		kdumpregs(regs);
@@ -226,6 +233,8 @@ static void onPageFault(Regs *regs)
 		};
 
 		kprintf("\nVirtual address: %a\n", faultAddr);
+		uint32_t wait = 0xFFFFFFFF;
+		while (wait--);
 		kprintf("Peek at RIP: ");
 		uint8_t *peek = (uint8_t*) regs->rip;
 		size_t sz = 16;
@@ -260,7 +269,6 @@ static void onPageFault(Regs *regs)
 
 static void onGPF(Regs *regs)
 {
-
 	if (1)
 	{
 		//heapDump();
@@ -316,6 +324,7 @@ void isrHandler(Regs *regs)
 	switch (regs->intNo)
 	{
 	case IRQ0:
+		uptime++;
 		switchTask(regs);
 		break;
 	case 6:

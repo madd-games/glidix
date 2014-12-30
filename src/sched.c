@@ -108,6 +108,7 @@ extern void reloadTR();
 static void jumpToTask()
 {
 	// switch kernel stack
+	ASM("cli");
 	_tss.rsp0 = ((uint64_t) currentThread->stack + currentThread->stackSize) & (uint64_t)~0xF;
 
 	// reload the TSS

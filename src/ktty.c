@@ -32,15 +32,16 @@
 #include <glidix/string.h>
 #include <glidix/console.h>
 #include <glidix/spinlock.h>
+#include <glidix/common.h>
 
 #define	INPUT_BUFFER_SIZE	256
 
-static volatile char	inputBuffer[256];
-static volatile int	inputPut;
-static volatile int	inputRead;
-static volatile int	lineCount;
-static volatile int	lineCharCount;
-static Spinlock		inputLock;
+static volatile ATOMIC(char)	inputBuffer[256];
+static volatile ATOMIC(int)	inputPut;
+static volatile ATOMIC(int)	inputRead;
+static volatile ATOMIC(int)	lineCount;
+static volatile ATOMIC(int)	lineCharCount;
+static Spinlock			inputLock;
 
 static ssize_t termWrite(File *file, const void *buffer, size_t size)
 {

@@ -29,6 +29,7 @@
 #include <glidix/storage.h>
 #include <glidix/memory.h>
 #include <glidix/string.h>
+#include <glidix/console.h>
 
 static char nextDriveLetter = 'a';
 
@@ -91,6 +92,36 @@ static ssize_t diskfile_read(File *fp, void *buffer, size_t size)
 	return outsize;
 };
 
+static ssize_t diskfile_write(File *fp, const void *buffer, size_t size)
+{
+	DiskFile *data = (DiskFile*) fp->fsdata;
+
+	ssize_t outsize = 0;
+	const uint8_t *scan = (const uint8_t*) buffer;
+	while (size--)
+	{
+		uint64_t block = data->pos / data->file->sd->blockSize;
+		uint64_t offset = data->pos % data->file->sd->blockSize;
+
+		if (block >= data->limit)
+		{
+			break;
+		};
+
+		if (data->bufCurrent != block)
+		{
+			diskfile_setblock(data, block);
+		};
+
+		data->buf[offset] = *scan++;
+		data->pos++;
+		outsize++;
+		data->dirty = 1;
+	};
+
+	return outsize;
+};
+
 static off_t diskfile_seek(File *fp, off_t offset, int whence)
 {
 	DiskFile *data = (DiskFile*) fp->fsdata;
@@ -134,6 +165,7 @@ static int diskfile_open(void *_diskfile_void, File *fp, size_t szFile)
 
 	fp->fsdata = data;
 	fp->read = diskfile_read;
+	if ((diskfile->sd->flags & SD_READONLY) == 0) fp->write = diskfile_write;
 	fp->seek = diskfile_seek;
 	fp->close = diskfile_close;
 

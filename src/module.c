@@ -114,9 +114,9 @@ static void mapModuleArea(int modblock, int numSectors)
 		int j;
 		for (j=0; j<512; j++)
 		{
-			pt->entries[i].present = 1;
-			pt->entries[i].rw = 1;
-			pt->entries[i].framePhysAddr = phmAllocFrame();
+			pt->entries[j].present = 1;
+			pt->entries[j].rw = 1;
+			pt->entries[j].framePhysAddr = phmAllocFrame();
 		};
 	};
 

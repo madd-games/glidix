@@ -118,9 +118,9 @@ static unsigned char keymapShift[128] =
     0,	/* All other keys are undefined */
 };
 
-static volatile uint8_t	kbdbuf[64];
-static volatile int	kbdput = 0;
-static volatile int	kbdread = 0;
+static volatile ATOMIC(uint8_t)	kbdbuf[64];
+static volatile ATOMIC(int)	kbdput = 0;
+static volatile ATOMIC(int)	kbdread = 0;
 
 static void onKeyboardIRQ(int irq)
 {

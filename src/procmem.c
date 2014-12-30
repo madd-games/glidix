@@ -297,8 +297,11 @@ int DeleteSegment(ProcMem *pm, uint64_t start)
 	return 0;
 };
 
+extern uint64_t getFlagsRegister();
+
 void SetProcessMemory(ProcMem *pm)
 {
+	int shouldEnable = getFlagsRegister() & (1 << 9);
 	PML4 *pml4 = getPML4();
 	ASM("cli");
 	pml4->entries[0].present = 1;
@@ -306,7 +309,7 @@ void SetProcessMemory(ProcMem *pm)
 	pml4->entries[0].user = 1;
 	pml4->entries[0].pdptPhysAddr = pm->pdptPhysFrame;
 	refreshAddrSpace();
-	ASM("sti");
+	if (shouldEnable) ASM("sti");
 };
 
 static void DeleteProcessMemory(ProcMem *pm)
