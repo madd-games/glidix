@@ -1,6 +1,6 @@
 ;	Glidix kernel
 ;
-;	Copyright (c) 2014, Madd Games.
+;	Copyright (c) 2014-2015, Madd Games.
 ;	All rights reserved.
 ;	
 ;	Redistribution and use in source and binary forms, with or without
@@ -70,7 +70,7 @@ memcmp:
 	mov	rcx,	rdx
 	test	rcx,	rcx
 	jz	.ok
-	dec	rcx
+	;dec	rcx
 .next:
 	mov	al,	[rdi]
 	mov	dl,	[rsi]

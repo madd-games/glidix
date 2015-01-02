@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014, Madd Games.
+	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -68,6 +68,7 @@ int	_glidix_insmod(const char *modname, const char *path, const char *opt, int f
 int	_glidix_ioctl(int fd, unsigned long cmd, void *argp);
 int	_glidix_fdopendir(const char *dirname);
 void	_glidix_diag();
+int	_glidix_mount(const char *filesystem, const char *image, const char *mountpoint, int flags);
 
 #ifdef __cplusplus
 }	/* extern "C" */

@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014, Madd Games.
+	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -302,7 +302,6 @@ static void atapiThread(void *data)
 			}
 			else
 			{
-				kprintf_debug("atapi: read now\n");
 				insw(bus, sdcmd->block, words);
 				while (!ideWaitIRQ[channel]);
 				while (ideReadReg(ctrl, channel, ATA_REG_STATUS) & (ATA_SR_BSY | ATA_SR_DRQ));

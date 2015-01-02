@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014, Madd Games.
+	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@
 #define	BREAKPOINT()		ASM ("xchg %bx, %bx")
 #define	ALIGN(x)		__attribute__ ((aligned(x)))
 #define	PAGE_ALIGN		ALIGN(0x1000)
+#define	ATOMIC(t)		ALIGN(sizeof(t)) t
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 

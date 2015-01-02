@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014, Madd Games.
+	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -33,5 +33,8 @@ void outb(unsigned int port, unsigned int value);
 uint8_t inb(unsigned int port);
 void outd(unsigned int port, uint32_t value);
 uint32_t ind(unsigned int port);
+void insw(unsigned int port, void *buffer, unsigned long count);
+void outsw(unsigned int port, const void *buffer, unsigned long count);
+void insd(unsigned int port, void *buffer, unsigned long count);
 
 #endif

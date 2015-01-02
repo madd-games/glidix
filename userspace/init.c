@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014, Madd Games.
+	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -423,13 +423,12 @@ void printbyte(uint8_t byte)
 	printf("%c%c ", hexd[high], hexd[low]);
 };
 
-void cmd_sdump(int argc, char **argv)
+void cmd_hexdump(int argc, char **argv)
 {
 	if (argc != 3)
 	{
-		fprintf(stderr, "sdump <filename> <index>\n");
-		fprintf(stderr, "  Displays the hexdump of a file sector.\n");
-		fprintf(stderr, "  1 sector = 512 bytes\n");
+		fprintf(stderr, "hexdump <filename> <offset>\n");
+		fprintf(stderr, "  Displays the hexdump 256 bytes of a file at offset.\n");
 	}
 	else
 	{
@@ -437,18 +436,18 @@ void cmd_sdump(int argc, char **argv)
 		int fd = open(argv[1], O_RDONLY);
 		if (fd < 0)
 		{
-			fprintf(stderr, "sdump: could not open %s\n", argv[1]);
+			fprintf(stderr, "hexdump: could not open %s\n", argv[1]);
 			return;
 		};
 
-		lseek(fd, 512*index, SEEK_SET);
-		uint8_t buf[512];
-		ssize_t sz = read(fd, buf, 512);
+		lseek(fd, index, SEEK_SET);
+		uint8_t buf[256];
+		ssize_t sz = read(fd, buf, 256);
 		close(fd);
 
 		if (sz == -1)
 		{
-			fprintf(stderr, "sdump: read() failed for some reason\n");
+			fprintf(stderr, "hexdump: read() failed for some reason\n");
 			return;
 		};
 
@@ -474,6 +473,23 @@ void cmd_sdump(int argc, char **argv)
 		};
 
 		printf("Total size actually read: %d\n", sz);
+	};
+};
+
+void cmd_mount(int argc, char **argv)
+{
+	if (argc != 4)
+	{
+		fprintf(stderr, "mount <filesystem> <image> <mountpoint>\n");
+		fprintf(stderr, "  Mount a filesystem stored on 'image' (a storage device or a virtual drive image) at the specified mountpoint.\n");
+		fprintf(stderr, "  The mountpoint must end in '/'\n");
+	}
+	else
+	{
+		if (_glidix_mount(argv[1], argv[2], argv[3], 0) != 0)
+		{
+			fprintf(stderr, "mount: error\n");
+		};
 	};
 };
 
@@ -541,13 +557,17 @@ void runCommand(char *buf)
 	{
 		cmd_ls(argc, argv);
 	}
-	else if (strcmp(argv[0], "sdump") == 0)
+	else if (strcmp(argv[0], "hexdump") == 0)
 	{
-		cmd_sdump(argc, argv);
+		cmd_hexdump(argc, argv);
 	}
 	else if (strcmp(argv[0], "diag") == 0)
 	{
 		_glidix_diag();
+	}
+	else if (strcmp(argv[0], "mount") == 0)
+	{
+		cmd_mount(argc, argv);
 	}
 	else
 	{
@@ -568,11 +588,35 @@ void shell()
 	};
 };
 
+void loadmods()
+{
+	DIR *dirp = opendir("/initrd/initmod");
+	struct dirent *ent;
+
+	char filename[128];
+	char modname[128];
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		strcpy(filename, "/initrd/initmod/");
+		strcat(filename, ent->d_name);
+
+		strcpy(modname, "mod_");
+		strcat(modname, ent->d_name);
+		modname[strlen(modname)-4] = 0;
+
+		printf("init: insmod %s (from %s)\n", modname, filename);
+		_glidix_insmod(modname, filename, NULL, 0);
+	};
+
+	closedir(dirp);
+};
+
 int main(int argc, char *argv[])
 {
 	if (getpid() == 1)
 	{
-		_glidix_insmod("mod_ps2kbd", "/initrd/ps2kbd.gkm", NULL, 0);
+		//_glidix_insmod("mod_ps2kbd", "/initrd/ps2kbd.gkm", NULL, 0);
+		loadmods();
 		if (fork() == 0)
 		{
 			shell();

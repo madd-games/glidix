@@ -2,7 +2,7 @@ CFLAGS=-I /glidix/kernel-include
 TARGET_CC=x86_64-glidix-gcc
 TARGET_MODCC=x86_64-glidix-modcc
 out/sdide.gkm: build/sdide.o
-	x86_64-glidix-modld $@ $<
+	x86_64-glidix-modld $@ $^
 -include build/sdide.d
 build/sdide.d: sdide.c
 	set -e; rm -f $@; \

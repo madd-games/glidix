@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014, Madd Games.
+	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,7 @@
 #include <glidix/devfs.h>
 #include <glidix/pci.h>
 #include <glidix/storage.h>
+#include <glidix/fsdriver.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -118,6 +119,10 @@ void kmain(MultibootInfo *info)
 
 	kprintf("Initializing PCI... ");
 	pciInit();
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing the FS driver interface... ");
+	initFSDrivers();
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the PIT... ");

@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014, Madd Games.
+	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -64,7 +64,7 @@ int sys_fdopendir(const char *dirname)
 {
 	char fulldir[512];
 	strcpy(fulldir, dirname);
-	strcat(fulldir, "/");
+	if (dirname[strlen(dirname)-1] != '/') strcat(fulldir, "/");
 
 	int error;
 	Dir *dir = parsePath(fulldir, VFS_CHECK_ACCESS, &error);

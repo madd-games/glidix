@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014, Madd Games.
+	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,7 @@
 #include <glidix/module.h>
 #include <glidix/console.h>
 #include <glidix/fdopendir.h>
+#include <glidix/fsdriver.h>
 
 void sys_exit(Regs *regs, int status)
 {
@@ -408,7 +409,6 @@ void signalOnBadSyscall(Regs *regs)
 void syscallDispatch(Regs *regs, uint16_t num)
 {
 	regs->rip += 4;
-	kprintf_debug("SYSCALL: %d\n", num);
 
 	switch (num)
 	{
@@ -542,6 +542,9 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		heapDump();
 		kdumpregs(regs);
 		BREAKPOINT();
+		break;
+	case 31:
+		*((int*)&regs->rax) = sys_mount((const char*)regs->rdi, (const char*)regs->rsi, (const char*)regs->rdx, (int)regs->rcx);
 		break;
 	default:
 		signalOnBadSyscall(regs);

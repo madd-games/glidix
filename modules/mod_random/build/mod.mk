@@ -2,7 +2,7 @@ CFLAGS=-I /glidix/kernel-include
 TARGET_CC=x86_64-glidix-gcc
 TARGET_MODCC=x86_64-glidix-modcc
 out/random.gkm: build/random.o
-	x86_64-glidix-modld $@ $<
+	x86_64-glidix-modld $@ $^
 -include build/random.d
 build/random.d: random.c
 	set -e; rm -f $@; \

@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014, Madd Games.
+	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,7 @@
 #include <glidix/vfs.h>
 #include <glidix/string.h>
 #include <glidix/console.h>
-#include <glidix/spinlock.h>
+#include <glidix/semaphore.h>
 #include <glidix/common.h>
 
 #define	INPUT_BUFFER_SIZE	256
@@ -41,7 +41,7 @@ static volatile ATOMIC(int)	inputPut;
 static volatile ATOMIC(int)	inputRead;
 static volatile ATOMIC(int)	lineCount;
 static volatile ATOMIC(int)	lineCharCount;
-static Spinlock			inputLock;
+static Semaphore		inputLock;
 
 static ssize_t termWrite(File *file, const void *buffer, size_t size)
 {
@@ -51,7 +51,6 @@ static ssize_t termWrite(File *file, const void *buffer, size_t size)
 
 static char getChar()
 {
-	spinlockAcquire(&inputLock);
 	char c;
 	if (inputPut == inputRead) c = 0;
 	else
@@ -60,7 +59,6 @@ static char getChar()
 		inputRead++;
 		if (inputRead == INPUT_BUFFER_SIZE) inputRead = 0;
 	};
-	spinlockRelease(&inputLock);
 
 	return c;
 };
@@ -69,14 +67,25 @@ static ssize_t termRead(File *fp, void *buffer, size_t size)
 {
 	ssize_t count = 0;
 	char *out = (char*) buffer;
-	while (size--)
+	while (size)
 	{
-		while (lineCount == 0);
+		semWait(&inputLock);
+		if (lineCount == 0)
+		{
+			semSignal(&inputLock);
+			continue;
+		};
 		char c;
-		while ((c = getChar()) == 0);
+		if ((c = getChar()) == 0)
+		{
+			semSignal(&inputLock);
+			continue;
+		};
 		*out++ = c;
 		count++;
 		if (c == '\n') lineCount--;
+		size--;
+		semSignal(&inputLock);
 	};
 
 	return count;
@@ -90,7 +99,7 @@ static int termDup(File *old, File *new, size_t szfile)
 
 void termPutChar(char c)
 {
-	spinlockAcquire(&inputLock);
+	semWait(&inputLock);
 	if (c == '\b')
 	{
 		if (lineCharCount != 0)
@@ -107,7 +116,7 @@ void termPutChar(char c)
 			kprintf("\b");
 		};
 
-		spinlockRelease(&inputLock);
+		semSignal(&inputLock);
 		return;
 	};
 
@@ -125,7 +134,7 @@ void termPutChar(char c)
 	{
 		lineCharCount++;
 	};
-	spinlockRelease(&inputLock);
+	semSignal(&inputLock);
 };
 
 void setupTerminal(FileTable *ftab)
@@ -152,5 +161,5 @@ void setupTerminal(FileTable *ftab)
 	termDup(termout, termerr, sizeof(File));
 	ftab->entries[2] = termerr;
 
-	spinlockRelease(&inputLock);
+	semInit(&inputLock);
 };

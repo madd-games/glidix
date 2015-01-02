@@ -1,6 +1,6 @@
 ;	Glidix
 ;
-;	Copyright (c) 2014, Madd Games.
+;	Copyright (c) 2014-2015, Madd Games.
 ;	All rights reserved.
 ;	
 ;	Redistribution and use in source and binary forms, with or without
@@ -79,3 +79,4 @@ GLIDIX_SYSCALL		27,	_glidix_insmod
 GLIDIX_SYSCALL		28,	_glidix_ioctl
 GLIDIX_SYSCALL		29,	_glidix_fdopendir
 GLIDIX_SYSCALL		30,	_glidix_diag
+GLIDIX_SYSCALL		31,	_glidix_mount
