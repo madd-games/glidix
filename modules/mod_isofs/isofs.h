@@ -90,7 +90,7 @@ typedef struct
 	uint32_t				ignore2;
 	uint8_t					year;				// since 1990
 	uint8_t					month;				// 1-12
-	uint8_t					dat;				// 1-31
+	uint8_t					day;				// 1-31
 	uint8_t					hour;				// 0-23
 	uint8_t					minute;				// 0-59
 	uint8_t					second;				// 0-59

@@ -343,11 +343,32 @@ ProcMem *DuplicateProcessMemory(ProcMem *pm)
 	Segment *seg = pm->firstSegment;
 	while (seg != NULL)
 	{
-		FrameList *newList = pdup(seg->fl);
+		FrameList *newList = /*pdup(seg->fl)*/ palloc(seg->fl->count);
 		AddSegment(new, seg->start, newList, seg->flags);
 		pdownref(newList);
 		seg = seg->next;
 	};
+
+	ASM("cli");
+	PML4 *pml4 = getPML4();
+	pml4->entries[1].present = 1;
+	pml4->entries[1].rw = 1;
+	pml4->entries[1].user = 0;
+	pml4->entries[1].pdptPhysAddr = new->pdptPhysFrame;
+	refreshAddrSpace();
+
+	seg = pm->firstSegment;
+	while (seg != NULL)
+	{
+		uint64_t target = 0x8000000000 + seg->start * 0x1000;
+		uint64_t source = seg->start * 0x1000;
+		memcpy((void*)target, (void*)source, seg->fl->count*0x1000);
+		seg = seg->next;
+	};
+	pml4->entries[1].present = 0;
+	pml4->entries[1].rw = 0;
+	pml4->entries[1].pdptPhysAddr = 0;
+	ASM("sti");
 
 	return new;
 };

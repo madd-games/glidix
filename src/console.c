@@ -110,7 +110,7 @@ static void kputch(char c)
 	}
 	else if (c == '\t')
 	{
-		consoleState.curX = (consoleState.curX/4+1)*4;
+		consoleState.curX = (consoleState.curX/8+1)*8;
 		if (consoleState.curX >= 80)
 		{
 			consoleState.curY++;

@@ -29,4 +29,9 @@
 #ifndef _TIME_H
 #define _TIME_H
 
+#include <sys/types.h>
+
+/* implemented by libglidix directly */
+time_t time();
+
 #endif

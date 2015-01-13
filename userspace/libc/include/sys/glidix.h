@@ -69,6 +69,7 @@ int	_glidix_ioctl(int fd, unsigned long cmd, void *argp);
 int	_glidix_fdopendir(const char *dirname);
 void	_glidix_diag();
 int	_glidix_mount(const char *filesystem, const char *image, const char *mountpoint, int flags);
+void	_glidix_yield();
 
 #ifdef __cplusplus
 }	/* extern "C" */

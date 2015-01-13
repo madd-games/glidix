@@ -242,6 +242,28 @@ static ssize_t read(File *file, void *buffer, size_t size)
 	return size;
 };
 
+static int fstat(File *file, struct stat *st)
+{
+	TarFile *tf = (TarFile*) file->fsdata;
+
+	st->st_dev = 0;
+	st->st_ino = (ino_t) tf;
+	st->st_mode = 0755;
+	st->st_nlink = 1;
+	st->st_uid = 0;
+	st->st_gid = 0;
+	st->st_rdev = 0;
+	st->st_size = tf->size;
+	st->st_blksize = 512;
+	st->st_blocks = st->st_size / 512;
+	if (st->st_size % 512) st->st_blocks++;
+	st->st_atime = 0;
+	st->st_ctime = 0;
+	st->st_mtime = 0;
+
+	return 0;
+};
+
 static int openfile(Dir *me, File *file, size_t szfile)
 {
 	(void)szfile;
@@ -257,6 +279,7 @@ static int openfile(Dir *me, File *file, size_t szfile)
 	file->close = fileClose;
 	file->seek = seek;
 	file->dup = dup;
+	file->fstat = fstat;
 
 	return 0;
 };

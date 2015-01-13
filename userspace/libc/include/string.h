@@ -42,6 +42,8 @@ size_t strlen(const char *str);
 int    memcmp(const void *a, const void *b, size_t size);
 int    strcmp(const char *a, const char *b);
 void*  strcat(char *dst, const char *a);
+char*  strerror(int errnum);
+int    strerror_r(int errnum, char *strerrbuf, size_t buflen);
 
 #ifdef __cplusplus
 }

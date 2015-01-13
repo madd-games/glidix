@@ -47,6 +47,7 @@
 #include <glidix/pci.h>
 #include <glidix/storage.h>
 #include <glidix/fsdriver.h>
+#include <glidix/time.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -105,16 +106,16 @@ void kmain(MultibootInfo *info)
 
 	initModuleInterface();
 
+	kprintf("Initializing the VFS... ");
+	vfsInit();
+	kprintf("%$\x02" "Done%#\n");
+
 	kprintf("Initializing the initrdfs... ");
 	initInitrdfs(info);
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the devfs... ");
 	initDevfs();
-	kprintf("%$\x02" "Done%#\n");
-
-	kprintf("Initializing SDI... ");
-	sdInit();
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing PCI... ");
@@ -180,8 +181,16 @@ extern uint64_t getFlagsRegister();
 
 void kmain2()
 {
+	kprintf("Initializing SDI... ");
+	sdInit();
+	kprintf("%$\x02" "Done%#\n");
+
 	initMount();
 	initSymtab();
+
+	kprintf("Initializing the RTC... ");
+	initRTC();
+	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Starting the spawn process... ");
 	MachineState state;

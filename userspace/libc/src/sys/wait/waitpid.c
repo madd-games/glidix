@@ -32,6 +32,7 @@
 
 pid_t waitpid(pid_t pid, int *stat_loc, int flags)
 {
+#if 0
 	/**
 	 * _glidix_pollpid() is a funny one. When called without the WNOHANG flag, it is equivalent
 	 * to calling it with WNOHANG and then calling pause(), except it is safe and doesn't deadlock
@@ -56,6 +57,18 @@ pid_t waitpid(pid_t pid, int *stat_loc, int flags)
 			};
 		};
 
+		return ret;
+	};
+#endif
+
+	if (flags & WNOHANG)
+	{
+		return _glidix_pollpid(pid, stat_loc, flags);
+	}
+	else
+	{
+		int ret;
+		while ((ret = _glidix_pollpid(pid, stat_loc, flags)) == -2);
 		return ret;
 	};
 };

@@ -37,10 +37,11 @@ extern "C" {
 #endif
 
 /* implemented by the runtime */
-int execv(const char*, char* const[]);
-int execve(const char*, char* const[], char* const[]);
-int execvp(const char*, char* const[]);
-pid_t fork(void);
+int	execv(const char*, char* const[]);
+int	execve(const char*, char* const[], char* const[]);
+int	execvp(const char*, char* const[]);
+pid_t	fork(void);
+int	truncate(const char *path, off_t length);
 
 /* implemented by libglidix directly */
 ssize_t	write(int fildes, const void *buf, size_t nbyte);
@@ -49,6 +50,13 @@ int	close(int fildes);
 off_t	lseek(int fildes, off_t pos, int whence);
 void	_exit(int status);
 int	pause();
+int	chdir(const char *path);
+char*	getcwd(char*, size_t);
+int	fsync(int fd);
+int	chown(const char *path, uid_t uid, gid_t gid);
+int	fchown(int fd, uid_t uid, gid_t gid);
+int	ftruncate(int fd, off_t length);
+int	unlink(const char *path);
 
 #ifdef __cplusplus
 }	/* extern "C" */

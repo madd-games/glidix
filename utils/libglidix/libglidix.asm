@@ -73,10 +73,24 @@ GLIDIX_SYSCALL		21,	mprotect
 GLIDIX_SYSCALL		22,	lseek
 GLIDIX_SYSCALL		23,	_glidix_clone
 GLIDIX_SYSCALL		24,	pause
-; system 25 handled in a special way; see above.
+; system call 25 handled in a special way; see above.
 GLIDIX_SYSCALL		26,	kill
 GLIDIX_SYSCALL		27,	_glidix_insmod
 GLIDIX_SYSCALL		28,	_glidix_ioctl
 GLIDIX_SYSCALL		29,	_glidix_fdopendir
 GLIDIX_SYSCALL		30,	_glidix_diag
 GLIDIX_SYSCALL		31,	_glidix_mount
+GLIDIX_SYSCALL		32,	_glidix_yield
+GLIDIX_SYSCALL		33,	time
+GLIDIX_SYSCALL		34,	realpath
+GLIDIX_SYSCALL		35,	chdir
+GLIDIX_SYSCALL		36,	getcwd
+GLIDIX_SYSCALL		37,	fstat
+GLIDIX_SYSCALL		38,	chmod
+GLIDIX_SYSCALL		39,	fchmod
+GLIDIX_SYSCALL		40,	fsync
+GLIDIX_SYSCALL		41,	chown
+GLIDIX_SYSCALL		42,	fchown
+GLIDIX_SYSCALL		43,	mkdir
+GLIDIX_SYSCALL		44,	ftruncate
+GLIDIX_SYSCALL		45,	unlink

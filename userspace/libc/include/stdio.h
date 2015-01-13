@@ -122,6 +122,7 @@ int	putchar(int);
 int	puts(const char *s);
 int	ferror(FILE *fp);
 int	feof(FILE *fp);
+void	perror(const char *s);
 
 #ifdef __cplusplus
 }

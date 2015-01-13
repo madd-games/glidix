@@ -74,6 +74,12 @@ typedef struct
 #define	THREAD_INT_SYSCALL		(1 << 3)
 
 /**
+ * If this flag is set, then the thread is a "rebel" and cannot be controlled by its parent.
+ * This happens due to suid/sgid attributes when exec() is called.
+ */
+#define	THREAD_REBEL			(1 << 4)
+
+/**
  * A bitwise-OR of all flags which stop the process from being scheduled.
  */
 #define	THREAD_NOSCHED			(THREAD_WAITING | THREAD_TERMINATED)
@@ -172,6 +178,11 @@ typedef struct _Thread
 	 * This is only valid if the THREAD_INT_SYSCALL flag is said.
 	 */
 	Regs				intSyscallRegs;
+
+	/**
+	 * The current working directory. Does not end with a slash unless it's the root directory.
+	 */
+	char				cwd[256];
 
 	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.

@@ -32,6 +32,7 @@
 #include <glidix/string.h>
 #include <glidix/sched.h>
 #include <glidix/memory.h>
+#include <glidix/errno.h>
 
 typedef struct
 {
@@ -46,6 +47,8 @@ typedef struct
 
 int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 {
+	getCurrentThread()->therrno = ENOEXEC;
+
 	struct stat st;
 	if (vfsStat(path, &st) != 0)
 	{
@@ -235,6 +238,19 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 
 	// make sure we jump to the entry upon return
 	regs->rip = elfHeader.e_entry;
+
+	// suid/sgid stuff
+	if (st.st_mode & VFS_MODE_SETUID)
+	{
+		thread->euid = st.st_uid;
+		thread->flags |= THREAD_REBEL;
+	};
+
+	if (st.st_mode & VFS_MODE_SETGID)
+	{
+		thread->egid = st.st_gid;
+		thread->flags |= THREAD_REBEL;
+	};
 
 	return 0;
 };

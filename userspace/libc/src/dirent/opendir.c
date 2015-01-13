@@ -33,7 +33,7 @@
 DIR *opendir(const char *dirname)
 {
 	int fd = _glidix_fdopendir(dirname);
-	if (fd < 0)
+	if (fd == -1)
 	{
 		return NULL;
 	};

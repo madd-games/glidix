@@ -48,5 +48,6 @@
  * Interface types (see docs/ioctl.html for more info).
  */
 #define	IOCTL_INT_PCI						0x0001
+#define	IOCTL_INT_SDI						0x0002
 
 #endif

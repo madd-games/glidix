@@ -144,6 +144,7 @@ void setupTerminal(FileTable *ftab)
 
 	termout->write = &termWrite;
 	termout->dup = &termDup;
+	termout->oflag = O_WRONLY;
 
 	inputPut = 0;
 	inputRead = 0;
@@ -152,6 +153,7 @@ void setupTerminal(FileTable *ftab)
 
 	File *termin = (File*) kmalloc(sizeof(File));
 	memset(termin, 0, sizeof(File));
+	termin->oflag = O_RDONLY;
 	termin->read = &termRead;
 	termin->dup = &termDup;
 

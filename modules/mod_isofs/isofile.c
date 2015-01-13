@@ -37,6 +37,7 @@
 
 typedef struct
 {
+	struct stat			st;
 	ISOFileSystem*			isofs;
 	uint64_t			start;
 	uint64_t			size;
@@ -112,9 +113,17 @@ static ssize_t isofile_read(File *fp, void *buffer, size_t size)
 	return count;
 };
 
-int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp)
+static int isofile_fstat(File *fp, struct stat *st)
+{
+	ISOFile *file = (ISOFile*) fp->fsdata;
+	memcpy(st, &file->st, sizeof(struct stat));
+	return 0;
+};
+
+int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, struct stat *st)
 {
 	ISOFile *file = (ISOFile*) kmalloc(sizeof(ISOFile));
+	memcpy(&file->st, st, sizeof(struct stat));
 	file->isofs = isofs;
 	file->start = start;
 	file->size = size;
@@ -125,6 +134,7 @@ int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp)
 	fp->read = isofile_read;
 	fp->dup = isofile_dup;
 	fp->seek = isofile_seek;
+	fp->fstat = isofile_fstat;
 
 	return 0;
 };

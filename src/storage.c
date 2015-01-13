@@ -33,9 +33,120 @@
 
 static char nextDriveLetter = 'a';
 
+typedef struct
+{
+	uint8_t							flags;
+	uint8_t							sig1;			// 0x14
+	uint16_t						startHigh;
+	uint8_t							systemID;
+	uint8_t							sig2;			// 0xEB
+	uint16_t						lenHigh;
+	uint32_t						startLow;
+	uint32_t						lenLow;
+} __attribute__ ((packed)) Partition;
+
+typedef struct
+{
+	uint8_t							bootloader[446];
+	Partition						parts[4];
+	uint8_t							bootsig[2];
+} __attribute__ ((packed)) MBR;
+
+static int diskfile_open(void *_diskfile_void, File *fp, size_t szFile);
+
+static Semaphore deleterLock;
+static Device devsToDelete[4];
+
+static void waitForDeleter()
+{
+	while (1)
+	{
+		semWait(&deleterLock);
+		int i;
+		int found = 0;
+		for (i=0; i<4; i++)
+		{
+			if (devsToDelete[i] != NULL)
+			{
+				semSignal(&deleterLock);
+				found = 1;
+				break;
+			};
+		};
+		if (found) continue;
+		else break;
+	};
+};
+
+static void signalDeleter()
+{
+	semSignal(&deleterLock);
+};
+
+static void sdThread(void *data)
+{
+	while (1)
+	{
+		semWait(&deleterLock);
+		int i;
+		for (i=0; i<4; i++)
+		{
+			Device dev = devsToDelete[i];
+			if (dev != NULL)
+			{
+				DeleteDevice(dev);
+				devsToDelete[i] = NULL;
+			};
+		};
+		semSignal(&deleterLock);
+	};
+};
+
 void sdInit()
 {
-	// NOP
+	semInit(&deleterLock);
+	int i;
+	for (i=0; i<4; i++)
+	{
+		devsToDelete[i] = NULL;
+	};
+	CreateKernelThread(sdThread, NULL, NULL);
+};
+
+static void reloadPartitionTable(SDFile *sdfile)
+{
+	MBR *mbr = (MBR*) kmalloc(sdfile->sd->blockSize);
+	sdRead(sdfile->sd, 0, mbr);
+
+	int i;
+	for (i=0; i<4; i++)
+	{
+		Partition *part = &mbr->parts[i];
+		if ((part->flags & 1) && (part->sig1 == 0x14) && (part->sig2 == 0xEB) && (part->systemID != 0))
+		{
+			uint64_t offset = ((uint64_t)part->startHigh << 32) + (uint64_t)part->startLow;
+			uint64_t limit = offset + ((uint64_t)part->lenHigh << 32) + (uint64_t)part->lenLow;
+			kprintf_debug("sdi: partition %d, offset %a, size %a\n", i, offset, limit);
+
+			SDFile *diskfile = (SDFile*) kmalloc(sizeof(SDFile));
+			diskfile->sd = sdfile->sd;
+			spinlockRelease(&diskfile->masterLock);
+			diskfile->index = i;
+			diskfile->master = sdfile;
+			diskfile->offset = offset;
+			diskfile->limit = limit;
+			diskfile->letter = sdfile->letter;
+
+			char name[5];
+			strcpy(name, "sd__");
+			name[2] = diskfile->letter;
+			name[3] = (char)i + '0';
+
+			sdfile->partdevs[i] = AddDevice(name, diskfile, diskfile_open, 0);
+		};
+	};
+
+	kfree(mbr);
 };
 
 static void diskfile_close(File *fp)
@@ -45,11 +156,30 @@ static void diskfile_close(File *fp)
 	{
 		sdWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
 	};
-	spinlockRelease(&data->file->lock);
+	int idx = data->file->index;
+	if (idx != -1)
+	{
+		spinlockRelease(&data->file->master->locks[idx]);
+	}
+	else
+	{
+		reloadPartitionTable(data->file);
+		spinlockRelease(&data->file->masterLock);
+	};
 	kfree(data);
 };
 
-static void diskfile_setblock(DiskFile *data, uint64_t block)
+static void diskfile_fsync(File *fp)
+{
+	DiskFile *data = (DiskFile*) fp->fsdata;
+	if (data->dirty)
+	{
+		sdWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
+		data->dirty = 0;
+	};
+};
+
+static void diskfile_setblock(DiskFile *data, uint64_t block, int shouldRead)
 {
 	if (data->bufCurrent != SD_FILE_NO_BUF)
 	{
@@ -60,7 +190,7 @@ static void diskfile_setblock(DiskFile *data, uint64_t block)
 	};
 
 	data->bufCurrent = block;
-	sdRead(data->file->sd, block, data->buf);
+	if (shouldRead) sdRead(data->file->sd, data->offset+block, data->buf);
 };
 
 static ssize_t diskfile_read(File *fp, void *buffer, size_t size)
@@ -81,7 +211,7 @@ static ssize_t diskfile_read(File *fp, void *buffer, size_t size)
 
 		if (data->bufCurrent != block)
 		{
-			diskfile_setblock(data, block);
+			diskfile_setblock(data, block, 1);
 		};
 
 		*put++ = data->buf[offset];
@@ -110,7 +240,7 @@ static ssize_t diskfile_write(File *fp, const void *buffer, size_t size)
 
 		if (data->bufCurrent != block)
 		{
-			diskfile_setblock(data, block);
+			diskfile_setblock(data, block, (size+1)<data->file->sd->blockSize);
 		};
 
 		data->buf[offset] = *scan++;
@@ -146,18 +276,63 @@ static off_t diskfile_seek(File *fp, off_t offset, int whence)
 	return data->pos;
 };
 
+static int diskfile_ioctl(File *fp, uint64_t cmd, void *params)
+{
+	if (cmd == IOCTL_SDI_IDENTITY)
+	{
+		DiskFile *data = (DiskFile*) fp->fsdata;
+		SDParams *sdpars = (SDParams*) params;
+		sdpars->flags = data->file->sd->flags;
+		sdpars->blockSize = data->file->sd->blockSize;
+		sdpars->totalSize = (data->file->limit - data->file->offset) * sdpars->blockSize;
+		return 0;
+	};
+
+	return -1;
+};
+
 static int diskfile_open(void *_diskfile_void, File *fp, size_t szFile)
 {
 	SDFile *diskfile = (SDFile*) _diskfile_void;
-	if (spinlockTry(&diskfile->lock))
+	if (diskfile->index != -1)
 	{
-		return VFS_BUSY;
+		if (spinlockTry(&diskfile->master->locks[diskfile->index]))
+		{
+			return VFS_BUSY;
+		};
+	}
+	else
+	{
+		if (spinlockTry(&diskfile->masterLock))
+		{
+			return VFS_BUSY;
+		};
+
+		int i;
+		waitForDeleter();
+		for (i=0; i<4; i++)
+		{
+			spinlockAcquire(&diskfile->master->locks[i]);
+			if (diskfile->partdevs[i] != NULL)
+			{
+				devsToDelete[i] = diskfile->partdevs[i];
+				diskfile->partdevs[i] = NULL;
+			}
+			else
+			{
+				devsToDelete[i] = NULL;
+			};
+			spinlockRelease(&diskfile->master->locks[i]);
+		};
+		signalDeleter();
 	};
 
 	DiskFile *data = (DiskFile*) kmalloc(sizeof(DiskFile)+diskfile->sd->blockSize);
 	data->file = diskfile;
-	data->offset = 0;
-	data->limit = diskfile->sd->totalSize / diskfile->sd->blockSize;
+	//data->offset = 0;
+	//data->limit = diskfile->sd->totalSize / diskfile->sd->blockSize;
+	data->offset = diskfile->offset;
+	data->limit = diskfile->limit;
 	data->buf = (uint8_t*) &data[1];
 	data->bufCurrent = SD_FILE_NO_BUF;
 	data->pos = 0;
@@ -168,6 +343,8 @@ static int diskfile_open(void *_diskfile_void, File *fp, size_t szFile)
 	if ((diskfile->sd->flags & SD_READONLY) == 0) fp->write = diskfile_write;
 	fp->seek = diskfile_seek;
 	fp->close = diskfile_close;
+	fp->ioctl = diskfile_ioctl;
+	fp->fsync = diskfile_fsync;
 
 	return 0;
 };
@@ -183,12 +360,24 @@ StorageDevice *sdCreate(SDParams *params)
 
 	SDFile *diskfile = (SDFile*) kmalloc(sizeof(SDFile));
 	diskfile->sd = sd;
-	spinlockRelease(&diskfile->lock);
+	spinlockRelease(&diskfile->masterLock);
+	int i;
+	for (i=0; i<4; i++)
+	{
+		spinlockRelease(&diskfile->locks[i]);
+		diskfile->partdevs[i] = NULL;
+	};
+
+	diskfile->index = -1;
+	diskfile->master = diskfile;
+	diskfile->offset = 0;
+	diskfile->limit = sd->totalSize / sd->blockSize;
+	diskfile->letter = nextDriveLetter++;
 
 	char name[4] = "sd_";
-	name[2] = nextDriveLetter++;
+	name[2] = diskfile->letter;
 	sd->diskfile = AddDevice(name, diskfile, diskfile_open, 0);
-
+	
 	return sd;
 };
 

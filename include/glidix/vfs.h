@@ -43,13 +43,16 @@
 /**
  * Extra flags for st_mode (other than the permissions).
  */
-#define	VFS_MODE_SETUID			(1 << 9)
-#define	VFS_MODE_SETGID			(1 << 10)
-#define	VFS_MODE_DIRECTORY		(1 << 11)
-#define	VFS_MODE_CHARDEV		(1 << 12)
-#define	VFS_MODE_BLKDEV			(1 << 13)
-#define	VFS_MODE_FIFO			(1 << 14)
-#define	VFS_MODE_LINK			(1 << 15)
+#define	VFS_MODE_SETUID			04000
+#define	VFS_MODE_SETGID			02000
+#define	VFS_MODE_STICKY			01000
+
+#define	VFS_MODE_REGULAR		0		/* 0, so default */
+#define	VFS_MODE_DIRECTORY		010000
+#define	VFS_MODE_CHARDEV		020000
+#define	VFS_MODE_BLKDEV			030000
+#define	VFS_MODE_FIFO			040000
+#define	VFS_MODE_LINK			050000		/* soft link */
 
 /**
  * Errors.
@@ -66,6 +69,12 @@
  * Flags to parsePath()/vfsOpen().
  */
 #define	VFS_CHECK_ACCESS		(1 << 0)
+// if set, and parsePath() finds an empty directory while searching, it will return the end directory pointer
+// for it, and set *error to VFS_EMPTY_DIRECTORY.
+#define	VFS_STOP_ON_EMPTY		(1 << 1)
+// if set, parsePath() will create a regular file if it does not exist.
+#define	VFS_CREATE			(1 << 2)
+/* next 12 bits reserved */
 
 /**
  * Flags for the open() system call.
@@ -85,6 +94,7 @@
 #define	O_ACCMODE			(O_RDWR)
 #define	O_ALL				((1 << 11)-1)
 
+#ifndef _SYS_STAT_H
 struct stat
 {
 	dev_t				st_dev;
@@ -101,6 +111,7 @@ struct stat
 	time_t				st_mtime;
 	time_t				st_ctime;
 };
+#endif
 
 struct dirent
 {
@@ -117,6 +128,11 @@ typedef struct _File
 	 * Private, filesystem-specific structure.
 	 */
 	void *fsdata;
+
+	/**
+	 * oflag used to open the file.
+	 */
+	int oflag;
 
 	/**
 	 * Read the file.
@@ -157,11 +173,37 @@ typedef struct _File
 	 * according to the rules from <glidix/ioctl.h>. The last argument is undefined for 0-sized
 	 * commands. Return 0 on success, -1 on error. All ioctl() calls will fail with EINVAL if
 	 * this entry is NULL.
-	 *
-	 * WARNING: Accessing the param structure could throw a #PF which causes the function to be
-	 * interrupted and return the EINTR error; you must be careful with your locks!
 	 */
 	int (*ioctl)(struct _File *file, uint64_t cmd, void *argp);
+
+	/**
+	 * Get the file state. Returns 0 on success, -1 on failure. If this is NULL then fstat() on
+	 * this file description always fails, which is a bad thing. If -1 is returned or this function
+	 * pointer is NULL, then EIO is returned to the caller.
+	 */
+	int (*fstat)(struct _File *file, struct stat *st);
+
+	/**
+	 * Like chmod() in DIR, except takes a file description instead of a directory pointer.
+	 */
+	int (*fchmod)(struct _File *file, mode_t mode);
+
+	/**
+	 * Like chown() in DIR, except takes a file description instead of a directory pointer.
+	 */
+	int (*fchown)(struct _File *file, uid_t uid, gid_t gid);
+
+	/**
+	 * Synchronise file contents with the disk. This function shall wait until all data modified in the
+	 * file has been written to disk. It cannot fail.
+	 */
+	void (*fsync)(struct _File *file);
+
+	/**
+	 * Truncate the file to the specified size. If the size is actually larger than the current size, then
+	 * zero-pad the file until it is the specified size. This can never fail if defined.
+	 */
+	void (*truncate)(struct _File *file, off_t length);
 } File;
 
 /**
@@ -204,6 +246,49 @@ typedef struct _Dir
 	 * remain valid so that mkdir() or mknode() can be called to add a new entry.
 	 */
 	int (*next)(struct _Dir *dir);
+
+	/**
+	 * Change the bottom 12 bits of st_mode, and save that change to disk. Do not perform any security
+	 * checks. If the change cannot be saved, then this function shall return -1; else the function
+	 * shall return 0. Please note that the top 4 bits of mode shall be ignored and the top 4 bits of
+	 * st_mode shall remain unchanged!
+	 */
+	int (*chmod)(struct _Dir *dir, mode_t mode);
+
+	/**
+	 * Change the value of st_uid and st_gid, and save that change to disk. Do not perform any security
+	 * checks. If the change cannot be saved, then this function shall return -1; else the function
+	 * shall return 0.
+	 */
+	int (*chown)(struct _Dir *dir, uid_t uid, gid_t gid);
+
+	/**
+	 * Create a new directory. 'dir' is guaranteed to be a directory end pointer (i.e. the state of a DIR
+	 * structure after a call to next() that returned -1). This function shall add a new directory entry
+	 * to 'dir', which shall represent a directory with name 'name' and access mode 'mode'. It is guaranteed
+	 * that this directory does not already contain an entry with the specified name. It is also guaranteed
+	 * that 2 mkdir() (or other creation or removal) requests do not happen at the same time.
+	 */
+	int (*mkdir)(struct _Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t gid);
+
+	/**
+	 * Create a new regular file. 'dir' is guaranteed to be a directory end pointer. This function shall add
+	 * a new directory entry to 'dir', which shall represent a new file with name 'name', and have the specified
+	 * mode, owner and group. It is guaranteed that this direcotry does not already contain an entry with the
+	 * specified name, and 2 mkreg() (or other creation or removal) request do not happen at the same time.
+	 * Return -1 on failure, or 0 on success; if successful, 'dir' shall be modified to point to this new file.
+	 */
+	int (*mkreg)(struct _Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t gid);
+
+	/**
+	 * Remove the directory entry pointed to by this directory pointer. If the entry is the only link to the inode
+	 * left, then the inode is also removed, along with all its contents. If the file is currently open, then the
+	 * inode shall be removed after all file desctipions referring to it are closed. It is guaranteed that 2 calls
+	 * to unlink() or any other creation/deletion function do not happen at the same time. Return 0 on success, or
+	 * -1 on error. This function will only be called on empty directories; the kernel will assume that a directory
+	 * is empty if st_size is 0.
+	 */
+	int (*unlink)(struct _Dir *dir);
 } Dir;
 
 /**
@@ -236,6 +321,8 @@ typedef struct _FileSystem
 void dumpFS(FileSystem *fs);
 int vfsCanCurrentThread(struct stat *st, mode_t mask);
 
+char *realpath(const char *relpath, char *buffer);
+
 /**
  * Construct the Dir such that it points to the file of the specified path. Returns NULL on error.
  * If the pathname ends with a slash ('/'), then the returned Dir is the actual directory opened,
@@ -246,6 +333,14 @@ Dir *parsePath(const char *path, int flags, int *error);
 int vfsStat(const char *path, struct stat *st);
 File *vfsOpen(const char *path, int flags, int *error);
 ssize_t vfsRead(File *file, void *buffer, size_t size);
+ssize_t vfsWrite(File *file, const void *buffer, size_t size);
 void vfsClose(File *file);
+
+/**
+ * This is used to ensure that 2 or more threads do not try to create files/directories simultaneously.
+ */
+void vfsInit();
+void vfsLockCreation();
+void vfsUnlockCreation();
 
 #endif

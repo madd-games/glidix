@@ -1,0 +1,2 @@
+ * Stop signal/interrupt hnalders from calling kmalloc()/kfree(), e.g. make a static queue for signals, and then stop kmalloc() and kfree() from enabling and disabling interrupts, i mean, omg, that make it laggy as penguin.
+ * TODO: "already free" in read atapi device

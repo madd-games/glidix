@@ -81,6 +81,9 @@ int sys_fdopendir(const char *dirname)
 		case VFS_NOT_DIR:
 			getCurrentThread()->therrno = ENOTDIR;
 			break;
+		case VFS_EMPTY_DIRECTORY:
+			return -2;
+			break;
 		default:
 			getCurrentThread()->therrno = EACCES;
 			break;
@@ -110,6 +113,7 @@ int sys_fdopendir(const char *dirname)
 
 	File *fp = (File*) kmalloc(sizeof(File));
 	memset(fp, 0, sizeof(File));
+	fp->oflag = O_RDONLY;
 	fp->fsdata = dir;
 	fp->read = readdir;
 	fp->close = closedir;

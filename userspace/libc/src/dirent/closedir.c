@@ -32,7 +32,7 @@
 
 int closedir(DIR *dirp)
 {
-	close(dirp->_fd);
+	if (dirp->_fd != -2) close(dirp->_fd);
 	free(dirp);
 	return 0;
 };

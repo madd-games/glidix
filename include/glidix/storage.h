@@ -33,8 +33,11 @@
 #include <glidix/semaphore.h>
 #include <glidix/spinlock.h>
 #include <glidix/devfs.h>
+#include <glidix/ioctl.h>
 
 #define	SD_FILE_NO_BUF				0xFFFFFFFFFFFFFFFF
+
+#define	IOCTL_SDI_IDENTITY			IOCTL_ARG(SDParams, IOCTL_INT_SDI, 0)
 
 /**
  * Storage device flags.
@@ -126,10 +129,17 @@ typedef struct
 /**
  * Represents a storage device in devfs.
  */
-typedef struct
+typedef struct _SDFile
 {
 	StorageDevice*				sd;
-	Spinlock				lock;
+	Spinlock				masterLock;
+	Spinlock				locks[4];
+	int					index;		// partition index, -1 = whole drive
+	Device					partdevs[4];	// devfs files belonging to partiions (or NULLs).
+	struct _SDFile*				master;
+	uint64_t				offset;
+	uint64_t				limit;
+	char					letter;
 } SDFile;
 
 /**
@@ -138,7 +148,7 @@ typedef struct
 typedef struct
 {
 	SDFile*					file;
-	uint64_t				offset;
+	uint64_t				offset;		// in blocks
 	uint64_t				limit;		// first block that CANNOT be accessed (relative to offset).
 	uint8_t*				buf;		// stored right after the struct, kfreed() in one go.
 	uint64_t				bufCurrent;	// if SD_FILE_NO_BUF, then no block has been buffered yet.

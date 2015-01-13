@@ -162,6 +162,7 @@ void DeleteDevice(Device ptr)
 	DeviceFile *dev = (DeviceFile*) ptr;
 	if (dev->prev != NULL) dev->prev->next = dev->next;
 	if (dev->next != NULL) dev->next->prev = dev->prev;
+	if (dev->data != NULL) kfree(dev->data);
 	spinlockRelease(&devfsLock);
 
 	kfree(dev);

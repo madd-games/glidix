@@ -46,6 +46,9 @@ void*	realloc(void*, size_t);
 void	exit(int);
 void	_Exit(int);
 
+/* implemented by libglidix directly */
+char*	realpath(const char*, char*);
+
 #ifdef __cplusplus
 }
 #endif

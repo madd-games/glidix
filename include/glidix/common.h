@@ -71,6 +71,7 @@ typedef struct
 	uint32_t		modEnd;
 } PACKED MultibootModule;
 
+#ifndef _SYS_TYPES_H
 typedef	uint64_t			dev_t;
 typedef	uint64_t			ino_t;
 typedef	uint64_t			mode_t;
@@ -79,9 +80,10 @@ typedef	uint64_t			uid_t;
 typedef	uint64_t			gid_t;
 typedef	uint64_t			blksize_t;
 typedef	uint64_t			blkcnt_t;
-typedef	uint64_t			time_t;
+typedef	int64_t				time_t;
 typedef	int64_t				off_t;
 typedef	int64_t				ssize_t;
 typedef int				pid_t;
+#endif
 
 #endif

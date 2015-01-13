@@ -94,6 +94,9 @@ void initSched()
 	firstThread.sgid = 0;
 	firstThread.rgid = 0;
 
+	// set the working directory to /initrd by default.
+	strcpy(firstThread.cwd, "/initrd");
+
 	// linking
 	firstThread.prev = &firstThread;
 	firstThread.next = &firstThread;
@@ -227,6 +230,9 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	thread->sgid = 0;
 	thread->rgid = 0;
 
+	// start all kernel threads in "/initrd"
+	strcpy(thread->cwd, "/initrd");
+
 	// this will simulate a call from kernelThreadExit() to "entry()"
 	// this is so that when entry() returns, the thread can safely exit.
 	thread->regs.rdi = (uint64_t) data;
@@ -348,6 +354,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->sgid = currentThread->sgid;
 	thread->rgid = currentThread->rgid;
 
+	// inherit the working directory
+	strcpy(thread->cwd, currentThread->cwd);
+
 	// inherit the root signal handler
 	thread->rootSigHandler = currentThread->rootSigHandler;
 
@@ -465,10 +474,11 @@ int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 	// when WNOHANG is clear
 	if ((threadToKill == NULL) && ((flags & WNOHANG) == 0))
 	{
-		currentThread->flags |= THREAD_WAITING;
-		currentThread->therrno = ECHILD;
-		*((int*)&regs->rax) = -1;
-		switchTask(regs);
+		//currentThread->flags |= THREAD_WAITING;
+		//currentThread->therrno = ECHILD;
+		//*((int*)&regs->rax) = -1;
+		//switchTask(regs);
+		return -2;
 	};
 
 	ASM("sti");
@@ -534,6 +544,11 @@ static int canSendSignal(Thread *src, Thread *dst, int signo)
 	};
 
 	if ((src->euid == dst->euid) || (src->ruid == dst->euid) || (src->euid == dst->suid) || (src->ruid == dst->ruid))
+	{
+		return 1;
+	};
+
+	if ((dst->pidParent == src->pid) && (((dst->flags & THREAD_REBEL) == 0) || (signo == SIGINT)))
 	{
 		return 1;
 	};

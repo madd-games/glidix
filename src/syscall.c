@@ -41,6 +41,7 @@
 #include <glidix/console.h>
 #include <glidix/fdopendir.h>
 #include <glidix/fsdriver.h>
+#include <glidix/time.h>
 
 void sys_exit(Regs *regs, int status)
 {
@@ -52,7 +53,7 @@ void sys_exit(Regs *regs, int status)
 uint64_t sys_write(int fd, const void *buf, size_t size)
 {
 	ssize_t out;
-	if (fd >= MAX_OPEN_FILES)
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
 		getCurrentThread()->therrno = EBADF;
 		out = -1;
@@ -73,13 +74,22 @@ uint64_t sys_write(int fd, const void *buf, size_t size)
 			if (fp->write == NULL)
 			{
 				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EACCES;
+				getCurrentThread()->therrno = EROFS;
 				out = -1;
 			}
 			else
 			{
-				out = fp->write(fp, buf, size);
-				spinlockRelease(&ftab->spinlock);
+				if ((fp->oflag & O_WRONLY) == 0)
+				{
+					spinlockRelease(&ftab->spinlock);
+					getCurrentThread()->therrno = EPERM;
+					out = -1;
+				}
+				else
+				{
+					out = fp->write(fp, buf, size);
+					spinlockRelease(&ftab->spinlock);
+				};
 			};
 		};
 	};
@@ -90,7 +100,7 @@ uint64_t sys_write(int fd, const void *buf, size_t size)
 uint64_t sys_read(int fd, void *buf, size_t size)
 {
 	ssize_t out;
-	if (fd >= MAX_OPEN_FILES)
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
 		getCurrentThread()->therrno = EBADF;
 		out = -1;
@@ -111,13 +121,22 @@ uint64_t sys_read(int fd, void *buf, size_t size)
 			if (fp->read == NULL)
 			{
 				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EACCES;
+				getCurrentThread()->therrno = EIO;
 				out = -1;
 			}
 			else
 			{
-				out = fp->read(fp, buf, size);
-				spinlockRelease(&ftab->spinlock);
+				if ((fp->oflag & O_RDONLY) == 0)
+				{
+					spinlockRelease(&ftab->spinlock);
+					getCurrentThread()->therrno = EPERM;
+					out = -1;
+				}
+				else
+				{
+					out = fp->read(fp, buf, size);
+					spinlockRelease(&ftab->spinlock);
+				};
 			};
 		};
 	};
@@ -154,6 +173,8 @@ int sysOpenErrno(int vfsError)
 
 int sys_open(const char *path, int oflag, mode_t mode)
 {
+	mode &= 0x0FFF;
+
 	if ((oflag & O_ALL) != oflag)
 	{
 		/* unrecognised bits were set */
@@ -161,15 +182,43 @@ int sys_open(const char *path, int oflag, mode_t mode)
 		return -1;
 	};
 
+	if (oflag & O_CREAT) vfsLockCreation();
+
 	struct stat st;
 	int error = vfsStat(path, &st);
 	if (error != 0)
 	{
-		return sysOpenErrno(error);
+		if (((error != VFS_NO_FILE) && (error != VFS_EMPTY_DIRECTORY)) || ((oflag & O_CREAT) == 0))
+		{
+			if (oflag & O_CREAT) vfsUnlockCreation();
+			return sysOpenErrno(error);
+		}
+		else
+		{
+			// we're creating a new file, fake a stat.
+			st.st_uid = getCurrentThread()->euid;
+			st.st_gid = getCurrentThread()->egid;
+			st.st_mode = 0777;				// because mode shall not affect the open (see POSIX open() )
+		};
+	}
+	else if (oflag & O_EXCL)
+	{
+		// file exists
+		if (oflag & O_CREAT) vfsUnlockCreation();
+		getCurrentThread()->therrno = EEXIST;
+		return -1;
+	};
+
+	if ((st.st_mode & 0xF000) == 0x1000)
+	{
+		// directory, do not open.
+		if (oflag & O_CREAT) vfsUnlockCreation();
+		getCurrentThread()->therrno = EISDIR;
+		return -1;
 	};
 
 	int neededPerms = 0;
-	if (oflag & O_WRONLY)
+	if (oflag & O_RDONLY)
 	{
 		neededPerms |= 2;
 	};
@@ -180,7 +229,10 @@ int sys_open(const char *path, int oflag, mode_t mode)
 
 	if (!vfsCanCurrentThread(&st, neededPerms))
 	{
-		return sysOpenErrno(VFS_PERM);
+		if ((oflag & O_CREAT) == 0)
+		{
+			return sysOpenErrno(VFS_PERM);
+		};
 	};
 
 	FileTable *ftab = getCurrentThread()->ftab;
@@ -197,20 +249,37 @@ int sys_open(const char *path, int oflag, mode_t mode)
 
 	if (i == MAX_OPEN_FILES)
 	{
+		if (oflag & O_CREAT) vfsUnlockCreation();
 		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
 	};
 
-	File *fp = vfsOpen(path, VFS_CHECK_ACCESS, &error);
+	int flags = VFS_CHECK_ACCESS;
+	if (oflag & O_CREAT)
+	{
+		flags |= VFS_CREATE | (mode << 3);
+	};
+
+	File *fp = vfsOpen(path, flags, &error);
 	if (fp == NULL)
 	{
+		if (oflag & O_CREAT) vfsUnlockCreation();
 		spinlockRelease(&ftab->spinlock);
 		return sysOpenErrno(error);
+	};
+
+	if (oflag & O_CREAT) vfsUnlockCreation();
+
+	if (oflag & O_TRUNC)
+	{
+		if (fp->truncate != NULL) fp->truncate(fp, 0);
 	};
 
 	if (oflag & O_APPEND)
 	{
 		if (fp->seek != NULL) fp->seek(fp, 0, SEEK_END);
 	};
+
+	fp->oflag = oflag;
 
 	ftab->entries[i] = fp;
 	spinlockRelease(&ftab->spinlock);
@@ -220,7 +289,7 @@ int sys_open(const char *path, int oflag, mode_t mode)
 
 void sys_close(int fd)
 {
-	if (fd >= MAX_OPEN_FILES)
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
 		return;
 	};
@@ -271,7 +340,7 @@ int sys_ioctl(int fd, uint64_t cmd, void *argp)
 
 off_t sys_lseek(int fd, off_t offset, int whence)
 {
-	if (fd >= MAX_OPEN_FILES)
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
 		getCurrentThread()->therrno = EBADF;
 		return (off_t)-1;
@@ -341,8 +410,7 @@ int sys_stat(const char *path, struct stat *buf)
 	}
 	else
 	{
-		getCurrentThread()->therrno = EIO;
-		return -1;
+		return sysOpenErrno(status);
 	};
 };
 
@@ -353,6 +421,541 @@ void sys_pause(Regs *regs)
 	getCurrentThread()->therrno = EINTR;
 	getCurrentThread()->flags |= THREAD_WAITING;
 	switchTask(regs);
+};
+
+int sys_fstat(int fd, struct stat *buf)
+{
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	File *fp = ftab->entries[fd];
+	if (fp == NULL)
+	{
+		getCurrentThread()->therrno = EBADF;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if (fp->fstat == NULL)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	int status = fp->fstat(fp, buf);
+
+	spinlockRelease(&ftab->spinlock);
+	if (status == -1)
+	{
+		getCurrentThread()->therrno = EIO;
+	};
+
+	return status;
+};
+
+int sys_chmod(const char *path, mode_t mode)
+{
+	int error;
+	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
+
+	if (dir == NULL)
+	{
+		return sysOpenErrno(error);
+	};
+
+	if (dir->chmod == NULL)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	if ((getCurrentThread()->euid != 0) && (getCurrentThread()->euid != dir->stat.st_uid))
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		getCurrentThread()->therrno = EPERM;
+		return -1;
+	};
+
+	int status = dir->chmod(dir, mode);
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+
+	if (status != 0) getCurrentThread()->therrno = EIO;
+	return status;
+};
+
+int sys_fchmod(int fd, mode_t mode)
+{
+	// fstat first.
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	File *fp = ftab->entries[fd];
+	if (fp == NULL)
+	{
+		getCurrentThread()->therrno = EBADF;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if (fp->fstat == NULL)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if (fp->fchmod == NULL)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	struct stat st;
+	int status = fp->fstat(fp, &st);
+
+	if (status == -1)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if ((getCurrentThread()->euid != 0) && (getCurrentThread()->euid != st.st_uid))
+	{
+		getCurrentThread()->therrno = EPERM;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	status = fp->fchmod(fp, mode);
+	if (status == -1)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	spinlockRelease(&ftab->spinlock);
+	return 0;
+};
+
+static int sys_fsync(int fd)
+{
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	File *fp = ftab->entries[fd];
+	if (fp == NULL)
+	{
+		getCurrentThread()->therrno = EBADF;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if (fp->fsync != NULL)
+	{
+		fp->fsync(fp);
+	};
+
+	spinlockRelease(&ftab->spinlock);
+	return 0;
+};
+
+static int canChangeOwner(struct stat *st, uid_t uid, gid_t gid)
+{
+	Thread *ct = getCurrentThread();
+	if (ct->euid == 0) return 1;
+
+	if ((ct->euid == uid) && (uid == st->st_uid))
+	{
+		return (ct->egid == gid) || (ct->sgid == gid) || (ct->rgid == gid);
+	};
+
+	return 0;
+};
+
+int sys_chown(const char *path, uid_t uid, gid_t gid)
+{
+	if ((uid == (uid_t)-1) && (gid == (gid_t)-1)) return 0;
+
+	int error;
+	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
+
+	if (dir == NULL)
+	{
+		return sysOpenErrno(error);
+	};
+
+	if (dir->chown == NULL)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	if (uid == (uid_t)-1)
+	{
+		uid = dir->stat.st_uid;
+	};
+
+	if (gid == (gid_t)-1)
+	{
+		gid = dir->stat.st_gid;
+	};
+
+	if (!canChangeOwner(&dir->stat, uid, gid))
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		getCurrentThread()->therrno = EPERM;
+		return -1;
+	};
+
+	int status = dir->chown(dir, uid, gid);
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+
+	if (status == -1)
+	{
+		getCurrentThread()->therrno = EIO;
+	};
+
+	return status;
+};
+
+int sys_fchown(int fd, uid_t uid, gid_t gid)
+{
+	// fstat first.
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	File *fp = ftab->entries[fd];
+	if (fp == NULL)
+	{
+		getCurrentThread()->therrno = EBADF;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if (fp->fstat == NULL)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if (fp->fchown == NULL)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	struct stat st;
+	int status = fp->fstat(fp, &st);
+
+	if (status == -1)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if (!canChangeOwner(&st, uid, gid))
+	{
+		getCurrentThread()->therrno = EPERM;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	status = fp->fchown(fp, uid, gid);
+	if (status == -1)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	spinlockRelease(&ftab->spinlock);
+	return 0;
+};
+
+int sys_mkdir(const char *path, mode_t mode)
+{
+	char rpath[256];
+	if (realpath(path, rpath) == NULL)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	char parent[256];
+	char newdir[256];
+
+	size_t sz = strlen(rpath);
+	while (rpath[sz] != '/')
+	{
+		sz--;
+	};
+
+	memcpy(parent, rpath, sz);
+	parent[sz] = 0;
+	if (parent[0] == 0)
+	{
+		strcpy(parent, "/");
+	};
+
+	strcpy(newdir, &rpath[sz+1]);
+	if (strlen(newdir) >= 128)
+	{
+		getCurrentThread()->therrno = ENAMETOOLONG;
+		return -1;
+	};
+
+	if (newdir[0] == 0)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	vfsLockCreation();
+
+	struct stat st;
+	int error;
+	if ((error = vfsStat(parent, &st)) != 0)
+	{
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
+	};
+
+	if (!vfsCanCurrentThread(&st, 2))
+	{
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EPERM;
+		return -1;
+	};
+
+	if (strcmp(parent, "/") != 0) strcat(parent, "/");
+
+	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
+	int endYet = (error == VFS_EMPTY_DIRECTORY);
+	if (dir->mkdir == NULL)
+	{
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	while (!endYet)
+	{
+		if (strcmp(dir->dirent.d_name, newdir) == 0)
+		{
+			if (dir->close != NULL) dir->close(dir);
+			kfree(dir);
+			vfsUnlockCreation();
+			getCurrentThread()->therrno = EEXIST;
+			return -1;
+		};
+
+		if (dir->next(dir) == -1)
+		{
+			endYet = 1;
+		};
+	};
+
+	int status = dir->mkdir(dir, newdir, mode & 0x0FFF, getCurrentThread()->euid, getCurrentThread()->egid);
+
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+	vfsUnlockCreation();
+
+	if (status != 0)
+	{
+		getCurrentThread()->therrno = EIO;
+	};
+
+	return status;
+};
+
+int sys_ftruncate(int fd, off_t length)
+{
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	File *fp = ftab->entries[fd];
+	if (fp == NULL)
+	{
+		getCurrentThread()->therrno = EBADF;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if ((fp->oflag & O_WRONLY) == 0)
+	{
+		getCurrentThread()->therrno = EPERM;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	if (fp->truncate == NULL)
+	{
+		getCurrentThread()->therrno = EIO;
+		spinlockRelease(&ftab->spinlock);
+		return -1;
+	};
+
+	fp->truncate(fp, length);
+
+	spinlockRelease(&ftab->spinlock);
+	return 0;
+};
+
+int sys_unlink(const char *path)
+{
+	char rpath[256];
+	if (realpath(path, rpath) == NULL)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	char parent[256];
+	char child[256];
+
+	size_t sz = strlen(rpath);
+	while (rpath[sz] != '/')
+	{
+		sz--;
+	};
+
+	memcpy(parent, rpath, sz);
+	parent[sz] = 0;
+	if (parent[0] == 0)
+	{
+		strcpy(parent, "/");
+	};
+
+	strcpy(child, &rpath[sz+1]);
+	if (strlen(child) >= 128)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	if (child[0] == 0)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	vfsLockCreation();
+
+	struct stat st;
+	int error;
+	if ((error = vfsStat(parent, &st)) != 0)
+	{
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
+	};
+
+	Dir *dir = parsePath(rpath, 0, &error);
+	if (dir == NULL)
+	{
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
+	};
+
+	if (((dir->stat.st_mode & 0xF000) == 0x1000) && (dir->stat.st_size != 0))
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = ENOTEMPTY;
+		return -1;
+	};
+
+	if ((st.st_mode & VFS_MODE_STICKY))
+	{
+		uid_t uid = getCurrentThread()->euid;
+		if ((st.st_uid != uid) && (dir->stat.st_uid != uid))
+		{
+			if (dir->close != NULL) dir->close(dir);
+			kfree(dir);
+			vfsUnlockCreation();
+			getCurrentThread()->therrno = EPERM;
+			return -1;
+		};
+	};
+
+	if (!vfsCanCurrentThread(&st, 2))
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EPERM;
+		return -1;
+	};
+
+	if (dir->unlink == NULL)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	if (dir->unlink(dir) != 0)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+
+	vfsUnlockCreation();
+	return 0;
 };
 
 int isPointerValid(uint64_t ptr, uint64_t size)
@@ -380,6 +983,45 @@ int sys_insmod(const char *modname, const char *path, const char *opt, int flags
 	};
 
 	return insmod(modname, path, opt, flags);
+};
+
+int sys_chdir(const char *path)
+{
+	struct stat st;
+	if (vfsStat(path, &st) != 0)
+	{
+		getCurrentThread()->therrno = EACCES;
+		return -1;
+	};
+
+	char rpath[256];
+	if (realpath(path, rpath) == NULL)
+	{
+		getCurrentThread()->therrno = EACCES;
+		return -1;
+	};
+
+	if ((st.st_mode & VFS_MODE_DIRECTORY) == 0)
+	{
+		getCurrentThread()->therrno = ENOTDIR;
+		return -1;
+	};
+
+	if (!vfsCanCurrentThread(&st, 1))
+	{
+		getCurrentThread()->therrno = EACCES;
+		return -1;
+	};
+
+	strcpy(getCurrentThread()->cwd, rpath);
+	return 0;
+};
+
+char *sys_getcwd(char *buf, size_t size)
+{
+	if (size > 256) size = 256;
+	memcpy(buf, getCurrentThread()->cwd, size);
+	return buf;
 };
 
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
@@ -545,6 +1187,66 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 31:
 		*((int*)&regs->rax) = sys_mount((const char*)regs->rdi, (const char*)regs->rsi, (const char*)regs->rdx, (int)regs->rcx);
+		break;
+	case 32:
+		/* _glidix_yield */
+		ASM("cli");
+		switchTask(regs);
+		break;
+	case 33:
+		*((time_t*)&regs->rax) = time();
+		break;
+	case 34:
+		if (!isPointerValid(regs->rsi, 256))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		regs->rax = (uint64_t) realpath((const char*) regs->rdi, (char*) regs->rsi);
+		if (regs->rax == 0)
+		{
+			getCurrentThread()->therrno = ENAMETOOLONG;
+		};
+		break;
+	case 35:
+		*((int*)&regs->rax) = sys_chdir((const char*)regs->rdi);
+		break;
+	case 36:
+		if (!isPointerValid(regs->rdi, regs->rsi))
+		{
+			signalOnBadPointer(regs, regs->rdi);
+		};
+		regs->rax = (uint64_t) sys_getcwd((char*) regs->rdi, regs->rsi);
+		break;
+	case 37:
+		if (!isPointerValid(regs->rsi, sizeof(struct stat)))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		*((int*)&regs->rax) = sys_fstat((int)regs->rdi, (struct stat*) regs->rsi);
+		break;
+	case 38:
+		*((int*)&regs->rax) = sys_chmod((const char*) regs->rdi, (mode_t) regs->rsi);
+		break;
+	case 39:
+		*((int*)&regs->rax) = sys_fchmod((int) regs->rdi, (mode_t) regs->rsi);
+		break;
+	case 40:
+		*((int*)&regs->rax) = sys_fsync((int)regs->rdi);
+		break;
+	case 41:
+		*((int*)&regs->rax) = sys_chown((const char*)regs->rdi, (uid_t)regs->rsi, (gid_t)regs->rdx);
+		break;
+	case 42:
+		*((int*)&regs->rax) = sys_fchown((int)regs->rdi, (uid_t)regs->rsi, (gid_t)regs->rdx);
+		break;
+	case 43:
+		*((int*)&regs->rax) = sys_mkdir((const char*)regs->rdi, (mode_t)regs->rsi);
+		break;
+	case 44:
+		*((int*)&regs->rax) = sys_ftruncate((int)regs->rdi, (off_t)regs->rsi);
+		break;
+	case 45:
+		*((int*)&regs->rax) = sys_unlink((const char*)regs->rdi);
 		break;
 	default:
 		signalOnBadSyscall(regs);

@@ -32,6 +32,14 @@
 #include <glidix/mount.h>
 #include <glidix/memory.h>
 #include <glidix/sched.h>
+#include <glidix/spinlock.h>
+
+static Spinlock vfsSpinlockCreation;
+
+void vfsInit()
+{
+	spinlockRelease(&vfsSpinlockCreation);
+};
 
 static void dumpDir(Dir *dir, int prefix)
 {
@@ -113,19 +121,156 @@ int vfsCanCurrentThread(struct stat *st, mode_t mask)
 	};
 };
 
+char *realpath(const char *relpath, char *buffer)
+{
+	Thread *ct = getCurrentThread();
+
+	if (*relpath == 0)
+	{
+		*buffer = 0;
+		return buffer;
+	};
+
+	char *put = buffer;
+	size_t szput = 0;
+	const char *scan = relpath;
+
+	if (relpath[0] != '/')
+	{
+		strcpy(buffer, ct->cwd);
+		szput = strlen(ct->cwd);
+		put = &buffer[szput];
+		if (*(put-1) != '/')
+		{
+			if (szput == 255)
+			{
+				return NULL;
+			};
+
+			*put++ = '/';
+			szput++;
+		};
+	}
+	else
+	{
+		*put++ = *scan++;			// put the slash there.
+		szput++;
+	};
+
+	char token[128];
+	char *tokput = token;
+	size_t toksz = 0;
+
+	while (1)
+	{
+		char c = *scan++;
+		if ((c != '/') && (c != 0))
+		{
+			if (toksz == 127)
+			{
+				return NULL;
+			};
+
+			*tokput++ = c;
+			toksz++;
+		}
+		else
+		{
+			*tokput = 0;
+
+			if (strcmp(token, ".") == 0)
+			{
+				if (szput != 1)
+				{
+					put--;
+					szput--;
+				};
+
+				*put++ = c;
+				szput++;
+				if (c == 0)
+				{
+					break;
+				}
+				else
+				{
+					tokput = token;
+					toksz = 0;
+					continue;
+				};
+			};
+
+			if (strcmp(token, "..") == 0)
+			{
+				if (szput == 1)
+				{
+					*put = 0;
+					tokput = token;
+					toksz = 0;
+					continue;		// "parent directory" of root directory is root directory itself.
+				};
+
+				szput--;
+				put--;
+				*put = 0;
+
+				while (*put != '/')
+				{
+					put--;
+				};
+
+				if (put != buffer) *put = 0;
+
+				put++;
+				*put = 0;
+				szput = put - buffer;
+				if (c == 0) break;
+				else
+				{
+					tokput = token;
+					toksz = 0;
+					continue;
+				};
+			};
+
+			if ((szput + toksz + 1) >= 255)
+			{
+				return NULL;
+			};
+
+			strcpy(put, token);
+			put += toksz;
+			*put++ = c;		// NUL or '/'
+
+			szput += toksz + 1;
+			if (c == 0) break;
+
+			tokput = token;
+			toksz = 0;
+		};
+	};
+
+	if (strcmp(buffer, "//") == 0)
+	{
+		strcpy(buffer, "/");
+	};
+
+	return buffer;
+};
+
 Dir *parsePath(const char *path, int flags, int *error)
 {
-	kprintf_debug("start of parsePath()\n");
-
 	*error = VFS_NO_FILE;			// default error
-	// TODO: relative paths
-	if (path[0] != '/')
+
+	kprintf_debug("start of parsePath()\n");
+	char rpath[256];
+	if (realpath(path, rpath) == NULL)
 	{
 		return NULL;
 	};
 
 	SplitPath spath;
-	if (resolveMounts(path, &spath) != 0)
+	if (resolveMounts(rpath, &spath) != 0)
 	{
 		return NULL;
 	};
@@ -146,6 +291,11 @@ Dir *parsePath(const char *path, int flags, int *error)
 		kfree(dir);
 		return NULL;
 	};
+
+	struct stat st_parent;
+	st_parent.st_mode = 01755;
+	st_parent.st_uid = 0;
+	st_parent.st_gid = 0;
 
 	while (1)
 	{
@@ -178,6 +328,25 @@ Dir *parsePath(const char *path, int flags, int *error)
 		{
 			if (dir->next(dir) != 0)
 			{
+				if ((*scan == 0) && (flags & VFS_CREATE) && (token[0] != 0))
+				{
+					if (dir->mkreg != NULL)
+					{
+						if (vfsCanCurrentThread(&st_parent, 2))
+						{
+							if (dir->mkreg(dir, token, (flags >> 3) & 0x0FFF,
+									getCurrentThread()->euid, getCurrentThread()->egid) == 0)
+							{
+								return dir;
+							};
+						}
+						else
+						{
+							*error = VFS_PERM;
+						};
+					};
+				};
+
 				if (dir->close != NULL) dir->close(dir);
 				kfree(dir);
 				return NULL;
@@ -205,11 +374,59 @@ Dir *parsePath(const char *path, int flags, int *error)
 			Dir *subdir = (Dir*) kmalloc(sizeof(Dir));
 			memset(subdir, 0, sizeof(Dir));
 
-			if (dir->opendir(dir, subdir, sizeof(Dir)) != 0)
+			int derror;
+			if ((derror = dir->opendir(dir, subdir, sizeof(Dir))) != 0)
 			{
-				kfree(subdir);
+				if ((derror == VFS_EMPTY_DIRECTORY) && (flags & VFS_STOP_ON_EMPTY))
+				{
+					if (dir->close != NULL) dir->close(dir);
+					kfree(dir);
+					*error = VFS_EMPTY_DIRECTORY;
+					return subdir;
+				};
+
+				memcpy(&st_parent, &dir->stat, sizeof(struct stat));
 				if (dir->close != NULL) dir->close(dir);
 				kfree(dir);
+
+				if ((derror == VFS_EMPTY_DIRECTORY) && (flags & VFS_CREATE))
+				{
+					char *put = token;
+					scan++;
+					while (*scan != '/')
+					{
+						*put++ = *scan;
+						if (*scan == 0) break;
+						scan++;
+					};
+
+					*put = 0;
+					kprintf_debug("vfs: creating regular file '%s'\n", token);
+					if (*scan == 0)
+					{
+						kprintf_debug("ok scan is good\n");
+						if (subdir->mkreg != NULL)
+						{
+							kprintf_debug("ok subdir->mkreg is here\n");
+							if (vfsCanCurrentThread(&st_parent, 2))
+							{
+								if (subdir->mkreg(subdir, token, (flags >> 3) & 0x0FFF,
+										getCurrentThread()->euid, getCurrentThread()->egid) == 0)
+								{
+									return subdir;
+								};
+							}
+							else
+							{
+								*error = VFS_PERM;
+							};
+						};
+					};
+				};
+
+				if (subdir->close != NULL) subdir->close(subdir);
+				kfree(subdir);
+				*error = derror;
 				return NULL;
 			};
 
@@ -228,6 +445,36 @@ Dir *parsePath(const char *path, int flags, int *error)
 
 int vfsStat(const char *path, struct stat *st)
 {
+	char rpath[256];
+	if (realpath(path, rpath) == NULL)
+	{
+		return VFS_NO_FILE;
+	};
+
+	if (strcmp(rpath, "/") == 0)
+	{
+		// special case
+		st->st_dev = 0;
+		st->st_ino = 2;
+		st->st_mode = 0755 | VFS_MODE_DIRECTORY | VFS_MODE_STICKY;
+		st->st_nlink = 1;
+		st->st_uid = 0;
+		st->st_gid = 0;
+		st->st_rdev = 0;
+		st->st_size = 0;
+		st->st_blksize = 512;
+		st->st_blocks = 0;
+		st->st_atime = 0;
+		st->st_ctime = 0;
+		st->st_mtime = 0;
+		return 0;
+	};
+
+	if (path[strlen(path)-1] == '/')
+	{
+		return VFS_NO_FILE;
+	};
+
 	int error;
 	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
 	if (dir == NULL)
@@ -284,8 +531,24 @@ ssize_t vfsRead(File *file, void *buffer, size_t size)
 	return file->read(file, buffer, size);
 };
 
+ssize_t vfsWrite(File *file, const void *buffer, size_t size)
+{
+	if (file->write == NULL) return -1;
+	return file->write(file, buffer, size);
+};
+
 void vfsClose(File *file)
 {
 	if (file->close != NULL) file->close(file);
 	kfree(file);
+};
+
+void vfsLockCreation()
+{
+	spinlockAcquire(&vfsSpinlockCreation);
+};
+
+void vfsUnlockCreation()
+{
+	spinlockRelease(&vfsSpinlockCreation);
 };

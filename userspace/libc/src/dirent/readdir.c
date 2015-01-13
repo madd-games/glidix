@@ -39,7 +39,8 @@ struct dirent *readdir(DIR *dirp)
 
 int readdir_r(DIR *dirp, struct dirent *entry, struct dirent **result)
 {
-	ssize_t ret = read(dirp->_fd, entry, sizeof(struct dirent));
+	ssize_t ret = 0;
+	if (dirp->_fd != -2) ret = read(dirp->_fd, entry, sizeof(struct dirent));
 	if (ret == 0)
 	{
 		*result = NULL;

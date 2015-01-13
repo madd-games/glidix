@@ -11,5 +11,5 @@ build/isodir.o build/isodir.d : isodir.c /glidix/kernel-include/glidix/common.h 
  /glidix/kernel-include/glidix/memory.h \
  /glidix/kernel-include/glidix/string.h \
  /glidix/kernel-include/glidix/console.h \
- /usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h isodir.h isofs.h \
- isofile.h
+ /usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h \
+ /glidix/kernel-include/glidix/time.h isodir.h isofs.h isofile.h

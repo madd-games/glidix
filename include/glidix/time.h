@@ -29,7 +29,12 @@
 #ifndef __glidix_time_h
 #define __glidix_time_h
 
+#include <glidix/common.h>
+
 int getUptime();			// idt.c
 void sleep(int ticks);
+time_t makeUnixTime(int64_t year, int64_t month, int64_t day, int64_t hour, int64_t minute, int64_t second);
+time_t time();
+void initRTC();
 
 #endif

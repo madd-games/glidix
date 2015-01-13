@@ -35,16 +35,40 @@
 extern "C" {
 #endif
 
-#define	S_ISBLK(m)			(m & (1 << 13))
-#define	S_ISCHR(m)			(m & (1 << 12))
-#define	S_ISDIR(m)			(m & (1 << 11))
-#define	S_ISFIFO(m)			(m & (1 << 14))
-#define	S_ISREG(m)			(!S_ISBLK(m) && !S_ISCHR(m) && !S_ISDIR(m) && !S_ISFIFO(m) && !S_ISLNK(m))
-#define	S_ISLNK(m)			(m & (1 << 15))
+#define	S_IFMT				(m & 0xF000)
+#define	S_IFBLK				030000
+#define	S_IFCHR				020000
+#define	S_IFDIR				010000
+#define	S_IFIFO				040000
+#define	S_IFREG				0
+#define	S_IFLNK				050000
+
+#define	S_ISBLK(m)			((m & 0xF000) == 030000)
+#define	S_ISCHR(m)			((m & 0xF000) == 020000)
+#define	S_ISDIR(m)			((m & 0xF000) == 010000)
+#define	S_ISFIFO(m)			((m & 0xF000) == 040000)
+#define	S_ISREG(m)			((m & 0xF000) == 0)
+#define	S_ISLNK(m)			((m & 0xF000) == 050000)
 
 #define	S_TYPEISMQ(m)			(0)
 #define	S_TYPEISSEM(m)			(0)
 #define	S_TYPEISSHM(m)			(0)
+
+#define	S_IRWXU				0700
+#define	S_IRUSR				0400
+#define	S_IWUSR				0200
+#define	S_IXUSR				0100
+#define	S_IRWXG				0070
+#define	S_IRGRP				0040
+#define	S_IWGRP				0020
+#define	S_IXGRP				0010
+#define	S_IRWXO				0007
+#define	S_IROTH				0004
+#define	S_IWOTH				0002
+#define	S_IXOTH				0001
+#define	S_ISUID				04000
+#define	S_ISGID				02000
+#define	S_ISVTX				01000
 
 struct stat
 {
@@ -65,6 +89,10 @@ struct stat
 
 /* implemented by libglidix directly */
 int stat(const char *path, struct stat *buf);
+int fstat(int fd, struct stat *buf);
+int chmod(const char *path, mode_t mode);
+int fchmod(int fd, mode_t mode);
+int mkdir(const char *path, mode_t mode);
 
 #ifdef __cplusplus
 }	/* extern "C" */

@@ -111,6 +111,9 @@ def opCreateISO():
 	os.system("cp out/vmglidix.tar isodir/boot/vmglidix.tar")
 	os.system("mkdir -p isodir/boot/grub")
 	os.system("cp grub.cfg isodir/boot/grub/grub.cfg")
+	os.system("mkdir -p isodir/initrd")
+	os.system("mkdir -p isodir/dev")
+	os.system("mkdir -p isodir/mnt")
 	os.system("grub-mkrescue -o out/glidix.iso isodir")
 
 doOperation("creating build.mk...", opCreateBuildMK)

@@ -37,6 +37,7 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <time.h>
 
 #define	IOCTL_NOARG(intf, cmd)				((intf << 16) | cmd)
 #define	IOCTL_ARG(type, intf, cmd)			((sizeof(type) << 32) | IOCTL_NOARG(intf, cmd))
@@ -106,6 +107,16 @@ int _toint(const char *str)
 	return out;
 };
 
+mode_t _tomode(const char *str)
+{
+	mode_t mode;
+	while (*str != 0)
+	{
+		mode = mode * 8 + ((*str++)-'0');
+	};
+	return mode;
+};
+
 void cmd_cat(int argc, char **argv)
 {
 	if (argc < 2)
@@ -121,10 +132,9 @@ void cmd_cat(int argc, char **argv)
 			FILE *fp = fopen(argv[i], "r");
 			if (fp == NULL)
 			{
-				fprintf(stderr, "cat: could not open %s\n", argv[i]);
+				perror("fopen");
 				break;
 			};
-			//asm volatile ("xchg %bx, %bx");
 			while (1)
 			{
 				int c = fgetc(fp);
@@ -146,10 +156,10 @@ void cmd_write(int argc, char **argv)
 	}
 	else
 	{
-		int fd = open(argv[1], O_CREAT | O_WRONLY, 0644);
+		int fd = open(argv[1], O_CREAT | O_WRONLY | O_TRUNC, 0644);
 		if (fd == -1)
 		{
-			fprintf(stderr, "write: could not open %s for write\n", argv[1]);
+			perror("open");
 			return;
 		};
 
@@ -158,41 +168,11 @@ void cmd_write(int argc, char **argv)
 
 		if (sz == -1)
 		{
-			fprintf(stderr, "write: the write failed\n");
+			perror("write");
 		}
 		else
 		{
 			printf("successfully wrote %d bytes to %s\n", sz, argv[1]);
-		};
-	};
-};
-
-void cmd_run(int argc, char **argv)
-{
-	if (argc != 2)
-	{
-		fprintf(stderr, "run <executable>\n");
-		fprintf(stderr, "  Runs an executable file.\n");
-	}
-	else
-	{
-		char pars[4] = {0, 0, 0, 0};
-		pid_t pid = fork();
-		if (pid == 0)
-		{
-			// i can into child
-			if (_glidix_exec(argv[1], pars, 4) != 0)
-			{
-				fprintf(stderr, "cannot execute %s\n", argv[1]);
-				exit(1);
-			};
-		}
-		else
-		{
-			// i can into parent
-			int status;
-			waitpid(pid, &status, 0);
-			printf("child (%d) terminated with status %d\n", pid, status);
 		};
 	};
 };
@@ -248,7 +228,7 @@ void cmd_insmod(int argc, char **argv)
 
 		if (_glidix_insmod(modname, path, opt, flags) != 0)
 		{
-			fprintf(stderr, "insmod: module loading failed\n");
+			perror("_glidix_insmod");
 			return;
 		};
 	};
@@ -271,14 +251,14 @@ void cmd_pcistat(int argc, char **argv)
 		int fd = open("/dev/pcictl", O_RDONLY);
 		if (fd < 0)
 		{
-			fprintf(stderr, "pcistat: failed to open /dev/pcictl\n");
+			perror("open");
 			return;
 		};
 
 		if (ioctl(fd, IOCTL_PCI_DEVINFO, &rq) != 0)
 		{
 			close(fd);
-			fprintf(stderr, "pcistat: failed to ioctl\n");
+			perror("ioctl");
 			return;
 		};
 
@@ -352,13 +332,13 @@ void cmd_stat(int argc, char **argv)
 		struct stat st;
 		if (stat(argv[1], &st) != 0)
 		{
-			fprintf(stderr, "stat: stat failed on %s\n", argv[1]);
+			perror("stat");
 			return;
 		};
 
 		printf("filename: %s\n", argv[1]);
 		printf("owner: %d\tgroup:%d\n", st.st_uid, st.st_gid);
-		printf("mode: %o\tsize: %d bytes\n", st.st_mode, st.st_size);
+		printf("mode: %o\tsize: %d bytes\n", (st.st_mode & 07777), st.st_size);
 		const char *type = "???";
 		if (S_ISBLK(st.st_mode))
 		{
@@ -385,33 +365,39 @@ void cmd_stat(int argc, char **argv)
 			type = "symbolic link";
 		};
 		printf("type: %s\n", type);
+
+		printf("last stat change:  %d\n", st.st_ctime);
+		printf("last mod time:     %d\n", st.st_mtime);
+		printf("last access time:  %d\n", st.st_atime);
 	};
 };
 
 void cmd_ls(int argc, char **argv)
 {
-	if (argc != 2)
+	const char *path;
+	if (argc < 2)
 	{
-		fprintf(stderr, "ls <directory>\n");
-		fprintf(stderr, "  Display the contents of a directory\n");
+		path = ".";
 	}
 	else
 	{
-		DIR *dirp = opendir(argv[1]);
-		if (dirp == NULL)
-		{
-			fprintf(stderr, "ls: could not open directory %s\n", argv[1]);
-			return;
-		};
-
-		struct dirent *ent;
-		while ((ent = readdir(dirp)) != NULL)
-		{
-			printf("%s\n", ent->d_name);
-		};
-
-		closedir(dirp);
+		path = argv[1];
 	};
+
+	DIR *dirp = opendir(path);
+	if (dirp == NULL)
+	{
+		perror("opendir");
+		return;
+	};
+
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		printf("%s\n", ent->d_name);
+	};
+
+	closedir(dirp);
 };
 
 void printbyte(uint8_t byte)
@@ -436,7 +422,7 @@ void cmd_hexdump(int argc, char **argv)
 		int fd = open(argv[1], O_RDONLY);
 		if (fd < 0)
 		{
-			fprintf(stderr, "hexdump: could not open %s\n", argv[1]);
+			perror("open");
 			return;
 		};
 
@@ -447,7 +433,7 @@ void cmd_hexdump(int argc, char **argv)
 
 		if (sz == -1)
 		{
-			fprintf(stderr, "hexdump: read() failed for some reason\n");
+			perror("read");
 			return;
 		};
 
@@ -488,8 +474,233 @@ void cmd_mount(int argc, char **argv)
 	{
 		if (_glidix_mount(argv[1], argv[2], argv[3], 0) != 0)
 		{
-			fprintf(stderr, "mount: error\n");
+			perror("_glidix_mount");
 		};
+	};
+};
+
+void cmd_realpath(int argc, char **argv)
+{
+	if (argc != 2)
+	{
+		fprintf(stderr, "realpath <path>\n");
+		fprintf(stderr, "  Prints the real path that <path> resolves to.\n");
+	}
+	else
+	{
+		char buffer[256];
+		char *p = realpath(argv[1], buffer);
+
+		if (p == NULL)
+		{
+			perror("realpath");
+		}
+		else
+		{
+			printf("%s\n", p);
+		};
+	};
+};
+
+int hasSlash(const char *str)
+{
+	while (*str != 0)
+	{
+		if (*str == '/') return 1;
+		str++;
+	};
+	return 0;
+};
+
+void cmd_cd(int argc, char **argv)
+{
+	if (argc != 2)
+	{
+		fprintf(stderr, "cd <directory>\n");
+		fprintf(stderr, "  Change the working directory.\n");
+	}
+	else
+	{
+		if (chdir(argv[1]) != 0)
+		{
+			perror("cd");
+		};
+	};
+};
+
+void cmd_chmod(int argc, char **argv)
+{
+	if (argc != 3)
+	{
+		fprintf(stderr, "chmod <mode> <filename>\n");
+		fprintf(stderr, "  Change the access mode of a file.\n");
+	}
+	else
+	{
+		mode_t mode = _tomode(argv[1]);
+		if (chmod(argv[2], mode) != 0)
+		{
+			perror("chmod");
+		};
+	};
+};
+
+void cmd_chown(int argc, char **argv)
+{
+	if (argc != 4)
+	{
+		fprintf(stderr, "chown <uid> <gid> <filename>\n");
+		fprintf(stderr, "  Change the owner and associated group of a file.\n");
+	}
+	else
+	{
+		uid_t uid = (uid_t) _toint(argv[1]);
+		gid_t gid = (gid_t) _toint(argv[2]);
+		if (chown(argv[3], uid, gid) != 0)
+		{
+			perror("chown");
+		};
+	};
+};
+
+void cmd_mkdir(int argc, char **argv)
+{
+	if (argc != 2)
+	{
+		fprintf(stderr, "mkdir <name>\n");
+		fprintf(stderr, "  Create a directory called <name>, the parent must exist.\n");
+	}
+	else
+	{
+		if (mkdir(argv[1], 0755) != 0)
+		{
+			perror("mkdir");
+		};
+	};
+};
+
+void cmd_touch(int argc, char **argv)
+{
+	if (argc != 2)
+	{
+		fprintf(stderr, "touch <filename>\n");
+		fprintf(stderr, "  Open a file in write mode, or create it, and then close it.\n");
+	}
+	else
+	{
+		int fd = open(argv[1], O_WRONLY | O_CREAT, 0644);
+		if (fd == -1)
+		{
+			perror("touch");
+		}
+		else
+		{
+			close(fd);
+		};
+	};
+};
+
+void cmd_rm(int argc, char **argv)
+{
+	if (argc != 2)
+	{
+		fprintf(stderr, "rm <filename>\n");
+		fprintf(stderr, "  Delete a file or an empty directory.\n");
+	}
+	else
+	{
+		if (unlink(argv[1]) != 0)
+		{
+			perror("rm: unlink");
+		};
+	};
+};
+
+void do_copy(const char *src, const char *dst, int recursive)
+{
+	if (recursive)
+	{
+		fprintf(stderr, "-r is not supported yet.\n");
+		return;
+	};
+
+	struct stat st;
+	if (stat(src, &st) != 0)
+	{
+		perror("cp: stat on source");
+		return;
+	};
+
+	int srcfd = open(src, O_RDONLY);
+	if (srcfd == -1)
+	{
+		perror("cp: open source");
+		return;
+	};
+
+	int tarfd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, st.st_mode & 07777);
+	if (tarfd == -1)
+	{
+		perror("cp: open target");
+		close(srcfd);
+		return;
+	};
+
+	char buf[16];
+	while (1)
+	{
+		ssize_t sz = read(srcfd, buf, 16);
+		if (sz == -1)
+		{
+			close(srcfd);
+			close(tarfd);
+			perror("cp: read");
+			return;
+		};
+
+		if (write(tarfd, buf, 16) == -1)
+		{
+			close(srcfd);
+			close(tarfd);
+			perror("cp: write");
+			return;
+		};
+
+		if (sz < 16) break;
+	};
+
+	close(tarfd);
+	close(srcfd);
+};
+
+void cmd_cp(int argc, char **argv)
+{
+	int recursive = 0;
+
+	if ((argc != 3) && (argc != 4))
+	{
+		fprintf(stderr, "cp [-r] <source> <destination>\n");
+		fprintf(stderr, "  Copy a source file to a destination file.\n");
+		fprintf(stderr, "  -r causes whole directories to be copied.\n");
+	}
+	else
+	{
+		const char *src;
+		const char *dst;
+
+		if ((argc == 4) && (strcmp(argv[1], "-r") == 0))
+		{
+			recursive = 1;
+			src = argv[2];
+			dst = argv[3];
+		}
+		else
+		{
+			src = argv[1];
+			dst = argv[2];
+		};
+
+		do_copy(src, dst, recursive);
 	};
 };
 
@@ -503,7 +714,7 @@ void runCommand(char *buf)
 		scan++;
 	};
 
-	char **argv = (char**) malloc(sizeof(char*)*argc);
+	char **argv = (char**) malloc(sizeof(char*)*(argc+1));
 	argv[0] = buf;
 	scan = buf;
 	int i = 1;
@@ -516,6 +727,7 @@ void runCommand(char *buf)
 		};
 		scan++;
 	};
+	argv[i] = NULL;
 
 	if (strcmp(argv[0], "cat") == 0)
 	{
@@ -532,10 +744,6 @@ void runCommand(char *buf)
 	else if (strcmp(argv[0], "exit") == 0)
 	{
 		if (getpid() != 2) exit(0);
-	}
-	else if (strcmp(argv[0], "run") == 0)
-	{
-		cmd_run(argc, argv);
 	}
 	else if (strcmp(argv[0], "insmod") == 0)
 	{
@@ -569,17 +777,100 @@ void runCommand(char *buf)
 	{
 		cmd_mount(argc, argv);
 	}
+	else if (strcmp(argv[0], "time") == 0)
+	{
+		printf("%d\n", time());
+	}
+	else if (strcmp(argv[0], "realpath") == 0)
+	{
+		cmd_realpath(argc, argv);
+	}
+	else if (strcmp(argv[0], "pwd") == 0)
+	{
+		char cwd[256];
+		getcwd(cwd, 256);
+		printf("%s\n", cwd);
+	}
+	else if (strcmp(argv[0], "cd") == 0)
+	{
+		cmd_cd(argc, argv);
+	}
+	else if (strcmp(argv[0], "chmod") == 0)
+	{
+		cmd_chmod(argc, argv);
+	}
+	else if (strcmp(argv[0], "chown") == 0)
+	{
+		cmd_chown(argc, argv);
+	}
+	else if (strcmp(argv[0], "mkdir") == 0)
+	{
+		cmd_mkdir(argc, argv);
+	}
+	else if (strcmp(argv[0], "touch") == 0)
+	{
+		cmd_touch(argc, argv);
+	}
+	else if (strcmp(argv[0], "rm") == 0)
+	{
+		cmd_rm(argc, argv);
+	}
+	else if (strcmp(argv[0], "cp") == 0)
+	{
+		cmd_cp(argc, argv);
+	}
+	else if (hasSlash(argv[0]))
+	{
+		pid_t pid = fork();
+		if (pid == 0)
+		{
+			// child
+			execv(argv[0], argv);
+			perror("exec");
+			exit(1);
+		}
+		else
+		{
+			int status;
+			waitpid(pid, &status, 0);
+		};
+	}
 	else
 	{
-		fprintf(stderr, "unknown command: %s\n", argv[0]);
+		char execpath[256];
+		strcpy(execpath, "/bin/");
+		strcat(execpath, argv[0]);
+
+		struct stat st;
+		if (stat(execpath, &st) != 0)
+		{
+			fprintf(stderr, "unknown command: %s\n", argv[0]);
+			return;
+		};
+
+		pid_t pid = fork();
+		if (pid == 0)
+		{
+			// child
+			execv(execpath, argv);
+			perror("exec");
+			exit(1);
+		}
+		else
+		{
+			int status;
+			waitpid(pid, &status, 0);
+		};
 	};
 };
 
 void shell()
 {
+	char cwd[256];
 	while (1)
 	{
-		printf("> ");
+		getcwd(cwd, 256);
+		printf("%s# ", cwd);
 		fflush(stdout);
 		char buf[256];
 		getline(buf);
@@ -591,10 +882,16 @@ void shell()
 void loadmods()
 {
 	DIR *dirp = opendir("/initrd/initmod");
+	if (dirp == NULL)
+	{
+		perror("opendir /initrd/initmod");
+		exit(1);
+	};
+
 	struct dirent *ent;
 
-	char filename[128];
-	char modname[128];
+	char filename[256];
+	char modname[256];
 	while ((ent = readdir(dirp)) != NULL)
 	{
 		strcpy(filename, "/initrd/initmod/");
@@ -617,6 +914,17 @@ int main(int argc, char *argv[])
 	{
 		//_glidix_insmod("mod_ps2kbd", "/initrd/ps2kbd.gkm", NULL, 0);
 		loadmods();
+		printf("init: mount root filesystem (isofs on /dev/sdb)\n");
+		if (_glidix_mount("isofs", "/dev/sdb", "/", 0) != 0)
+		{
+			perror("init: mount failed");
+		};
+		close(open("/dev/sda", O_RDONLY));
+		if (_glidix_mount("gxfs", "/dev/sda0", "/mnt/", 0) != 0)
+		{
+			perror("init: mount gxfs on /mnt");
+		};
+
 		if (fork() == 0)
 		{
 			shell();

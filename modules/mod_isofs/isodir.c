@@ -32,6 +32,7 @@
 #include <glidix/string.h>
 #include <glidix/vfs.h>
 #include <glidix/console.h>
+#include <glidix/time.h>
 
 #include "isodir.h"
 #include "isofile.h"
@@ -100,7 +101,11 @@ static int readDirent(ISODirScanner *isodir, Dir *dir)
 	dir->stat.st_size = head.fileSize;
 	dir->stat.st_blksize = isodir->isofs->blockSize;
 	dir->stat.st_blocks = dir->stat.st_size / dir->stat.st_blksize + 1;
-	// TODO: times
+
+	time_t time = makeUnixTime((int64_t)head.year + 1900, head.month, head.day, head.hour, head.minute, head.second);
+	dir->stat.st_ctime = time;
+	dir->stat.st_atime = time;
+	dir->stat.st_mtime = time;
 
 	isodir->childStart = (uint64_t)head.startLBA * isodir->isofs->blockSize;
 	isodir->childEnd = isodir->childStart + (uint64_t)head.fileSize;
@@ -119,7 +124,7 @@ static int isodir_openfile(Dir *me, File *fp, size_t szFile)
 {
 	ISODirScanner *isodir = (ISODirScanner*) me->fsdata;
 	if (me->stat.st_mode & VFS_MODE_DIRECTORY) return VFS_BUSY;
-	return isoOpenFile(isodir->isofs, isodir->childStart, isodir->childEnd-isodir->childStart, fp);
+	return isoOpenFile(isodir->isofs, isodir->childStart, isodir->childEnd-isodir->childStart, fp, &me->stat);
 };
 
 static int isodir_next(Dir *dir)
@@ -155,6 +160,8 @@ int isodirOpen(ISOFileSystem *isofs, uint64_t start, uint64_t end, Dir *dir, siz
 	if (status != 0)
 	{
 		kfree(isodir);
+		return VFS_EMPTY_DIRECTORY;
 	};
-	return status;
+
+	return 0;
 };
