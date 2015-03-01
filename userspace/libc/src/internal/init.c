@@ -30,12 +30,16 @@
 #include <stddef.h>
 #include <_heap.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
-extern int main(int argc, char *argv[], char *envp[]);
+char **environ;
 
+int __errno_initial;
 void __init_sig();
-void __glidixrt_init()
+void __glidixrt_init(int (*_main)(int,char*[],char*[]))
 {
+	_glidix_seterrnoptr(&__errno_initial);
 	_heap_init();
 	__init_sig();
 
@@ -61,5 +65,26 @@ void __glidixrt_init()
 		};
 	};
 
-	exit(main(argc, argv, NULL));
+	argv = realloc(argv, sizeof(char*)*(argc+1));
+	argv[argc] = NULL;
+
+	environ = NULL;
+	int envc = 0;
+	prevStart++;
+	scan = prevStart;
+	while (1)
+	{
+		char c = *scan++;
+		if (c == 0)
+		{
+			if ((scan-prevStart) == 1) break;
+			environ = realloc(environ, sizeof(char*)*(envc+1));
+			environ[envc++] = strdup(prevStart);
+			prevStart = scan;
+		};
+	};
+	environ = realloc(environ, sizeof(char*)*(envc+1));
+	environ[envc] = NULL;
+
+	exit(_main(argc, argv, environ));
 };

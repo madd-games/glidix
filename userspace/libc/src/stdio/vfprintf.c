@@ -228,6 +228,7 @@ int vfprintf(FILE *fp, const char *fmt, va_list ap)
 		};
 	};
 
+	fflush(fp);
 	return ret;
 };
 

@@ -262,7 +262,7 @@ Dir *parsePath(const char *path, int flags, int *error)
 {
 	*error = VFS_NO_FILE;			// default error
 
-	kprintf_debug("start of parsePath()\n");
+	//kprintf_debug("start of parsePath()\n");
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{
@@ -311,7 +311,7 @@ Dir *parsePath(const char *path, int flags, int *error)
 		};
 		*put = 0;
 
-		kprintf_debug("token '%s'\n", token);
+		//kprintf_debug("token '%s'\n", token);
 		if (strlen(token) == 0)
 		{
 			if (*scan == 0)
@@ -355,7 +355,7 @@ Dir *parsePath(const char *path, int flags, int *error)
 
 		if (*scan == '/')
 		{
-			if ((dir->stat.st_mode & VFS_MODE_DIRECTORY) == 0)
+			if ((dir->stat.st_mode & 0xF000) != VFS_MODE_DIRECTORY)
 			{
 				*error = VFS_NOT_DIR;
 				if (dir->close != NULL) dir->close(dir);
@@ -401,13 +401,13 @@ Dir *parsePath(const char *path, int flags, int *error)
 					};
 
 					*put = 0;
-					kprintf_debug("vfs: creating regular file '%s'\n", token);
+					//kprintf_debug("vfs: creating regular file '%s'\n", token);
 					if (*scan == 0)
 					{
-						kprintf_debug("ok scan is good\n");
+						//kprintf_debug("ok scan is good\n");
 						if (subdir->mkreg != NULL)
 						{
-							kprintf_debug("ok subdir->mkreg is here\n");
+							//kprintf_debug("ok subdir->mkreg is here\n");
 							if (vfsCanCurrentThread(&st_parent, 2))
 							{
 								if (subdir->mkreg(subdir, token, (flags >> 3) & 0x0FFF,

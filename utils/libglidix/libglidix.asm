@@ -48,6 +48,16 @@ _glidix_pollpid:
 	.nopass:
 	ret
 
+global pipe
+pipe:
+	; this syscall is special because it returns pipefd[0] in r8 and pipefd[1] in r9
+	xor rax, rax
+	ud2
+	dw 48
+	mov [rdi], r8
+	mov [rdi+4], r9
+	ret
+
 GLIDIX_SYSCALL		0,	_exit
 GLIDIX_SYSCALL		1,	write
 GLIDIX_SYSCALL		2,	_glidix_exec
@@ -81,7 +91,7 @@ GLIDIX_SYSCALL		29,	_glidix_fdopendir
 GLIDIX_SYSCALL		30,	_glidix_diag
 GLIDIX_SYSCALL		31,	_glidix_mount
 GLIDIX_SYSCALL		32,	_glidix_yield
-GLIDIX_SYSCALL		33,	time
+GLIDIX_SYSCALL		33,	_glidix_time
 GLIDIX_SYSCALL		34,	realpath
 GLIDIX_SYSCALL		35,	chdir
 GLIDIX_SYSCALL		36,	getcwd
@@ -94,3 +104,11 @@ GLIDIX_SYSCALL		42,	fchown
 GLIDIX_SYSCALL		43,	mkdir
 GLIDIX_SYSCALL		44,	ftruncate
 GLIDIX_SYSCALL		45,	unlink
+GLIDIX_SYSCALL		46,	dup
+GLIDIX_SYSCALL		47,	dup2
+; system call 48 is handled in a special way; see above.
+GLIDIX_SYSCALL		49,	_glidix_seterrnoptr
+GLIDIX_SYSCALL		50,	_glidix_geterrnoptr
+GLIDIX_SYSCALL		51,	clock
+GLIDIX_SYSCALL		52,	_glidix_libopen
+GLIDIX_SYSCALL		53,	_glidix_libclose

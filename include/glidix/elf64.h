@@ -66,6 +66,9 @@ typedef	int64_t				Elf64_Sxword;
 
 #define	PT_NULL				0
 #define	PT_LOAD				1
+#define	PT_DYNAMIC			2
+#define	PT_INTERP			3
+#define	PT_NOTE				4
 
 #define	PF_X				0x1
 #define	PF_W				0x2
@@ -156,6 +159,16 @@ typedef struct
 	Elf64_Addr			st_value;
 	Elf64_Xword			st_size;
 } Elf64_Sym;
+
+typedef struct
+{
+	Elf64_Sxword			d_tag;
+	union
+	{
+		Elf64_Xword		d_val;
+		Elf64_Addr		d_ptr;
+	} d_un;
+} Elf64_Dyn;
 
 int elfExec(Regs *regs, const char *path, const char *execPars, size_t parsz);
 

@@ -41,6 +41,7 @@ typedef struct
 {
 	int _fd;
 	struct dirent _dirbuf;
+	int _idx;
 } DIR;
 
 DIR *opendir(const char *dirname);

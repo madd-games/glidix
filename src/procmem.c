@@ -35,12 +35,28 @@
 #include <glidix/errno.h>
 #include <glidix/sched.h>
 
+FrameList *palloc_later(int count, off_t fileOffset, size_t fileSize)
+{
+	FrameList *fl = (FrameList*) kmalloc(sizeof(FrameList));
+	fl->refcount = 1;
+	fl->count = count;
+	fl->frames = (uint64_t*) kmalloc(8*count);
+	fl->fileOffset = fileOffset;
+	fl->fileSize = fileSize;
+	memset(fl->frames, 0, 8*count);
+	spinlockRelease(&fl->lock);
+	return fl;
+};
+
 FrameList *palloc(int count)
 {
 	FrameList *fl = (FrameList*) kmalloc(sizeof(FrameList));
 	fl->refcount = 1;
 	fl->count = count;
 	fl->frames = (uint64_t*) kmalloc(8*count);
+	fl->fileOffset = -1;
+	fl->fileSize = 0;
+	spinlockRelease(&fl->lock);
 
 	int i;
 	for (i=0; i<count; i++)
@@ -64,7 +80,7 @@ void pdownref(FrameList *fl)
 		int i;
 		for (i=0; i<fl->count; i++)
 		{
-			phmFreeFrame(fl->frames[i]);
+			if (fl->frames[i] != 0) phmFreeFrame(fl->frames[i]);
 		};
 
 		kfree(fl->frames);
@@ -74,7 +90,15 @@ void pdownref(FrameList *fl)
 
 FrameList *pdup(FrameList *old)
 {
-	FrameList *new = palloc(old->count);
+	FrameList *new;
+	if (old->fileOffset == -1)
+	{
+		new = palloc(old->count);
+	}
+	else
+	{
+		new = palloc_later(old->count, old->fileOffset, old->fileSize);
+	};
 
 	// we will use this page buffer to copy data between the old frames and the new
 	// frames.
@@ -84,10 +108,21 @@ FrameList *pdup(FrameList *old)
 	ispLock();
 	for (i=0; i<old->count; i++)
 	{
-		ispSetFrame(old->frames[i]);
-		memcpy(pagebuf, ispGetPointer(), 0x1000);
-		ispSetFrame(new->frames[i]);
-		memcpy(ispGetPointer(), pagebuf, 0x1000);
+		if (old->frames[i] == 0)
+		{
+			new->frames[i] = 0;
+		}
+		else
+		{
+			if (new->frames[i] == 0)
+			{
+				new->frames[i] = phmAllocFrame();
+			};
+			ispSetFrame(old->frames[i]);
+			memcpy(pagebuf, ispGetPointer(), 0x1000);
+			ispSetFrame(new->frames[i]);
+			memcpy(ispGetPointer(), pagebuf, 0x1000);
+		};
 	};
 	ispUnlock();
 
@@ -230,7 +265,7 @@ int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 			memset(&pt->entries[pageIndex], 0, 8);
 		};
 
-		pt->entries[pageIndex].present = 1;
+		pt->entries[pageIndex].present = !!(frames->frames[i] != 0);
 		pt->entries[pageIndex].rw = !!(flags & PROT_WRITE);
 		pt->entries[pageIndex].user = 1;
 		pt->entries[pageIndex].framePhysAddr = frames->frames[i];
@@ -343,10 +378,18 @@ ProcMem *DuplicateProcessMemory(ProcMem *pm)
 	Segment *seg = pm->firstSegment;
 	while (seg != NULL)
 	{
-		FrameList *newList = /*pdup(seg->fl)*/ palloc(seg->fl->count);
-		AddSegment(new, seg->start, newList, seg->flags);
-		pdownref(newList);
-		seg = seg->next;
+		if (seg->flags & PROT_WRITE)
+		{
+			FrameList *newList = pdup(seg->fl); /*palloc(seg->fl->count);*/
+			AddSegment(new, seg->start, newList, seg->flags);
+			pdownref(newList);
+			seg = seg->next;
+		}
+		else
+		{
+			AddSegment(new, seg->start, seg->fl, seg->flags);
+			seg = seg->next;
+		};
 	};
 
 	ASM("cli");
@@ -357,6 +400,7 @@ ProcMem *DuplicateProcessMemory(ProcMem *pm)
 	pml4->entries[1].pdptPhysAddr = new->pdptPhysFrame;
 	refreshAddrSpace();
 
+#if 0
 	seg = pm->firstSegment;
 	while (seg != NULL)
 	{
@@ -365,6 +409,8 @@ ProcMem *DuplicateProcessMemory(ProcMem *pm)
 		memcpy((void*)target, (void*)source, seg->fl->count*0x1000);
 		seg = seg->next;
 	};
+#endif
+
 	pml4->entries[1].present = 0;
 	pml4->entries[1].rw = 0;
 	pml4->entries[1].pdptPhysAddr = 0;
@@ -391,6 +437,71 @@ void DownrefProcessMemory(ProcMem *pm)
 		return;				// not need to unlock because nobody will try locking ever again.
 	};
 	spinlockRelease(&pm->lock);
+};
+
+int tryLoadOnDemand(uint64_t addr)
+{
+	ProcMem *pm = getCurrentThread()->pm;
+	spinlockAcquire(&pm->lock);
+
+	uint64_t pageIndex = addr / 0x1000;
+	Segment *seg = pm->firstSegment;
+
+	while (seg != NULL)
+	{
+		if (seg->start <= pageIndex)
+		{
+			uint64_t relidx = pageIndex - seg->start;
+			spinlockAcquire(&seg->fl->lock);
+			if (relidx < seg->fl->count)
+			{
+				if (seg->fl->frames[relidx] == 0)
+				{
+					if (seg->fl->fileOffset == -1)
+					{
+						panic("unloaded pages in non-disk segment");
+					};
+
+					ASM("sti");
+					// hooray, we can load on demand.
+					ispLock();
+					uint64_t ptPhysFrame, index;
+					findPageTable(pm, pageIndex, &ptPhysFrame, &index);
+					ispSetFrame(ptPhysFrame);
+					PT *pt = (PT*) ispGetPointer();
+					uint64_t newFrame = phmAllocFrame();
+					seg->fl->frames[relidx] = newFrame;
+					pt->entries[index].framePhysAddr = newFrame;
+					pt->entries[index].present = 1;
+					ispUnlock();
+					refreshAddrSpace();
+
+					void *ptr = (void*) (pageIndex * 0x1000);
+					off_t offset = (seg->fl->fileOffset + (relidx * 0x1000)) & ~0xFFF;
+					size_t size = 0x1000;
+					while (((offset+size) > (seg->fl->fileOffset+seg->fl->fileSize)) && (size != 0))
+					{
+						size--;
+					};
+					//kprintf_debug("ptr %a, offset %a, size %a\n", ptr, offset, size);
+					memset(ptr, 0, 0x1000);
+					File *fp = getCurrentThread()->fpexec;
+					fp->seek(fp, offset, SEEK_SET);
+					vfsRead(fp, ptr, size);
+
+					spinlockRelease(&seg->fl->lock);
+					spinlockRelease(&pm->lock);
+					return 0;
+				};
+			};
+			spinlockRelease(&seg->fl->lock);
+		};
+
+		seg = seg->next;
+	};
+
+	spinlockRelease(&pm->lock);
+	return -1;
 };
 
 int mprotect(uint64_t addr, uint64_t len, int prot)

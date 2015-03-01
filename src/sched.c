@@ -62,6 +62,7 @@ static void startupThread()
 void initSched()
 {
 	nextPid = 1;
+	spinlockRelease(&schedLock);
 
 	// create a new stack for this initial process
 	firstThread.stack = kmalloc(DEFAULT_STACK_SIZE);
@@ -84,7 +85,9 @@ void initSched()
 	firstThread.pid = 0;
 	firstThread.ftab = NULL;
 	firstThread.rootSigHandler = 0;
-	firstThread.sigq = NULL;
+	firstThread.sigput = 0;
+	firstThread.sigfetch = 0;
+	firstThread.sigcnt = 0;
 
 	// UID/GID stuff
 	firstThread.euid = 0;
@@ -96,6 +99,12 @@ void initSched()
 
 	// set the working directory to /initrd by default.
 	strcpy(firstThread.cwd, "/initrd");
+
+	// no executable
+	firstThread.fpexec = NULL;
+
+	// no error ptr
+	firstThread.errnoptr = NULL;
 
 	// linking
 	firstThread.prev = &firstThread;
@@ -128,9 +137,20 @@ static void jumpToTask()
 	switchContext(&currentThread->regs);
 };
 
+void lockSched()
+{
+	spinlockAcquire(&schedLock);
+};
+
+void unlockSched()
+{
+	spinlockRelease(&schedLock);
+};
+
 void switchTask(Regs *regs)
 {
 	if (currentThread == NULL) return;
+	if (spinlockTry(&schedLock)) return;
 	ASM("cli");
 
 	// remember the context of this thread.
@@ -143,11 +163,12 @@ void switchTask(Regs *regs)
 	} while (currentThread->flags & THREAD_NOSCHED);
 
 	// if there are signals waiting, and not currently being handled, then handle them.
-	if (((currentThread->flags & THREAD_SIGNALLED) == 0) && (currentThread->sigq != NULL))
+	if (((currentThread->flags & THREAD_SIGNALLED) == 0) && (currentThread->sigcnt != 0))
 	{
 		// if the syscall is interruptable, do the switch-back.
 		if (currentThread->flags & THREAD_INT_SYSCALL)
 		{
+			kprintf_debug("signal in queue, THREAD_INT_SYSCALL ok\n");
 			memcpy(&currentThread->regs, &currentThread->intSyscallRegs, sizeof(Regs));
 			*((int64_t*)&currentThread->regs.rax) = -1;
 			currentThread->therrno = EINTR;
@@ -160,12 +181,14 @@ void switchTask(Regs *regs)
 		};
 	};
 
-	ASM("sti");
+	spinlockRelease(&schedLock);
 	jumpToTask();
 };
 
 static void kernelThreadExit()
 {
+	panic("TODO: we must properly implement kernel thrads exiting");
+
 	// just to be safe
 	if (currentThread == &firstThread)
 	{
@@ -220,7 +243,9 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	thread->pid = 0;
 	thread->ftab = NULL;
 	thread->rootSigHandler = 0;
-	thread->sigq = NULL;
+	thread->sigput = 0;
+	thread->sigfetch = 0;
+	thread->sigcnt = 0;
 
 	// kernel threads always run as root
 	thread->euid = 0;
@@ -233,20 +258,26 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	// start all kernel threads in "/initrd"
 	strcpy(thread->cwd, "/initrd");
 
+	// no executable attached
+	thread->fpexec = NULL;
+
+	// no errnoptr
+	thread->errnoptr = NULL;
+
 	// this will simulate a call from kernelThreadExit() to "entry()"
 	// this is so that when entry() returns, the thread can safely exit.
 	thread->regs.rdi = (uint64_t) data;
 	*((uint64_t*)thread->regs.rsp) = (uint64_t) &kernelThreadExit;
 
-	// link into the runqueue (disable interrupts for the duration of this).
-	ASM("cli");
+	// link into the runqueue
+	spinlockAcquire(&schedLock);
 	currentThread->next->prev = thread;
 	thread->next = currentThread->next;
 	thread->prev = currentThread;
 	currentThread->next = thread;
 	// there is no need to update currentThread->prev, it will only be broken for the init
 	// thread, which never exits, and therefore its prev will never need to be valid.
-	ASM("sti");
+	spinlockRelease(&schedLock);
 };
 
 Thread *getCurrentThread()
@@ -357,11 +388,26 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	// inherit the working directory
 	strcpy(thread->cwd, currentThread->cwd);
 
+	// duplicate the executable description.
+	if (currentThread->fpexec == NULL)
+	{
+		thread->fpexec = NULL;
+	}
+	else
+	{
+		File *fpexec = (File*) kmalloc(sizeof(File));
+		memset(fpexec, 0, sizeof(File));
+		currentThread->fpexec->dup(currentThread->fpexec, fpexec, sizeof(File));
+		thread->fpexec = fpexec;
+	};
+	
 	// inherit the root signal handler
 	thread->rootSigHandler = currentThread->rootSigHandler;
 
 	// empty signal queue
-	thread->sigq = NULL;
+	thread->sigput = 0;
+	thread->sigfetch = 0;
+	thread->sigcnt = 0;
 
 	// exec params
 	if (currentThread->pid != 0)
@@ -378,13 +424,16 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 
 	thread->therrno = 0;
 
-	// link into the runqueue (disable interrupts for the duration of this).
-	ASM("cli");
+	// no errnoptr
+	thread->errnoptr = NULL;
+
+	// link into the runqueue
+	spinlockAcquire(&schedLock);
 	currentThread->next->prev = thread;
 	thread->next = currentThread->next;
 	thread->prev = currentThread;
 	currentThread->next = thread;
-	ASM("sti");
+	spinlockRelease(&schedLock);
 
 	return thread->pid;
 };
@@ -495,11 +544,10 @@ int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 	DownrefProcessMemory(thread->pm);
 	ftabDownref(thread->ftab);
 
-	while (thread->sigq != NULL)
+	if (thread->fpexec != NULL)
 	{
-		SignalQueue *rm = thread->sigq;
-		thread->sigq = rm->next;
-		kfree(rm);
+		if (thread->fpexec->close != NULL) thread->fpexec->close(thread->fpexec);
+		kfree(thread->fpexec);
 	};
 
 	if (thread->execPars != NULL) kfree(thread->execPars);
@@ -564,7 +612,7 @@ int signalPid(int pid, int signo)
 		return -1;
 	};
 
-	ASM("cli");
+	lockSched();
 	Thread *thread = currentThread->next;
 
 	while (thread != currentThread)
@@ -584,21 +632,21 @@ int signalPid(int pid, int signo)
 	if (thread == currentThread)
 	{
 		currentThread->therrno = ESRCH;
-		ASM("sti");
+		unlockSched();
 		return -1;
 	};
 
 	if (!canSendSignal(currentThread, thread, signo))
 	{
 		currentThread->therrno = EPERM;
-		ASM("sti");
+		unlockSched();
 		return -1;
 	};
 
 	siginfo_t si;
 	si.si_signo = signo;
-	ASM("sti");
 	if (signo != 0) sendSignal(thread, &si);
 
+	unlockSched();
 	return 0;
 };

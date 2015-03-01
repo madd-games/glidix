@@ -35,6 +35,7 @@
 
 #include <glidix/pagetab.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <glidix/common.h>
 #include <glidix/spinlock.h>
 
@@ -53,6 +54,9 @@ typedef struct
 	int refcount;
 	int count;
 	uint64_t *frames;
+	off_t fileOffset;
+	size_t fileSize;
+	Spinlock lock;
 } FrameList;
 
 typedef struct _Segment
@@ -108,6 +112,7 @@ typedef struct
 	Spinlock lock;
 } ProcMem;
 
+FrameList *palloc_later(int count, off_t fileOffset, size_t fileSize);
 FrameList *palloc(int count);
 void pupref(FrameList *fl);
 void pdownref(FrameList *fl);
@@ -125,6 +130,11 @@ ProcMem* DuplicateProcessMemory(ProcMem *pm);
 
 void UprefProcessMemory(ProcMem *pm);
 void DownrefProcessMemory(ProcMem *pm);
+
+/**
+ * Try loading-on-demand some data. Returns 0 if it happened, -1 otherwise.
+ */
+int tryLoadOnDemand(uint64_t addr);
 
 /**
  * Userspace.

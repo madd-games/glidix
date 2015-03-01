@@ -76,6 +76,8 @@ uint64_t phmAllocFrame()
 
 void phmFreeFrame(uint64_t frame)
 {
+	if (frame < 0x200) panic("attempted to free frame %d (below 2MB)", frame);
+
 	spinlockAcquire(&physmemLock);
 	frameStack[frameStackPointer++] = frame;
 	spinlockRelease(&physmemLock);

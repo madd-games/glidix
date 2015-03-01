@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
 	cis.cisTotalBlocks = blocksPerSection * sectionsToMake;
 	cis.cisBlocksPerSection = blocksPerSection;
 	cis.cisBlockSize = fsBlockSize;
-	cis.cisCreateTime = time();
+	cis.cisCreateTime = time(NULL);
 	cis.cisFirstDataIno = 8;
 	cis.cisOffSections = 0x440;		// straight after the CIS
 	cis.cisZero = 0;

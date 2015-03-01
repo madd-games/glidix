@@ -43,11 +43,12 @@ void initMemoryPhase2();
 void *_kxmalloc(size_t size, int flags, const char *aid, int lineno);
 void *_kmalloc(size_t size, const char *aid, int lineno);
 void *krealloc(void *block, size_t size);
-void kfree(void *block);
+void _kfree(void *block, const char *who, int line);
 void heapDump();
 
 #define	kmalloc(size)			_kmalloc((size), __FILE__, __LINE__)
 #define	kxmalloc(size, flags)		_kxmalloc((size), (flags), "", 0)
+#define	kfree(x)			_kfree((x), __FILE__, __LINE__)
 
 /**
  * Private heap structures.
@@ -68,6 +69,7 @@ typedef struct
 	uint8_t  flags;
 	const char *aid;				// allocator string (filename and lineno of kmalloc(), for debugging)
 	int lineno;
+	uint8_t pad[7];					// make the size divisible by 8.
 } PACKED HeapHeader;
 
 typedef struct
@@ -75,6 +77,7 @@ typedef struct
 	uint32_t magic;
 	uint64_t size;
 	uint8_t  flags;
+	uint8_t  pad[3];				// make the size divisible by 8.
 } PACKED HeapFooter;
 
 #endif

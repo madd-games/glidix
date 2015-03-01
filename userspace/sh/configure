@@ -1,0 +1,117 @@
+#! /usr/bin/python
+#	Copyright (c) 2014-2015, Madd Games.
+#	All rights reserved.
+#	
+#	Redistribution and use in source and binary forms, with or without
+#	modification, are permitted provided that the following conditions are met:
+#	
+#	* Redistributions of source code must retain the above copyright notice, this
+#	  list of conditions and the following disclaimer.
+#	
+#	* Redistributions in binary form must reproduce the above copyright notice,
+#	  this list of conditions and the following disclaimer in the documentation
+#	  and/or other materials provided with the distribution.
+#	
+#	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+#	FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+#	DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+#	CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+import sys, os
+import subprocess
+import json
+
+prefix = ""
+host = ""
+
+for param in sys.argv[1:]:
+	if param.startswith("--prefix="):
+		prefix = param[len("--prefix="):]
+	elif param.startswith("--host="):
+		host = param[len("--host="):]
+
+compiler = "gcc"
+ar = "ar"
+ranlib = "ranlib"
+if host != "":
+	compiler = host + "-gcc"
+	ar = host + "-ar"
+	ranlib = host + "-ranlib"
+
+def assertCommand(cmd, msg = None):
+	if msg is None:
+		msg = "checking for %s... " % cmd
+	sys.stderr.write(msg)
+	sys.stderr.flush()
+
+	output = ""
+	try:
+		output = subprocess.check_output("command -v %s" % cmd, shell=True)
+	except:
+		pass
+
+	if output == "":
+		sys.stderr.write("\n%s: command not found: %s\n" % (sys.argv[0], cmd))
+		sys.exit(1)
+	else:
+		sys.stderr.write(output)
+
+def checkLib(name):
+	sys.stderr.write("checking for %s... " % name)
+	sys.stderr.flush()
+	f = open("test.c", "wb")
+	f.write("void _start(){};\n")
+	f.close()
+	status = os.system("%s test.c -o test -nostdlib %s" % (compiler, name))
+	if status == 0:
+		sys.stderr.write("yes\n")
+		os.remove("test")
+		os.remove("test.c")
+	else:
+		sys.stderr.write("no\n")
+		sys.stderr.write("%s: library not found: %s\n" % (sys.argv[0], name))
+		sys.exit(1)
+
+# Make sure all the tools we need are here
+assertCommand(compiler)
+assertCommand(ar)
+assertCommand(ranlib)
+
+sys.stderr.write("checking build system type... ")
+sys.stderr.flush()
+systype = subprocess.check_output(compiler + " -dumpmachine", shell=True)[:-1]	# discard the newline at the end
+sys.stderr.write(systype+"\n")
+if systype != "x86_64-glidix":
+	sys.stderr.write("%s: error: the compiler %s does not target x86_64-glidix\n" % (sys.argv[0], compiler))
+	sys.exit(1)
+
+config = {
+	"compiler":	compiler,
+	"prefix":	prefix,
+	"ar":		ar,
+	"ranlib":	ranlib
+}
+
+# Write the configuration to config.json
+f = open("config.json", "wb")
+json.dump(config, f)
+f.close()
+
+# Create a Makefile
+f = open("Makefile", "wb")
+f.write(".PHONY: all install clean distclean\n")
+f.write("all:\n")
+f.write("\tpython build.py\n")
+f.write("install:\n")
+f.write("\tsh install.sh %s\n" % prefix)
+f.write("clean:\n")
+f.write("\trm -rf build build.mk libglidix.o config.json Makefile\n")
+f.write("distclean:\n")
+f.write("\trm -rf build build.mk libglidix.o config.json Makefile out\n")
+f.close()

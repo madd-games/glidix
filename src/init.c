@@ -48,6 +48,7 @@
 #include <glidix/storage.h>
 #include <glidix/fsdriver.h>
 #include <glidix/time.h>
+#include <glidix/cowcache.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -57,6 +58,7 @@ extern int masterHeader;
 
 void kmain(MultibootInfo *info)
 {
+	ASM("cli");
 	initConsole();
 	kprintf("Successfully booted into 64-bit mode\n");
 	if (info->modsCount != 1)
@@ -124,6 +126,10 @@ void kmain(MultibootInfo *info)
 
 	kprintf("Initializing the FS driver interface... ");
 	initFSDrivers();
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing the COW cache... ");
+	cowInit();
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the PIT... ");

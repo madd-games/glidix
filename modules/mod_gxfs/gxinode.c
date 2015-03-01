@@ -30,6 +30,24 @@
 #include <glidix/console.h>
 #include <glidix/time.h>
 
+void GXDumpInode(GXFileSystem *gxfs, ino_t ino)
+{
+	GXInode gxino;
+	GXOpenInode(gxfs, &gxino, ino);
+	gxfs->fp->seek(gxfs->fp, gxino.offset, SEEK_SET);
+	gxfsInode inode;
+	vfsRead(gxfs->fp, &inode, sizeof(gxfsInode));
+
+	kprintf_debug("Dumping fragment list for inode %d\n", ino);
+	kprintf_debug("#\tOffset\tBlock\tExtent\n");
+	int i;
+	for (i=0; i<16; i++)
+	{
+		gxfsFragment *frag = &inode.inoFrags[i];
+		kprintf_debug("%d\t%d\t%d\t%d\n", i, frag->fOff, frag->fBlock, frag->fExtent);
+	};
+};
+
 static ino_t GXCreateInodeInSection(GXFileSystem *gxfs, GXInode *gxino, uint64_t section)
 {
 	uint64_t offbitmap = gxfs->sections[section].sdOffMapIno;

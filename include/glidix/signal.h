@@ -83,6 +83,11 @@
 #define	CLD_STOPPED	4
 #define	CLD_CONTINUED	5
 
+/**
+ * Max number of signals that can be sent at once to a process.
+ */
+#define	SIGQ_SIZE	16
+
 union sigval
 {
 	int		sival_int;
@@ -102,11 +107,13 @@ typedef struct
 	union sigval	si_value;
 } siginfo_t;
 
+#if 0
 typedef struct _sigq
 {
 	siginfo_t	si;
 	struct _sigq	*next;
 } SignalQueue;
+#endif
 
 struct _Thread;
 void dispatchSignal(struct _Thread *thread);

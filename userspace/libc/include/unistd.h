@@ -40,6 +40,8 @@ extern "C" {
 int	execv(const char*, char* const[]);
 int	execve(const char*, char* const[], char* const[]);
 int	execvp(const char*, char* const[]);
+int	execl(const char *, const char *arg0, ...);
+int	execle(const char *, const char *arg0, ...);
 pid_t	fork(void);
 int	truncate(const char *path, off_t length);
 
@@ -57,6 +59,19 @@ int	chown(const char *path, uid_t uid, gid_t gid);
 int	fchown(int fd, uid_t uid, gid_t gid);
 int	ftruncate(int fd, off_t length);
 int	unlink(const char *path);
+int	dup(int fd);
+int	dup2(int oldfd, int newfd);
+int	pipe(int pipefd[2]);
+uid_t	geteuid();
+uid_t	getuid();
+gid_t	getegid();
+gid_t	getgid();
+int	seteuid(uid_t);
+int	setuid(uid_t);
+int	setreuid(uid_t, uid_t);
+int	setegid(gid_t);
+int	setgid(gid_t);
+int	setregid(gid_t, gid_t);
 
 #ifdef __cplusplus
 }	/* extern "C" */

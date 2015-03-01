@@ -45,31 +45,46 @@ typedef struct
 	int			flags;
 } ProgramSegment;
 
+int sysOpenErrno();			// syscall.c
 int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 {
-	getCurrentThread()->therrno = ENOEXEC;
+	//getCurrentThread()->therrno = ENOEXEC;
 
+	vfsLockCreation();
 	struct stat st;
-	if (vfsStat(path, &st) != 0)
+	int error = vfsStat(path, &st);
+	if (error != 0)
 	{
-		return -1;
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
 	};
 
 	if (!vfsCanCurrentThread(&st, 1))
 	{
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EPERM;
 		return -1;
 	};
 
-	int error;
 	File *fp = vfsOpen(path, VFS_CHECK_ACCESS, &error);
 	if (fp == NULL)
 	{
-		return -1;
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
 	};
+	vfsUnlockCreation();
 
 	if (fp->seek == NULL)
 	{
 		vfsClose(fp);
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	if (fp->dup == NULL)
+	{
+		vfsClose(fp);
+		getCurrentThread()->therrno = EIO;
 		return -1;
 	};
 
@@ -77,42 +92,49 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	if (vfsRead(fp, &elfHeader, sizeof(Elf64_Ehdr)) < sizeof(Elf64_Ehdr))
 	{
 		vfsClose(fp);
+		getCurrentThread()->therrno = ENOEXEC;
 		return -1;
 	};
 
 	if (memcmp(elfHeader.e_ident, "\x7f" "ELF", 4) != 0)
 	{
 		vfsClose(fp);
+		getCurrentThread()->therrno = ENOEXEC;
 		return -1;
 	};
 
 	if (elfHeader.e_ident[EI_CLASS] != ELFCLASS64)
 	{
 		vfsClose(fp);
+		getCurrentThread()->therrno = ENOEXEC;
 		return -1;
 	};
 
 	if (elfHeader.e_ident[EI_DATA] != ELFDATA2LSB)
 	{
 		vfsClose(fp);
+		getCurrentThread()->therrno = ENOEXEC;
 		return -1;
 	};
 
 	if (elfHeader.e_ident[EI_VERSION] != 1)
 	{
 		vfsClose(fp);
+		getCurrentThread()->therrno = ENOEXEC;
 		return -1;
 	};
 
 	if (elfHeader.e_type != ET_EXEC)
 	{
 		vfsClose(fp);
+		getCurrentThread()->therrno = ENOEXEC;
 		return -1;
 	};
 
 	if (elfHeader.e_phentsize < sizeof(Elf64_Phdr))
 	{
 		vfsClose(fp);
+		getCurrentThread()->therrno = ENOEXEC;
 		return -1;
 	};
 
@@ -126,6 +148,7 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 		if (vfsRead(fp, &proghead, sizeof(Elf64_Phdr)) < sizeof(Elf64_Phdr))
 		{
 			kfree(segments);
+			getCurrentThread()->therrno = ENOEXEC;
 			return -1;
 		};
 
@@ -139,6 +162,7 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 			{
 				vfsClose(fp);
 				kfree(segments);
+				getCurrentThread()->therrno = ENOEXEC;
 				return -1;
 			};
 
@@ -182,6 +206,7 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 		else
 		{
 			kfree(segments);
+			getCurrentThread()->therrno = ENOEXEC;
 			return -1;
 		};
 	};
@@ -191,53 +216,49 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 
 	// set the execPars
 	Thread *thread = getCurrentThread();
+	if (thread->execPars != NULL) kfree(thread->execPars);
 	thread->execPars = (char*) kmalloc(parsz);
 	thread->szExecPars = parsz;
 	memcpy(thread->execPars, pars, parsz);
 
-	// delete the current addr space
-	ProcMem *pm = thread->pm;
-	ASM("cli");
-	thread->pm = NULL;
-	ASM("sti");
-
-	DownrefProcessMemory(pm);
-
 	// create a new one
-	pm = CreateProcessMemory();
+	ProcMem *pm = CreateProcessMemory();
 
 	// pass 1: allocate the frames and map them
 	for (i=0; i<(elfHeader.e_phnum); i++)
 	{
-		FrameList *fl = palloc(segments[i].count);
+		FrameList *fl = palloc_later(segments[i].count, segments[i].fileOffset, segments[i].fileSize);
 		if (AddSegment(pm, segments[i].index, fl, segments[i].flags) != 0)
 		{
-			// the memory is now severely broken, but still try running the program because YOLO
-			// TODO: perhaps we should send a signal like SIGILL?
+			getCurrentThread()->therrno = ENOEXEC;
+			pdownref(fl);
+			DownrefProcessMemory(pm);
 			break;
 		};
 		pdownref(fl);
 	};
 
-	// switch the memory space
-	ASM("cli");
+	// switch the address space
+	lockSched();
+	ProcMem *oldPM = thread->pm;
 	thread->pm = pm;
-	ASM("sti");
+	unlockSched();
 	SetProcessMemory(pm);
+	DownrefProcessMemory(oldPM);
 
-	// pass 2: load segments into memory
-	for (i=0; i<(elfHeader.e_phnum); i++)
+	// change the fpexec
+	if (thread->fpexec != NULL)
 	{
-		fp->seek(fp, segments[i].fileOffset, SEEK_SET);
-		memset((void*) segments[i].loadAddr, 0, segments[i].memorySize);
-		vfsRead(fp, (void*) segments[i].loadAddr, segments[i].fileSize);
+		if (thread->fpexec->close != NULL) thread->fpexec->close(thread->fpexec);
+		kfree(thread->fpexec);
 	};
-
-	// close the ELF64 file.
-	vfsClose(fp);
+	thread->fpexec = fp;
 
 	// make sure we jump to the entry upon return
 	regs->rip = elfHeader.e_entry;
+
+	// the errnoptr is not invalid
+	thread->errnoptr = NULL;
 
 	// suid/sgid stuff
 	if (st.st_mode & VFS_MODE_SETUID)

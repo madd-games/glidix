@@ -40,6 +40,7 @@ DIR *opendir(const char *dirname)
 
 	DIR *dirp = (DIR*) malloc(sizeof(DIR));
 	dirp->_fd = fd;
+	dirp->_idx = 0;
 
 	return dirp;
 };

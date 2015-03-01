@@ -37,6 +37,7 @@
 #include <glidix/procmem.h>
 #include <glidix/ftab.h>
 #include <glidix/signal.h>
+#include <glidix/vfs.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -151,7 +152,10 @@ typedef struct _Thread
 	/**
 	 * This thread's signal queue.
 	 */
-	SignalQueue			*sigq;
+	siginfo_t			sigq[SIGQ_SIZE];
+	int				sigput;
+	int				sigfetch;
+	int				sigcnt;
 
 	/**
 	 * Points to this thread's argv and initial environment string.
@@ -185,6 +189,16 @@ typedef struct _Thread
 	char				cwd[256];
 
 	/**
+	 * File description of the executable file, or NULL.
+	 */
+	File				*fpexec;
+
+	/**
+	 * Pointer to where the errno shall be stored after syscalls complete.
+	 */
+	int				*errnoptr;
+
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;
@@ -206,6 +220,9 @@ void initSched();
 void switchContext(Regs *regs);
 void dumpRunqueue();
 void switchTask(Regs *regs);
+
+void lockSched();
+void unlockSched();
 
 /**
  * Prototype for a kernel thread entry point.

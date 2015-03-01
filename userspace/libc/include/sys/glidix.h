@@ -43,6 +43,16 @@ typedef struct
 	uint64_t rip, rsp;
 } __attribute__ ((packed)) _glidix_mstate;
 
+typedef struct
+{
+	uint64_t		dynSize;
+	void*			dynSection;
+	uint64_t		loadAddr;
+	uint64_t		nextLoadAddr;
+	uint64_t		textIndex;
+	uint64_t		dataIndex;
+} _glidix_libinfo;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -70,6 +80,11 @@ int	_glidix_fdopendir(const char *dirname);
 void	_glidix_diag();
 int	_glidix_mount(const char *filesystem, const char *image, const char *mountpoint, int flags);
 void	_glidix_yield();
+time_t	_glidix_time();
+void	_glidix_seterrnoptr(int *ptr);
+int*	_glidix_geterrnoptr();
+int	_glidix_libopen(const char *path, uint64_t loadAddr, _glidix_libinfo *info);
+void	_glidix_libclose(_glidix_libinfo *info);
 
 #ifdef __cplusplus
 }	/* extern "C" */

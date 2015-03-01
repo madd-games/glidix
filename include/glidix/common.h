@@ -42,6 +42,8 @@
 #define	ALIGN(x)		__attribute__ ((aligned(x)))
 #define	PAGE_ALIGN		ALIGN(0x1000)
 #define	ATOMIC(t)		ALIGN(sizeof(t)) t
+#define	SECTION(n)		__attribute__ ((section(n)))
+#define	PER_CPU			SECTION(".data_per_cpu")
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
@@ -80,6 +82,7 @@ typedef	uint64_t			uid_t;
 typedef	uint64_t			gid_t;
 typedef	uint64_t			blksize_t;
 typedef	uint64_t			blkcnt_t;
+typedef	int64_t				clock_t;
 typedef	int64_t				time_t;
 typedef	int64_t				off_t;
 typedef	int64_t				ssize_t;

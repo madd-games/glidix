@@ -159,7 +159,6 @@ int isodirOpen(ISOFileSystem *isofs, uint64_t start, uint64_t end, Dir *dir, siz
 	int status = isodir_next(dir);
 	if (status != 0)
 	{
-		kfree(isodir);
 		return VFS_EMPTY_DIRECTORY;
 	};
 

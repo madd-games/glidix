@@ -27,7 +27,7 @@
 section .text
 bits 64
 
-extern kfree
+extern _kfree
 extern heapDump
 global _jmp_usbs
 _jmp_usbs:
@@ -36,7 +36,9 @@ _jmp_usbs:
 
 	; free the temporary stack (passed to us as an argument, which we'll now, effectively,
 	; pass to kfree).
-	call		kfree
+	mov		rsi,		syscall_name
+	mov		rdx,		41
+	call		_kfree
 
 	cli
 	; magic time!
@@ -58,3 +60,6 @@ _jmp_usbs:
 	mov  rax,	0x1000
 	push rax				; RIP
 	iretq
+
+section .data
+syscall_name db 'syscall.asm', 0

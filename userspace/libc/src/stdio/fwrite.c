@@ -49,6 +49,7 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 		buf = (void*) ((char*) buf + fp->_bufsiz);
 		rsz -= fp->_bufsiz;
 		fp->_bufsiz = 0;
+		if (fp->_flush == NULL) return ret;
 		fp->_flush(fp);
 	};
 

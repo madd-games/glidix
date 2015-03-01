@@ -137,8 +137,12 @@ static void kbdThread(void *data)
 	int shift = 0;
 	while (1)
 	{
-		while (kbdput == kbdread);		// wait for keyboard event
+		while (kbdput == kbdread)
+		{
+			//kprintf_debug("WAIT kbdput=%d, kbdread=%d\n", kbdput, kbdread);
+		};		// wait for keyboard event
 		uint8_t code = kbdbuf[kbdread];
+		//kprintf_debug("keybaord code: %a\n", code);
 		kbdread++;
 		if (kbdread == 64) kbdread = 0;
 
@@ -163,6 +167,9 @@ static void kbdThread(void *data)
 
 			if (ctrl)
 			{
+				termPutChar('^');
+				termPutChar(keymapShift[code]);
+
 				if (key == 'c')
 				{
 					signalPid(1, SIGINT);
@@ -179,6 +186,8 @@ static void kbdThread(void *data)
 			if (key == 0x80) shift = 0;
 		};
 	};
+
+	//kprintf_debug("here or something?\n");
 };
 
 MODULE_INIT()

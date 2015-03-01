@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define	S_IFMT				(m & 0xF000)
+#define	S_IFMT				0xF000
 #define	S_IFBLK				030000
 #define	S_IFCHR				020000
 #define	S_IFDIR				010000

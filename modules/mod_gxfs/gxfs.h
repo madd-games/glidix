@@ -144,6 +144,7 @@ void GXReadInodeHeader(GXInode *gxino, gxfsInode *inode);			// inoFrags is NOT r
 void GXWriteInodeHeader(GXInode *gxino, gxfsInode *inode);			// inoFrags is NOT updated!
 void GXShrinkInode(GXInode *gxino, size_t shrinkBy, gxfsInode *inode);
 void GXUnlinkInode(GXInode *gxino);
+void GXDumpInode(GXFileSystem *gxfs, ino_t ino);
 
 uint64_t GXAllocBlock(GXFileSystem *gxfs, uint64_t tryFirst);
 void GXFreeBlock(GXFileSystem *gxfs, uint64_t block);

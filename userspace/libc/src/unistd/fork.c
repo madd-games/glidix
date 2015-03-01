@@ -28,8 +28,14 @@
 
 #include <sys/glidix.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 pid_t fork()
 {
-	return _glidix_clone(0, NULL);
+	pid_t ret = _glidix_clone(0, NULL);
+	if (ret == 0)
+	{
+		_glidix_seterrnoptr(malloc(sizeof(int)));
+	};
+	return ret;
 };

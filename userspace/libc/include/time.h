@@ -29,9 +29,64 @@
 #ifndef _TIME_H
 #define _TIME_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <sys/types.h>
 
+#define	CLK_TCK				1000
+#define	CLOCKS_PER_SEC			1000
+#define	TIME_MAX			9223372036854775807L
+
+struct tm
+{
+	int		tm_sec;
+	int		tm_min;
+	int		tm_hour;
+	int		tm_mday;
+	int		tm_mon;
+	int		tm_year;
+	int		tm_wday;
+	int		tm_yday;
+	int		tm_isdst;
+};
+
+struct timespec
+{
+	time_t		tv_sec;
+	long		tv_nsec;
+};
+
+struct itimerspec
+{
+	struct timespec	it_interval;
+	struct timespec	it_value;
+};
+
+extern char* tzname[];
+extern long int timezone;
+extern int daylight;
+
+/* implemented by the runtime */
+time_t		time(time_t*);
+char*		asctime(const struct tm *timeptr);
+char*		asctime_r(const struct tm *timeptr, char *result);
+void		tzset();
+struct tm*	localtime(const time_t *timer);
+struct tm*	localtime_r(const time_t *timer, struct tm *result);
+struct tm*	gmtime(const time_t *timer);
+struct tm*	gmtime_r(const time_t *timer, struct tm *result);
+char*		ctime(const time_t *timer);
+char*		ctime_r(const time_t *timer, char *buf);
+time_t		mktime(struct tm *tm);
+size_t		strftime(char *s, size_t maxsize, const char *format, const struct tm *timeptr);
+
 /* implemented by libglidix directly */
-time_t time();
+clock_t		clock();
+
+#ifdef __cplusplus
+};		/* extern "C" */
+#endif
 
 #endif

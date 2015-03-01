@@ -39,8 +39,14 @@ void semInit(Semaphore *sem)
 	sem->last = NULL;
 };
 
+extern uint64_t getFlagsRegister();
 void semWait(Semaphore *sem)
 {
+	if ((getFlagsRegister() & (1 << 9)) == 0)
+	{
+		panic("semWait when IF=0");
+	};
+
 	spinlockAcquire(&sem->lock);
 	Thread *me = getCurrentThread();
 
@@ -84,6 +90,11 @@ void semWait(Semaphore *sem)
 
 void semSignal(Semaphore *sem)
 {
+	if ((getFlagsRegister() & (1 << 9)) == 0)
+	{
+		panic("semSignal when IF=0");
+	};
+
 	spinlockAcquire(&sem->lock);
 
 	if (sem->first == NULL)

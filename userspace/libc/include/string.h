@@ -35,6 +35,7 @@
 extern "C" {
 #endif
 
+#if 0
 void*  memcpy(void *dst, const void *src, size_t size);
 void*  memset(void *dst, int value, size_t size);
 void*  strcpy(char *dst, const char *src);
@@ -44,9 +45,39 @@ int    strcmp(const char *a, const char *b);
 void*  strcat(char *dst, const char *a);
 char*  strerror(int errnum);
 int    strerror_r(int errnum, char *strerrbuf, size_t buflen);
+#endif
+
+/* copied from PDCLib and not really cleaned up */
+#define _PDCLIB_restrict
+void * memcpy( void *  s1, const void *  s2, size_t n );
+void * memmove( void * s1, const void * , size_t n );
+char * strcpy( char *  s1, const char *  s2 );
+char * strncpy( char *  s1, const char *  s2, size_t n );
+char * strcat( char *  s1, const char *  s2 );
+char * strncat( char *  s1, const char *  s2, size_t n );
+int memcmp( const void * s1, const void * s2, size_t n );
+int strcmp( const char * s1, const char * s2 );
+int strcoll( const char * s1, const char * s2 );
+int strncmp( const char * s1, const char * s2, size_t n );
+size_t strxfrm( char *  s1, const char *  s2, size_t n );
+void * memchr( const void * s, int c, size_t n );
+char * strchr( const char * s, int c );
+size_t strcspn( const char * s1, const char * s2 );
+char * strpbrk( const char * s1, const char * s2 );
+char * strrchr( const char * s, int c );
+size_t strspn( const char * s1, const char * s2 );
+char * strstr( const char * s1, const char * s2 );
+char * strtok( char *  s1, const char *  s2 );
+void * memset( void * s, int c, size_t n );
+char * strerror( int errnum );
+size_t strlen( const char * s );
+size_t strnlen( const char * s, size_t maxlen );
+char * strdup( const char* src );
+char * strndup( const char* src, size_t n );
+int    strerror_r(int errnum, char *strerrbuf, size_t buflen);
 
 #ifdef __cplusplus
-}
+}	/* extern "C" */
 #endif
 
 #endif

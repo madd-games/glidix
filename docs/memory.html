@@ -1,0 +1,49 @@
+<title>Glidix Memory Map</title>
+<h1>Glidix Memory Map</h1>
+
+<p>
+Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divided into 512GB blocks, each with a different purpose. Here is the specific memory map:
+</p>
+
+<ul>
+<li><code>pml4[0]</code> (except the first page) is for userspace processes.</li>
+<li><code>pml4[1]</code> is used as a buffer when data is transferred between 2 userspace blocks.</li>
+<li><code>pml4[256]</code> is the static kernel image (code, data, bss, symbols, etc).</li>
+<li><code>pml4[257]</code> is the Interprocess Streaming Page (ISP), this is a single page that gets remapped to different addresses to send data to different address spaces etc. There may be more things in this PML4e in the future.</li>
+<li><code>pml4[258]</code> is the kernel heap.</li>
+<li><code>pml4[259]</code> is module space; each module is assigned a 1GB block within this PML4e, which limits the number of modules to 512.</li>
+<li><code>pml4[260]</code> is used for the copy-on-write cache.</li>
+<li><code>pml4[261]</code> is used for the per-CPU variable area (starts at <code>0xFFFF828000000000</code>).</li>
+</ul>
+
+<p>
+The rest of the address space is reserved.
+</p>
+
+<h2>Copy-on-Write (COW) Cache</h2>
+<p>
+The <i>copy-on-write (COW) cache</i> is used to help make <i>fork()</i> more efficient. The PML4e for the COW cache contains a single PDPT, with a special first page directory: it contains one page table, whose entries point to corresponding page directories. In every other page directory, the first page table contains entries that point to corresponding page tables for that directory.
+</p>
+
+<p>
+Additionally, each page table with index 1 and above in directory 0 is used to keep refcounts of copy-on-write frames; the index of the page table corresponds to a directory index. Within those tables, each page with index <i>n</i> refers to page table with index <i>n</i> in the directory; and the page contents are an array of <code>uint64_t</code>, and an index into that page specifies the refcounts for the page with the corresponding index in the page table that is referred to. The following diagram demonstrates this:
+</p>
+
+<img src="cow.svg">
+
+<p>
+Each page in directories with index 1 and above, in page tables with index 1 and above, therefore have a reference counter in directory 0. Each of those pages is mapped to a <i>copy-on-write frame</i>. So a copy-on-write frame has a refcount and a page of data.
+</p>
+
+<p>
+When <i>fork()</i> is called, all read-write pages of the calling process are mapped into the COW cache, with refcount 1, and are marked as read-only in the calling process. Then, when the child process is created, all the read-write pages are mapped (not copied) from the COW cache, and also marked as read-only; and the refcount in the COW cache becomes 2.
+</p>
+
+<p>
+When a process then tries to write to a page that is mapped from the COW cache, the following happens:
+</p>
+
+<ul>
+<li>If the refcount is 1, the page in the process' address space is marked as read-write and just removed from the COW cache.</li>
+<li>If the refcount is larger than 1, then a new memory frame is allocated for the process, marked as read-write, and data from the COW cache is copied to it, and the COW cache frame's refcount is decreased by 1.</li>
+</ul>

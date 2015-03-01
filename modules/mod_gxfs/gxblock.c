@@ -32,7 +32,7 @@
 uint64_t GXAllocBlockInSection(GXFileSystem *gxfs, uint64_t section)
 {
 	uint64_t offbitmap = gxfs->sections[section].sdOffMapBlocks;
-	uint64_t block = gxfs->cis.cisBlocksPerSection * section;
+	uint64_t block = 0;
 	gxfs->fp->seek(gxfs->fp, offbitmap, SEEK_SET);
 	uint8_t mask = (1 << 0);
 	uint8_t byte;
@@ -47,7 +47,7 @@ uint64_t GXAllocBlockInSection(GXFileSystem *gxfs, uint64_t section)
 			vfsWrite(gxfs->fp, &byte, 1);
 
 			//kprintf_debug("gxfs: allocated block %d\n", block);
-			return block;
+			return block + gxfs->cis.cisBlocksPerSection * section;
 		};
 
 		block++;
@@ -105,7 +105,7 @@ uint64_t GXAllocBlock(GXFileSystem *gxfs, uint64_t tryFirst)
 	};
 
 	// no blocks left
-	//kprintf_debug("gxfs: out of free blocks!\n");
+	kprintf_debug("gxfs: out of free blocks!\n");
 	return GX_NO_BLOCK;
 };
 

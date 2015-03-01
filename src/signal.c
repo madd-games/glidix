@@ -42,22 +42,25 @@ typedef struct
 
 void dispatchSignal(Thread *thread)
 {
-	SignalQueue *sigq = thread->sigq;
-	thread->sigq = sigq->next;
+	if (thread->sigcnt == 0) return;
 
-	if (sigq->si.si_signo == SIGKILL)
+	siginfo_t *siginfo = &thread->sigq[thread->sigfetch];
+	thread->sigfetch = (thread->sigfetch + 1) % SIGQ_SIZE;
+	thread->sigcnt--;
+
+	if (siginfo->si_signo == SIGKILL)
 	{
 		// not allowed to override SIGKILL
 		Regs regs;				// doesn't matter, it will die
 		threadExit(thread, -SIGKILL);
 		ASM("cli");
+		unlockSched();
 		switchTask(&regs);
 	};
 
 	if (thread->rootSigHandler == 0)
 	{
 		// there is no sig handler; discard.
-		kfree(sigq);
 		return;
 	};
 
@@ -66,12 +69,10 @@ void dispatchSignal(Thread *thread)
 	if ((addr < 0x1000) || ((addr+sizeof(SignalStackFrame)) > 0x8000000000))
 	{
 		// extreme case, discard the signal :'(
-		kfree(sigq);
 		return;
 	};
 
 	SetProcessMemory(thread->pm);
-	ASM("cli");
 	SignalStackFrame *frame = (SignalStackFrame*) addr;
 	frame->mstate.rdi = thread->regs.rdi;
 	frame->mstate.rsi = thread->regs.rsi;
@@ -91,7 +92,7 @@ void dispatchSignal(Thread *thread)
 	frame->mstate.rip = thread->regs.rip;
 	frame->mstate.rsp = thread->regs.rsp;
 	frame->mstate.therrno = thread->therrno;
-	memcpy(&frame->si, &sigq->si, sizeof(siginfo_t));
+	memcpy(&frame->si, siginfo, sizeof(siginfo_t));
 
 	thread->regs.rsp = addr & ~0xF;
 	thread->regs.rdi = addr;
@@ -99,32 +100,30 @@ void dispatchSignal(Thread *thread)
 	thread->regs.rip = thread->rootSigHandler;
 
 	thread->flags |= THREAD_SIGNALLED;
-
-	ASM("sti");
-	kfree(sigq);
 };
 
 void sendSignal(Thread *thread, siginfo_t *siginfo)
 {
-	if (thread->flags & THREAD_TERMINATED) return;
-
-	SignalQueue *sq = (SignalQueue*) kmalloc(sizeof(SignalQueue));
-	sq->next = NULL;
-	memcpy(&sq->si, siginfo, sizeof(siginfo_t));
-
-	ASM("cli");
-	if (thread->sigq == NULL)
+	if (thread == getCurrentThread()) lockSched();
+	if (thread->flags & THREAD_TERMINATED)
 	{
-		thread->sigq = sq;
-	}
-	else
-	{
-		SignalQueue *last = thread->sigq;
-		while (last->next != NULL) last = last->next;
-		last->next = sq;
+		if (thread == getCurrentThread()) unlockSched();
+		return;
 	};
+
+	if (thread->sigcnt == SIGQ_SIZE)
+	{
+		// drop the signal because the queue is full.
+		if (thread == getCurrentThread()) unlockSched();
+		return;
+	};
+
+	memcpy(&thread->sigq[thread->sigput], siginfo, sizeof(siginfo_t));
+	thread->sigput = (thread->sigput + 1) % SIGQ_SIZE;
+	thread->sigcnt++;
+
 	thread->flags &= ~THREAD_WAITING;
-	ASM("sti");
+	if (thread == getCurrentThread()) unlockSched();
 };
 
 void sigret(Regs *regs, void *ret)

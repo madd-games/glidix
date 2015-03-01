@@ -89,12 +89,14 @@ for asmfile in os.listdir("asm"):
 def opCreateBuildMK():
 	f = open("build.mk", "wb")
 	f.write(".PHONY: all\n")
-	f.write("all: out/lib/libc.a out/lib/crt0.o out/lib/crti.o out/lib/crtn.o\n")
+	f.write("all: out/lib/libc.so out/lib/libc.a out/lib/crt0.o out/lib/crti.o out/lib/crtn.o\n")
 	f.write("TARGET_CC=%s\n" % config["compiler"])
 	f.write("TARGET_AR=%s\n" % config["ar"])
 	f.write("TARGET_RANLIB=%s\n" % config["ranlib"])
 	f.write("PREFIX=%s\n" % config["prefix"])
-	f.write("CFLAGS=-mno-mmx -mno-sse -mno-sse2 -I include -Wall -Werror\n")
+	f.write("CFLAGS=-mno-mmx -mno-sse -mno-sse2 -I include -Wall -Werror -fPIC\n")
+	f.write("out/lib/libc.so: %s\n" % (" ".join(objectFiles)))
+	f.write("\t$(TARGET_CC) -shared -o $@ $^\n");
 	f.write("out/lib/libc.a: %s\n" % (" ".join(objectFiles)))
 	f.write("\t%s x %s/lib/libglidix.a\n" % (config["ar"], config["prefix"]))
 	f.write("\t%s rvs $@ libglidix.o $^\n" % config["ar"])

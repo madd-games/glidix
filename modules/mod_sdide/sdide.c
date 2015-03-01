@@ -207,10 +207,10 @@ static void ataThread(void *data)
 
 		if (sdcmd->type == SD_CMD_READ)
 		{
-			kprintf_debug("sdide: read sector %d\n", sdcmd->index);
+			//kprintf_debug("sdide: read sector %d\n", sdcmd->index);
 			if ((err = idePoll(ctrl, channel, 1)))		// Yes, assignment.
 			{
-				kprintf_debug("sdide: error %d\n", err);
+				//kprintf_debug("sdide: error %d\n", err);
 			}
 			else
 			{
@@ -221,7 +221,7 @@ static void ataThread(void *data)
 		{
 			// write
 			idePoll(ctrl, channel, 0);
-			kprintf_debug("sdide: write sector %d\n", sdcmd->index);
+			//kprintf_debug("sdide: write sector %d\n", sdcmd->index);
 			outsw(bus, sdcmd->block, words);
 			if (lbaMode == 1)
 			{
@@ -252,7 +252,7 @@ static void atapiThread(void *data)
 		SDCommand *sdcmd = sdPop(sd);
 		semWait(&ideSem);
 
-		kprintf_debug("sdide: read atapi device, sector %d\n", sdcmd->index);
+		//kprintf_debug("sdide: read atapi device, sector %d\n", sdcmd->index);
 
 		uint32_t channel = idev->channel;
 		uint32_t slavebit = idev->drive;
@@ -289,7 +289,7 @@ static void atapiThread(void *data)
 		err = idePoll(ctrl, channel, 1);
 		if (err)
 		{
-			kprintf_debug("atapi read error: %d\n", err);
+			//kprintf_debug("atapi read error: %d\n", err);
 		}
 		else
 		{
@@ -299,7 +299,7 @@ static void atapiThread(void *data)
 			err = idePoll(ctrl, channel, 1);
 			if (err)
 			{
-				kprintf_debug("atapi read error: %d\n", err);
+				//kprintf_debug("atapi read error: %d\n", err);
 			}
 			else
 			{

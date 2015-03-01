@@ -44,6 +44,8 @@ static int readyForDynamic;
 static PD *pdHeap;
 static int nextHeapTable;
 
+static HeapHeader *lowestFreeHeader;
+
 void initMemoryPhase1(uint64_t pc)
 {
 	placement = pc;
@@ -102,7 +104,8 @@ void initMemoryPhase2()
 	foot->magic = HEAP_FOOTER_MAGIC;
 	foot->size = head->size;
 	foot->flags = 0;
-	
+
+	lowestFreeHeader = head;
 	readyForDynamic = 1;
 };
 
@@ -240,18 +243,33 @@ static void heapSplitBlock(HeapHeader *head, size_t size)
 	newFooter->size = size;
 };
 
+static HeapHeader *findFreeHeader(HeapHeader *head)
+{
+	while (head->flags & HEAP_BLOCK_TAKEN)
+	{
+		head = heapWalkRight(head);
+		if (head == NULL) return (HeapHeader*) HEAP_BASE_ADDR;
+	};
+
+	return head;
+};
+
 static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno)
 {
 	// TODO: don't ignore the flags!
 	void *retAddr = NULL;
-	ASM("cli");
 	spinlockAcquire(&heapLock);
 
+	// make the size divisible by 8.
+	if ((size & 7) != 0)
+	{
+		size = (size & ~7) + 8;
+	};
+
 	// find the first free block.
-	HeapHeader *head = (HeapHeader*) HEAP_BASE_ADDR;
+	HeapHeader *head = /*(HeapHeader*) HEAP_BASE_ADDR*/ lowestFreeHeader;
 	while ((head->flags & HEAP_BLOCK_TAKEN) || (head->size < size))
 	{
-		asm volatile ("xchg %ax, %ax");
 		HeapHeader *nextHead = heapWalkRight(head);
 		if (nextHead == NULL)
 		{
@@ -270,7 +288,6 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 		{
 			head = nextHead;
 		};
-		asm volatile("xchg %cx, %cx");
 	};
 
 	if (head->size > (size+sizeof(HeapHeader)+sizeof(HeapFooter)+8))
@@ -283,8 +300,13 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 	head->aid = aid;
 	head->lineno = lineno;
 
+	if (head == lowestFreeHeader)
+	{
+		lowestFreeHeader = findFreeHeader(head);
+	};
+
 	spinlockRelease(&heapLock);
-	ASM("sti");
+	//ASM("sti");
 	return retAddr;
 };
 
@@ -350,41 +372,41 @@ void *krealloc(void *block, size_t size)
 	return ret;
 };
 
-void kfree(void *block)
+void _kfree(void *block, const char *who, int line)
 {
 	// kfree()ing NULL is perfectly acceptable.
 	if (block == NULL) return;
-	ASM("cli");
+	//ASM("cli");
 	spinlockAcquire(&heapLock);
 
 	uint64_t addr = (uint64_t) block;
 	if (addr < (HEAP_BASE_ADDR + sizeof(HeapHeader)))
 	{
-		panic("invalid pointer passed to kfree(): %a: below heap start", addr);
+		panic("%s:%d: invalid pointer passed to kfree(): %a: below heap start", who, line, addr);
 	};
 
 	HeapHeader *head = (HeapHeader*) (addr - sizeof(HeapHeader));
 	if (head->magic != HEAP_HEADER_MAGIC)
 	{
-		panic("invalid pointer passed to kfree(): %a: lacking or corrupt block header", addr);
+		panic("%s:%d: invalid pointer passed to kfree(): %a: lacking or corrupt block header", who, line, addr);
 	};
 
 	HeapFooter *foot = heapFooterFromHeader(head);
 	if (foot->magic != HEAP_FOOTER_MAGIC)
 	{
-		panic("heap corruption detected: the header for %a is not linked to a valid footer", addr);
+		panic("%s:%d: heap corruption detected: the header for %a is not linked to a valid footer", who, line, addr);
 	};
 
 	if ((head->flags & HEAP_BLOCK_TAKEN) == 0)
 	{
 		heapDump();
-		panic("invalid pointer passed to kfree(): %a: already free", addr);
+		panic("%s:%d: invalid pointer passed to kfree(): %a: already free", who, line, addr);
 	};
 
 	if (foot->size != head->size)
 	{
 		heapDump();
-		panic("heap corruption detected: the header for %a does not agree with the footer on block size", addr);
+		panic("%s:%d: heap corruption detected: the header for %a does not agree with the footer on block size", who, line, addr);
 	};
 
 	// mark this block as free
@@ -399,7 +421,7 @@ void kfree(void *block)
 		HeapFooter *footLeft = (HeapFooter*) (addr - sizeof(HeapHeader) - sizeof(HeapFooter));
 		if (footLeft->magic != HEAP_FOOTER_MAGIC)
 		{
-			panic("heap corruption detected: block to the left of %a is marked as existing but has invalid footer magic");
+			panic("%s:%d: heap corruption detected: block to the left of %a is marked as existing but has invalid footer magic", who, line, addr);
 		};
 
 		HeapHeader *tmpHead = heapHeaderFromFooter(footLeft);
@@ -414,7 +436,7 @@ void kfree(void *block)
 		HeapHeader *headRight = (HeapHeader*) &foot[1];
 		if (headRight->magic != HEAP_HEADER_MAGIC)
 		{
-			panic("heap corruption detected: block to the right of %a is marked as existing but has invalid header magic");
+			panic("%s:%d: heap corruption detected: block to the right of %a is marked as existing but has invalid header magic", who, line, addr);
 		};
 
 		HeapFooter *tmpFoot = heapFooterFromHeader(headRight);
@@ -430,6 +452,7 @@ void kfree(void *block)
 		size_t newSize = headLeft->size + sizeof(HeapHeader) + sizeof(HeapFooter) + head->size;
 		headLeft->size = newSize;
 		foot->size = newSize;
+		if (headLeft < lowestFreeHeader) lowestFreeHeader = headLeft;
 	}
 	else if ((headLeft == NULL) && (footRight != NULL))
 	{
@@ -437,6 +460,7 @@ void kfree(void *block)
 		size_t newSize = head->size + sizeof(HeapHeader) + sizeof(HeapFooter) + footRight->size;
 		head->size = newSize;
 		footRight->size = newSize;
+		if (head < lowestFreeHeader) lowestFreeHeader = head;
 	}
 	else if ((headLeft != NULL) && (footRight != NULL))
 	{
@@ -445,11 +469,15 @@ void kfree(void *block)
 		size_t newSize = headLeft->size + footRight->size + head->size + 2*sizeof(HeapHeader) + 2*sizeof(HeapFooter);
 		headLeft->size = newSize;
 		footRight->size = newSize;
+		if (head < lowestFreeHeader) lowestFreeHeader = head;
+	}
+	else
+	{
+		if (head < lowestFreeHeader) lowestFreeHeader = head;
 	};
-	// otherwise no joining.
 
 	spinlockRelease(&heapLock);
-	ASM("sti");
+	//ASM("sti");
 };
 
 void heapDump()
@@ -504,5 +532,6 @@ void heapDump()
 	uint64_t heapszMB = heapsz / 1024 / 1024;
 	uint64_t heapszPercent = heapsz * 100 / 0x40000000;
 	kprintf("Total heap usage: %d/1024MB (%d%%)\n", heapszMB, heapszPercent);
+	kprintf("Lowest free header: %a, so lowest addr: %a\n", lowestFreeHeader, &lowestFreeHeader[1]);
 	kprintf("---\n");
 };

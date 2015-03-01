@@ -190,7 +190,9 @@ static void diskfile_setblock(DiskFile *data, uint64_t block, int shouldRead)
 	};
 
 	data->bufCurrent = block;
-	if (shouldRead) sdRead(data->file->sd, data->offset+block, data->buf);
+	// TODO: the condition for shouldRead causes it to fail and corrupt disk data if the writing starts
+	// on a weird boundary.
+	/*if (shouldRead)*/ sdRead(data->file->sd, data->offset+block, data->buf);
 };
 
 static ssize_t diskfile_read(File *fp, void *buffer, size_t size)

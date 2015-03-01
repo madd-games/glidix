@@ -10,5 +10,6 @@ int main(int argc, char *argv[])
 	};
 
 	printf("bye bye.\n");
+	fprintf(stderr, "And to stderr?\n");
 	return 0;
 };

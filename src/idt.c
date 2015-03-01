@@ -194,7 +194,20 @@ static void onPageFault(Regs *regs)
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 
+	if (getCurrentThread() != NULL)
+	{
+		if (tryLoadOnDemand(faultAddr) == 0)
+		{
+			return;
+		}
+		else
+		{
+			//panic("fail to load on demand (%a)\n", faultAddr);
+		};
+	};
+
 	if ((getCurrentThread() == NULL) || (regs->cs == 8))
+	//if (1)
 	{
 		//heapDump();
 		kdumpregs(regs);

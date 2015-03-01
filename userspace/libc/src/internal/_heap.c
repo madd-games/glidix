@@ -155,7 +155,7 @@ void *_heap_realloc(void *block, size_t newsize)
 	}
 	else
 	{
-		memcpy(block, newblock, newsize);
+		memcpy(newblock, block, newsize);
 	};
 
 	free(block);

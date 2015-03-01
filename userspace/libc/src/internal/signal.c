@@ -61,6 +61,7 @@ static void defSigHandler(siginfo_t *si)
 		write(2, "Illegal instruction\n", 20);
 		_Exit(-SIGILL);
 	case SIGINT:
+		write(2, "Interrupted\n", 12);
 		exit(-SIGINT);
 	/* SIGKILL cannot be caught or ignored */
 	case SIGPIPE:
@@ -110,7 +111,7 @@ static void defSigHandler(siginfo_t *si)
 	};
 };
 
-static void rootSigHandler(void *ret, siginfo_t *si)
+void __rootSigHandler(void *ret, siginfo_t *si)
 {
 	struct sigaction *sa = &sighandlers[si->si_signo];
 	if (sa->sa_flags & SA_SIGINFO)
@@ -149,7 +150,7 @@ void __init_sig()
 		sighandlers[i].sa_handler = SIG_DFL;
 		sighandlers[i].sa_flags = 0;
 	};
-	_glidix_sighandler(rootSigHandler);
+	_glidix_sighandler(__rootSigHandler);
 };
 
 int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)

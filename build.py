@@ -89,7 +89,7 @@ def opCreateBuildMK():
 	f.write("\t%s -T linker.ld -o $@ -ffreestanding -O2 -nostdlib %s -lgcc\n" % (config["compiler"], " ".join(objectFiles)))
 	f.write("-include %s\n" % (" ".join(depFiles)))
 	f.write("initrd/ksyms: elf64.ld %s\n" % (" ".join(objectFiles)))
-	f.write("\t%s -shared -T elf64.ld -o build/vmglidix.so -ffreestanding -O2 -nostdlib %s -lgcc\n" % (config["compiler"], " ".join(objectFiles)))
+	f.write("\t%s -T elf64.ld -o build/vmglidix.so -ffreestanding -O2 -nostdlib %s -lgcc\n" % (config["compiler"], " ".join(objectFiles)))
 	f.write("\tnm build/vmglidix.so>$@\n")
 	f.write("\tobjdump -d build/vmglidix.so>kdebug.txt\n");
 	f.write("\n")

@@ -35,6 +35,8 @@
 extern "C" {
 #endif
 
+#define	MB_CUR_MAX				1
+
 /* implemented by the runtime */
 void	abort(void);
 int	atexit(void (*)(void));
@@ -45,6 +47,9 @@ void*	malloc(size_t);
 void*	realloc(void*, size_t);
 void	exit(int);
 void	_Exit(int);
+void*	calloc(size_t nitems, size_t size);
+char*	getenv(const char *name);
+int	setenv(const char *name, const char *value, int update);
 
 /* implemented by libglidix directly */
 char*	realpath(const char*, char*);

@@ -42,6 +42,8 @@
 #include <glidix/fdopendir.h>
 #include <glidix/fsdriver.h>
 #include <glidix/time.h>
+#include <glidix/pipe.h>
+#include <glidix/shared.h>
 
 void sys_exit(Regs *regs, int status)
 {
@@ -182,7 +184,7 @@ int sys_open(const char *path, int oflag, mode_t mode)
 		return -1;
 	};
 
-	if (oflag & O_CREAT) vfsLockCreation();
+	vfsLockCreation();
 
 	struct stat st;
 	int error = vfsStat(path, &st);
@@ -190,7 +192,7 @@ int sys_open(const char *path, int oflag, mode_t mode)
 	{
 		if (((error != VFS_NO_FILE) && (error != VFS_EMPTY_DIRECTORY)) || ((oflag & O_CREAT) == 0))
 		{
-			if (oflag & O_CREAT) vfsUnlockCreation();
+			vfsUnlockCreation();
 			return sysOpenErrno(error);
 		}
 		else
@@ -204,7 +206,7 @@ int sys_open(const char *path, int oflag, mode_t mode)
 	else if (oflag & O_EXCL)
 	{
 		// file exists
-		if (oflag & O_CREAT) vfsUnlockCreation();
+		vfsUnlockCreation();
 		getCurrentThread()->therrno = EEXIST;
 		return -1;
 	};
@@ -212,7 +214,7 @@ int sys_open(const char *path, int oflag, mode_t mode)
 	if ((st.st_mode & 0xF000) == 0x1000)
 	{
 		// directory, do not open.
-		if (oflag & O_CREAT) vfsUnlockCreation();
+		vfsUnlockCreation();
 		getCurrentThread()->therrno = EISDIR;
 		return -1;
 	};
@@ -231,6 +233,7 @@ int sys_open(const char *path, int oflag, mode_t mode)
 	{
 		if ((oflag & O_CREAT) == 0)
 		{
+			vfsUnlockCreation();
 			return sysOpenErrno(VFS_PERM);
 		};
 	};
@@ -249,7 +252,8 @@ int sys_open(const char *path, int oflag, mode_t mode)
 
 	if (i == MAX_OPEN_FILES)
 	{
-		if (oflag & O_CREAT) vfsUnlockCreation();
+		vfsUnlockCreation();
+		spinlockRelease(&ftab->spinlock);
 		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
 	};
 
@@ -262,12 +266,12 @@ int sys_open(const char *path, int oflag, mode_t mode)
 	File *fp = vfsOpen(path, flags, &error);
 	if (fp == NULL)
 	{
-		if (oflag & O_CREAT) vfsUnlockCreation();
+		vfsUnlockCreation();
 		spinlockRelease(&ftab->spinlock);
 		return sysOpenErrno(error);
 	};
 
-	if (oflag & O_CREAT) vfsUnlockCreation();
+	vfsUnlockCreation();
 
 	if (oflag & O_TRUNC)
 	{
@@ -958,6 +962,121 @@ int sys_unlink(const char *path)
 	return 0;
 };
 
+int sys_dup(int fd)
+{
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	File *fp = ftab->entries[fd];
+	if (fp == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	if (fp->dup == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	int i;
+	for (i=0; i<MAX_OPEN_FILES; i++)
+	{
+		if (ftab->entries[i] == NULL)
+		{
+			break;
+		};
+	};
+
+	if (i == MAX_OPEN_FILES)
+	{
+		spinlockRelease(&ftab->spinlock);
+		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
+	};
+
+	File *newfp = (File*) kmalloc(sizeof(File));
+	memset(newfp, 0, sizeof(File));
+
+	if (fp->dup(fp, newfp, sizeof(File)) != 0)
+	{
+		kfree(newfp);
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	ftab->entries[i] = newfp;
+	spinlockRelease(&ftab->spinlock);
+
+	return i;
+};
+
+int sys_dup2(int oldfd, int newfd)
+{
+	if ((oldfd < 0) || (oldfd >= MAX_OPEN_FILES))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	if ((newfd < 0) || (newfd >= MAX_OPEN_FILES))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	if (newfd == oldfd)
+	{
+		return newfd;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	File *fp = ftab->entries[oldfd];
+	if (fp == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	};
+
+	if (fp->dup == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	File *newfp = (File*) kmalloc(sizeof(File));
+	memset(newfp, 0, sizeof(File));
+	if (fp->dup(fp, newfp, sizeof(File)) != 0)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	if (ftab->entries[newfd] != NULL)
+	{
+		File *toclose = ftab->entries[newfd];
+		if (toclose->close != NULL) toclose->close(toclose);
+		kfree(toclose);
+	};
+	ftab->entries[newfd] = newfp;
+
+	return newfd;
+};
+
 int isPointerValid(uint64_t ptr, uint64_t size)
 {
 	if (ptr < 0x1000)
@@ -988,10 +1107,10 @@ int sys_insmod(const char *modname, const char *path, const char *opt, int flags
 int sys_chdir(const char *path)
 {
 	struct stat st;
-	if (vfsStat(path, &st) != 0)
+	int error = vfsStat(path, &st);
+	if (error != 0)
 	{
-		getCurrentThread()->therrno = EACCES;
-		return -1;
+		return sysOpenErrno(error);
 	};
 
 	char rpath[256];
@@ -1050,7 +1169,23 @@ void signalOnBadSyscall(Regs *regs)
 
 void syscallDispatch(Regs *regs, uint16_t num)
 {
+	if (getCurrentThread()->sigcnt > 0)
+	{
+		// before doing any syscalls, we dispatch all interrupts.
+		ASM("cli");
+		lockSched();
+		memcpy(&getCurrentThread()->regs, regs, sizeof(Regs));
+		dispatchSignal(getCurrentThread());
+		return;					// interrupts will be enabled on return
+	};
+
 	regs->rip += 4;
+
+	// store the return registers; this is in case some syscall, such as read(), requests a return-on-signal.
+	memcpy(&getCurrentThread()->intSyscallRegs, regs, sizeof(Regs));
+
+	// for the magical pipe() system call
+	int pipefd[2];
 
 	switch (num)
 	{
@@ -1248,8 +1383,51 @@ void syscallDispatch(Regs *regs, uint16_t num)
 	case 45:
 		*((int*)&regs->rax) = sys_unlink((const char*)regs->rdi);
 		break;
+	case 46:
+		*((int*)&regs->rax) = sys_dup((int)regs->rdi);
+		break;
+	case 47:
+		*((int*)&regs->rax) = sys_dup2((int)regs->rdi, (int)regs->rsi);
+		break;
+	case 48:
+		*((int*)&regs->rax) = sys_pipe(pipefd);
+		*((int*)&regs->r8) = pipefd[0];
+		*((int*)&regs->r9) = pipefd[1];
+		break;
+	case 49:
+		if (!isPointerValid(regs->rdi, sizeof(int)))
+		{
+			signalOnBadPointer(regs, regs->rdi);
+		};
+		getCurrentThread()->errnoptr = (int*) regs->rdi;
+		break;
+	case 50:
+		regs->rax = (uint64_t) getCurrentThread()->errnoptr;
+		break;
+	case 51:
+		*((clock_t*)&regs->rax) = (clock_t) getUptime();
+		break;
+	case 52:
+		if (!isPointerValid(regs->rdx, sizeof(libInfo)))
+		{
+			signalOnBadPointer(regs, regs->rdx);
+		};
+		*((int*)&regs->rax) = libOpen((const char*) regs->rdi, regs->rsi, (libInfo*) regs->rdx);
+		break;
+	case 53:
+		if (!isPointerValid(regs->rdi, sizeof(libInfo)))
+		{
+			signalOnBadPointer(regs, regs->rdi);
+		};
+		libClose((libInfo*) regs->rdx);
+		break;
 	default:
 		signalOnBadSyscall(regs);
 		break;
+	};
+
+	if (getCurrentThread()->errnoptr != NULL)
+	{
+		*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
 	};
 };

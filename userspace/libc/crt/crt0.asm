@@ -30,12 +30,14 @@ global _start
 extern _init
 extern _fini
 extern __glidixrt_init
+extern main
 
 STACK_SIZE equ 0x100000
 
 _start:
 	mov		rsp, stack + STACK_SIZE
 	call		_init
+	mov		rdi, main
 	call		__glidixrt_init
 	jmp $
 

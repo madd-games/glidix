@@ -30,7 +30,7 @@
 #define	_ERRNO_H
 
 #include <sys/glidix.h>
-#define	errno (_glidix_geterrno())
+#define	errno (*_glidix_geterrnoptr())
 
 #define E2BIG                                     1
 #define EACCES                                    2

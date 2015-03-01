@@ -26,9 +26,11 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <errno.h>
+#include <string.h>
 
 struct dirent *readdir(DIR *dirp)
 {
@@ -39,6 +41,29 @@ struct dirent *readdir(DIR *dirp)
 
 int readdir_r(DIR *dirp, struct dirent *entry, struct dirent **result)
 {
+	if (dirp->_idx == 0)
+	{
+		struct stat st;
+		st.st_ino = 2;
+		stat(".", &st);
+		strcpy(entry->d_name, ".");
+		entry->d_ino = st.st_ino;
+		dirp->_idx = 1;
+		*result = entry;
+		return 0;
+	}
+	else if (dirp->_idx == 1)
+	{
+		struct stat st;
+		st.st_ino = 2;
+		stat("..", &st);
+		strcpy(entry->d_name, "..");
+		entry->d_ino = st.st_ino;
+		dirp->_idx = 2;
+		*result = entry;
+		return 0;
+	};
+
 	ssize_t ret = 0;
 	if (dirp->_fd != -2) ret = read(dirp->_fd, entry, sizeof(struct dirent));
 	if (ret == 0)

@@ -364,11 +364,13 @@ void cmd_stat(int argc, char **argv)
 		{
 			type = "symbolic link";
 		};
-		printf("type: %s\n", type);
-
-		printf("last stat change:  %d\n", st.st_ctime);
-		printf("last mod time:     %d\n", st.st_mtime);
-		printf("last access time:  %d\n", st.st_atime);
+		printf("type:           %s\n", type);
+		printf("inode:          %d\n", st.st_ino);
+		printf("block size:     %d\n", st.st_blksize);
+		printf("block count:    %d\n", st.st_blocks);
+		printf("ctime:          %d\n", st.st_ctime);
+		printf("mtime:          %d\n", st.st_mtime);
+		printf("atime:          %d\n", st.st_atime);
 	};
 };
 
@@ -447,13 +449,13 @@ void cmd_hexdump(int argc, char **argv)
 
 			printf("  ");
 
-#if 0
+//#if 0
 			for (x=0; x<16; x++)
 			{
 				char c = (char) buf[y * 16 + x];
 				printf("%c", c);
 			};
-#endif
+//#endif
 
 			printf("\n");
 		};
@@ -646,10 +648,10 @@ void do_copy(const char *src, const char *dst, int recursive)
 		return;
 	};
 
-	char buf[16];
+	char buf[1024];
 	while (1)
 	{
-		ssize_t sz = read(srcfd, buf, 16);
+		ssize_t sz = read(srcfd, buf, 1024);
 		if (sz == -1)
 		{
 			close(srcfd);
@@ -658,7 +660,7 @@ void do_copy(const char *src, const char *dst, int recursive)
 			return;
 		};
 
-		if (write(tarfd, buf, 16) == -1)
+		if (write(tarfd, buf, sz) == -1)
 		{
 			close(srcfd);
 			close(tarfd);
@@ -666,7 +668,7 @@ void do_copy(const char *src, const char *dst, int recursive)
 			return;
 		};
 
-		if (sz < 16) break;
+		if (sz < 1024) break;
 	};
 
 	close(tarfd);
@@ -779,7 +781,7 @@ void runCommand(char *buf)
 	}
 	else if (strcmp(argv[0], "time") == 0)
 	{
-		printf("%d\n", time());
+		printf("%d\n", time(NULL));
 	}
 	else if (strcmp(argv[0], "realpath") == 0)
 	{
@@ -866,6 +868,9 @@ void runCommand(char *buf)
 
 void shell()
 {
+	setenv("OS", "glidix", 1);
+	setenv("PATH", "/bin", 1);
+
 	char cwd[256];
 	while (1)
 	{
@@ -894,18 +899,38 @@ void loadmods()
 	char modname[256];
 	while ((ent = readdir(dirp)) != NULL)
 	{
-		strcpy(filename, "/initrd/initmod/");
-		strcat(filename, ent->d_name);
+		if (ent->d_name[0] != '.')
+		{
+			strcpy(filename, "/initrd/initmod/");
+			strcat(filename, ent->d_name);
 
-		strcpy(modname, "mod_");
-		strcat(modname, ent->d_name);
-		modname[strlen(modname)-4] = 0;
+			strcpy(modname, "mod_");
+			strcat(modname, ent->d_name);
+			modname[strlen(modname)-4] = 0;
 
-		printf("init: insmod %s (from %s)\n", modname, filename);
-		_glidix_insmod(modname, filename, NULL, 0);
+			printf("init: insmod %s (from %s)\n", modname, filename);
+			_glidix_insmod(modname, filename, NULL, 0);
+		};
 	};
 
 	closedir(dirp);
+};
+
+void on_signal(int sig, siginfo_t *si, void *ignore)
+{
+	if (sig == SIGINT)
+	{
+		kill(2, SIGINT);
+	}
+	else if (sig == SIGCHLD)
+	{
+		if (si->si_pid == 2)
+		{
+			exit(1);
+		};
+
+		waitpid(si->si_pid, NULL, 0);
+	};
 };
 
 int main(int argc, char *argv[])
@@ -914,26 +939,47 @@ int main(int argc, char *argv[])
 	{
 		//_glidix_insmod("mod_ps2kbd", "/initrd/ps2kbd.gkm", NULL, 0);
 		loadmods();
-		printf("init: mount root filesystem (isofs on /dev/sdb)\n");
-		if (_glidix_mount("isofs", "/dev/sdb", "/", 0) != 0)
+		if (_glidix_mount("isofs", "/dev/sdb", "/mnt/", 0) != 0)
 		{
 			perror("init: mount failed");
 		};
+
 		close(open("/dev/sda", O_RDONLY));
-		if (_glidix_mount("gxfs", "/dev/sda0", "/mnt/", 0) != 0)
+		if (_glidix_mount("gxfs", "/dev/sda0", "/", 0) != 0)
 		{
-			perror("init: mount gxfs on /mnt");
+			perror("init: mount gxfs on /");
+		};
+
+		struct sigaction sa;
+		sa.sa_sigaction = on_signal;
+		sa.sa_flags = SA_SIGINFO;
+		if (sigaction(SIGINT, &sa, NULL) != 0)
+		{
+			perror("sigaction SIGINT");
+			return 1;
+		};
+		if (sigaction(SIGCHLD, &sa, NULL) != 0)
+		{
+			perror("sigaction SIGCHLD");
+			return 1;
 		};
 
 		if (fork() == 0)
 		{
-			shell();
+			setenv("PATH", "/bin:/mnt/bin", 1);
+			setenv("HOME", "/root", 1);
+			if (execl("/mnt/bin/sh", "sh", NULL) != 0)
+			{
+				perror("exec");
+				exit(1);
+			};
 		};
 		while (1);
 	}
 	else
 	{
-		shell();
+		fprintf(stderr, "%s: not allowed to execute with pid other than 1!\n", argv[0]);
+		return 1;
 	};
 	return 0;
 };

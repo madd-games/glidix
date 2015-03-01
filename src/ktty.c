@@ -33,6 +33,7 @@
 #include <glidix/console.h>
 #include <glidix/semaphore.h>
 #include <glidix/common.h>
+#include <glidix/errno.h>
 
 #define	INPUT_BUFFER_SIZE	256
 
@@ -65,6 +66,8 @@ static char getChar()
 
 static ssize_t termRead(File *fp, void *buffer, size_t size)
 {
+	int sigcntOrig = getCurrentThread()->sigcnt;
+
 	ssize_t count = 0;
 	char *out = (char*) buffer;
 	while (size)
@@ -73,13 +76,18 @@ static ssize_t termRead(File *fp, void *buffer, size_t size)
 		if (lineCount == 0)
 		{
 			semSignal(&inputLock);
+			if (getCurrentThread()->sigcnt > sigcntOrig)
+			{
+				getCurrentThread()->therrno = EINTR;
+				return -1;
+			};
 			continue;
 		};
 		char c;
 		if ((c = getChar()) == 0)
 		{
 			semSignal(&inputLock);
-			continue;
+			return count;
 		};
 		*out++ = c;
 		count++;
@@ -99,6 +107,8 @@ static int termDup(File *old, File *new, size_t szfile)
 
 void termPutChar(char c)
 {
+	//kprintf_debug("PUT CHAR '%c'\n", c);
+
 	semWait(&inputLock);
 	if (c == '\b')
 	{
@@ -107,7 +117,7 @@ void termPutChar(char c)
 			lineCharCount--;
 			if (inputPut == 0)
 			{
-				inputPut = INPUT_BUFFER_SIZE - inputPut;
+				inputPut = INPUT_BUFFER_SIZE - 1;
 			}
 			else
 			{
@@ -117,6 +127,7 @@ void termPutChar(char c)
 		};
 
 		semSignal(&inputLock);
+		//kprintf_debug("end put char\n");
 		return;
 	};
 
@@ -135,6 +146,7 @@ void termPutChar(char c)
 		lineCharCount++;
 	};
 	semSignal(&inputLock);
+	//kprintf_debug("end put char\n");
 };
 
 void setupTerminal(FileTable *ftab)
