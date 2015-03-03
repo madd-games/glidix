@@ -96,7 +96,7 @@ def opCreateBuildMK():
 	f.write("PREFIX=%s\n" % config["prefix"])
 	f.write("CFLAGS=-mno-mmx -mno-sse -mno-sse2 -I include -Wall -Werror -fPIC\n")
 	f.write("out/lib/libc.so: %s\n" % (" ".join(objectFiles)))
-	f.write("\t$(TARGET_CC) -shared -o $@ $^\n");
+	f.write("\t$(TARGET_CC) -shared -o $@ libglidix.o $^\n");
 	f.write("out/lib/libc.a: %s\n" % (" ".join(objectFiles)))
 	f.write("\t%s x %s/lib/libglidix.a\n" % (config["ar"], config["prefix"]))
 	f.write("\t%s rvs $@ libglidix.o $^\n" % config["ar"])

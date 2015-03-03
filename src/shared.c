@@ -170,7 +170,7 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 		return -1;
 	};
 
-	if (loadAddr & 0x200000)
+	if (loadAddr % 0x200000)
 	{
 		loadAddr = (loadAddr & ~0x1FFFFF) + 0x200000;
 	};
@@ -223,7 +223,9 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 	info->dynSize = hdrDynamic->p_memsz;
 	info->dynSection = (Elf64_Dyn*) (loadAddr + hdrDynamic->p_vaddr);
 	info->loadAddr = loadAddr;
-	info->nextLoadAddr = indexData * 0x1000 + hdrData->p_memsz;
+	info->nextLoadAddr = loadAddr + hdrData->p_vaddr + hdrData->p_memsz;
+	info->textIndex = indexText;
+	info->dataIndex = indexData;
 
 	kfree(progHeads);
 	vfsClose(fp);
