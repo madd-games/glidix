@@ -78,7 +78,7 @@ typedef struct
 	ISOPrimaryDateTime			dtCanBeUsed;
 	uint8_t					fileStructVersion;		// == 1
 	uint8_t					ignore7;
-} ISOPrimaryVolumeDescriptor;
+} PACKED ISOPrimaryVolumeDescriptor;
 
 typedef struct
 {

@@ -32,6 +32,7 @@
 #include <glidix/sched.h>
 #include <glidix/string.h>
 #include <glidix/elf64.h>
+#include <glidix/console.h>
 
 int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 {
@@ -197,7 +198,7 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 		return -1;
 	};
 
-	if (AddSegment(pm, indexData, flText, PROT_READ | PROT_WRITE) != 0)
+	if (AddSegment(pm, indexData, flData, PROT_READ | PROT_WRITE) != 0)
 	{
 		DeleteSegment(pm, indexText);
 		pdownref(flText);

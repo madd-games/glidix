@@ -19,6 +19,17 @@ typedef struct
 	unsigned int				symbolCount;
 } Library;
 
+int isSymbolNeededFor(Elf64_Xword relocType)
+{
+	switch (relocType)
+	{
+	case R_X86_64_RELATIVE:
+		return 0;
+	default:
+		return 1;
+	};
+};
+
 int relocate(Library *lib, Elf64_Rela *table, size_t num)
 {
 	size_t i;
@@ -30,11 +41,11 @@ int relocate(Library *lib, Elf64_Rela *table, size_t num)
 
 		Elf64_Sym *symbol = &lib->symtab[symidx];
 		const char *symname = &lib->strtab[symbol->st_name];
-		printf("symname@%p (symbol %d at %p), value=%p\n", symname, symidx, symbol, (void*)symbol->st_value);
+		//printf("symname@%p (symbol %d at %p), value=%p\n", symname, symidx, symbol, (void*)symbol->st_value);
 		if (symbol->st_name == 0) symname = "<noname>";
 
 		void *symaddr = NULL;
-		if (symbol->st_shndx == 0)
+		if ((symbol->st_shndx == 0) && isSymbolNeededFor(type))
 		{
 			printf("undefined reference to '%s'\n", symname);
 			return -1;
@@ -47,8 +58,20 @@ int relocate(Library *lib, Elf64_Rela *table, size_t num)
 		void *reladdr = (void*) (lib->loadAddr + rela->r_offset);
 		switch (type)
 		{
+		case R_X86_64_64:
+			//printf("64 (%p) = '%s' + %d (%p)\n", reladdr, symname, rela->r_addend, (void*)((uint64_t)symaddr + rela->r_addend));
+			*((uint64_t*)reladdr) = (uint64_t) symaddr + rela->r_addend;
+			break;
 		case R_X86_64_JUMP_SLOT:
-			printf("JUMP_SLOT (%p) = '%s' (%p)\n", reladdr, symname, symaddr);
+			//printf("JUMP_SLOT (%p) = '%s' (%p)\n", reladdr, symname, symaddr);
+			*((uint64_t*)reladdr) = (uint64_t) symaddr;
+			break;
+		case R_X86_64_RELATIVE:
+			//printf("RELATIVE (%p) = %p\n", reladdr, (void*)(lib->loadAddr + rela->r_addend));
+			*((uint64_t*)reladdr) = (uint64_t) (lib->loadAddr + rela->r_addend);
+			break;
+		case R_x86_64_GLOB_DAT:
+			//printf("GLOB_DAT (%p) = '%s' (%p)\n", reladdr, symname, symaddr);
 			*((uint64_t*)reladdr) = (uint64_t) symaddr;
 			break;
 		default:
@@ -143,13 +166,6 @@ int libOpen(const char *path)
 	};
 	printf("Dyn. symbols:     %d\n", (unsigned int) lib.symbolCount);
 
-	printf("Showing symbols...\n");
-	size_t i;
-	for (i=0; i<5; i++)
-	{
-		printf("SYMBOL VALUE %p\n", (void*) lib.symtab[i].st_value);
-	};
-
 	if (lib.pltRela != NULL)
 	{
 		if (relocate(&lib, lib.pltRela, lib.pltRelaSize / sizeof(Elf64_Rela)))
@@ -158,6 +174,8 @@ int libOpen(const char *path)
 			return -1;
 		};
 	};
+
+	printf("Relocating the RELA section\n");
 	if (lib.rela != NULL)
 	{
 		if (relocate(&lib, lib.rela, lib.szRela / lib.szRelaEntry))
@@ -172,15 +190,24 @@ int libOpen(const char *path)
 
 uint64_t getSymbolAddr(const char *name)
 {
-	size_t i;
-	for (i=0; i<lib.symbolCount; i++)
+	// we pass through global symbols then go to weak symbols
+	unsigned char pass;
+	for (pass=1; pass<3; pass++)
 	{
-		Elf64_Sym *sym = &lib.symtab[i];
-		const char *thisName = &lib.strtab[sym->st_name];
-
-		if (strcmp(thisName, name) == 0)
+		size_t i;
+		for (i=0; i<lib.symbolCount; i++)
 		{
-			return lib.loadAddr + sym->st_value;
+			Elf64_Sym *sym = &lib.symtab[i];
+			const char *thisName = &lib.strtab[sym->st_name];
+
+			if (strcmp(thisName, name) == 0)
+			{
+				unsigned char binding = (sym->st_info >> 4) & 0xF;
+				if (binding == pass)
+				{
+					return lib.loadAddr + sym->st_value;
+				};
+			};
 		};
 	};
 

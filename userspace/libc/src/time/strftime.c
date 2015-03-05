@@ -109,7 +109,11 @@
 
 #define P_(x) x
 
-extern char *get_tz_name();
+char* get_tz_name()
+{
+	return "UTC";
+};
+
 static int weeknumber P_((const struct tm *timeptr, int firstweekday));
 
 /* defaults: season to taste */
