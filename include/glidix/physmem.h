@@ -29,9 +29,10 @@
 #ifndef __glidix_physmem_h
 #define __glidix_physmem_h
 
+#include <glidix/common.h>
 #include <stdint.h>
 
-void initPhysMem(uint64_t numPages);
+void initPhysMem(uint64_t numPages, MultibootMemoryMap *mmap, uint64_t mmapEnd);
 void initPhysMem2();
 
 /**

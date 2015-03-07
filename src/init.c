@@ -83,6 +83,22 @@ void kmain(MultibootInfo *info)
 		kprintf("w: Assuming 64MB of RAM\n");
 	};
 
+	if ((info->flags & (1 << 6)) == 0)
+	{
+		panic("no memory map from bootloader");
+	};
+
+	uint64_t mmapAddr = (uint64_t) info->mmapAddr + 0xFFFF800000000000;
+	uint64_t mmapEnd = mmapAddr + info->mmapLen;
+	kprintf("Memory map address: %a memory map size = %d\n", mmapAddr, info->mmapLen);
+	MultibootMemoryMap *mmap = (MultibootMemoryMap*) mmapAddr;
+	kprintf("Size\tBase\tLen\tType\n");
+	while ((uint64_t)mmap < mmapEnd)
+	{
+		kprintf("%d\t%a\t%d\t%d\n", mmap->size, mmap->baseAddr, mmap->len, mmap->type);
+		mmap = (MultibootMemoryMap*) ((uint64_t) mmap + mmap->size + 4);
+	};
+
 	MultibootModule *mod = (MultibootModule*) ((uint64_t) info->modsAddr + 0xFFFF800000000000);
 	uint64_t end = (uint64_t) mod->modEnd + 0xFFFF800000000000;
 
@@ -91,7 +107,7 @@ void kmain(MultibootInfo *info)
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the physical memory manager (%d pages)... ", (memSize/4));
-	initPhysMem(memSize/4);
+	initPhysMem(memSize/4, (MultibootMemoryMap*) mmapAddr, mmapEnd);
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the ISP... ");

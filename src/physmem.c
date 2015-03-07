@@ -31,17 +31,63 @@
 #include <glidix/spinlock.h>
 #include <glidix/common.h>
 
-static Spinlock  physmemLock;
-static uint64_t *frameStack;
-static uint64_t  frameStackPointer;
-static uint64_t  nextFrame;
-static uint64_t  numSystemFrames;
+static Spinlock			physmemLock;
+static uint64_t*		frameStack;
+static uint64_t			frameStackPointer;
+static uint64_t			nextFrame;
+static uint64_t			numSystemFrames;
+static MultibootMemoryMap*	memoryMap;
+static uint64_t			memoryMapEnd;
 
-void initPhysMem(uint64_t numPages)
+static int isUseableMemory(MultibootMemoryMap *mmap)
+{
+	if (mmap->type != 1) return 0;
+	if (mmap->baseAddr & 0xFFF) return 0;
+	return 1;
+};
+
+static int isFrameInArea(MultibootMemoryMap *mmap, uint64_t frame)
+{
+	uint64_t mmapStartFrame = mmap->baseAddr / 0x1000;
+	uint64_t mmapNumFrames = mmap->len / 0x1000;
+	uint64_t mmapEndFrame = mmapStartFrame + mmapNumFrames;
+
+	if ((frame >= mmapStartFrame) || (frame < mmapEndFrame))
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	};
+};
+
+void initPhysMem(uint64_t numPages, MultibootMemoryMap *mmap, uint64_t mmapEnd)
 {
 	frameStackPointer = 0;
 	nextFrame = 0x200;
 	numSystemFrames = numPages;
+
+	while ((uint64_t)mmap < mmapEnd)
+	{
+		if (isUseableMemory(mmap))
+		{
+			if (isFrameInArea(mmap, 0x200))
+			{
+				break;
+			};
+		};
+
+		mmap = (MultibootMemoryMap*) ((uint64_t) mmap + mmap->size + 4);
+	};
+
+	if ((uint64_t)mmap >= mmapEnd)
+	{
+		panic("no RAM addresses detected!");
+	};
+
+	memoryMap = mmap;
+	memoryMapEnd = mmapEnd;
 	spinlockRelease(&physmemLock);
 };
 
@@ -50,16 +96,37 @@ void initPhysMem2()
 	frameStack = kmalloc(8*numSystemFrames);
 };
 
+static void loadNextMemory()
+{
+	do
+	{
+		memoryMap = (MultibootMemoryMap*) ((uint64_t) memoryMap + memoryMap->size + 4);
+		if (isUseableMemory(memoryMap))
+		{
+			nextFrame = memoryMap->baseAddr / 0x1000;
+		};
+	} while ((uint64_t) memoryMap < memoryMapEnd);
+
+	if ((uint64_t) memoryMap >= memoryMapEnd)
+	{
+		heapDump();
+		panic("out of physical memory");
+	};
+};
+
 uint64_t phmAllocFrame()
 {
 	spinlockAcquire(&physmemLock);
 	uint64_t out;
 	if (frameStackPointer == 0)
 	{
-		if (nextFrame == numSystemFrames)
+		uint64_t mmapStartFrame = memoryMap->baseAddr / 0x1000;
+		uint64_t mmapNumFrames = memoryMap->len / 0x1000;
+		uint64_t mmapEndFrame = mmapStartFrame + mmapNumFrames;
+
+		if (mmapEndFrame == nextFrame)
 		{
-			heapDump();
-			panic("out of physical memory!\n");
+			loadNextMemory();
 		};
 
 		out = nextFrame;

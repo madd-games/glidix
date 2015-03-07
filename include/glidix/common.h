@@ -56,6 +56,7 @@ typedef struct {
 	uint64_t rip, cs, rflags, rsp, ss;
 } PACKED Regs;
 
+
 typedef struct
 {
 	uint32_t flags;
@@ -65,7 +66,18 @@ typedef struct
 	uint32_t cmdLine;
 	uint32_t modsCount;
 	uint32_t modsAddr;
+	uint8_t  ignore[16];
+	uint32_t mmapLen;
+	uint32_t mmapAddr;
 } PACKED MultibootInfo;
+
+typedef struct
+{
+	uint32_t		size;
+	uint64_t		baseAddr;
+	uint64_t		len;
+	uint32_t		type;
+} PACKED MultibootMemoryMap;
 
 typedef struct
 {
