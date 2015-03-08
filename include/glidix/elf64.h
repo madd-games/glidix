@@ -69,6 +69,8 @@ typedef	int64_t				Elf64_Sxword;
 #define	PT_DYNAMIC			2
 #define	PT_INTERP			3
 #define	PT_NOTE				4
+#define	PT_SHLIB			5
+#define	PT_PHDR				6
 
 #define	PF_X				0x1
 #define	PF_W				0x2
@@ -87,13 +89,64 @@ typedef	int64_t				Elf64_Sxword;
 #define	SHT_SHLIB			10
 #define	SHT_DYNSYM			11
 
+#define DT_NULL		0	/* Terminating entry. */
+#define DT_NEEDED	1	/* String table offset of a needed shared
+				   library. */
+#define DT_PLTRELSZ	2	/* Total size in bytes of PLT relocations. */
+#define DT_PLTGOT	3	/* Processor-dependent address. */
+#define DT_HASH		4	/* Address of symbol hash table. */
+#define DT_STRTAB	5	/* Address of string table. */
+#define DT_SYMTAB	6	/* Address of symbol table. */
+#define DT_RELA		7	/* Address of ElfNN_Rela relocations. */
+#define DT_RELASZ	8	/* Total size of ElfNN_Rela relocations. */
+#define DT_RELAENT	9	/* Size of each ElfNN_Rela relocation entry. */
+#define DT_STRSZ	10	/* Size of string table. */
+#define DT_SYMENT	11	/* Size of each symbol table entry. */
+#define DT_INIT		12	/* Address of initialization function. */
+#define DT_FINI		13	/* Address of finalization function. */
+#define DT_SONAME	14	/* String table offset of shared object
+				   name. */
+#define DT_RPATH	15	/* String table offset of library path. [sup] */
+#define DT_SYMBOLIC	16	/* Indicates "symbolic" linking. [sup] */
+#define DT_REL		17	/* Address of ElfNN_Rel relocations. */
+#define DT_RELSZ	18	/* Total size of ElfNN_Rel relocations. */
+#define DT_RELENT	19	/* Size of each ElfNN_Rel relocation. */
+#define DT_PLTREL	20	/* Type of relocation used for PLT. */
+#define DT_DEBUG	21	/* Reserved (not used). */
+#define DT_TEXTREL	22	/* Indicates there may be relocations in
+				   non-writable segments. [sup] */
+#define DT_JMPREL	23	/* Address of PLT relocations. */
+#define	DT_BIND_NOW	24	/* [sup] */
+#define	DT_INIT_ARRAY	25	/* Address of the array of pointers to
+				   initialization functions */
+#define	DT_FINI_ARRAY	26	/* Address of the array of pointers to
+				   termination functions */
+#define	DT_INIT_ARRAYSZ	27	/* Size in bytes of the array of
+				   initialization functions. */
+#define	DT_FINI_ARRAYSZ	28	/* Size in bytes of the array of
+				   terminationfunctions. */
+#define	DT_RUNPATH	29	/* String table offset of a null-terminated
+				   library search path string. */
+#define	DT_FLAGS	30	/* Object specific flag values. */
+#define	DT_ENCODING	32	/* Values greater than or equal to DT_ENCODING
+				   and less than DT_LOOS follow the rules for
+				   the interpretation of the d_un union
+				   as follows: even == 'd_ptr', even == 'd_val'
+				   or none */
+#define	DT_PREINIT_ARRAY 32	/* Address of the array of pointers to
+				   pre-initialization functions. */
+#define	DT_PREINIT_ARRAYSZ 33	/* Size in bytes of the array of
+				   pre-initialization functions. */
+
 #define ELF64_R_SYM(i)			((i) >> 32)
 #define ELF64_R_TYPE(i)			((i) & 0xffffffffL)
 #define ELF64_R_INFO(s, t)		(((s) << 32) + ((t) & 0xffffffffL))
 
 #define	R_X86_64_NONE			0
 #define	R_X86_64_64			1
-
+#define	R_X86_64_GLOB_DAT		6
+#define	R_X86_64_JUMP_SLOT		7
+#define	R_X86_64_RELATIVE		8
 /**
  * Please remember that all the structures here are NOT packed, because ELF64 has all the
  * types aligned.

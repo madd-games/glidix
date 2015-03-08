@@ -37,6 +37,17 @@
 
 int findCommand(char *path, char *cmd)
 {
+	const char *scan = cmd;
+	while (*scan != 0)
+	{
+		if (*scan == '/')
+		{
+			strcpy(path, cmd);
+			return 0;
+		};
+		scan++;
+	};
+
 	char *search = strdup(getenv("PATH"));
 	char *token = strtok(search, ":");
 

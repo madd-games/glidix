@@ -33,6 +33,7 @@
 #include <glidix/sched.h>
 #include <glidix/memory.h>
 #include <glidix/errno.h>
+#include <glidix/interp.h>
 
 typedef struct
 {
@@ -139,6 +140,10 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	};
 
 	ProgramSegment *segments = (ProgramSegment*) kmalloc(sizeof(ProgramSegment)*(elfHeader.e_phnum));
+	memset(segments, 0, sizeof(ProgramSegment) * elfHeader.e_phnum);
+
+	int interpNeeded = 0;
+	Elf64_Dyn *dynamic;
 
 	unsigned int i;
 	for (i=0; i<elfHeader.e_phnum; i++)
@@ -152,7 +157,11 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 			return -1;
 		};
 
-		if (proghead.p_type == PT_NULL)
+		if (proghead.p_type == PT_PHDR)
+		{
+			continue;
+		}
+		else if (proghead.p_type == PT_NULL)
 		{
 			continue;
 		}
@@ -203,6 +212,14 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 				segments[i].flags |= PROT_EXEC;
 			};
 		}
+		else if (proghead.p_type == PT_INTERP)
+		{
+			interpNeeded = 1;
+		}
+		else if (proghead.p_type == PT_DYNAMIC)
+		{
+			dynamic = (Elf64_Dyn*) proghead.p_vaddr;
+		}
 		else
 		{
 			kfree(segments);
@@ -227,15 +244,18 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	// pass 1: allocate the frames and map them
 	for (i=0; i<(elfHeader.e_phnum); i++)
 	{
-		FrameList *fl = palloc_later(segments[i].count, segments[i].fileOffset, segments[i].fileSize);
-		if (AddSegment(pm, segments[i].index, fl, segments[i].flags) != 0)
+		if (segments[i].count > 0)
 		{
-			getCurrentThread()->therrno = ENOEXEC;
+			FrameList *fl = palloc_later(segments[i].count, segments[i].fileOffset, segments[i].fileSize);
+			if (AddSegment(pm, segments[i].index, fl, segments[i].flags) != 0)
+			{
+				getCurrentThread()->therrno = ENOEXEC;
+				pdownref(fl);
+				DownrefProcessMemory(pm);
+				break;
+			};
 			pdownref(fl);
-			DownrefProcessMemory(pm);
-			break;
 		};
-		pdownref(fl);
 	};
 
 	// switch the address space
@@ -271,6 +291,12 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	{
 		thread->egid = st.st_gid;
 		thread->flags |= THREAD_REBEL;
+	};
+
+	if (interpNeeded)
+	{
+		kprintf_debug("using interpreter\n");
+		linkInterp(regs, dynamic, pm);
 	};
 
 	return 0;

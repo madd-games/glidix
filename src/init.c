@@ -49,6 +49,7 @@
 #include <glidix/fsdriver.h>
 #include <glidix/time.h>
 #include <glidix/cowcache.h>
+#include <glidix/interp.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -79,8 +80,7 @@ void kmain(MultibootInfo *info)
 	else
 	{
 		kprintf("%$\x04" "Failed%#\n");
-		memSize = 1024 * 64;
-		kprintf("w: Assuming 64MB of RAM\n");
+		panic("could not determine memory size");
 	};
 
 	if ((info->flags & (1 << 6)) == 0)
@@ -156,7 +156,7 @@ void kmain(MultibootInfo *info)
 	outb(0x40, l);
 	outb(0x40, h);
 	kprintf("%$\x02" "Done%#\n");
-
+	
 	kprintf("Initializing the scheduler... ");
 	initSched();
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
@@ -166,6 +166,8 @@ extern void _jmp_usbs(void *stack);
 static void spawnProc(void *stack)
 {
 	kprintf("%$\x02" "Done%#\n");
+
+	initInterp();
 
 	kprintf("Allocating memory for bootstrap... ");
 	FrameList *fl = palloc(2);

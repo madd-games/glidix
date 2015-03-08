@@ -37,11 +37,21 @@ char **environ;
 
 int __errno_initial;
 void __init_sig();
-void __glidixrt_init(int (*_main)(int,char*[],char*[]))
+static int __init_done = 0;
+void __do_init()
 {
 	_glidix_seterrnoptr(&__errno_initial);
 	_heap_init();
 	__init_sig();
+	__init_done = 1;
+};
+
+void __glidixrt_init(int (*_main)(int,char*[],char*[]))
+{
+	if (!__init_done)
+	{
+		__do_init();
+	};
 
 	// parse the execPars
 	size_t parsz = _glidix_getparsz();

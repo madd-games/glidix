@@ -331,6 +331,9 @@ void initInitrdfs(MultibootInfo *info)
 
 	initrdEnd = ((uint64_t) mod->modEnd + 0xFFFF800000000000);
 	masterHeader = (TarHeader*) ((uint64_t) mod->modStart + 0xFFFF800000000000);
+
+	//dumpFS(initrdfs);
+	//panic("ok");
 };
 
 FileSystem *getInitrdfs()
