@@ -35,6 +35,7 @@
 #include <sys/stat.h>
 
 #define	DEFAULT_LIBRARY_PATH			"/initrd/lib:/lib:/usr/lib"
+#define	LIBC_BASE				0x100000000
 
 static uint64_t nextLoadAddr = 0x100000000;
 
@@ -62,6 +63,36 @@ typedef struct _Library
 
 static Library *globalResolutionTable = NULL;
 static char libdlError[256];
+static Library __libc_handle;
+static Library __main_handle;
+
+void* __get_glob_data(const char *name)
+{
+	if (__main_handle.rela == NULL) return NULL;
+
+	size_t numRela = __main_handle.szRela / __main_handle.szRelaEntry;
+	size_t i;
+
+	for (i=0; i<numRela; i++)
+	{
+		Elf64_Rela *rela = &__main_handle.rela[i];
+		Elf64_Xword type = ELF64_R_TYPE(rela->r_info);
+		Elf64_Xword symidx = ELF64_R_SYM(rela->r_info);
+
+		if (type == R_X86_64_COPY)
+		{
+			Elf64_Sym *sym = &__main_handle.symtab[symidx];
+			char *symname = &__main_handle.strtab[sym->st_name];
+
+			if (strcmp(name, symname) == 0)
+			{
+				return (void*) sym->st_value;
+			};
+		};
+	};
+
+	return NULL;
+};
 
 int __dlclose(Library *lib);
 static int isSymbolNeededFor(Elf64_Xword relocType)
@@ -102,9 +133,8 @@ static int relocate(Library *lib, Elf64_Rela *table, size_t num)
 		if (symbol->st_name == 0) symname = "<noname>";
 
 		void *symaddr = NULL;
-		if ((symbol->st_shndx == 0) && isSymbolNeededFor(type))
+		if (((symbol->st_shndx == 0) && isSymbolNeededFor(type)) || (type == R_X86_64_COPY))
 		{
-			//printf("undefined reference to '%s'\n", symname);
 			symaddr = __dlsym_global(symname);
 			if (symaddr == NULL)
 			{
@@ -115,6 +145,15 @@ static int relocate(Library *lib, Elf64_Rela *table, size_t num)
 		else
 		{
 			symaddr = (void*) (lib->loadAddr + symbol->st_value);
+		};
+
+		// for R_X86_64_GLOB_DAT relocations, if the symbol was copied by the main module
+		// via R_X86_64_COPY relocations, we must relocate to that address, else we relocate
+		// to this library's value.
+		if (type == R_x86_64_GLOB_DAT)
+		{
+			void *globaddr = __get_glob_data(symname);
+			if (globaddr != NULL) symaddr = globaddr;
 		};
 
 		void *reladdr = (void*) (lib->loadAddr + rela->r_offset);
@@ -136,6 +175,9 @@ static int relocate(Library *lib, Elf64_Rela *table, size_t num)
 			//printf("GLOB_DAT (%p) = '%s' (%p)\n", reladdr, symname, symaddr);
 			*((uint64_t*)reladdr) = (uint64_t) symaddr;
 			break;
+		case R_X86_64_COPY:
+			memcpy(reladdr, symaddr, symbol->st_size);
+			break;       
 		default:
 			strcpy(libdlError, "bad relocation");
 			return 1;
@@ -146,32 +188,9 @@ static int relocate(Library *lib, Elf64_Rela *table, size_t num)
 };
 
 Library* __libopen_withpaths(const char *soname, const char *rpath, const char *runpath, int mode);
-Library* __libopen_found(const char *path, const char *soname, int mode)
+static int __lib_process(Library *lib, _glidix_libinfo info)
 {
-	_glidix_libinfo info;
-	int status = _glidix_libopen(path, nextLoadAddr, &info);
-
-	if (status == -1)
-	{
-		strcpy(libdlError, "_glidix_libopen failed");
-		return NULL;
-	};
-
-#if 0
-	printf("Dynamic info size:          %u\n", (unsigned int) info.dynSize);
-	printf("Address of dynamic section: %p\n", info.dynSection);
-	printf("Load address:               %p\n", (void*)info.loadAddr);
-	printf("Next good load addr:        %p\n", (void*)info.nextLoadAddr);
-	printf("Text base:                  %p\n", (void*)(info.textIndex * 0x1000));
-	printf("Data base:                  %p\n", (void*)(info.dataIndex * 0x1000));
-	printf("\nAnalyzing dynamic info...\n");
-#endif
-
 	Elf64_Dyn *dyn = (Elf64_Dyn*) info.dynSection;
-	Library *lib = (Library*) malloc(sizeof(Library));
-	memset(lib, 0, sizeof(Library));
-	strcpy(lib->soname, soname);
-	lib->mode = mode;
 	lib->loadAddr = info.loadAddr;
 
 	char *rpath = NULL;
@@ -217,9 +236,7 @@ Library* __libopen_found(const char *path, const char *soname, int mode)
 			if (dyn->d_un.d_val != sizeof(Elf64_Sym))
 			{
 				strcpy(libdlError, "symbol size mismatch");
-				_glidix_libclose(&info);
-				free(lib);
-				return NULL;
+				return -1;
 			};
 		}
 		else if (dyn->d_tag == DT_NEEDED)
@@ -267,9 +284,7 @@ Library* __libopen_found(const char *path, const char *soname, int mode)
 				};
 
 				free(lib->deps);
-				free(lib);
-				_glidix_libclose(&info);
-				return NULL;
+				return -1;
 			};
 
 			lib->deps[i++] = dep;
@@ -277,18 +292,6 @@ Library* __libopen_found(const char *path, const char *soname, int mode)
 
 		dyn++;
 	};
-
-#if 0
-	printf("Relocation table: %p\n", lib->rela);
-	printf("Relocation size:  %d\n", (unsigned int) lib->szRela);
-	printf("Reloc entry size: %d\n", (unsigned int) lib->szRelaEntry);
-	printf("PLT Reloc table:  %p\n", lib->pltRela);
-	printf("PLT Reloc size:   %d\n", (unsigned int) lib->pltRelaSize);
-	printf("String table:     %p\n", lib->strtab);
-	printf("Symbol table:     %p\n", lib->symtab);
-	printf("Hash table:       %p\n", lib->hashtab);
-	printf("Sizeof Elf64_Sym: %d\n", sizeof(Elf64_Sym));
-#endif
 
 	if (lib->hashtab != NULL)
 	{
@@ -299,9 +302,7 @@ Library* __libopen_found(const char *path, const char *soname, int mode)
 	{
 		if (relocate(lib, lib->pltRela, lib->pltRelaSize / sizeof(Elf64_Rela)))
 		{
-			_glidix_libclose(&info);
-			free(lib);
-			return NULL;
+			return -1;
 		};
 	};
 
@@ -309,10 +310,34 @@ Library* __libopen_found(const char *path, const char *soname, int mode)
 	{
 		if (relocate(lib, lib->rela, lib->szRela / lib->szRelaEntry))
 		{
-			_glidix_libclose(&info);
-			free(lib);
-			return NULL;
+			return -1;
 		};
+	};
+
+	return 0;
+};
+
+Library* __libopen_found(const char *path, const char *soname, int mode)
+{
+	_glidix_libinfo info;
+	int status = _glidix_libopen(path, nextLoadAddr, &info);
+
+	if (status == -1)
+	{
+		strcpy(libdlError, "_glidix_libopen failed");
+		return NULL;
+	};
+
+	Library *lib = (Library*) malloc(sizeof(Library));
+	memset(lib, 0, sizeof(Library));
+	strcpy(lib->soname, soname);
+	lib->mode = mode;
+
+	if (__lib_process(lib, info) != 0)
+	{
+		_glidix_libclose(&info);
+		free(lib);
+		return NULL;
 	};
 
 	lib->refcount = 1;
@@ -475,12 +500,16 @@ Library *__dlopen(const char *soname, int mode)
 	return __libopen_withpaths(soname, NULL, NULL, mode);
 };
 
+extern Elf64_Dyn _DYNAMIC;
 void __do_init();
+typedef void (*__entry_t)(void);
 char __interp_stack[4096];
 void __interp_main(Elf64_Dyn *execDyn, Elf64_Sym *mySymbols, unsigned int mySymbolCount, uint64_t firstLoadAddr, char *myStringTable, uint64_t entry)
 {
 	nextLoadAddr = firstLoadAddr;
 	__do_init();
+
+#if 0
 	printf("Hello world from interpreter\n");
 	printf("execDyn = %p\n", execDyn);
 	printf("mySymbols = %p\n", mySymbols);
@@ -488,5 +517,72 @@ void __interp_main(Elf64_Dyn *execDyn, Elf64_Sym *mySymbols, unsigned int mySymb
 	printf("firstLoadAddr = %p\n", (void*)firstLoadAddr);
 	printf("myStringTable = %p\n", myStringTable);
 	printf("entry = %p\n", (void*)entry);
+#endif
+
+	// create a handle for the C library. it's already relocated.
+	memset(&__libc_handle, 0, sizeof(Library));
+	strcpy(__libc_handle.soname, "libc.so");
+	__libc_handle.symtab = mySymbols;
+	__libc_handle.strtab = myStringTable;
+	__libc_handle.loadAddr = LIBC_BASE;
+	__libc_handle.symbolCount = mySymbolCount;
+	__libc_handle.mode = RTLD_NOW | RTLD_GLOBAL;
+	__libc_handle.refcount = 1;
+
+	// parse the dynamic information for the executable.
+	memset(&__main_handle, 0, sizeof(Library));
+	Elf64_Dyn *dyn = execDyn;
+	while (dyn->d_tag != DT_NULL)
+	{
+		if (dyn->d_tag == DT_SYMTAB)
+		{
+			__main_handle.symtab = (Elf64_Sym*) dyn->d_un.d_ptr;
+		}
+		else if (dyn->d_tag == DT_STRTAB)
+		{
+			__main_handle.strtab = (char*) dyn->d_un.d_ptr;
+		}
+		else if (dyn->d_tag == DT_RELA)
+		{
+			__main_handle.rela = (Elf64_Rela*) (dyn->d_un.d_ptr);
+		}
+		else if (dyn->d_tag == DT_RELASZ)
+		{
+			__main_handle.szRela = dyn->d_un.d_val;
+		}
+		else if (dyn->d_tag == DT_RELAENT)
+		{
+			__main_handle.szRelaEntry = dyn->d_un.d_val;
+		};
+
+		dyn++;
+	};
+
+	// set up the global resolution table
+	globalResolutionTable = &__main_handle;
+	__main_handle.next = &__libc_handle;
+
+	__main_handle.info.dynSection = execDyn;
+	__main_handle.info.loadAddr = 0;
+	if (__lib_process(&__main_handle, __main_handle.info) != 0)
+	{
+		fprintf(stderr, "failed to process executable\n");
+		while (1);
+	};
+
+	// now the executable has copies of some of our data. we must now self-relocate, to reconnect with
+	// this data.
+	__libc_handle.info.dynSection = &_DYNAMIC;
+	__libc_handle.info.loadAddr = LIBC_BASE;
+	if (__lib_process(&__libc_handle, __libc_handle.info) != 0)
+	{
+		fprintf(stderr, "failed to second-pass-relocate the C library\n");
+		while (1);
+	};
+
+	// jump to the entry point by pretending it's a function
+	__entry_t entryFunc = (__entry_t) entry;
+	entryFunc();
+
 	while (1);
 };
