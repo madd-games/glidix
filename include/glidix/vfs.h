@@ -316,6 +316,11 @@ typedef struct _FileSystem
 	 * The name of this filesystem.
 	 */
 	const char *fsname;
+	
+	/**
+	 * Device ID, assigned during mount.
+	 */
+	dev_t dev;
 } FileSystem;
 
 void dumpFS(FileSystem *fs);
