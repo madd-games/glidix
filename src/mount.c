@@ -63,6 +63,7 @@ void initMount()
 	kprintf("%$\x02" "Done%#\n");
 };
 
+static dev_t nextDev = 1;
 int mount(const char *prefix, FileSystem *fs, int flags)
 {
 	if (flags != 0)
@@ -127,6 +128,7 @@ int mount(const char *prefix, FileSystem *fs, int flags)
 		};
 	};
 
+	fs->dev = nextDev++;
 	spinlockRelease(&mountLock);
 	return 0;
 };
