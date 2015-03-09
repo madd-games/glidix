@@ -316,6 +316,7 @@ Dir *parsePath(const char *path, int flags, int *error)
 		{
 			if (*scan == 0)
 			{
+				dir->stat.st_dev = spath.fs->dev;
 				return dir;
 			};
 
@@ -337,6 +338,7 @@ Dir *parsePath(const char *path, int flags, int *error)
 							if (dir->mkreg(dir, token, (flags >> 3) & 0x0FFF,
 									getCurrentThread()->euid, getCurrentThread()->egid) == 0)
 							{
+								dir->stat.st_dev = spath.fs->dev;
 								return dir;
 							};
 						}
@@ -413,6 +415,7 @@ Dir *parsePath(const char *path, int flags, int *error)
 								if (subdir->mkreg(subdir, token, (flags >> 3) & 0x0FFF,
 										getCurrentThread()->euid, getCurrentThread()->egid) == 0)
 								{
+									subdir->stat.st_dev = spath.fs->dev;
 									return subdir;
 								};
 							}
@@ -438,6 +441,7 @@ Dir *parsePath(const char *path, int flags, int *error)
 		}
 		else
 		{
+			dir->stat.st_dev = spath.fs->dev;
 			return dir;
 		};
 	};
