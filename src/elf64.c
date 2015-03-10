@@ -187,8 +187,8 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 
 			uint64_t end = proghead.p_vaddr + proghead.p_memsz;
 			uint64_t size = end - start;
-			uint64_t numPages = size / 0x1000;
-			if (size % 0x1000) numPages++;
+			uint64_t numPages = ((start + size) / 0x1000) - segments[i].index + 1; 
+			//if (size % 0x1000) numPages++;
 
 			segments[i].count = (int) numPages;
 			segments[i].fileOffset = proghead.p_offset;
@@ -295,7 +295,6 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 
 	if (interpNeeded)
 	{
-		kprintf_debug("using interpreter\n");
 		linkInterp(regs, dynamic, pm);
 	};
 

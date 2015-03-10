@@ -153,14 +153,17 @@ static int relocate(Library *lib, Elf64_Rela *table, size_t num)
 		if (type == R_x86_64_GLOB_DAT)
 		{
 			void *globaddr = __get_glob_data(symname);
-			if (globaddr != NULL) symaddr = globaddr;
+			if (globaddr != NULL)
+			{
+				symaddr = globaddr;
+			};
 		};
 
 		void *reladdr = (void*) (lib->loadAddr + rela->r_offset);
 		switch (type)
 		{
 		case R_X86_64_64:
-			//printf("64 (%p) = '%s' + %d (%p)\n", reladdr, symname, rela->r_addend, (void*)((uint64_t)symaddr + rela->r_addend));
+			//printf("64 (%p) = '%s' + %d (%p)\n", reladdr, symname, (int)rela->r_addend, (void*)((uint64_t)symaddr + rela->r_addend));
 			*((uint64_t*)reladdr) = (uint64_t) symaddr + rela->r_addend;
 			break;
 		case R_X86_64_JUMP_SLOT:
@@ -176,6 +179,7 @@ static int relocate(Library *lib, Elf64_Rela *table, size_t num)
 			*((uint64_t*)reladdr) = (uint64_t) symaddr;
 			break;
 		case R_X86_64_COPY:
+			//printf("COPY (%p <- %p), '%s' + %d bytes\n", reladdr, symaddr, symname, (int)symbol->st_size);
 			memcpy(reladdr, symaddr, symbol->st_size);
 			break;       
 		default:
@@ -559,8 +563,9 @@ void __interp_main(Elf64_Dyn *execDyn, Elf64_Sym *mySymbols, unsigned int mySymb
 	};
 
 	// set up the global resolution table
-	globalResolutionTable = &__main_handle;
-	__main_handle.next = &__libc_handle;
+	// first we'll only have the C library on it. this is so that the executable
+	// does not relocate its 'copy' relocations to itself.
+	globalResolutionTable = &__libc_handle;
 
 	__main_handle.info.dynSection = execDyn;
 	__main_handle.info.loadAddr = 0;
@@ -569,6 +574,11 @@ void __interp_main(Elf64_Dyn *execDyn, Elf64_Sym *mySymbols, unsigned int mySymb
 		fprintf(stderr, "failed to process executable\n");
 		while (1);
 	};
+
+	// OK, next link the executable in.
+	__main_handle.next = globalResolutionTable;
+	globalResolutionTable->prev = &__main_handle;
+	globalResolutionTable = &__main_handle;
 
 	// now the executable has copies of some of our data. we must now self-relocate, to reconnect with
 	// this data.
