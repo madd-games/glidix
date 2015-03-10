@@ -334,12 +334,10 @@ void initInterp()
 	memcpy(libcDataSection, &tmpBuffer[hdrData->p_vaddr], hdrData->p_memsz);
 
 	// calculate the number of data pages
-	libcDataPages = hdrData->p_memsz / 0x1000;
-	if (hdrData->p_memsz % 0x1000) libcDataPages++;
+	libcDataPages = ((hdrData->p_vaddr + hdrData->p_memsz) / 0x1000) - (hdrData->p_vaddr / 0x1000) + 1;
 
 	// make the text pages
-	uint64_t textPages = hdrText->p_memsz / 0x1000;
-	if (hdrText->p_memsz % 0x1000) textPages++;
+	uint64_t textPages = ((hdrText->p_vaddr + hdrText->p_memsz) / 0x1000) - (hdrText->p_vaddr / 0x1000) + 1;
 
 	libcTextFrames = palloc(textPages);
 	ispLock();

@@ -335,7 +335,7 @@ void *_kxmalloc(size_t size, int flags, const char *aid, int lineno)
 	placement += size;
 	if (placement > 0xFFFF800000200000)
 	{
-		panic("placement allocation went beyond 2MB mark!");
+		panic("placement allocation went beyond 2MB mark! Perhaps the initrd is too large?");
 	};
 	spinlockRelease(&heapLock);
 	return ret;

@@ -177,9 +177,7 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 	};
 
 	size_t textPageCount = ((hdrText->p_vaddr + hdrText->p_memsz) / 0x1000) - (hdrText->p_vaddr / 0x1000) + 1;
-	if (hdrText->p_memsz % 0x1000) textPageCount++;
 	size_t dataPageCount = ((hdrData->p_vaddr + hdrData->p_memsz) / 0x1000) - (hdrData->p_vaddr / 0x1000) + 1;
-	if (hdrData->p_memsz % 0x1000) dataPageCount++;
 
 	FrameList *flText = palloc(textPageCount);
 	FrameList *flData = palloc(dataPageCount);
