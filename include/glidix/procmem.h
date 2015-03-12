@@ -38,6 +38,7 @@
 #include <stddef.h>
 #include <glidix/common.h>
 #include <glidix/spinlock.h>
+#include <glidix/cowcache.h>
 
 #define	PROT_READ			(1 << 0)
 #define	PROT_WRITE			(1 << 1)

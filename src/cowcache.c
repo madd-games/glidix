@@ -56,7 +56,6 @@ void cowInit()
 
 int cowCreateFrameInTable(COWFrame *cf, uint64_t frame, int diridx, int tabidx)
 {
-	kprintf_debug("create frame in directory %d table %d\n", diridx, tabidx);
 	PT *tables = (PT*) (0xFFFF820000000000 + (diridx * 0x40000000));
 	PT *pt = &tables[tabidx];
 
@@ -68,6 +67,7 @@ int cowCreateFrameInTable(COWFrame *cf, uint64_t frame, int diridx, int tabidx)
 	{
 		if (refcounts[i] == 0)
 		{
+			//kprintf_debug("create frame in directory %d table %d, page %d\n", diridx, tabidx, i);
 			refcounts[i] = 1;
 			pt->entries[i].present = 1;
 			pt->entries[i].framePhysAddr = frame;
@@ -209,4 +209,40 @@ void cowCreateFrame(COWFrame *cf, uint64_t frame)
 void cowPrintFrame(COWFrame *cf)
 {
 	kprintf("%a\t%a\t%a\t%d\n", cf->refcountptr, cf->pte, cf->data, *(cf->refcountptr));
+};
+
+void cowDoCopy(COWFrame *cf, PTe *pte, void *data)
+{
+	spinlockAcquire(&cowLock);
+	if (!pte->present)
+	{
+		panic("copy-on-write non-present page");
+	};
+
+	(*(cf->refcountptr))--;
+	if ((*(cf->refcountptr)) == 0)
+	{
+		// no need to copy, just mark the page writeable.
+		// also don't need to unmap cf->pte because refcounts, rather than page mappings,
+		// are used to define which cache pages are free.
+		pte->rw = 1;
+		refreshAddrSpace();
+	}
+	else
+	{
+		// allocate a new frame, copy the data, and mark the entry read-write.
+		pte->rw = 1;
+		pte->framePhysAddr = phmAllocFrame();
+		refreshAddrSpace();
+		memcpy(data, cf->data, 0x1000);
+	};
+
+	spinlockRelease(&cowLock);
+};
+
+void cowUpref(COWFrame *cf)
+{
+	spinlockAcquire(&cowLock);
+	(*(cf->refcountptr))++;
+	spinlockRelease(&cowLock);
 };

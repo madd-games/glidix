@@ -51,5 +51,7 @@ typedef struct
 void cowInit();
 void cowCreateFrame(COWFrame *cf, uint64_t frame);
 void cowPrintFrame(COWFrame *cf);
+void cowDoCopy(COWFrame *cf, PTe *pte, void *data);
+void cowUpref(COWFrame *cf);
 
 #endif

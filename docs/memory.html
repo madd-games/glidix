@@ -20,6 +20,7 @@ Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divid
 The rest of the address space is reserved.
 </p>
 
+<!--
 <h2>Copy-on-Write (COW) Cache</h2>
 <p>
 The <i>copy-on-write (COW) cache</i> is used to help make <i>fork()</i> more efficient. The PML4e for the COW cache contains a single PDPT, with a special first page directory: it contains one page table, whose entries point to corresponding page directories. In every other page directory, the first page table contains entries that point to corresponding page tables for that directory.
@@ -47,3 +48,18 @@ When a process then tries to write to a page that is mapped from the COW cache, 
 <li>If the refcount is 1, the page in the process' address space is marked as read-write and just removed from the COW cache.</li>
 <li>If the refcount is larger than 1, then a new memory frame is allocated for the process, marked as read-write, and data from the COW cache is copied to it, and the COW cache frame's refcount is decreased by 1.</li>
 </ul>
+-->
+
+<h2>Userspace Process Memory</h2>
+<p>
+The userspace process memory is mapped to <code>pml4[0]</code> and controlled by <code>procmem.c</code>. To make operations on it faster, recursive mapping is used:
+</p>
+
+<ul>
+<li>The very last page (<code>0xFFFFFFFFF000</code>) is mapped to the PDPT itself.</li>
+<li>Every other page in the last table is mapped to the page directory (PD) with the corresponding index <i>I<sub>PD</sub></i>: so the address of a PD is <code>0xFFFFFFE00000 + <i>I<sub>PD</sub></i> * 0x1000</code>.</li>
+<li>Every other table in the last PD, with index <i>I<sub>PD</sub></i> contains pages, where their index in the table, <i>I<sub>PT</sub></i> maps to a page table in the directory: so the address of a PT in a specific PD is: <code>0xFFFFC0000000 + <i>I<sub>PD</sub></i> * 0x200000 + <i>I<sub>PT</sub></i> * 0x1000</code>.</li>
+<li>In addition, the page <code>0x1000</code> is mapped to the last PD, and <code>0x2000</code> to the last PT.</li>
+</ul>
+
+

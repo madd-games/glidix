@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			if (dirname != NULL)
+			if (dirname == NULL)
 			{
 				dirname = argv[i];
 			}
