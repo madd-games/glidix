@@ -112,9 +112,12 @@ void* __dlsym_global(const char *name)
 	Library *lib = globalResolutionTable;
 	while (lib != NULL)
 	{
-		void *sym = __dlsym(lib, name);
-		if (sym != NULL) return sym;
-		lib = lib->next;
+		if (lib->mode & RTLD_GLOBAL)
+		{
+			void *sym = __dlsym(lib, name);
+			if (sym != NULL) return sym;
+			lib = lib->next;
+		};
 	};
 	return NULL;
 };
@@ -501,6 +504,12 @@ Library* __libopen_withpaths(const char *soname, const char *rpath, const char *
 
 Library *__dlopen(const char *soname, int mode)
 {
+	if (soname == NULL)
+	{
+		__main_handle.refcount++;
+		return &__main_handle;
+	};
+
 	return __libopen_withpaths(soname, NULL, NULL, mode);
 };
 
