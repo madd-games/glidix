@@ -38,11 +38,13 @@
 #include <glidix/ftab.h>
 #include <glidix/signal.h>
 #include <glidix/vfs.h>
+#include <glidix/fpu.h>
 #include <stdint.h>
 #include <stddef.h>
 
 typedef struct
 {
+	FPURegs		fpuRegs;
 	uint64_t	rdi, rsi, rbp, rbx, rdx, rcx, rax;
 	uint64_t	r8, r9, r10, r11, r12, r13, r14, r15;
 	uint64_t	rip, rsp;
@@ -92,6 +94,12 @@ typedef struct
 
 typedef struct _Thread
 {
+	/**
+	 * The thread's FPU registers. This must be the first member of this structure
+	 * so that they are 16-byte-aligned without any waste.
+	 */
+	FPURegs				fpuRegs;
+
 	/**
 	 * The thread's registers.
 	 */

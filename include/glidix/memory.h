@@ -69,7 +69,7 @@ typedef struct
 	uint8_t  flags;
 	const char *aid;				// allocator string (filename and lineno of kmalloc(), for debugging)
 	int lineno;
-	uint8_t pad[7];					// make the size divisible by 8.
+	uint8_t pad[7];					// make the size divisible by 16.
 } PACKED HeapHeader;
 
 typedef struct
@@ -77,7 +77,7 @@ typedef struct
 	uint32_t magic;
 	uint64_t size;
 	uint8_t  flags;
-	uint8_t  pad[3];				// make the size divisible by 8.
+	uint8_t  pad[3];				// make the size divisible by 16.
 } PACKED HeapFooter;
 
 #endif

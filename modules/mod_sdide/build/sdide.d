@@ -10,6 +10,7 @@ build/sdide.o build/sdide.d : sdide.c /glidix/kernel-include/glidix/module.h \
  /glidix/kernel-include/glidix/cowcache.h \
  /glidix/kernel-include/glidix/ftab.h /glidix/kernel-include/glidix/vfs.h \
  /glidix/kernel-include/glidix/signal.h \
+ /glidix/kernel-include/glidix/fpu.h \
  /glidix/kernel-include/glidix/storage.h \
  /glidix/kernel-include/glidix/semaphore.h \
  /glidix/kernel-include/glidix/devfs.h \

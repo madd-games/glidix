@@ -9,5 +9,6 @@ build/gxblock.o build/gxblock.d : gxblock.c gxfs.h /glidix/kernel-include/glidix
  /glidix/kernel-include/glidix/cowcache.h \
  /glidix/kernel-include/glidix/ftab.h \
  /glidix/kernel-include/glidix/signal.h \
+ /glidix/kernel-include/glidix/fpu.h \
  /glidix/kernel-include/glidix/console.h \
  /usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h

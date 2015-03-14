@@ -28,6 +28,7 @@
 
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/glidix.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -98,6 +99,12 @@ int execCommand(char *cmd)
 		int status = cmd_cd(argc-1, argv);
 		free(argv);
 		return status;
+	}
+	else if (strcmp(argv[0], "diag") == 0)
+	{
+		_glidix_diag();
+		free(argv);
+		return 0;
 	};
 
 	char execpath[256];

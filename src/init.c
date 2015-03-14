@@ -50,6 +50,7 @@
 #include <glidix/time.h>
 #include <glidix/cowcache.h>
 #include <glidix/interp.h>
+#include <glidix/fpu.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -123,6 +124,10 @@ void kmain(MultibootInfo *info)
 	kprintf("%$\x02" "Done%#\n");
 
 	initModuleInterface();
+
+	kprintf("Initializing the FPU... ");
+	fpuInit();
+	DONE();
 
 	kprintf("Initializing the VFS... ");
 	vfsInit();

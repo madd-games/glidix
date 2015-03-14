@@ -9,6 +9,7 @@ build/isodir.o build/isodir.d : isodir.c /glidix/kernel-include/glidix/common.h 
  /glidix/kernel-include/glidix/cowcache.h \
  /glidix/kernel-include/glidix/ftab.h /glidix/kernel-include/glidix/vfs.h \
  /glidix/kernel-include/glidix/signal.h \
+ /glidix/kernel-include/glidix/fpu.h \
  /glidix/kernel-include/glidix/memory.h \
  /glidix/kernel-include/glidix/string.h \
  /glidix/kernel-include/glidix/console.h \

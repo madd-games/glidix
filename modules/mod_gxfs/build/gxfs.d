@@ -16,4 +16,5 @@ build/gxfs.o build/gxfs.d : gxfs.c /glidix/kernel-include/glidix/module.h \
  /glidix/kernel-include/glidix/pagetab.h \
  /glidix/kernel-include/glidix/cowcache.h \
  /glidix/kernel-include/glidix/ftab.h \
- /glidix/kernel-include/glidix/signal.h
+ /glidix/kernel-include/glidix/signal.h \
+ /glidix/kernel-include/glidix/fpu.h

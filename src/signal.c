@@ -65,8 +65,8 @@ void dispatchSignal(Thread *thread)
 	};
 
 	// try pushing the signal stack frame. also, don't break the red zone!
-	uint64_t addr = thread->regs.rsp - sizeof(SignalStackFrame) - 128;
-	if ((addr < 0x1000) || ((addr+sizeof(SignalStackFrame)) > 0x8000000000))
+	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & ~0xF;
+	if ((addr < 0x1000) || ((addr+sizeof(SignalStackFrame)) > 0x7FC0000000))
 	{
 		// extreme case, discard the signal :'(
 		return;
@@ -74,6 +74,7 @@ void dispatchSignal(Thread *thread)
 
 	SetProcessMemory(thread->pm);
 	SignalStackFrame *frame = (SignalStackFrame*) addr;
+	fpuSave(&frame->mstate.fpuRegs);
 	frame->mstate.rdi = thread->regs.rdi;
 	frame->mstate.rsi = thread->regs.rsi;
 	frame->mstate.rbp = thread->regs.rbp;
@@ -138,6 +139,7 @@ void sigret(Regs *regs, void *ret)
 	regs->rip = frame->mstate.rip;
 	regs->rdi = frame->mstate.rdi;
 	regs->rsi = frame->mstate.rsi;
+	fpuLoad(&frame->mstate.fpuRegs);
 	getCurrentThread()->therrno = frame->mstate.therrno;
 
 	ASM("cli");

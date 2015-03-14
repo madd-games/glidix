@@ -212,8 +212,8 @@ static void onPageFault(Regs *regs)
 		};
 	};
 
-	//if ((getCurrentThread() == NULL) || (regs->cs == 8))
-	if (1)
+	if ((getCurrentThread() == NULL) || (regs->cs == 8))
+	//if (1)
 	{
 		//heapDump();
 		kdumpregs(regs);

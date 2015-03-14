@@ -134,6 +134,7 @@ static void jumpToTask()
 	currentThread->regs.rflags |= (1 << 9);
 
 	// switch context
+	fpuLoad(&currentThread->fpuRegs);
 	switchContext(&currentThread->regs);
 };
 
@@ -154,6 +155,7 @@ void switchTask(Regs *regs)
 	ASM("cli");
 
 	// remember the context of this thread.
+	fpuSave(&currentThread->fpuRegs);
 	memcpy(&currentThread->regs, regs, sizeof(Regs));
 
 	// get the next thread

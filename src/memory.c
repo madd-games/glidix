@@ -260,10 +260,10 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 	void *retAddr = NULL;
 	spinlockAcquire(&heapLock);
 
-	// make the size divisible by 8.
-	if ((size & 7) != 0)
+	// make the size divisible by 16.
+	if ((size & 0xF) != 0)
 	{
-		size = (size & ~7) + 8;
+		size = (size & ~0xF) + 16;
 	};
 
 	// find the first free block.

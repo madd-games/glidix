@@ -517,20 +517,11 @@ extern Elf64_Dyn _DYNAMIC;
 void __do_init();
 typedef void (*__entry_t)(void);
 char __interp_stack[4096];
+void _exit(int status);
 void __interp_main(Elf64_Dyn *execDyn, Elf64_Sym *mySymbols, unsigned int mySymbolCount, uint64_t firstLoadAddr, char *myStringTable, uint64_t entry)
 {
 	nextLoadAddr = firstLoadAddr;
 	__do_init();
-
-#if 0
-	printf("Hello world from interpreter\n");
-	printf("execDyn = %p\n", execDyn);
-	printf("mySymbols = %p\n", mySymbols);
-	printf("mySymbolCount = %d\n", mySymbolCount);
-	printf("firstLoadAddr = %p\n", (void*)firstLoadAddr);
-	printf("myStringTable = %p\n", myStringTable);
-	printf("entry = %p\n", (void*)entry);
-#endif
 
 	// create a handle for the C library. it's already relocated.
 	memset(&__libc_handle, 0, sizeof(Library));
@@ -596,7 +587,7 @@ void __interp_main(Elf64_Dyn *execDyn, Elf64_Sym *mySymbols, unsigned int mySymb
 	if (__lib_process(&__libc_handle, __libc_handle.info) != 0)
 	{
 		fprintf(stderr, "failed to second-pass-relocate the C library\n");
-		while (1);
+		_exit(1);
 	};
 
 	// jump to the entry point by pretending it's a function

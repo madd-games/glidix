@@ -56,7 +56,6 @@ typedef struct {
 	uint64_t rip, cs, rflags, rsp, ss;
 } PACKED Regs;
 
-
 typedef struct
 {
 	uint32_t flags;

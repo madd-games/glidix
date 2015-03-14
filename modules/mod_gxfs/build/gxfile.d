@@ -9,6 +9,7 @@ build/gxfile.o build/gxfile.d : gxfile.c gxfs.h /glidix/kernel-include/glidix/co
  /glidix/kernel-include/glidix/cowcache.h \
  /glidix/kernel-include/glidix/ftab.h \
  /glidix/kernel-include/glidix/signal.h \
+ /glidix/kernel-include/glidix/fpu.h \
  /glidix/kernel-include/glidix/console.h \
  /usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h \
  /glidix/kernel-include/glidix/memory.h \

@@ -10,4 +10,5 @@ build/isofile.o build/isofile.d : isofile.c /glidix/kernel-include/glidix/common
  /glidix/kernel-include/glidix/cowcache.h \
  /glidix/kernel-include/glidix/ftab.h \
  /glidix/kernel-include/glidix/signal.h \
+ /glidix/kernel-include/glidix/fpu.h \
  /glidix/kernel-include/glidix/string.h isofs.h isofile.h
