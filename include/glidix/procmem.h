@@ -50,6 +50,39 @@
 #define	MEM_SEGMENT_COLLISION		-1
 #define	MEM_SEGMENT_INVALID		-2
 
+#define	MEM_MAKE			(1 << 0)
+
+typedef enum
+{
+	MEM_CURRENT = 0,
+	MEM_OTHER = 1
+} MemorySelector;
+
+typedef struct
+{
+	/**
+	 * Pages still not copied from this COW list.
+	 * (sum of all refcounts).
+	 */
+	uint64_t pagesToGo;
+
+	/**
+	 * The frames.
+	 */
+	uint64_t *frames;
+
+	/**
+	 * Refcounts for each frame.
+	 */
+	uint64_t *refcounts;
+
+	/**
+	 * Number of FrameLists using this list.
+	 */
+	uint64_t users;
+	Spinlock lock;
+} COWList;
+
 typedef struct
 {
 	int refcount;
@@ -58,6 +91,11 @@ typedef struct
 	off_t fileOffset;
 	size_t fileSize;
 	Spinlock lock;
+
+	/**
+	 * If this is a copy-on-write frame list.
+	 */
+	COWList *cowList;
 } FrameList;
 
 typedef struct _Segment
@@ -131,6 +169,11 @@ ProcMem* DuplicateProcessMemory(ProcMem *pm);
 
 void UprefProcessMemory(ProcMem *pm);
 void DownrefProcessMemory(ProcMem *pm);
+
+/**
+ * Try copy-on-writing some data. Returns 0 if it happened, -1 otherwise.
+ */
+int tryCopyOnWrite(uint64_t addr);
 
 /**
  * Try loading-on-demand some data. Returns 0 if it happened, -1 otherwise.

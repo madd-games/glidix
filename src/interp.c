@@ -207,15 +207,6 @@ void initInterp()
 	libcDataSection = kmalloc(hdrData->p_memsz);
 	memset(libcDataSection, 0, hdrData->p_memsz);
 
-#if 0
-	fp->seek(fp, hdrData->p_offset, SEEK_SET);
-	if (vfsRead(fp, libcDataSection, hdrData->p_filesz) < hdrData->p_filesz)
-	{
-		FAILED();
-		panic("/initrd/lib/libc.so: failed to read all of the data section");
-	};
-#endif
-
 	// we must temporarily buffer all sections, with the correct layout, so that we can perform
 	// relocations on the data sections while reading all the tables from the text section.
 	char *tmpBuffer = (char*) kmalloc(hdrData->p_vaddr + hdrData->p_memsz);

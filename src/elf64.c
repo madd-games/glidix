@@ -238,8 +238,16 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	thread->szExecPars = parsz;
 	memcpy(thread->execPars, pars, parsz);
 
-	// create a new one
+	// create a new address space
 	ProcMem *pm = CreateProcessMemory();
+
+	// switch the address space, so that AddSegment() can optimize mapping
+	lockSched();
+	ProcMem *oldPM = thread->pm;
+	thread->pm = pm;
+	unlockSched();
+	SetProcessMemory(pm);
+	DownrefProcessMemory(oldPM);
 
 	// pass 1: allocate the frames and map them
 	for (i=0; i<(elfHeader.e_phnum); i++)
@@ -257,14 +265,6 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 			pdownref(fl);
 		};
 	};
-
-	// switch the address space
-	lockSched();
-	ProcMem *oldPM = thread->pm;
-	thread->pm = pm;
-	unlockSched();
-	SetProcessMemory(pm);
-	DownrefProcessMemory(oldPM);
 
 	// change the fpexec
 	if (thread->fpexec != NULL)

@@ -191,18 +191,24 @@ static void printbyte(uint8_t byte)
 
 static void onPageFault(Regs *regs)
 {
+	//kprintf_debug("pf\n");
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 
 	if (getCurrentThread() != NULL)
 	{
+		if (regs->errCode & 2)
+		{
+			// caused by a write
+			if (tryCopyOnWrite(faultAddr) == 0)
+			{
+				return;
+			};
+		};
+
 		if (tryLoadOnDemand(faultAddr) == 0)
 		{
 			return;
-		}
-		else
-		{
-			//panic("fail to load on demand (%a)\n", faultAddr);
 		};
 	};
 

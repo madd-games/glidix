@@ -107,14 +107,6 @@ typedef struct
 	union sigval	si_value;
 } siginfo_t;
 
-#if 0
-typedef struct _sigq
-{
-	siginfo_t	si;
-	struct _sigq	*next;
-} SignalQueue;
-#endif
-
 struct _Thread;
 void dispatchSignal(struct _Thread *thread);
 void sendSignal(struct _Thread *thread, siginfo_t *siginfo);
