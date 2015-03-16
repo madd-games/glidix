@@ -156,6 +156,7 @@ typedef struct
 
 FrameList *palloc_later(int count, off_t fileOffset, size_t fileSize);
 FrameList *palloc(int count);
+FrameList *pmap(uint64_t start, int count);
 void pupref(FrameList *fl);
 void pdownref(FrameList *fl);
 
