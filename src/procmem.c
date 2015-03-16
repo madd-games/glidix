@@ -81,7 +81,7 @@ FrameList *pmap(uint64_t start, int count)
 	fl->frames = (uint64_t*) kmalloc(8*count);
 	fl->fileOffset = -1;
 	fl->fileSize = 0;
-	fl->flags = 0;
+	fl->flags = FL_SHARED;
 	fl->cowList = NULL;
 	spinlockRelease(&fl->lock);
 	
