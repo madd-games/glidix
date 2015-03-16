@@ -62,29 +62,30 @@ extern "C" {
 
 #define	_GLIDIX_INSMOD_VERBOSE			(1 << 0)
 
-int	_glidix_exec(const char *path, const char *pars, size_t parsz);
-int	_glidix_open(const char *path, int flags, mode_t mode);
-uid_t	_glidix_getsuid();
-gid_t	_glidix_getsgid();
-void	_glidix_sighandler(void *handler);
-void	_glidix_sigret(void *ret);
-size_t	_glidix_getparsz();
-void	_glidix_getpars(char *buffer, size_t size);
-int	_glidix_geterrno();
-void	_glidix_seterrno(int _errno);
-pid_t	_glidix_clone(int flags, const _glidix_mstate *state);
-pid_t	_glidix_pollpid(pid_t pid, int *stat_loc, int flags);
-int	_glidix_insmod(const char *modname, const char *path, const char *opt, int flags);
-int	_glidix_ioctl(int fd, unsigned long cmd, void *argp);
-int	_glidix_fdopendir(const char *dirname);
-void	_glidix_diag();
-int	_glidix_mount(const char *filesystem, const char *image, const char *mountpoint, int flags);
-void	_glidix_yield();
-time_t	_glidix_time();
-void	_glidix_seterrnoptr(int *ptr);
-int*	_glidix_geterrnoptr();
-int	_glidix_libopen(const char *path, uint64_t loadAddr, _glidix_libinfo *info);
-void	_glidix_libclose(_glidix_libinfo *info);
+int		_glidix_exec(const char *path, const char *pars, size_t parsz);
+int		_glidix_open(const char *path, int flags, mode_t mode);
+uid_t		_glidix_getsuid();
+gid_t		_glidix_getsgid();
+void		_glidix_sighandler(void *handler);
+void		_glidix_sigret(void *ret);
+size_t		_glidix_getparsz();
+void		_glidix_getpars(char *buffer, size_t size);
+int		_glidix_geterrno();
+void		_glidix_seterrno(int _errno);
+pid_t		_glidix_clone(int flags, const _glidix_mstate *state);
+pid_t		_glidix_pollpid(pid_t pid, int *stat_loc, int flags);
+int		_glidix_insmod(const char *modname, const char *path, const char *opt, int flags);
+int		_glidix_ioctl(int fd, unsigned long cmd, void *argp);
+int		_glidix_fdopendir(const char *dirname);
+void		_glidix_diag();
+int		_glidix_mount(const char *filesystem, const char *image, const char *mountpoint, int flags);
+void		_glidix_yield();
+time_t		_glidix_time();
+void		_glidix_seterrnoptr(int *ptr);
+int*		_glidix_geterrnoptr();
+int		_glidix_libopen(const char *path, uint64_t loadAddr, _glidix_libinfo *info);
+void		_glidix_libclose(_glidix_libinfo *info);
+uint64_t	_glidix_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset);
 
 #ifdef __cplusplus
 }	/* extern "C" */

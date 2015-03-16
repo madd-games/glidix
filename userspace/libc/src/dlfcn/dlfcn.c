@@ -66,6 +66,19 @@ static char libdlError[256];
 static Library __libc_handle;
 static Library __main_handle;
 
+uint64_t __alloc_pages(size_t len)
+{
+	if (nextLoadAddr & 0xFFF)
+	{
+		nextLoadAddr &= ~0xFFF;
+		nextLoadAddr += 0x1000;
+	};
+
+	uint64_t out = nextLoadAddr;
+	nextLoadAddr += len;
+	return out;
+};
+
 void* __get_glob_data(const char *name)
 {
 	if (__main_handle.rela == NULL) return NULL;

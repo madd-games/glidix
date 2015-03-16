@@ -301,7 +301,7 @@ static void onGPF(Regs *regs)
 			printbyte(*peek++);
 		};
 		kprintf("\n");
-		panic("#PF in kernel");
+		panic("#GP in kernel");
 	};
 };
 

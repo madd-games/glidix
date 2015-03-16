@@ -70,6 +70,7 @@ void initSched()
 
 	// the value of registers do not matter except RSP and RIP,
 	// also the startup function should never return.
+	memset(&firstThread.fpuRegs, 0, 512);
 	memset(&firstThread.regs, 0, sizeof(Regs));
 	firstThread.regs.rip = (uint64_t) &startupThread;
 	firstThread.regs.rsp = (uint64_t) firstThread.stack + firstThread.stackSize;
@@ -232,6 +233,7 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	thread->stack = kmalloc(stackSize);
 	thread->stackSize = stackSize;
 
+	memset(&thread->fpuRegs, 0, 512);
 	memset(&thread->regs, 0, sizeof(Regs));
 	thread->regs.rip = (uint64_t) entry;
 	thread->regs.rsp = ((uint64_t) thread->stack + thread->stackSize - 8) & ~0xF;	// -8 because we'll push the return address...
@@ -304,11 +306,13 @@ void signalThread(Thread *thread)
 int threadClone(Regs *regs, int flags, MachineState *state)
 {
 	Thread *thread = (Thread*) kmalloc(sizeof(Thread));
+	fpuSave(&thread->fpuRegs);
 	memcpy(&thread->regs, regs, sizeof(Regs));
 	thread->regs.rax = 0;
 
 	if (state != NULL)
 	{
+		memcpy(&thread->fpuRegs, &state->fpuRegs, 512);
 		thread->regs.rdi = state->rdi;
 		thread->regs.rsi = state->rsi;
 		thread->regs.rbp = state->rbp;

@@ -38,7 +38,7 @@
 #include <stddef.h>
 #include <glidix/common.h>
 #include <glidix/spinlock.h>
-#include <glidix/cowcache.h>
+//#include <glidix/cowcache.h>
 
 #define	PROT_READ			(1 << 0)
 #define	PROT_WRITE			(1 << 1)
@@ -53,6 +53,9 @@
 #define	MEM_MAKE			(1 << 0)
 
 #define	FL_SHARED			(1 << 0)
+
+#define	MAP_PRIVATE			(1 << 0)
+#define	MAP_SHARED			(1 << 1)
 
 typedef enum
 {
@@ -93,7 +96,7 @@ typedef struct
 	off_t fileOffset;
 	size_t fileSize;
 	Spinlock lock;
-`	int flags;		/* F_L* */
+	int flags;		/* FL_* */
 
 	/**
 	 * If this is a copy-on-write frame list.
@@ -187,6 +190,8 @@ int tryLoadOnDemand(uint64_t addr);
 /**
  * Userspace.
  */
+#ifndef _SYS_MMAN_H
 int mprotect(uint64_t addr, uint64_t len, int prot);
+#endif
 
 #endif

@@ -1,2 +1,4 @@
  * Make sure that dup() in filesystem drivers actually causes both descriptions to point to the same offset.
-
+ * Module unloading
+ * Fix FPU support (fpuLoad causes GPF, see sched.c and signal.c)
+ * Implement APIC timers for the scheduler.

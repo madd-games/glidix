@@ -31,29 +31,71 @@
 
 #include <glidix/common.h>
 #include <glidix/ioctl.h>
+#include <glidix/devfs.h>
 
-#define	IOCTL_VIDEO_DEVSTAT		IOCTL_ARG(KDisplayDeviceStat, IOCTL_INT_VIDEO, 0)
-#define	IOCTL_VIDEO_MODSTAT		IOCTL_ARG(KDisplayMode, IOCTL_INT_VIDEO, 1)
-#define	IOCTL_VIDEO_SETMODE		IOCTL_ARG(KDisplayMode, IOCTL_INT_VIDEO, 2)
-#define	IOCTL_VIDEO_POST		IOCTL_NOARG(IOCTL_INT_VIDEO, 3)
-
-typedef struct
-{
-	unsigned int			index;
-	unsigned int			width;
-	unsigned int			height;
-	uint64_t			fbBytes;
-	uint8_t				bytesPerPixel;
-	uint8_t				redIndex;
-	uint8_t				greenIndex;
-	uint8_t				blueIndex;
-} KDisplayMode;
+#define	IOCTL_VIDEO_DEVSTAT		IOCTL_ARG(LGIDisplayDeviceStat, IOCTL_INT_VIDEO, 0)
+#define	IOCTL_VIDEO_MODSTAT		IOCTL_ARG(LGIDisplayMode, IOCTL_INT_VIDEO, 1)
+#define	IOCTL_VIDEO_SETMODE		IOCTL_ARG(LGIDisplayMode, IOCTL_INT_VIDEO, 2)
 
 typedef struct
 {
-	char				devName[256];
-	unsigned int			numModes;
-	char				libDriver[256];
-} KDisplayDeviceStat;
+	uint8_t				numModes;
+} LGIDisplayDeviceStat;
+
+typedef struct
+{
+	uint8_t				index;
+	int				width;
+	int				height;
+} LGIDisplayMode;
+
+typedef struct _LGIDeviceInterface
+{
+	/**
+	 * Private, driver-specific data.
+	 */
+	void*				drvdata;
+
+	/**
+	 * The device (devfs) handle for this interface.
+	 * Drivers should not use this.
+	 */
+	Device				dev;
+
+	/**
+	 * Information about the device.
+	 */
+	LGIDisplayDeviceStat		dstat;
+
+	/**
+	 * Get information about the specified video mode.
+	 * Returns 0 on success, -1 on device error.
+	 * The 'index' field is already set.
+	 */
+	int (*getModeInfo)(struct _LGIDeviceInterface *intf, LGIDisplayMode *mode);
+
+	/**
+	 * Set the video mode.
+	 */
+	void (*setMode)(struct _LGIDeviceInterface *intf, LGIDisplayMode *mode);
+
+	/**
+	 * Swap a framebuffer to the screen.
+	 */
+	void (*write)(struct _LGIDeviceInterface *intf, const void *data, size_t len);
+
+	/**
+	 * Get current video memory.
+	 */
+	FrameList* (*getFramebuffer)(struct _LGIDeviceInterface *intf, size_t len, int prot, int flags, off_t offset);
+} LGIDeviceInterface;
+
+void lgiKInit();
+
+/**
+ * Add a new LGI device. This is used by drivers to report the existence of a display device.
+ * Returns 0 on success, -1 on failure.
+ */
+int lgiKAddDevice(const char *name, LGIDeviceInterface *intf);
 
 #endif

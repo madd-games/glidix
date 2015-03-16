@@ -32,12 +32,12 @@
 #include <glidix/devfs.h>
 
 static Device devRandom;
-static int lastRand = 56;
-static int coeff = 45;
+static unsigned int lastRand = 56;
+//static unsigned int coeff = 45;
 
 static char randByte()
 {
-	int nextRand = (coeff * lastRand + 7) % 256;
+	unsigned int nextRand = (1103515245 * lastRand + 12345);
 	lastRand = nextRand;
 	return (char) nextRand;
 };

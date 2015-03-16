@@ -95,13 +95,14 @@ def opCreateBuildMK():
 	f.write("TARGET_RANLIB=%s\n" % config["ranlib"])
 	f.write("PREFIX=%s\n" % config["prefix"])
 	f.write("CFLAGS=-mno-mmx -mno-sse -mno-sse2 -I include -Wall -Werror -fPIC\n")
-	f.write("out/lib/libc.so: %s\n" % (" ".join(objectFiles)))
-	f.write("\t$(TARGET_CC) -shared -o $@ libglidix.o $^\n");
+	f.write("out/lib/libc.so: libglidix.o %s\n" % (" ".join(objectFiles)))
+	f.write("\t$(TARGET_CC) -shared -o $@ $^\n");
 	f.write("out/lib/libdl.so: support/libdl.c\n")
 	f.write("\t$(TARGET_CC) -shared -o $@ $^ -fPIC\n")
-	f.write("out/lib/libc.a: %s\n" % (" ".join(objectFiles)))
+	f.write("libglidix.o: %s/lib/libglidix.a\n" % config["prefix"])
 	f.write("\t%s x %s/lib/libglidix.a\n" % (config["ar"], config["prefix"]))
-	f.write("\t%s rvs $@ libglidix.o $^\n" % config["ar"])
+	f.write("out/lib/libc.a: libglidix.o %s\n" % (" ".join(objectFiles)))
+	f.write("\t%s rvs $@ $^\n" % config["ar"])
 	f.write("\t%s $@\n" % config["ranlib"])
 	f.write("-include %s\n" % (" ".join(depFiles)))
 	f.write("out/lib/crt0.o: crt/crt0.asm\n")

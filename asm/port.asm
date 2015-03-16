@@ -41,6 +41,20 @@ inb:
 	in  al,		dx
 	ret
 
+[global outw]
+outw:
+	mov dx,		di
+	mov ax,		si
+	out dx,		ax
+	ret
+
+[global inw]
+inw:
+	mov dx,		di
+	xor rax,	rax
+	in  ax,		dx
+	ret
+
 [global outd]
 outd:
 	mov dx,		di

@@ -27,5 +27,83 @@
 */
 
 #include <glidix/video.h>
+#include <glidix/devfs.h>
+#include <glidix/sched.h>
+#include <glidix/errno.h>
+#include <glidix/string.h>
+#include <glidix/memory.h>
+#include <glidix/console.h>
 
+typedef struct
+{
+	LGIDeviceInterface*			intf;
+} DisplayData;
 
+static int lgi_ioctl(File *fp, uint64_t cmd, void *argp)
+{
+	//LGIDeviceInterface *intf = (LGIDeviceInterface*) fp->fsdata;
+	DisplayData *data = (DisplayData*) fp->fsdata;
+	LGIDeviceInterface *intf = data->intf;
+	Thread *ct = getCurrentThread();
+
+	switch (cmd)
+	{
+	case IOCTL_VIDEO_DEVSTAT:
+		memcpy(argp, &intf->dstat, sizeof(LGIDisplayDeviceStat));
+		return 0;
+	case IOCTL_VIDEO_MODSTAT:
+		ct->therrno = EIO;
+		return intf->getModeInfo(intf, (LGIDisplayMode*) argp);
+	case IOCTL_VIDEO_SETMODE:
+		intf->setMode(intf, (LGIDisplayMode*) argp);
+		return 0;
+	default:
+		ct->therrno = EINVAL;
+		return -1;
+	};
+};
+
+static void lgi_close(File *fp)
+{
+	DisplayData *data = (DisplayData*) fp->fsdata;
+	kfree(data->intf);
+	kfree(data);
+};
+
+static ssize_t lgi_write(File *fp, const void *data, size_t size)
+{
+	DisplayData *disp = (DisplayData*) fp->fsdata;
+	disp->intf->write(disp->intf, data, size);
+	return (ssize_t) size;
+};
+
+FrameList* lgi_mmap(File *fp, size_t len, int prot, int flags, off_t offset)
+{
+	DisplayData *disp = (DisplayData*) fp->fsdata;
+	return disp->intf->getFramebuffer(disp->intf, len, prot, flags, offset);
+};
+
+static int lgi_open(void *data, File *fp, size_t szFile)
+{
+	DisplayData *disp = (DisplayData*) kmalloc(sizeof(DisplayData));
+	disp->intf = (LGIDeviceInterface*) data;
+
+	fp->fsdata = disp;
+	fp->ioctl = lgi_ioctl;
+	fp->close = lgi_close;
+	fp->write = lgi_write;
+	fp->mmap = lgi_mmap;
+
+	return 0;
+};
+
+int lgiKAddDevice(const char *name, LGIDeviceInterface *intf)
+{
+	intf->dev = AddDevice(name, intf, lgi_open, 0);
+	if (intf->dev == NULL)
+	{
+		return -1;
+	};
+
+	return 0;
+};

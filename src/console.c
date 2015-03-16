@@ -281,29 +281,49 @@ void kputbuf(const char *buf, size_t size)
 	spinlockRelease(&consoleLock);
 };
 
+typedef struct
+{
+	char on;
+	char off;
+	uint64_t mask;
+} Flag;
+
+static Flag flagList[11] = {
+	{'C', 'c', (1 << 0)},
+	{'P', 'p', (1 << 2)},
+	{'A', 'a', (1 << 4)},
+	{'Z', 'z', (1 << 6)},
+	{'S', 's', (1 << 7)},
+	{'T', 't', (1 << 8)},
+	{'I', 'i', (1 << 9)},
+	{'D', 'd', (1 << 10)},
+	{'O', 'o', (1 << 11)},
+	{'N', 'n', (1 << 14)},
+	{'R', 'r', (1 << 16)}
+};
+
+static void printFlags(uint64_t flags)
+{
+	int i;
+	for (i=0; i<11; i++)
+	{
+		char c = (flags & flagList[i].mask) ? flagList[i].on : flagList[i].off;
+		kprintf("%c", c);
+	};
+};
+
 void kdumpregs(Regs *regs)
 {
-	kprintf("DS : %a\n", regs->ds);
-	kprintf("RDI: %a\n", regs->rdi);
-	kprintf("RSI: %a\n", regs->rsi);
-	kprintf("RBP: %a\n", regs->rbp);
-	kprintf("RBX: %a\n", regs->rbx);
-	kprintf("RDX: %a\n", regs->rdx);
-	kprintf("RCX: %a\n", regs->rcx);
-	kprintf("RAX: %a\n", regs->rax);
-	kprintf("R8:  %a\n", regs->r8);
-	kprintf("R9:  %a\n", regs->r9);
-	kprintf("R10: %a\n", regs->r10);
-	kprintf("R11: %a\n", regs->r11);
-	kprintf("R12: %a\n", regs->r12);
-	kprintf("R13: %a\n", regs->r13);
-	kprintf("R14: %a\n", regs->r14);
-	kprintf("R15: %a\n", regs->r15);
-	kprintf("INO: %a\n", regs->intNo);
-	kprintf("ERR: %a\n", regs->errCode);
-	kprintf("RIP: %a\n", regs->rip);
-	kprintf("CS : %a\n", regs->cs);
-	kprintf("RFL: %a\n", regs->rflags);
-	kprintf("RSP: %a\n", regs->rsp);
-	kprintf("SS : %a\n", regs->ss);
+	kprintf("DS:  %a\tSS:  %a\n", regs->ds, regs->ss);
+	kprintf("RDI: %a\tRSI: %a\n", regs->rdi, regs->rsi);
+	kprintf("RBP: %a\tRSP: %a\n", regs->rbp, regs->rsp);
+	kprintf("RAX: %a\tRBX: %a\n", regs->rax, regs->rbx);
+	kprintf("RCX: %a\tRDX: %a\n", regs->rcx, regs->rdx);
+	kprintf("R8:  %a\tR9:  %a\n", regs->r8, regs->r9);
+	kprintf("R10: %a\tR11: %a\n", regs->r10, regs->r11);
+	kprintf("R12: %a\tR13: %a\n", regs->r12, regs->r13);
+	kprintf("R14: %a\tR15: %a\n", regs->r14, regs->r15);
+	kprintf("INO: %a\tERR: %a\n", regs->intNo, regs->errCode);
+	kprintf("CS:  %a\tRIP: %a\n", regs->cs, regs->rip);
+	kprintf("RFLAGS: %a (", regs->rflags); printFlags(regs->rflags); kprintf(")\n");
 };

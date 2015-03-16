@@ -34,6 +34,7 @@
  */
 
 #include <glidix/common.h>
+#include <glidix/procmem.h>
 #include <stddef.h>
 
 #define	SEEK_SET			0
@@ -204,6 +205,14 @@ typedef struct _File
 	 * zero-pad the file until it is the specified size. This can never fail if defined.
 	 */
 	void (*truncate)(struct _File *file, off_t length);
+
+	/**
+	 * Create a FrameList that can be used to read/write from the file - this is used by mmap().
+	 * If NULL is returned, then the operation failed and mmap() returns with error code ENODEV.
+	 * The returned FrameList should be such that pdownref() can be called on it aftewards, without
+	 * causing it to delete. For example, it could be returned by palloc().
+	 */
+	FrameList* (*mmap)(struct _File *file, size_t len, int prot, int flags, off_t offset);
 } File;
 
 /**

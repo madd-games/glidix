@@ -97,7 +97,8 @@ syscallTable = {
 	50:	"_glidix_geterrnoptr",
 	51:	"clock",
 	52:	"_glidix_libopen",
-	53:	"_glidix_libclose"
+	53:	"_glidix_libclose",
+	54:	"_glidix_mmap"
 }
 
 f = open("_libglidix.s", "wb")

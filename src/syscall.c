@@ -1143,6 +1143,123 @@ char *sys_getcwd(char *buf, size_t size)
 	return buf;
 };
 
+/**
+ * Userspace mmap() should map around this. Returns the address of the END of the mapped region,
+ * and 'addr' must be a valid address where the specified region can fit without segment collisions.
+ */
+uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset)
+{
+	int allProt = PROT_READ | PROT_WRITE | PROT_EXEC;
+	int allFlags = MAP_PRIVATE | MAP_SHARED;
+
+	if (prot == 0)
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return 0;
+	};
+
+	if ((prot & allProt) != prot)
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return 0;
+	};
+
+	if ((flags & allFlags) != flags)
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return 0;
+	};
+
+	if ((flags & (MAP_PRIVATE | MAP_SHARED)) == 0)
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return 0;
+	};
+
+	if ((flags & MAP_PRIVATE) && (flags & MAP_SHARED))
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return 0;
+	};
+
+	if (len == 0)
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return 0;
+	};
+
+	addr &= ~0xFFF;
+	if ((addr < 0x1000) || ((addr+len) > 0x7FC0000000))
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return 0;
+	};
+
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return 0;
+	};
+
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	File *fp = ftab->entries[fd];
+	if (fp->mmap == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = ENODEV;
+		return 0;
+	};
+
+	int neededPerms = 0;
+	if (prot & PROT_READ)
+	{
+		neededPerms |= O_RDONLY;
+	};
+
+	if (prot & PROT_WRITE)
+	{
+		// PROT_WRITE implies PROT_READ.
+		neededPerms |= O_RDWR;
+	};
+
+	if (prot & PROT_EXEC)
+	{
+		// PROT_EXEC implies PROT_READ
+		neededPerms |= O_RDONLY;
+	};
+
+	if ((fp->oflag & neededPerms) != neededPerms)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = EACCES;
+		return 0;
+	};
+
+	FrameList *fl = fp->mmap(fp, len, prot, flags, offset);
+	if (fl == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		getCurrentThread()->therrno = ENODEV;
+		return 0;
+	};
+
+	spinlockRelease(&ftab->spinlock);
+
+	if (AddSegment(getCurrentThread()->pm, addr/0x1000, fl, prot) != 0)
+	{
+		pdownref(fl);
+		getCurrentThread()->therrno = EINVAL;
+		return 0;
+	};
+
+	uint64_t out = addr + 0x1000 * fl->count;
+	pdownref(fl);
+
+	return out;
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	kdumpregs(regs);
@@ -1420,6 +1537,9 @@ void syscallDispatch(Regs *regs, uint16_t num)
 			signalOnBadPointer(regs, regs->rdi);
 		};
 		libClose((libInfo*) regs->rdx);
+		break;
+	case 54:
+		regs->rax = sys_mmap(regs->rdi, (size_t)regs->rsi, (int)regs->rdx, (int)regs->rcx, (int)regs->r8, (off_t)regs->r9);
 		break;
 	default:
 		signalOnBadSyscall(regs);
