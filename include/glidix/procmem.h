@@ -52,7 +52,7 @@
 
 #define	MEM_MAKE			(1 << 0)
 
-#define	FL_NO_FREE			(1 << 0)
+#define	FL_SHARED			(1 << 0)
 
 typedef enum
 {
