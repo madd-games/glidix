@@ -52,6 +52,8 @@
 
 #define	MEM_MAKE			(1 << 0)
 
+#define	FL_NO_FREE			(1 << 0)
+
 typedef enum
 {
 	MEM_CURRENT = 0,
@@ -91,6 +93,7 @@ typedef struct
 	off_t fileOffset;
 	size_t fileSize;
 	Spinlock lock;
+`	int flags;		/* F_L* */
 
 	/**
 	 * If this is a copy-on-write frame list.
