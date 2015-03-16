@@ -45,6 +45,7 @@ FrameList *palloc_later(int count, off_t fileOffset, size_t fileSize)
 	fl->frames = (uint64_t*) kmalloc(8*count);
 	fl->fileOffset = fileOffset;
 	fl->fileSize = fileSize;
+	fl->flags = 0;
 	fl->cowList = NULL;
 	memset(fl->frames, 0, 8*count);
 	spinlockRelease(&fl->lock);
@@ -59,6 +60,7 @@ FrameList *palloc(int count)
 	fl->frames = (uint64_t*) kmalloc(8*count);
 	fl->fileOffset = -1;
 	fl->fileSize = 0;
+	fl->flags = 0;
 	fl->cowList = NULL;
 	spinlockRelease(&fl->lock);
 
@@ -71,14 +73,38 @@ FrameList *palloc(int count)
 	return fl;
 };
 
+FrameList *pmap(uint64_t start, int count)
+{
+	FrameList *fl = (FrameList*) kmalloc(sizeof(FrameList));
+	fl->refcount = 1;
+	fl->count = count;
+	fl->frames = (uint64_t*) kmalloc(8*count);
+	fl->fileOffset = -1;
+	fl->fileSize = 0;
+	fl->flags = 0;
+	fl->cowList = NULL;
+	spinlockRelease(&fl->lock);
+	
+	int i;
+	for (i=0; i<count; i++)
+	{
+		fl->frames[i] = start + i;
+	};
+	
+	return fl;
+};
+
 void pupref(FrameList *fl)
 {
+	spinlockAcquire(&fl->lock);
 	fl->refcount++;
+	spinlockRelease(&fl->lock);
 };
 
 uint64_t getFlagsRegister();
 void pdownref(FrameList *fl)
 {
+	spinlockAcquire(&fl->lock);
 	fl->refcount--;
 	if (fl->refcount == 0)
 	{
@@ -123,12 +149,20 @@ void pdownref(FrameList *fl)
 		kfree(fl->frames);
 		kfree(fl);
 	};
+	
+	spinlockRelease(&fl->lock);
 };
 
 FrameList *pdup(FrameList *old)
 {
 	spinlockAcquire(&old->lock);
-
+	if (old->flags & FL_SHARED)
+	{
+		old->refcount++;
+		spinlockRelease(&old->lock);
+		return old;
+	};
+	
 	FrameList *fl = (FrameList*) kmalloc(sizeof(FrameList));
 	fl->refcount = 1;
 	fl->count = old->count;
