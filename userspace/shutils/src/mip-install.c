@@ -1,0 +1,125 @@
+/*
+	Glidix Shell Utilities
+
+	Copyright (c) 2014-2015, Madd Games.
+	All rights reserved.
+	
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions are met:
+	
+	* Redistributions of source code must retain the above copyright notice, this
+	  list of conditions and the following disclaimer.
+	
+	* Redistributions in binary form must reproduce the above copyright notice,
+	  this list of conditions and the following disclaimer in the documentation
+	  and/or other materials provided with the distribution.
+	
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+	FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+	DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+	CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+#include <sys/stat.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include "mip.h"
+
+int main(int argc, char *argv[])
+{
+	if (argc != 2)
+	{
+		fprintf(stderr, "USAGE:\t%s mip-file\n", argv[0]);
+		fprintf(stderr, "\tInstall a MIP file.\n");
+		return 1;
+	};
+
+	if (geteuid() != 0)
+	{
+		fprintf(stderr, "you must be root\n");
+		return 1;
+	};
+
+	FILE *fp = fopen(argv[1], "rb");
+	if (fp == NULL)
+	{
+		perror("fopen");
+		return 1;
+	};
+
+	MIPHeader head;
+	fread(&head, 1, sizeof(MIPHeader), fp);
+
+	if (memcmp(head.magic, "MIP", 3) != 0)
+	{
+		fprintf(stderr, "this is not a valid MIP file\n");
+		fclose(fp);
+		return 1;
+	};
+
+	if (head.version != 1)
+	{
+		fprintf(stderr, "unsupported MIP version (%d)\n", head.version);
+		fclose(fp);
+		return 1;
+	};
+
+	while (!feof(fp))
+	{
+		MIPFile fileinfo;
+		if (fread(&fileinfo, 1, sizeof(MIPFile), fp) == 0) break;
+
+		if (fileinfo.mode & 0x8000)
+		{
+			printf("mkdir %s\n", fileinfo.filename);
+			struct stat st;
+			if (stat(fileinfo.filename, &st) == 0)
+			{
+				continue;
+			};
+
+			if (mkdir(fileinfo.filename, fileinfo.mode) != 0)
+			{
+				perror("mkdir");
+				fclose(fp);
+				return 1;
+			};
+		}
+		else
+		{
+			printf("unpack %s\n", fileinfo.filename);
+			int fd = open(fileinfo.filename, O_CREAT | O_WRONLY | O_TRUNC, fileinfo.mode);
+			if (fd == -1)
+			{
+				perror("open");
+				fclose(fp);
+				return 1;
+			};
+
+			void *buffer = malloc(fileinfo.size);
+			if (buffer == NULL)
+			{
+				fprintf(stderr, "out of memory!");
+				return 1;
+			};
+
+			fread(buffer, 1, fileinfo.size, fp);
+			write(fd, buffer, fileinfo.size);
+			free(buffer);
+
+			close(fd);
+		};
+	};
+
+	printf("installation complete\n");
+	return 0;
+};
