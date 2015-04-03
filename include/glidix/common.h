@@ -100,4 +100,28 @@ typedef	int64_t				ssize_t;
 typedef int				pid_t;
 #endif
 
+/* common.asm */
+uint64_t	msrRead(uint32_t msr);
+void		msrWrite(uint32_t msr, uint64_t value);
+
+/**
+ * Give up remaining CPU time (implemented in sched.c, don't ask for reasons).
+ */
+void		kyield();
+
+/**
+ * This is used to improve debugging of the OS inside Bochs. When this function is called,
+ * and we are not running within Bochs, 0 is simply returned. If we ARE within Bochs, then
+ * this issues a breakpoint such that the developer may change the value of RAX to give us
+ * an option, without depending on any Glidix drivers, which can help debug some low-level
+ * stuff. See common.asm.
+ */
+uint64_t getDebugInput();
+
+/**
+ * Enter the debugging state (see debug.c). The passed 'Regs' structure refers to the state
+ * of the kernel at the time of a complete failure.
+ */
+void debugKernel(Regs *regs);
+
 #endif

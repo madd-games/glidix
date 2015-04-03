@@ -434,7 +434,10 @@ static void ideInit(uint32_t *bars)
 				thparams->devidx = count;
 				thparams->sd = sdCreate(&sdparams);
 
-				CreateKernelThread(ataThread, NULL, thparams);
+				KernelThreadParams ataPars;
+				ataPars.stackSize = 0x4000;
+				ataPars.name = "ATA device";
+				CreateKernelThread(ataThread, &ataPars, thparams);
 			}
 			else
 			{
@@ -488,7 +491,10 @@ static void ideInit(uint32_t *bars)
 				thparams->devidx = count;
 				thparams->sd = sdCreate(&sdparams);
 
-				CreateKernelThread(atapiThread, NULL, thparams);
+				KernelThreadParams atapiPars;
+				atapiPars.stackSize = 0x4000;
+				atapiPars.name = "ATAPI device";
+				CreateKernelThread(atapiThread, &atapiPars, thparams);
 			};
 
 			count++;

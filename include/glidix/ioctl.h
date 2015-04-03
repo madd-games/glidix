@@ -51,5 +51,6 @@
 #define	IOCTL_INT_SDI						0x0002
 #define	IOCTL_INT_VIDEO						0x0003
 #define	IOCTL_INT_GPU						0x0004
+#define	IOCTL_INT_TERM						0x0005
 
 #endif

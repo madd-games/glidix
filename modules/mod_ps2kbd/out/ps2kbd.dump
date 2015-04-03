@@ -1,0 +1,253 @@
+
+ps2kbd.gkm:     file format elf64-x86-64
+
+
+Disassembly of section .modbody:
+
+0000000000000000 <_start>:
+   0:	55                   	push   %rbp
+   1:	48 89 e5             	mov    %rsp,%rbp
+   4:	5d                   	pop    %rbp
+   5:	c3                   	retq   
+
+0000000000000006 <onKeyboardIRQ>:
+   6:	55                   	push   %rbp
+   7:	48 89 e5             	mov    %rsp,%rbp
+   a:	48 83 ec 10          	sub    $0x10,%rsp
+   e:	89 7d fc             	mov    %edi,-0x4(%rbp)
+  11:	48 bf 00 00 00 00 00 	movabs $0x0,%rdi
+  18:	00 00 00 
+  1b:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+  22:	00 00 00 
+  25:	ff d0                	callq  *%rax
+  27:	c9                   	leaveq 
+  28:	c3                   	retq   
+
+0000000000000029 <kbdThread>:
+  29:	55                   	push   %rbp
+  2a:	48 89 e5             	mov    %rsp,%rbp
+  2d:	48 83 ec 20          	sub    $0x20,%rsp
+  31:	48 89 7d e8          	mov    %rdi,-0x18(%rbp)
+  35:	c7 45 fc 00 00 00 00 	movl   $0x0,-0x4(%rbp)
+  3c:	c7 45 f8 00 00 00 00 	movl   $0x0,-0x8(%rbp)
+  43:	48 bf 00 00 00 00 00 	movabs $0x0,%rdi
+  4a:	00 00 00 
+  4d:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+  54:	00 00 00 
+  57:	ff d0                	callq  *%rax
+  59:	bf 60 00 00 00       	mov    $0x60,%edi
+  5e:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+  65:	00 00 00 
+  68:	ff d0                	callq  *%rax
+  6a:	88 45 f6             	mov    %al,-0xa(%rbp)
+  6d:	80 7d f6 1d          	cmpb   $0x1d,-0xa(%rbp)
+  71:	75 0c                	jne    7f <kbdThread+0x56>
+  73:	c7 45 fc 01 00 00 00 	movl   $0x1,-0x4(%rbp)
+  7a:	e9 11 01 00 00       	jmpq   190 <kbdThread+0x167>
+  7f:	80 7d f6 9d          	cmpb   $0x9d,-0xa(%rbp)
+  83:	75 0c                	jne    91 <kbdThread+0x68>
+  85:	c7 45 fc 00 00 00 00 	movl   $0x0,-0x4(%rbp)
+  8c:	e9 ff 00 00 00       	jmpq   190 <kbdThread+0x167>
+  91:	0f b6 45 f6          	movzbl -0xa(%rbp),%eax
+  95:	84 c0                	test   %al,%al
+  97:	0f 88 c4 00 00 00    	js     161 <kbdThread+0x138>
+  9d:	0f b6 45 f6          	movzbl -0xa(%rbp),%eax
+  a1:	48 ba 00 00 00 00 00 	movabs $0x0,%rdx
+  a8:	00 00 00 
+  ab:	48 98                	cltq   
+  ad:	0f b6 04 02          	movzbl (%rdx,%rax,1),%eax
+  b1:	88 45 f7             	mov    %al,-0x9(%rbp)
+  b4:	83 7d f8 00          	cmpl   $0x0,-0x8(%rbp)
+  b8:	74 17                	je     d1 <kbdThread+0xa8>
+  ba:	0f b6 45 f6          	movzbl -0xa(%rbp),%eax
+  be:	48 ba 00 00 00 00 00 	movabs $0x0,%rdx
+  c5:	00 00 00 
+  c8:	48 98                	cltq   
+  ca:	0f b6 04 02          	movzbl (%rdx,%rax,1),%eax
+  ce:	88 45 f7             	mov    %al,-0x9(%rbp)
+  d1:	80 7d f7 80          	cmpb   $0x80,-0x9(%rbp)
+  d5:	75 0c                	jne    e3 <kbdThread+0xba>
+  d7:	c7 45 f8 01 00 00 00 	movl   $0x1,-0x8(%rbp)
+  de:	e9 ad 00 00 00       	jmpq   190 <kbdThread+0x167>
+  e3:	80 7d f7 00          	cmpb   $0x0,-0x9(%rbp)
+  e7:	75 05                	jne    ee <kbdThread+0xc5>
+  e9:	e9 a2 00 00 00       	jmpq   190 <kbdThread+0x167>
+  ee:	83 7d fc 00          	cmpl   $0x0,-0x4(%rbp)
+  f2:	74 54                	je     148 <kbdThread+0x11f>
+  f4:	bf 5e 00 00 00       	mov    $0x5e,%edi
+  f9:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+ 100:	00 00 00 
+ 103:	ff d0                	callq  *%rax
+ 105:	0f b6 45 f6          	movzbl -0xa(%rbp),%eax
+ 109:	48 ba 00 00 00 00 00 	movabs $0x0,%rdx
+ 110:	00 00 00 
+ 113:	48 98                	cltq   
+ 115:	0f b6 04 02          	movzbl (%rdx,%rax,1),%eax
+ 119:	0f be c0             	movsbl %al,%eax
+ 11c:	89 c7                	mov    %eax,%edi
+ 11e:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+ 125:	00 00 00 
+ 128:	ff d0                	callq  *%rax
+ 12a:	80 7d f7 63          	cmpb   $0x63,-0x9(%rbp)
+ 12e:	75 2f                	jne    15f <kbdThread+0x136>
+ 130:	be 02 00 00 00       	mov    $0x2,%esi
+ 135:	bf 01 00 00 00       	mov    $0x1,%edi
+ 13a:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+ 141:	00 00 00 
+ 144:	ff d0                	callq  *%rax
+ 146:	eb 48                	jmp    190 <kbdThread+0x167>
+ 148:	0f b6 45 f7          	movzbl -0x9(%rbp),%eax
+ 14c:	0f be c0             	movsbl %al,%eax
+ 14f:	89 c7                	mov    %eax,%edi
+ 151:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+ 158:	00 00 00 
+ 15b:	ff d0                	callq  *%rax
+ 15d:	eb 31                	jmp    190 <kbdThread+0x167>
+ 15f:	eb 2f                	jmp    190 <kbdThread+0x167>
+ 161:	0f b6 45 f6          	movzbl -0xa(%rbp),%eax
+ 165:	84 c0                	test   %al,%al
+ 167:	79 27                	jns    190 <kbdThread+0x167>
+ 169:	0f b6 45 f6          	movzbl -0xa(%rbp),%eax
+ 16d:	83 e0 7f             	and    $0x7f,%eax
+ 170:	48 ba 00 00 00 00 00 	movabs $0x0,%rdx
+ 177:	00 00 00 
+ 17a:	48 98                	cltq   
+ 17c:	0f b6 04 02          	movzbl (%rdx,%rax,1),%eax
+ 180:	88 45 f5             	mov    %al,-0xb(%rbp)
+ 183:	80 7d f5 80          	cmpb   $0x80,-0xb(%rbp)
+ 187:	75 07                	jne    190 <kbdThread+0x167>
+ 189:	c7 45 f8 00 00 00 00 	movl   $0x0,-0x8(%rbp)
+ 190:	e9 ae fe ff ff       	jmpq   43 <kbdThread+0x1a>
+
+0000000000000195 <__module_init>:
+ 195:	55                   	push   %rbp
+ 196:	48 89 e5             	mov    %rsp,%rbp
+ 199:	48 83 ec 10          	sub    $0x10,%rsp
+ 19d:	48 bf 00 00 00 00 00 	movabs $0x0,%rdi
+ 1a4:	00 00 00 
+ 1a7:	b8 00 00 00 00       	mov    $0x0,%eax
+ 1ac:	48 ba 00 00 00 00 00 	movabs $0x0,%rdx
+ 1b3:	00 00 00 
+ 1b6:	ff d2                	callq  *%rdx
+ 1b8:	48 be 00 00 00 00 00 	movabs $0x0,%rsi
+ 1bf:	00 00 00 
+ 1c2:	bf 01 00 00 00       	mov    $0x1,%edi
+ 1c7:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+ 1ce:	00 00 00 
+ 1d1:	ff d0                	callq  *%rax
+ 1d3:	48 ba 00 00 00 00 00 	movabs $0x0,%rdx
+ 1da:	00 00 00 
+ 1dd:	48 89 02             	mov    %rax,(%rdx)
+ 1e0:	48 c7 45 f0 00 40 00 	movq   $0x4000,-0x10(%rbp)
+ 1e7:	00 
+ 1e8:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+ 1ef:	00 00 00 
+ 1f2:	48 89 45 f8          	mov    %rax,-0x8(%rbp)
+ 1f6:	48 8d 45 f0          	lea    -0x10(%rbp),%rax
+ 1fa:	ba 00 00 00 00       	mov    $0x0,%edx
+ 1ff:	48 89 c6             	mov    %rax,%rsi
+ 202:	48 bf 00 00 00 00 00 	movabs $0x0,%rdi
+ 209:	00 00 00 
+ 20c:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+ 213:	00 00 00 
+ 216:	ff d0                	callq  *%rax
+ 218:	c9                   	leaveq 
+ 219:	c3                   	retq   
+
+000000000000021a <__module_fini>:
+ 21a:	55                   	push   %rbp
+ 21b:	48 89 e5             	mov    %rsp,%rbp
+ 21e:	48 bf 00 00 00 00 00 	movabs $0x0,%rdi
+ 225:	00 00 00 
+ 228:	b8 00 00 00 00       	mov    $0x0,%eax
+ 22d:	48 ba 00 00 00 00 00 	movabs $0x0,%rdx
+ 234:	00 00 00 
+ 237:	ff d2                	callq  *%rdx
+ 239:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+ 240:	00 00 00 
+ 243:	48 8b 00             	mov    (%rax),%rax
+ 246:	48 89 c6             	mov    %rax,%rsi
+ 249:	bf 01 00 00 00       	mov    $0x1,%edi
+ 24e:	48 b8 00 00 00 00 00 	movabs $0x0,%rax
+ 255:	00 00 00 
+ 258:	ff d0                	callq  *%rax
+ 25a:	5d                   	pop    %rbp
+ 25b:	c3                   	retq   
+
+000000000000025c <_fini>:
+ 25c:	55                   	push   %rbp
+ 25d:	48 89 e5             	mov    %rsp,%rbp
+ 260:	5d                   	pop    %rbp
+ 261:	c3                   	retq   
+ 262:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+ 268:	49 6e                	rex.WB outsb %ds:(%rsi),(%dx)
+ 26a:	69 74 69 61 6c 69 7a 	imul   $0x697a696c,0x61(%rcx,%rbp,2),%esi
+ 271:	69 
+ 272:	6e                   	outsb  %ds:(%rsi),(%dx)
+ 273:	67 20 74 68 65       	and    %dh,0x65(%eax,%ebp,2)
+ 278:	20 50 53             	and    %dl,0x53(%rax)
+ 27b:	2f                   	(bad)  
+ 27c:	32 20                	xor    (%rax),%ah
+ 27e:	6b 65 79 62          	imul   $0x62,0x79(%rbp),%esp
+ 282:	6f                   	outsl  %ds:(%rsi),(%dx)
+ 283:	61                   	(bad)  
+ 284:	72 64                	jb     2ea <keymap+0x2a>
+ 286:	0a 00                	or     (%rax),%al
+ 288:	50                   	push   %rax
+ 289:	53                   	push   %rbx
+ 28a:	2f                   	(bad)  
+ 28b:	32 20                	xor    (%rax),%ah
+ 28d:	6b 65 79 62          	imul   $0x62,0x79(%rbp),%esp
+ 291:	6f                   	outsl  %ds:(%rsi),(%dx)
+ 292:	61                   	(bad)  
+ 293:	72 64                	jb     2f9 <keymap+0x39>
+ 295:	20 64 72 69          	and    %ah,0x69(%rdx,%rsi,2)
+ 299:	76 65                	jbe    300 <keymap+0x40>
+ 29b:	72 00                	jb     29d <_fini+0x41>
+ 29d:	53                   	push   %rbx
+ 29e:	68 75 74 74 69       	pushq  $0x69747475
+ 2a3:	6e                   	outsb  %ds:(%rsi),(%dx)
+ 2a4:	67 20 64 6f 77       	and    %ah,0x77(%edi,%ebp,2)
+ 2a9:	6e                   	outsb  %ds:(%rsi),(%dx)
+ 2aa:	20 50 53             	and    %dl,0x53(%rax)
+ 2ad:	2f                   	(bad)  
+ 2ae:	32 20                	xor    (%rax),%ah
+ 2b0:	6b 65 79 62          	imul   $0x62,0x79(%rbp),%esp
+ 2b4:	6f                   	outsl  %ds:(%rsi),(%dx)
+ 2b5:	61                   	(bad)  
+ 2b6:	72 64                	jb     31c <keymap+0x5c>
+ 2b8:	0a 00                	or     (%rax),%al
+ 2ba:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+
+00000000000002c0 <keymap>:
+ 2c0:	00 00 31 32 33 34 35 36 37 38 39 30 2d 3d 08 09     ..1234567890-=..
+ 2d0:	71 77 65 72 74 79 75 69 6f 70 5b 5d 0a 00 61 73     qwertyuiop[]..as
+ 2e0:	64 66 67 68 6a 6b 6c 3b 27 60 80 5c 7a 78 63 76     dfghjkl;'`.\zxcv
+ 2f0:	62 6e 6d 2c 2e 2f 80 2a 00 20 00 00 00 00 00 00     bnm,./.*. ......
+	...
+ 308:	00 00 2d 00 00 00 2b 00 00 00 00 00 00 00 00 00     ..-...+.........
+	...
+
+0000000000000340 <keymapShift>:
+ 340:	00 00 21 40 23 24 25 5e 26 2a 28 29 5f 2b 08 09     ..!@#$%^&*()_+..
+ 350:	51 57 45 52 54 59 55 49 4f 50 7b 7d 0a 00 41 53     QWERTYUIOP{}..AS
+ 360:	44 46 47 48 4a 4b 4c 3a 22 60 80 5c 5a 58 43 56     DFGHJKL:"`.\ZXCV
+ 370:	42 4e 4d 3c 3e 3f 80 2a 00 20 00 00 00 00 00 00     BNM<>?.*. ......
+	...
+ 388:	00 00 2d 00 00 00 2b 00 00 00 00 00 00 00 00 00     ..-...+.........
+	...
+
+00000000000003c0 <oldHandler>:
+	...
+
+00000000000003c8 <kbdbuf>:
+	...
+
+0000000000000408 <kbdput>:
+ 408:	00 00 00 00                                         ....
+
+000000000000040c <kbdread>:
+ 40c:	00 00 00 00                                         ....
+
+0000000000000410 <wcKeyboard>:
+	...

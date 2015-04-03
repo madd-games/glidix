@@ -92,13 +92,19 @@ syscallTable = {
 	45:	"unlink",
 	46:	"dup",
 	47:	"dup2",
-	# 48: see extra
+	# 48: see 'extra'
 	49:	"_glidix_seterrnoptr",
 	50:	"_glidix_geterrnoptr",
 	51:	"clock",
 	52:	"_glidix_libopen",
 	53:	"_glidix_libclose",
-	54:	"_glidix_mmap"
+	54:	"_glidix_mmap",
+	55:	"setuid",
+	56:	"setgid",
+	57:	"seteuid",
+	58:	"setegid",
+	59:	"setreuid",
+	60:	"setregid"
 }
 
 f = open("_libglidix.s", "wb")

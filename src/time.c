@@ -146,5 +146,8 @@ static void rtcThread(void *data)
 
 void initRTC()
 {
-	CreateKernelThread(rtcThread, NULL, NULL);
+	KernelThreadParams rtcPars;
+	rtcPars.stackSize = 0x4000;
+	rtcPars.name = "RTC reader daemon";
+	CreateKernelThread(rtcThread, &rtcPars, NULL);
 };

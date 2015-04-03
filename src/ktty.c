@@ -34,15 +34,19 @@
 #include <glidix/semaphore.h>
 #include <glidix/common.h>
 #include <glidix/errno.h>
+#include <glidix/waitcnt.h>
+#include <glidix/term.h>
 
-#define	INPUT_BUFFER_SIZE	256
+#define	INPUT_BUFFER_SIZE			4096
 
-static volatile ATOMIC(char)	inputBuffer[256];
-static volatile ATOMIC(int)	inputPut;
-static volatile ATOMIC(int)	inputRead;
-static volatile ATOMIC(int)	lineCount;
-static volatile ATOMIC(int)	lineCharCount;
-static Semaphore		inputLock;
+static char					inputBuffer[INPUT_BUFFER_SIZE];
+static volatile int				inputRead;
+static volatile int				inputWrite;
+static Semaphore				semCount;
+static Semaphore				semInput;
+static Semaphore				semLineBuffer;
+static volatile int				lineBufferSize;
+static struct termios				termState;
 
 static ssize_t termWrite(File *file, const void *buffer, size_t size)
 {
@@ -50,53 +54,32 @@ static ssize_t termWrite(File *file, const void *buffer, size_t size)
 	return size;
 };
 
-static char getChar()
-{
-	char c;
-	if (inputPut == inputRead) c = 0;
-	else
-	{
-		c = inputBuffer[inputRead];
-		inputRead++;
-		if (inputRead == INPUT_BUFFER_SIZE) inputRead = 0;
-	};
-
-	return c;
-};
-
 static ssize_t termRead(File *fp, void *buffer, size_t size)
 {
-	int sigcntOrig = getCurrentThread()->sigcnt;
-
-	ssize_t count = 0;
-	char *out = (char*) buffer;
-	while (size)
+	int count = semWait2(&semCount, (int) size);
+	if (count == -1)
 	{
-		semWait(&inputLock);
-		if (lineCount == 0)
-		{
-			semSignal(&inputLock);
-			if (getCurrentThread()->sigcnt > sigcntOrig)
-			{
-				getCurrentThread()->therrno = EINTR;
-				return -1;
-			};
-			continue;
-		};
-		char c;
-		if ((c = getChar()) == 0)
-		{
-			semSignal(&inputLock);
-			return count;
-		};
-		*out++ = c;
-		count++;
-		if (c == '\n') lineCount--;
-		size--;
-		semSignal(&inputLock);
+		getCurrentThread()->therrno = EINTR;
+		return -1;
 	};
 
-	return count;
+	semWait(&semInput);
+
+	if (size > (size_t) count) size = (size_t) count;
+	ssize_t out = 0;
+	while (size > 0)
+	{
+		if (inputRead == INPUT_BUFFER_SIZE) inputRead = 0;
+		size_t max = INPUT_BUFFER_SIZE - inputRead;
+		if (max > size) max = size;
+		memcpy(buffer, &inputBuffer[inputRead], max);
+		size -= max;
+		out += max;
+		inputRead += max;
+		buffer = (void*)((uint64_t)buffer + max);
+	};
+	semSignal(&semInput);
+	return out;
 };
 
 static int termDup(File *old, File *new, size_t szfile)
@@ -105,48 +88,83 @@ static int termDup(File *old, File *new, size_t szfile)
 	return 0;
 };
 
+int termIoctl(File *fp, uint64_t cmd, void *argp)
+{
+	struct termios *tc = (struct termios*) argp;
+
+	switch (cmd)
+	{
+	case IOCTL_TTY_GETATTR:
+		memcpy(tc, &termState, sizeof(struct termios));
+		return 0;
+	case IOCTL_TTY_SETATTR:
+		termState.c_iflag = tc->c_iflag;
+		termState.c_oflag = tc->c_oflag;
+		termState.c_cflag = tc->c_cflag;
+		termState.c_lflag = tc->c_lflag;
+		return 0;
+	default:
+		getCurrentThread()->therrno = EINVAL;
+		return -1;
+	};
+};
+
 void termPutChar(char c)
 {
-	//kprintf_debug("PUT CHAR '%c'\n", c);
-
-	semWait(&inputLock);
-	if (c == '\b')
+	semWait(&semLineBuffer);
+	if ((c == '\b') && (termState.c_lflag & ICANON))
 	{
-		if (lineCharCount != 0)
+		if (lineBufferSize != 0)
 		{
-			lineCharCount--;
-			if (inputPut == 0)
-			{
-				inputPut = INPUT_BUFFER_SIZE - 1;
-			}
-			else
-			{
-				inputPut--;
-			};
-			kprintf("\b");
+			if (inputWrite == 0) inputWrite = INPUT_BUFFER_SIZE;
+			else inputWrite--;
+			lineBufferSize--;
+			if (termState.c_lflag & ECHO) kprintf("\b");
 		};
 
-		semSignal(&inputLock);
-		//kprintf_debug("end put char\n");
+		semSignal(&semLineBuffer);
 		return;
-	};
-
-	kprintf("%c", c);
-	int newInputPut = inputPut + 1;
-	if (newInputPut == INPUT_BUFFER_SIZE) newInputPut = 0;
-	inputBuffer[inputPut] = c;
-	inputPut = newInputPut;
-	if (c == '\n')
-	{
-		lineCount++;
-		lineCharCount = 0;
 	}
 	else
 	{
-		lineCharCount++;
+		inputBuffer[inputWrite++] = c;
+		if (inputWrite == INPUT_BUFFER_SIZE) inputWrite = 0;
+		lineBufferSize++;
 	};
-	semSignal(&inputLock);
-	//kprintf_debug("end put char\n");
+
+	__sync_synchronize();
+	if (((c & 0x80) == 0) && (termState.c_lflag & ECHO))
+	{
+		kprintf("%c", c);
+	}
+	else if ((c == '\n') && (termState.c_lflag & ECHONL))
+	{
+		kprintf("\n");
+	};
+
+	if ((termState.c_lflag & ICANON) == 0)
+	{
+		semSignal2(&semCount, lineBufferSize);
+		lineBufferSize = 0;
+	}
+	else if (c == '\n')
+	{
+		semSignal2(&semCount, lineBufferSize);
+		lineBufferSize = 0;
+	};
+
+	if (c == CC_VINTR)
+	{
+		kprintf("^C");
+		if (termState.c_lflag & ICANON)
+		{
+			inputWrite = inputRead;
+			lineBufferSize = 0;
+		};
+		signalPid(1, SIGINT);
+	};
+
+	semSignal(&semLineBuffer);
 };
 
 void setupTerminal(FileTable *ftab)
@@ -157,17 +175,18 @@ void setupTerminal(FileTable *ftab)
 	termout->write = &termWrite;
 	termout->dup = &termDup;
 	termout->oflag = O_WRONLY;
+	termout->ioctl = &termIoctl;
 
-	inputPut = 0;
+	inputWrite = 0;
 	inputRead = 0;
-	lineCount = 0;
-	lineCharCount = 0;
+	lineBufferSize = 0;
 
 	File *termin = (File*) kmalloc(sizeof(File));
 	memset(termin, 0, sizeof(File));
 	termin->oflag = O_RDONLY;
 	termin->read = &termRead;
 	termin->dup = &termDup;
+	termin->ioctl = &termIoctl;
 
 	ftab->entries[0] = termin;
 	ftab->entries[1] = termout;
@@ -175,5 +194,18 @@ void setupTerminal(FileTable *ftab)
 	termDup(termout, termerr, sizeof(File));
 	ftab->entries[2] = termerr;
 
-	semInit(&inputLock);
+	termState.c_iflag = ICRNL;
+	termState.c_oflag = 0;
+	termState.c_cflag = 0;
+	termState.c_lflag = ECHO | ECHOE | ECHOK | ECHONL | ICANON | ISIG;
+
+	int i;
+	for (i=0; i<NCCS; i++)
+	{
+		termState.c_cc[i] = i+0x80;
+	};
+
+	semInit2(&semCount, 0);
+	semInit(&semInput);
+	semInit(&semLineBuffer);
 };

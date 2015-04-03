@@ -472,6 +472,8 @@ int __find_lib(char *libpath, const char *soname, const char *rpath, const char 
 		if (__find_lib_in_path(libpath, soname, runpath) == 0) return 0;
 	};
 
+	if (__find_lib_in_path(libpath, soname, DEFAULT_LIBRARY_PATH) == 0) return 0;
+
 	return -1;
 };
 
@@ -492,7 +494,8 @@ Library* __libopen_withpaths(const char *soname, const char *rpath, const char *
 	char libpath[256];
 	if (__find_lib(libpath, soname, rpath, runpath) != 0)
 	{
-		sprintf(libdlError, "could not find library '%s'", soname);
+		//sprintf(libdlError, "could not find library '%s'", soname);
+		strcpy(libdlError, "could not find library\n");
 		return NULL;
 	};
 
@@ -584,7 +587,7 @@ void __interp_main(Elf64_Dyn *execDyn, Elf64_Sym *mySymbols, unsigned int mySymb
 	__main_handle.info.loadAddr = 0;
 	if (__lib_process(&__main_handle, __main_handle.info) != 0)
 	{
-		fprintf(stderr, "failed to process executable\n");
+		fprintf(stderr, "failed to process executable: %s\n", libdlError);
 		while (1);
 	};
 

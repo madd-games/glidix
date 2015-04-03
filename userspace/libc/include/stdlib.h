@@ -38,18 +38,25 @@ extern "C" {
 #define	MB_CUR_MAX				1
 
 /* implemented by the runtime */
-void	abort(void);
-int	atexit(void (*)(void));
-int	atoi(const char*);
-void	free(void*);
-char*	getenv(const char*);
-void*	malloc(size_t);
-void*	realloc(void*, size_t);
-void	exit(int);
-void	_Exit(int);
-void*	calloc(size_t nitems, size_t size);
-char*	getenv(const char *name);
-int	setenv(const char *name, const char *value, int update);
+void			abort(void);
+int			atexit(void (*)(void));
+int			atoi(const char*);
+void			free(void*);
+char*			getenv(const char*);
+void*			malloc(size_t);
+void*			realloc(void*, size_t);
+void			exit(int);
+void			_Exit(int);
+void*			calloc(size_t nitems, size_t size);
+char*			getenv(const char *name);
+int			setenv(const char *name, const char *value, int update);
+long			strtol(const char *str, const char **str_end, int base);
+long long		strtoll(const char *str, const char **str_end, int base);
+unsigned long		strtoul(const char *str, const char **str_end, int base);
+unsigned long long	strtoull(const char *str, const char **str_end, int base);
+int			atoi(const char *str);
+long			atol(const char *str);
+long long		atoll(const char *str);
 
 /* implemented by libglidix directly */
 char*	realpath(const char*, char*);

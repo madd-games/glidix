@@ -72,6 +72,7 @@ int findCommand(char *path, char *cmd)
 };
 
 int cmd_cd(int argc, char **argv);
+int cmd_exit(int argc, char **argv);
 
 int execCommand(char *cmd)
 {
@@ -97,6 +98,12 @@ int execCommand(char *cmd)
 	if (strcmp(argv[0], "cd") == 0)
 	{
 		int status = cmd_cd(argc-1, argv);
+		free(argv);
+		return status;
+	}
+	else if (strcmp(argv[0], "exit") == 0)
+	{
+		int status = cmd_exit(argc-1, argv);
 		free(argv);
 		return status;
 	}

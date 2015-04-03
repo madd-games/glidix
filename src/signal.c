@@ -65,7 +65,7 @@ void dispatchSignal(Thread *thread)
 	};
 
 	// try pushing the signal stack frame. also, don't break the red zone!
-	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & ~0xF;
+	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & (uint64_t)(~0xF);
 	if ((addr < 0x1000) || ((addr+sizeof(SignalStackFrame)) > 0x7FC0000000))
 	{
 		// extreme case, discard the signal :'(
@@ -95,27 +95,28 @@ void dispatchSignal(Thread *thread)
 	frame->mstate.therrno = thread->therrno;
 	memcpy(&frame->si, siginfo, sizeof(siginfo_t));
 
-	thread->regs.rsp = addr & ~0xF;
+	thread->regs.rsp = addr;
 	thread->regs.rdi = addr;
 	thread->regs.rsi = (uint64_t) (&frame->si);
 	thread->regs.rip = thread->rootSigHandler;
 
 	thread->flags |= THREAD_SIGNALLED;
+	thread->flags &= ~THREAD_WAITING;
 };
 
 void sendSignal(Thread *thread, siginfo_t *siginfo)
 {
-	if (thread == getCurrentThread()) lockSched();
+	//if (thread == getCurrentThread()) lockSched();
 	if (thread->flags & THREAD_TERMINATED)
 	{
-		if (thread == getCurrentThread()) unlockSched();
+		//if (thread == getCurrentThread()) unlockSched();
 		return;
 	};
 
 	if (thread->sigcnt == SIGQ_SIZE)
 	{
 		// drop the signal because the queue is full.
-		if (thread == getCurrentThread()) unlockSched();
+		//if (thread == getCurrentThread()) unlockSched();
 		return;
 	};
 
@@ -124,7 +125,7 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 	thread->sigcnt++;
 
 	thread->flags &= ~THREAD_WAITING;
-	if (thread == getCurrentThread()) unlockSched();
+	//if (thread == getCurrentThread()) unlockSched();
 };
 
 void sigret(Regs *regs, void *ret)

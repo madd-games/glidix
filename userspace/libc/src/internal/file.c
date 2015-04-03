@@ -44,7 +44,7 @@ void __fd_flush(FILE *fp)
 
 	write(fp->_fd, fp->_rdbuf, (size_t)(fp->_wrbuf - fp->_rdbuf));
 	fp->_wrbuf = fp->_buf;
-	fp->_rdbuf = fp->_rdbuf;
+	fp->_rdbuf = fp->_buf;
 	fp->_bufsiz = fp->_bufsiz_org;
 };
 

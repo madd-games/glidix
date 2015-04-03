@@ -188,6 +188,12 @@ int tryCopyOnWrite(uint64_t addr);
 int tryLoadOnDemand(uint64_t addr);
 
 /**
+ * Dump the contents of a process memory, for debugging purposes. Also show an arrow to indicate
+ * which segment an address is in.
+ */
+void dumpProcessMemory(ProcMem *pm, uint64_t checkAddr);
+
+/**
  * Userspace.
  */
 #ifndef _SYS_MMAN_H

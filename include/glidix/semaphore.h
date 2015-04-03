@@ -39,21 +39,32 @@
 typedef struct _SemWaitThread
 {
 	Thread *thread;
+	int waiting;
 	struct _SemWaitThread *next;
 } SemWaitThread;
 
 typedef struct
 {
 	Spinlock lock;
-	Thread *owner;
+	Thread *waiter;
+	int count;
 
 	// the queue of threads waiting for this semaphore.
 	SemWaitThread *first;
 	SemWaitThread *last;
+
+	// for semWait2/semSignal2, to keep some synchronisation of blocks
+	Thread *countWaiter;
+	Spinlock countLock;
 } Semaphore;
 
 void semInit(Semaphore *sem);
+void semInit2(Semaphore *sem, int count);
 void semWait(Semaphore *sem);
+int  semWait2(Semaphore *sem, int count);
 void semSignal(Semaphore *sem);
+void semSignal2(Semaphore *sem, int count);
+void semSignalAndWait(Semaphore *sem);
+void semDump(Semaphore *sem);
 
 #endif

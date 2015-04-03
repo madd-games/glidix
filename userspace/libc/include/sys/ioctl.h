@@ -29,6 +29,9 @@
 #ifndef _SYS_IOCTL_H
 #define _SYS_IOCTL_H
 
+#define	__IOCTL_NOARG(intf, cmd)				((intf << 16) | cmd)
+#define	__IOCTL_ARG(type, intf, cmd)				((sizeof(type) << 32) | __IOCTL_NOARG(intf, cmd))
+
 /* implemented by the runtime */
 int ioctl(int fd, unsigned long cmd, ...);
 

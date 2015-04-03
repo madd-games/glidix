@@ -35,6 +35,7 @@
 #include <glidix/sched.h>
 #include <glidix/signal.h>
 #include <glidix/memory.h>
+#include <glidix/apic.h>
 
 IDTEntry idt[256];
 IDTPointer idtPtr;
@@ -90,6 +91,9 @@ extern void irq12();
 extern void irq13();
 extern void irq14();
 extern void irq15();
+extern void isr48();
+
+int kernelDead = 0;
 
 int getUptime()						// <glidix/time.h>
 {
@@ -121,6 +125,9 @@ void initIDT()
 	outb(0xA1, 0x01);
 	outb(0x21, 0x0);
 	outb(0xA1, 0x0);
+
+	outb(0xA1, 0xFF);
+	outb(0x21, 0xFF);
 
 	memset(idt, 0, 256*sizeof(IDTEntry));
 	setGate(0, isr0);
@@ -171,6 +178,7 @@ void initIDT()
 	setGate(45, irq13);
 	setGate(46, irq14);
 	setGate(47, irq15);
+	setGate(48, isr48);
 
 	idtPtr.addr = (uint64_t) &idt[0];
 	idtPtr.limit = (sizeof(IDTEntry) * 256) - 1;
@@ -212,9 +220,11 @@ static void onPageFault(Regs *regs)
 		};
 	};
 
-	if ((getCurrentThread() == NULL) || (regs->cs == 8))
-	//if (1)
+	//if ((getCurrentThread() == NULL) || (regs->cs == 8))
+	if (1)
 	{
+		ASM("cli");
+		kernelDead = 1;
 		//heapDump();
 		kdumpregs(regs);
 		kprintf("A page fault occured (rip=%a)\n", regs->rip);
@@ -252,6 +262,7 @@ static void onPageFault(Regs *regs)
 		};
 
 		kprintf("\nVirtual address: %a\n", faultAddr);
+#if 0
 		uint32_t wait = 0xFFFFFFFF;
 		while (wait--);
 		kprintf("Peek at RIP: ");
@@ -262,7 +273,8 @@ static void onPageFault(Regs *regs)
 			printbyte(*peek++);
 		};
 		kprintf("\n");
-		panic("#PF in kernel");
+#endif
+		debugKernel(regs);
 	}
 	else
 	{
@@ -290,6 +302,8 @@ static void onGPF(Regs *regs)
 {
 	if (1)
 	{
+		ASM("cli");
+		kernelDead = 1;
 		//heapDump();
 		kdumpregs(regs);
 		kprintf("GPF (rip=%a)\n", regs->rip);
@@ -301,7 +315,7 @@ static void onGPF(Regs *regs)
 			printbyte(*peek++);
 		};
 		kprintf("\n");
-		panic("#GP in kernel");
+		debugKernel(regs);
 	};
 };
 
@@ -329,31 +343,43 @@ void onInvalidOpcodeOrSyscall(Regs *regs)
 
 void isrHandler(Regs *regs)
 {
+	if (kernelDead)
+	{
+		panic("interrupt %d after kernel died.", regs->intNo);
+	};
+
+	// ignore spurious IRQs
+	if ((regs->intNo == IRQ7) || (regs->intNo == IRQ15))
+	{
+		return;
+	};
+
 	if (regs->intNo >= 32)
 	{
 		// IRQ
-		if (regs->intNo >= 40)
-		{
-			// slave
-			outb(0xA0, 0x20);
-		};
-		outb(0x20, 0x20);
+		apic->eoi = 0;
 	};
 
 	switch (regs->intNo)
 	{
-	case IRQ0:
+	case IRQ2:
 		uptime++;
-		switchTask(regs);
+		//switchTask(regs);
 		break;
-	case 6:
+	case I_UNDEF_OPCODE:
 		onInvalidOpcodeOrSyscall(regs);
 		break;
-	case 13:
+	case I_GPF:
 		onGPF(regs);
 		break;
-	case 14:
+	case I_PAGE_FAULT:
 		onPageFault(regs);
+		break;
+	case I_APIC_TIMER:
+		if (apic->timerCurrentCount == 0)
+		{
+			switchTask(regs);
+		};
 		break;
 	default:
 		if (regs->intNo >= IRQ0)

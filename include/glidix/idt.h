@@ -32,22 +32,46 @@
 #include <glidix/common.h>
 #include <stdint.h>
 
-#define	IRQ0	32
-#define	IRQ1	33
-#define	IRQ2	34
-#define	IRQ3	35
-#define	IRQ4	36
-#define	IRQ5	37
-#define	IRQ6	38
-#define	IRQ7	39
-#define	IRQ8	40
-#define	IRQ9	41
-#define	IRQ10	42
-#define	IRQ11	43
-#define	IRQ12	44
-#define	IRQ13	45
-#define	IRQ14	46
-#define	IRQ15	47
+// exceptions and APIC interrupt numbers
+#define	I_DIV_ZERO			0
+#define	I_DEBUG				1
+#define	I_NMI				2
+#define	I_BREAKPOINT			3
+#define	I_OVERFLOW			4
+#define	I_BOUND_EX			5
+#define	I_UNDEF_OPCODE			6
+#define	I_NODEV				7
+#define	I_DOUBLE			8
+#define	I_BAD_TSS			10
+#define	I_NOSEG				11
+#define	I_STACKSEGV			12
+#define	I_GPF				13
+#define	I_PAGE_FAULT			14
+#define	I_FLOAT_EX			16
+#define	I_ALIGN_CHECK			17
+#define	I_MACHINE_CHECK			18
+#define	I_SIMD_EX			19
+#define	I_VIRT_EX			20
+#define	I_SECURITY_EX			30
+#define	I_APIC_TIMER			48
+
+// IRQ interrupt numbers.
+#define	IRQ0				32
+#define	IRQ1				33
+#define	IRQ2				34
+#define	IRQ3				35
+#define	IRQ4				36
+#define	IRQ5				37
+#define	IRQ6				38
+#define	IRQ7				39
+#define	IRQ8				40
+#define	IRQ9				41
+#define	IRQ10				42
+#define	IRQ11				43
+#define	IRQ12				44
+#define	IRQ13				45
+#define	IRQ14				46
+#define	IRQ15				47
 
 typedef struct
 {

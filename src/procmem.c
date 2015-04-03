@@ -166,6 +166,7 @@ FrameList *pdup(FrameList *old)
 	FrameList *fl = (FrameList*) kmalloc(sizeof(FrameList));
 	fl->refcount = 1;
 	fl->count = old->count;
+	fl->flags = old->flags;
 	fl->frames = (uint64_t*) kmalloc(8*old->count);
 	fl->fileOffset = old->fileOffset;
 	fl->fileSize = old->fileSize;
@@ -175,7 +176,7 @@ FrameList *pdup(FrameList *old)
 	{
 		COWList *list = (COWList*) kmalloc(sizeof(COWList));
 		spinlockRelease(&list->lock);
-		list->pagesToGo = old->count;
+		list->pagesToGo = 0;
 		list->frames = (uint64_t*) kmalloc(8*old->count);
 		list->refcounts = (uint64_t*) kmalloc(8*old->count);
 		list->users = 1;
@@ -187,6 +188,8 @@ FrameList *pdup(FrameList *old)
 			{
 				list->refcounts[i] = 1;
 				list->frames[i] = old->frames[i];
+				old->frames[i] = 0;
+				list->pagesToGo++;
 			}
 			else
 			{
@@ -209,7 +212,7 @@ FrameList *pdup(FrameList *old)
 		if (old->frames[i] != 0)
 		{
 			old->cowList->pagesToGo++;
-			old->cowList->refcounts[i]++;
+			old->cowList->refcounts[i] = 1;
 			old->cowList->frames[i] = old->frames[i];
 			old->frames[i] = 0;
 		};
@@ -342,14 +345,14 @@ int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 	{
 		if ((start >= scan->start) && (start < (scan->start+scan->fl->count)))
 		{
-			spinlockRelease(&pm->lock);
 			spinlockRelease(&frames->lock);
+			spinlockRelease(&pm->lock);
 			return MEM_SEGMENT_COLLISION;
 		};
 		if (((start+count) < (scan->start+scan->fl->count)) && ((start+count) > scan->start))
 		{
-			spinlockRelease(&pm->lock);
 			spinlockRelease(&frames->lock);
+			spinlockRelease(&pm->lock);
 			return MEM_SEGMENT_COLLISION;
 		};
 		lastSegment = scan;
@@ -543,13 +546,16 @@ ProcMem *DuplicateProcessMemory(ProcMem *pm)
 		/**
 		 * Mark the pages read-only, for copy-on-write.
 		 */
-		if (seg->fl->fileOffset == -1)
+		int i;
+		for (i=0; i<seg->fl->count; i++)
 		{
-			int i;
-			for (i=0; i<seg->fl->count; i++)
+			PTe *pte = getPage(pm, MEM_CURRENT, seg->start + i, 0);
+			if (pte != NULL)			// pte might be NULL for load-on-demand pages
 			{
-				PTe *pte = getPage(pm, MEM_CURRENT, seg->start + i, 0);
-				pte->rw = 0;
+				if (pte->present)		// may be non-present if its load-on-demand and unloaded
+				{
+					pte->rw = 0;
+				};
 			};
 		};
 
@@ -718,6 +724,53 @@ int tryLoadOnDemand(uint64_t addr)
 
 	spinlockRelease(&pm->lock);
 	return -1;
+};
+
+void dumpProcessMemory(ProcMem *pm, uint64_t checkAddr)
+{
+	static const char *sizeUnits[5] = {
+		"B", "KB", "MB", "GB", "TB"
+	};
+
+	uint64_t frameInList=0, frameInCOW=0, cowRefcount=0;
+	kprintf(" BASE\t\t\tEND\t\t\tSIZE\tFLAGS\n");
+	Segment *seg;
+	for (seg=pm->firstSegment; seg!=NULL; seg=seg->next)
+	{
+		uint64_t base = seg->start * 0x1000;
+		uint64_t size = seg->fl->count * 0x1000;
+		uint64_t end = base + size;
+
+		int displaySize = (int) size;
+		int sizeIndex = 0;
+
+		while ((sizeIndex < 5) && (displaySize > 1024))
+		{
+			sizeIndex++;
+			displaySize /= 1024;
+		};
+
+		char arrow = ' ';
+		if ((base <= checkAddr) && (end > checkAddr))
+		{
+			arrow = '>';
+			uint64_t index = (checkAddr - base)/0x1000;
+			frameInList = seg->fl->frames[index];
+			if (seg->fl->cowList != NULL)
+			{
+				frameInCOW = seg->fl->cowList->frames[index];
+				cowRefcount = seg->fl->cowList->refcounts[index];
+			};
+		};
+
+		kprintf("%c%a\t%a\t%d%s\t", arrow, base, end, displaySize, sizeUnits[sizeIndex]);
+		PRINTFLAG(seg->flags & PROT_READ, 'R');
+		PRINTFLAG(seg->flags & PROT_WRITE, 'W');
+		PRINTFLAG(seg->flags & PROT_EXEC, 'X');
+		PRINTFLAG(seg->fl->flags & FL_SHARED, 'S');
+		kprintf("\n");
+	};
+	kprintf("Virtual addr %a is frame %a and cow frame %a (refcount %d)\n", checkAddr, frameInList, frameInCOW, cowRefcount);
 };
 
 int mprotect(uint64_t addr, uint64_t len, int prot)

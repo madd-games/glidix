@@ -71,6 +71,44 @@ switchContext:
 	; the rest is popped by an interrupt return
 	iretq
 
+[global enterDebugContext]
+enterDebugContext:
+	; essentially the same as switchContext, but we trap into the Bochs debugger
+	; so that we can see why stuff is breaking in the context.
+	cli
+	mov	rsp,		rdi
+
+	; first we switch the DS
+	pop	rbx
+	mov	ds,		bx
+	mov	es,		bx
+	mov	fs,		bx
+	mov	gs,		bx
+
+	; GPRs
+	pop	rdi
+	pop	rsi
+	pop	rbp
+	pop	rbx
+	pop	rdx
+	pop	rcx
+	pop	rax
+	pop	r8
+	pop	r9
+	pop	r10
+	pop	r11
+	pop	r12
+	pop	r13
+	pop	r14
+	pop	r15
+
+	; ignore "intNo" and "errCode"
+	add	rsp,		16
+
+	; the rest is popped by an interrupt return, but obviously trap first.
+	xchg	bx,		bx
+	iretq
+
 [global reloadTR]
 [extern _tss_reload_access]
 reloadTR:

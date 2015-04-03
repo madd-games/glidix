@@ -31,7 +31,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-void cmd_usage()
+void cd_usage()
 {
 	fprintf(stderr, "USAGE:\tcd [dirname]\n\n");
 	fprintf(stderr, "\tChange the current working directory. If dirname is not\n");
@@ -42,7 +42,7 @@ int cmd_cd(int argc, char **argv)
 {
 	if ((argc != 1) && (argc != 2))
 	{
-		cmd_usage();
+		cd_usage();
 		return 1;
 	};
 
@@ -51,7 +51,7 @@ int cmd_cd(int argc, char **argv)
 	{
 		if (argv[1][0] == '-')
 		{
-			cmd_usage();
+			cd_usage();
 			return 1;
 		};
 

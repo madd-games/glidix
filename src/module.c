@@ -45,10 +45,15 @@
 static PAGE_ALIGN PDPT pdptModuleSpace;
 static Spinlock modLock;
 
+static Module *firstModule;
+static Module *lastModule;
+
 void initModuleInterface()
 {
 	kprintf("Initializing the module interface... ");
 	spinlockRelease(&modLock);
+	firstModule = NULL;
+	lastModule = NULL;
 	memset(&pdptModuleSpace, 0, 0x1000);
 
 	uint64_t pdptPhysAddr = (uint64_t) &pdptModuleSpace - 0xFFFF800000000000;
@@ -425,6 +430,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	fp->seek(fp, elfHeader.e_shoff + shSymtab * sizeof(Elf64_Shdr), SEEK_SET);
 	vfsRead(fp, &symtabSection, sizeof(Elf64_Shdr));
 	Elf64_Sym *symtab = (Elf64_Sym*) kmalloc(symtabSection.sh_size);
+	module->numSymbols = symtabSection.sh_size / sizeof(Elf64_Sym);
 	fp->seek(fp, symtabSection.sh_offset, SEEK_SET);
 	vfsRead(fp, symtab, symtabSection.sh_size);
 
@@ -532,9 +538,23 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		};
 	};
 
+	module->symtab = symtab;
+	module->strings = strings;
+	module->baseAddr = baseAddr;
+	module->next = NULL;
 	vfsClose(fp);
-	kfree(symtab);
-	kfree(strings);
+	//kfree(symtab);
+	//kfree(strings);
+	if (firstModule == NULL)
+	{
+		firstModule = module;
+		lastModule = module;
+	}
+	else
+	{
+		lastModule->next = module;
+		lastModule = module;
+	};
 	spinlockRelease(&modLock);
 
 	if (flags & INSMOD_VERBOSE) kprintf("insmod(%s): running module initializers\n", modname);
@@ -556,4 +576,54 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	};
 
 	return 0;
+};
+
+void dumpModules()
+{
+	// please call this with interrupts disabled
+	Module *module;
+	kprintf("BASE\t\t\tBODY\tNAME\n");
+
+	for (module=firstModule; module!=NULL; module=module->next)
+	{
+		kprintf("%a\t%dMB\t%s\n", module->baseAddr, module->numSectors*2, module->name);
+	};
+};
+
+void findDebugSymbolInModules(uint64_t addr, SymbolInfo *info)
+{
+	spinlockAcquire(&modLock);
+
+	Module *module;
+	for (module=firstModule; module!=NULL; module=module->next)
+	{
+		uint64_t end = module->baseAddr + 0x200000 * module->numSectors;
+		if ((addr >= module->baseAddr) && (addr < end))
+		{
+			uint64_t i;
+			Elf64_Sym *best = module->symtab;
+			for (i=0; i<module->numSymbols; i++)
+			{
+				Elf64_Sym *symbol = &module->symtab[i];
+				uint64_t saddr = module->baseAddr + symbol->st_value;
+				if ((symbol->st_value > best->st_value) && (saddr < addr))
+				{
+					best = symbol;
+				};
+			};
+
+			info->modname = module->name;
+			info->symname = &module->strings[best->st_name];
+			info->offset = addr - module->baseAddr - best->st_value;
+			spinlockRelease(&modLock);
+			return;
+		};
+	};
+
+	spinlockRelease(&modLock);
+
+	Symbol *sym = findSymbolForAddr(addr);
+	info->modname = "kernel";
+	info->symname = sym->name;
+	info->offset = addr - (uint64_t)sym->ptr;
 };

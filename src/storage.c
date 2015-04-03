@@ -110,7 +110,10 @@ void sdInit()
 	{
 		devsToDelete[i] = NULL;
 	};
-	CreateKernelThread(sdThread, NULL, NULL);
+	KernelThreadParams sdPars;
+	sdPars.stackSize = DEFAULT_STACK_SIZE;
+	sdPars.name = "SDI control daemon";
+	CreateKernelThread(sdThread, &sdPars, NULL);
 };
 
 static void reloadPartitionTable(SDFile *sdfile)
@@ -359,6 +362,7 @@ StorageDevice *sdCreate(SDParams *params)
 	sd->blockSize = params->blockSize;
 	sd->totalSize = params->totalSize;
 	sd->cmdq = NULL;
+	sd->thread = NULL;
 
 	SDFile *diskfile = (SDFile*) kmalloc(sizeof(SDFile));
 	diskfile->sd = sd;
@@ -399,6 +403,12 @@ void sdPush(StorageDevice *dev, SDCommand *cmd)
 		last->next = cmd;
 	};
 
+	if (dev->thread != NULL)
+	{
+		signalThread(dev->thread);
+		dev->thread = NULL;
+	};
+
 	semSignal(&dev->sem);
 };
 
@@ -407,7 +417,8 @@ SDCommand* sdTryPop(StorageDevice *dev)
 	semWait(&dev->sem);
 	if (dev->cmdq == NULL)
 	{
-		semSignal(&dev->sem);
+		dev->thread = getCurrentThread();
+		semSignalAndWait(&dev->sem);
 		return NULL;
 	};
 

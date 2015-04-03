@@ -38,20 +38,14 @@ char **environ;
 int __errno_initial;
 void __init_sig();
 static int __init_done = 0;
+static int __argc;
+static char **__argv;
+
 void __do_init()
 {
 	_glidix_seterrnoptr(&__errno_initial);
 	_heap_init();
 	__init_sig();
-	__init_done = 1;
-};
-
-void __glidixrt_init(int (*_main)(int,char*[],char*[]))
-{
-	if (!__init_done)
-	{
-		__do_init();
-	};
 
 	// parse the execPars
 	size_t parsz = _glidix_getparsz();
@@ -77,7 +71,6 @@ void __glidixrt_init(int (*_main)(int,char*[],char*[]))
 
 	argv = realloc(argv, sizeof(char*)*(argc+1));
 	argv[argc] = NULL;
-
 	environ = NULL;
 	int envc = 0;
 	prevStart++;
@@ -96,5 +89,17 @@ void __glidixrt_init(int (*_main)(int,char*[],char*[]))
 	environ = realloc(environ, sizeof(char*)*(envc+1));
 	environ[envc] = NULL;
 
-	exit(_main(argc, argv, environ));
+	__argc = argc;
+	__argv = argv;
+	__init_done = 1;
+};
+
+void __glidixrt_init(int (*_main)(int,char*[],char*[]))
+{
+	if (!__init_done)
+	{
+		__do_init();
+	};
+
+	exit(_main(__argc, __argv, environ));
 };

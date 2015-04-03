@@ -34,6 +34,7 @@
  */
 
 #include <glidix/common.h>
+#include <glidix/elf64.h>
 
 #define	INSMOD_VERBOSE			(1 << 0)
 
@@ -43,14 +44,28 @@
 #define	MODULE_INIT(...)		void __module_init(__VA_ARGS__)
 #define	MODULE_FINI(...)		void __module_fini(__VA_ARGS__)
 
-typedef struct
+typedef struct _Module
 {
 	char				name[128];
 	int				block;
 	int				numSectors;		// number of 2MB blocks assigned to this module
+	uint64_t			baseAddr;
+	Elf64_Sym*			symtab;
+	uint64_t			numSymbols;
+	const char*			strings;
+	struct _Module*			next;
 } Module;
+
+typedef struct
+{
+	const char*			modname;
+	const char*			symname;
+	uint64_t			offset;
+} SymbolInfo;
 
 void initModuleInterface();
 int insmod(const char *modname, const char *path, const char *opt, int flags);
+void dumpModules();
+void findDebugSymbolInModules(uint64_t addr, SymbolInfo *symInfo);
 
 #endif

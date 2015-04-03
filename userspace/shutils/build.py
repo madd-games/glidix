@@ -35,6 +35,8 @@ os.system("mkdir -p out")
 
 utilmap = {}
 
+cryptUsers = ["src/crypt.c", "src/pwdsetup.c", "src/login.c"]
+
 for name in os.listdir("src"):
 	if name.endswith(".c"):
 		utilmap["out/"+name[:-2]] = "src/"+name
@@ -45,7 +47,10 @@ f.write("all: %s\n" % " ".join(utilmap.keys()))
 
 for key, value in utilmap.items():
 	f.write("%s: %s\n" % (key, value))
-	f.write("\t%s $< -o $@\n" % config["compiler"])
+	extra = ""
+	if value in cryptUsers:
+		extra = "-lcrypt"
+	f.write("\t%s $< -o $@ %s\n" % (config["compiler"], extra))
 
 f.close()
 

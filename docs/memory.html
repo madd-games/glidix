@@ -9,14 +9,21 @@ Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divid
 <li><code>pml4[0]</code> (except the first page) is for userspace processes.</li>
 <li><code>pml4[1]</code> is used as a buffer when data is transferred between 2 userspace blocks.</li>
 <li><code>pml4[256]</code> is the static kernel image (code, data, bss, symbols, etc).</li>
-<li><code>pml4[257]</code> is the Interprocess Streaming Page (ISP), this is a single page that gets remapped to different addresses to send data to different address spaces etc. There may be more things in this PML4e in the future.</li>
+<!--<li><code>pml4[257]</code> is the Interprocess Streaming Page (ISP), this is a single page that gets remapped to different addresses to send data to different address spaces etc. There may be more things in this PML4e in the future.</li>-->
+<li><code>pml4[257]</code> is initialized by <code>isp.c</code> and contains all sorts of special pages. See below.</li>
 <li><code>pml4[258]</code> is the kernel heap.</li>
 <li><code>pml4[259]</code> is module space; each module is assigned a 1GB block within this PML4e, which limits the number of modules to 512.</li>
 <li><code>pml4[260]</code> is used for the copy-on-write cache.</li>
 <li><code>pml4[261]</code> is used for the per-CPU variable area (starts at <code>0xFFFF828000000000</code>).</li>
-<li><code>pml4[262]</code> is used by the Low-level Graphics Interface (LGI) for memory-mapped framebuffers.</li>
 </ul>
 
 <p>
 The rest of the address space is reserved.
 </p>
+
+<h2>Special pages (<code>pml4[257]</code>)</h2>
+<ul>
+<li><code>0xFFFF808000000000-0xFFFF808000000FFF</code> is the Interprocess Streaming Page (ISP), it's used by parts of kernel code to make a temporary mapping of some physical frame.</li>
+<li><code>0xFFFF808000001000-0xFFFF808000001FFF</code> contains the APIC registers (see <code>apic.h</code>).</li>
+<li><code>0xFFFF808000002000-0xFFFF808000002FFF</code> contains the IOAPIC registers.</li>
+</ul>

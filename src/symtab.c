@@ -151,3 +151,25 @@ void *getSymbol(const char *name)
 
 	return sym->ptr;
 };
+
+Symbol *findSymbolForAddr(uint64_t addr)
+{
+	Symbol *sym = symtab;
+	Symbol *possible = symtab;
+
+	while (sym != NULL)
+	{
+		uint64_t saddr = (uint64_t) sym->ptr;
+		uint64_t top = (uint64_t) possible->ptr;
+
+		if ((saddr > top) && (saddr < addr))
+		{
+			possible = sym;
+		};
+
+		sym = sym->next;
+	};
+
+	return possible;
+};
+

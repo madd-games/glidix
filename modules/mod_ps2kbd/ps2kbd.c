@@ -33,6 +33,8 @@
 #include <glidix/port.h>
 #include <glidix/sched.h>
 #include <glidix/ktty.h>
+#include <glidix/waitcnt.h>
+#include <glidix/term.h>
 
 static IRQHandler oldHandler;
 
@@ -122,13 +124,18 @@ static volatile ATOMIC(uint8_t)	kbdbuf[64];
 static volatile ATOMIC(int)	kbdput = 0;
 static volatile ATOMIC(int)	kbdread = 0;
 
+static WaitCounter wcKeyboard = WC_INIT;
+
 static void onKeyboardIRQ(int irq)
 {
+#if 0
 	uint8_t code = inb(0x60);
 	int nextPut = kbdput + 1;
 	if (nextPut == 64) nextPut = 0;
 	kbdbuf[kbdput] = code;
 	kbdput = nextPut;
+#endif
+	wcUp(&wcKeyboard);
 };
 
 static void kbdThread(void *data)
@@ -137,15 +144,8 @@ static void kbdThread(void *data)
 	int shift = 0;
 	while (1)
 	{
-		while (kbdput == kbdread)
-		{
-			//kprintf_debug("WAIT kbdput=%d, kbdread=%d\n", kbdput, kbdread);
-		};		// wait for keyboard event
-		uint8_t code = kbdbuf[kbdread];
-		//kprintf_debug("keybaord code: %a\n", code);
-		kbdread++;
-		if (kbdread == 64) kbdread = 0;
-
+		wcDown(&wcKeyboard);
+		uint8_t code = inb(0x60);
 		if (code == 0x1D)
 		{
 			ctrl = 1;
@@ -167,12 +167,13 @@ static void kbdThread(void *data)
 
 			if (ctrl)
 			{
-				termPutChar('^');
-				termPutChar(keymapShift[code]);
+				//termPutChar('^');
+				//termPutChar(keymapShift[code]);
 
 				if (key == 'c')
 				{
-					signalPid(1, SIGINT);
+					//signalPid(1, SIGINT);
+					termPutChar(CC_VINTR);
 				};
 			}
 			else
@@ -186,8 +187,6 @@ static void kbdThread(void *data)
 			if (key == 0x80) shift = 0;
 		};
 	};
-
-	//kprintf_debug("here or something?\n");
 };
 
 MODULE_INIT()
@@ -195,7 +194,10 @@ MODULE_INIT()
 	kprintf("Initializing the PS/2 keyboard\n");
 	oldHandler = registerIRQHandler(1, onKeyboardIRQ);
 
-	CreateKernelThread(kbdThread, NULL, NULL);
+	KernelThreadParams kbdPars;
+	kbdPars.stackSize = 0x4000;
+	kbdPars.name = "PS/2 keyboard driver";
+	CreateKernelThread(kbdThread, &kbdPars, NULL);
 };
 
 MODULE_FINI()

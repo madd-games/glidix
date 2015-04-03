@@ -48,15 +48,19 @@
 #include <glidix/storage.h>
 #include <glidix/fsdriver.h>
 #include <glidix/time.h>
-#include <glidix/cowcache.h>
 #include <glidix/interp.h>
 #include <glidix/fpu.h>
+#include <glidix/apic.h>
+#include <glidix/acpi.h>
 
 extern int _bootstrap_stack;
 extern int end;
+extern uint32_t quantumTicks;
 
 void expandHeap();
 extern int masterHeader;
+void _syscall_entry();
+void trapKernel();
 
 void kmain(MultibootInfo *info)
 {
@@ -125,6 +129,9 @@ void kmain(MultibootInfo *info)
 
 	initModuleInterface();
 
+	kprintf("Getting ACPI info... ");
+	acpiInit();
+
 	kprintf("Initializing the FPU... ");
 	fpuInit();
 	DONE();
@@ -149,10 +156,6 @@ void kmain(MultibootInfo *info)
 	initFSDrivers();
 	kprintf("%$\x02" "Done%#\n");
 
-	kprintf("Initializing the COW cache... ");
-	cowInit();
-	kprintf("%$\x02" "Done%#\n");
-
 	kprintf("Initializing the PIT... ");
 	uint16_t divisor = 1193180 / 1000;		// 1000 Hz
 	outb(0x43, 0x36);
@@ -161,8 +164,29 @@ void kmain(MultibootInfo *info)
 	outb(0x40, l);
 	outb(0x40, h);
 	kprintf("%$\x02" "Done%#\n");
-	
-	kprintf("Initializing the scheduler... ");
+
+	kprintf("Initializing the APIC timer...");
+	ASM("sti");
+	apic->timerDivide = 3;
+	apic->timerInitCount = 0xFFFFFFFF;
+	sleep(35);
+	apic->lvtTimer = 0;
+	quantumTicks = 0xFFFFFFFF - apic->timerCurrentCount;
+	apic->timerInitCount = 0;
+	// put the timer in single-shot mode at the appropriate interrupt vector.
+	apic->lvtTimer = I_APIC_TIMER;
+	DONE();
+
+	kprintf_debug(" *** TO TRAP THE KERNEL *** \n");
+	kprintf_debug(" set r15=rip\n");
+	kprintf_debug(" set rip=%a\n", &trapKernel);
+	kprintf_debug(" *** END OF INFO *** \n");
+
+	kprintf("Initializing the scheduler and syscalls... ");
+	//msrWrite(0xC0000080, msrRead(0xC0000080) | 1);
+	//msrWrite(0xC0000081, ((uint64_t)8 << 32));
+	//msrWrite(0xC0000082, (uint64_t)(&_syscall_entry));
+	//msrWrite(0xC0000084, (1 << 9));
 	initSched();
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
 };
@@ -225,8 +249,11 @@ void kmain2()
 	MachineState state;
 	void *spawnStack = kmalloc(0x1000);
 	state.rip = (uint64_t) &spawnProc;
-	state.rsp = (uint64_t) spawnStack + 0x1000;
+	state.rsp = (uint64_t) spawnStack + 0x1000 - 16;
+	((uint64_t*)state.rsp)[0] = 0;
+	((uint64_t*)state.rsp)[1] = 0;
 	state.rdi = (uint64_t) spawnStack;
+	state.rbp = 0;
 	Regs regs;
 	regs.cs = 8;
 	regs.ds = 16;
@@ -234,4 +261,6 @@ void kmain2()
 	regs.ss = 0;
 	threadClone(&regs, 0, &state);
 	// "Done" is displayed by the spawnProc() and that's our job done pretty much.
+	// Mark this thread as waiting so that it never wastes any CPU time.
+	getCurrentThread()->flags = THREAD_WAITING;
 };

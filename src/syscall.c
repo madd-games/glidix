@@ -222,11 +222,11 @@ int sys_open(const char *path, int oflag, mode_t mode)
 	int neededPerms = 0;
 	if (oflag & O_RDONLY)
 	{
-		neededPerms |= 2;
+		neededPerms |= 4;
 	};
 	if (oflag & O_WRONLY)
 	{
-		neededPerms |= 4;
+		neededPerms |= 2;
 	};
 
 	if (!vfsCanCurrentThread(&st, neededPerms))
@@ -421,9 +421,11 @@ int sys_stat(const char *path, struct stat *buf)
 void sys_pause(Regs *regs)
 {
 	ASM("cli");
+	lockSched();
 	*((int*)&regs->rax) = -1;
 	getCurrentThread()->therrno = EINTR;
 	getCurrentThread()->flags |= THREAD_WAITING;
+	unlockSched();
 	switchTask(regs);
 };
 
@@ -1260,6 +1262,144 @@ uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t 
 	return out;
 };
 
+int setuid(uid_t uid)
+{
+	Thread *me = getCurrentThread();
+	if ((me->euid != 0) && (uid != me->euid) && (uid != me->ruid))
+	{
+		me->therrno = EPERM;
+		return -1;
+	};
+
+	if (me->euid == 0)
+	{
+		me->ruid = uid;
+		me->suid = uid;
+	};
+
+	me->euid = uid;
+	return 0;
+};
+
+int setgid(gid_t gid)
+{
+	Thread *me = getCurrentThread();
+	if ((me->egid != 0) && (gid != me->egid) && (gid != me->rgid))
+	{
+		me->therrno = EPERM;
+		return -1;
+	};
+
+	if (me->egid == 0)
+	{
+		me->rgid = gid;
+		me->sgid = gid;
+	};
+
+	me->egid = gid;
+	return 0;
+};
+
+int setreuid(uid_t ruid, uid_t euid)
+{
+	Thread *me = getCurrentThread();
+	uid_t ruidPrev = me->ruid;
+	if (ruid != (uid_t)-1)
+	{
+		if (me->euid != 0)
+		{
+			me->therrno = EPERM;
+			return -1;
+		};
+
+		me->ruid = ruid;
+	};
+
+	if (euid != (uid_t)-1)
+	{
+		if (euid != ruidPrev)
+		{
+			if (me->euid != 0)
+			{
+				me->therrno = EPERM;
+				return -1;
+			};
+
+			me->suid = euid;
+		};
+
+		me->euid = euid;
+	};
+
+	return 0;
+};
+
+int setregid(gid_t rgid, gid_t egid)
+{
+	Thread *me = getCurrentThread();
+	gid_t rgidPrev = me->rgid;
+	if (rgid != (gid_t)-1)
+	{
+		if (me->egid != 0)
+		{
+			me->therrno = EPERM;
+			return -1;
+		};
+
+		me->rgid = rgid;
+	};
+
+	if (egid != (gid_t)-1)
+	{
+		if (egid != rgidPrev)
+		{
+			if (me->egid != 0)
+			{
+				me->therrno = EPERM;
+				return -1;
+			};
+
+			me->sgid = egid;
+		};
+
+		me->egid = egid;
+	};
+
+	return 0;
+};
+
+int seteuid(uid_t euid)
+{
+	Thread *me = getCurrentThread();
+	if (me->euid != 0)
+	{
+		if ((euid != me->euid) && (euid != me->ruid) && (euid != me->suid))
+		{
+			me->therrno = EPERM;
+			return -1;
+		};
+	};
+
+	me->euid = euid;
+	return 0;
+};
+
+int setegid(gid_t egid)
+{
+	Thread *me = getCurrentThread();
+	if (me->egid != 0)
+	{
+		if ((egid != me->egid) && (egid != me->rgid) && (egid != me->sgid))
+		{
+			me->therrno = EPERM;
+			return -1;
+		};
+	};
+
+	me->egid = egid;
+	return 0;
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	kdumpregs(regs);
@@ -1284,15 +1424,24 @@ void signalOnBadSyscall(Regs *regs)
 	switchTask(regs);
 };
 
+void dumpRunqueue();
+
 void syscallDispatch(Regs *regs, uint16_t num)
 {
-	if (getCurrentThread()->sigcnt > 0)
+	if (getCurrentThread()->errnoptr != NULL)
+	{
+		getCurrentThread()->therrno = *(getCurrentThread()->errnoptr);
+	};
+
+	if ((getCurrentThread()->sigcnt > 0) && ((regs->cs & 3) == 3) && ((getCurrentThread()->flags & THREAD_SIGNALLED) == 0))
 	{
 		// before doing any syscalls, we dispatch all interrupts.
 		ASM("cli");
 		lockSched();
 		memcpy(&getCurrentThread()->regs, regs, sizeof(Regs));
 		dispatchSignal(getCurrentThread());
+		memcpy(regs, &getCurrentThread()->regs, sizeof(Regs));
+		unlockSched();
 		return;					// interrupts will be enabled on return
 	};
 
@@ -1433,9 +1582,11 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 30:
 		/* _glidix_diag */
-		heapDump();
+		//heapDump();
 		kdumpregs(regs);
-		BREAKPOINT();
+		dumpRunqueue();
+		//regs->rflags &= ~(1 << 9);
+		//BREAKPOINT();
 		break;
 	case 31:
 		*((int*)&regs->rax) = sys_mount((const char*)regs->rdi, (const char*)regs->rsi, (const char*)regs->rdx, (int)regs->rcx);
@@ -1541,6 +1692,24 @@ void syscallDispatch(Regs *regs, uint16_t num)
 	case 54:
 		regs->rax = sys_mmap(regs->rdi, (size_t)regs->rsi, (int)regs->rdx, (int)regs->rcx, (int)regs->r8, (off_t)regs->r9);
 		break;
+	case 55:
+		regs->rax = setuid(regs->rdi);
+		break;
+	case 56:
+		regs->rax = setgid(regs->rdi);
+		break;
+	case 57:
+		regs->rax = seteuid(regs->rdi);
+		break;
+	case 58:
+		regs->rax = setegid(regs->rdi);
+		break;
+	case 59:
+		regs->rax = setreuid(regs->rdi, regs->rsi);
+		break;
+	case 60:
+		regs->rax = setregid(regs->rdi, regs->rsi);
+		break;
 	default:
 		signalOnBadSyscall(regs);
 		break;
@@ -1549,5 +1718,17 @@ void syscallDispatch(Regs *regs, uint16_t num)
 	if (getCurrentThread()->errnoptr != NULL)
 	{
 		*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
+	};
+
+	if ((getCurrentThread()->sigcnt > 0) && ((regs->cs & 3) == 3) && ((getCurrentThread()->flags & THREAD_SIGNALLED) == 0))
+	{
+		// also dispatching after calls.
+		ASM("cli");
+		lockSched();
+		memcpy(&getCurrentThread()->regs, regs, sizeof(Regs));
+		dispatchSignal(getCurrentThread());
+		memcpy(regs, &getCurrentThread()->regs, sizeof(Regs));
+		unlockSched();
+		return;					// interrupts will be enabled on return
 	};
 };

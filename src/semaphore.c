@@ -30,13 +30,22 @@
 #include <glidix/spinlock.h>
 #include <glidix/common.h>
 #include <glidix/memory.h>
+#include <glidix/console.h>
 
 void semInit(Semaphore *sem)
 {
+	semInit2(sem, 1);
+};
+
+void semInit2(Semaphore *sem, int count)
+{
 	spinlockRelease(&sem->lock);
-	sem->owner = NULL;
+	spinlockRelease(&sem->countLock);
+	sem->waiter = NULL;
+	sem->count = count;
 	sem->first = NULL;
 	sem->last = NULL;
+	sem->countWaiter = NULL;
 };
 
 extern uint64_t getFlagsRegister();
@@ -50,16 +59,13 @@ void semWait(Semaphore *sem)
 	spinlockAcquire(&sem->lock);
 	Thread *me = getCurrentThread();
 
-	if (sem->owner != NULL)
+	//if (sem->owner != NULL)
+	if ((sem->count == 0) || (sem->first != NULL))
 	{
-		if (sem->owner == me)
-		{
-			panic("a thread attempted to wait for a semaphore that it already acquired");
-		};
-
 		SemWaitThread *thwait = (SemWaitThread*) kmalloc(sizeof(SemWaitThread));
 		thwait->thread = me;
 		thwait->next = NULL;
+		thwait->waiting = 1;
 
 		if (sem->last == NULL)
 		{
@@ -73,22 +79,110 @@ void semWait(Semaphore *sem)
 		};
 
 		// wait without hanging up the whole system
-		while (sem->owner != me)
+		while (thwait->waiting)
 		{
+			ASM("cli");
+			getCurrentThread()->flags |= THREAD_WAITING;
 			spinlockRelease(&sem->lock);
-			ASM("hlt");
+			kyield();
 			spinlockAcquire(&sem->lock);
 		};
+		kfree(thwait);
 	}
 	else
 	{
-		sem->owner = me;
+		sem->count--;
+	};
+
+	if ((sem->count > 0) && (sem->first != NULL))
+	{
+		// make sure we signal the next thread so that it could get its share
+		// of resources.
+		SemWaitThread *thwait = sem->first;
+		if (sem->last == thwait)
+		{
+			sem->last = NULL;
+		};
+
+		Thread *thread = thwait->thread;
+		sem->first = thwait->next;
+		thwait->waiting = 0;			// the waiter will free this
+
+		sem->count--;
+		signalThread(thread);
 	};
 
 	spinlockRelease(&sem->lock);
 };
 
-void semSignal(Semaphore *sem)
+#if 0
+static inline int semTryLock(Semaphore *sem)
+{
+	spinlockAcquire(&sem->lock);
+	Thread *me = getCurrentThread();
+
+	//if (sem->owner != NULL)
+	if ((sem->count == 0) || (sem->first != NULL))
+	{
+		spinlockRelease(&sem->lock);
+		return -1;
+	}
+	else
+	{
+		sem->count--;
+	};
+
+	spinlockRelease(&sem->lock);
+	return 0;
+};
+#endif
+
+int semWait2(Semaphore *sem, int count)
+{
+	spinlockAcquire(&sem->lock);
+	if (sem->countWaiter != NULL)
+	{
+		spinlockRelease(&sem->lock);
+		return 0;
+	};
+
+	int sigcnt = getCurrentThread()->sigcnt;
+
+	while (sem->count == 0)
+	{
+		sem->countWaiter = getCurrentThread();
+		ASM("cli");
+		getCurrentThread()->flags |= THREAD_WAITING;
+		spinlockRelease(&sem->lock);
+		kyield();
+		if (getCurrentThread()->sigcnt > sigcnt)
+		{
+			sem->countWaiter = NULL;
+			return -1;
+		};
+		spinlockAcquire(&sem->lock);
+	};
+
+	spinlockRelease(&sem->lock);
+	sem->countWaiter = NULL;
+	spinlockAcquire(&sem->countLock);
+	spinlockRelease(&sem->countLock);
+
+	spinlockAcquire(&sem->lock);
+	if (sem->count < count) count = sem->count;
+	spinlockRelease(&sem->lock);
+
+	int out = 0;
+	while (count--)
+	{
+		semWait(sem);
+		out++;
+	};
+
+	return out;
+};
+
+static void semSignalGen(Semaphore *sem, int wait)
 {
 	if ((getFlagsRegister() & (1 << 9)) == 0)
 	{
@@ -96,12 +190,13 @@ void semSignal(Semaphore *sem)
 	};
 
 	spinlockAcquire(&sem->lock);
-
-	if (sem->first == NULL)
+	if (sem->countWaiter != NULL)
 	{
-		sem->owner = NULL;
-	}
-	else
+		signalThread(sem->countWaiter);
+	};
+
+	sem->count++;
+	if ((sem->first != NULL) && (sem->count == 1))
 	{
 		SemWaitThread *thwait = sem->first;
 		if (sem->last == thwait)
@@ -111,10 +206,59 @@ void semSignal(Semaphore *sem)
 
 		Thread *thread = thwait->thread;
 		sem->first = thwait->next;
-		kfree(thwait);
+		thwait->waiting = 0;			// the waiter will free this
 
-		sem->owner = thread;
+		sem->count--;
+		signalThread(thread);
 	};
 
-	spinlockRelease(&sem->lock);
+	if (wait)
+	{
+		ASM("cli");
+		getCurrentThread()->flags |= THREAD_WAITING;
+		spinlockRelease(&sem->lock);
+		kyield();
+	}
+	else
+	{
+		spinlockRelease(&sem->lock);
+	};
+};
+
+void semSignal(Semaphore *sem)
+{
+	semSignalGen(sem, 0);
+};
+
+void semSignalAndWait(Semaphore *sem)
+{
+	semSignalGen(sem, 1);
+};
+
+void semSignal2(Semaphore *sem, int count)
+{
+	spinlockAcquire(&sem->countLock);
+	while (count--) semSignal(sem);
+	spinlockRelease(&sem->countLock);
+};
+
+uint64_t getFlagsRegister();
+void semDump(Semaphore *sem)
+{
+	uint64_t shouldSTI = getFlagsRegister() & (1 << 9);
+	ASM("cli");
+	kprintf_debug("I AM: %s\n", getCurrentThread()->name);
+	kprintf_debug("SEM ADDR: %a\n", sem);
+	kprintf_debug("AVAIALBLE: %d\n", sem->count);
+	kprintf_debug("QUEUE FOR SEMAPHORE:\n");
+
+	SemWaitThread *thwait = sem->first;
+	while (thwait != NULL)
+	{
+		kprintf_debug("%s\n", thwait->thread->name);
+		thwait = thwait->next;
+	};
+
+	kprintf_debug("END OF QUEUE\n");
+	if (shouldSTI) ASM("sti");
 };

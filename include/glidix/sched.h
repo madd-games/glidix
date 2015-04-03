@@ -114,7 +114,7 @@ typedef struct _Thread
 	/**
 	 * Thread name (for debugging).
 	 */
-	const char			*name;
+	char				name[32];
 
 	/**
 	 * Flags (see above).
@@ -291,5 +291,11 @@ int pollThread(Regs *regs, int pid, int *stat_loc, int flags);
  * Send a signal to a specific pid.
  */
 int signalPid(int pid, int signal);
+
+/**
+ * Switch to the process with specified index. This is only for debugging purposes and can be used from debugging
+ * mode only.
+ */
+void switchTaskToIndex(int index);
 
 #endif

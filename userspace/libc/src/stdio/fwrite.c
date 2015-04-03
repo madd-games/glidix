@@ -40,28 +40,33 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 		return 0;
 	};
 
+	const void *buf_org = buf;
+
 	size_t ret = size * count;
 	size_t rsz = size * count;
-	if (fp->_bufsiz < rsz)
+	while (fp->_bufsiz < rsz)
 	{
-		memcpy(fp->_wrbuf, buf, fp->_bufsiz);
+		if (fp->_bufsiz != 0) memcpy(fp->_wrbuf, buf, fp->_bufsiz);
 		fp->_wrbuf += fp->_bufsiz;
 		buf = (void*) ((char*) buf + fp->_bufsiz);
 		rsz -= fp->_bufsiz;
 		fp->_bufsiz = 0;
-		if (fp->_flush == NULL) return ret;
-		fp->_flush(fp);
+		//if (fp->_flush == NULL) return ret;
+		//fp->_flush(fp);
+		//fp->_bufsiz = fp->_bufsiz_org;
+		fflush(fp);
 	};
 
-	memcpy(fp->_wrbuf, buf, rsz);
+	if (rsz != 0) memcpy(fp->_wrbuf, buf, rsz);
 	fp->_wrbuf += rsz;
-	const char *scan = (const char *) buf;
+	fp->_bufsiz -= rsz;
+	const char *scan = (const char *) buf_org;
 
 	while (rsz--)
 	{
 		if (*scan == fp->_trigger)
 		{
-			fp->_flush(fp);
+			fflush(fp);
 		};
 
 		scan++;

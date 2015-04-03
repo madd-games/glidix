@@ -90,6 +90,7 @@ isrCommon:
 	mov			rdi, rsp		; pass a pointer to registers as argument to isrHandler
 	mov			rbx, rsp		; save the RSP (RBX is preserved, remember).
 	and			rsp, ~0xF		; align on 16-byte boundary.
+	xor			rbp, rbp		; mark the bottom of the stack
 	call	 		isrHandler
 	mov			rsp, rbx		; restore the real stack
 
@@ -101,7 +102,6 @@ isrCommon:
 
 	popAll
 	add			rsp, 16
-	;sti
 	iretq
 
 %macro ISR_NOERRCODE 1
@@ -162,6 +162,7 @@ ISR_NOERRCODE 28
 ISR_NOERRCODE 29
 ISR_NOERRCODE 30
 ISR_NOERRCODE 31
+ISR_NOERRCODE 48
 
 IRQ	0,	32
 IRQ	1,	33

@@ -61,5 +61,10 @@ _jmp_usbs:
 	push rax				; RIP
 	iretq
 
+global _syscall_entry
+_syscall_entry:
+	cli
+	hlt
+
 section .data
 syscall_name db 'syscall.asm', 0

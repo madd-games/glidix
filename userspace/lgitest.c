@@ -55,7 +55,10 @@ int main(int argc, char *argv[])
 	memset(data, 0xFF, size);
 
 	printf("Literally spamming.\n");
+	_glidix_diag();
+	asm volatile("xchg %bx, %bx");
 	memcpy(videoram, data, size);
+	asm volatile("xchg %bx, %bx");
 
 	printf("done.\n");
 	while (1);

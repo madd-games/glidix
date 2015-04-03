@@ -32,6 +32,7 @@
 #include <glidix/console.h>
 #include <glidix/spinlock.h>
 #include <glidix/errno.h>
+#include <glidix/apic.h>
 
 static Thread firstThread;
 static Thread *currentThread;
@@ -40,13 +41,60 @@ static int nextPid;
 
 extern uint64_t getFlagsRegister();
 void kmain2();
+uint32_t quantumTicks;			// initialised by init.c, how many APIC timer ticks to do per process.
+
+typedef struct
+{
+	char symbol;
+	uint64_t mask;
+} ThreadFlagInfo;
+
+static ThreadFlagInfo threadFlags[] = {
+	{'W', THREAD_WAITING},
+	{'S', THREAD_SIGNALLED},
+	{'T', THREAD_TERMINATED},
+	{'R', THREAD_REBEL},
+	{0, 0}
+};
+
+static void printThreadFlags(uint64_t flags)
+{
+	ThreadFlagInfo *info;
+	for (info=threadFlags; info->symbol!=0; info++)
+	{
+		if (flags & info->mask)
+		{
+			kprintf("%$\x02%c%#", info->symbol);
+		}
+		else
+		{
+			kprintf("%$\x04%c%#", info->symbol);
+		};
+	};
+};
 
 void dumpRunqueue()
 {
+	kprintf("#\tPID\tPARENT\tNAME                            FLAGS\tEUID\tEGID\n");
 	Thread *th = &firstThread;
+	int i=0;
 	do
 	{
-		kprintf("%s (prev=%s, next=%s)\n", th->name, th->prev->name, th->next->name);
+		char name[33];
+		memset(name, ' ', 32);
+		name[32] = 0;
+		memcpy(name, th->name, strlen(th->name));
+		kprintf("%d\t%d\t%d\t%s", i++, th->pid, th->pidParent, name);
+		printThreadFlags(th->flags);
+		if (th->regs.cs == 8)
+		{
+			kprintf("%$\x02" "K%#");
+		}
+		else
+		{
+			kprintf("%$\x04" "K%#");
+		};
+		kprintf("\t%d\t%d\n", th->euid, th->egid);
 		th = th->next;
 	} while (th != &firstThread);
 };
@@ -80,7 +128,7 @@ void initSched()
 	firstThread.regs.rflags = getFlagsRegister() | (1 << 9);		// enable interrupts
 
 	// other stuff
-	firstThread.name = "Startup thread";
+	strcpy(firstThread.name, "Startup thread");
 	firstThread.flags = 0;
 	firstThread.pm = NULL;
 	firstThread.pid = 0;
@@ -113,6 +161,7 @@ void initSched()
 
 	// switch to this new thread's context
 	currentThread = &firstThread;
+	apic->timerInitCount = quantumTicks;
 	switchContext(&firstThread.regs);
 };
 
@@ -136,6 +185,7 @@ static void jumpToTask()
 
 	// switch context
 	fpuLoad(&currentThread->fpuRegs);
+	apic->timerInitCount = quantumTicks;
 	switchContext(&currentThread->regs);
 };
 
@@ -149,10 +199,37 @@ void unlockSched()
 	spinlockRelease(&schedLock);
 };
 
+int canSched(Thread *thread)
+{
+	if (thread->flags & THREAD_NOSCHED) return 0;
+#if 0
+	if (thread->pm != NULL)
+	{
+		if (spinlockTry(&thread->pm->lock))
+		{
+			return 0;
+		};
+
+		spinlockRelease(&thread->pm->lock);
+	};
+#endif
+
+	return 1;
+};
+
 void switchTask(Regs *regs)
 {
-	if (currentThread == NULL) return;
-	if (spinlockTry(&schedLock)) return;
+	if (currentThread == NULL)
+	{
+		apic->timerInitCount = quantumTicks;
+		return;
+	};
+	if (spinlockTry(&schedLock))
+	{
+		kprintf_debug("WARNING: SCHED LOCKED\n");
+		apic->timerInitCount = quantumTicks;
+		return;
+	};
 	ASM("cli");
 
 	// remember the context of this thread.
@@ -163,7 +240,7 @@ void switchTask(Regs *regs)
 	do
 	{
 		currentThread = currentThread->next;
-	} while (currentThread->flags & THREAD_NOSCHED);
+	} while (!canSched(currentThread));
 
 	// if there are signals waiting, and not currently being handled, then handle them.
 	if (((currentThread->flags & THREAD_SIGNALLED) == 0) && (currentThread->sigcnt != 0))
@@ -241,10 +318,11 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	thread->regs.ds = 16;
 	thread->regs.ss = 0;
 	thread->regs.rflags = getFlagsRegister() | (1 << 9);				// enable interrupts in that thread
-	thread->name = name;
+	strcpy(thread->name, name);
 	thread->flags = 0;
 	thread->pm = NULL;
 	thread->pid = 0;
+	thread->pidParent = 0;
 	thread->ftab = NULL;
 	thread->rootSigHandler = 0;
 	thread->sigput = 0;
@@ -336,7 +414,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->stack = kmalloc(DEFAULT_STACK_SIZE);
 	thread->stackSize = DEFAULT_STACK_SIZE;
 
-	thread->name = "";
+	strcpy(thread->name, currentThread->name);
 	thread->flags = 0;
 
 	// process memory
@@ -458,6 +536,7 @@ void threadExit(Thread *thread, int status)
 
 	// don't break the CPU runqueue
 	ASM("cli");
+	lockSched();
 
 	// init will adopt all orphans
 	Thread *scan = thread;
@@ -495,12 +574,14 @@ void threadExit(Thread *thread, int status)
 	siginfo.si_pid = thread->pid;
 	siginfo.si_status = status;
 	siginfo.si_uid = thread->ruid;
-	ASM("sti");
 	sendSignal(parent, &siginfo);
+	unlockSched();
+	ASM("sti");
 };
 
 int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 {
+	lockSched();
 	ASM("cli");
 	Thread *threadToKill = NULL;
 	Thread *thread = currentThread->next;
@@ -533,9 +614,13 @@ int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 		//currentThread->therrno = ECHILD;
 		//*((int*)&regs->rax) = -1;
 		//switchTask(regs);
+		getCurrentThread()->flags |= THREAD_WAITING;
+		unlockSched();
+		kyield();
 		return -2;
 	};
 
+	unlockSched();
 	ASM("sti");
 
 	// when WNOHANG is set
@@ -597,7 +682,7 @@ static int canSendSignal(Thread *src, Thread *dst, int signo)
 		return 1;
 	};
 
-	if ((src->euid == dst->euid) || (src->ruid == dst->euid) || (src->euid == dst->suid) || (src->ruid == dst->ruid))
+	if ((src->ruid == dst->euid) || (src->ruid == dst->ruid))
 	{
 		return 1;
 	};
@@ -632,7 +717,9 @@ int signalPid(int pid, int signo)
 
 	if (thread->flags & THREAD_TERMINATED)
 	{
-		thread = currentThread;
+		currentThread->therrno = ESRCH;
+		unlockSched();
+		return -1;
 	};
 
 	if (thread == currentThread)
@@ -655,4 +742,21 @@ int signalPid(int pid, int signo)
 
 	unlockSched();
 	return 0;
+};
+
+void switchTaskToIndex(int index)
+{
+	currentThread = &firstThread;
+	while (index--)
+	{
+		currentThread = currentThread->next;
+	};
+};
+
+void kyield()
+{
+	while (getCurrentThread()->flags & THREAD_WAITING)
+	{
+		ASM("sti; hlt");
+	};
 };

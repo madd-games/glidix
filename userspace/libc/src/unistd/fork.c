@@ -32,10 +32,5 @@
 
 pid_t fork()
 {
-	pid_t ret = _glidix_clone(0, NULL);
-	if (ret == 0)
-	{
-		_glidix_seterrnoptr(malloc(sizeof(int)));
-	};
-	return ret;
+	return _glidix_clone(0, NULL);
 };

@@ -64,9 +64,19 @@ void ispInit()
 	ispPTE->rw = 1;
 	ispPTE->framePhysAddr = 0;
 
+	// APIC register space - also make sure it is in the default place.
+	msrWrite(0x1B, 0xFEE00000 | (2 << 10) | (1 << 8));
+	pt->entries[1].present = 1;
+	pt->entries[1].framePhysAddr = 0xFEE00;
+	pt->entries[1].pcd = 1;
+
+	// IOAPIC register space
+	pt->entries[2].present = 1;
+	pt->entries[2].framePhysAddr = 0xFEC00;
+	pt->entries[2].pcd = 1;
+
 	// set it in the PML4 (so it maps from 0xFFFF808000000000 up).
 	pml4->entries[257].present = 1;
-	pml4->entries[257].rw = 1;
 	pml4->entries[257].pdptPhysAddr = (((uint64_t)pdpt-0xFFFF800000000000) >> 12);
 
 	// refresh the address space
@@ -94,4 +104,22 @@ void ispLock()
 void ispUnlock()
 {
 	spinlockRelease(&ispSpinlock);
+};
+
+void pmem_read(void *buffer, uint64_t physAddr, size_t len)
+{
+	ispLock();
+	while (len != 0)
+	{
+		uint64_t frame = physAddr / 0x1000;
+		uint64_t offset = physAddr % 0x1000;
+		size_t toCopy = 0x1000 - offset;
+		if (toCopy > len) toCopy = len;
+
+		ispSetFrame(frame);
+		memcpy(buffer, (void*)((uint64_t)ispGetPointer() + offset), toCopy);
+		len -= toCopy;
+		buffer = (void*)((uint64_t)buffer+toCopy);
+	};
+	ispUnlock();
 };

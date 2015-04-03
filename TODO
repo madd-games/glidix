@@ -2,3 +2,4 @@
  * Module unloading
  * Fix FPU support (fpuLoad causes GPF, see sched.c and signal.c)
  * Implement APIC timers for the scheduler.
+ * Get ACPI to properly read IRQ remappings.

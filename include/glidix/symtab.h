@@ -44,5 +44,6 @@ typedef struct _Symbol
 
 void initSymtab();
 void *getSymbol(const char *name);
+Symbol *findSymbolForAddr(uint64_t addr);
 
 #endif

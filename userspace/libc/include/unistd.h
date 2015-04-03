@@ -30,11 +30,21 @@
 #define _UNISTD_H
 
 #include <sys/types.h>
-#include <stdio.h>		/* SEEK_* */
+#include <stdio.h>				/* SEEK_* */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define	_SC_GETPW_R_SIZE_MAX 			0
+#define	_SC_GETGR_R_SIZE_MAX			1
+#define	_SC_LOGIN_NAME_MAX			2
+#define	_SC_PAGESIZE				3 // { Synonims
+#define	_SC_PAGE_SIZE				3 // {
+
+#define	LOGIN_NAME_MAX				127
+#define	PAGESIZE				0x1000
+#define	PAGE_SIZE				0x1000
 
 /* implemented by the runtime */
 int	execv(const char*, char* const[]);
@@ -72,6 +82,10 @@ int	setreuid(uid_t, uid_t);
 int	setegid(gid_t);
 int	setgid(gid_t);
 int	setregid(gid_t, gid_t);
+long	sysconf(int name);
+
+/* libcrypt */
+char*	crypt(const char *key, const char *salt);
 
 #ifdef __cplusplus
 }	/* extern "C" */

@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <pwd.h>
 
 const char *sizeScales[] = {
 	"B", "KB", "MB", "GB", "TB", "PB", "EB"
@@ -93,10 +94,14 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 
+	struct passwd *pwd = getpwuid(st.st_uid);
+	const char *name = "error";
+	if (pwd != NULL) name = pwd->pw_name;
+
 	printf("Inode:      %d\n", st.st_ino);
 	printf("Mode:       %o\n", st.st_mode & 0777);
 	printf("Links:      %d\n", st.st_nlink);
-	printf("Owner:      %d\n", st.st_uid);
+	printf("Owner:      %d <%s>\n", st.st_uid, name);
 	printf("Group:      %d\n", st.st_gid);
 	printf("Type:       %s\n", getFileType(st.st_mode));
 	if (S_ISREG(st.st_mode))

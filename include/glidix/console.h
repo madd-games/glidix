@@ -37,10 +37,13 @@ void initConsole();
 void kvprintf(const char *fmt, va_list ap);
 void kprintf(const char *fmt, ...);
 void kputbuf(const char *buf, size_t size);
+void kputbuf_debug(const char *buf, size_t size);
 void kdumpregs(Regs *regs);
 void kprintf_debug(const char *fmt, ...);
 
 #define	DONE()						kprintf("%$\x02" "Done%#\n")
 #define	FAILED()					kprintf("%$\x04" "Failed%#\n")
+
+#define	PRINTFLAG(cond, c)	if (cond) {kprintf("%$\x02" "%c%#", c);} else {kprintf("%$\x04" "%c%#", c);}
 
 #endif

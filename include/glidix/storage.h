@@ -114,6 +114,10 @@ typedef struct
 	Device					diskfile;
 
 	/**
+	 * The kernel thread waiting for commands on this device.
+	 */
+	Thread*					thread;
+	/**
 	 * Command queue.
 	 */
 	SDCommand*				cmdq;

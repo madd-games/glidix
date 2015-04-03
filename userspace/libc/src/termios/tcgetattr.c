@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Runtime
 
 	Copyright (c) 2014-2015, Madd Games.
 	All rights reserved.
@@ -26,32 +26,19 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_cowcache_h
-#define __glidix_cowcache_h
+#include <termios.h>
+#include <errno.h>
 
-/**
- * Copy-on-write cache.
- */
-
-#include <glidix/common.h>
-#include <glidix/pagetab.h>
-
-typedef struct
+int tcgetattr(int fildes, struct termios *tc)
 {
-	// pointer to the refcount
-	uint64_t*			refcountptr;
+	int status = ioctl(fildes, __IOCTL_TTY_GETATTR, tc);
+	if (status == -1)
+	{
+		if (errno == EINVAL)
+		{
+			errno = ENOTTY;
+		};
+	};
 
-	// pointer to the page table entry
-	PTe*				pte;
-
-	// pointer to the page data.
-	void*				data;
-} COWFrame;
-
-void cowInit();
-void cowCreateFrame(COWFrame *cf, uint64_t frame);
-void cowPrintFrame(COWFrame *cf);
-void cowDoCopy(COWFrame *cf, PTe *pte, void *data);
-void cowUpref(COWFrame *cf);
-
-#endif
+	return status;
+};

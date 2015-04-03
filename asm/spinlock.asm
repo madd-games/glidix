@@ -32,20 +32,33 @@ bits 64
 [global spinlockRelease]
 
 spinlockAcquire:
+	push	rbp
+	mov	rbp,	rsp
+
 .acq:
 	mov	al,	1
 	xchg	al,	[rdi]
 	test	al,	al
 	jnz	.acq
+
+	pop	rbp
 	ret
 
 spinlockTry:
+	push	rbp
+	mov	rbp,	rsp
+
 	xor	rax,	rax
 	mov	al,	1
 	xchg	al,	[rdi]
+
+	pop	rbp
 	ret
 
 spinlockRelease:
+	push	rbp
+	mov	rbp,	rsp
+
 	xor	rax,	rax
 	xchg	al,	[rdi]
 
@@ -62,4 +75,5 @@ spinlockRelease:
 	hlt
 
 .end:
+	pop	rbp
 	ret

@@ -111,7 +111,7 @@ _start:
 	add edi, 8                   ; Add eight to the destination index.
 	loop SetEntry               ; Set the next entry.
 
-	; 256th PML4e
+	; pml4[256]
 	mov edi, 0x1800
 	mov dword [edi], 0x5003
 	mov edi, 0x5000
@@ -121,13 +121,13 @@ _start:
 	add edi, 0x1000
 
 	mov ebx, 0x00000003          ; Set the B-register to 0x00000003.
-	mov ecx, 511                 ; Set the C-register to 511.
+	mov ecx, 512                 ; Set the C-register to 511.
 
-	mov dword [edi], 0
-	add ebx, 0x1000
-	add edi, 8
+	;mov dword [edi], 0
+	;add ebx, 0x1000
+	;add edi, 8
 
-	; the rest (above 4KB up to 2MB) is mapped.
+	; map everything up to pml4[256]+2MB
 	SetEntry2:
 	mov dword [edi], ebx         ; Set the double word at the destination index to the B-register.
 	add ebx, 0x1000              ; Add 0x1000 to the B-register.
@@ -311,6 +311,7 @@ _bootstrap64_upper:
 	mov edi,	esi
 	mov rax,	0xFFFF800000000000
 	add rdi,	rax
+	xor rbp,	rbp
 	call		kmain
 
 	; if the C kernel returns, halt the CPU.

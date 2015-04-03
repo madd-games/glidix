@@ -189,7 +189,7 @@ static void put_a(uint64_t addr)
 
 void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 {
-	spinlockAcquire(&consoleLock);
+	if (putcon) spinlockAcquire(&consoleLock);
 	consoleState.putcon = putcon;
 
 	while (*fmt != 0)
@@ -240,7 +240,7 @@ void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 
 	updateVGACursor();
 
-	spinlockRelease(&consoleLock);
+	if (putcon) spinlockRelease(&consoleLock);
 };
 
 void kvprintf(const char *fmt, va_list ap)
@@ -281,6 +281,18 @@ void kputbuf(const char *buf, size_t size)
 	spinlockRelease(&consoleLock);
 };
 
+void kputbuf_debug(const char *buf, size_t size)
+{
+	spinlockAcquire(&consoleLock);
+	consoleState.putcon = 0;
+	while (size--)
+	{
+		kputch(*buf++);
+	};
+	updateVGACursor();
+	spinlockRelease(&consoleLock);
+};
+
 typedef struct
 {
 	char on;
@@ -307,8 +319,16 @@ static void printFlags(uint64_t flags)
 	int i;
 	for (i=0; i<11; i++)
 	{
-		char c = (flags & flagList[i].mask) ? flagList[i].on : flagList[i].off;
-		kprintf("%c", c);
+		//char c = (flags & flagList[i].mask) ? flagList[i].on : flagList[i].off;
+		//kprintf("%c", c);
+		if (flags & flagList[i].mask)
+		{
+			kprintf("%$\x02%c%#", flagList[i].on);
+		}
+		else
+		{
+			kprintf("%$\x04%c%#", flagList[i].on);
+		};
 	};
 };
 

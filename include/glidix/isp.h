@@ -30,6 +30,7 @@
 #define __glidix_isp_h
 
 #include <stdint.h>
+#include <stddef.h>
 
 /**
  * The Interprocess Streaming Page (ISP) allows for you to send data to arbitrary locations
@@ -41,5 +42,7 @@ void *ispGetPointer();
 void ispSetFrame(uint64_t frame);
 void ispLock();
 void ispUnlock();
+
+void pmem_read(void *buffer, uint64_t physAddr, size_t len);
 
 #endif

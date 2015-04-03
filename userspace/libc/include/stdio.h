@@ -127,6 +127,7 @@ int	puts(const char *s);
 int	ferror(FILE *fp);
 int	feof(FILE *fp);
 void	perror(const char *s);
+FILE*	fdopen(int fd, const char *mode);
 
 #ifdef __cplusplus
 }

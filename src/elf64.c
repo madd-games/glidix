@@ -231,6 +231,9 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	// set the signal handler to default.
 	getCurrentThread()->rootSigHandler = 0;
 
+	// thread name
+	strcpy(getCurrentThread()->name, path);
+
 	// set the execPars
 	Thread *thread = getCurrentThread();
 	if (thread->execPars != NULL) kfree(thread->execPars);
@@ -284,12 +287,16 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	if (st.st_mode & VFS_MODE_SETUID)
 	{
 		thread->euid = st.st_uid;
+		thread->ruid = st.st_uid;
+		thread->suid = st.st_uid;
 		thread->flags |= THREAD_REBEL;
 	};
 
 	if (st.st_mode & VFS_MODE_SETGID)
 	{
 		thread->egid = st.st_gid;
+		thread->rgid = st.st_gid;
+		thread->sgid = st.st_gid;
 		thread->flags |= THREAD_REBEL;
 	};
 
