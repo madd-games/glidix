@@ -73,12 +73,14 @@ typedef struct _SDCommand
 	uint64_t				index;
 
 	/**
-	 * This is used to report when a read operation has been completed. To send a read command,
-	 * this spinlock is first acquired by the sender. Next, the operations is pushed to the queue.
-	 * Then, the sender acquires the lock again, effectively blocking himself. When the SDI driver
-	 * completes the command, it shall release this lock, causing the sender to be unlocked.
+	 * Number of blocks to read/write.
 	 */
-	Spinlock*				cmdlock;
+	uint64_t				count;
+
+	/**
+	 * Semaphore used to decice when an operation is complete.
+	 */
+	Semaphore*				cmdlock;
 
 	/**
 	 * For queues.

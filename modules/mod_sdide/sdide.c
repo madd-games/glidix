@@ -151,7 +151,7 @@ static void ataThread(void *data)
 		uint8_t channel = idev->channel;
 		uint8_t slavebit = idev->drive;
 		uint16_t bus = ctrl->channels[channel].base;
-		unsigned long words = 256;
+		unsigned long words = 256 * sdcmd->count;
 		uint8_t err;
 
 		ideWriteReg(ctrl, channel, ATA_REG_CONTROL, ctrl->channels[channel].nIEN = 2);
@@ -194,7 +194,7 @@ static void ataThread(void *data)
 			ideWriteReg(ctrl, channel, ATA_REG_LBA4, lbaIO[4]);
 			ideWriteReg(ctrl, channel, ATA_REG_LBA5, lbaIO[5]);
 		};
-		ideWriteReg(ctrl, channel, ATA_REG_SECCOUNT0, 1);
+		ideWriteReg(ctrl, channel, ATA_REG_SECCOUNT0, sdcmd->count);
 		ideWriteReg(ctrl, channel, ATA_REG_LBA0, lbaIO[0]);
 		ideWriteReg(ctrl, channel, ATA_REG_LBA1, lbaIO[1]);
 		ideWriteReg(ctrl, channel, ATA_REG_LBA2, lbaIO[2]);
@@ -257,7 +257,7 @@ static void atapiThread(void *data)
 		uint32_t channel = idev->channel;
 		uint32_t slavebit = idev->drive;
 		uint16_t bus = ctrl->channels[channel].base;
-		unsigned long words = 1024;
+		unsigned long words = 1024 * sdcmd->count;
 		uint8_t err;
 		int i;
 
@@ -271,7 +271,7 @@ static void atapiThread(void *data)
 		ctrl->atapiPacket[6] = 0;
 		ctrl->atapiPacket[7] = 0;
 		ctrl->atapiPacket[8] = 0;
-		ctrl->atapiPacket[9] = 1;		// sector count
+		ctrl->atapiPacket[9] = sdcmd->count;
 		ctrl->atapiPacket[10] = 0;
 		ctrl->atapiPacket[11] = 0;
 

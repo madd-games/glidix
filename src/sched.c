@@ -508,8 +508,16 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 
 	thread->therrno = 0;
 
-	// no errnoptr
-	thread->errnoptr = NULL;
+	// if the address space is shared, the errnoptr is now invalid;
+	// otherwise, it can just stay where it is.
+	if (flags & CLONE_SHARE_MEMORY)
+	{
+		thread->errnoptr = NULL;
+	}
+	else
+	{
+		thread->errnoptr = currentThread->errnoptr;
+	};
 
 	// link into the runqueue
 	spinlockAcquire(&schedLock);

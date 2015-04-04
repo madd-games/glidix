@@ -444,7 +444,7 @@ SDCommand* sdPop(StorageDevice *dev)
 
 void sdPostComplete(SDCommand *cmd)
 {
-	if (cmd->cmdlock != NULL) spinlockRelease(cmd->cmdlock);
+	if (cmd->cmdlock != NULL) semSignal(cmd->cmdlock);
 	kfree(cmd);
 };
 
@@ -452,18 +452,18 @@ int sdRead(StorageDevice *dev, uint64_t block, void *buffer)
 {
 	if (dev->blockSize*(block+1) > dev->totalSize) return -1;
 
-	Spinlock lock;
-	spinlockRelease(&lock);
-	spinlockAcquire(&lock);
+	Semaphore lock;
+	semInit2(&lock, 0);
 
 	SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
 	cmd->type = SD_CMD_READ;
 	cmd->block = buffer;
 	cmd->index = block;
+	cmd->count = 1;
 	cmd->cmdlock = &lock;
 
 	sdPush(dev, cmd);
-	spinlockAcquire(&lock);				// wait for the read operation to finish
+	semWait(&lock);				// wait for the read operation to finish
 
 	// (cmd was freed by the driver)
 	return 0;
@@ -478,6 +478,7 @@ int sdWrite(StorageDevice *dev, uint64_t block, const void *buffer)
 	cmd->type = SD_CMD_WRITE;
 	cmd->block = &cmd[1];			// the block will be stored right after the struct.
 	cmd->index = block;
+	cmd->count = 1;
 	cmd->cmdlock = NULL;
 	memcpy(&cmd[1], buffer, dev->blockSize);
 

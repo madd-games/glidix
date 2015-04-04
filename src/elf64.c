@@ -280,7 +280,7 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	// make sure we jump to the entry upon return
 	regs->rip = elfHeader.e_entry;
 
-	// the errnoptr is not invalid
+	// the errnoptr is now invalid
 	thread->errnoptr = NULL;
 
 	// suid/sgid stuff

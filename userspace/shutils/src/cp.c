@@ -30,14 +30,76 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <dirent.h>
+#include <string.h>
 
 const char *progName;
 char transferBuffer[2048];
+int recur = 0;
 
 void usage()
 {
 	fprintf(stderr, "USAGE:\t%s src dst\n", progName);
 	fprintf(stderr, "\tCopy the file 'src' into the new name 'dst'.\n");
+};
+
+void copyFile(const char *src, const char *dst);
+
+void copyDirRecur(const char *src, const char *dst)
+{
+	struct stat st;
+	if (stat(dst, &st) != 0)
+	{
+		if (!S_ISDIR(st.st_mode))
+		{
+			fprintf(stderr, "%s: %s exists and is not a directory\n", progName, dst);
+			exit(1);
+		};
+	}
+	else
+	{
+		if (mkdir(dst, 0755) != 0)
+		{
+			fprintf(stderr, "%s: mkdir %s", progName, dst);
+			perror("");
+			exit(1);
+		};
+	};
+
+	DIR *dp = opendir(src);
+	if (dp == NULL)
+	{
+		perror(src);
+		exit(1);
+	};
+
+	struct dirent *ent;
+	while ((ent = readdir(dp)) != NULL)
+	{
+		if (strcmp(ent->d_name, ".") == 0)
+		{
+			continue;
+		};
+
+		if (strcmp(ent->d_name, "..") == 0)
+		{
+			continue;
+		};
+
+		char srcpath[256];
+		strcpy(srcpath, src);
+		if (srcpath[strlen(srcpath)-1] != '/') strcat(srcpath, "/");
+		strcat(srcpath, ent->d_name);
+
+		char dstpath[256];
+		strcpy(dstpath, src);
+		if (dstpath[strlen(dstpath)-1] != '/') strcat(dstpath, "/");
+		strcat(dstpath, ent->d_name);
+
+		copyFile(srcpath, dstpath);
+	};
+
+	closedir(dp);
 };
 
 void copyFile(const char *src, const char *dst)
@@ -48,6 +110,19 @@ void copyFile(const char *src, const char *dst)
 		fprintf(stderr, "%s: stat %s: ", progName, src);
 		perror(NULL);
 		exit(1);
+	};
+
+	if (S_ISDIR(st.st_mode))
+	{
+		if (recur)
+		{
+			copyDirRecur(src, dst);
+		}
+		else
+		{
+			fprintf(stderr, "%s: %s: is a directory\n", progName, src);
+			exit(1);
+		};
 	};
 
 	int fdSrc = open(src, O_RDONLY);
@@ -93,8 +168,21 @@ void copyFile(const char *src, const char *dst)
 
 void processSwitches(const char *sw)
 {
-	fprintf(stderr, "%s: unrecognised command-line option: -%c\n", progName, sw[0]);
-	exit(1);
+	const char *scan;
+	for (scan=&sw[1]; *scan!=0; scan++)
+	{
+		char c = *scan;
+		switch (c)
+		{
+		case 'r':
+			recur = 1;
+			break;
+		default:
+			fprintf(stderr, "%s: unrecognised command-line option: -%c\n", progName, c);
+			exit(1);
+			break;
+		};
+	};
 };
 
 int main(int argc, char *argv[])
