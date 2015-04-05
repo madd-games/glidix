@@ -287,16 +287,16 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	if (st.st_mode & VFS_MODE_SETUID)
 	{
 		thread->euid = st.st_uid;
-		thread->ruid = st.st_uid;
-		thread->suid = st.st_uid;
+		//thread->ruid = st.st_uid;
+		//thread->suid = st.st_uid;
 		thread->flags |= THREAD_REBEL;
 	};
 
 	if (st.st_mode & VFS_MODE_SETGID)
 	{
 		thread->egid = st.st_gid;
-		thread->rgid = st.st_gid;
-		thread->sgid = st.st_gid;
+		//thread->rgid = st.st_gid;
+		//thread->sgid = st.st_gid;
 		thread->flags |= THREAD_REBEL;
 	};
 

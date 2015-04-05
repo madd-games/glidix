@@ -35,7 +35,11 @@ os.system("mkdir -p out")
 
 utilmap = {}
 
-cryptUsers = ["src/crypt.c", "src/pwdsetup.c", "src/login.c"]
+# these will be linked with -lcrypt
+cryptUsers = ["src/crypt.c", "src/pwdsetup.c", "src/login.c", "src/passwd.c"]
+
+# the executables will have the set-UID and set-GID bit set.
+suidUsers = ["src/passwd.c"]
 
 for name in os.listdir("src"):
 	if name.endswith(".c"):
@@ -51,6 +55,8 @@ for key, value in utilmap.items():
 	if value in cryptUsers:
 		extra = "-lcrypt"
 	f.write("\t%s $< -o $@ %s\n" % (config["compiler"], extra))
+	if value in suidUsers:
+		f.write("\tchmod 6755 $@\n")
 
 f.close()
 

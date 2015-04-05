@@ -32,6 +32,7 @@
 #include <string.h>
 #include <time.h>
 #include <pwd.h>
+#include <grp.h>
 
 const char *sizeScales[] = {
 	"B", "KB", "MB", "GB", "TB", "PB", "EB"
@@ -98,11 +99,15 @@ int main(int argc, char *argv[])
 	const char *name = "error";
 	if (pwd != NULL) name = pwd->pw_name;
 
+	struct group *grp = getgrgid(st.st_gid);
+	const char *grpname = "error";
+	if (grp != NULL) grpname = grp->gr_name;
+
 	printf("Inode:      %d\n", st.st_ino);
-	printf("Mode:       %o\n", st.st_mode & 0777);
+	printf("Mode:       %o\n", st.st_mode & 07777);
 	printf("Links:      %d\n", st.st_nlink);
 	printf("Owner:      %d <%s>\n", st.st_uid, name);
-	printf("Group:      %d\n", st.st_gid);
+	printf("Group:      %d <%s>\n", st.st_gid, grpname);
 	printf("Type:       %s\n", getFileType(st.st_mode));
 	if (S_ISREG(st.st_mode))
 	{

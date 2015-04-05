@@ -171,15 +171,15 @@ int main(int argc, char *argv[])
 
 		if (strcmp(crypt(password, passcrypt), passcrypt) == 0)
 		{
-			if (setregid(pwd->pw_gid, pwd->pw_gid) != 0)
+			if (setgid(pwd->pw_gid) != 0)
 			{
-				perror("setregid");
+				perror("setgid");
 				return 1;
 			};
 
-			if (setreuid(pwd->pw_uid, pwd->pw_uid) != 0)
+			if (setuid(pwd->pw_uid) != 0)
 			{
-				perror("setreuid");
+				perror("setuid");
 				return 1;
 			};
 
@@ -195,7 +195,7 @@ int main(int argc, char *argv[])
 			if (execl(pwd->pw_shell, "-sh", NULL) != 0)
 			{
 				perror("execl");
-				continue;
+				return 1;
 			};
 		};
 	};

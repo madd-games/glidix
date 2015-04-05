@@ -80,14 +80,14 @@ int main(int argc, char *argv[])
 
 		if (fileinfo.mode & 0x8000)
 		{
-			printf("mkdir %s\n", fileinfo.filename);
+			printf("mkdir %s (%o)\n", fileinfo.filename, fileinfo.mode & 0xFFF);
 			struct stat st;
 			if (stat(fileinfo.filename, &st) == 0)
 			{
 				continue;
 			};
 
-			if (mkdir(fileinfo.filename, fileinfo.mode) != 0)
+			if (mkdir(fileinfo.filename, fileinfo.mode & 0xFFF) != 0)
 			{
 				perror("mkdir");
 				fclose(fp);
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			printf("unpack %s\n", fileinfo.filename);
+			printf("unpack %s (%o)\n", fileinfo.filename, fileinfo.mode);
 			int fd = open(fileinfo.filename, O_CREAT | O_WRONLY | O_TRUNC, fileinfo.mode);
 			if (fd == -1)
 			{
