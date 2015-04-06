@@ -42,12 +42,16 @@ static ssize_t readdir(File *fp, void *buffer, size_t size)
 	if (size > sizeof(struct dirent)) size = sizeof(struct dirent);
 	memcpy(buffer, &dir->dirent, size);
 
-	if (dir->next(dir) != 0)
+	do
 	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		fp->fsdata = NULL;
-	};
+		if (dir->next(dir) != 0)
+		{
+			if (dir->close != NULL) dir->close(dir);
+			kfree(dir);
+			fp->fsdata = NULL;
+			break;
+		};
+	} while (dir->dirent.d_ino == 0);
 
 	return (ssize_t) size;
 };

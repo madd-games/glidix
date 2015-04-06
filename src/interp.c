@@ -331,6 +331,7 @@ void initInterp()
 	uint64_t textPages = ((hdrText->p_vaddr + hdrText->p_memsz) / 0x1000) - (hdrText->p_vaddr / 0x1000) + 1;
 
 	libcTextFrames = palloc(textPages);
+	libcTextFrames->flags = FL_SHARED;
 	ispLock();
 
 	for (i=0; i<textPages; i++)

@@ -34,25 +34,12 @@
 #include <string.h>
 #include "mip.h"
 
-int main(int argc, char *argv[])
+int installPackage(const char *path)
 {
-	if (argc != 2)
-	{
-		fprintf(stderr, "USAGE:\t%s mip-file\n", argv[0]);
-		fprintf(stderr, "\tInstall a MIP file.\n");
-		return 1;
-	};
-
-	if (geteuid() != 0)
-	{
-		fprintf(stderr, "you must be root\n");
-		return 1;
-	};
-
-	FILE *fp = fopen(argv[1], "rb");
+	FILE *fp = fopen(path, "rb");
 	if (fp == NULL)
 	{
-		perror("fopen");
+		perror(path);
 		return 1;
 	};
 
@@ -117,6 +104,36 @@ int main(int argc, char *argv[])
 			free(buffer);
 
 			close(fd);
+		};
+	};
+
+	printf("installation of %s complete\n", path);
+	return 0;
+};
+
+int main(int argc, char *argv[])
+{
+	if (argc < 2)
+	{
+		fprintf(stderr, "USAGE:\t%s mip-files...\n", argv[0]);
+		fprintf(stderr, "\tInstall MIP files.\n");
+		return 1;
+	};
+
+	if (geteuid() != 0)
+	{
+		fprintf(stderr, "you must be root\n");
+		return 1;
+	};
+
+	int i;
+	for (i=1; i<argc; i++)
+	{
+		int status = installPackage(argv[i]);
+		if (status != 0)
+		{
+			fprintf(stderr, "installation aborted\n");
+			return status;
 		};
 	};
 

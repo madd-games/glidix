@@ -141,6 +141,12 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 
+	if (chmod(homedir, 0700) != 0)
+	{
+		perror("chmod");
+		return 1;
+	};
+
 	printf("Creating /etc/passwd...\n");
 	int fd = open("/etc/passwd", O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if (fd == -1)

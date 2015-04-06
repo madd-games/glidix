@@ -966,7 +966,7 @@ int main(int argc, char *argv[])
 
 		if (fork() == 0)
 		{
-			setenv("PATH", "/bin:/mnt/bin", 1);
+			setenv("PATH", "/bin:/usr/local/bin:/usr/bin:/mnt/bin", 1);
 			setenv("HOME", "/root", 1);
 			if (execl("/mnt/bin/sh", "sh", NULL) != 0)
 			{

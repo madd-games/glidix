@@ -1,5 +1,5 @@
 .PHONY: all
-all: out/cp out/whoami out/whois out/cat out/login out/ls out/crypt out/rm out/mkmip out/mip-install out/passwd out/stat out/pwdsetup out/mkdir
+all: out/cp out/whoami out/whois out/cat out/env out/login out/ls out/crypt out/rm out/mkmip out/chmod out/touch out/mip-install out/passwd out/stat out/pwdsetup out/mkdir out/chown
 out/cp: src/cp.c
 	x86_64-glidix-gcc $< -o $@ 
 out/whoami: src/whoami.c
@@ -7,6 +7,8 @@ out/whoami: src/whoami.c
 out/whois: src/whois.c
 	x86_64-glidix-gcc $< -o $@ 
 out/cat: src/cat.c
+	x86_64-glidix-gcc $< -o $@ 
+out/env: src/env.c
 	x86_64-glidix-gcc $< -o $@ 
 out/login: src/login.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt
@@ -18,6 +20,10 @@ out/rm: src/rm.c
 	x86_64-glidix-gcc $< -o $@ 
 out/mkmip: src/mkmip.c
 	x86_64-glidix-gcc $< -o $@ 
+out/chmod: src/chmod.c
+	x86_64-glidix-gcc $< -o $@ 
+out/touch: src/touch.c
+	x86_64-glidix-gcc $< -o $@ 
 out/mip-install: src/mip-install.c
 	x86_64-glidix-gcc $< -o $@ 
 out/passwd: src/passwd.c
@@ -28,4 +34,6 @@ out/stat: src/stat.c
 out/pwdsetup: src/pwdsetup.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt
 out/mkdir: src/mkdir.c
+	x86_64-glidix-gcc $< -o $@ 
+out/chown: src/chown.c
 	x86_64-glidix-gcc $< -o $@ 

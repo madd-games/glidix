@@ -284,7 +284,7 @@ typedef struct _Dir
 	 * Create a new regular file. 'dir' is guaranteed to be a directory end pointer. This function shall add
 	 * a new directory entry to 'dir', which shall represent a new file with name 'name', and have the specified
 	 * mode, owner and group. It is guaranteed that this direcotry does not already contain an entry with the
-	 * specified name, and 2 mkreg() (or other creation or removal) request do not happen at the same time.
+	 * specified name, and 2 mkreg() (or other creation or removal) requests do not happen at the same time.
 	 * Return -1 on failure, or 0 on success; if successful, 'dir' shall be modified to point to this new file.
 	 */
 	int (*mkreg)(struct _Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t gid);

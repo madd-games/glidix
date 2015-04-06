@@ -34,6 +34,42 @@
 
 static void gxdir_close(Dir *dir)
 {
+	// get rid of any unused entries at the end of the directory. other than saving space,
+	// this will ensure that the inode size of a directory is 0 when it's empty.
+	GXDir *gxdir = (GXDir*) dir->fsdata;
+	semWait(&gxdir->gxfs->sem);
+
+	gxfsInode inohead;
+	GXReadInodeHeader(&gxdir->gxino, &inohead);
+
+	gxdir->gxino.pos = inohead.inoSize;
+	uint64_t shrinkBy = 0;
+	if (gxdir->gxino.pos != 0)
+	{
+		gxdir->gxino.pos -= sizeof(struct dirent);
+		struct dirent ent;
+		while (1)
+		{
+			GXReadInode(&gxdir->gxino, &ent, sizeof(struct dirent));
+			if (ent.d_ino == 0)
+			{
+				shrinkBy += sizeof(struct dirent);
+			}
+			else
+			{
+				break;
+			};
+
+			gxdir->gxino.pos -= sizeof(struct dirent);
+			if (gxdir->gxino.pos == 0) break;
+			gxdir->gxino.pos -= sizeof(struct dirent);
+		};
+
+		GXShrinkInode(&gxdir->gxino, shrinkBy, &inohead);
+		GXWriteInodeHeader(&gxdir->gxino, &inohead);
+	};
+
+	semSignal(&gxdir->gxfs->sem);
 	kfree(dir->fsdata);
 };
 
@@ -41,13 +77,17 @@ static int gxdir_next(Dir *dir)
 {
 	GXDir *gxdir = (GXDir*) dir->fsdata;
 	semWait(&gxdir->gxfs->sem);
-	ssize_t iread = GXReadInode(&gxdir->gxino, &dir->dirent, sizeof(struct dirent));
-	//kprintf_debug("gxfs: directory read: %d bytes\n", iread);
-	if (iread < sizeof(struct dirent))
+
+	do
 	{
-		semSignal(&gxdir->gxfs->sem);
-		return -1;
-	};
+		ssize_t iread = GXReadInode(&gxdir->gxino, &dir->dirent, sizeof(struct dirent));
+		//kprintf_debug("gxfs: directory read: %d bytes\n", iread);
+		if (iread < sizeof(struct dirent))
+		{
+			semSignal(&gxdir->gxfs->sem);
+			return -1;
+		};
+	} while (dir->dirent.d_ino == 0);
 
 	gxfsInode inode;
 	GXInode gxino;
@@ -282,6 +322,10 @@ static int gxdir_unlink(Dir *dir)
 {
 	GXDir *gxdir = (GXDir*) dir->fsdata;
 	GXFileSystem *gxfs = gxdir->gxfs;
+	if (dir->dirent.d_ino < gxfs->cis.cisFirstDataIno)
+	{
+		return -1;
+	};
 	semWait(&gxdir->gxfs->sem);
 
 	gxfsInode parentInode;
@@ -291,16 +335,17 @@ static int gxdir_unlink(Dir *dir)
 
 	if (gxdir->gxino.pos != parentInode.inoSize)
 	{
-		// swap this with the last entry so that we can just shrink
-		struct dirent lastent;
 		off_t thisPos = gxdir->gxino.pos - sizeof(struct dirent);
-		gxdir->gxino.pos = parentInode.inoSize - sizeof(struct dirent);
-		GXReadInode(&gxdir->gxino, &lastent, sizeof(struct dirent));
 		gxdir->gxino.pos = thisPos;
-		GXWriteInode(&gxdir->gxino, &lastent, sizeof(struct dirent));
+		struct dirent ent;
+		memset(&ent, 0, sizeof(struct dirent));
+		GXWriteInode(&gxdir->gxino, &ent, sizeof(struct dirent));
+	}
+	else
+	{
+		GXShrinkInode(&gxdir->gxino, sizeof(struct dirent), &parentInode);
+		GXWriteInodeHeader(&gxdir->gxino, &parentInode);
 	};
-	GXShrinkInode(&gxdir->gxino, sizeof(struct dirent), &parentInode);
-	GXWriteInodeHeader(&gxdir->gxino, &parentInode);
 
 	// TODO: file opens should add to inoLinks!
 	GXInode gxino;

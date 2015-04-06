@@ -38,6 +38,7 @@
 const char *progName;
 int recur = 0;
 int force = 0;
+int verbose = 0;
 
 void processSwitches(const char *sw)
 {
@@ -52,6 +53,9 @@ void processSwitches(const char *sw)
 			break;
 		case 'f':
 			force = 1;
+			break;
+		case 'v':
+			verbose = 1;
 			break;
 		default:
 			fprintf(stderr, "%s: unrecognised command-line option: -%c\n", progName, c);
@@ -105,6 +109,11 @@ void doRemoveRecur(const char *name)
 
 void doRemove(const char *name)
 {
+	if (verbose)
+	{
+		printf("delete %s\n", name);
+	};
+
 	struct stat st;
 	if (stat(name, &st) != 0)
 	{
