@@ -68,10 +68,14 @@ MODULE_INIT(const char *opt)
 	if (devRandom == NULL)
 	{
 		kprintf("could not add the random device!\n");
+		return 1;
 	};
+	return 0;
 };
 
 MODULE_FINI()
 {
+	DeleteDevice(devRandom);
 	kprintf("Unloaded mod_random\n");
+	return 0;
 };

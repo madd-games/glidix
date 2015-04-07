@@ -62,6 +62,9 @@ extern "C" {
 
 #define	_GLIDIX_INSMOD_VERBOSE			(1 << 0)
 
+#define	_GLIDIX_RMMOD_VERBOSE			(1 << 0)
+#define	_GLIDIX_RMMOD_FORCE			(1 << 1)
+
 int		_glidix_exec(const char *path, const char *pars, size_t parsz);
 int		_glidix_open(const char *path, int flags, mode_t mode);
 uid_t		_glidix_getsuid();
@@ -86,6 +89,7 @@ int*		_glidix_geterrnoptr();
 int		_glidix_libopen(const char *path, uint64_t loadAddr, _glidix_libinfo *info);
 void		_glidix_libclose(_glidix_libinfo *info);
 uint64_t	_glidix_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset);
+int		_glidix_rmmod(const char *modname, int flags);
 
 #ifdef __cplusplus
 }	/* extern "C" */

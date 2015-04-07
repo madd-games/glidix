@@ -122,8 +122,10 @@ MODULE_INIT()
 {
 	kprintf("isofs: registering the ISO filesystem\n");
 	registerFSDriver(&isoDriver);
+	return 0;
 };
 
 MODULE_FINI()
 {
+	return 0;
 };

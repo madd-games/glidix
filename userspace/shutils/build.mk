@@ -1,14 +1,21 @@
 .PHONY: all
-all: out/cp out/whoami out/whois out/cat out/env out/login out/ls out/crypt out/rm out/mkmip out/chmod out/touch out/mip-install out/passwd out/stat out/pwdsetup out/mkdir out/chown
+all: out/cp out/cat out/whoami out/whois out/chgrp out/sudo out/env out/rmmod out/login out/ls out/crypt out/rm out/mkmip out/chmod out/touch out/mip-install out/passwd out/stat out/pwdsetup out/mkdir out/chown
 out/cp: src/cp.c
+	x86_64-glidix-gcc $< -o $@ 
+out/cat: src/cat.c
 	x86_64-glidix-gcc $< -o $@ 
 out/whoami: src/whoami.c
 	x86_64-glidix-gcc $< -o $@ 
 out/whois: src/whois.c
 	x86_64-glidix-gcc $< -o $@ 
-out/cat: src/cat.c
+out/chgrp: src/chgrp.c
 	x86_64-glidix-gcc $< -o $@ 
+out/sudo: src/sudo.c
+	x86_64-glidix-gcc $< -o $@ -lcrypt
+	chmod 6755 $@
 out/env: src/env.c
+	x86_64-glidix-gcc $< -o $@ 
+out/rmmod: src/rmmod.c
 	x86_64-glidix-gcc $< -o $@ 
 out/login: src/login.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt

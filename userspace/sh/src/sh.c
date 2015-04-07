@@ -30,6 +30,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <locale.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include <pwd.h>
 #include "command.h"
 #include "sh.h"
 
@@ -51,7 +55,7 @@ int getline(int fd, char *buf, size_t max)
 
 		if (sz == 0)
 		{
-			c = '\n';
+			return 1;
 		};
 
 		if (c == '\n')
@@ -73,8 +77,12 @@ int getline(int fd, char *buf, size_t max)
 	return status;
 };
 
-int main(int argc, char *argv[])
+int startInteractive()
 {
+	struct passwd *pwd = getpwuid(geteuid());
+	char username[256] = "unknown";
+	if (pwd != NULL) strcpy(username, pwd->pw_name);
+
 	while (1)
 	{
 		char cwd[256];
@@ -90,13 +98,13 @@ int main(int argc, char *argv[])
 			prompt = '$';
 		};
 
-		printf("%s%c ", cwd, prompt);
+		printf("%s:%s%c ", username, cwd, prompt);
 
 		char line[256];
 		int status = getline(0, line, 256);
 		if (status == -1)
 		{
-			fprintf(stderr, "%s: line too long\n", argv[0]);
+			fprintf(stderr, "line too long\n");
 		}
 		else if (status == -2)
 		{
@@ -112,4 +120,79 @@ int main(int argc, char *argv[])
 		};
 	};
 	return 0;
+};
+
+int runScript(const char *filename, int argc, char *argv[])
+{
+	int fd = open(filename, O_RDONLY);
+	if (fd == -1)
+	{
+		perror(filename);
+	};
+
+	while (1)
+	{
+		char line[256];
+		int status = getline(fd, line, 256);
+
+		if (status == -1)
+		{
+			close(fd);
+			return 1;
+		}
+		else if (status == -2)
+		{
+			close(fd);
+			return 1;
+		}
+		else if (status == 1)
+		{
+			close(fd);
+			return 0;
+		}
+		else
+		{
+			execCommand(line);
+		};
+	};
+
+	close(fd);
+	return 0;
+};
+
+int main(int argc, char *argv[])
+{
+	if (argc == 1)
+	{
+		return startInteractive();
+	};
+
+	char shellType = 'x';
+	if (strcmp(argv[1], "-s") == 0)
+	{
+		shellType = 's';
+	}
+	else if (strcmp(argv[1], "-c") == 0)
+	{
+		shellType = 'c';
+	};
+
+	if (shellType == 'x')
+	{
+		return runScript(argv[1], argc-1, &argv[1]);
+	}
+	else if (shellType == 'c')
+	{
+		if (argc != 3)
+		{
+			fprintf(stderr, "no command specified\n");
+			return 1;
+		};
+
+		return execCommand(argv[2]);
+	}
+	else
+	{
+		return startInteractive();
+	};
 };

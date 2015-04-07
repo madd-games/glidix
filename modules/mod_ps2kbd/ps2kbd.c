@@ -198,10 +198,12 @@ MODULE_INIT()
 	kbdPars.stackSize = 0x4000;
 	kbdPars.name = "PS/2 keyboard driver";
 	CreateKernelThread(kbdThread, &kbdPars, NULL);
+	return 0;
 };
 
 MODULE_FINI()
 {
 	kprintf("Shutting down PS/2 keyboard\n");
 	registerIRQHandler(1, oldHandler);
+	return 0;
 };

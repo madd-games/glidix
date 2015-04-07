@@ -1400,6 +1400,18 @@ int setegid(gid_t egid)
 	return 0;
 };
 
+int sys_rmmod(const char *modname, int flags)
+{
+	// only root can remove modules!
+	if (getCurrentThread()->euid != 0)
+	{
+		getCurrentThread()->therrno = EPERM;
+		return -1;
+	};
+
+	return rmmod(modname, flags);
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	kdumpregs(regs);
@@ -1583,10 +1595,11 @@ void syscallDispatch(Regs *regs, uint16_t num)
 	case 30:
 		/* _glidix_diag */
 		//heapDump();
-		kdumpregs(regs);
-		dumpRunqueue();
+		//kdumpregs(regs);
+		//dumpRunqueue();
 		//regs->rflags &= ~(1 << 9);
 		//BREAKPOINT();
+		dumpModules();
 		break;
 	case 31:
 		*((int*)&regs->rax) = sys_mount((const char*)regs->rdi, (const char*)regs->rsi, (const char*)regs->rdx, (int)regs->rcx);
@@ -1709,6 +1722,9 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 60:
 		regs->rax = setregid(regs->rdi, regs->rsi);
+		break;
+	case 61:
+		*((int*)&regs->rax) = sys_rmmod((const char*) regs->rdi, (int) regs->rsi);
 		break;
 	default:
 		signalOnBadSyscall(regs);

@@ -143,6 +143,11 @@ void doChangeOwner(const char *filename)
 			doChangeOwnerRecur(filename);
 		};
 
+		if (verbose)
+		{
+			printf("chown %u:%u %s\n", newUID, newGID, filename);
+		};
+
 		if (chown(filename, newUID, newGID) != 0)
 		{
 			if ((!force) || (verbose))
@@ -218,7 +223,7 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 
-		newGID = pwd->pw_gid;
+		newGID = grp->gr_gid;
 	};
 
 	for (i=0; i<numFiles; i++)

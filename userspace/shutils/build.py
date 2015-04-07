@@ -36,10 +36,10 @@ os.system("mkdir -p out")
 utilmap = {}
 
 # these will be linked with -lcrypt
-cryptUsers = ["src/crypt.c", "src/pwdsetup.c", "src/login.c", "src/passwd.c"]
+cryptUsers = ["src/crypt.c", "src/pwdsetup.c", "src/login.c", "src/passwd.c", "src/sudo.c"]
 
 # the executables will have the set-UID and set-GID bit set.
-suidUsers = ["src/passwd.c"]
+suidUsers = ["src/passwd.c", "src/sudo.c"]
 
 for name in os.listdir("src"):
 	if name.endswith(".c"):

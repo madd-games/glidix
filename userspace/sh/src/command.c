@@ -33,7 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <ctype.h>
 #include "command.h"
 
 int findCommand(char *path, char *cmd)
@@ -73,6 +73,7 @@ int findCommand(char *path, char *cmd)
 
 int cmd_cd(int argc, char **argv);
 int cmd_exit(int argc, char **argv);
+int cmd_echo(int argc, char **argv);
 
 int execCommand(char *cmd)
 {
@@ -82,11 +83,44 @@ int execCommand(char *cmd)
 
 	while (1)
 	{
-		char *token = strtok(nextToStrtok, " \t");
+		//char *token = strtok(nextToStrtok, nextSplitString);
+		char *token = nextToStrtok;
+
+#if 0
 		nextToStrtok = NULL;
 		if (token != NULL)
 		{
 			if (strlen(token) == 0) continue;
+		};
+#endif
+
+		if (token != NULL)
+		{
+			while (isspace(*token)) token++;
+			if (*token == 0)
+			{
+				token = NULL;
+			}
+			else
+			{
+				const char *termString = " \t";
+				if (*token == '"')
+				{
+					termString = "\"";
+					token++;
+				};
+
+				char *endpos = strpbrk(token, termString);
+				if (endpos == NULL)
+				{
+					nextToStrtok = NULL;
+				}
+				else
+				{
+					*endpos = 0;
+					nextToStrtok = endpos+1;
+				};
+			};
 		};
 
 		argv = realloc(argv, sizeof(char*)*(argc+1));
@@ -104,6 +138,12 @@ int execCommand(char *cmd)
 	else if (strcmp(argv[0], "exit") == 0)
 	{
 		int status = cmd_exit(argc-1, argv);
+		free(argv);
+		return status;
+	}
+	else if (strcmp(argv[0], "echo") == 0)
+	{
+		int status = cmd_echo(argc-1, argv);
 		free(argv);
 		return status;
 	}

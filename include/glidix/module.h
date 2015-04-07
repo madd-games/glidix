@@ -36,24 +36,36 @@
 #include <glidix/common.h>
 #include <glidix/elf64.h>
 
+/**
+ * Flags for _glidix_insmod().
+ */
 #define	INSMOD_VERBOSE			(1 << 0)
+
+/**
+ * Flags for _glidix_rmmod().
+ */
+#define	RMMOD_VERBOSE			(1 << 0)
+#define	RMMOD_FORCE			(1 << 1)
 
 /**
  * Those macros are to be used by modules.
  */
-#define	MODULE_INIT(...)		void __module_init(__VA_ARGS__)
-#define	MODULE_FINI(...)		void __module_fini(__VA_ARGS__)
+#define	MODULE_INIT(...)		int __module_init(__VA_ARGS__)
+#define	MODULE_FINI(...)		int __module_fini(__VA_ARGS__)
 
 typedef struct _Module
 {
 	char				name[128];
 	int				block;
 	int				numSectors;		// number of 2MB blocks assigned to this module
+	uint64_t*			frames;			// allocated frames - number of them = numSectors+numSectors*512
 	uint64_t			baseAddr;
 	Elf64_Sym*			symtab;
 	uint64_t			numSymbols;
 	const char*			strings;
 	struct _Module*			next;
+	void (*fini)(void);
+	int (*modfini)(void);
 } Module;
 
 typedef struct
@@ -65,6 +77,7 @@ typedef struct
 
 void initModuleInterface();
 int insmod(const char *modname, const char *path, const char *opt, int flags);
+int rmmod(const char *modname, int flags);
 void dumpModules();
 void findDebugSymbolInModules(uint64_t addr, SymbolInfo *symInfo);
 

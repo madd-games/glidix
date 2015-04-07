@@ -34,6 +34,9 @@
 
 #include "gxfs.h"
 
+static Spinlock gxfsMountLock;
+static volatile int numMountedFilesystems = 0;
+
 static int gxfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 {
 	GXFileSystem *gxfs = (GXFileSystem*) fs->fsdata;
@@ -43,6 +46,8 @@ static int gxfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 
 static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 {
+	spinlockAcquire(&gxfsMountLock);
+
 	int error;
 	File *fp = vfsOpen(image, 0, &error);
 	if (fp == NULL)
@@ -54,6 +59,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	if (fp->seek == NULL)
 	{
 		vfsClose(fp);
+		spinlockRelease(&gxfsMountLock);
 		//kprintf_debug("gxfs: this file does not support seeking\n");
 		return -1;
 	};
@@ -64,6 +70,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	{
 		//kprintf_debug("gxfs: offCIS cannot be read, this is not a valid GXFS image\n");
 		vfsClose(fp);
+		spinlockRelease(&gxfsMountLock);
 		return -1;
 	};
 
@@ -73,6 +80,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	{
 		//kprintf_debug("gxfs: cannot read the whole CIS, this is not a valid GXFS image\n");
 		vfsClose(fp);
+		spinlockRelease(&gxfsMountLock);
 		return -1;
 	};
 
@@ -80,6 +88,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	{
 		//kprintf_debug("gxfs: invalid CIS magic, this is not a valid GXFS image\n");
 		vfsClose(fp);
+		spinlockRelease(&gxfsMountLock);
 		return -1;
 	};
 
@@ -90,6 +99,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	{
 		//kprintf_debug("gxfs: section count inconsistent\n");
 		vfsClose(fp);
+		spinlockRelease(&gxfsMountLock);
 		return -1;
 	};
 
@@ -107,6 +117,8 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	fs->fsdata = gxfs;
 	fs->openroot = gxfs_openroot;
 
+	numMountedFilesystems++;
+	spinlockRelease(&gxfsMountLock);
 	return 0;
 };
 
@@ -118,9 +130,21 @@ FSDriver gxfsDriver = {
 MODULE_INIT()
 {
 	kprintf("gxfs: registering the GXFS filesystem\n");
+	spinlockRelease(&gxfsMountLock);
 	registerFSDriver(&gxfsDriver);
+	return 0;
 };
 
 MODULE_FINI()
 {
+	spinlockAcquire(&gxfsMountLock);
+	int numFS = numMountedFilesystems;
+	spinlockRelease(&gxfsMountLock);
+
+	if (numFS != 0)
+	{
+		return 1;
+	};
+
+	return 0;
 };

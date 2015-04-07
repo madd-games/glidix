@@ -529,8 +529,10 @@ MODULE_INIT()
 {
 	kprintf("sdide: scanning for IDE controllers on primary bus\n");
 	checkBus(0);
+	return 0;
 };
 
 MODULE_FINI()
 {
+	return 0;
 };

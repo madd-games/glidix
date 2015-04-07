@@ -37,6 +37,8 @@
 #include <glidix/isp.h>
 #include <glidix/physmem.h>
 #include <glidix/symtab.h>
+#include <glidix/errno.h>
+#include <glidix/sched.h>
 
 #define	MODULE_AREA_BASE			0xFFFF818000000000
 #define	MODULE_BLOCK_SIZE			0x0000000040000000
@@ -87,13 +89,13 @@ static int allocModuleBlock()
 	return -1;
 };
 
-static void mapModuleArea(int modblock, int numSectors)
+static uint64_t *mapModuleArea(int modblock, int numSectors)
 {
 	ispLock();
 
 	// physical frame indices of page tables we will use; we collect them here to avoid constantly
 	// switching the ISP.
-	uint64_t *ptFrames = (uint64_t*) kmalloc(8*numSectors);
+	uint64_t *ptFrames = (uint64_t*) kmalloc(8*(numSectors+512*numSectors));
 
 	uint64_t pdPhysFrame = phmAllocFrame();
 	ispSetFrame(pdPhysFrame);
@@ -110,6 +112,11 @@ static void mapModuleArea(int modblock, int numSectors)
 		pd->entries[i].ptPhysAddr = ptFrame;
 	};
 
+	for (i=0; i<(numSectors*512); i++)
+	{
+		ptFrames[numSectors+i] = phmAllocFrame();
+	};
+
 	// now the module pages to physical frames.
 	PT *pt = ispGetPointer();
 	for (i=0; i<numSectors; i++)
@@ -121,12 +128,12 @@ static void mapModuleArea(int modblock, int numSectors)
 		{
 			pt->entries[j].present = 1;
 			pt->entries[j].rw = 1;
-			pt->entries[j].framePhysAddr = phmAllocFrame();
+			pt->entries[j].framePhysAddr = /*phmAllocFrame();*/ ptFrames[numSectors+512*i+j];
 		};
 	};
 
 	ispUnlock();
-	kfree(ptFrames);
+	//kfree(ptFrames);
 
 	// now map that into the address space
 	ASM("cli");
@@ -135,6 +142,23 @@ static void mapModuleArea(int modblock, int numSectors)
 	pdptModuleSpace.entries[modblock].pdPhysAddr = pdPhysFrame;
 	refreshAddrSpace();
 	ASM("sti");
+
+	return ptFrames;
+};
+
+static void unmapModuleArea(Module *mod)
+{
+	pdptModuleSpace.entries[mod->block].present = 0;
+	refreshAddrSpace();
+
+	int i;
+	for (i=0; i<(mod->numSectors+512*mod->numSectors); i++)
+	{
+		phmFreeFrame(mod->frames[i]);
+	};
+
+	kfree(mod->frames);
+	mod->frames = NULL;
 };
 
 int insmod(const char *modname, const char *path, const char *opt, int flags)
@@ -413,7 +437,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	{
 		kprintf("insmod(%s): mapping %d sectors (2MB blocks) for module body\n", modname, module->numSectors);
 	};
-	mapModuleArea(modblock, module->numSectors);
+	module->frames = mapModuleArea(modblock, module->numSectors);
 
 	if (flags & INSMOD_VERBOSE)
 	{
@@ -450,6 +474,24 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 					kprintf("insmod(%s): found __module_init at %a\n", modname, addr);
 				};
 				moduleInitEvent = (void (*)(const char*)) addr;
+			}
+			else if (strcmp(symname, "_fini") == 0)
+			{
+				uint64_t addr = baseAddr + symbol->st_value;
+				if (flags & INSMOD_VERBOSE)
+				{
+					kprintf("insmod(%s): found _fini at %a\n", modname, addr);
+				};
+				module->fini = (void(*)(void)) addr;
+			}
+			else if (strcmp(symname, "__module_fini") == 0)
+			{
+				uint64_t addr = baseAddr + symbol->st_value;
+				if (flags & INSMOD_VERBOSE)
+				{
+					kprintf("insmod(%s): found __module_fini at %a\n", modname, addr);
+				};
+				module->modfini = (int(*)(void)) addr;
 			};
 		};
 	};
@@ -493,7 +535,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 				vfsClose(fp);
 				kfree(strings);
 				kfree(symtab);
-				// TODO: unmap module memory
+				unmapModuleArea(module);
 				spinlockRelease(&modLock);
 				return -1;
 			};
@@ -510,7 +552,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			vfsClose(fp);
 			kfree(strings);
 			kfree(symtab);
-			// TODO: unmap module memory
+			unmapModuleArea(module);
 			spinlockRelease(&modLock);
 		};
 
@@ -532,7 +574,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			vfsClose(fp);
 			kfree(strings);
 			kfree(symtab);
-			// TODO: unmap module memory
+			unmapModuleArea(module);
 			spinlockRelease(&modLock);
 			return -1;
 		};
@@ -573,6 +615,116 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	if (flags & INSMOD_VERBOSE)
 	{
 		kprintf("insmod(%s): module loaded\n", modname);
+	};
+
+	return 0;
+};
+
+int rmmod(const char *modname, int flags)
+{
+	spinlockAcquire(&modLock);
+	if (firstModule == NULL)
+	{
+		spinlockRelease(&modLock);
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	Module *mod = firstModule;
+	Module *prevmod = NULL;
+
+	while (strcmp(mod->name, modname) != 0)
+	{
+		if (mod->next == NULL)
+		{
+			spinlockRelease(&modLock);
+			getCurrentThread()->therrno = ENOENT;
+			return -1;
+		};
+
+		prevmod = mod;
+		mod = mod->next;
+	};
+
+	if (mod->modfini != NULL)
+	{
+		if (flags & RMMOD_VERBOSE)
+		{
+			kprintf("rmmod(%s): calling module fini event\n", modname);
+		};
+
+		int status = mod->modfini();
+
+		if (status != 0)
+		{
+			if (flags & RMMOD_FORCE)
+			{
+				kprintf("rmmod(%s): WARNING: module refused to unlink but RMMOD_FORCE is set!\n", modname);
+			}
+			else
+			{
+				kprintf("rmmod(%s): module refused to unlink\n", modname);
+				spinlockRelease(&modLock);
+				getCurrentThread()->therrno = EPERM;
+				return -1;
+			};
+		};
+	}
+	else
+	{
+		if (flags & RMMOD_FORCE)
+		{
+			kprintf("rmmod(%s): WARNING: no module fini event by RMMOD_FORCE is set!\n", modname);
+		}
+		else
+		{
+			kprintf("rmmod(%s): no module fini event (use RMMOD_FORCE to unload anyway)\n", modname);
+			spinlockRelease(&modLock);
+			getCurrentThread()->therrno = EPERM;
+			return -1;
+		};
+	};
+
+	if (mod->fini != NULL)
+	{
+		if (flags & RMMOD_VERBOSE)
+		{
+			kprintf("rmmod(%s): calling module fininalizers\n", modname);
+		};
+
+		mod->fini();
+	}
+	else if (flags & RMMOD_VERBOSE)
+	{
+		kprintf("rmmod(%s): WARNING: no module finalizers\n", modname);
+	};
+
+	kprintf("rmmod(%s): unmapping module memory\n", modname);
+	unmapModuleArea(mod);
+
+	if (flags & RMMOD_VERBOSE)
+	{
+		kprintf("rmmod(%s): unlinking module from kernel\n", modname);
+	};
+
+	if (prevmod == NULL)
+	{
+		firstModule = NULL;
+	}
+	else
+	{
+		prevmod->next = mod->next;
+	};
+
+	kfree(mod->symtab);
+	kfree((void*)mod->strings);
+	kfree(mod);
+
+	spinlockRelease(&modLock);
+
+	if (flags & RMMOD_VERBOSE)
+	{
+		kprintf("rmmod(%s): finished successfully\n", modname);
 	};
 
 	return 0;

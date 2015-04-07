@@ -248,9 +248,13 @@ MODULE_INIT()
 	if (!bgaFound)
 	{
 		kprintf("bga: device not found\n");
+		return 1;
 	};
+
+	return 0;
 };
 
 MODULE_FINI()
 {
+	return 0;
 };
