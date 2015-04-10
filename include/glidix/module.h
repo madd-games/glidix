@@ -35,6 +35,7 @@
 
 #include <glidix/common.h>
 #include <glidix/elf64.h>
+#include <glidix/vfs.h>
 
 /**
  * Flags for _glidix_insmod().
@@ -80,5 +81,10 @@ int insmod(const char *modname, const char *path, const char *opt, int flags);
 int rmmod(const char *modname, int flags);
 void dumpModules();
 void findDebugSymbolInModules(uint64_t addr, SymbolInfo *symInfo);
+
+/**
+ * The filesystem mounted under /sys/mod.
+ */
+FileSystem *getModulefs();
 
 #endif

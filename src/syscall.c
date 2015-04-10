@@ -1412,6 +1412,134 @@ int sys_rmmod(const char *modname, int flags)
 	return rmmod(modname, flags);
 };
 
+int sys_link(const char *oldname, const char *newname)
+{
+	char rpath[256];
+	if (realpath(newname, rpath) == NULL)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	char parent[256];
+	char child[256];
+
+	size_t sz = strlen(rpath);
+	while (rpath[sz] != '/')
+	{
+		sz--;
+	};
+
+	memcpy(parent, rpath, sz);
+	parent[sz] = 0;
+	if (parent[0] == 0)
+	{
+		strcpy(parent, "/");
+	};
+
+	strcpy(child, &rpath[sz+1]);
+	if (strlen(child) >= 128)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	if (child[0] == 0)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	vfsLockCreation();
+
+	struct stat stdir;
+	int error;
+	if ((error = vfsStat(parent, &stdir)) != 0)
+	{
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
+	};
+
+	struct stat stold;
+	if ((error = vfsStat(oldname, &stold)) != 0)
+	{
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
+	};
+
+	if ((stold.st_mode & 0xF000) == VFS_MODE_DIRECTORY)
+	{
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EPERM;
+		return -1;
+	};
+
+	if (stold.st_dev != stdir.st_dev)
+	{
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EXDEV;
+		return -1;
+	};
+
+	// make sure we can write to the directory
+	if (!vfsCanCurrentThread(&stold, 2))
+	{
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EACCES;
+		return -1;
+	};
+
+	if (parent[strlen(parent-1)] != '/')
+	{
+		strcat(parent, "/");
+	};
+
+	error = 0;
+	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
+	if (dir == NULL)
+	{
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
+	};
+
+	if (error != VFS_EMPTY_DIRECTORY)
+	{
+		do
+		{
+			if (strcmp(dir->dirent.d_name, child) == 0)
+			{
+				if (dir->close != NULL) dir->close(dir);
+				kfree(dir);
+				vfsUnlockCreation();
+				getCurrentThread()->therrno = EEXIST;
+				return -1;
+			};
+		} while (dir->next(dir) != -1);
+	};
+
+	if (dir->link == NULL)
+	{
+		vfsUnlockCreation();
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		getCurrentThread()->therrno = EMLINK;
+		return -1;
+	};
+
+	int status = dir->link(dir, child, stold.st_ino);
+
+	vfsUnlockCreation();
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+
+	if (status != 0)
+	{
+		getCurrentThread()->therrno = EIO;
+	};
+
+	return status;
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	kdumpregs(regs);
@@ -1725,6 +1853,9 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 61:
 		*((int*)&regs->rax) = sys_rmmod((const char*) regs->rdi, (int) regs->rsi);
+		break;
+	case 62:
+		*((int*)&regs->rax) = sys_link((const char*) regs->rdi, (const char*) regs->rsi);
 		break;
 	default:
 		signalOnBadSyscall(regs);

@@ -105,7 +105,8 @@ syscallTable = {
 	58:	"setegid",
 	59:	"setreuid",
 	60:	"setregid",
-	61:	"_glidix_rmmod"
+	61:	"_glidix_rmmod",
+	62:	"link"
 }
 
 f = open("_libglidix.s", "wb")

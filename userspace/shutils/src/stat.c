@@ -103,6 +103,7 @@ int main(int argc, char *argv[])
 	const char *grpname = "error";
 	if (grp != NULL) grpname = grp->gr_name;
 
+	printf("Device:     %d\n", st.st_dev);
 	printf("Inode:      %d\n", st.st_ino);
 	printf("Mode:       %o\n", st.st_mode & 07777);
 	printf("Links:      %d\n", st.st_nlink);

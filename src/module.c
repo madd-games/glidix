@@ -50,6 +50,69 @@ static Spinlock modLock;
 static Module *firstModule;
 static Module *lastModule;
 
+static FileSystem *moduleFileSystem;
+
+static int getModule(Dir *dir)
+{
+	spinlockAcquire(&modLock);
+	Module *mod = firstModule;
+
+	while (mod != NULL)
+	{
+		if (mod->block == (int)dir->stat.st_ino)
+		{
+			strcpy(dir->dirent.d_name, mod->name);
+			dir->dirent.d_ino = dir->stat.st_ino;
+			dir->stat.st_mode = 0;
+			dir->stat.st_nlink = 1;
+			dir->stat.st_uid = 0;
+			dir->stat.st_gid = 0;
+			dir->stat.st_rdev = 0;
+			dir->stat.st_size = mod->numSectors * MODULE_SECTOR_SIZE;
+			dir->stat.st_blksize = MODULE_SECTOR_SIZE;
+			dir->stat.st_blocks = mod->numSectors;
+			spinlockRelease(&modLock);
+			return 0;
+		};
+
+		mod = mod->next;
+	};
+
+	spinlockRelease(&modLock);
+	return -1;
+};
+
+static int modfs_next(Dir *dir)
+{
+	while (1)
+	{
+		dir->stat.st_ino++;
+		if (dir->stat.st_ino == 512) return -1;
+		if (getModule(dir) == 0) return 0;
+	};
+
+	return -1;
+};
+
+static int modfs_unlink(Dir *dir)
+{
+	return rmmod(dir->dirent.d_name, 0);
+};
+
+static int modfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
+{
+	dir->next = modfs_next;
+	dir->unlink = modfs_unlink;
+	dir->stat.st_ino = 0;
+
+	while (1)
+	{
+		if (dir->stat.st_ino == 512) return VFS_EMPTY_DIRECTORY;
+		if (getModule(dir) == 0) return 0;
+		dir->stat.st_ino++;
+	};
+};
+
 void initModuleInterface()
 {
 	kprintf("Initializing the module interface... ");
@@ -71,6 +134,12 @@ void initModuleInterface()
 	pml4->entries[259].pdptPhysAddr = (pdptPhysAddr >> 12);
 
 	refreshAddrSpace();
+
+	moduleFileSystem = (FileSystem*) kmalloc(sizeof(FileSystem));
+	memset(moduleFileSystem, 0, sizeof(FileSystem));
+
+	moduleFileSystem->fsname = "";
+	moduleFileSystem->openroot = modfs_openroot;
 
 	kprintf("%$\x02" "Done%#\n");
 };
@@ -170,6 +239,19 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	};
 
 	spinlockAcquire(&modLock);
+
+	Module *scanmod = firstModule;
+	while (scanmod != NULL)
+	{
+		if (strcmp(scanmod->name, modname) == 0)
+		{
+			spinlockRelease(&modLock);
+			kprintf("insmod(%s): a module with this name is already loaded\n", modname);
+			return -1;
+		};
+
+		scanmod = scanmod->next;
+	};
 
 	int error;
 	File *fp = vfsOpen(path, 0, &error);
@@ -699,7 +781,11 @@ int rmmod(const char *modname, int flags)
 		kprintf("rmmod(%s): WARNING: no module finalizers\n", modname);
 	};
 
-	kprintf("rmmod(%s): unmapping module memory\n", modname);
+	if (flags & RMMOD_VERBOSE)
+	{
+		kprintf("rmmod(%s): unmapping module memory\n", modname);
+	};
+
 	unmapModuleArea(mod);
 
 	if (flags & RMMOD_VERBOSE)
@@ -778,4 +864,9 @@ void findDebugSymbolInModules(uint64_t addr, SymbolInfo *info)
 	info->modname = "kernel";
 	info->symname = sym->name;
 	info->offset = addr - (uint64_t)sym->ptr;
+};
+
+FileSystem *getModulefs()
+{
+	return moduleFileSystem;
 };

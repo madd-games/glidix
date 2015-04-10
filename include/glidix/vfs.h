@@ -298,6 +298,15 @@ typedef struct _Dir
 	 * is empty if st_size is 0.
 	 */
 	int (*unlink)(struct _Dir *dir);
+
+	/**
+	 * Create a hard link in this directory to an already-existing file. 'dir' is guaranteed to be a directory end pointer.
+	 * It is guranteed that this directory does not already contain an entry with the given name, and 2 link() (or other
+	 * creation or removal) requests do not happen at the same time. Return -1 on error (EIO) or 0 on success.
+	 * 'ino' is guranteed to be the inode number of a file on the same filesystem (i.e. with st_dev matching that of this
+	 * directory).
+	 */
+	int (*link)(struct _Dir *dir, const char *name, ino_t ino);
 } Dir;
 
 /**

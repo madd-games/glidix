@@ -33,6 +33,7 @@
 #include <glidix/memory.h>
 #include <glidix/initrdfs.h>
 #include <glidix/devfs.h>
+#include <glidix/module.h>
 
 static Spinlock mountLock;
 static MountPoint *mountTable;
@@ -60,6 +61,17 @@ void initMount()
 		kprintf("%$\x04", "Failed%#\n");
 		panic("failed to mount the devfs (errno %d)", errno);
 	};
+
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Mounting the modfs at /sys/mod... ");
+	errno = mount("/sys/mod/", getModulefs(), 0);
+	if (errno != 0)
+	{
+		kprintf("%$\x04", "Failed%#\n");
+		panic("failed to mount the modfs (errno %d)", errno);
+	};
+
 	kprintf("%$\x02" "Done%#\n");
 };
 
