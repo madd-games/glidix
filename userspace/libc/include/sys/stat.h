@@ -90,6 +90,7 @@ struct stat
 /* implemented by libglidix directly */
 int stat(const char *path, struct stat *buf);
 int fstat(int fd, struct stat *buf);
+int lstat(const char *path, struct stat *buf);
 int chmod(const char *path, mode_t mode);
 int fchmod(int fd, mode_t mode);
 int mkdir(const char *path, mode_t mode);

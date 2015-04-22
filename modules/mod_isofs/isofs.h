@@ -108,6 +108,7 @@ typedef struct
 	uint64_t				rootStart;			// byte offset
 	uint64_t				rootEnd;			// first byte NOT part of the root directory
 	uint64_t				blockSize;
+	int					numOpenInodes;
 } ISOFileSystem;
 
 #endif

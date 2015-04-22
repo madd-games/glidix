@@ -121,9 +121,9 @@ int vfsCanCurrentThread(struct stat *st, mode_t mask)
 	};
 };
 
-char *realpath(const char *relpath, char *buffer)
+char *realpath_from(const char *relpath, char *buffer, const char *fromdir)
 {
-	Thread *ct = getCurrentThread();
+	//Thread *ct = getCurrentThread();
 
 	if (*relpath == 0)
 	{
@@ -137,8 +137,8 @@ char *realpath(const char *relpath, char *buffer)
 
 	if (relpath[0] != '/')
 	{
-		strcpy(buffer, ct->cwd);
-		szput = strlen(ct->cwd);
+		strcpy(buffer, fromdir);
+		szput = strlen(fromdir);
 		put = &buffer[szput];
 		if (*(put-1) != '/')
 		{
@@ -258,26 +258,41 @@ char *realpath(const char *relpath, char *buffer)
 	return buffer;
 };
 
-Dir *parsePath(const char *path, int flags, int *error)
+char *realpath(const char *relpath, char *buffer)
 {
+	return realpath_from(relpath, buffer, getCurrentThread()->cwd);
+};
+
+Dir *resolvePath(const char *path, int flags, int *error, int level)
+{
+	if (level == VFS_MAX_LINK_DEPTH)
+	{
+		*error = VFS_LINK_LOOP;
+		return NULL;
+	};
+
 	*error = VFS_NO_FILE;			// default error
 
-	//kprintf_debug("start of parsePath()\n");
+	//kprintf_debug("start of parsePath('%s')\n", path);
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{
 		return NULL;
 	};
+	//kprintf_debug("rpath='%s'\n", rpath);
 
 	SplitPath spath;
 	if (resolveMounts(rpath, &spath) != 0)
 	{
+		kprintf_debug("could not resolve mounts\n");
 		return NULL;
 	};
 
 	char token[128];
 	char *end = (char*) &token[127];
 	const char *scan = spath.filename;
+	char currentDir[PATH_MAX];
+	strcpy(currentDir, spath.parent);
 
 	if (spath.fs->openroot == NULL)
 	{
@@ -359,6 +374,34 @@ Dir *parsePath(const char *path, int flags, int *error)
 		{
 			if ((dir->stat.st_mode & 0xF000) != VFS_MODE_DIRECTORY)
 			{
+				if ((dir->stat.st_mode & 0xF000) == VFS_MODE_LINK)
+				{
+					//kprintf_debug("link?\n");
+					char linkpath[PATH_MAX];
+					dir->readlink(dir, linkpath);
+					if (dir->close != NULL) dir->close(dir);
+					kfree(dir);
+					char target[PATH_MAX];
+					if (realpath_from(linkpath, target, currentDir) == NULL)
+					{
+						*error = VFS_NO_FILE;
+						return NULL;
+					};
+
+					char completePath[PATH_MAX];
+					if ((strlen(target) + strlen(scan+1) + 2) > PATH_MAX)
+					{
+						*error = VFS_NO_FILE;
+						return NULL;
+					};
+
+					strcpy(completePath, target);
+					strcat(completePath, "/");
+					strcat(completePath, scan+1);
+
+					return resolvePath(completePath, flags, error, level+1);
+				};
+
 				*error = VFS_NOT_DIR;
 				if (dir->close != NULL) dir->close(dir);
 				kfree(dir);
@@ -433,6 +476,9 @@ Dir *parsePath(const char *path, int flags, int *error)
 				return NULL;
 			};
 
+			strcat(currentDir, "/");
+			strcat(currentDir, token);
+
 			if (dir->close != NULL) dir->close(dir);
 			kfree(dir);
 			dir = subdir;
@@ -441,13 +487,41 @@ Dir *parsePath(const char *path, int flags, int *error)
 		}
 		else
 		{
+			if (((dir->stat.st_mode & 0xF000) == VFS_MODE_LINK) && ((flags & VFS_NO_FOLLOW) == 0))
+			{
+				// this is a link and we were not instructed to not-follow, so we follow.
+				char linkpath[PATH_MAX];
+				ssize_t rls = dir->readlink(dir, linkpath);
+				if (dir->close != NULL) dir->close(dir);
+				kfree(dir);
+				if (rls == -1)
+				{
+					*error = VFS_IO_ERROR;
+					return NULL;
+				};
+
+				char target[PATH_MAX];
+				if (realpath_from(linkpath, target, currentDir) == NULL)
+				{
+					*error = VFS_NO_FILE;
+					return NULL;
+				};
+
+				return resolvePath(target, flags, error, level+1);
+			};
+
 			dir->stat.st_dev = spath.fs->dev;
 			return dir;
 		};
 	};
 };
 
-int vfsStat(const char *path, struct stat *st)
+Dir *parsePath(const char *path, int flags, int *error)
+{
+	return resolvePath(path, flags, error, 0);
+};
+
+static int vfsStatGen(const char *path, struct stat *st, int flags)
 {
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
@@ -480,7 +554,7 @@ int vfsStat(const char *path, struct stat *st)
 	};
 
 	int error;
-	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
+	Dir *dir = parsePath(path, VFS_CHECK_ACCESS | flags, &error);
 	if (dir == NULL)
 	{
 		return error;
@@ -490,6 +564,16 @@ int vfsStat(const char *path, struct stat *st)
 	if (dir->close != NULL) dir->close(dir);
 	kfree(dir);
 	return 0;
+};
+
+int vfsStat(const char *path, struct stat *st)
+{
+	return vfsStatGen(path, st, 0);
+};
+
+int vfsLinkStat(const char *path, struct stat *st)
+{
+	return vfsStatGen(path, st, VFS_NO_FOLLOW);
 };
 
 File *vfsOpen(const char *path, int flags, int *error)

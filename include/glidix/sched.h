@@ -112,9 +112,10 @@ typedef struct _Thread
 	size_t				stackSize;
 
 	/**
-	 * Thread name (for debugging).
+	 * Thread name (for debugging of kernel threads), or the path to the executable in
+	 * any other case.
 	 */
-	char				name[32];
+	char				name[256];
 
 	/**
 	 * Flags (see above).
@@ -297,5 +298,11 @@ int signalPid(int pid, int signal);
  * mode only.
  */
 void switchTaskToIndex(int index);
+
+/**
+ * Return a thread by pid. The scheduler must be locked when calling this function. Kernel threads (pid=0) cannot be retrieved.
+ * Return NULL if not found.
+ */
+Thread *getThreadByID(int pid);
 
 #endif

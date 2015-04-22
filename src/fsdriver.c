@@ -115,6 +115,7 @@ int sys_mount(const char *fsname, const char *image, const char *mountpoint, int
 	};
 
 	status = mount(mountpoint, fs, flags);
+
 	if (status != 0)
 	{
 		kfree(fs);

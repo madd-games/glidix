@@ -53,6 +53,10 @@ ssize_t gxfile_write(File *fp, const void *buffer, size_t size)
 
 void gxfile_close(File *fp)
 {
+	GXFile *gxfile = (GXFile*) fp->fsdata;
+	semWait(&gxfile->gxfs->sem);
+	gxfile->gxfs->numOpenInodes--;
+	semSignal(&gxfile->gxfs->sem);
 	fp->fsync(fp);
 	kfree(fp->fsdata);
 };
@@ -90,6 +94,7 @@ int gxfile_dup(File *me, File *fp, size_t szfile)
 {
 	GXFile *gxfile = (GXFile*) me->fsdata;
 	semWait(&gxfile->gxfs->sem);
+	gxfile->gxfs->numOpenInodes++;
 
 	memcpy(fp, me, szfile);
 	fp->fsdata = kmalloc(sizeof(GXFile));
@@ -223,6 +228,7 @@ int GXOpenFile(GXFileSystem *gxfs, File *fp, ino_t ino)
 	fp->fsync = gxfile_fsync;
 	fp->truncate = gxfile_truncate;
 
+	gxfs->numOpenInodes++;
 	semSignal(&gxfs->sem);
 	return 0;
 };

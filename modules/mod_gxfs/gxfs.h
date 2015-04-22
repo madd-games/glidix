@@ -94,6 +94,9 @@ typedef struct
 	// sections
 	size_t				numSections;
 	gxfsSD*				sections;
+
+	// number of inodes that are open
+	int				numOpenInodes;
 } GXFileSystem;
 
 /**

@@ -100,6 +100,14 @@ typedef	int64_t				ssize_t;
 typedef int				pid_t;
 #endif
 
+/* init.c */
+typedef enum
+{
+	KERNEL_RUNNING,
+	KERNEL_STOPPING,
+} KernelStatus;
+extern KernelStatus kernelStatus;
+
 /* common.asm */
 uint64_t	msrRead(uint32_t msr);
 void		msrWrite(uint32_t msr, uint64_t value);

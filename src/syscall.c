@@ -165,6 +165,9 @@ int sysOpenErrno(int vfsError)
 	case VFS_NOT_DIR:
 		getCurrentThread()->therrno = ENOTDIR;
 		break;
+	case VFS_LINK_LOOP:
+		getCurrentThread()->therrno = ELOOP;
+		break;
 	default:
 		/* fallback in case there are some unhandled errors */
 		getCurrentThread()->therrno = EIO;
@@ -408,6 +411,19 @@ int sys_raise(Regs *regs, int sig)
 int sys_stat(const char *path, struct stat *buf)
 {
 	int status = vfsStat(path, buf);
+	if (status == 0)
+	{
+		return status;
+	}
+	else
+	{
+		return sysOpenErrno(status);
+	};
+};
+
+int sys_lstat(const char *path, struct stat *buf)
+{
+	int status = vfsLinkStat(path, buf);
 	if (status == 0)
 	{
 		return status;
@@ -1540,6 +1556,152 @@ int sys_link(const char *oldname, const char *newname)
 	return status;
 };
 
+int sys_symlink(const char *target, const char *path)
+{
+	if (strlen(target) > PATH_MAX)
+	{
+		getCurrentThread()->therrno = ENAMETOOLONG;
+		return -1;
+	};
+
+	char rpath[256];
+	if (realpath(path, rpath) == NULL)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	char parent[256];
+	char newlink[256];
+
+	size_t sz = strlen(rpath);
+	while (rpath[sz] != '/')
+	{
+		sz--;
+	};
+
+	memcpy(parent, rpath, sz);
+	parent[sz] = 0;
+	if (parent[0] == 0)
+	{
+		strcpy(parent, "/");
+	};
+
+	strcpy(newlink, &rpath[sz+1]);
+	if (strlen(newlink) >= 128)
+	{
+		getCurrentThread()->therrno = ENAMETOOLONG;
+		return -1;
+	};
+
+	if (newlink[0] == 0)
+	{
+		getCurrentThread()->therrno = ENOENT;
+		return -1;
+	};
+
+	vfsLockCreation();
+
+	struct stat st;
+	int error;
+	if ((error = vfsStat(parent, &st)) != 0)
+	{
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
+	};
+
+	if (!vfsCanCurrentThread(&st, 2))
+	{
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EPERM;
+		return -1;
+	};
+
+	if (strcmp(parent, "/") != 0) strcat(parent, "/");
+
+	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
+	int endYet = (error == VFS_EMPTY_DIRECTORY);
+	if (dir->mkdir == NULL)
+	{
+		vfsUnlockCreation();
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	while (!endYet)
+	{
+		if (strcmp(dir->dirent.d_name, newlink) == 0)
+		{
+			if (dir->close != NULL) dir->close(dir);
+			kfree(dir);
+			vfsUnlockCreation();
+			getCurrentThread()->therrno = EEXIST;
+			return -1;
+		};
+
+		if (dir->next(dir) == -1)
+		{
+			endYet = 1;
+		};
+	};
+
+	int status = dir->symlink(dir, newlink, target);
+
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+	vfsUnlockCreation();
+
+	if (status != 0)
+	{
+		getCurrentThread()->therrno = EIO;
+	};
+
+	return status;
+};
+
+ssize_t sys_readlink(const char *path, char *buf, size_t bufsize)
+{
+	char tmpbuf[PATH_MAX];
+	int error;
+	Dir *dir = parsePath(path, VFS_NO_FOLLOW, &error);
+	if (dir == NULL)
+	{
+		return sysOpenErrno(error);
+	};
+
+	if ((dir->stat.st_mode & 0xF000) != VFS_MODE_LINK)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		getCurrentThread()->therrno = EINVAL;
+		return -1;
+	};
+
+	ssize_t out = dir->readlink(dir, tmpbuf);
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+
+	if (out == -1)
+	{
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	if (bufsize > out)
+	{
+		bufsize = out;
+	};
+
+	if (bufsize > PATH_MAX)
+	{
+		getCurrentThread()->therrno = ENAMETOOLONG;
+		return -1;
+	};
+
+	memcpy(buf, tmpbuf, bufsize);
+	return 0;
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	kdumpregs(regs);
@@ -1695,6 +1857,12 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((off_t*)&regs->rax) = sys_lseek((int) regs->rdi, *((off_t*)&regs->rsi), (int) regs->rdx);
 		break;
 	case 23:
+		if (kernelStatus == KERNEL_STOPPING)
+		{
+			getCurrentThread()->therrno = EPERM;
+			*((int*)&regs->rax) = -1;
+			break;
+		};
 		*((int*)&regs->rax) = threadClone(regs, (int) regs->rdi, (MachineState*) regs->rsi);
 		break;
 	case 24:
@@ -1856,6 +2024,26 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 62:
 		*((int*)&regs->rax) = sys_link((const char*) regs->rdi, (const char*) regs->rsi);
+		break;
+	case 63:
+		*((int*)&regs->rax) = unmount((const char*) regs->rdi);
+		break;
+	case 64:
+		if (!isPointerValid(regs->rsi, sizeof(struct stat)))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		*((int*)&regs->rax) = sys_lstat((const char*) regs->rdi, (struct stat*) regs->rsi);
+		break;
+	case 65:
+		*((int*)&regs->rax) = sys_symlink((const char*) regs->rdi, (const char*) regs->rsi);
+		break;
+	case 66:
+		if (!isPointerValid(regs->rdi, regs->rdx))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		*((ssize_t*)&regs->rax) = sys_readlink((const char*) regs->rdi, (char*) regs->rsi, (size_t) regs->rdx);
 		break;
 	default:
 		signalOnBadSyscall(regs);

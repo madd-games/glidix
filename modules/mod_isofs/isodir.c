@@ -50,6 +50,10 @@ typedef struct
 
 static void isodir_close(Dir *dir)
 {
+	ISODirScanner *isodir = (ISODirScanner*) dir->fsdata;
+	semWait(&isodir->isofs->sem);
+	isodir->isofs->numOpenInodes--;
+	semSignal(&isodir->isofs->sem);
 	kfree(dir->fsdata);
 };
 
@@ -145,6 +149,9 @@ int isodirOpen(ISOFileSystem *isofs, uint64_t start, uint64_t end, Dir *dir, siz
 	isodir->isofs = isofs;
 	isodir->pos = start;
 	isodir->end = end;
+	semWait(&isodir->isofs->sem);
+	isodir->isofs->numOpenInodes++;
+	semSignal(&isodir->isofs->sem);
 
 	dir->fsdata = isodir;
 	dir->close = isodir_close;

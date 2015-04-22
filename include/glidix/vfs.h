@@ -65,6 +65,8 @@
 #define	VFS_FILE_LIMIT_EXCEEDED		-5		/* MAX_OPEN_FILES limit exceeded */
 #define	VFS_BUSY			-6		/* a file is busy */
 #define	VFS_NOT_DIR			-7		/* not a directory */
+#define	VFS_LINK_LOOP			-8		/* symbolic link depth too high */
+#define	VFS_IO_ERROR			-9		/* other, unknown problem (e.g. readlink failed) */
 
 /**
  * Flags to parsePath()/vfsOpen().
@@ -76,6 +78,8 @@
 // if set, parsePath() will create a regular file if it does not exist.
 #define	VFS_CREATE			(1 << 2)
 /* next 12 bits reserved */
+// if final component is a symlink, do not follow
+#define	VFS_NO_FOLLOW			(1 << 14)
 
 /**
  * Flags for the open() system call.
@@ -94,6 +98,10 @@
 #define	O_SYNC				(1 << 10)
 #define	O_ACCMODE			(O_RDWR)
 #define	O_ALL				((1 << 11)-1)
+
+#define	FILENAME_MAX			128
+#define	PATH_MAX			256
+#define	VFS_MAX_LINK_DEPTH		8
 
 #ifndef _SYS_STAT_H
 struct stat
@@ -307,6 +315,19 @@ typedef struct _Dir
 	 * directory).
 	 */
 	int (*link)(struct _Dir *dir, const char *name, ino_t ino);
+
+	/**
+	 * Create a symbolic/soft link with the specified name, and store the specified path. See mkreg() for more info on file-creation
+	 * semantics. Returns 0 on success, or -1 on error (EIO).
+	 */
+	int (*symlink)(struct _Dir *dir, const char *name, const char *path);
+
+	/**
+	 * Read the path of a symbolic link pointed to by this directory pointer. The path shall be stored in 'buffer', which
+	 * has a length of at least PATH_MAX. On failure, return -1; otherwise, return the actual size of the path, which must
+	 * be smaller than PATH_MAX. Also, the path must be NUL-terminated.
+	 */
+	ssize_t (*readlink)(struct _Dir *dir, char *buffer);
 } Dir;
 
 /**
@@ -327,8 +348,9 @@ typedef struct _FileSystem
 
 	/**
 	 * Unmount this filesystem. Do not free this structure! The kernel does that for you.
+	 * Return 0 on success, -1 on error (reported as EBUSY).
 	 */
-	void (*unmount)(struct _FileSystem *fs);
+	int (*unmount)(struct _FileSystem *fs);
 
 	/**
 	 * The name of this filesystem.
@@ -354,6 +376,7 @@ char *realpath(const char *relpath, char *buffer);
 Dir *parsePath(const char *path, int flags, int *error);
 
 int vfsStat(const char *path, struct stat *st);
+int vfsLinkStat(const char *path, struct stat *st);
 File *vfsOpen(const char *path, int flags, int *error);
 ssize_t vfsRead(File *file, void *buffer, size_t size);
 ssize_t vfsWrite(File *file, const void *buffer, size_t size);

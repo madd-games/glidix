@@ -1,5 +1,5 @@
 .PHONY: all
-all: out/cp out/sudo out/mip-install out/passwd out/mkdir out/chown out/ls out/rmmod out/login out/chgrp out/insmod out/whoami out/whois out/env out/stat out/pwdsetup out/rm out/crypt out/mkmip out/chmod out/touch out/cat
+all: out/cp out/sudo out/mip-install out/passwd out/mkdir out/chown out/ls out/rmmod out/login out/chgrp out/insmod out/whoami out/whois out/env out/stat out/pwdsetup out/rm out/umount out/crypt out/mkmip out/chmod out/touch out/cat
 out/cp: src/cp.c
 	x86_64-glidix-gcc $< -o $@ 
 out/sudo: src/sudo.c
@@ -35,6 +35,8 @@ out/stat: src/stat.c
 out/pwdsetup: src/pwdsetup.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt
 out/rm: src/rm.c
+	x86_64-glidix-gcc $< -o $@ 
+out/umount: src/umount.c
 	x86_64-glidix-gcc $< -o $@ 
 out/crypt: src/crypt.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt

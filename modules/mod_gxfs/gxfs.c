@@ -44,6 +44,27 @@ static int gxfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 	return GXOpenDir(gxfs, dir, 2);				// inode 2 = root directory
 };
 
+static int gxfs_unmount(FileSystem *fs)
+{
+	GXFileSystem *gxfs = (GXFileSystem*) fs->fsdata;
+	semWait(&gxfs->sem);
+	if (gxfs->numOpenInodes != 0)
+	{
+		kprintf_debug("gxfs: cannot unmount: %d inodes are open\n", gxfs->numOpenInodes);
+		semSignal(&gxfs->sem);
+		return -1;
+	};
+
+	kfree(gxfs->sections);
+	vfsClose(gxfs->fp);
+	kfree(gxfs);
+
+	spinlockAcquire(&gxfsMountLock);
+	numMountedFilesystems--;
+	spinlockRelease(&gxfsMountLock);
+	return 0;
+};
+
 static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 {
 	spinlockAcquire(&gxfsMountLock);
@@ -52,7 +73,8 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	File *fp = vfsOpen(image, 0, &error);
 	if (fp == NULL)
 	{
-		//kprintf_debug("gxfs: could not open %s\n", image);
+		kprintf_debug("gxfs: could not open %s\n", image);
+		spinlockRelease(&gxfsMountLock);
 		return -1;
 	};
 
@@ -60,7 +82,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	{
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
-		//kprintf_debug("gxfs: this file does not support seeking\n");
+		kprintf_debug("gxfs: this file does not support seeking\n");
 		return -1;
 	};
 
@@ -68,7 +90,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	uint64_t offCIS;
 	if (vfsRead(fp, &offCIS, 8) != 8)
 	{
-		//kprintf_debug("gxfs: offCIS cannot be read, this is not a valid GXFS image\n");
+		kprintf_debug("gxfs: offCIS cannot be read, this is not a valid GXFS image\n");
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
 		return -1;
@@ -78,7 +100,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	fp->seek(fp, offCIS, SEEK_SET);
 	if (vfsRead(fp, &cis, 64) != 64)
 	{
-		//kprintf_debug("gxfs: cannot read the whole CIS, this is not a valid GXFS image\n");
+		kprintf_debug("gxfs: cannot read the whole CIS, this is not a valid GXFS image\n");
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
 		return -1;
@@ -86,24 +108,24 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 
 	if (memcmp(cis.cisMagic, "GXFS", 4) != 0)
 	{
-		//kprintf_debug("gxfs: invalid CIS magic, this is not a valid GXFS image\n");
+		kprintf_debug("gxfs: invalid CIS magic, this is not a valid GXFS image\n");
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
 		return -1;
 	};
 
-	//kprintf_debug("gxfs: filesystem creation time: %d\n", cis.cisCreateTime);
+	kprintf_debug("gxfs: filesystem creation time: %d\n", cis.cisCreateTime);
 
 	size_t numSections = cis.cisTotalIno / cis.cisInoPerSection;
 	if (numSections != (cis.cisTotalBlocks / cis.cisBlocksPerSection))
 	{
-		//kprintf_debug("gxfs: section count inconsistent\n");
+		kprintf_debug("gxfs: section count inconsistent\n");
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
 		return -1;
 	};
 
-	//kprintf_debug("gxfs: this filesystem has %d sections\n", numSections);
+	kprintf_debug("gxfs: this filesystem has %d sections\n", numSections);
 
 	GXFileSystem *gxfs = (GXFileSystem*) kmalloc(sizeof(GXFileSystem));
 	gxfs->fp = fp;
@@ -113,9 +135,11 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	gxfs->sections = (gxfsSD*) kmalloc(sizeof(gxfsSD)*numSections);
 	fp->seek(fp, cis.cisOffSections, SEEK_SET);
 	vfsRead(fp, gxfs->sections, 32*numSections);
+	gxfs->numOpenInodes = 0;
 
 	fs->fsdata = gxfs;
 	fs->openroot = gxfs_openroot;
+	fs->unmount = gxfs_unmount;
 
 	numMountedFilesystems++;
 	spinlockRelease(&gxfsMountLock);

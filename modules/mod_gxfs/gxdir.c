@@ -69,6 +69,7 @@ static void gxdir_close(Dir *dir)
 		GXWriteInodeHeader(&gxdir->gxino, &inohead);
 	};
 
+	gxdir->gxfs->numOpenInodes--;
 	semSignal(&gxdir->gxfs->sem);
 	kfree(dir->fsdata);
 };
@@ -250,6 +251,115 @@ static int gxdir_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	return 0;
 };
 
+static int gxdir_symlink(Dir *dir, const char *name, const char *path)
+{
+	time_t now = time();
+
+	GXDir *gxdir = (GXDir*) dir->fsdata;
+	GXFileSystem *gxfs = gxdir->gxfs;
+	semWait(&gxdir->gxfs->sem);
+
+	gxfsInode newInode;
+	GXInode gxNewInode;
+	ino_t newInodeNumber = GXCreateInode(gxdir->gxfs, &gxNewInode, gxdir->gxino.ino);
+
+	if (newInodeNumber == 0)
+	{
+		//kprintf_debug("gxfs: mkdir: out of inodes\n");
+		semSignal(&gxdir->gxfs->sem);
+		return -1;
+	};
+
+	gxdir->gxfs->fp->seek(gxdir->gxfs->fp, gxNewInode.offset, SEEK_SET);
+	newInode.inoMode = (uint16_t) (0644 | VFS_MODE_LINK);
+	newInode.inoSize = 0;
+	newInode.inoLinks = 1;
+	newInode.inoCTime = now;
+	newInode.inoATime = now;
+	newInode.inoMTime = now;
+	newInode.inoOwner = (uint16_t) getCurrentThread()->euid;
+	newInode.inoGroup = (uint16_t) getCurrentThread()->egid;
+	memset(&newInode.inoFrags, 0, sizeof(gxfsFragment)*16);
+	// for symlinks, "inoFrags" actually stores the path (for quicker access)
+	strcpy((char*)&newInode.inoFrags, path);
+	vfsWrite(gxdir->gxfs->fp, &newInode, sizeof(gxfsInode));
+
+	//kprintf_debug("gxfs: writing directory entry\n");
+	struct dirent ent;
+	ent.d_ino = newInodeNumber;
+	strcpy(ent.d_name, name);
+	GXWriteInode(&gxdir->gxino, &ent, sizeof(struct dirent));
+
+	//kprintf_debug("gxfs: updating st_mtime for inode %d (parent directory)\n", gxdir->gxino.ino);
+	gxfs->fp->seek(gxfs->fp, gxdir->gxino.offset, SEEK_SET);
+	vfsRead(gxfs->fp, &newInode, 39);
+	gxfs->fp->seek(gxfs->fp, -39, SEEK_CUR);
+	newInode.inoMTime = now;
+	vfsWrite(gxfs->fp, &newInode, 39);
+
+	if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
+
+	semSignal(&gxdir->gxfs->sem);
+	return 0;
+};
+
+static ssize_t gxdir_readlink(Dir *dir, char *buffer)
+{
+	GXDir *gxdir = (GXDir*) dir->fsdata;
+	semWait(&gxdir->gxfs->sem);
+
+	GXInode gxInode;
+	GXOpenInode(gxdir->gxfs, &gxInode, dir->dirent.d_ino);
+	gxdir->gxfs->fp->seek(gxdir->gxfs->fp, gxInode.offset + 39, SEEK_SET);
+	buffer[PATH_MAX-1] = 0;
+	vfsRead(gxdir->gxfs->fp, buffer, PATH_MAX-1);
+
+	semSignal(&gxdir->gxfs->sem);
+
+	return strlen(buffer);
+};
+
+static int gxdir_link(Dir *dir, const char *name, ino_t ino)
+{
+	time_t now = time();
+
+	GXDir *gxdir = (GXDir*) dir->fsdata;
+	GXFileSystem *gxfs = gxdir->gxfs;
+	semWait(&gxdir->gxfs->sem);
+
+	gxfsInode inode;
+	GXInode gxInode;
+	//ino_t newInodeNumber = GXCreateInode(gxdir->gxfs, &gxNewInode, gxdir->gxino.ino);
+	GXOpenInode(gxdir->gxfs, &gxInode, ino);
+	GXReadInodeHeader(&gxInode, &inode);
+	if (inode.inoLinks == 255)
+	{
+		semSignal(&gxdir->gxfs->sem);
+		return -1;
+	};
+
+	inode.inoLinks++;
+	inode.inoCTime = now;
+	GXWriteInodeHeader(&gxInode, &inode);
+
+	struct dirent ent;
+	ent.d_ino = ino;
+	strcpy(ent.d_name, name);
+	GXWriteInode(&gxdir->gxino, &ent, sizeof(struct dirent));
+
+	//kprintf_debug("gxfs: updating st_mtime for inode %d (parent directory)\n", gxdir->gxino.ino);
+	gxfs->fp->seek(gxfs->fp, gxdir->gxino.offset, SEEK_SET);
+	vfsRead(gxfs->fp, &inode, 39);
+	gxfs->fp->seek(gxfs->fp, -39, SEEK_CUR);
+	inode.inoMTime = now;
+	vfsWrite(gxfs->fp, &inode, 39);
+
+	if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
+
+	semSignal(&gxdir->gxfs->sem);
+	return 0;
+};
+
 static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t gid)
 {
 	time_t now = time();
@@ -375,7 +485,11 @@ int GXOpenDir(GXFileSystem *gxfs, Dir *dir, ino_t ino)
 	dir->mkdir = gxdir_mkdir;
 	dir->mkreg = gxdir_mkreg;
 	dir->unlink = gxdir_unlink;
+	dir->link = gxdir_link;
+	dir->symlink = gxdir_symlink;
+	dir->readlink = gxdir_readlink;
 
+	gxfs->numOpenInodes++;
 	semSignal(&gxfs->sem);
 	if (gxdir_next(dir) == -1)
 	{

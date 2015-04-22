@@ -46,15 +46,23 @@ typedef struct
 
 static void isofile_close(File *fp)
 {
+	ISOFile *file = (ISOFile*) fp->fsdata;
+	semWait(&file->isofs->sem);
+	file->isofs->numOpenInodes--;
+	semSignal(&file->isofs->sem);
 	kfree(fp->fsdata);
 };
 
 static int isofile_dup(File *me, File *fp, size_t szfile)
 {
+	ISOFile *org = (ISOFile*) me->fsdata;
+	semWait(&org->isofs->sem);
+	org->isofs->numOpenInodes++;
 	ISOFile *file = (ISOFile*) kmalloc(sizeof(ISOFile));
 	memcpy(file, me->fsdata, sizeof(ISOFile));
 	memcpy(fp, me, szfile);
 	fp->fsdata = file;
+	semSignal(&org->isofs->sem);
 	return 0;
 };
 
@@ -123,6 +131,7 @@ static int isofile_fstat(File *fp, struct stat *st)
 int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, struct stat *st)
 {
 	ISOFile *file = (ISOFile*) kmalloc(sizeof(ISOFile));
+	semWait(&isofs->sem);
 	memcpy(&file->st, st, sizeof(struct stat));
 	file->isofs = isofs;
 	file->start = start;
@@ -136,5 +145,7 @@ int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, s
 	fp->seek = isofile_seek;
 	fp->fstat = isofile_fstat;
 
+	isofs->numOpenInodes++;
+	semSignal(&isofs->sem);
 	return 0;
 };

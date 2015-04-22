@@ -34,6 +34,9 @@
 #include <glidix/initrdfs.h>
 #include <glidix/devfs.h>
 #include <glidix/module.h>
+#include <glidix/sched.h>
+#include <glidix/errno.h>
+#include <glidix/procfs.h>
 
 static Spinlock mountLock;
 static MountPoint *mountTable;
@@ -71,7 +74,15 @@ void initMount()
 		kprintf("%$\x04", "Failed%#\n");
 		panic("failed to mount the modfs (errno %d)", errno);
 	};
+	kprintf("%$\x02" "Done%#\n");
 
+	kprintf("Mounting the procfs at /proc... ");
+	errno = mount("/proc/", getProcfs(), 0);
+	if (errno != 0)
+	{
+		kprintf("%$\x04", "Failed%#\n");
+		panic("failed to mount the procfs (errno %d)", errno);
+	};
 	kprintf("%$\x02" "Done%#\n");
 };
 
@@ -145,15 +156,39 @@ int mount(const char *prefix, FileSystem *fs, int flags)
 	return 0;
 };
 
-void unmount(const char *prefix)
+int unmount(const char *prefix)
 {
+	if (getCurrentThread()->euid != 0)
+	{
+		getCurrentThread()->therrno = EPERM;
+		return -1;
+	};
+
 	spinlockAcquire(&mountLock);
 	MountPoint *mp = mountTable;
+
+	int status = -1;
 
 	while (mp != NULL)
 	{
 		if (strcmp(prefix, mp->prefix) == 0)
 		{
+			if (mp->fs->unmount != NULL)
+			{
+				if (mp->fs->unmount(mp->fs) != 0)
+				{
+					getCurrentThread()->therrno = EBUSY;
+					spinlockRelease(&mountLock);
+					return -1;
+				};
+			}
+			else
+			{
+				getCurrentThread()->therrno = EINVAL;
+				spinlockRelease(&mountLock);
+				return -1;
+			};
+
 			// unlink
 			if (mp->prev != NULL) mp->prev->next = mp->next;
 			if (mp->next != NULL) mp->next->prev = mp->prev;
@@ -161,9 +196,10 @@ void unmount(const char *prefix)
 			{
 				mountTable = mp->next;
 			};
-			if (mp->fs->unmount != NULL) mp->fs->unmount(mp->fs);
+
 			kfree(mp->fs);
 			kfree(mp);
+			status = 0;
 			break;
 		};
 
@@ -171,6 +207,13 @@ void unmount(const char *prefix)
 	};
 
 	spinlockRelease(&mountLock);
+
+	if (status == -1)
+	{
+		getCurrentThread()->therrno = EINVAL;
+	};
+
+	return status;
 };
 
 int resolveMounts(const char *path, SplitPath *out)
@@ -187,6 +230,8 @@ int resolveMounts(const char *path, SplitPath *out)
 			{
 				out->fs = mp->fs;
 				strcpy(out->filename, &path[strlen(mp->prefix)]);
+				memset(out->parent, 0, 512);
+				memcpy(out->parent, path, strlen(mp->prefix)-1);
 				spinlockRelease(&mountLock);
 				return 0;
 			};

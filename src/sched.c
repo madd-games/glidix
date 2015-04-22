@@ -761,6 +761,20 @@ void switchTaskToIndex(int index)
 	};
 };
 
+Thread *getThreadByID(int pid)
+{
+	if (pid == 0) return NULL;
+
+	Thread *th = currentThread;
+	while (th->pid != pid)
+	{
+		th = th->next;
+		if (th == currentThread) return NULL;
+	};
+
+	return th;
+};
+
 void kyield()
 {
 	while (getCurrentThread()->flags & THREAD_WAITING)

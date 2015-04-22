@@ -59,12 +59,13 @@ typedef struct _MountPoint
 typedef struct
 {
 	FileSystem		*fs;
+	char			parent[512];
 	char			filename[512];
 } SplitPath;
 
 void initMount();
 int mount(const char *prefix, FileSystem *fs, int flags);
-void unmount(const char *prefix);
+int unmount(const char *prefix);
 int resolveMounts(const char *path, SplitPath *out);
 void dumpMountTable();
 

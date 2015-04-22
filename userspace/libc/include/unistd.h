@@ -84,6 +84,8 @@ int	setgid(gid_t);
 int	setregid(gid_t, gid_t);
 long	sysconf(int name);
 int	link(const char *oldname, const char *newname);
+ssize_t	readlink(const char *path, char *buf, size_t bufsiz);
+int	symlink(const char *oldname, const char *newname);
 
 /* libcrypt */
 char*	crypt(const char *key, const char *salt);

@@ -38,6 +38,7 @@
 #include <glidix/sched.h>
 #include <glidix/mount.h>
 #include <glidix/initrdfs.h>
+#include <glidix/procfs.h>
 #include <glidix/procmem.h>
 #include <glidix/vfs.h>
 #include <glidix/ktty.h>
@@ -56,6 +57,7 @@
 extern int _bootstrap_stack;
 extern int end;
 extern uint32_t quantumTicks;
+KernelStatus kernelStatus;
 
 void expandHeap();
 extern int masterHeader;
@@ -65,6 +67,7 @@ void trapKernel();
 void kmain(MultibootInfo *info)
 {
 	ASM("cli");
+	kernelStatus = KERNEL_RUNNING;
 	initConsole();
 	kprintf("Successfully booted into 64-bit mode\n");
 	if (info->modsCount != 1)
@@ -142,6 +145,10 @@ void kmain(MultibootInfo *info)
 
 	kprintf("Initializing the initrdfs... ");
 	initInitrdfs(info);
+	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing the procfs... ");
+	initProcfs();
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the devfs... ");

@@ -35,6 +35,9 @@
 #include "isofs.h"
 #include "isodir.h"
 
+static Spinlock isoMountLock;
+static volatile int isoMountCount = 0;
+
 static int iso_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 {
 	ISOFileSystem *isofs = (ISOFileSystem*) fs->fsdata;
@@ -61,18 +64,43 @@ static int checkPVD(ISOPrimaryVolumeDescriptor *pvd)
 	return 1;
 };
 
+static int iso_unmount(FileSystem *fs)
+{
+	ISOFileSystem *isofs = (ISOFileSystem*) fs->fsdata;
+	semWait(&isofs->sem);
+	if (isofs->numOpenInodes != 0)
+	{
+		kprintf_debug("isofs: cannot unmount because %d inodes are open\n", isofs->numOpenInodes);
+		semSignal(&isofs->sem);
+		return -1;
+	};
+
+	vfsClose(isofs->fp);
+	kfree(isofs);
+
+	spinlockAcquire(&isoMountLock);
+	isoMountCount--;
+	spinlockRelease(&isoMountLock);
+
+	return 0;
+};
+
 static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 {
+	spinlockAcquire(&isoMountLock);
+
 	int error;
 	File *fp = vfsOpen(image, 0, &error);
 	if (fp == NULL)
 	{
+		spinlockRelease(&isoMountLock);
 		kprintf_debug("isofs: could not open %s\n", image);
 		return -1;
 	};
 
 	if (fp->seek == NULL)
 	{
+		spinlockRelease(&isoMountLock);
 		kprintf_debug("isofs: %s cannot seek\n", image);
 		vfsClose(fp);
 		return -1;
@@ -82,6 +110,7 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 	ISOPrimaryVolumeDescriptor primary;
 	if (vfsRead(fp, &primary, sizeof(ISOPrimaryVolumeDescriptor)) != sizeof(ISOPrimaryVolumeDescriptor))
 	{
+		spinlockRelease(&isoMountLock);
 		kprintf_debug("isofs: cannot read the whole ISOPrimaryVolumeDescriptor (EOF)\n");
 		vfsClose(fp);
 		return -1;
@@ -89,6 +118,7 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 
 	if (!checkPVD(&primary))
 	{
+		spinlockRelease(&isoMountLock);
 		kprintf_debug("isofs: the Primary Volume Descriptor is invalid\n");
 		vfsClose(fp);
 		return -1;
@@ -104,12 +134,17 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 	isofs->rootStart = (uint64_t)rootDir->startLBA * (uint64_t)primary.blockSize;
 	isofs->rootEnd = isofs->rootStart + (uint64_t)rootDir->fileSize;
 	isofs->blockSize = (uint64_t)primary.blockSize;
+	isofs->numOpenInodes = 0;
 
 	kprintf_debug("isofs: root directory start LBA is %a, block size is %d\n", rootDir->startLBA, primary.blockSize);
 
 	fs->fsdata = isofs;
 	fs->fsname = "isofs";
 	fs->openroot = iso_openroot;
+	fs->unmount = iso_unmount;
+
+	isoMountCount++;
+	spinlockRelease(&isoMountLock);
 	return 0;
 };
 
@@ -121,11 +156,19 @@ FSDriver isoDriver = {
 MODULE_INIT()
 {
 	kprintf("isofs: registering the ISO filesystem\n");
+	spinlockRelease(&isoMountLock);
 	registerFSDriver(&isoDriver);
 	return 0;
 };
 
 MODULE_FINI()
 {
+	spinlockAcquire(&isoMountLock);
+	if (isoMountCount > 0)
+	{
+		spinlockRelease(&isoMountLock);
+		return 1;
+	};
+
 	return 0;
 };

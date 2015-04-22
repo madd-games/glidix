@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 	};
 
 	struct stat st;
-	if (stat(argv[1], &st) != 0)
+	if (lstat(argv[1], &st) != 0)
 	{
 		fprintf(stderr, "%s: ", argv[0]);
 		perror(argv[1]);
@@ -110,6 +110,14 @@ int main(int argc, char *argv[])
 	printf("Owner:      %d <%s>\n", st.st_uid, name);
 	printf("Group:      %d <%s>\n", st.st_gid, grpname);
 	printf("Type:       %s\n", getFileType(st.st_mode));
+	if (S_ISLNK(st.st_mode))
+	{
+	char target[256];
+	ssize_t sz;
+	if ((sz = readlink(argv[1], target, 255)) == -1) strcpy(target, "???");
+	else target[sz] = 0;
+	printf("Target:     %s\n", target);
+	};
 	if (S_ISREG(st.st_mode))
 	{
 	printf("Size:       "); print_size(st.st_size); printf("\n");

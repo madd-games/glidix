@@ -90,6 +90,7 @@ int		_glidix_libopen(const char *path, uint64_t loadAddr, _glidix_libinfo *info)
 void		_glidix_libclose(_glidix_libinfo *info);
 uint64_t	_glidix_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset);
 int		_glidix_rmmod(const char *modname, int flags);
+int		_glidix_unmount(const char *prefix);
 
 #ifdef __cplusplus
 }	/* extern "C" */
