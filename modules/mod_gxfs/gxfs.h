@@ -35,6 +35,9 @@
 
 #define	GX_NO_BLOCK			0xFFFFFFFFFFFFFFFF
 
+#define	INODE_BUFFER_SIZE		64
+#define	INODE_IMPORTANCE_LIMIT		32
+
 typedef struct
 {
 	char				cisMagic[4];
@@ -77,6 +80,27 @@ typedef struct
 	gxfsFragment			inoFrags[16];
 } __attribute__ ((packed)) gxfsInode;
 
+typedef struct
+{
+	uint64_t			deInode;
+	uint8_t				deNextSz;
+	uint8_t				deNameLen;
+	char				deName[];
+} __attribute__ ((packed)) gxfsDirent;
+
+typedef struct
+{
+	uint32_t			dhCount;
+	uint8_t				dhFirstSz;
+} __attribute__ ((packed)) gxfsDirHeader;
+
+typedef struct
+{
+	ino_t				num;
+	gxfsInode			data;
+	int				counter;		// measures how important this buffered inode is
+} BufferedInode;
+
 /**
  * The 'fsdata' of a mounted GXFS filesystem.
  */
@@ -97,6 +121,9 @@ typedef struct
 
 	// number of inodes that are open
 	int				numOpenInodes;
+
+	// inode buffer
+	BufferedInode			ibuf[INODE_BUFFER_SIZE];
 } GXFileSystem;
 
 /**
@@ -127,6 +154,17 @@ typedef struct
 
 	// the inode
 	GXInode				gxino;
+
+	// offset to the currently-shown directory entry.
+	off_t				offCurrent;
+
+	// size of the next entry
+	size_t				szNext;
+
+	// current entry index, and the number of entries. If new ones are added, we shall NOT care
+	// for reads.
+	uint32_t			index;
+	uint32_t			count;
 } GXDir;
 
 /**
@@ -143,8 +181,8 @@ ino_t GXCreateInode(GXFileSystem *gxfs, GXInode *gxino, ino_t closeTo);
 int GXOpenInode(GXFileSystem *gxfs, GXInode *gxino, ino_t inode);
 size_t GXReadInode(GXInode *gxino, void *buffer, size_t size);
 size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size);
-void GXReadInodeHeader(GXInode *gxino, gxfsInode *inode);			// inoFrags is NOT read!
-void GXWriteInodeHeader(GXInode *gxino, gxfsInode *inode);			// inoFrags is NOT updated!
+void GXReadInodeHeader(GXInode *gxino, gxfsInode *inode);
+void GXWriteInodeHeader(GXInode *gxino, gxfsInode *inode);
 void GXShrinkInode(GXInode *gxino, size_t shrinkBy, gxfsInode *inode);
 void GXUnlinkInode(GXInode *gxino);
 void GXDumpInode(GXFileSystem *gxfs, ino_t ino);

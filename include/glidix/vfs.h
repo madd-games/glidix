@@ -249,6 +249,7 @@ typedef struct _Dir
 
 	/**
 	 * Same as openfile(), except opens a directory. It may return error codes as described above.
+	 * 'walkflags' should be inherited, if supported!
 	 */
 	int (*opendir)(struct _Dir *me, struct _Dir *dir, size_t szDir);
 
@@ -328,6 +329,13 @@ typedef struct _Dir
 	 * be smaller than PATH_MAX. Also, the path must be NUL-terminated.
 	 */
 	ssize_t (*readlink)(struct _Dir *dir, char *buffer);
+
+	/**
+	 * Used to implement efficient stat(). If this function is NULL, then it is expected that opendir(), openroot() and
+	 * next() will automatically set the 'stat' field to a valid value. If this function IS implemented, then the stat
+	 * field should only be filled in when this is called.
+	 */
+	void (*getstat)(struct _Dir *dir);
 } Dir;
 
 /**

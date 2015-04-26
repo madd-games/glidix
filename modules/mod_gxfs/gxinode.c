@@ -29,6 +29,7 @@
 #include "gxfs.h"
 #include <glidix/console.h>
 #include <glidix/time.h>
+#include <glidix/string.h>
 
 void GXDumpInode(GXFileSystem *gxfs, ino_t ino)
 {
@@ -46,6 +47,28 @@ void GXDumpInode(GXFileSystem *gxfs, ino_t ino)
 		gxfsFragment *frag = &inode.inoFrags[i];
 		kprintf_debug("%d\t%d\t%d\t%d\n", i, frag->fOff, frag->fBlock, frag->fExtent);
 	};
+};
+
+void GXDumpInodeBuffer(GXFileSystem *gxfs)
+{
+	kprintf_debug("Currently-buffered inodes: %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d\n",
+		gxfs->ibuf[0].num, gxfs->ibuf[0].counter,
+		gxfs->ibuf[1].num, gxfs->ibuf[1].counter,
+		gxfs->ibuf[2].num, gxfs->ibuf[2].counter,
+		gxfs->ibuf[3].num, gxfs->ibuf[3].counter,
+		gxfs->ibuf[4].num, gxfs->ibuf[4].counter,
+		gxfs->ibuf[5].num, gxfs->ibuf[5].counter,
+		gxfs->ibuf[6].num, gxfs->ibuf[6].counter,
+		gxfs->ibuf[7].num, gxfs->ibuf[7].counter,
+		gxfs->ibuf[8].num, gxfs->ibuf[8].counter,
+		gxfs->ibuf[9].num, gxfs->ibuf[9].counter,
+		gxfs->ibuf[10].num, gxfs->ibuf[10].counter,
+		gxfs->ibuf[11].num, gxfs->ibuf[11].counter,
+		gxfs->ibuf[12].num, gxfs->ibuf[12].counter,
+		gxfs->ibuf[13].num, gxfs->ibuf[13].counter,
+		gxfs->ibuf[14].num, gxfs->ibuf[14].counter,
+		gxfs->ibuf[15].num, gxfs->ibuf[15].counter
+	);
 };
 
 static ino_t GXCreateInodeInSection(GXFileSystem *gxfs, GXInode *gxino, uint64_t section)
@@ -134,10 +157,12 @@ int GXOpenInode(GXFileSystem *gxfs, GXInode *gxino, ino_t inode)
 
 size_t GXReadInode(GXInode *gxino, void *buffer, size_t size)
 {
+	//kprintf_debug("GXReadInode(%d)\n", gxino->ino);
 	GXFileSystem *gxfs = gxino->gxfs;
 	gxfsInode inode;
-	gxfs->fp->seek(gxfs->fp, gxino->offset, SEEK_SET);
-	vfsRead(gxfs->fp, &inode, sizeof(gxfsInode));
+	//gxfs->fp->seek(gxfs->fp, gxino->offset, SEEK_SET);
+	//vfsRead(gxfs->fp, &inode, sizeof(gxfsInode));
+	GXReadInodeHeader(gxino, &inode);
 
 	if ((gxino->pos+size) > inode.inoSize)
 	{
@@ -190,6 +215,8 @@ size_t GXReadInode(GXInode *gxino, void *buffer, size_t size)
 	};
 
 	// that took a lot of code...
+	//kprintf_debug("END OF READ INODE\n");
+	//GXDumpInodeBuffer(gxino->gxfs);
 	return sizeRead;
 };
 
@@ -286,8 +313,9 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 {
 	GXFileSystem *gxfs = gxino->gxfs;
 	gxfsInode inode;
-	gxfs->fp->seek(gxfs->fp, gxino->offset, SEEK_SET);
-	vfsRead(gxfs->fp, &inode, sizeof(gxfsInode));
+	//gxfs->fp->seek(gxfs->fp, gxino->offset, SEEK_SET);
+	//vfsRead(gxfs->fp, &inode, sizeof(gxfsInode));
+	GXReadInodeHeader(gxino, &inode);
 	int inodeDirty = 0;
 
 	if (gxino->pos > inode.inoSize)
@@ -347,8 +375,9 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 	if (inodeDirty)
 	{
 		//kprintf_debug("gxfs: flushing dirty inode %d\n", gxino->ino);
-		gxfs->fp->seek(gxfs->fp, gxino->offset, SEEK_SET);
-		vfsWrite(gxfs->fp, &inode, sizeof(gxfsInode));
+		//gxfs->fp->seek(gxfs->fp, gxino->offset, SEEK_SET);
+		//vfsWrite(gxfs->fp, &inode, sizeof(gxfsInode));
+		GXWriteInodeHeader(gxino, &inode);
 	};
 
 	return sizeWritten;
@@ -356,21 +385,106 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 
 void GXReadInodeHeader(GXInode *gxino, gxfsInode *inode)
 {
+	//kprintf_debug("GXReadInodeHeader (%d)\n", gxino->ino);
+#if 0
 	gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset, SEEK_SET);
-	vfsRead(gxino->gxfs->fp, inode, 39);
+	vfsRead(gxino->gxfs->fp, inode, sizeof(gxfsInode));
+#endif
+
+	int i;
+	int freeIndex = -1;
+	for (i=0; i<INODE_BUFFER_SIZE; i++)
+	{
+		if (gxino->gxfs->ibuf[i].num == 0)
+		{
+			freeIndex = i;
+		};
+
+		if (gxino->gxfs->ibuf[i].num == gxino->ino)
+		{
+			if (gxino->gxfs->ibuf[i].counter < INODE_IMPORTANCE_LIMIT) gxino->gxfs->ibuf[i].counter++;
+			memcpy(inode, &gxino->gxfs->ibuf[i].data, sizeof(gxfsInode));
+			return;
+		};
+	};
+
+	if (freeIndex == -1)
+	{
+		// throw out the least-important inode and make all others less important
+		freeIndex = 0;
+		int importance = gxino->gxfs->ibuf[i].counter;
+
+		for (i=1; i<INODE_BUFFER_SIZE; i++)
+		{
+			if (gxino->gxfs->ibuf[i].num < importance)
+			{
+				freeIndex = i;
+				importance = gxino->gxfs->ibuf[i].num;
+			};
+
+			if (gxino->gxfs->ibuf[i].counter > 0) gxino->gxfs->ibuf[i].counter--;
+		};
+	};
+
+	gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset, SEEK_SET);
+	vfsRead(gxino->gxfs->fp, inode, sizeof(gxfsInode));
+	gxino->gxfs->ibuf[freeIndex].num = gxino->ino;
+	gxino->gxfs->ibuf[freeIndex].counter = 1;
+	memcpy(&gxino->gxfs->ibuf[freeIndex].data, inode, sizeof(gxfsInode));
 };
 
 void GXWriteInodeHeader(GXInode *gxino, gxfsInode *inode)
 {
+	//kprintf_debug("GXWriteInodeHeader (%d)\n", gxino->ino);
+
+	int i;
+	int freeIndex = -1;
+	for (i=0; i<INODE_BUFFER_SIZE; i++)
+	{
+		if (gxino->gxfs->ibuf[i].num == 0)
+		{
+			freeIndex = i;
+		};
+
+		if (gxino->gxfs->ibuf[i].num == gxino->ino)
+		{
+			if (gxino->gxfs->ibuf[i].counter < INODE_IMPORTANCE_LIMIT) gxino->gxfs->ibuf[i].counter++;
+			memcpy(&gxino->gxfs->ibuf[i].data, inode, sizeof(gxfsInode));
+		};
+	};
+
+	if (freeIndex == -1)
+	{
+		// throw out the least-important inode and make all others less important
+		freeIndex = 0;
+		int importance = gxino->gxfs->ibuf[i].counter;
+
+		for (i=1; i<INODE_BUFFER_SIZE; i++)
+		{
+			if (gxino->gxfs->ibuf[i].num < importance)
+			{
+				freeIndex = i;
+				importance = gxino->gxfs->ibuf[i].num;
+			};
+
+			if (gxino->gxfs->ibuf[i].counter > 0) gxino->gxfs->ibuf[i].counter--;
+		};
+	};
+
+	gxino->gxfs->ibuf[freeIndex].num = gxino->ino;
+	gxino->gxfs->ibuf[freeIndex].counter = 1;
+	memcpy(&gxino->gxfs->ibuf[freeIndex].data, inode, sizeof(gxfsInode));
+
 	gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset, SEEK_SET);
-	vfsWrite(gxino->gxfs->fp, inode, 39);
+	vfsWrite(gxino->gxfs->fp, inode, sizeof(gxfsInode));
 };
 
 void GXShrinkInode(GXInode *gxino, size_t shrinkBy, gxfsInode *inode)
 {
-	gxfsFragment frags[16];
-	gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset+39, SEEK_SET);
-	vfsRead(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
+	//gxfsFragment frags[16];
+	//gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset+39, SEEK_SET);
+	//vfsRead(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
+	gxfsFragment *frags = inode->inoFrags;
 
 	int i;
 	for (i=0; i<16; i++)
@@ -396,8 +510,9 @@ void GXShrinkInode(GXInode *gxino, size_t shrinkBy, gxfsInode *inode)
 	};
 
 	inode->inoSize -= shrinkBy;
-	gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset+39, SEEK_SET);
-	vfsWrite(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
+	//gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset+39, SEEK_SET);
+	//vfsWrite(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
+	GXWriteInodeHeader(gxino, inode);
 };
 
 void GXUnlinkInode(GXInode *gxino)
@@ -410,9 +525,10 @@ void GXUnlinkInode(GXInode *gxino)
 
 	if (inode.inoLinks == 0)
 	{
-		gxfsFragment frags[16];
-		gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset+39, SEEK_SET);
-		vfsRead(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
+		//gxfsFragment frags[16];
+		//gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset+39, SEEK_SET);
+		//vfsRead(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
+		gxfsFragment *frags = inode.inoFrags;
 
 		int i;
 		for (i=0; i<16; i++)

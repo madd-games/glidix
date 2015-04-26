@@ -118,10 +118,7 @@ int main(int argc, char *argv[])
 	else target[sz] = 0;
 	printf("Target:     %s\n", target);
 	};
-	if (S_ISREG(st.st_mode))
-	{
 	printf("Size:       "); print_size(st.st_size); printf("\n");
-	};
 	printf("A-time:     %d\n", st.st_atime);
 	printf("M-time:     %d\n", st.st_mtime);
 	printf("C-time:     %d\n", st.st_ctime);

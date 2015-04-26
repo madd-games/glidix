@@ -123,6 +123,17 @@ int sys_fdopendir(const char *dirname)
 	fp->close = closedir;
 	ftab->entries[fd] = fp;
 
+	while (dir->dirent.d_ino == 0)
+	{
+		if (dir->next(dir) != 0)
+		{
+			if (dir->close != NULL) dir->close(dir);
+			kfree(dir);
+			fp->fsdata = NULL;
+			break;
+		};
+	};
+
 	spinlockRelease(&ftab->spinlock);
 	return fd;
 };

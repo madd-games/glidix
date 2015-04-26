@@ -174,8 +174,8 @@ int main(int argc, char *argv[])
 	lseek(fd, itab0 + sizeof(gxfsInode), SEEK_SET);
 	gxfsInode inode;
 	inode.inoMode = 011755;
-	inode.inoSize = sizeof(struct dirent);			// for the lost+found directory.
-	inode.inoLinks = 1;
+	inode.inoSize = /*sizeof(struct dirent);*/ 25;			// for the lost+found directory.
+	inode.inoLinks = 2;						// number of entries + 1
 	inode.inoCTime = cis.cisCreateTime;
 	inode.inoATime = cis.cisCreateTime;
 	inode.inoMTime = cis.cisCreateTime;
@@ -207,10 +207,20 @@ int main(int argc, char *argv[])
 
 	// create the directory entry for lost+found in the root directory.
 	lseek(fd, btab0 + 7 * fsBlockSize, SEEK_SET);
-	struct dirent ent;
-	ent.d_ino = 3;
-	strcpy(ent.d_name, "lost+found");
-	write(fd, &ent, sizeof(struct dirent));
+	//struct dirent ent;
+	//ent.d_ino = 3;
+	//strcpy(ent.d_name, "lost+found");
+	//write(fd, &ent, sizeof(struct dirent));
+	char direntdata[26];
+	gxfsDirHeader *dhead = (gxfsDirHeader*) &direntdata[0];
+	gxfsDirent *lfent = (gxfsDirent*) &direntdata[5];
+	dhead->dhCount = 1;
+	dhead->dhFirstSz = 20;
+	lfent->deInode = 3;
+	lfent->deNextSz = 0;
+	lfent->deNameLen = 10;		// strlen("lost+found")
+	strcpy(lfent->deName, "lost+found");
+	write(fd, direntdata, 25);
 
 	printf("Marking the first 8 blocks as used...\n");
 	lseek(fd, bmap0, SEEK_SET);

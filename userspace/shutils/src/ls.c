@@ -34,6 +34,7 @@
 
 const char *progname;
 int showAll = 0;
+int showInode = 0;
 
 void usage()
 {
@@ -54,6 +55,9 @@ void processSwitch(const char *sw)
 		{
 		case 'a':
 			showAll = 1;
+			break;
+		case 'i':
+			showInode = 1;
 			break;
 		default:
 			fprintf(stderr, "%s: unknown command-line option: -%c\n", progname, c);
@@ -108,7 +112,8 @@ int main(int argc, char *argv[])
 	{
 		if ((ent->d_name[0] != '.') || (showAll))
 		{
-			printf("%s\n", ent->d_name);
+			if (!showInode) printf("%s\n", ent->d_name);
+			else printf("%s (ino %u)\n", ent->d_name, ent->d_ino);
 		};
 	};
 

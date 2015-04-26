@@ -73,4 +73,18 @@ typedef struct
 	gxfsFragment			inoFrags[16];
 } __attribute__ ((packed)) gxfsInode;
 
+typedef struct
+{
+	uint64_t			deInode;
+	uint8_t				deNextSz;
+	uint8_t				deNameLen;
+	char				deName[];
+} __attribute__ ((packed)) gxfsDirent;
+
+typedef struct
+{
+	uint32_t			dhCount;
+	uint8_t				dhFirstSz;
+} __attribute__ ((packed)) gxfsDirHeader;
+
 #endif

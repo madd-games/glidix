@@ -284,7 +284,7 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 	SplitPath spath;
 	if (resolveMounts(rpath, &spath) != 0)
 	{
-		kprintf_debug("could not resolve mounts\n");
+		//kprintf_debug("could not resolve mounts\n");
 		return NULL;
 	};
 
@@ -372,6 +372,8 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 
 		if (*scan == '/')
 		{
+			if (dir->getstat != NULL) dir->getstat(dir);
+
 			if ((dir->stat.st_mode & 0xF000) != VFS_MODE_DIRECTORY)
 			{
 				if ((dir->stat.st_mode & 0xF000) == VFS_MODE_LINK)
@@ -487,6 +489,8 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 		}
 		else
 		{
+			if (dir->getstat != NULL) dir->getstat(dir);
+
 			if (((dir->stat.st_mode & 0xF000) == VFS_MODE_LINK) && ((flags & VFS_NO_FOLLOW) == 0))
 			{
 				// this is a link and we were not instructed to not-follow, so we follow.

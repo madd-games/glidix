@@ -136,6 +136,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	fp->seek(fp, cis.cisOffSections, SEEK_SET);
 	vfsRead(fp, gxfs->sections, 32*numSections);
 	gxfs->numOpenInodes = 0;
+	memset(gxfs->ibuf, 0, sizeof(BufferedInode)*INODE_BUFFER_SIZE);
 
 	fs->fsdata = gxfs;
 	fs->openroot = gxfs_openroot;
