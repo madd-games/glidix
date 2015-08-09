@@ -1,6 +1,8 @@
 .PHONY: all
-all: out/cp out/sudo out/mip-install out/passwd out/mkdir out/chown out/ls out/rmmod out/login out/chgrp out/insmod out/whoami out/whois out/env out/stat out/pwdsetup out/rm out/umount out/crypt out/mkmip out/chmod out/touch out/cat
+all: out/cp out/route out/sudo out/mip-install out/passwd out/mount out/mkdir out/chown out/ls out/rmmod out/login out/chgrp out/ping out/ln out/insmod out/whoami out/whois out/env out/halt out/stat out/pwdsetup out/rm out/umount out/crypt out/mkmip out/chmod out/touch out/cat
 out/cp: src/cp.c
+	x86_64-glidix-gcc $< -o $@ 
+out/route: src/route.c
 	x86_64-glidix-gcc $< -o $@ 
 out/sudo: src/sudo.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt
@@ -10,6 +12,8 @@ out/mip-install: src/mip-install.c
 out/passwd: src/passwd.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt
 	chmod 6755 $@
+out/mount: src/mount.c
+	x86_64-glidix-gcc $< -o $@ 
 out/mkdir: src/mkdir.c
 	x86_64-glidix-gcc $< -o $@ 
 out/chown: src/chown.c
@@ -22,6 +26,10 @@ out/login: src/login.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt
 out/chgrp: src/chgrp.c
 	x86_64-glidix-gcc $< -o $@ 
+out/ping: src/ping.c
+	x86_64-glidix-gcc $< -o $@ 
+out/ln: src/ln.c
+	x86_64-glidix-gcc $< -o $@ 
 out/insmod: src/insmod.c
 	x86_64-glidix-gcc $< -o $@ 
 out/whoami: src/whoami.c
@@ -29,6 +37,8 @@ out/whoami: src/whoami.c
 out/whois: src/whois.c
 	x86_64-glidix-gcc $< -o $@ 
 out/env: src/env.c
+	x86_64-glidix-gcc $< -o $@ 
+out/halt: src/halt.c
 	x86_64-glidix-gcc $< -o $@ 
 out/stat: src/stat.c
 	x86_64-glidix-gcc $< -o $@ 

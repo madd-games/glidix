@@ -43,6 +43,8 @@
 #define	IOCTL_ARG(type, intf, cmd)			((sizeof(type) << 32) | IOCTL_NOARG(intf, cmd))
 #define	IOCTL_PCI_DEVINFO				IOCTL_ARG(PCIDevinfoRequest, 1, 0x01)
 
+int shouldHalt = 0;
+
 typedef union
 {
 	struct
@@ -926,10 +928,14 @@ void on_signal(int sig, siginfo_t *si, void *ignore)
 	{
 		if (si->si_pid == 2)
 		{
-			exit(1);
+			//exit(1);
 		};
 
 		waitpid(si->si_pid, NULL, 0);
+	}
+	else if (sig == SIGTERM)
+	{
+		shouldHalt = 1;
 	};
 };
 
@@ -963,6 +969,11 @@ int main(int argc, char *argv[])
 			perror("sigaction SIGCHLD");
 			return 1;
 		};
+		if (sigaction(SIGTERM, &sa, NULL) != 0)
+		{
+			perror("sigaction SIGTERM");
+			return 1;
+		};
 
 		if (fork() == 0)
 		{
@@ -974,7 +985,38 @@ int main(int argc, char *argv[])
 				exit(1);
 			};
 		};
-		while (1) pause();
+
+		while (1)
+		{
+			pause();
+			if (shouldHalt)
+			{
+				sa.sa_handler = SIG_DFL;
+				if (sigaction(SIGCHLD, &sa, NULL) != 0)
+				{
+					perror("sigaction SIGCHLD");
+					return 1;
+				};
+
+				int fd = open("/etc/down-action", O_RDONLY);
+				char downAction[256];
+				memset(downAction, 0, 256);
+				read(fd, downAction, 16);
+				close(fd);
+
+				int action = _GLIDIX_DOWN_HALT;
+				if (strcmp(downAction, "poweroff") == 0)
+				{
+					action = _GLIDIX_DOWN_POWEROFF;
+				}
+				else if (strcmp(downAction, "reboot") == 0)
+				{
+					action = _GLIDIX_DOWN_REBOOT;
+				};
+
+				_glidix_down(action);
+			};
+		};
 	}
 	else
 	{

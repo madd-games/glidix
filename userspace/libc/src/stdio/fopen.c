@@ -89,5 +89,6 @@ FILE *fopen(const char *path, const char *mode)
 	fp->_flush = __fd_flush;
 	fp->_fd = fd;
 	fp->_flags = fpflags;
+	fp->_ungot = -1;
 	return fp;
 };

@@ -42,11 +42,13 @@ typedef struct
 	int _fd;
 	struct dirent _dirbuf;
 	int _idx;
+	char _rpath[256];
 } DIR;
 
 DIR *opendir(const char *dirname);
 struct dirent *readdir(DIR *dirp);
 int readdir_r(DIR *dirp, struct dirent *entry, struct dirent **result);
 int closedir(DIR *dirp);
+void rewinddir(DIR *dirp);
 
 #endif

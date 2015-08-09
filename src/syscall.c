@@ -44,6 +44,9 @@
 #include <glidix/time.h>
 #include <glidix/pipe.h>
 #include <glidix/shared.h>
+#include <glidix/down.h>
+#include <glidix/netif.h>
+#include <glidix/socket.h>
 
 void sys_exit(Regs *regs, int status)
 {
@@ -179,6 +182,7 @@ int sysOpenErrno(int vfsError)
 int sys_open(const char *path, int oflag, mode_t mode)
 {
 	mode &= 0x0FFF;
+	mode &= ~(getCurrentThread()->umask);
 
 	if ((oflag & O_ALL) != oflag)
 	{
@@ -735,6 +739,9 @@ int sys_fchown(int fd, uid_t uid, gid_t gid)
 
 int sys_mkdir(const char *path, mode_t mode)
 {
+	mode &= 0xFFF;
+	mode &= ~(getCurrentThread()->umask);
+
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{
@@ -917,7 +924,7 @@ int sys_unlink(const char *path)
 		return sysOpenErrno(error);
 	};
 
-	Dir *dir = parsePath(rpath, 0, &error);
+	Dir *dir = parsePath(rpath, VFS_NO_FOLLOW, &error);
 	if (dir == NULL)
 	{
 		vfsUnlockCreation();
@@ -1477,7 +1484,7 @@ int sys_link(const char *oldname, const char *newname)
 	};
 
 	struct stat stold;
-	if ((error = vfsStat(oldname, &stold)) != 0)
+	if ((error = vfsLinkStat(oldname, &stold)) != 0)
 	{
 		vfsUnlockCreation();
 		return sysOpenErrno(error);
@@ -1509,6 +1516,8 @@ int sys_link(const char *oldname, const char *newname)
 	{
 		strcat(parent, "/");
 	};
+
+	if (strcmp(parent, "/") != 0) strcat(parent, "/");
 
 	error = 0;
 	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
@@ -1663,7 +1672,7 @@ ssize_t sys_readlink(const char *path, char *buf, size_t bufsize)
 {
 	char tmpbuf[PATH_MAX];
 	int error;
-	Dir *dir = parsePath(path, VFS_NO_FOLLOW, &error);
+	Dir *dir = parsePath(path, VFS_NO_FOLLOW | VFS_CHECK_ACCESS, &error);
 	if (dir == NULL)
 	{
 		return sysOpenErrno(error);
@@ -1699,7 +1708,203 @@ ssize_t sys_readlink(const char *path, char *buf, size_t bufsize)
 	};
 
 	memcpy(buf, tmpbuf, bufsize);
+	return out;
+};
+
+unsigned sys_sleep(unsigned seconds)
+{
+	if (seconds == 0) return 0;
+
+	ASM("cli");
+	uint64_t sleepStart = (uint64_t) getTicks();
+	uint64_t wakeTime = ((uint64_t) getTicks() + (uint64_t) seconds * (uint64_t) 1000);
+	getCurrentThread()->wakeTime = wakeTime;
+	getCurrentThread()->flags |= THREAD_WAITING;
+	kyield();
+
+	uint64_t timeDelta = (uint64_t) getTicks() - sleepStart;
+	unsigned secondsSlept = (unsigned) timeDelta / 1000;
+
+	if (secondsSlept >= seconds)
+	{
+		return 0;
+	}
+	else
+	{
+		return seconds-secondsSlept;
+	};
+};
+
+int sys_utime(const char *path, time_t atime, time_t mtime)
+{
+	int error;
+	Dir *dirp = parsePath(path, VFS_CHECK_ACCESS, &error);
+
+	if (dirp == NULL)
+	{
+		return sysOpenErrno(error);
+	};
+
+	if ((atime == 0) && (mtime == 0))
+	{
+		if (!vfsCanCurrentThread(&dirp->stat, 2))
+		{
+			getCurrentThread()->therrno = EACCES;
+			return -1;
+		};
+
+		atime = time();
+		mtime = atime;
+	}
+	else
+	{
+		if (dirp->stat.st_uid != getCurrentThread()->euid)
+		{
+			getCurrentThread()->therrno = EACCES;
+			return -1;
+		};
+	};
+
+	if (dirp->utime == NULL)
+	{
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
+	if (dirp->utime(dirp, atime, mtime) != 0)
+	{
+		getCurrentThread()->therrno = EIO;
+		return -1;
+	};
+
 	return 0;
+};
+
+mode_t sys_umask(mode_t cmask)
+{
+	mode_t old = getCurrentThread()->umask;
+	getCurrentThread()->umask = (cmask & 0777);
+	return old;
+};
+
+int sys_socket(int domain, int type, int proto)
+{
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	int i;
+	for (i=0; i<MAX_OPEN_FILES; i++)
+	{
+		if (ftab->entries[i] == NULL)
+		{
+			break;
+		};
+	};
+
+	if (i == MAX_OPEN_FILES)
+	{
+		spinlockRelease(&ftab->spinlock);
+		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
+	};
+	
+	File *fp = CreateSocket(domain, type, proto);
+	if (fp == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		// errno set by CreateSocket()
+		return -1;
+	};
+	
+	ftab->entries[i] = fp;
+	spinlockRelease(&ftab->spinlock);
+	return i;
+};
+
+int sys_bind(int fd, const struct sockaddr *addr, size_t addrlen)
+{
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = BindSocket(fp, addr, addrlen);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
+};
+
+ssize_t sys_sendto(int fd, const void *message, size_t len, int flags, const struct sockaddr *addr, size_t addrlen)
+{
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = SendtoSocket(fp, message, len, flags, addr, addrlen);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
+};
+
+ssize_t sys_recvfrom(int fd, void *message, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)
+{
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = RecvfromSocket(fp, message, len, flags, addr, addrlen);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
 };
 
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
@@ -2039,11 +2244,78 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((int*)&regs->rax) = sys_symlink((const char*) regs->rdi, (const char*) regs->rsi);
 		break;
 	case 66:
-		if (!isPointerValid(regs->rdi, regs->rdx))
+		if (!isPointerValid(regs->rsi, regs->rdx))
 		{
 			signalOnBadPointer(regs, regs->rsi);
 		};
 		*((ssize_t*)&regs->rax) = sys_readlink((const char*) regs->rdi, (char*) regs->rsi, (size_t) regs->rdx);
+		break;
+	case 67:
+		*((int*)&regs->rax) = systemDown((int) regs->rdi);
+		break;
+	case 68:
+		*((unsigned*)&regs->rax) = sys_sleep((unsigned) regs->rdi);
+		break;
+	case 69:
+		*((int*)&regs->rax) = sys_utime((const char*) regs->rdi, (time_t) regs->rsi, (time_t) regs->rdx);
+		break;
+	case 70:
+		*((mode_t*)&regs->rax) = sys_umask((mode_t) regs->rdi);
+		break;
+	case 71:
+		*((int*)&regs->rax) = sysRouteTable(regs->rdi);
+		break;
+	case 72:
+		*((int*)&regs->rax) = sys_socket((int) regs->rdi, (int) regs->rsi, (int) regs->rdx);
+		break;
+	case 73:
+		if (!isPointerValid(regs->rsi, regs->rdx))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		*((int*)&regs->rax) = sys_bind((int) regs->rdi, (const struct sockaddr*) regs->rsi, (size_t) regs->rdx);
+		break;
+	case 74:
+		if (!isPointerValid(regs->rsi, regs->rdx))	// message
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		if (!isPointerValid(regs->r8, regs->r9))	// addr
+		{
+			signalOnBadPointer(regs, regs->r8);
+		};
+		*((ssize_t*)&regs->rax) = sys_sendto((int) regs->rdi, (const void*) regs->rsi, (size_t) regs->rdx,
+							(int) regs->rcx, (const struct sockaddr*) regs->r8, (size_t) regs->r9);
+		break;
+	case 75:	// send
+		if (!isPointerValid(regs->rsi, regs->rdx))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		*((ssize_t*)&regs->rax) = sys_sendto((int) regs->rdi, (const void*) regs->rsi, (size_t) regs->rdx, (int) regs->rcx, NULL, 0);
+		break;
+	case 76:
+		if (!isPointerValid(regs->rsi, regs->rdx))	// message
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		if (!isPointerValid(regs->r9, 8))		// addrlen
+		{
+			signalOnBadPointer(regs, regs->r9);
+		};
+		if (!isPointerValid(regs->r8, *((uint64_t*)regs->r9))) // addr
+		{
+			signalOnBadPointer(regs, regs->r8);
+		};
+		*((ssize_t*)&regs->rax) = sys_recvfrom((int) regs->rdi, (void*) regs->rsi, (size_t) regs->rdx,
+							(int) regs->rcx, (struct sockaddr*) regs->r8, (size_t*) regs->r9);
+		break;
+	case 77:
+		if (!isPointerValid(regs->rsi, regs->rdx))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		*((ssize_t*)&regs->rax) = sys_recvfrom((int) regs->rdi, (void*) regs->rsi, (size_t) regs->rdx, (int) regs->rcx, NULL, NULL);
 		break;
 	default:
 		signalOnBadSyscall(regs);

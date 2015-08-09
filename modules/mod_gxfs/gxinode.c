@@ -530,19 +530,22 @@ void GXUnlinkInode(GXInode *gxino)
 		//vfsRead(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
 		gxfsFragment *frags = inode.inoFrags;
 
-		int i;
-		for (i=0; i<16; i++)
+		if ((inode.inoMode & 0xF000) != 0x5000)
 		{
-			while (frags[i].fExtent != 0)
+			int i;
+			for (i=0; i<16; i++)
 			{
-				GXFreeBlock(gxino->gxfs, frags[i].fBlock);
-				frags[i].fBlock++;
-				frags[i].fExtent--;
+				while (frags[i].fExtent != 0)
+				{
+					GXFreeBlock(gxino->gxfs, frags[i].fBlock);
+					frags[i].fBlock++;
+					frags[i].fExtent--;
+				};
 			};
 		};
 
-		uint64_t section = gxino->ino / gxino->gxfs->cis.cisInoPerSection;
-		uint64_t index = gxino->ino % gxino->gxfs->cis.cisInoPerSection;
+		uint64_t section = (gxino->ino-1) / gxino->gxfs->cis.cisInoPerSection;
+		uint64_t index = (gxino->ino-1) % gxino->gxfs->cis.cisInoPerSection;
 		uint64_t offset = gxino->gxfs->sections[section].sdOffMapIno + (index/8);
 		uint8_t mask = (1 << (index%8));
 

@@ -115,7 +115,7 @@ void doRemove(const char *name)
 	};
 
 	struct stat st;
-	if (stat(name, &st) != 0)
+	if (lstat(name, &st) != 0)
 	{
 		if ((errno != ENOENT) || (!force))
 		{

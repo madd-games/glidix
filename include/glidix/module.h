@@ -81,6 +81,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags);
 int rmmod(const char *modname, int flags);
 void dumpModules();
 void findDebugSymbolInModules(uint64_t addr, SymbolInfo *symInfo);
+void rmmodAll();
 
 /**
  * The filesystem mounted under /sys/mod.

@@ -33,6 +33,7 @@
 #include <glidix/spinlock.h>
 #include <glidix/errno.h>
 #include <glidix/apic.h>
+#include <glidix/time.h>
 
 static Thread firstThread;
 static Thread *currentThread;
@@ -155,6 +156,12 @@ void initSched()
 	// no error ptr
 	firstThread.errnoptr = NULL;
 
+	// no wakeing
+	firstThread.wakeTime = 0;
+
+	// no umask
+	firstThread.umask = 0;
+
 	// linking
 	firstThread.prev = &firstThread;
 	firstThread.next = &firstThread;
@@ -201,6 +208,15 @@ void unlockSched()
 
 int canSched(Thread *thread)
 {
+	if (thread->wakeTime != 0)
+	{
+		uint64_t currentTime = (uint64_t) getTicks();
+		if (currentTime >= thread->wakeTime)
+		{
+			thread->flags &= ~THREAD_WAITING;
+		};
+	};
+
 	if (thread->flags & THREAD_NOSCHED) return 0;
 #if 0
 	if (thread->pm != NULL)
@@ -345,6 +361,12 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 
 	// no errnoptr
 	thread->errnoptr = NULL;
+
+	// do not wake
+	thread->wakeTime = 0;
+
+	// no umask
+	thread->umask = 0;
 
 	// this will simulate a call from kernelThreadExit() to "entry()"
 	// this is so that when entry() returns, the thread can safely exit.
@@ -507,6 +529,8 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	};
 
 	thread->therrno = 0;
+	thread->wakeTime = 0;
+	thread->umask = 0;
 
 	// if the address space is shared, the errnoptr is now invalid;
 	// otherwise, it can just stay where it is.
@@ -589,6 +613,12 @@ void threadExit(Thread *thread, int status)
 
 int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 {
+	if (kernelStatus != KERNEL_RUNNING)
+	{
+		currentThread->therrno = EPERM;
+		return -1;
+	};
+
 	lockSched();
 	ASM("cli");
 	Thread *threadToKill = NULL;

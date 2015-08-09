@@ -53,6 +53,7 @@
 #include <glidix/fpu.h>
 #include <glidix/apic.h>
 #include <glidix/acpi.h>
+#include <glidix/netif.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -252,6 +253,10 @@ void kmain2()
 	initRTC();
 	kprintf("%$\x02" "Done%#\n");
 
+	kprintf("Initializing the network interface... ");
+	initNetIf();
+	kprintf("%$\x02" "Done%#\n");
+	
 	kprintf("Starting the spawn process... ");
 	MachineState state;
 	void *spawnStack = kmalloc(0x1000);

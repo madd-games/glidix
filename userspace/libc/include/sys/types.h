@@ -45,5 +45,10 @@ typedef	int64_t				time_t;
 typedef	int64_t				off_t;
 typedef	int64_t				ssize_t;
 typedef int				pid_t;
+typedef	int64_t				suseconds_t;
+typedef	uint64_t			socklen_t;
+typedef	uint16_t			sa_family_t;
+typedef uint16_t			in_port_t;
+typedef uint32_t			in_addr_t;
 
 #endif

@@ -99,6 +99,7 @@ typedef struct
 typedef void (*IRQHandler)(int);
 
 void initIDT();
+void idtReboot();
 IRQHandler registerIRQHandler(int irq, IRQHandler handler);
 
 #endif

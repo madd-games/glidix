@@ -69,13 +69,17 @@ int findCommand(char *path, const char *cmd)
 
 char path[256];
 
-int main(int argc, char *argv[])
+int main(int argc, char *argv[], char *envp[])
 {
 	if (argc < 2)
 	{
-		fprintf(stderr, "USAGE:\t%s command [args...]\n", argv[0]);
-		fprintf(stderr, "\tRun a command with the specified args, by searching the PATH.\n");
-		return 1;
+		char **scan;
+		for (scan=envp; *scan!=NULL; scan++)
+		{
+			printf("%s\n", *scan);
+		};
+
+		return 0;
 	};
 
 	if (findCommand(path, argv[1]) != 0)

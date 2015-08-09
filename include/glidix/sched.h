@@ -208,6 +208,17 @@ typedef struct _Thread
 	int				*errnoptr;
 
 	/**
+	 * The time at which to wake this process up; 0 if it should not be awaken by clock.
+	 * This is used by stuff like sleep().
+	 */
+	uint64_t			wakeTime;
+
+	/**
+	 * File mode creation mask as set by umask().
+	 */
+	mode_t				umask;
+
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;

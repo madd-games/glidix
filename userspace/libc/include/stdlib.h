@@ -50,13 +50,17 @@ void			_Exit(int);
 void*			calloc(size_t nitems, size_t size);
 char*			getenv(const char *name);
 int			setenv(const char *name, const char *value, int update);
-long			strtol(const char *str, const char **str_end, int base);
-long long		strtoll(const char *str, const char **str_end, int base);
-unsigned long		strtoul(const char *str, const char **str_end, int base);
-unsigned long long	strtoull(const char *str, const char **str_end, int base);
+long			strtol(const char *str, char **str_end, int base);
+long long		strtoll(const char *str, char **str_end, int base);
+unsigned long		strtoul(const char *str, char **str_end, int base);
+unsigned long long	strtoull(const char *str, char **str_end, int base);
 int			atoi(const char *str);
 long			atol(const char *str);
 long long		atoll(const char *str);
+void			qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
+void*			bsearch(const void *key, const void *base, size_t num, size_t size, int (*cmp)(const void *, const void *));
+int			wctomb(char *s, wchar_t wc);
+int			mbtowc(wchar_t *pwc, const char *s, size_t n);
 
 /* implemented by libglidix directly */
 char*	realpath(const char*, char*);

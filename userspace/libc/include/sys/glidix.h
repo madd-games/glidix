@@ -34,6 +34,7 @@
  */
 
 #include <sys/types.h>
+#include <netinet/in.h>
 #include <stddef.h>
 
 typedef struct
@@ -53,6 +54,24 @@ typedef struct
 	uint64_t		dataIndex;
 } _glidix_libinfo;
 
+typedef struct
+{
+	char				ifname[16];
+	struct in_addr			dest;
+	struct in_addr			mask;
+	struct in_addr			gateway;
+	uint64_t			flags;
+} _glidix_in_route;
+
+typedef struct
+{
+	char				ifname[16];
+	struct in6_addr			dest;
+	struct in6_addr			mask;
+	struct in6_addr			gateway;
+	uint64_t			flags;
+} _glidix_in6_route;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -64,6 +83,10 @@ extern "C" {
 
 #define	_GLIDIX_RMMOD_VERBOSE			(1 << 0)
 #define	_GLIDIX_RMMOD_FORCE			(1 << 1)
+
+#define	_GLIDIX_DOWN_POWEROFF				0
+#define	_GLIDIX_DOWN_REBOOT				1
+#define	_GLIDIX_DOWN_HALT				2
 
 int		_glidix_exec(const char *path, const char *pars, size_t parsz);
 int		_glidix_open(const char *path, int flags, mode_t mode);
@@ -91,6 +114,9 @@ void		_glidix_libclose(_glidix_libinfo *info);
 uint64_t	_glidix_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset);
 int		_glidix_rmmod(const char *modname, int flags);
 int		_glidix_unmount(const char *prefix);
+int		_glidix_down(int action);
+int		_glidix_utime(const char *path, time_t atime, time_t mtime);
+int		_glidix_routetab(sa_family_t family);
 
 #ifdef __cplusplus
 }	/* extern "C" */

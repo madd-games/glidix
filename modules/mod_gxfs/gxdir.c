@@ -72,6 +72,8 @@ static int gxdir_next(Dir *dir)
 	//kprintf_debug("NEXT INODE : %d\n", ent->deInode);
 	if (dir->dirent.d_ino == 0) dir->dirent.d_name[0] = 0;
 
+	//kprintf_debug("NEXT: %s (%d)\n", dir->dirent.d_name, dir->dirent.d_ino);
+
 	semSignal(&gxdir->gxfs->sem);
 	return 0;
 };
@@ -361,6 +363,7 @@ static ssize_t gxdir_readlink(Dir *dir, char *buffer)
 
 static int gxdir_link(Dir *dir, const char *name, ino_t ino)
 {
+	//kprintf_debug("LINK TO INODE: %d\n", ino);
 	time_t now = time();
 
 	GXDir *gxdir = (GXDir*) dir->fsdata;
@@ -369,7 +372,6 @@ static int gxdir_link(Dir *dir, const char *name, ino_t ino)
 
 	gxfsInode inode;
 	GXInode gxInode;
-	//ino_t newInodeNumber = GXCreateInode(gxdir->gxfs, &gxNewInode, gxdir->gxino.ino);
 	GXOpenInode(gxdir->gxfs, &gxInode, ino);
 	GXReadInodeHeader(&gxInode, &inode);
 	if (inode.inoLinks == 255)
@@ -525,6 +527,7 @@ static int gxdir_unlink(Dir *dir)
 	parentInode.inoCTime = time();
 	parentInode.inoMTime = time();
 	parentInode.inoLinks--;					// file count decreases
+	GXWriteInodeHeader(&gxdir->gxino, &parentInode);
 
 	// rermove the current entry by setting the inode to 0.
 	uint64_t inodeZero = 0;

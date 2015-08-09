@@ -68,5 +68,6 @@ int mount(const char *prefix, FileSystem *fs, int flags);
 int unmount(const char *prefix);
 int resolveMounts(const char *path, SplitPath *out);
 void dumpMountTable();
+void unmountAll();
 
 #endif

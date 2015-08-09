@@ -99,6 +99,11 @@
 #define	O_ACCMODE			(O_RDWR)
 #define	O_ALL				((1 << 11)-1)
 
+/**
+ * Additional flags, cannot be passed to open().
+ */
+#define	O_SOCKET			(1 << 16)
+
 #define	FILENAME_MAX			128
 #define	PATH_MAX			256
 #define	VFS_MAX_LINK_DEPTH		8
@@ -336,6 +341,11 @@ typedef struct _Dir
 	 * field should only be filled in when this is called.
 	 */
 	void (*getstat)(struct _Dir *dir);
+
+	/**
+	 * Change the access and modification times of this file. Return 0 on success, -1 on failure.
+	 */
+	int (*utime)(struct _Dir *dir, time_t atime, time_t mtime);
 } Dir;
 
 /**

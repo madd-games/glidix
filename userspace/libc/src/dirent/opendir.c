@@ -29,6 +29,7 @@
 #include <dirent.h>
 #include <sys/glidix.h>
 #include <stdlib.h>
+#include <limits.h>
 
 DIR *opendir(const char *dirname)
 {
@@ -41,6 +42,7 @@ DIR *opendir(const char *dirname)
 	DIR *dirp = (DIR*) malloc(sizeof(DIR));
 	dirp->_fd = fd;
 	dirp->_idx = 0;
+	realpath(dirname, dirp->_rpath);
 
 	return dirp;
 };

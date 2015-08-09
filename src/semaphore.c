@@ -182,6 +182,47 @@ int semWait2(Semaphore *sem, int count)
 	return out;
 };
 
+int semWaitNoblock(Semaphore *sem, int count)
+{
+	spinlockAcquire(&sem->lock);
+	if (sem->countWaiter != NULL)
+	{
+		spinlockRelease(&sem->lock);
+		return 0;
+	};
+
+	int status = 0;
+
+	if (sem->count == 0)
+	{
+		// no resources available, return -1 indicating EWOULDBLOCK
+		status = -1;
+	};
+
+	spinlockRelease(&sem->lock);
+	sem->countWaiter = NULL;
+	spinlockAcquire(&sem->countLock);
+	spinlockRelease(&sem->countLock);
+
+	spinlockAcquire(&sem->lock);
+	if (sem->count < count) count = sem->count;
+	spinlockRelease(&sem->lock);
+
+	if (status == -1)
+	{
+		return -1;
+	};
+
+	int out = 0;
+	while (count--)
+	{
+		semWait(sem);
+		out++;
+	};
+
+	return out;
+};
+
 static void semSignalGen(Semaphore *sem, int wait)
 {
 	if ((getFlagsRegister() & (1 << 9)) == 0)

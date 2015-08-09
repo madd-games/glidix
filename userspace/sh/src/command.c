@@ -77,9 +77,66 @@ int cmd_echo(int argc, char **argv);
 
 int execCommand(char *cmd)
 {
+	if (*cmd == '#') return 0;
+
+	// remove comments
+	int currentlyInString = 0;
+	char *commentScan = cmd;
+
+	while (*commentScan != 0)
+	{
+		if ((*commentScan) == '"') currentlyInString = !currentlyInString;
+		else if (((*commentScan) == '#') && (!currentlyInString))
+		{
+			*commentScan = 0;
+			break;
+		};
+
+		commentScan++;
+	};
+
+	if (*cmd == 0) return 0;
+
+	char processedCommand[1024];
+	char *put = processedCommand;
+	char *scan = cmd;
+	while (*scan != 0)
+	{
+		if (*scan == '\\')
+		{
+			scan++;
+			if (*scan == 0) break;
+			*put++ = *scan++;
+			continue;
+		}
+		else if (*scan == '$')
+		{
+			char envname[256];
+			char *envnameput = envname;
+			scan++;
+			while (isalnum(*scan))
+			{
+				*envnameput++ = *scan++;
+			};
+
+			*envnameput = 0;
+			char *value = getenv(envname);
+			if (value != NULL)
+			{
+				strcpy(put, value);
+				put += strlen(value);
+			};
+		}
+		else
+		{
+			*put++ = *scan++;
+		};
+	};
+	*put = 0;
+
 	int argc = 0;
 	char **argv = NULL;
-	char *nextToStrtok = cmd;
+	char *nextToStrtok = processedCommand;
 
 	while (1)
 	{
@@ -123,11 +180,29 @@ int execCommand(char *cmd)
 			};
 		};
 
-		argv = realloc(argv, sizeof(char*)*(argc+1));
-		argv[argc++] = token;
+		int shouldAdd = 0;
+		if (token == NULL)
+		{
+			shouldAdd = 1;
+		}
+		else
+		{
+			if (strlen(token) > 0)
+			{
+				shouldAdd = 1;
+			};
+		};
+
+		if (shouldAdd)
+		{
+			argv = realloc(argv, sizeof(char*)*(argc+1));
+			argv[argc++] = token;
+		};
 
 		if (token == NULL) break;
 	};
+
+	if (argc == 1) return 0;
 
 	if (strcmp(argv[0], "cd") == 0)
 	{

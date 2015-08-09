@@ -119,9 +119,9 @@ int main(int argc, char *argv[])
 	printf("Target:     %s\n", target);
 	};
 	printf("Size:       "); print_size(st.st_size); printf("\n");
-	printf("A-time:     %d\n", st.st_atime);
-	printf("M-time:     %d\n", st.st_mtime);
-	printf("C-time:     %d\n", st.st_ctime);
+	printf("A-time:     %s", ctime(&st.st_atime));
+	printf("M-time:     %s", ctime(&st.st_mtime));
+	printf("C-time:     %s", ctime(&st.st_ctime));
 	printf("Block size: "); print_size(st.st_blksize); printf("\n");
 	printf("Blocks:     %d\n", st.st_blocks);
 	return 0;

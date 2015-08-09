@@ -42,6 +42,8 @@ long sysconf(int name)
 		return LOGIN_NAME_MAX;
 	case _SC_PAGESIZE:
 		return PAGESIZE;
+	case _SC_NGROUPS_MAX:
+		return NGROUPS_MAX;
 	default:
 		errno = EINVAL;
 		return -1;

@@ -41,6 +41,6 @@ jmp $
 
 str_path db '/initrd/init', 0
 str_execpars:
-db 'init', 0, '-startup', 0, 'something else', 0, 0
-db 'HI=hello', 0, 0
+db 'init', 0, 0
+db 'USERNAME=root', 0, 'SHELL=/mnt/bin/sh', 0, 'HOME=/root', 0, 0
 sz_execpars equ $ - str_execpars

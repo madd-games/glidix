@@ -165,7 +165,7 @@ void acpiInit()
 				}
 				else
 				{
-					searching += sizeof(MADTRecordHeader) + rhead.len;
+					searching += /*sizeof(MADTRecordHeader) +*/ rhead.len;
 				};
 			};
 		};

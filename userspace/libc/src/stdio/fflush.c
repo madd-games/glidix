@@ -30,6 +30,7 @@
 
 int fflush(FILE *fp)
 {
-	fp->_flush(fp);
+	if (fp->_flush != NULL) fp->_flush(fp);
+	fp->_bufsiz = fp->_bufsiz_org;
 	return 0;
 };

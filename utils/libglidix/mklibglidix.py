@@ -110,7 +110,18 @@ syscallTable = {
 	63:	"_glidix_unmount",
 	64:	"lstat",
 	65:	"symlink",
-	66:	"readlink"
+	66:	"readlink",
+	67:	"_glidix_down",
+	68:	"sleep",
+	69:	"_glidix_utime",
+	70:	"umask",
+	71:	"_glidix_routetab",
+	72:	"socket",
+	73:	"bind",
+	74:	"sendto",
+	75:	"send",
+	76:	"recvfrom",
+	77:	"recv"
 }
 
 f = open("_libglidix.s", "wb")

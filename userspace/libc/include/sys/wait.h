@@ -37,6 +37,11 @@ extern "C" {
 
 #define	WNOHANG			(1 << 0)
 
+#define	WIFEXITED(status)	((status) >= 0)
+#define	WEXITSTATUS(status)	(status)
+#define	WIFSIGNALLED(status)	((status) < 0)
+#define	WTERMSIG(status)	(-(status))
+
 pid_t wait(int *stat_loc);
 pid_t waitpid(pid_t pid, int *stat_loc, int flags);
 

@@ -866,6 +866,33 @@ void findDebugSymbolInModules(uint64_t addr, SymbolInfo *info)
 	info->offset = addr - (uint64_t)sym->ptr;
 };
 
+void rmmodAll()
+{
+	if (firstModule == NULL) return;
+
+	Module *mod = firstModule;
+
+	while (mod != NULL)
+	{
+		if (mod->modfini != NULL)
+		{
+			int status = mod->modfini();
+
+			if (status != 0)
+			{
+				kprintf("WARNING: Removing module %s by force\n", mod->name);
+			};
+		};
+
+		if (mod->fini != NULL)
+		{
+			mod->fini();
+		};
+
+		mod = mod->next;
+	};
+};
+
 FileSystem *getModulefs()
 {
 	return moduleFileSystem;

@@ -260,3 +260,21 @@ void dumpMountTable()
 	};
 	spinlockRelease(&mountLock);
 };
+
+void unmountAll()
+{
+	MountPoint *mp = mountTable;
+	while (mp != NULL)
+	{
+		if (mp->fs->unmount != NULL)
+		{
+			int status = mp->fs->unmount(mp->fs);
+			if (status != 0)
+			{
+				kprintf("WARNING: unmounting %s by force\n", mp->prefix);
+			};
+		};
+
+		mp = mp->next;
+	};
+};

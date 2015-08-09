@@ -57,7 +57,8 @@ static FILE _file_stdin = {
 	._trigger = 0,
 	._flush = NULL,
 	._fd = 0,
-	._flags = __FILE_READ
+	._flags = __FILE_READ,
+	._ungot = -1
 };
 
 static FILE _file_stdout = {
@@ -69,7 +70,8 @@ static FILE _file_stdout = {
 	._trigger = '\n',
 	._flush = &__fd_flush,
 	._fd = 1,
-	._flags = __FILE_WRITE
+	._flags = __FILE_WRITE,
+	._ungot = -1
 };
 
 static FILE _file_stderr = {
@@ -81,7 +83,8 @@ static FILE _file_stderr = {
 	._trigger = '\n',
 	._flush = &__fd_flush,
 	._fd = 2,
-	._flags = __FILE_WRITE
+	._flags = __FILE_WRITE,
+	._ungot = -1
 };
 
 FILE *stdin  = &_file_stdin;

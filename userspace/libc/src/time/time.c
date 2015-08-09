@@ -84,10 +84,10 @@ char *asctime(const struct tm *timeptr)
 
 char *asctime_r(const struct tm *timeptr, char *result)
 {
-	static char wday_name[7][3] = {
+	static const char *wday_name[7] = {
 		"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 	};
-	static char mon_name[12][3] = {
+	static const char* mon_name[12] = {
 		"Jan", "Feb", "Mar", "Apr", "May", "Jun",
 		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 	};

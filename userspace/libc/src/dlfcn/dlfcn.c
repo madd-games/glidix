@@ -154,7 +154,8 @@ static int relocate(Library *lib, Elf64_Rela *table, size_t num)
 			symaddr = __dlsym_global(symname);
 			if (symaddr == NULL)
 			{
-				strcpy(libdlError, "undefined reference");
+				//strcpy(libdlError, "undefined reference");
+				sprintf(libdlError, "undefined reference to '%s'", symname);
 				return -1;
 			};
 		}
@@ -479,6 +480,13 @@ int __find_lib(char *libpath, const char *soname, const char *rpath, const char 
 
 Library* __libopen_withpaths(const char *soname, const char *rpath, const char *runpath, int mode)
 {
+	if (strcmp(soname, "libg.so") == 0)
+	{
+		// TODO: we should really do it so that libraries are identified by inode/dev pairs,
+		// to allow symbolic links to point to libraries.
+		soname = "libc.so";
+	};
+
 	Library *grt = globalResolutionTable;
 	while (grt != NULL)
 	{
@@ -494,8 +502,8 @@ Library* __libopen_withpaths(const char *soname, const char *rpath, const char *
 	char libpath[256];
 	if (__find_lib(libpath, soname, rpath, runpath) != 0)
 	{
-		//sprintf(libdlError, "could not find library '%s'", soname);
-		strcpy(libdlError, "could not find library\n");
+		sprintf(libdlError, "could not find library '%s'", soname);
+		//strcpy(libdlError, "could not find library\n");
 		return NULL;
 	};
 
@@ -588,7 +596,7 @@ void __interp_main(Elf64_Dyn *execDyn, Elf64_Sym *mySymbols, unsigned int mySymb
 	if (__lib_process(&__main_handle, __main_handle.info) != 0)
 	{
 		fprintf(stderr, "failed to process executable: %s\n", libdlError);
-		while (1);
+		_exit(1);
 	};
 
 	// OK, next link the executable in.

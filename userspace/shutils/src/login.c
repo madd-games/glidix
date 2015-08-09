@@ -26,6 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <sys/stat.h>
 #include <stdio.h>
 #include <pwd.h>
 #include <termios.h>
@@ -184,17 +185,47 @@ int main(int argc, char *argv[])
 			};
 
 			// at this point, we are logged in as the user.
+			const char *home;
 			if (chdir(pwd->pw_dir) != 0)
 			{
 				perror("chdir");
 				fprintf(stderr, "Using / as home.\n");
 				chdir("/");
+				home = "/";
+			}
+			else
+			{
+				home = pwd->pw_dir;
+			};
+
+			// set up the environment
+			setenv("HOME", home, 1);
+			setenv("SHELL", pwd->pw_shell, 1);
+			setenv("USERNAME", pwd->pw_name, 1);
+
+			// try finding the login script.
+			const char *loginScript;
+			struct stat st;
+			if (stat("/etc/init/login.sh", &st) == 0)
+			{
+				if ((st.st_uid != 0) || (st.st_gid != 0) || ((st.st_mode & 0444) != 0444))
+				{
+					fprintf(stderr, "ERROR: Bad permissions set on /etc/init/login.sh! Refusing to log in.\n");
+					return 1;
+				};
+
+				loginScript = "/etc/init/login.sh";
+			}
+			else
+			{
+				fprintf(stderr, "Cannot find login script (/etc/init/login.sh), dropping to shell.\n");
+				loginScript = NULL;
 			};
 
 			printf("Welcome, %s\n", pwd->pw_gecos);
-			if (execl(pwd->pw_shell, "-sh", NULL) != 0)
+			if (execl(pwd->pw_shell, "-sh", loginScript, NULL) != 0)
 			{
-				perror("execl");
+				perror(pwd->pw_shell);
 				return 1;
 			};
 		}

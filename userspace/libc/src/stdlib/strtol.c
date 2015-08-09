@@ -32,6 +32,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 #ifndef ULLONG_MAX
 #	define	ULLONG_MAX	ULONG_MAX
@@ -46,14 +47,14 @@
 #endif
 
 #ifndef ULLONG_MIN
-#	define	ULLONG_MIN	ULONG_MIN
+#	define	ULLONG_MIN	ULONG_MINf
 #endif
 
-long long strtoll(const char *str, const char **str_end, int base)
+long long strtoll(const char *str, char **str_end, int base)
 {
 	if (((base < 2) || (base > 36)) && (base != 0))
 	{
-		if (str_end != NULL) *str_end = str;
+		if (str_end != NULL) *str_end = (char*)str;
 		errno = EINVAL;
 		return 0;
 	};
@@ -122,7 +123,7 @@ long long strtoll(const char *str, const char **str_end, int base)
 		if (out > ((LLONG_MAX-digit)/llbase))
 		{
 			errno = ERANGE;
-			if (str_end != NULL) *str_end = str;
+			if (str_end != NULL) *str_end = (char*)str;
 			if (negative) return LLONG_MIN;
 			else return LLONG_MAX;
 		};
@@ -131,12 +132,12 @@ long long strtoll(const char *str, const char **str_end, int base)
 	};
 
 	finished:
-	if (str_end != NULL) *str_end = str;
+	if (str_end != NULL) *str_end = (char*)str;
 	if (negative) return -out;
 	else return out;
 };
 
-long strtol(const char *str, const char **str_end, int base)
+long strtol(const char *str, char **str_end, int base)
 {
 	long long out = strtoll(str, str_end, base);
 	if (out > LONG_MAX)
@@ -154,11 +155,11 @@ long strtol(const char *str, const char **str_end, int base)
 	return (long) out;
 };
 
-unsigned long long strtoull(const char *str, const char **str_end, int base)
+unsigned long long strtoull(const char *str, char **str_end, int base)
 {
 	if (((base < 2) || (base > 36)) && (base != 0))
 	{
-		if (str_end != NULL) *str_end = str;
+		if (str_end != NULL) *str_end = (char*)str;
 		errno = EINVAL;
 		return 0;
 	};
@@ -216,7 +217,7 @@ unsigned long long strtoull(const char *str, const char **str_end, int base)
 		if (out > ((ULLONG_MAX-digit)/llbase))
 		{
 			errno = ERANGE;
-			if (str_end != NULL) *str_end = str;
+			if (str_end != NULL) *str_end = (char*)str;
 			return ULLONG_MAX;
 		};
 
@@ -224,11 +225,172 @@ unsigned long long strtoull(const char *str, const char **str_end, int base)
 	};
 
 	finished:
-	if (str_end != NULL) *str_end = str;
+	if (str_end != NULL) *str_end = (char*)str;
 	return out;
 };
 
-unsigned long strtoul(const char *str, const char **str_end, int base)
+intmax_t strtoimax(const char *str, char **str_end, int base)
+{
+	if (((base < 2) || (base > 36)) && (base != 0))
+	{
+		if (str_end != NULL) *str_end = (char*)str;
+		errno = EINVAL;
+		return 0;
+	};
+
+	while (isspace(*str)) str++;
+
+	int negative = 0;
+	if (*str == '+')
+	{
+		str++;
+	}
+	else if (*str == '-')
+	{
+		negative = 1;
+		str++;
+	};
+
+	intmax_t out = 0;
+	if (base == 0)
+	{
+		if (*str == '0')
+		{
+			str++;
+			base = 8;
+
+			if (*str == 'x')
+			{
+				str++;
+				base = 16;
+			};
+		}
+		else
+		{
+			base = 10;
+		};
+	};
+
+	intmax_t llbase = (intmax_t) base;
+	while (*str != 0)
+	{
+		char c = *str++;
+		if (((c < '0') || (c > '9')) && ((c < 'a') || (c > 'z')) && ((c < 'A') || (c > 'Z')))
+		{
+			goto finished;
+		};
+
+		intmax_t digit = 0;
+		if ((c >= '0') && (c <= '9'))
+		{
+			digit = c - '0';
+		}
+		else if ((c >= 'a') && (c <= 'z'))
+		{
+			digit = 10 + c - 'a';
+		}
+		else
+		{
+			digit = 10 + c - 'A';
+		};
+
+		if (digit >= llbase)
+		{
+			goto finished;
+		};
+
+		if (out > ((INTMAX_MAX-digit)/llbase))
+		{
+			errno = ERANGE;
+			if (str_end != NULL) *str_end = (char*)str;
+			if (negative) return LLONG_MIN;
+			else return LLONG_MAX;
+		};
+
+		out = out * llbase + digit;
+	};
+
+	finished:
+	if (str_end != NULL) *str_end = (char*)str;
+	if (negative) return -out;
+	else return out;
+};
+
+uintmax_t strtoumax(const char *str, char **str_end, int base)
+{
+	if (((base < 2) || (base > 36)) && (base != 0))
+	{
+		if (str_end != NULL) *str_end = (char*)str;
+		errno = EINVAL;
+		return 0;
+	};
+
+	while (isspace(*str)) str++;
+
+	uintmax_t out = 0;
+	if (base == 0)
+	{
+		if (*str == '0')
+		{
+			str++;
+			base = 8;
+
+			if (*str == 'x')
+			{
+				str++;
+				base = 16;
+			};
+		}
+		else
+		{
+			base = 10;
+		};
+	};
+
+	uintmax_t llbase = (uintmax_t) base;
+	while (*str != 0)
+	{
+		char c = *str++;
+		if (((c < '0') || (c > '9')) && ((c < 'a') || (c > 'z')) && ((c < 'A') || (c > 'Z')))
+		{
+			goto finished;
+		};
+
+		uintmax_t digit = 0;
+		if ((c >= '0') && (c <= '9'))
+		{
+			digit = c - '0';
+		}
+		else if ((c >= 'a') && (c <= 'z'))
+		{
+			digit = 10 + c - 'a';
+		}
+		else
+		{
+			digit = 10 + c - 'A';
+		};
+
+		if (digit >= llbase)
+		{
+			goto finished;
+		};
+
+		if (out > ((UINTMAX_MAX-digit)/llbase))
+		{
+			errno = ERANGE;
+			if (str_end != NULL) *str_end = (char*)str;
+			return ULLONG_MAX;
+		};
+
+		out = out * llbase + digit;
+	};
+
+	finished:
+	if (str_end != NULL) *str_end = (char*)str;
+	return out;
+};
+
+unsigned long strtoul(const char *str, char **str_end, int base)
 {
 	unsigned long out = strtoull(str, str_end, base);
 	if (out > ULONG_MAX)

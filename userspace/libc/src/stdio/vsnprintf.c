@@ -35,13 +35,15 @@ int vsnprintf(char *s, size_t n, const char *fmt, va_list ap)
 	temp._buf = s;
 	temp._wrbuf = s;
 	temp._rdbuf = s;
-	temp._bufsiz = n;
-	temp._bufsiz_org = n;
+	temp._bufsiz = n-1;
+	temp._bufsiz_org = n-1;
 	temp._trigger = 0;
 	temp._flush = NULL;
 	temp._fd = -1;
 	temp._flags = __FILE_WRITE;
-	return vfprintf(&temp, fmt, ap);
+	int out = vfprintf(&temp, fmt, ap);
+	*(temp._wrbuf) = 0;
+	return out;
 };
 
 int snprintf(char *s, size_t n, const char *fmt, ...)

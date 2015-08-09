@@ -58,6 +58,7 @@ static volatile ATOMIC(time_t) currentTime;
 
 void sleep(int ticks)
 {
+	// TODO: make the thread wait!
 	int now = getUptime();
 	int then = now + ticks;
 	while (getUptime() < then);

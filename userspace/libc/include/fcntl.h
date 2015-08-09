@@ -44,7 +44,14 @@
 #define	O_NONBLOCK			(1 << 8)
 #define	O_RSYNC				(1 << 9)
 #define	O_SYNC				(1 << 10)
+#define	O_CLOEXEC			(1 << 11)
 #define	O_ACCMODE			(O_RDWR)
+
+#define	F_DUPFD				0
+#define	F_GETFD				1
+#define	F_SETFD				2
+#define	F_GETFL				3
+#define	F_SETFL				4
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,6 +59,8 @@ extern "C" {
 
 /* implemented by the runtime */
 int open(const char *path, int oflag, ...);
+int fcntl(int fd, int cmd, ...);
+int creat(const char *path, mode_t mode);
 
 #ifdef __cplusplus
 }	/* extern "C" */

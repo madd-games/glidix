@@ -31,6 +31,13 @@
 
 int fgetc(FILE *fp)
 {
+	if (fp->_ungot != -1)
+	{
+		int out = fp->_ungot;
+		fp->_ungot = -1;
+		return out;
+	};
+
 	unsigned char c;
 	int ret = read(fp->_fd, &c, 1);
 	if (ret == 0)

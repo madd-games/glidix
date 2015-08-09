@@ -188,6 +188,16 @@ void initIDT()
 	uptime = 0;
 };
 
+void idtReboot()
+{
+	ASM("cli");
+	idtPtr.addr = 0;
+	idtPtr.limit = 0;
+	loadIDT();
+	ASM("int $0x70");
+	while (1) ASM("cli; hlt");
+};
+
 static void printbyte(uint8_t byte)
 {
 	uint8_t high = (byte >> 4) & 0xF;
@@ -327,6 +337,20 @@ typedef struct
 	uint16_t			num;		// syscall number
 } PACKED SyscallOpcode;
 
+void sendCPUErrorSignal(Regs *regs, int signal, int code, void *addr)
+{
+	Thread *thread = getCurrentThread();
+
+	siginfo_t siginfo;
+	siginfo.si_signo = signal;
+	siginfo.si_code = code;
+	siginfo.si_addr = addr;
+
+	ASM("cli");
+	sendSignal(thread, &siginfo);
+	switchTask(regs);
+};
+
 void onInvalidOpcodeOrSyscall(Regs *regs)
 {
 	SyscallOpcode *syscall = (SyscallOpcode*) regs->rip;
@@ -366,6 +390,9 @@ void isrHandler(Regs *regs)
 		uptime++;
 		//switchTask(regs);
 		break;
+	case I_DIV_ZERO:
+		sendCPUErrorSignal(regs, SIGFPE, FPE_INTDIV, (void*) regs->rip);
+		break;
 	case I_UNDEF_OPCODE:
 		onInvalidOpcodeOrSyscall(regs);
 		break;
@@ -374,6 +401,9 @@ void isrHandler(Regs *regs)
 		break;
 	case I_PAGE_FAULT:
 		onPageFault(regs);
+		break;
+	case I_SIMD_EX:
+		sendCPUErrorSignal(regs, SIGFPE, FPE_FLTUND, (void*) regs->rip);
 		break;
 	case I_APIC_TIMER:
 		if (apic->timerCurrentCount == 0)

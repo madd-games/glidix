@@ -62,6 +62,7 @@ void semInit(Semaphore *sem);
 void semInit2(Semaphore *sem, int count);
 void semWait(Semaphore *sem);
 int  semWait2(Semaphore *sem, int count);
+int  semWaitNoblock(Semaphore *sem, int count);
 void semSignal(Semaphore *sem);
 void semSignal2(Semaphore *sem, int count);
 void semSignalAndWait(Semaphore *sem);

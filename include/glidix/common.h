@@ -30,6 +30,7 @@
 #define __glidix_common_h
 
 #include <stdint.h>
+#include <stddef.h>
 
 /**
  * Some common routines used by various parts of the kernel.

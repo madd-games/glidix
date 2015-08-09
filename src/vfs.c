@@ -308,6 +308,8 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 	};
 
 	struct stat st_parent;
+	st_parent.st_dev = 0;
+	st_parent.st_ino = 2;
 	st_parent.st_mode = 01755;
 	st_parent.st_uid = 0;
 	st_parent.st_gid = 0;
@@ -348,11 +350,15 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 				{
 					if (dir->mkreg != NULL)
 					{
+						//if (dir->getstat != NULL) dir->getstat(dir);
+
+						if (st_parent.st_ino == 0) panic("parent with inode 0!");
 						if (vfsCanCurrentThread(&st_parent, 2))
 						{
 							if (dir->mkreg(dir, token, (flags >> 3) & 0x0FFF,
 									getCurrentThread()->euid, getCurrentThread()->egid) == 0)
 							{
+								
 								dir->stat.st_dev = spath.fs->dev;
 								return dir;
 							};
@@ -418,6 +424,8 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 				return NULL;
 			};
 
+			memcpy(&st_parent, &dir->stat, sizeof(struct stat));
+
 			Dir *subdir = (Dir*) kmalloc(sizeof(Dir));
 			memset(subdir, 0, sizeof(Dir));
 
@@ -432,7 +440,6 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 					return subdir;
 				};
 
-				memcpy(&st_parent, &dir->stat, sizeof(struct stat));
 				if (dir->close != NULL) dir->close(dir);
 				kfree(dir);
 
@@ -452,9 +459,11 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 					if (*scan == 0)
 					{
 						//kprintf_debug("ok scan is good\n");
+						//if (dir->getstat != NULL) dir->getstat(dir);
 						if (subdir->mkreg != NULL)
 						{
 							//kprintf_debug("ok subdir->mkreg is here\n");
+							if (st_parent.st_ino == 0) panic("parent with inode 0!");
 							if (vfsCanCurrentThread(&st_parent, 2))
 							{
 								if (subdir->mkreg(subdir, token, (flags >> 3) & 0x0FFF,

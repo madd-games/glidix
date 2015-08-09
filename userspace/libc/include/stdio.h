@@ -87,6 +87,11 @@ typedef struct __file
 	char _nanobuf;
 
 	/**
+	 * The character pushed by ungetc().
+	 */
+	int _ungot;
+
+	/**
 	 * Flags.
 	 */
 	int _flags;
@@ -128,6 +133,21 @@ int	ferror(FILE *fp);
 int	feof(FILE *fp);
 void	perror(const char *s);
 FILE*	fdopen(int fd, const char *mode);
+int	fileno(FILE *fp);
+int	rename(const char *oldpath, const char *newpath);
+int	ungetc(int c, FILE *fp);
+int	vfscanf(FILE *stream, const char *format, va_list arg);
+int	vscanf(const char *format, va_list arg);
+int	vsscanf(const char *s, const char *format, va_list arg);
+int	fscanf(FILE *stream, const char *format, ... );
+int	scanf(const char *format, ... );
+int	sscanf(const char *s, const char *format, ... );
+
+/* off_t is the same as long on Glidix */
+#define	fseeko					fseek
+#define	ftello					ftell
+#define	getc					fgetc
+#define	putc					fputc
 
 #ifdef __cplusplus
 }
