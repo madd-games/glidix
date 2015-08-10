@@ -391,7 +391,7 @@ static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	}
 	else
 	{
-		// just peeking to "return" the packet
+		// just peeking so "return" the packet
 		semSignal(&rawsock->packetCounter);
 	};
 	

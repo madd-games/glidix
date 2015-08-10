@@ -2187,7 +2187,7 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		regs->rax = (uint64_t) getCurrentThread()->errnoptr;
 		break;
 	case 51:
-		*((clock_t*)&regs->rax) = (clock_t) getUptime();
+		*((clock_t*)&regs->rax) = (clock_t) getUptime() * 1000;
 		break;
 	case 52:
 		if (!isPointerValid(regs->rdx, sizeof(libInfo)))
@@ -2316,6 +2316,20 @@ void syscallDispatch(Regs *regs, uint16_t num)
 			signalOnBadPointer(regs, regs->rsi);
 		};
 		*((ssize_t*)&regs->rax) = sys_recvfrom((int) regs->rdi, (void*) regs->rsi, (size_t) regs->rdx, (int) regs->rcx, NULL, NULL);
+		break;
+	case 78:
+		if (!isPointerValid(regs->rdx, sizeof(gen_route)))
+		{
+			signalOnBadPointer(regs, regs->rdx);
+		};
+		*((int*)&regs->rax) = route_add((int) regs->rdi, *((int*)&regs->rsi), (gen_route*) regs->rdx);
+		break;
+	case 79:
+		if (!isPointerValid(regs->rsi, regs->rdx))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		*((ssize_t*)&regs->rax) = netconf_stat((const char*) regs->rdi, (NetStat*) regs->rsi, (size_t) regs->rdx);
 		break;
 	default:
 		signalOnBadSyscall(regs);

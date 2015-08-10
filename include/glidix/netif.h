@@ -316,6 +316,15 @@ typedef struct NetIf_
 	struct NetIf_ *next;
 } NetIf;
 
+typedef struct
+{
+	char				ifname[16];
+	int				numTrans;
+	int				numRecv;
+	int				numDropped;
+	int				numErrors;
+} NetStat;
+
 /**
  * Initialize the network interface.
  */
@@ -346,6 +355,13 @@ typedef struct
 	uint64_t			flags;
 } in6_route;
 
+typedef struct
+{
+	char				ifname[16];
+	char				data[3*16];
+	uint64_t			flags;
+} gen_route;
+
 /**
  * A system call that returns a file descriptor from which one may read the routing table for a particular address family.
  * Each read() call returns a single entry. If the given read size cannot encompass the full structure, only part of the
@@ -368,6 +384,33 @@ int sendPacket(const struct sockaddr *addr, const void *packet, size_t len);
 void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest);
 void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest);
 
+/**
+ * Calculate the "internet checksum" of the data specified.
+ */
 uint16_t ipv4_checksum(void *data, size_t size);
+
+/**
+ * System call to add a new route. Only 'root' is allowed to do this (effective UID must be 0).
+ * The family is either AF_INET or AF_INET6. 'route' is a pointer to an address structure, which
+ * is cast to either '_glidix_in_route' or '_glidix_in6_route' depending on the family. The route
+ * specifies the network address, mask, and optionally a gateway (a zero gateway means the lack
+ * thereof). 'pos' indicates the position within the list to place the entry (e.g. pos=0 means it
+ * comes to the very beginning). A 'pos' of -1 indicates addition to the end.
+ * Returns 0 on success, -1 on error, setting errno appropriately:
+ * - ENOENT	The specified network interface does not exist.
+ * - EINVAL	Invalid address family.
+ * - EACCES	Access denied (you are not root).
+ */
+int route_add(int family, int pos, gen_route *route);
+
+/**
+ * Return the statistics for a particular network interface. The statistics include the number of
+ * successfully transmitted and received packets, as well as dropped and errored packets.
+ * The 'buffer' points to a NetStat ('_glidix_netstat') structure to be filled with information,
+ * and 'size' is the maximum number of bytes that structure can hold. This function returns the
+ * actual number of bytes loaded into the buffer on success, or -1 on error, setting errno appropriately:
+ * - ENOENT	The specified network interface does not exist.
+ */
+ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size);
 
 #endif

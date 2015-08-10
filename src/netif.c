@@ -230,16 +230,24 @@ void initNetIf()
 	iflist.drvdata = NULL;
 	strcpy(iflist.name, "lo");
 	
-	iflist.ipv4.addrs = &loaddr4;
+	//iflist.ipv4.addrs = &loaddr4;
+	iflist.ipv4.addrs = (IPNetIfAddr4*) kmalloc(sizeof(IPNetIfAddr4));
+	memcpy(iflist.ipv4.addrs, &loaddr4, sizeof(IPNetIfAddr4));
 	iflist.ipv4.numAddrs = 1;
-	iflist.ipv4.routes = &lortab4;
+	//iflist.ipv4.routes = &lortab4;
+	iflist.ipv4.routes = (IPRoute4*) kmalloc(sizeof(IPRoute4));
+	memcpy(iflist.ipv4.routes, &lortab4, sizeof(IPRoute4));
 	iflist.ipv4.numRoutes = 1;
 	iflist.ipv4.dnsServers = NULL;
 	iflist.ipv4.numDNSServers = 0;
 	
-	iflist.ipv6.addrs = &loaddr6;
+	//iflist.ipv6.addrs = &loaddr6;
+	iflist.ipv6.addrs = (IPNetIfAddr6*) kmalloc(sizeof(IPNetIfAddr6));
+	memcpy(iflist.ipv6.addrs, &loaddr6, sizeof(IPNetIfAddr6));
 	iflist.ipv6.numAddrs = 1;
-	iflist.ipv6.routes = &lortab6;
+	//iflist.ipv6.routes = &lortab6;
+	iflist.ipv6.routes = (IPRoute6*) kmalloc(sizeof(IPRoute6));
+	memcpy(iflist.ipv6.routes, &lortab6, sizeof(IPRoute6));
 	iflist.ipv6.numRoutes = 1;
 	iflist.ipv6.dnsServers = NULL;
 	iflist.ipv6.numDNSServers = 0;
@@ -678,4 +686,121 @@ void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest)
 	
 	memset(src, 0, 16);
 	semSignal(&iflistLock);
+};
+
+int route_add(int family, int pos, gen_route *route)
+{
+	if ((family != AF_INET) && (family != AF_INET6))
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return -1;
+	};
+	
+	if (getCurrentThread()->euid != 0)
+	{
+		getCurrentThread()->therrno = EACCES;
+		return -1;
+	};
+	
+	semWait(&iflistLock);
+	
+	NetIf *netif = &iflist;
+	while (netif != NULL)
+	{
+		if (strcmp(route->ifname, netif->name) == 0)
+		{
+			if (family == AF_INET)
+			{
+				in_route *inroute = (in_route*) route;
+				netif->ipv4.numRoutes++;
+				IPRoute4 *oldRoutes = netif->ipv4.routes;
+				netif->ipv4.routes = (IPRoute4*) kmalloc(sizeof(IPRoute4)*netif->ipv4.numRoutes);
+				if (pos == -1)
+				{
+					pos = netif->ipv4.numRoutes - 1;
+				};
+				if (pos > (netif->ipv4.numRoutes - 1))
+				{
+					pos = netif->ipv4.numRoutes - 1;
+				};
+				
+				memcpy(netif->ipv4.routes, oldRoutes, sizeof(IPRoute4)*pos);
+				memcpy(&netif->ipv4.routes[pos+1], &oldRoutes[pos], sizeof(IPRoute4)*(netif->ipv4.numRoutes-1-pos));
+				memcpy(&netif->ipv4.routes[pos].dest, &inroute->dest, 4);
+				memcpy(&netif->ipv4.routes[pos].mask, &inroute->mask, 4);
+				memcpy(&netif->ipv4.routes[pos].gateway, &inroute->gateway, 4);
+				kfree(oldRoutes);
+				semSignal(&iflistLock);
+				return 0;
+			}
+			else if (family == AF_INET6)
+			{
+				in6_route *inroute = (in6_route*) route;
+				netif->ipv6.numRoutes++;
+				IPRoute6 *oldRoutes = netif->ipv6.routes;
+				netif->ipv6.routes = (IPRoute6*) kmalloc(sizeof(IPRoute6)*netif->ipv6.numRoutes);
+				if (pos == -1)
+				{
+					pos = netif->ipv6.numRoutes - 1;
+				};
+				if (pos > (netif->ipv6.numRoutes - 1))
+				{
+					pos = netif->ipv6.numRoutes - 1;
+				};
+				
+				memcpy(netif->ipv6.routes, oldRoutes, sizeof(IPRoute6)*pos);
+				memcpy(&netif->ipv6.routes[pos+1], &oldRoutes[pos], sizeof(IPRoute6)*(netif->ipv6.numRoutes-1-pos));
+				memcpy(&netif->ipv6.routes[pos].dest, &inroute->dest, 16);
+				memcpy(&netif->ipv6.routes[pos].mask, &inroute->mask, 16);
+				memcpy(&netif->ipv6.routes[pos].gateway, &inroute->gateway, 16);
+				kfree(oldRoutes);
+				semSignal(&iflistLock);
+				return 0;
+			};
+		};
+		
+		netif = netif->next;
+	};
+	
+	semSignal(&iflistLock);
+	
+	// the interface was not found!
+	getCurrentThread()->therrno = ENOENT;
+	return -1;
+};
+
+ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size)
+{
+	NetStat netstat;
+	semWait(&iflistLock);
+	
+	NetIf *netif = &iflist;
+	while (netif != NULL)
+	{
+		if (strcmp(ifname, netif->name) == 0)
+		{
+			strcpy(netstat.ifname, netif->name);
+			netstat.numTrans = netif->numTrans;
+			netstat.numErrors = netif->numErrors;
+			netstat.numRecv = netif->numRecv;
+			netstat.numDropped = netif->numDropped;
+			
+			if (size > sizeof(NetStat))
+			{
+				size = sizeof(NetStat);
+			};
+			
+			memcpy(buffer, &netstat, size);
+			semSignal(&iflistLock);
+			return (ssize_t) size;
+		};
+		
+		netif = netif->next;
+	};
+	
+	semSignal(&iflistLock);
+	
+	// the interface was not found!
+	getCurrentThread()->therrno = ENOENT;
+	return -1;
 };

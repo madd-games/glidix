@@ -72,6 +72,22 @@ typedef struct
 	uint64_t			flags;
 } _glidix_in6_route;
 
+typedef struct
+{
+	char				ifname[16];
+	char				data[3*16];
+	uint64_t			flags;
+} _glidix_gen_route;
+
+typedef struct
+{
+	char				ifname[16];
+	int				numTrans;
+	int				numRecv;
+	int				numDropped;
+	int				numErrors;
+} _glidix_netstat;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -117,6 +133,8 @@ int		_glidix_unmount(const char *prefix);
 int		_glidix_down(int action);
 int		_glidix_utime(const char *path, time_t atime, time_t mtime);
 int		_glidix_routetab(sa_family_t family);
+int		_glidix_route_add(int family, int pos, _glidix_gen_route *route);
+ssize_t		_glidix_netconf_stat(const char *ifname, _glidix_netstat *buffer, size_t bufsize);
 
 #ifdef __cplusplus
 }	/* extern "C" */

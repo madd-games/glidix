@@ -33,6 +33,7 @@
 #include <sys/glidix.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 void ip_to_string(struct in_addr *addr, struct in_addr *mask, char *str)
 {
@@ -117,8 +118,128 @@ void ip6_to_string(struct in6_addr *addr, struct in6_addr *mask, char *str)
 	str[44] = 0;
 };
 
-int main()
+int mainUtil(int argc, char *argv[])
 {
+	if (strcmp(argv[1], "add") == 0)
+	{
+		if (argc < 4)
+		{
+			fprintf(stderr, "USAGE:\t%s add subnet interface [-g gateway] [-i index]\n", argv[0]);
+			fprintf(stderr, "\tAdds an entry for the specified subnet to the routing table. If the network size\n");
+			fprintf(stderr, "\tis not given, adds just the specified address. You can also optionally specify a\n");
+			fprintf(stderr, "\tgateway, as well as the position within the interface's routing table.\n");
+			return 1;
+		};
+		
+		char subnet[19];
+		char gateway[16] = "0.0.0.0";
+		char ifname[16];
+		int pos = -1;
+		
+		if (strlen(argv[2]) > 18)
+		{
+			fprintf(stderr, "%s: invalid address or subnet: %s\n", argv[0], argv[2]);
+			return 1;
+		};
+		
+		if (strlen(argv[3]) > 15)
+		{
+			fprintf(stderr, "%s: invalid interface name: %s\n", argv[0], argv[3]);
+			return 1;
+		};
+		
+		strcpy(subnet, argv[2]);
+		strcpy(ifname, argv[3]);
+		
+		int i;
+		for (i=4; i<argc; i++)
+		{
+			if (strcmp(argv[i], "-g") == 0)
+			{
+				i++;
+				if (strlen(argv[i]) > 15)
+				{
+					fprintf(stderr, "%s: invalid gateway: %s\n", argv[0], argv[i]);
+					return 1;
+				};
+				strcpy(gateway, argv[i]);
+			}
+			else if (strcmp(argv[i], "-i") == 0)
+			{
+				i++;
+				pos = atoi(argv[i]);
+			}
+			else
+			{
+				fprintf(stderr, "%s: unrecognised command-line option: %s\n", argv[0], argv[i]);
+				return 1;
+			};
+		};
+		
+		_glidix_gen_route genroute;
+		_glidix_in_route *inroute = (_glidix_in_route*) &genroute;
+		strcpy(inroute->ifname, ifname);
+		memset(&inroute->mask, 0xFF, 4);
+		
+		char *slashpos = strchr(subnet, '/');
+		if (slashpos != NULL)
+		{
+			*slashpos = 0;
+			int netsize = atoi(slashpos+1);
+			
+			if ((netsize < 0) || (netsize > 32))
+			{
+				fprintf(stderr, "%s: invalid subnet size: /%d\n", argv[0], netsize);
+				return 1;
+			};
+			
+			uint8_t *out = (uint8_t*) &inroute->mask;
+			memset(out, 0, 4);
+			
+			while (netsize >= 8)
+			{
+				*out++ = 0xFF;
+				netsize -= 8;
+			};
+			
+			if (netsize > 0)
+			{
+				// number of bits at the end that should be 0
+				int zeroBits = 8 - netsize;
+				
+				// make a number which has this many '1's at the end, and then NOT it
+				*out = ~((1 << zeroBits)-1);
+			};
+		};
+		
+		if (inet_pton(AF_INET, subnet, &inroute->dest) != 1)
+		{
+			fprintf(stderr, "%s: failed to parse address %s: %s\n", argv[0], subnet, strerror(errno));
+			return 1;
+		};
+		
+		if (inet_pton(AF_INET, gateway, &inroute->gateway) != 1)
+		{
+			fprintf(stderr, "%s: failed to parse address %s: %s\n", argv[0], gateway, strerror(errno));
+			return 1;
+		};
+		
+		inroute->flags = 0;
+		if (_glidix_route_add(AF_INET, pos, &genroute) != 0)
+		{
+			fprintf(stderr, "%s: failed to add the route: %s\n", argv[0], strerror(errno));
+			return 1;
+		};
+	};
+};
+
+int main(int argc, char *argv[])
+{
+	if (argc > 1)
+	{
+		return mainUtil(argc, argv);
+	};
+	
 	printf("Kernel IPv4 routing table:\n");
 	printf("Network            Gateway            Interface\n");
 	int fd = _glidix_routetab(AF_INET);

@@ -39,6 +39,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <time.h>
 
 char *progName;
 
@@ -138,6 +139,7 @@ int main(int argc, char *argv[])
 	ping.seq = 0;
 	
 	printf("PING %s\n", argv[1]);
+	clock_t pingtimes[5];
 	int i;
 	for (i=0; i<5; i++)
 	{
@@ -145,6 +147,7 @@ int main(int argc, char *argv[])
 		ping.seq = i;
 		ping.checksum = checksum(&ping, sizeof(PingPongPacket));
 		
+		pingtimes[i] = clock();
 		if (sendto(sockfd, &ping, sizeof(PingPongPacket), 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) < sizeof(PingPongPacket))
 		{
 			fprintf(stderr, "%s: sendto: %s\n", argv[0], strerror(errno));
@@ -160,12 +163,13 @@ int main(int argc, char *argv[])
 		PingPongPacket pong;
 		
 		socklen_t addrlen = sizeof(struct sockaddr_in);
-		if (recvfrom(sockfd, &pong, sizeof(PingPongPacket), 0, &src, &addrlen) < sizeof(PingPongPacket))
+		if (recvfrom(sockfd, &pong, sizeof(PingPongPacket), 0, (struct sockaddr*) &src, &addrlen) < sizeof(PingPongPacket))
 		{
 			fprintf(stderr, "%s: recvfrom: %s\n", argv[0], strerror(errno));
 			close(sockfd);
 			return 1;
 		};
+		clock_t pongtime = clock();
 		
 		char buffer[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &src.sin_addr, buffer, INET_ADDRSTRLEN);
@@ -188,7 +192,7 @@ int main(int argc, char *argv[])
 			continue;
 		};
 		
-		printf("PONG from %s: id=%d, seq=%d\n", buffer, pong.id, pong.seq);
+		printf("PONG from %s: id=%d, seq=%d, time=%u ms\n", buffer, pong.id, pong.seq, pongtime-pingtimes[pong.seq]);
 		gotBack++;
 	};
 	

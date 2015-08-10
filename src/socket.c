@@ -119,7 +119,7 @@ File* CreateSocket(int domain, int type, int proto)
 	// append the socket to the beginning of the socket list.
 	// (the order does not acutally matter by adding to the beginning is faster).
 	semWait(&sockLock);
-	sock->prev = NULL;
+	sock->prev = &sockList;
 	sock->next = sockList.next;
 	sockList.next = sock;
 	semSignal(&sockLock);
@@ -211,7 +211,7 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 	{
 		ICMPPacket *icmp = (ICMPPacket*) ((char*)packet + dataOffset);
 		if ((icmp->type == 8) && (icmp->code == 0))
-		{	
+		{
 			void *response = kmalloc(size);
 			memcpy(response, packet, size);
 			
