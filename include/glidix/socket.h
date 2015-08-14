@@ -90,6 +90,11 @@ typedef struct Socket_
 	 */
 	void (*packet)(struct Socket_ *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto, uint64_t dataOffset);
+
+	/**
+	 * Called to handle a connect() on this socket.
+	 */
+	int (*connect)(struct Socket_ *sock, const struct sockaddr *addr, size_t addrlen);
 } Socket;
 
 typedef struct

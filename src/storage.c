@@ -55,6 +55,7 @@ typedef struct
 static int diskfile_open(void *_diskfile_void, File *fp, size_t szFile);
 
 static Semaphore deleterLock;
+static Semaphore deleterCounter;
 static Device devsToDelete[4];
 
 static void waitForDeleter()
@@ -87,6 +88,7 @@ static void sdThread(void *data)
 {
 	while (1)
 	{
+		semWait(&deleterCounter);
 		semWait(&deleterLock);
 		int i;
 		for (i=0; i<4; i++)
@@ -105,6 +107,8 @@ static void sdThread(void *data)
 void sdInit()
 {
 	semInit(&deleterLock);
+	semInit2(&deleterCounter, 0);
+	
 	int i;
 	for (i=0; i<4; i++)
 	{
@@ -330,6 +334,7 @@ static int diskfile_open(void *_diskfile_void, File *fp, size_t szFile)
 			spinlockRelease(&diskfile->master->locks[i]);
 		};
 		signalDeleter();
+		semSignal(&deleterCounter);
 	};
 
 	DiskFile *data = (DiskFile*) kmalloc(sizeof(DiskFile)+diskfile->sd->blockSize);

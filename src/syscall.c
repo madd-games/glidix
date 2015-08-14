@@ -2331,6 +2331,13 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		};
 		*((ssize_t*)&regs->rax) = netconf_stat((const char*) regs->rdi, (NetStat*) regs->rsi, (size_t) regs->rdx);
 		break;
+	case 80:
+		if (!isPointerValid(regs->rdx, regs->rcx))
+		{
+			signalOnBadPointer(regs, regs->rdx);
+		};
+		*((ssize_t*)&regs->rax) = netconf_getaddrs((const char*) regs->rdi, (int) regs->rsi, (void*) regs->rdx, (size_t) regs->rcx);
+		break;
 	default:
 		signalOnBadSyscall(regs);
 		break;

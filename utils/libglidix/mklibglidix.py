@@ -123,7 +123,8 @@ syscallTable = {
 	76:	"recvfrom",
 	77:	"recv",
 	78:	"_glidix_route_add",
-	79:	"_glidix_netconf_stat"
+	79:	"_glidix_netconf_stat",
+	80:	"_glidix_netconf_getaddrs"
 }
 
 f = open("_libglidix.s", "wb")

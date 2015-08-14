@@ -120,6 +120,7 @@ static int isSymbolNeededFor(Elf64_Xword relocType)
 };
 
 void* __dlsym(Library *lib, const char *name);
+const char *__dlsymname_inlib(Library *lib, void *ptr);
 void* __dlsym_global(const char *name)
 {
 	Library *lib = globalResolutionTable;
@@ -133,6 +134,18 @@ void* __dlsym_global(const char *name)
 		};
 	};
 	return NULL;
+};
+
+const char *__dlsymname(void *ptr)
+{
+	Library *lib = globalResolutionTable;
+	while (lib != NULL)
+	{
+		const char *name = __dlsymname_inlib(lib, ptr);
+		if (name != NULL) return name;
+		lib = lib->next;
+	};
+	return "?";
 };
 
 static int relocate(Library *lib, Elf64_Rela *table, size_t num)
@@ -390,6 +403,28 @@ void* __dlsym(Library *lib, const char *name)
 		};
 	};
 
+	return NULL;
+};
+
+const char *__dlsymname_inlib(Library *lib, void *ptr)
+{
+	uint64_t addr = (uint64_t) ptr;
+
+	size_t i;
+	for (i=0; i<lib->symbolCount; i++)
+	{
+		Elf64_Sym *sym = &lib->symtab[i];
+		const char *thisName = &lib->strtab[sym->st_name];
+
+		uint64_t symaddr = lib->loadAddr + sym->st_value;
+		uint64_t symend = symaddr + sym->st_size;
+		
+		if ((symaddr <= addr) && (symend > addr))
+		{
+			return thisName;
+		};
+	};
+	
 	return NULL;
 };
 

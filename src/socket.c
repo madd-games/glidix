@@ -36,6 +36,7 @@
 #include <glidix/netif.h>
 
 Socket* CreateRawSocket();				/* rawsock.c */
+Socket* CreateUDPSocket();				/* udpsock.c */
 
 static Semaphore sockLock;
 static Socket sockList;
@@ -104,6 +105,19 @@ File* CreateSocket(int domain, int type, int proto)
 		};
 		
 		sock = CreateRawSocket();
+	}
+	else if (type == SOCK_DGRAM)
+	{
+		switch (proto)
+		{
+		case 0:
+		case IPPROTO_UDP:
+			sock = CreateUDPSocket();
+			break;
+		default:
+			getCurrentThread()->therrno = EPROTONOSUPPORT;
+			return NULL;
+		};
 	}
 	else
 	{

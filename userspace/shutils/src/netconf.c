@@ -31,6 +31,7 @@
 #endif
 
 #include <sys/glidix.h>
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,11 +63,46 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
+	_glidix_ifaddr4 *addrs = (_glidix_ifaddr4*) malloc(sizeof(_glidix_ifaddr4) * netstat.numAddrs4);
+	_glidix_netconf_getaddrs(argv[1], AF_INET, addrs, sizeof(_glidix_ifaddr4) * netstat.numAddrs4);
+	
 	printf("Interface: %s\n", netstat.ifname);
 	printf("\tpackets sent: %d\n", netstat.numTrans);
 	printf("\tpackets received: %d\n", netstat.numRecv);
 	printf("\tpacket errors: %d\n", netstat.numErrors);
 	printf("\tpackets dropped: %d\n", netstat.numDropped);
+	printf("\tAddresses:\n");
+	char netaddr[INET_ADDRSTRLEN];
+	int netsize;
+	int i;
+	for (i=0; i<netstat.numAddrs4; i++)
+	{
+		inet_ntop(AF_INET, &addrs[i].addr, netaddr, INET_ADDRSTRLEN);
+		netsize = 0;
+		uint8_t *bytes = (uint8_t*) &addrs[i].mask;
+		int j;
+		netsize = 0;
+		for (j=0; j<4; j++)
+		{
+			if (bytes[j] == 0xFF)
+			{
+				netsize += 8;
+			}
+			else
+			{
+				uint8_t byte = bytes[j];
+				while (byte & 0x80)
+				{
+					netsize++;
+					byte <<= 1;
+				};
+				break;
+			};
+		};
+		printf("\t\t%s/%d\n", netaddr, netsize);
+	};
+	
+	printf("\n");
 	
 	return 0;
 };

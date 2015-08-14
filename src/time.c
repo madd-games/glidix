@@ -30,11 +30,15 @@
 #include <glidix/console.h>
 #include <glidix/sched.h>
 #include <glidix/port.h>
+#include <glidix/semaphore.h>
 
 #define	SECONDS_PER_HOUR				3600
 #define	SECONDS_PER_MINUTE				60
 #define	SECONDS_PER_DAY					86400
 #define	SECONDS_PER_NONLEAP_YEAR			31536000
+
+// time between system time updates from RTC
+#define	RTC_WAIT_TIME					10*1000
 
 // each entry is the number of days into the year that the given month starts
 // so 1 january is the first day of the year, so the value for january is 0.
@@ -55,13 +59,28 @@ static int64_t monthOffsets[12] = {
 };
 
 static volatile ATOMIC(time_t) currentTime;
+static volatile ATOMIC(int) timeUpdateStamp;
+static Spinlock timeLock;
 
 void sleep(int ticks)
 {
-	// TODO: make the thread wait!
-	int now = getUptime();
-	int then = now + ticks;
-	while (getUptime() < then);
+	if (getCurrentThread() == NULL)
+	{
+		// not ready to wait!
+		int then = getUptime() + ticks;
+		while (getUptime() < then);
+	}
+	else
+	{
+		int then = getUptime() + ticks;
+		while (getUptime() < then)
+		{
+			ASM("cli");
+			getCurrentThread()->wakeTime = then;
+			getCurrentThread()->flags |= THREAD_WAITING;
+			kyield();
+		};
+	};
 };
 
 time_t makeUnixTime(int64_t year, int64_t month, int64_t day, int64_t hour, int64_t minute, int64_t second)
@@ -84,7 +103,10 @@ time_t makeUnixTime(int64_t year, int64_t month, int64_t day, int64_t hour, int6
 
 time_t time()
 {
-	return currentTime;
+	spinlockAcquire(&timeLock);
+	time_t out = currentTime + (time_t) (getUptime()-timeUpdateStamp);
+	spinlockRelease(&timeLock);
+	return out;
 };
 
 static uint8_t getRTCRegister(uint8_t reg)
@@ -141,14 +163,24 @@ static void rtcThread(void *data)
 			hour = ((hour & 0x7F) + 12) % 24;
 		};
 
+		spinlockAcquire(&timeLock);
 		currentTime = makeUnixTime(2000+year, month, day, hour, minute, second);
+		timeUpdateStamp = getUptime();
+		spinlockRelease(&timeLock);
+		
+		sleep(RTC_WAIT_TIME);
 	};
 };
 
 void initRTC()
 {
+	spinlockRelease(&timeLock);
 	KernelThreadParams rtcPars;
 	rtcPars.stackSize = 0x4000;
 	rtcPars.name = "RTC reader daemon";
 	CreateKernelThread(rtcThread, &rtcPars, NULL);
+};
+
+void handleTodos()
+{
 };

@@ -36,6 +36,7 @@
 #include <glidix/signal.h>
 #include <glidix/memory.h>
 #include <glidix/apic.h>
+#include <glidix/time.h>
 
 IDTEntry idt[256];
 IDTPointer idtPtr;
@@ -388,6 +389,7 @@ void isrHandler(Regs *regs)
 	{
 	case IRQ2:
 		uptime++;
+		handleTodos();
 		//switchTask(regs);
 		break;
 	case I_DIV_ZERO:

@@ -86,7 +86,21 @@ typedef struct
 	int				numRecv;
 	int				numDropped;
 	int				numErrors;
+	int				numAddrs4;
+	int				numAddrs6;
 } _glidix_netstat;
+
+typedef struct
+{
+	struct in_addr			addr;
+	struct in_addr			mask;
+} _glidix_ifaddr4;
+
+typedef struct
+{
+	struct in6_addr			addr;
+	struct in6_addr			mask;
+} _glidix_ifaddr6;
 
 #ifdef __cplusplus
 extern "C" {
@@ -135,6 +149,7 @@ int		_glidix_utime(const char *path, time_t atime, time_t mtime);
 int		_glidix_routetab(sa_family_t family);
 int		_glidix_route_add(int family, int pos, _glidix_gen_route *route);
 ssize_t		_glidix_netconf_stat(const char *ifname, _glidix_netstat *buffer, size_t bufsize);
+ssize_t		_glidix_netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bufsize);
 
 #ifdef __cplusplus
 }	/* extern "C" */

@@ -784,6 +784,8 @@ ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size)
 			netstat.numErrors = netif->numErrors;
 			netstat.numRecv = netif->numRecv;
 			netstat.numDropped = netif->numDropped;
+			netstat.numAddrs4 = netif->ipv4.numAddrs;
+			netstat.numAddrs6 = netif->ipv6.numAddrs;
 			
 			if (size > sizeof(NetStat))
 			{
@@ -793,6 +795,48 @@ ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size)
 			memcpy(buffer, &netstat, size);
 			semSignal(&iflistLock);
 			return (ssize_t) size;
+		};
+		
+		netif = netif->next;
+	};
+	
+	semSignal(&iflistLock);
+	
+	// the interface was not found!
+	getCurrentThread()->therrno = ENOENT;
+	return -1;
+};
+
+ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bufsiz)
+{
+	if ((family != AF_INET) && (family != AF_INET6))
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return -1;
+	};
+	
+	semWait(&iflistLock);
+	
+	NetIf *netif = &iflist;
+	while (netif != NULL)
+	{
+		if (strcmp(ifname, netif->name) == 0)
+		{
+			if (family == AF_INET)
+			{
+				size_t totalsz = sizeof(IPNetIfAddr4) * netif->ipv4.numAddrs;
+				if (bufsiz > totalsz) bufsiz = totalsz;
+				memcpy(buffer, netif->ipv4.addrs, bufsiz);
+			}
+			else if (family == AF_INET6)
+			{
+				size_t totalsz = sizeof(IPNetIfAddr6) * netif->ipv6.numAddrs;
+				if (bufsiz > totalsz) bufsiz = totalsz;
+				memcpy(buffer, netif->ipv6.addrs, bufsiz);
+			};
+			
+			semSignal(&iflistLock);
+			return (ssize_t) bufsiz;
 		};
 		
 		netif = netif->next;

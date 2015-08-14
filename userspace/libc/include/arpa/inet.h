@@ -34,7 +34,7 @@
 #define	INET_ADDRSTRLEN				16
 #define	INET6_ADDRSTRLEN			82
 
-/* functiosn implemented by the runtime */
+/* functions implemented by the runtime */
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 int inet_pton(int af, const char *src, void *dst);
 

@@ -323,6 +323,8 @@ typedef struct
 	int				numRecv;
 	int				numDropped;
 	int				numErrors;
+	int				numAddrs4;
+	int				numAddrs6;
 } NetStat;
 
 /**
@@ -412,5 +414,16 @@ int route_add(int family, int pos, gen_route *route);
  * - ENOENT	The specified network interface does not exist.
  */
 ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size);
+
+/**
+ * Return the list of addresses for a particular network interface with the name 'ifname'. 'family' specifies
+ * which address protocol shall be queried: AF_INET or AF_INET6. 'buffer' points to an area of size 'bufsiz'
+ * which is an array of either IPNetIfAddr4 ('_glidix_ifaddr4') or IPNetIfAddr6 ('_glidix_ifaddr6'). The number
+ * of addresses for each protocol is given by netconf_stat(). Returns the actual size of the data returned on
+ * success, or -1 on error, setting errno appropriately:
+ *  - ENOENT	The specified network interface does not exist.
+ *  - EINVAL	The 'family' is invalid (neither AF_INET nor AF_INET6).
+ */
+ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bufsiz);
 
 #endif
