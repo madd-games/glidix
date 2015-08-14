@@ -168,7 +168,6 @@ int BindSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
 	if (sock->bind == NULL)
 	{
 		getCurrentThread()->therrno = EOPNOTSUPP;
-		semSignal(&sockLock);
 		return -1;
 	};
 	
@@ -188,7 +187,6 @@ ssize_t SendtoSocket(File *fp, const void *message, size_t len, int flags, const
 	if (sock->sendto == NULL)
 	{
 		getCurrentThread()->therrno = EOPNOTSUPP;
-		semSignal(&sockLock);
 		return -1;
 	};
 	
@@ -209,13 +207,49 @@ ssize_t RecvfromSocket(File *fp, void *message, size_t len, int flags, struct so
 	if (sock->recvfrom == NULL)
 	{
 		getCurrentThread()->therrno = EOPNOTSUPP;
-		semSignal(&sockLock);
 		return -1;
 	};
 	
 	ssize_t result = sock->recvfrom(sock, message, len, flags, addr, addrlen);
 	
 	return result;
+};
+
+int SocketGetsockname(File *fp, struct sockaddr *addr, size_t *addrlen)
+{
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		getCurrentThread()->therrno = ENOTSOCK;
+		return -1;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (sock->getsockname == NULL)
+	{
+		getCurrentThread()->therrno = EOPNOTSUPP;
+		return -1;
+	};
+	
+	return sock->getsockname(sock, addr, addrlen);
+};
+
+int ShutdownSocket(File *fp, int how)
+{
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		getCurrentThread()->therrno = ENOTSOCK;
+		return -1;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (sock->shutdown == NULL)
+	{
+		getCurrentThread()->therrno = EOPNOTSUPP;
+		return -1;
+	};
+	
+	sock->shutdown(sock, how);
+	return 0;
 };
 
 void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,

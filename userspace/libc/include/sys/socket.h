@@ -29,6 +29,10 @@
 #ifndef _SYS_SOCKET_H
 #define _SYS_SOCKET_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <sys/types.h>
 
 /* address families */
@@ -60,7 +64,7 @@ struct sockaddr
 struct sockaddr_storage
 {
 	sa_family_t			ss_family;
-	char				sa_data[26];
+	char				ss_data[26];
 };
 
 /* implemented by libglidix directly */
@@ -70,5 +74,11 @@ ssize_t send(int socket, const void *buffer, size_t length, int flags);
 ssize_t sendto(int socket, const void *message, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
 ssize_t recv(int socket, void *buffer, size_t length, int flags);
 ssize_t recvfrom(int socket, void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len);
+int getsockname(int socket, struct sockaddr *address, socklen_t *address_len);
+int shutdown(int socket, int how);
+
+#ifdef __cplusplus
+};	/* extern "C" */
+#endif
 
 #endif

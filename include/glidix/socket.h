@@ -95,6 +95,11 @@ typedef struct Socket_
 	 * Called to handle a connect() on this socket.
 	 */
 	int (*connect)(struct Socket_ *sock, const struct sockaddr *addr, size_t addrlen);
+	
+	/**
+	 * Called to handle getsockname() on this socket.
+	 */
+	int (*getsockname)(struct Socket_ *sock, struct sockaddr *addr, size_t *addrlenptr);
 } Socket;
 
 typedef struct
@@ -144,5 +149,15 @@ ssize_t SendtoSocket(File *fp, const void *message, size_t len, int flags, const
  * Receive a message from a socket - this implements both recv() and recvfrom() userspace functions.
  */
 ssize_t RecvfromSocket(File *fp, void *message, size_t len, int flags, struct sockaddr *addr, size_t *addrlen);
+
+/**
+ * Implements getsockname().
+ */
+int SocketGetsockname(File *fp, struct sockaddr *addr, size_t *addrlenptr);
+
+/**
+ * Implements shutdown().
+ */
+int ShutdownSocket(File *fp, int how);
 
 #endif

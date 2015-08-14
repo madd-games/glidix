@@ -1880,7 +1880,7 @@ ssize_t sys_sendto(int fd, const void *message, size_t len, int flags, const str
 
 ssize_t sys_recvfrom(int fd, void *message, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)
 {
-	int out;
+	ssize_t out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
 		getCurrentThread()->therrno = EBADF;
@@ -1900,6 +1900,70 @@ ssize_t sys_recvfrom(int fd, void *message, size_t len, int flags, struct sockad
 		else
 		{
 			out = RecvfromSocket(fp, message, len, flags, addr, addrlen);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
+};
+
+int sys_getsockname(int fd, struct sockaddr *addr, size_t *addrlenptr)
+{
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = SocketGetsockname(fp, addr, addrlenptr);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
+};
+
+int sys_shutdown(int fd, int how)
+{
+	if ((how & ~SHUT_RDWR) != 0)
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return -1;
+	};
+
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = ShutdownSocket(fp, how);
 			spinlockRelease(&ftab->spinlock);
 		};
 	};
@@ -2337,6 +2401,20 @@ void syscallDispatch(Regs *regs, uint16_t num)
 			signalOnBadPointer(regs, regs->rdx);
 		};
 		*((ssize_t*)&regs->rax) = netconf_getaddrs((const char*) regs->rdi, (int) regs->rsi, (void*) regs->rdx, (size_t) regs->rcx);
+		break;
+	case 81:
+		if (!isPointerValid(regs->rdx, 8))
+		{
+			signalOnBadPointer(regs, regs->rdx);
+		};
+		if (!isPointerValid(regs->rsi, *((uint64_t*)regs->rdx)))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+		};
+		*((int*)&regs->rax) = sys_getsockname((int) regs->rdi, (struct sockaddr*) regs->rsi, (size_t*) regs->rdx);
+		break;
+	case 82:
+		*((int*)&regs->rax) = sys_shutdown((int) regs->rdi, (int) regs->rsi);
 		break;
 	default:
 		signalOnBadSyscall(regs);

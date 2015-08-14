@@ -32,6 +32,9 @@
 int fclose(FILE *fp)
 {
 	fflush(fp);
-	free(fp);
+	if ((fp != stdin) && (fp != stdout) && (fp != stderr))
+	{
+		free(fp);
+	};
 	return 0;
 };

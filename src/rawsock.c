@@ -398,6 +398,19 @@ static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	return (ssize_t) len;
 };
 
+static int rawsock_getsockname(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
+{
+	if ((*addrlenptr) > sizeof(struct sockaddr))
+	{
+		*addrlenptr = sizeof(struct sockaddr);
+	};
+	
+	size_t len = *addrlenptr;
+	RawSocket *rawsock = (RawSocket*) sock;
+	memcpy(addr, &rawsock->addr, len);
+	return 0;
+};
+
 Socket *CreateRawSocket()
 {
 	RawSocket *rawsock = (RawSocket*) kmalloc(sizeof(RawSocket));
@@ -408,6 +421,7 @@ Socket *CreateRawSocket()
 	sock->sendto = rawsock_sendto;
 	sock->packet = rawsock_packet;
 	sock->recvfrom = rawsock_recvfrom;
+	sock->getsockname = rawsock_getsockname;
 	
 	semInit(&rawsock->queueLock);
 	semInit2(&rawsock->packetCounter, 0);
