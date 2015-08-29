@@ -47,6 +47,7 @@
 #include <glidix/down.h>
 #include <glidix/netif.h>
 #include <glidix/socket.h>
+#include <glidix/pci.h>
 
 void sys_exit(Regs *regs, int status)
 {
@@ -1102,18 +1103,33 @@ int sys_dup2(int oldfd, int newfd)
 	return newfd;
 };
 
-int isPointerValid(uint64_t ptr, uint64_t size)
+int isPointerValid(uint64_t ptr, uint64_t size, int flags)
 {
+	if (size == 0) return 1;
+
 	if (ptr < 0x1000)
 	{
 		return 0;
 	};
 
-	if ((ptr+size) > 0x8000000000)
+	if ((ptr+size) > 0x7FC0000000)
 	{
 		return 0;
 	};
 
+	uint64_t start = ptr / 0x1000;
+	uint64_t count = size / 0x1000;
+	if (size % 0x1000) count++;
+	
+	uint64_t i;
+	for (i=start; i<start+count; i++)
+	{
+		if (!canAccessPage(getCurrentThread()->pm, i, flags))
+		{
+			return 0;
+		};
+	};
+	
 	return 1;
 };
 
@@ -1971,18 +1987,137 @@ int sys_shutdown(int fd, int how)
 	return out;
 };
 
+int sys_connect(int fd, struct sockaddr *addr, size_t addrlen)
+{
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = ConnectSocket(fp, addr, addrlen);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
+};
+
+int sys_getpeername(int fd, struct sockaddr *addr, size_t *addrlenptr)
+{
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = SocketGetpeername(fp, addr, addrlenptr);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
+};
+
+int sys_setsockopt(int fd, int proto, int option, uint64_t value)
+{
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = SetSocketOption(fp, proto, option, value);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
+};
+
+uint64_t sys_getsockopt(int fd, int proto, int option)
+{
+	uint64_t out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = GetSocketOption(fp, proto, option);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
-	kdumpregs(regs);
 	siginfo_t siginfo;
 	siginfo.si_signo = SIGSEGV;
 	siginfo.si_code = SEGV_ACCERR;
 	siginfo.si_addr = (void*) ptr;
 	(void)siginfo;
 
-	ASM("cli");
+	ERRNO = EINTR;
+	*((int64_t*)&regs->rax) = -1;
+	
+	lockSched();
 	sendSignal(getCurrentThread(), &siginfo);
-	switchTask(regs);
+	unlockSched();
+	kyield();
 };
 
 void signalOnBadSyscall(Regs *regs)
@@ -1990,9 +2125,10 @@ void signalOnBadSyscall(Regs *regs)
 	siginfo_t si;
 	si.si_signo = SIGSYS;
 
-	ASM("cli");
+	lockSched();
 	sendSignal(getCurrentThread(), &si);
-	switchTask(regs);
+	unlockSched();
+	kyield();
 };
 
 void dumpRunqueue();
@@ -2030,23 +2166,26 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		sys_exit(regs, (int) regs->rdi);
 		break;					/* never actually reached */
 	case 1:
-		if (!isPointerValid(regs->rsi, regs->rdx))
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((ssize_t*)&regs->rax) = sys_write(*((int*)&regs->rdi), (const void*) regs->rsi, *((size_t*)&regs->rdx));
 		break;
 	case 2:
-		if (!isPointerValid(regs->rsi, regs->rdx))
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		regs->rax = elfExec(regs, (const char*) regs->rdi, (const char*) regs->rsi, regs->rdx);
 		break;
 	case 3:
-		if (!isPointerValid(regs->rsi, regs->rdx))
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((ssize_t*)&regs->rax) = sys_read(*((int*)&regs->rdi), (void*) regs->rsi, *((size_t*)&regs->rdx));
 		break;
@@ -2079,24 +2218,22 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		regs->rax = getCurrentThread()->sgid;
 		break;
 	case 13:
-		if (!isPointerValid(regs->rdi, 0))
-		{
-			signalOnBadPointer(regs, regs->rdi);
-		};
 		getCurrentThread()->rootSigHandler = regs->rdi;
 		regs->rax = 0;
 		break;
 	case 14:
-		if (!isPointerValid(regs->rdi, 0x1000))
+		if (!isPointerValid(regs->rdi, sizeSignalStackFrame, PROT_READ))
 		{
 			signalOnBadPointer(regs, regs->rdi);
+			break;
 		};
 		sigret(regs, (void*) regs->rdi);
 		break;
 	case 15:
-		if (!isPointerValid(regs->rsi, sizeof(struct stat)))
+		if (!isPointerValid(regs->rsi, sizeof(struct stat), PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((int*)&regs->rax) = sys_stat((const char*) regs->rdi, (struct stat*) regs->rsi);
 		break;
@@ -2104,9 +2241,10 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		regs->rax = (uint64_t) getCurrentThread()->szExecPars;
 		break;
 	case 17:
-		if (!isPointerValid(regs->rdi, regs->rsi))
+		if (!isPointerValid(regs->rdi, regs->rsi, PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rdi);
+			break;
 		};
 		memcpy((void*)regs->rdi, getCurrentThread()->execPars, regs->rsi);
 		break;
@@ -2148,9 +2286,10 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((int*)&regs->rax) = sys_insmod((const char*) regs->rdi, (const char*) regs->rsi, (const char*) regs->rdx, (int) regs->rcx);
 		break;
 	case 28:
-		if (!isPointerValid(regs->rdx, (regs->rsi >> 32) & 0xFFFF))
+		if (!isPointerValid(regs->rdx, (regs->rsi >> 32) & 0xFFFF, PROT_READ | PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rdx);
+			break;
 		};
 		*((int*)&regs->rax) = sys_ioctl((int) regs->rdi, regs->rsi, (void*) regs->rdx);
 		break;
@@ -2164,23 +2303,24 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		//dumpRunqueue();
 		//regs->rflags &= ~(1 << 9);
 		//BREAKPOINT();
-		dumpModules();
+		//dumpModules();
 		break;
 	case 31:
 		*((int*)&regs->rax) = sys_mount((const char*)regs->rdi, (const char*)regs->rsi, (const char*)regs->rdx, (int)regs->rcx);
 		break;
 	case 32:
 		/* _glidix_yield */
-		ASM("cli");
-		switchTask(regs);
+		//ASM("cli");
+		//switchTask(regs);
 		break;
 	case 33:
 		*((time_t*)&regs->rax) = time();
 		break;
 	case 34:
-		if (!isPointerValid(regs->rsi, 256))
+		if (!isPointerValid(regs->rsi, 256, PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		regs->rax = (uint64_t) realpath((const char*) regs->rdi, (char*) regs->rsi);
 		if (regs->rax == 0)
@@ -2192,16 +2332,18 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((int*)&regs->rax) = sys_chdir((const char*)regs->rdi);
 		break;
 	case 36:
-		if (!isPointerValid(regs->rdi, regs->rsi))
+		if (!isPointerValid(regs->rdi, regs->rsi, PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rdi);
+			break;
 		};
 		regs->rax = (uint64_t) sys_getcwd((char*) regs->rdi, regs->rsi);
 		break;
 	case 37:
-		if (!isPointerValid(regs->rsi, sizeof(struct stat)))
+		if (!isPointerValid(regs->rsi, sizeof(struct stat), PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((int*)&regs->rax) = sys_fstat((int)regs->rdi, (struct stat*) regs->rsi);
 		break;
@@ -2241,9 +2383,10 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((int*)&regs->r9) = pipefd[1];
 		break;
 	case 49:
-		if (!isPointerValid(regs->rdi, sizeof(int)))
+		if (!isPointerValid(regs->rdi, sizeof(int), PROT_READ | PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rdi);
+			break;
 		};
 		getCurrentThread()->errnoptr = (int*) regs->rdi;
 		break;
@@ -2251,19 +2394,21 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		regs->rax = (uint64_t) getCurrentThread()->errnoptr;
 		break;
 	case 51:
-		*((clock_t*)&regs->rax) = (clock_t) getUptime() * 1000;
+		*((clock_t*)&regs->rax) = (clock_t) getUptime() * 1000000;
 		break;
 	case 52:
-		if (!isPointerValid(regs->rdx, sizeof(libInfo)))
+		if (!isPointerValid(regs->rdx, sizeof(libInfo), PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rdx);
+			break;
 		};
 		*((int*)&regs->rax) = libOpen((const char*) regs->rdi, regs->rsi, (libInfo*) regs->rdx);
 		break;
 	case 53:
-		if (!isPointerValid(regs->rdi, sizeof(libInfo)))
+		if (!isPointerValid(regs->rdi, sizeof(libInfo), PROT_READ | PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rdi);
+			break;
 		};
 		libClose((libInfo*) regs->rdx);
 		break;
@@ -2298,9 +2443,10 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((int*)&regs->rax) = unmount((const char*) regs->rdi);
 		break;
 	case 64:
-		if (!isPointerValid(regs->rsi, sizeof(struct stat)))
+		if (!isPointerValid(regs->rsi, sizeof(struct stat), PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((int*)&regs->rax) = sys_lstat((const char*) regs->rdi, (struct stat*) regs->rsi);
 		break;
@@ -2308,9 +2454,10 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((int*)&regs->rax) = sys_symlink((const char*) regs->rdi, (const char*) regs->rsi);
 		break;
 	case 66:
-		if (!isPointerValid(regs->rsi, regs->rdx))
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((ssize_t*)&regs->rax) = sys_readlink((const char*) regs->rdi, (char*) regs->rsi, (size_t) regs->rdx);
 		break;
@@ -2333,88 +2480,144 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((int*)&regs->rax) = sys_socket((int) regs->rdi, (int) regs->rsi, (int) regs->rdx);
 		break;
 	case 73:
-		if (!isPointerValid(regs->rsi, regs->rdx))
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((int*)&regs->rax) = sys_bind((int) regs->rdi, (const struct sockaddr*) regs->rsi, (size_t) regs->rdx);
 		break;
 	case 74:
-		if (!isPointerValid(regs->rsi, regs->rdx))	// message
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))	// message
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
-		if (!isPointerValid(regs->r8, regs->r9))	// addr
+		if (!isPointerValid(regs->r8, regs->r9, PROT_READ))	// addr
 		{
 			signalOnBadPointer(regs, regs->r8);
+			break;
 		};
 		*((ssize_t*)&regs->rax) = sys_sendto((int) regs->rdi, (const void*) regs->rsi, (size_t) regs->rdx,
 							(int) regs->rcx, (const struct sockaddr*) regs->r8, (size_t) regs->r9);
 		break;
 	case 75:	// send
-		if (!isPointerValid(regs->rsi, regs->rdx))
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((ssize_t*)&regs->rax) = sys_sendto((int) regs->rdi, (const void*) regs->rsi, (size_t) regs->rdx, (int) regs->rcx, NULL, 0);
 		break;
 	case 76:
-		if (!isPointerValid(regs->rsi, regs->rdx))	// message
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))	// message
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
-		if (!isPointerValid(regs->r9, 8))		// addrlen
+		if (!isPointerValid(regs->r9, 8, PROT_READ | PROT_WRITE))		// addrlen
 		{
 			signalOnBadPointer(regs, regs->r9);
+			break;
 		};
-		if (!isPointerValid(regs->r8, *((uint64_t*)regs->r9))) // addr
+		if (!isPointerValid(regs->r8, *((uint64_t*)regs->r9), PROT_WRITE)) // addr
 		{
 			signalOnBadPointer(regs, regs->r8);
+			break;
 		};
 		*((ssize_t*)&regs->rax) = sys_recvfrom((int) regs->rdi, (void*) regs->rsi, (size_t) regs->rdx,
 							(int) regs->rcx, (struct sockaddr*) regs->r8, (size_t*) regs->r9);
 		break;
 	case 77:
-		if (!isPointerValid(regs->rsi, regs->rdx))
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((ssize_t*)&regs->rax) = sys_recvfrom((int) regs->rdi, (void*) regs->rsi, (size_t) regs->rdx, (int) regs->rcx, NULL, NULL);
 		break;
 	case 78:
-		if (!isPointerValid(regs->rdx, sizeof(gen_route)))
+		if (!isPointerValid(regs->rdx, sizeof(gen_route), PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rdx);
+			break;
 		};
 		*((int*)&regs->rax) = route_add((int) regs->rdi, *((int*)&regs->rsi), (gen_route*) regs->rdx);
 		break;
 	case 79:
-		if (!isPointerValid(regs->rsi, regs->rdx))
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((ssize_t*)&regs->rax) = netconf_stat((const char*) regs->rdi, (NetStat*) regs->rsi, (size_t) regs->rdx);
 		break;
 	case 80:
-		if (!isPointerValid(regs->rdx, regs->rcx))
+		if (!isPointerValid(regs->rdx, regs->rcx, PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rdx);
+			break;
 		};
 		*((ssize_t*)&regs->rax) = netconf_getaddrs((const char*) regs->rdi, (int) regs->rsi, (void*) regs->rdx, (size_t) regs->rcx);
 		break;
 	case 81:
-		if (!isPointerValid(regs->rdx, 8))
+		if (!isPointerValid(regs->rdx, 8, PROT_READ | PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rdx);
+			break;
 		};
-		if (!isPointerValid(regs->rsi, *((uint64_t*)regs->rdx)))
+		if (!isPointerValid(regs->rsi, *((uint64_t*)regs->rdx), PROT_WRITE))
 		{
 			signalOnBadPointer(regs, regs->rsi);
+			break;
 		};
 		*((int*)&regs->rax) = sys_getsockname((int) regs->rdi, (struct sockaddr*) regs->rsi, (size_t*) regs->rdx);
 		break;
 	case 82:
 		*((int*)&regs->rax) = sys_shutdown((int) regs->rdi, (int) regs->rsi);
+		break;
+	case 83:
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+			break;
+		};
+		*((int*)&regs->rax) = sys_connect((int) regs->rdi, (struct sockaddr*) regs->rsi, (size_t) regs->rdx);
+		break;
+	case 84:
+		if (!isPointerValid(regs->rdx, 8, PROT_READ | PROT_WRITE))
+		{
+			signalOnBadPointer(regs, regs->rdx);
+			break;
+		};
+		if (!isPointerValid(regs->rsi, *((uint64_t*)regs->rdx), PROT_WRITE))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+			break;
+		};
+		*((int*)&regs->rax) = sys_getpeername((int) regs->rdi, (struct sockaddr*) regs->rsi, (size_t*) regs->rdx);
+		break;
+	case 85:
+		*((int*)&regs->rax) = sys_setsockopt((int) regs->rdi, (int) regs->rsi, (int) regs->rdx, regs->rcx);
+		break;
+	case 86:
+		regs->rax = sys_getsockopt((int) regs->rdi, (int) regs->rsi, (int) regs->rdx);
+		break;
+	case 87:
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+			break;
+		};
+		*((ssize_t*)&regs->rax) = netconf_statidx((unsigned int) regs->rdi, (NetStat*) regs->rsi, (size_t) regs->rdx);
+		break;
+	case 88:
+		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+			break;
+		};
+		*((ssize_t*)&regs->rax) = sys_pcistat((int) regs->rdi, (PCIDevice*) regs->rsi, (size_t) regs->rdx);
 		break;
 	default:
 		signalOnBadSyscall(regs);

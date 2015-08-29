@@ -43,31 +43,78 @@
 #define	AF_INET6			3
 
 /* IP protocols */
-#define	IPPROTO_IP	0		/* Dummy protocol for TCP.  */
-#define	IPPROTO_ICMP	1		/* Internet Control Message Protocol.  */
-#define	IPPROTO_IGMP	2		/* Internet Group Management Protocol. */
-#define	IPPROTO_IPIP	4		/* IPIP tunnels (older KA9Q tunnels use 94).  */
-#define	IPPROTO_TCP	6		/* Transmission Control Protocol.  */
-#define	IPPROTO_EGP	8		/* Exterior Gateway Protocol.  */
-#define	IPPROTO_PUP	12		/* PUP protocol.  */
-#define	IPPROTO_UDP	17		/* User Datagram Protocol.  */
-#define	IPPROTO_IDP	22		/* XNS IDP protocol.  */
-#define	IPPROTO_TP	29		/* SO Transport Protocol Class 4.  */
-#define	IPPROTO_DCCP	33		/* Datagram Congestion Control Protocol.  */
-#define	IPPROTO_IPV6	41		/* IPv6 header.  */
-#define	IPPROTO_RSVP	46		/* Reservation Protocol.  */
-#define	IPPROTO_GRE	47		/* General Routing Encapsulation.  */
-#define	IPPROTO_ESP	50		/* encapsulating security payload.  */
-#define	IPPROTO_AH	51		/* authentication header.  */
-#define	IPPROTO_MTP	92		/* Multicast Transport Protocol.  */
-#define	IPPROTO_BEETPH	94		/* IP option pseudo header for BEET.  */
-#define	IPPROTO_ENCAP	98		/* Encapsulation Header.  */
-#define	IPPROTO_PIM	103		/* Protocol Independent Multicast.  */
-#define	IPPROTO_COMP	108		/* Compression Header Protocol.  */
-#define	IPPROTO_SCTP	132		/* Stream Control Transmission Protocol.  */
-#define	IPPROTO_UDPLITE	136		/* UDP-Lite protocol.  */
-#define	IPPROTO_RAW	255		/* Raw IP packets.  */
-#define	IPPROTO_MAX	256
+#define	IPPROTO_IP			0		/* Dummy protocol for TCP.  */
+#define	IPPROTO_ICMP			1		/* Internet Control Message Protocol.  */
+#define	IPPROTO_IGMP			2		/* Internet Group Management Protocol. */
+#define	IPPROTO_IPIP			4		/* IPIP tunnels (older KA9Q tunnels use 94).  */
+#define	IPPROTO_TCP			6		/* Transmission Control Protocol.  */
+#define	IPPROTO_EGP			8		/* Exterior Gateway Protocol.  */
+#define	IPPROTO_PUP			12		/* PUP protocol.  */
+#define	IPPROTO_UDP			17		/* User Datagram Protocol.  */
+#define	IPPROTO_IDP			22		/* XNS IDP protocol.  */
+#define	IPPROTO_TP			29		/* SO Transport Protocol Class 4.  */
+#define	IPPROTO_DCCP			33		/* Datagram Congestion Control Protocol.  */
+#define	IPPROTO_IPV6			41		/* IPv6 header.  */
+#define	IPPROTO_RSVP			46		/* Reservation Protocol.  */
+#define	IPPROTO_GRE			47		/* General Routing Encapsulation.  */
+#define	IPPROTO_ESP			50		/* encapsulating security payload.  */
+#define	IPPROTO_AH			51		/* authentication header.  */
+#define	IPPROTO_MTP			92		/* Multicast Transport Protocol.  */
+#define	IPPROTO_BEETPH			94		/* IP option pseudo header for BEET.  */
+#define	IPPROTO_ENCAP			98		/* Encapsulation Header.  */
+#define	IPPROTO_PIM			103		/* Protocol Independent Multicast.  */
+#define	IPPROTO_COMP			108		/* Compression Header Protocol.  */
+#define	IPPROTO_SCTP			132		/* Stream Control Transmission Protocol.  */
+#define	IPPROTO_UDPLITE			136		/* UDP-Lite protocol.  */
+#define	IPPROTO_RAW			255		/* Raw IP packets.  */
+#define	IPPROTO_MAX			256
+
+/* types of connections */
+#define	IF_LOOPBACK			0		/* loopback interface (localhost) */
+#define	IF_ETHERNET			1		/* ethernet controller */
+#define	IF_TUNNEL			2		/* software tunnel */
+
+/**
+ * Type-specific network interface options.
+ */
+typedef union
+{
+	/**
+	 * Type of connection - this is one of the IF_* constants. It also determines which
+	 * of the structures inside this union is valid.
+	 */
+	int				type;
+	
+	/**
+	 * IF_LOOPBACK has no options (reserved).
+	 */
+	struct
+	{
+		int			type;			// IF_LOOPBACK
+	} loopback;
+	
+	/**
+	 * IF_ETHERNET (Ethernet) options.
+	 */
+	struct
+	{
+		int			type;			// IF_ETHERNET
+		
+		/**
+		 * The controller's MAC address (used as source address of transmitted
+		 * packets).
+		 */
+		uint8_t			mac[6];
+	} ethernet;
+	
+	/**
+	 * IF_TUNNEL (Software tunnel) options.
+	 */
+	struct
+	{
+		int			type;			// IF_TUNNEL
+	} tunnel;
+} NetIfConfig;
 
 struct sockaddr
 {
@@ -289,6 +336,18 @@ typedef struct NetIf_
 	IPConfig6			ipv6;
 	
 	/**
+	 * Interface configuration (described above, near "conenction types").
+	 */
+	NetIfConfig			ifconfig;
+
+	/**
+	 * Maximum Transmission Unit (MTU). This is the maximum possible packet size
+	 * passed to the driver's send() implementation. If bigger packets are to be
+	 * transferred, they are fragmented.
+	 */
+	uint64_t		mtu;
+
+	/**
 	 * Interface statistics. Number of successfully transmitted and recevied packets,
 	 * number of dropped packets and number of errors.
 	 */
@@ -325,6 +384,7 @@ typedef struct
 	int				numErrors;
 	int				numAddrs4;
 	int				numAddrs6;
+	NetIfConfig			ifconfig;
 } NetStat;
 
 /**
@@ -416,6 +476,11 @@ int route_add(int family, int pos, gen_route *route);
 ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size);
 
 /**
+ * Like netconf_stat() but takes an index instead of a name. Fails with ENOENT if the index is out of bounds.
+ */
+ssize_t netconf_statidx(unsigned int index, NetStat *buffer, size_t size);
+
+/**
  * Return the list of addresses for a particular network interface with the name 'ifname'. 'family' specifies
  * which address protocol shall be queried: AF_INET or AF_INET6. 'buffer' points to an area of size 'bufsiz'
  * which is an array of either IPNetIfAddr4 ('_glidix_ifaddr4') or IPNetIfAddr6 ('_glidix_ifaddr6'). The number
@@ -425,5 +490,31 @@ ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size);
  *  - EINVAL	The 'family' is invalid (neither AF_INET nor AF_INET6).
  */
 ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bufsiz);
+
+/**
+ * These 2 functions are used by network device drivers. The first one adds a new network interface that a driver has detected,
+ * and returns a pointer to a new NetIf structure that refers to it. This new structure can then be passed to DeleteNetworkInterface()
+ * when the driver is being unloaded. 3 parameters are needed to define such an interface: driver-specific data (assigned to the
+ * NetIf structure directly), an interface configuration, and a send function, as described in the NetIf structure. Details of the
+ * creation of the new interface depends on the value of ifconfig->type:
+ *
+ *	IF_LOOPBACK
+ *		Results in an error (NULL is returned); you cannot add another loopback interface.
+ *
+ *	IF_ETHERNET
+ *		The new interface is assigned the name "ethX", where X is a number, indicating it to be an ethernet connection.
+ *		You are not allowed to rename the interface. The given MAC address and MTU must be valid. The interface is initialized
+ *		with no routing information or addresses, but depending on the network settings, the network manager may run a DHCP
+ *		session on the interface to get addresses.
+ *
+ *	IF_TUNNEL
+ *		The new interface is assigned then name "tnlX", where X is a number, indicating it be a software tunnel. No DHCP or
+ *		other automatic configuration methods will be tried by the system. The tunneling software must configure the tunnel
+ *		in its own way.
+ *
+ * Upon error, NULL is returned; otherwise, the new interface handle is returned.
+ */
+NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig, void (*send)(NetIf*, const void*, size_t, const void*, size_t));
+void DeleteNetworkInterface(NetIf *netif);
 
 #endif

@@ -8,7 +8,7 @@ Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divid
 <ul>
 <li><code>pml4[0]</code> (except the first page) is for userspace processes.</li>
 <li><code>pml4[1]</code> is used as a buffer when data is transferred between 2 userspace blocks.</li>
-<li><code>pml4[256]</code> is the static kernel image (code, data, bss, symbols, etc).</li>
+<li><code>pml4[256]</code> is the static kernel image (code, data, bss, symbols, etc). The first 2MB of this block is mapped to the first 2MB of physical memory.</li>
 <!--<li><code>pml4[257]</code> is the Interprocess Streaming Page (ISP), this is a single page that gets remapped to different addresses to send data to different address spaces etc. There may be more things in this PML4e in the future.</li>-->
 <li><code>pml4[257]</code> is initialized by <code>isp.c</code> and contains all sorts of special pages. See below.</li>
 <li><code>pml4[258]</code> is the kernel heap.</li>

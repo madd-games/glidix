@@ -79,6 +79,26 @@ typedef struct
 	uint64_t			flags;
 } _glidix_gen_route;
 
+typedef union
+{
+	int				type;	
+	struct
+	{
+		int			type;
+	} loopback;
+
+	struct
+	{
+		int			type;
+		uint8_t			mac[6];
+	} ethernet;
+
+	struct
+	{
+		int			type;
+	} tunnel;
+} _glidix_ifconfig;
+
 typedef struct
 {
 	char				ifname[16];
@@ -88,6 +108,7 @@ typedef struct
 	int				numErrors;
 	int				numAddrs4;
 	int				numAddrs6;
+	_glidix_ifconfig		ifconfig;
 } _glidix_netstat;
 
 typedef struct
@@ -101,6 +122,22 @@ typedef struct
 	struct in6_addr			addr;
 	struct in6_addr			mask;
 } _glidix_ifaddr6;
+
+typedef struct
+{
+	void*						ignore1;
+	uint8_t						bus;
+	uint8_t						slot;
+	uint8_t						func;
+	int						id;
+	uint16_t					vendor;
+	uint16_t					device;
+	uint16_t					type;
+	uint8_t						intpin;
+	void*						ignore2;
+	char						driverName[128];
+	char						deviceName[128];
+} _glidix_pcidev;
 
 #ifdef __cplusplus
 extern "C" {
@@ -150,6 +187,10 @@ int		_glidix_routetab(sa_family_t family);
 int		_glidix_route_add(int family, int pos, _glidix_gen_route *route);
 ssize_t		_glidix_netconf_stat(const char *ifname, _glidix_netstat *buffer, size_t bufsize);
 ssize_t		_glidix_netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bufsize);
+int		_glidix_setsockopt(int socket, int proto, int option, uint64_t value);
+uint64_t	_glidix_getsockopt(int socket, int proto, int option);
+ssize_t		_glidix_netconf_statidx(unsigned int index, _glidix_netstat *buffer, size_t bufsize);
+ssize_t		_glidix_pcistat(int id, _glidix_pcidev *buffer, size_t bufsize);
 
 #ifdef __cplusplus
 }	/* extern "C" */

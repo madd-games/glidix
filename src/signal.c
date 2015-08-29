@@ -40,6 +40,9 @@ typedef struct
 	siginfo_t			si;
 } PACKED SignalStackFrame;
 
+uint64_t sizeSignalStackFrame = sizeof(SignalStackFrame);
+int isPointerValid(uint64_t ptr, uint64_t size);		// syscall.c
+
 void dispatchSignal(Thread *thread)
 {
 	if (thread->sigcnt == 0) return;
@@ -66,9 +69,11 @@ void dispatchSignal(Thread *thread)
 
 	// try pushing the signal stack frame. also, don't break the red zone!
 	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & (uint64_t)(~0xF);
-	if ((addr < 0x1000) || ((addr+sizeof(SignalStackFrame)) > 0x7FC0000000))
+	//if ((addr < 0x1000) || ((addr+sizeof(SignalStackFrame)) > 0x7FC0000000))
+	if (!isPointerValid(addr, sizeof(SignalStackFrame)))
 	{
 		// extreme case, discard the signal :'(
+		kprintf("discarding signal\n");
 		return;
 	};
 
@@ -100,23 +105,20 @@ void dispatchSignal(Thread *thread)
 	thread->regs.rsi = (uint64_t) (&frame->si);
 	thread->regs.rip = thread->rootSigHandler;
 
-	thread->flags |= THREAD_SIGNALLED;
+	//thread->flags |= THREAD_SIGNALLED;
 	thread->flags &= ~THREAD_WAITING;
 };
 
 void sendSignal(Thread *thread, siginfo_t *siginfo)
 {
-	//if (thread == getCurrentThread()) lockSched();
 	if (thread->flags & THREAD_TERMINATED)
 	{
-		//if (thread == getCurrentThread()) unlockSched();
 		return;
 	};
 
 	if (thread->sigcnt == SIGQ_SIZE)
 	{
 		// drop the signal because the queue is full.
-		//if (thread == getCurrentThread()) unlockSched();
 		return;
 	};
 
@@ -125,7 +127,6 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 	thread->sigcnt++;
 
 	thread->flags &= ~THREAD_WAITING;
-	//if (thread == getCurrentThread()) unlockSched();
 };
 
 void sigret(Regs *regs, void *ret)

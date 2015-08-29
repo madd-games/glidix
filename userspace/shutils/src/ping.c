@@ -31,6 +31,7 @@
 #endif
 
 #include <sys/socket.h>
+#include <sys/glidix.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
@@ -121,6 +122,13 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
+	// 10 second timeout
+	if (_glidix_setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, 10000000000) != 0)
+	{
+		fprintf(stderr, "%s: setsockopt SO_RCVTIMEO: %s\n", argv[0], strerror(errno));
+		return 1;
+	};
+	
 	struct sockaddr_in wildcard_addr;
 	memset(&wildcard_addr, 0, sizeof(struct sockaddr_in));
 	wildcard_addr.sin_family = AF_INET;
@@ -148,7 +156,7 @@ int main(int argc, char *argv[])
 		ping.checksum = checksum(&ping, sizeof(PingPongPacket));
 		
 		pingtimes[i] = clock();
-		if (sendto(sockfd, &ping, sizeof(PingPongPacket), 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) < sizeof(PingPongPacket))
+		if (sendto(sockfd, &ping, sizeof(PingPongPacket), 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) == -1)
 		{
 			fprintf(stderr, "%s: sendto: %s\n", argv[0], strerror(errno));
 			close(sockfd);
@@ -163,12 +171,14 @@ int main(int argc, char *argv[])
 		PingPongPacket pong;
 		
 		socklen_t addrlen = sizeof(struct sockaddr_in);
-		if (recvfrom(sockfd, &pong, sizeof(PingPongPacket), 0, (struct sockaddr*) &src, &addrlen) < sizeof(PingPongPacket))
+		ssize_t count = recvfrom(sockfd, &pong, sizeof(PingPongPacket), 0, (struct sockaddr*) &src, &addrlen);
+		if (count == -1)
 		{
 			fprintf(stderr, "%s: recvfrom: %s\n", argv[0], strerror(errno));
 			close(sockfd);
 			return 1;
 		};
+
 		clock_t pongtime = clock();
 		
 		char buffer[INET_ADDRSTRLEN];
@@ -192,7 +202,7 @@ int main(int argc, char *argv[])
 			continue;
 		};
 		
-		printf("PONG from %s: id=%d, seq=%d, time=%u ms\n", buffer, pong.id, pong.seq, pongtime-pingtimes[pong.seq]);
+		printf("PONG from %s: id=%d, seq=%d, time=%u ns\n", buffer, pong.id, pong.seq, pongtime-pingtimes[pong.seq]);
 		gotBack++;
 	};
 	

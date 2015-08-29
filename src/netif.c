@@ -786,6 +786,46 @@ ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size)
 			netstat.numDropped = netif->numDropped;
 			netstat.numAddrs4 = netif->ipv4.numAddrs;
 			netstat.numAddrs6 = netif->ipv6.numAddrs;
+			memcpy(&netstat.ifconfig, &netif->ifconfig, sizeof(NetIfConfig));
+			
+			if (size > sizeof(NetStat))
+			{
+				size = sizeof(NetStat);
+			};
+			
+			memcpy(buffer, &netstat, size);
+			semSignal(&iflistLock);
+			return (ssize_t) size;
+		};
+		
+		netif = netif->next;
+	};
+	
+	semSignal(&iflistLock);
+	
+	// the interface was not found!
+	getCurrentThread()->therrno = ENOENT;
+	return -1;
+};
+
+ssize_t netconf_statidx(unsigned int index, NetStat *buffer, size_t size)
+{
+	NetStat netstat;
+	semWait(&iflistLock);
+	
+	NetIf *netif = &iflist;
+	while (netif != NULL)
+	{
+		if ((index--) == 0)
+		{
+			strcpy(netstat.ifname, netif->name);
+			netstat.numTrans = netif->numTrans;
+			netstat.numErrors = netif->numErrors;
+			netstat.numRecv = netif->numRecv;
+			netstat.numDropped = netif->numDropped;
+			netstat.numAddrs4 = netif->ipv4.numAddrs;
+			netstat.numAddrs6 = netif->ipv6.numAddrs;
+			memcpy(&netstat.ifconfig, &netif->ifconfig, sizeof(NetIfConfig));
 			
 			if (size > sizeof(NetStat))
 			{
@@ -847,4 +887,112 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
 	// the interface was not found!
 	getCurrentThread()->therrno = ENOENT;
 	return -1;
+};
+
+static int nextEthNumber = 0;
+static int nextTnlNumber = 0;
+
+NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig, void (*send)(NetIf*, const void*, size_t, const void*, size_t))
+{
+	semWait(&iflistLock);
+	char ifname[16];
+	if (ifconfig->type == IF_LOOPBACK)
+	{
+		semSignal(&iflistLock);
+		return NULL;
+	}
+	else if (ifconfig->type == IF_ETHERNET)
+	{
+		if (nextEthNumber == 100)
+		{
+			semSignal(&iflistLock);
+			return NULL;
+		};
+		
+		// validate mac address: it must not be broadcast (ff:ff:ff:ff:ff:ff), or multicast
+		// (bit 0 of first byte set).
+		if (ifconfig->ethernet.mac[0] & 1)
+		{
+			semSignal(&iflistLock);
+			return NULL;
+		};
+		
+		static uint8_t macBroadcast[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+		if (memcmp(ifconfig->ethernet.mac, macBroadcast, 6) == 0)
+		{
+			semSignal(&iflistLock);
+			return NULL;
+		};
+		
+		memcpy(ifname, "eth", 3);
+		if (nextEthNumber >= 10)
+		{
+			ifname[3] = '0' + (nextEthNumber/10);
+			ifname[4] = '0' + (nextEthNumber%10);
+			nextEthNumber++;
+			ifname[5] = 0;
+		}
+		else
+		{
+			ifname[3] = '0' + nextEthNumber;
+			nextEthNumber++;
+			ifname[4] = 0;
+		};
+	}
+	else if (ifconfig->type == IF_TUNNEL)
+	{
+		if (nextTnlNumber == 100)
+		{
+			semSignal(&iflistLock);
+			return NULL;
+		};
+		
+		memcpy(ifname, "tnl", 3);
+		if (nextTnlNumber >= 10)
+		{
+			ifname[3] = '0' + (nextTnlNumber/10);
+			ifname[4] = '0' + (nextTnlNumber%10);
+			nextTnlNumber++;
+			ifname[5] = 0;
+		}
+		else
+		{
+			ifname[3] = '0' + nextTnlNumber;
+			nextTnlNumber++;
+		};
+	}
+	else
+	{
+		semSignal(&iflistLock);
+		return NULL;
+	};
+	
+	NetIf *netif = (NetIf*) kmalloc(sizeof(NetIf));
+	memset(netif, 0, sizeof(NetIf));
+	netif->drvdata = drvdata;
+	strcpy(netif->name, ifname);
+	memcpy(&netif->ifconfig, ifconfig, sizeof(NetIfConfig));
+	netif->send = send;
+	
+	NetIf *last = &iflist;
+	while (last->next != NULL)
+	{
+		last = last->next;
+	};
+	
+	last->next = netif;
+	netif->prev = last;
+	
+	semSignal(&iflistLock);
+	return netif;
+};
+
+void DeleteNetworkInterface(NetIf *netif)
+{
+	semWait(&iflistLock);
+	if (netif->prev != NULL) netif->prev->next = netif->next;
+	if (netif->next != NULL) netif->next->prev = netif->prev;
+	semSignal(&iflistLock);
+	
+	kfree(netif);
 };

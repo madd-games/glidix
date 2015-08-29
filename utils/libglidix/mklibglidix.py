@@ -126,7 +126,13 @@ syscallTable = {
 	79:	"_glidix_netconf_stat",
 	80:	"_glidix_netconf_getaddrs",
 	81:	"getsockname",
-	82:	"shutdown"
+	82:	"shutdown",
+	83:	"connect",
+	84:	"getpeername",
+	85:	"_glidix_setsockopt",
+	86:	"_glidix_getsockopt",
+	87:	"_glidix_netconf_statidx",
+	88:	"_glidix_pcistat"
 }
 
 f = open("_libglidix.s", "wb")

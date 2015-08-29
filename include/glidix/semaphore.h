@@ -36,6 +36,9 @@
 #include <glidix/spinlock.h>
 #include <glidix/sched.h>
 
+#define	SEM_INTERRUPT				-1
+#define	SEM_TIMEOUT				-2
+
 typedef struct _SemWaitThread
 {
 	Thread *thread;
@@ -47,7 +50,7 @@ typedef struct
 {
 	Spinlock lock;
 	Thread *waiter;
-	int count;
+	volatile int count;
 
 	// the queue of threads waiting for this semaphore.
 	SemWaitThread *first;
@@ -67,5 +70,14 @@ void semSignal(Semaphore *sem);
 void semSignal2(Semaphore *sem, int count);
 void semSignalAndWait(Semaphore *sem);
 void semDump(Semaphore *sem);
+
+/**
+ * Wait for up to a specified number of resources with a timeout (given in nanoseconds). If the timeout is zero,
+ * wait indefinitely. Returns a positive value, indicating the number of resources that became available, on success.
+ * Otherwise returns one of the following negative values:
+ *  - SEM_INTERRUPT		The operation was interrupted by the reception of a signal.
+ *  - SEM_TIMEOUT		The operation has timed out.
+ */
+int semWaitTimeout(Semaphore *sem, int count, uint64_t timeout);
 
 #endif

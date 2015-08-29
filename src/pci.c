@@ -34,39 +34,91 @@
 #include <glidix/string.h>
 #include <glidix/sched.h>
 #include <glidix/errno.h>
+#include <glidix/memory.h>
+#include <glidix/console.h>
 
 static Spinlock pciLock;
 
-int pci_ioctl(File *fp, uint64_t cmd, void *argp)
+static PCIDevice *pciDevices = NULL;
+static PCIDevice *lastDevice = NULL;
+static int nextPCIID = 0;
+
+static void checkBus(uint8_t bus);
+static void checkSlot(uint8_t bus, uint8_t slot)
 {
-	if (cmd == IOCTL_PCI_DEVINFO)
+	PCIDeviceConfig config;
+	uint8_t funcs = 1;
+	
+	pciGetDeviceConfig(bus, slot, 0, &config);
+	if (config.std.vendor == 0xFFFF) return;
+	
+	if (config.std.headerType & 0x80)
 	{
-		PCIDevinfoRequest *rq = (PCIDevinfoRequest*) argp;
-		PCIDeviceConfig config;
-		pciGetDeviceConfig(rq->bus, rq->slot, rq->func, &config);
-		memcpy(&rq->config, &config, sizeof(PCIDeviceConfig));
-		return 0;
+		funcs = 8;
+	};
+	
+	if ((config.std.headerType & 0x7F) == 0x01)
+	{
+		// PCI-to-PCI bridge, scan secondary bus
+		checkBus(config.bridge.secondaryBus);
 	}
 	else
 	{
-		getCurrentThread()->therrno = ENOTTY;
-		return -1;
+		uint8_t func = 0;
+		do
+		{
+			if (config.std.vendor != 0xFFFF)
+			{
+				PCIDevice *dev = (PCIDevice*) kmalloc(sizeof(PCIDevice));
+				dev->next = NULL;
+				dev->bus = bus;
+				dev->slot = slot;
+				dev->func = func;
+				dev->id = nextPCIID++;
+				dev->vendor = config.std.vendor;
+				dev->device = config.std.device;
+				uint16_t classcode16 = (uint16_t) config.std.classcode;
+				uint16_t subclass16 = (uint16_t) config.std.subclass;
+				dev->type = (classcode16 << 8) | (subclass16 & 0xFF);
+				dev->intpin = config.std.intpin;
+				dev->driver = NULL;
+				strcpy(dev->driverName, "null");
+				strcpy(dev->deviceName, "Unknown");
+				
+				if (lastDevice == NULL)
+				{
+					pciDevices = dev;
+					lastDevice = dev;
+				}
+				else
+				{
+					lastDevice->next = dev;
+					lastDevice = dev;
+				};
+			};
+			
+			func++;
+			if (func != 8)
+			{
+				pciGetDeviceConfig(bus, slot, func, &config);
+			};
+		} while (func < funcs);
 	};
 };
 
-int openpcictl(void *data, File *fp, size_t szFile)
+static void checkBus(uint8_t bus)
 {
-	fp->ioctl = pci_ioctl;
-	return 0;
+	uint8_t slot;
+	for (slot=0; slot<32; slot++)
+	{
+		checkSlot(bus, slot);
+	};
 };
 
 void pciInit()
 {
 	spinlockRelease(&pciLock);
-	if (AddDevice("pcictl", NULL, openpcictl, 0) == NULL)
-	{
-		panic("failed to create /dev/pcictl");
-	};
+	checkBus(0);
 };
 
 void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig *config)
@@ -87,5 +139,59 @@ void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig
 		*put++ = ind(PCI_CONFIG_DATA);
 		addr += 4;
 	};
+	spinlockRelease(&pciLock);
+};
+
+ssize_t sys_pcistat(int id, PCIDevice *buffer, size_t bufsize)
+{
+	spinlockAcquire(&pciLock);
+	PCIDevice *dev;
+	
+	for (dev=pciDevices; dev!=NULL; dev=dev->next)
+	{
+		if (dev->id == id)
+		{
+			if (bufsize > sizeof(PCIDevice))
+			{
+				bufsize = sizeof(PCIDevice);
+			};
+			
+			memcpy(buffer, dev, bufsize);
+			spinlockRelease(&pciLock);
+			return (ssize_t) bufsize;
+		};
+	};
+	
+	spinlockRelease(&pciLock);
+	ERRNO = ENOENT;
+	return -1;
+};
+
+void pciEnumDevices(Module *module, int (*enumerator)(PCIDevice *dev, void *param), void *param)
+{
+	spinlockAcquire(&pciLock);
+	PCIDevice *dev;
+	
+	for (dev=pciDevices; dev!=NULL; dev=dev->next)
+	{
+		if (dev->driver == NULL)
+		{
+			if (enumerator(dev, param))
+			{
+				dev->driver = module;
+				strcpy(dev->driverName, module->name);
+			};
+		};
+	};
+	
+	spinlockRelease(&pciLock);
+};
+
+void pciReleaseDevice(PCIDevice *dev)
+{
+	spinlockAcquire(&pciLock);
+	dev->driver = NULL;
+	strcpy(dev->driverName, "null");
+	strcpy(dev->deviceName, "Unknown");
 	spinlockRelease(&pciLock);
 };

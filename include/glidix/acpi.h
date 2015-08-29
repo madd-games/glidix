@@ -73,6 +73,16 @@ typedef struct
 	uint32_t				intbase;
 } PACKED MADT_IOAPIC;
 
+typedef struct
+{
+	uint8_t					type;		// 2
+	uint8_t					len;
+	uint8_t					bus;
+	uint8_t					irq;
+	uint32_t				sysint;
+	uint16_t				flags;
+} PACKED MADT_IntOvr;
+
 void acpiInit();
 
 #endif

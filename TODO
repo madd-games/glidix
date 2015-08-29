@@ -1,5 +1,3 @@
  * Make sure that dup() in filesystem drivers actually causes both descriptions to point to the same offset.
- * Module unloading
- * Fix FPU support (fpuLoad causes GPF, see sched.c and signal.c)
- * Get ACPI to properly read IRQ remappings.
- * Load-on-demand and copy-on-write page faults should ensure the page wasn't already loaded by another thread sharing the same address space.
+ * Check IDE IRQs (mod_sdide) - and make sure it scans the full space (see the "/*2*/1" comment). If we send a command
+   to a non-existent controller, interrupts stop arriving in VirtualBox.

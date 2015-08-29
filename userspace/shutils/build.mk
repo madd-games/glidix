@@ -1,6 +1,8 @@
 .PHONY: all
-all: out/cp out/route out/sudo out/mip-install out/passwd out/mount out/mkdir out/chown out/ls out/date out/rmmod out/login out/chgrp out/ping out/ln out/insmod out/whoami out/whois out/env out/halt out/stat out/pwdsetup out/rm out/umount out/crypt out/mkmip out/chmod out/touch out/cat out/netconf
+all: out/cp out/lspci out/route out/sudo out/mip-install out/passwd out/mount out/mkdir out/chown out/ls out/sleep out/date out/rmmod out/login out/chgrp out/ping out/ln out/insmod out/whoami out/whois out/env out/halt out/stat out/pwdsetup out/rm out/umount out/crypt out/mkmip out/chmod out/touch out/cat out/netconf
 out/cp: src/cp.c
+	x86_64-glidix-gcc $< -o $@ 
+out/lspci: src/lspci.c
 	x86_64-glidix-gcc $< -o $@ 
 out/route: src/route.c
 	x86_64-glidix-gcc $< -o $@ 
@@ -19,6 +21,8 @@ out/mkdir: src/mkdir.c
 out/chown: src/chown.c
 	x86_64-glidix-gcc $< -o $@ 
 out/ls: src/ls.c
+	x86_64-glidix-gcc $< -o $@ 
+out/sleep: src/sleep.c
 	x86_64-glidix-gcc $< -o $@ 
 out/date: src/date.c
 	x86_64-glidix-gcc $< -o $@ 

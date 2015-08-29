@@ -112,4 +112,10 @@
 #define EWOULDBLOCK                               82
 #define EXDEV                                     83
 
+/**
+ * This macro must only be used with <glidix/sched.h> included! Expands to an lvalue for the current
+ * thread's error number.
+ */
+#define	ERRNO					getCurrentThread()->therrno
+
 #endif

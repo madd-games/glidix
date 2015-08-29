@@ -32,8 +32,10 @@
 #include <stddef.h>
 
 /**
- * String and memory operations for the kernel. Implemented in string.asm.
+ * String and memory operations for the kernel. Implemented in string.asm and init.c.
  */
+
+#define	ULONG_MAX							18446744073709551615UL
 
 void   memcpy(void *dst, const void *src, size_t size);
 void   memset(void *dst, char c, size_t size);
@@ -42,5 +44,19 @@ size_t strlen(const char *str);
 int    memcmp(const void *a, const void *b, size_t size);
 int    strcmp(const char *a, const char *b);
 void   strcat(char *dst, const char *a);
+int    strncmp(const char *s1, const char *s2, size_t n);		/* init.c */
+int    isprint(int c);							/* init.c */
+char*  strncpy(char *s1, const char *s2, size_t n);			/* init.c */
+int    isdigit (int c);							/* init.c */
+int    isspace(int c);							/* init.c */
+int    isxdigit(int c);							/* init.c */
+int    toupper(int c);							/* init.c */
+int    tolower(int c);                                                  /* init.c */
+char*  strncat(char *dst, const char *src, size_t n);			/* init.c */
+int    isalpha(int c);							/* init.c */
+int    isupper(int c);							/* init.c */
+int    islower(int c);							/* init.c */
+unsigned long strtoul(const char *nptr, char **endptr, int base);	/* init.c */
+char *strstr(const char *in, const char *str);				/* init.c */
 
 #endif

@@ -54,6 +54,13 @@
 #define	MODULE_INIT(...)		int __module_init(__VA_ARGS__)
 #define	MODULE_FINI(...)		int __module_fini(__VA_ARGS__)
 
+/**
+ * This macro evaluates to a pointer to the current module, when used inside module code. It returns a
+ * pointer to the external variable "__this_module" declared below. That variable does not actually exist
+ * but the module loader resolved the symbol to the module structure's address.
+ */
+#define	THIS_MODULE			(&__this_module)
+
 typedef struct _Module
 {
 	char				name[128];
@@ -82,6 +89,11 @@ int rmmod(const char *modname, int flags);
 void dumpModules();
 void findDebugSymbolInModules(uint64_t addr, SymbolInfo *symInfo);
 void rmmodAll();
+
+/**
+ * See above (THIS_MODULE).
+ */
+extern Module __this_module;
 
 /**
  * The filesystem mounted under /sys/mod.

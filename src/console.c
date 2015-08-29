@@ -347,3 +347,8 @@ void kdumpregs(Regs *regs)
 	kprintf("CS:  %a\tRIP: %a\n", regs->cs, regs->rip);
 	kprintf("RFLAGS: %a (", regs->rflags); printFlags(regs->rflags); kprintf(")\n");
 };
+
+void unlockConsole()
+{
+	spinlockRelease(&consoleLock);
+};

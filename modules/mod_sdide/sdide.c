@@ -341,10 +341,11 @@ static void ideInit(uint32_t *bars)
 	ideWriteReg(ctrl, ATA_SECONDARY, ATA_REG_CONTROL, 2);
 
 	int i, j, k, count=0;
-	for (i=0; i<2; i++)
+	for (i=0; i</*2*/1; i++)
 	{
 		for (j=0; j<2; j++)
 		{
+			kprintf("loop %d, %d\n", i, j);
 			uint8_t err = 0, type = IDE_ATA, status;
 			ctrl->devices[count].exists = 0;
 
@@ -490,7 +491,7 @@ static void ideInit(uint32_t *bars)
 				thparams->ctrl = ctrl;
 				thparams->devidx = count;
 				thparams->sd = sdCreate(&sdparams);
-
+				
 				KernelThreadParams atapiPars;
 				atapiPars.stackSize = 0x4000;
 				atapiPars.name = "ATAPI device";

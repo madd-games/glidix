@@ -31,6 +31,7 @@
 
 #include <glidix/common.h>
 #include <glidix/ioctl.h>
+#include <glidix/module.h>
 
 #define	PCI_CONFIG_ADDR					0xCF8
 #define	PCI_CONFIG_DATA					0xCFC
@@ -65,7 +66,44 @@ typedef union
 		uint8_t					mingrant;
 		uint8_t					maxlat;
 	} PACKED std;
-	// TODO
+	
+	struct
+	{
+		uint16_t				vendor;
+		uint16_t				device;
+		uint16_t				command;
+		uint16_t				status;
+		uint8_t					rev;
+		uint8_t					progif;
+		uint8_t					subclass;
+		uint8_t					classcode;
+		uint8_t					cacheLineSize;
+		uint8_t					latencyTimer;
+		uint8_t					headerType;
+		uint8_t					bist;
+		uint32_t				bar[2];
+		uint8_t					primaryBus;
+		uint8_t					secondaryBus;
+		uint8_t					subordinateBus;
+		uint8_t					secondaryLatencyTimer;
+		uint8_t					iobase;
+		uint8_t					iolimit;
+		uint16_t				secondaryStatus;
+		uint16_t				membase;
+		uint16_t				memlimit;
+		uint16_t				premembase;
+		uint16_t				prememlimit;
+		uint32_t				premembaseupper;
+		uint32_t				prememlimitupper;
+		uint16_t				iobaseupper;
+		uint16_t				iolimitupper;
+		uint8_t					capability;
+		uint8_t					reserved[7];
+		uint32_t				expbase;
+		uint8_t					intline;
+		uint8_t					intpin;
+		uint16_t				bridgectl;
+	} PACKED bridge;
 } PCIDeviceConfig;
 
 typedef struct
@@ -76,7 +114,50 @@ typedef struct
 	PCIDeviceConfig config;
 } PACKED PCIDevinfoRequest;
 
+typedef struct PCIDevice_
+{
+	struct PCIDevice_*				next;
+	uint8_t						bus;
+	uint8_t						slot;
+	uint8_t						func;
+	int						id;			// glidix-defined device ID
+	uint16_t					vendor;
+	uint16_t					device;
+	uint16_t					type;			// high 8 bits = classcode, low 8 bits = subclass
+	uint8_t						intpin;
+	Module*						driver;
+	char						driverName[128];	// name of driver module
+	char						deviceName[128];	// name of device (default = "Unknown")
+} PCIDevice;
+
 void pciInit();
 void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig *config);
+
+/**
+ * System call to get information about a PCI device with the given ID. The PCIDevice structure is copied into the
+ * buffer. If the buffer is larger than expected, the real size is returned; if it is too small, the structure is
+ * truncated. The pointers in the PCIDevice structure are meaningless in userspace. Returns -1 on error, and sets
+ * errno appropriately:
+ *  - ENOENT	The device with the given ID does not exist.
+ */
+ssize_t sys_pcistat(int id, PCIDevice *buffer, size_t bufsize);
+
+/**
+ * This function is called by device drivers to decide which devices they can support. This function will scan the
+ * list of PCI devices in the system, calling enumerator() on each one (passing @param to that function). The job
+ * of the enumerator() is as follows: if it doesn't support the device, return 0 without doing anything at all to
+ * the device description. If it does support the device, it should change the @deviceName field - and ONLY that
+ * field - to indicate what the device is called, and return 1; the kernel will then assign this device to the module.
+ * The @module argument should be THIS_MODULE. The device list is locked when the enumerator() is called, so it must not
+ * do anything other than recognise the device, put it in an internal list of devices, and return. Remember that when
+ * the module is being unloaded, it must call pciReleaseDevice()!
+ */
+void pciEnumDevices(Module *module, int (*enumerator)(PCIDevice *dev, void *param), void *param);
+
+/**
+ * Release the device. Called by a driver after it has acquired a device and no longer wants to support it (e.g. the module
+ * is being unloaded).
+ */
+void pciReleaseDevice(PCIDevice *dev);
 
 #endif

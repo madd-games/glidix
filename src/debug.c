@@ -33,7 +33,7 @@
 #include <glidix/module.h>
 #include <glidix/string.h>
 #include <glidix/semaphore.h>
-
+#include <glidix/time.h>
 void enterDebugContext(Regs *regs);			// sched.asm
 
 void stackTrace(uint64_t rip, uint64_t rbp)
@@ -94,6 +94,7 @@ void debugKernel(Regs *regs)
 			break;
 		case 5:
 			kprintf("PID: %d, '%s'\n", getCurrentThread()->pid, getCurrentThread()->name);
+			kprintf("WAKE: %d, TICKS: %d\n", (int) getCurrentThread()->wakeTime, getUptime());
 			kdumpregs(&getCurrentThread()->regs);
 			break;
 		case 6:

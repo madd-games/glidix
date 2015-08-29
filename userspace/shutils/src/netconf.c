@@ -46,31 +46,48 @@ void usage()
 	exit(1);
 };
 
-int main(int argc, char *argv[])
+const char *linkname(int type)
 {
-	progName = argv[0];
-	
-	if (argc != 2)
+	switch (type)
 	{
-		usage();
-		return 1;
+	case 0:				// IF_LOOPBACK
+		return "Loopback";
+	case 1:				// IF_ETHERNET
+		return "Ethernet";
+	case 2:				// IF_TUNNEL
+		return "Software Tunnel";
+	default:
+		return "?";
 	};
-	
+};
+
+void printIntfInfo(const char *ifname)
+{
 	_glidix_netstat netstat;
-	if (_glidix_netconf_stat(argv[1], &netstat, sizeof(_glidix_netstat)) == -1)
+	if (_glidix_netconf_stat(ifname, &netstat, sizeof(_glidix_netstat)) == -1)
 	{
-		fprintf(stderr, "%s: %s: %s\n", argv[0], argv[1], strerror(errno));
-		return 1;
+		fprintf(stderr, "%s: %s: %s\n", progName, ifname, strerror(errno));
+		exit(1);
 	};
 	
 	_glidix_ifaddr4 *addrs = (_glidix_ifaddr4*) malloc(sizeof(_glidix_ifaddr4) * netstat.numAddrs4);
-	_glidix_netconf_getaddrs(argv[1], AF_INET, addrs, sizeof(_glidix_ifaddr4) * netstat.numAddrs4);
+	_glidix_netconf_getaddrs(ifname, AF_INET, addrs, sizeof(_glidix_ifaddr4) * netstat.numAddrs4);
 	
 	printf("Interface: %s\n", netstat.ifname);
 	printf("\tpackets sent: %d\n", netstat.numTrans);
 	printf("\tpackets received: %d\n", netstat.numRecv);
 	printf("\tpacket errors: %d\n", netstat.numErrors);
 	printf("\tpackets dropped: %d\n", netstat.numDropped);
+	printf("\tLink: %s\n", linkname(netstat.ifconfig.type));
+	if (netstat.ifconfig.type == 1)
+	{
+		// IF_ETHER
+		printf("\t\tMAC: %x:%x:%x:%x:%x:%x\n", netstat.ifconfig.ethernet.mac[0], netstat.ifconfig.ethernet.mac[1],
+			netstat.ifconfig.ethernet.mac[2], netstat.ifconfig.ethernet.mac[3], netstat.ifconfig.ethernet.mac[4],
+			netstat.ifconfig.ethernet.mac[5]
+		);
+	};
+	
 	printf("\tAddresses:\n");
 	char netaddr[INET_ADDRSTRLEN];
 	int netsize;
@@ -103,6 +120,44 @@ int main(int argc, char *argv[])
 	};
 	
 	printf("\n");
+};
+
+int main(int argc, char *argv[])
+{
+	progName = argv[0];
+	
+	if (argc == 1)
+	{
+		_glidix_netstat netstat;
+		unsigned int i;
+		for (i=0;;i++)
+		{
+			if (_glidix_netconf_statidx(i, &netstat, sizeof(_glidix_netstat)) != -1)
+			{
+				printIntfInfo(netstat.ifname);
+			}
+			else
+			{
+				if (errno == ENOENT)
+				{
+					break;
+				}
+				else
+				{
+					fprintf(stderr, "%s: %u: %s\n", argv[0], i, strerror(errno));
+				};
+			};
+		};
+	}
+	else if (argc == 2)
+	{
+		printIntfInfo(argv[1]);
+	}
+	else
+	{
+		usage();
+		return 1;
+	};
 	
 	return 0;
 };

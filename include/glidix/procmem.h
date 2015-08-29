@@ -194,6 +194,12 @@ int tryLoadOnDemand(uint64_t addr);
 void dumpProcessMemory(ProcMem *pm, uint64_t checkAddr);
 
 /**
+ * Check if a given page can be safely accessed by a userspace process, for reading (PROT_READ), writing
+ * (PROT_WRITE) or both. The page is an index (address/0x1000). Returns 1 if it can be accessed, 0 otherwise.
+ */
+int canAccessPage(ProcMem *pm, uint64_t pageindex, int perms);
+
+/**
  * Userspace.
  */
 #ifndef _SYS_MMAN_H

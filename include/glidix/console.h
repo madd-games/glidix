@@ -40,6 +40,7 @@ void kputbuf(const char *buf, size_t size);
 void kputbuf_debug(const char *buf, size_t size);
 void kdumpregs(Regs *regs);
 void kprintf_debug(const char *fmt, ...);
+void unlockConsole();
 
 #define	DONE()						kprintf("%$\x02" "Done%#\n")
 #define	FAILED()					kprintf("%$\x04" "Failed%#\n")

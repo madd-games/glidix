@@ -31,6 +31,7 @@
 #include <glidix/common.h>
 #include <glidix/memory.h>
 #include <glidix/console.h>
+#include <glidix/time.h>
 
 void semInit(Semaphore *sem)
 {
@@ -115,28 +116,6 @@ void semWait(Semaphore *sem)
 	spinlockRelease(&sem->lock);
 };
 
-#if 0
-static inline int semTryLock(Semaphore *sem)
-{
-	spinlockAcquire(&sem->lock);
-	Thread *me = getCurrentThread();
-
-	//if (sem->owner != NULL)
-	if ((sem->count == 0) || (sem->first != NULL))
-	{
-		spinlockRelease(&sem->lock);
-		return -1;
-	}
-	else
-	{
-		sem->count--;
-	};
-
-	spinlockRelease(&sem->lock);
-	return 0;
-};
-#endif
-
 int semWait2(Semaphore *sem, int count)
 {
 	spinlockAcquire(&sem->lock);
@@ -150,19 +129,84 @@ int semWait2(Semaphore *sem, int count)
 
 	while (sem->count == 0)
 	{
+		//kprintf("try again\n");
 		sem->countWaiter = getCurrentThread();
 		ASM("cli");
 		getCurrentThread()->flags |= THREAD_WAITING;
 		spinlockRelease(&sem->lock);
 		kyield();
+		spinlockAcquire(&sem->lock);
 		if (getCurrentThread()->sigcnt > sigcnt)
 		{
 			sem->countWaiter = NULL;
+			spinlockRelease(&sem->lock);
 			return -1;
 		};
-		spinlockAcquire(&sem->lock);
+		//kprintf("MAYBE? COUNT=%d\n", sem->count);
 	};
 
+	sem->countWaiter = NULL;
+	spinlockRelease(&sem->lock);
+	
+	spinlockAcquire(&sem->countLock);
+	spinlockRelease(&sem->countLock);
+
+	spinlockAcquire(&sem->lock);
+	if (sem->count < count) count = sem->count;
+	spinlockRelease(&sem->lock);
+
+	int out = 0;
+	//kprintf("wait %d\n", count);
+	while (count--)
+	{
+		semWait(sem);
+		out++;
+	};
+
+	return out;
+};
+
+int semWaitTimeout(Semaphore *sem, int count, uint64_t timeout)
+{
+	int deadline = 0;
+	if (timeout != 0)
+	{
+		deadline = getUptime() + (int) (timeout/1000000);
+	};
+	
+	spinlockAcquire(&sem->lock);
+	if (sem->countWaiter != NULL)
+	{
+		spinlockRelease(&sem->lock);
+		return 0;
+	};
+
+	int sigcnt = getCurrentThread()->sigcnt;
+	while (sem->count == 0)
+	{
+		sem->countWaiter = getCurrentThread();
+		ASM("cli");
+		getCurrentThread()->flags |= THREAD_WAITING;
+		getCurrentThread()->wakeTime = deadline;
+		spinlockRelease(&sem->lock);
+		kyield();
+		spinlockAcquire(&sem->lock);
+		if (getCurrentThread()->sigcnt > sigcnt)
+		{
+			sem->countWaiter = NULL;
+			spinlockRelease(&sem->lock);
+			return SEM_INTERRUPT;
+		};
+		if (getUptime() >= deadline)
+		{
+			sem->countWaiter = NULL;
+			spinlockRelease(&sem->lock);
+			return SEM_TIMEOUT;
+		};
+	};
+
+	getCurrentThread()->wakeTime = 0;
+	
 	spinlockRelease(&sem->lock);
 	sem->countWaiter = NULL;
 	spinlockAcquire(&sem->countLock);

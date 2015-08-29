@@ -36,10 +36,15 @@ void _panic(const char *filename, int lineno, const char *funcname, const char *
 	va_start(ap, fmt);
 
 	ASM ("cli");
+	unlockConsole();
 	kprintf("In function %s at %s:%d\n", funcname, filename, lineno);
 	kprintf("Kernel panic: ");
 	kvprintf(fmt, ap);
-	ASM ("hlt");
+	
+	while (1)
+	{
+		ASM ("cli; hlt");
+	};
 
 	/* no need for cleanup because the CPU is halted */
 };

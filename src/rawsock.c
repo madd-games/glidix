@@ -145,7 +145,8 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 	{
 		if (sendPacket(addr, message, len) != 0)
 		{
-			return 0;
+			ERRNO = ENETUNREACH;
+			return -1;
 		}
 		else
 		{
@@ -237,7 +238,13 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 		dataLen = len + 40;
 	};
 	
-	sendPacket(addr, data, dataLen);
+	if (sendPacket(addr, data, dataLen) != 0)
+	{
+		kfree(data);
+		ERRNO = ENETUNREACH;
+		return -1;
+	};
+	
 	kfree(data);
 	
 	return (ssize_t) len;
@@ -322,7 +329,7 @@ static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struc
 	semSignal(&rawsock->queueLock);
 	
 	// announce to any waiting processes that a packet was received
-	semSignal(&rawsock->packetCounter);
+	semSignal2(&rawsock->packetCounter, 1);
 };
 
 static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)
@@ -339,7 +346,21 @@ static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	}
 	else
 	{
-		semWait(&rawsock->packetCounter);
+		int status = semWaitTimeout(&rawsock->packetCounter, 1, sock->options[GSO_RCVTIMEO]);
+		
+		if (status < 0)
+		{
+			if (status == SEM_INTERRUPT)
+			{
+				ERRNO = EINTR;
+			}
+			else
+			{
+				ERRNO = ETIMEDOUT;
+			};
+			
+			return -1;
+		};
 	};
 	
 	// packet inbound
@@ -392,7 +413,7 @@ static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	else
 	{
 		// just peeking so "return" the packet
-		semSignal(&rawsock->packetCounter);
+		semSignal2(&rawsock->packetCounter, 1);
 	};
 	
 	return (ssize_t) len;

@@ -38,7 +38,7 @@
 #define	SECONDS_PER_NONLEAP_YEAR			31536000
 
 // time between system time updates from RTC
-#define	RTC_WAIT_TIME					10*1000
+#define	RTC_UPDATE_INTERVAL				10*1000
 
 // each entry is the number of days into the year that the given month starts
 // so 1 january is the first day of the year, so the value for january is 0.
@@ -64,23 +64,33 @@ static Spinlock timeLock;
 
 void sleep(int ticks)
 {
+	//kprintf("sleep() called\n");
 	if (getCurrentThread() == NULL)
 	{
+		//kprintf("here maybe???\n");
 		// not ready to wait!
 		int then = getUptime() + ticks;
 		while (getUptime() < then);
 	}
 	else
 	{
+		//kprintf("here then aye?\n");
 		int then = getUptime() + ticks;
+		//kprintf("got to this part; will break at %d (now=%d)\n", then, getUptime());
 		while (getUptime() < then)
 		{
-			ASM("cli");
+			//kprintf("time: %d\n", getUptime());
+			lockSched();
+			//ASM("cli");
+			//kprintf("locked sched\n");
 			getCurrentThread()->wakeTime = then;
 			getCurrentThread()->flags |= THREAD_WAITING;
+			unlockSched();
+			//kprintf("about to kyield\n");
 			kyield();
 		};
 	};
+	//kprintf("sleep() returned\n");
 };
 
 time_t makeUnixTime(int64_t year, int64_t month, int64_t day, int64_t hour, int64_t minute, int64_t second)
@@ -104,7 +114,7 @@ time_t makeUnixTime(int64_t year, int64_t month, int64_t day, int64_t hour, int6
 time_t time()
 {
 	spinlockAcquire(&timeLock);
-	time_t out = currentTime + (time_t) (getUptime()-timeUpdateStamp);
+	time_t out = currentTime + (time_t) (getUptime()-timeUpdateStamp)/1000;
 	spinlockRelease(&timeLock);
 	return out;
 };
@@ -168,7 +178,8 @@ static void rtcThread(void *data)
 		timeUpdateStamp = getUptime();
 		spinlockRelease(&timeLock);
 		
-		sleep(RTC_WAIT_TIME);
+		sleep(RTC_UPDATE_INTERVAL);
+		//getCurrentThread()->flags |= THREAD_WAITING;
 	};
 };
 

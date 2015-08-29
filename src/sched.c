@@ -211,8 +211,15 @@ int canSched(Thread *thread)
 	if (thread->wakeTime != 0)
 	{
 		uint64_t currentTime = (uint64_t) getTicks();
+		//if (thread->pid == 1)
+		//{
+		//	kprintf("process %d, wakeTime=%d, now=%d\n", (int) thread->pid, (int) thread->wakeTime, (int) currentTime);
+		//};
+		//kprintf("TIME: %d; WAKEY: %d, FLAGS: %a\n", currentTime, thread->wakeTime, getFlagsRegister());
 		if (currentTime >= thread->wakeTime)
 		{
+			//kprintf("WAKING UP\n");
+			thread->wakeTime = 0;
 			thread->flags &= ~THREAD_WAITING;
 		};
 	};
@@ -235,6 +242,7 @@ int canSched(Thread *thread)
 
 void switchTask(Regs *regs)
 {
+	ASM("sti");
 	if (currentThread == NULL)
 	{
 		apic->timerInitCount = quantumTicks;
@@ -242,11 +250,10 @@ void switchTask(Regs *regs)
 	};
 	if (spinlockTry(&schedLock))
 	{
-		kprintf_debug("WARNING: SCHED LOCKED\n");
+		//kprintf_debug("WARNING: SCHED LOCKED\n");
 		apic->timerInitCount = quantumTicks;
 		return;
 	};
-	ASM("cli");
 
 	// remember the context of this thread.
 	fpuSave(&currentThread->fpuRegs);
@@ -264,7 +271,7 @@ void switchTask(Regs *regs)
 		// if the syscall is interruptable, do the switch-back.
 		if (currentThread->flags & THREAD_INT_SYSCALL)
 		{
-			kprintf_debug("signal in queue, THREAD_INT_SYSCALL ok\n");
+			//kprintf_debug("signal in queue, THREAD_INT_SYSCALL ok\n");
 			memcpy(&currentThread->regs, &currentThread->intSyscallRegs, sizeof(Regs));
 			*((int64_t*)&currentThread->regs.rax) = -1;
 			currentThread->therrno = EINTR;

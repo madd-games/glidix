@@ -773,9 +773,38 @@ void dumpProcessMemory(ProcMem *pm, uint64_t checkAddr)
 	kprintf("Virtual addr %a is frame %a and cow frame %a (refcount %d)\n", checkAddr, frameInList, frameInCOW, cowRefcount);
 };
 
+int canAccessPage(ProcMem *pm, uint64_t pageindex, int perms)
+{
+	if (pm == NULL) return 0;
+
+	spinlockAcquire(&pm->lock);
+	Segment *seg;
+	
+	for (seg=pm->firstSegment; seg!=NULL; seg=seg->next)
+	{
+		uint64_t endframe = seg->start + seg->fl->count;
+		if ((pageindex >= seg->start) && (pageindex < endframe))
+		{
+			int status = 1;
+			if ((seg->flags & perms) != perms)
+			{
+				// not all perms are set
+				status = 0;
+			};
+			
+			spinlockRelease(&pm->lock);
+			return status;
+		};
+	};
+	
+	// the memory is not mapped
+	spinlockRelease(&pm->lock);
+	return 0;
+};
+
 int mprotect(uint64_t addr, uint64_t len, int prot)
 {
-	if ((addr < 0x1000) || ((addr+len) > 0x8000000000))
+	if ((addr < 0x1000) || ((addr+len) > 0x7FC0000000))
 	{
 		getCurrentThread()->therrno = ENOMEM;
 		return -1;

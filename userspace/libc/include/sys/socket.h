@@ -55,6 +55,11 @@ extern "C" {
 #define	MSG_PEEK			(1 << 2)
 #define	MSG_WAITALL			(1 << 3)
 
+#define	SOL_SOCKET			0
+
+#define	SO_RCVTIMEO			0
+#define	SO_SNDTIMEO			1
+
 struct sockaddr
 {
 	sa_family_t			sa_family;		/* AF_* */
@@ -75,7 +80,9 @@ ssize_t sendto(int socket, const void *message, size_t length, int flags, const 
 ssize_t recv(int socket, void *buffer, size_t length, int flags);
 ssize_t recvfrom(int socket, void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len);
 int getsockname(int socket, struct sockaddr *address, socklen_t *address_len);
+int getpeername(int socket, struct sockaddr *address, socklen_t *address_len);
 int shutdown(int socket, int how);
+int connect(int socket, const struct sockaddr *addr, socklen_t addrlen);
 
 #ifdef __cplusplus
 };	/* extern "C" */

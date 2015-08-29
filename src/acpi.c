@@ -81,6 +81,9 @@ static ACPI_RSDPDescriptor *findRSDP()
 	return findRSDPInRange(start, start+0x400);
 };
 
+// maps an IRQ to a system interrupt
+static int irqMap[15];
+
 static void ioapicInit(uint64_t ioapicbasephys)
 {
 	uint32_t volatile* regsel = (uint32_t volatile*) /*(ioapicbasephys+0xFFFF800000000000)*/ 0xFFFF808000002000;
@@ -91,20 +94,44 @@ static void ioapicInit(uint64_t ioapicbasephys)
 	__sync_synchronize();
 
 	kprintf("APIC ID: %d, NUM INTERRUPTS: %d\n", apic->id, maxintr);
+	uint8_t *checkInts = (uint8_t*) kmalloc(maxintr+1);
+	memset(checkInts, 0, maxintr+1);
+	
 	int i;
 	for (i=0; i<15; i++)
 	{
-		*regsel = (0x10+2*i);
+		kprintf("SYSINT %d -> LOCAL INT %d\n", irqMap[i], i+32);
+		*regsel = (0x10+2*irqMap[i]);
 		__sync_synchronize();
 		uint64_t entry = (uint64_t)(i+32) | ((uint64_t)(apic->id) << 56);
 		*iowin = (uint32_t)(entry);
 		__sync_synchronize();
-		*regsel = (0x10+2*i+1);
+		*regsel = (0x10+2*irqMap[i]+1);
 		__sync_synchronize();
 		*iowin = (uint32_t)(entry >> 32);
 		__sync_synchronize();
+		
+		checkInts[irqMap[i]] = 1;
 	};
 
+	for (i=0; i<=maxintr; i++)
+	{
+		if (!checkInts[i])
+		{
+			kprintf("SYSINT %d -> LOCAL INT 7\n", i);
+			*regsel = (0x10+2*i);
+			__sync_synchronize();
+			uint64_t entry = (uint64_t)(39) | ((uint64_t)(apic->id) << 56);
+			*iowin = (uint32_t)(entry);
+			__sync_synchronize();
+			*regsel = (0x10+2*i+1);
+			__sync_synchronize();
+			*iowin = (uint32_t)(entry >> 32);
+			__sync_synchronize();
+		};
+	};
+	
+	kfree(checkInts);
 	kprintf("Done.\n");
 
 	//panic("Stop");
@@ -137,6 +164,13 @@ void acpiInit()
 	pmem_read(acpiTables, rsdp->rsdtAddr+sizeof(ACPI_SDTHeader), acpiNumTables*4);
 
 	int i;
+	for (i=0; i<15; i++)
+	{
+		irqMap[i] = i;
+	};
+	
+	uint64_t ioapicphys = 0;
+	
 	ACPI_SDTHeader head;
 	uint32_t payloadPhysAddr;
 	for (i=0; i<acpiNumTables; i++)
@@ -154,20 +188,42 @@ void acpiInit()
 				MADTRecordHeader rhead;
 				pmem_read(&rhead, searching, sizeof(MADTRecordHeader));
 
+				//kprintf("TYPE=%d, LEN=%d\n", rhead.type, rhead.len);
 				if (rhead.type == 1)
 				{
 					pmem_read(&madtIOAPIC, searching+sizeof(MADTRecordHeader), sizeof(MADT_IOAPIC));
 					kprintf("BASE: %a\n", madtIOAPIC.ioapicbase);
 					kprintf("INTBASE: %a\n", madtIOAPIC.intbase);
-					ioapicInit(madtIOAPIC.ioapicbase);
-					//panic("found IOAPIC info");
-					break;
+					//ioapicInit(madtIOAPIC.ioapicbase);
+					ioapicphys = madtIOAPIC.ioapicbase;
 				}
-				else
+				else if (rhead.type == 2)
 				{
-					searching += /*sizeof(MADTRecordHeader) +*/ rhead.len;
+					MADT_IntOvr intovr;
+					pmem_read(&intovr, searching, sizeof(MADT_IntOvr));
+					kprintf("INTOVR: BUS=%d, IRQ=%d, SYSINT=%d, FLAGS=%a\n", intovr.bus, intovr.irq, intovr.sysint, intovr.flags);
+					if (intovr.bus == 0)
+					{
+						irqMap[intovr.irq] = intovr.sysint;
+						if (intovr.sysint < 16)
+						{
+							irqMap[intovr.sysint] = 7;
+						};
+					};
 				};
+				
+				if (rhead.len == 0) break;
+				searching += rhead.len;
 			};
 		};
 	};
+	
+	if (ioapicphys == 0)
+	{
+		panic("failed to find the IOAPIC ACPI table");
+	};
+	
+	ioapicInit(ioapicphys);
+	
+	//panic("ye");
 };

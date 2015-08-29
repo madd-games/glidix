@@ -46,6 +46,10 @@
 #define	MSG_PEEK			(1 << 2)
 #define	MSG_WAITALL			(1 << 3)
 
+#define	GSO_RCVTIMEO			0
+#define	GSO_SNDTIMEO			1
+#define	GSO_COUNT			2
+
 typedef struct Socket_
 {
 	File*				fp;
@@ -53,6 +57,11 @@ typedef struct Socket_
 	
 	struct Socket_*			prev;
 	struct Socket_*			next;
+	
+	/**
+	 * Socket options.
+	 */
+	uint64_t			options[GSO_COUNT];
 	
 	/**
 	 * Called to handle a bind() on this socket.
@@ -100,6 +109,11 @@ typedef struct Socket_
 	 * Called to handle getsockname() on this socket.
 	 */
 	int (*getsockname)(struct Socket_ *sock, struct sockaddr *addr, size_t *addrlenptr);
+	
+	/**
+	 * Called to handle getpeername() on this socket.
+	 */
+	int (*getpeername)(struct Socket_ *sock, struct sockaddr *addr, size_t *addrlenptr);
 } Socket;
 
 typedef struct
@@ -159,5 +173,42 @@ int SocketGetsockname(File *fp, struct sockaddr *addr, size_t *addrlenptr);
  * Implements shutdown().
  */
 int ShutdownSocket(File *fp, int how);
+
+/**
+ * Implements connect().
+ */
+int ConnectSocket(File *fp, const struct sockaddr *addr, size_t addrlen);
+
+/**
+ * Implements getpeername().
+ */
+int SocketGetpeername(File *fp, struct sockaddr *addr, size_t *addrlenptr);
+
+/**
+ * Try claiming a specific unique local address (used by bind()). Returns 0 if the claim was successful and no other
+ * socket currently uses the address; in this case, the address is copied into "dest". Otherwise, -1 is returned and
+ * "dest" is unmodified. This is thread-safe as long as copying the address into "dest" is enough to rename your socket.
+ */
+int ClaimSocketAddr(const struct sockaddr *addr, struct sockaddr *dest);
+
+/**
+ * Allocate an ephemeral port, and mark it as used. The value is returned in network byte order, and can therefore be
+ * assigned directly to sin_port or sin6_port. Returns 0 if no ephemeral port is available!
+ */
+uint16_t AllocPort();
+
+/**
+ * Free a port. The port is given in network byte order. If it is an ephemeral port, it is marked as free; otherwise,
+ * nothing happens (deleting the socket that calls this function is enough to release it).
+ */
+void FreePort(uint16_t port);
+
+/**
+ * Get/set a socket option. This is used by the C library functions setsockopt() and getsockopt(). All Glidix socket
+ * options are passed as 64-bit values. 'proto' is currently reserved and must be set to zero (SOL_SOCKET).
+ * Additionally, GetSocketOption() sets errno to 0 on success. SetSocketOption() returns 0 on success, or -1 on error.
+ */
+int SetSocketOption(File *fp, int proto, int option, uint64_t value);
+uint64_t GetSocketOption(File *fp, int proto, int option);
 
 #endif

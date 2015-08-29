@@ -116,6 +116,7 @@ static void setGate(int index, void *isr)
 void initIDT()
 {
 	// remap the IRQs
+#if 0
 	outb(0x20, 0x11);
 	outb(0xA0, 0x11);
 	outb(0x21, 0x20);
@@ -126,6 +127,7 @@ void initIDT()
 	outb(0xA1, 0x01);
 	outb(0x21, 0x0);
 	outb(0xA1, 0x0);
+#endif
 
 	outb(0xA1, 0xFF);
 	outb(0x21, 0xFF);
@@ -231,8 +233,8 @@ static void onPageFault(Regs *regs)
 		};
 	};
 
-	//if ((getCurrentThread() == NULL) || (regs->cs == 8))
-	if (1)
+	if ((getCurrentThread() == NULL) || (regs->cs == 8))
+	//if (1)
 	{
 		ASM("cli");
 		kernelDead = 1;
@@ -368,6 +370,12 @@ void onInvalidOpcodeOrSyscall(Regs *regs)
 
 void isrHandler(Regs *regs)
 {
+	//kprintf("INTNO: %d\n", regs->intNo);
+	if ((regs->intNo == IRQ14) && (regs->intNo == IRQ15))
+	{
+		panic("INT: %d\n", regs->intNo);
+	};
+	
 	if (kernelDead)
 	{
 		panic("interrupt %d after kernel died.", regs->intNo);
@@ -376,10 +384,11 @@ void isrHandler(Regs *regs)
 	// ignore spurious IRQs
 	if ((regs->intNo == IRQ7) || (regs->intNo == IRQ15))
 	{
+		//apic->eoi = 0;
 		return;
 	};
 
-	if (regs->intNo >= 32)
+	if ((regs->intNo >= IRQ0) && (regs->intNo <= I_APIC_TIMER))
 	{
 		// IRQ
 		apic->eoi = 0;
@@ -387,10 +396,9 @@ void isrHandler(Regs *regs)
 
 	switch (regs->intNo)
 	{
-	case IRQ2:
-		uptime++;
-		handleTodos();
-		//switchTask(regs);
+	case IRQ0:
+		__sync_fetch_and_add(&uptime, 1);
+		//kprintf("UPTIME: %d\n", uptime);
 		break;
 	case I_DIV_ZERO:
 		sendCPUErrorSignal(regs, SIGFPE, FPE_INTDIV, (void*) regs->rip);
@@ -412,6 +420,10 @@ void isrHandler(Regs *regs)
 		{
 			switchTask(regs);
 		};
+		break;
+	case 15:
+		// sometimes generated for seemingly no reason... perhaps related to the PIT going off before
+		// the interrupts are reprogremmed? i don't know
 		break;
 	default:
 		if (regs->intNo >= IRQ0)

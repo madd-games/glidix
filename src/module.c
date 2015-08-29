@@ -610,16 +610,23 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		if (symbol->st_shndx == 0)
 		{
 			// undefined reference; resolve against kernel symbol table
-			symaddr = getSymbol(symname);
-			if (symaddr == NULL)
+			if (strcmp(symname, "__this_module") == 0)
 			{
-				kprintf("insmod(%s): undefined reference to '%s'\n", modname, symname);
-				vfsClose(fp);
-				kfree(strings);
-				kfree(symtab);
-				unmapModuleArea(module);
-				spinlockRelease(&modLock);
-				return -1;
+				symaddr = module;
+			}
+			else
+			{
+				symaddr = getSymbol(symname);
+				if (symaddr == NULL)
+				{
+					kprintf("insmod(%s): undefined reference to '%s'\n", modname, symname);
+					vfsClose(fp);
+					kfree(strings);
+					kfree(symtab);
+					unmapModuleArea(module);
+					spinlockRelease(&modLock);
+					return -1;
+				};
 			};
 		}
 		else if (symbol->st_shndx == shModbody)

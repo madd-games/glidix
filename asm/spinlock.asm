@@ -36,6 +36,7 @@ spinlockAcquire:
 	mov	rbp,	rsp
 
 .acq:
+	pause
 	mov	al,	1
 	xchg	al,	[rdi]
 	test	al,	al
@@ -72,7 +73,7 @@ spinlockRelease:
 	jz	.end				; interrupts are disabled.
 
 	; interrupts are enabled, so halt and wait for a reschedule.
-	hlt
+	;hlt
 
 .end:
 	pop	rbp

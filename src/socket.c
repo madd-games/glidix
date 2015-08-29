@@ -34,6 +34,7 @@
 #include <glidix/string.h>
 #include <glidix/console.h>
 #include <glidix/netif.h>
+#include <glidix/spinlock.h>
 
 Socket* CreateRawSocket();				/* rawsock.c */
 Socket* CreateUDPSocket();				/* udpsock.c */
@@ -41,11 +42,16 @@ Socket* CreateUDPSocket();				/* udpsock.c */
 static Semaphore sockLock;
 static Socket sockList;
 
+static Spinlock portLock;
+static uint8_t *ethports;
+
 void initSocket()
 {
 	semInit(&sockLock);
 	memset(&sockList, 0, sizeof(Socket));
 	
+	spinlockRelease(&portLock);
+	ethports = (uint8_t*) kmalloc(2048);		// 16384 ports, 1 byte for each 8
 };
 
 static void sock_close(File *fp)
@@ -252,6 +258,43 @@ int ShutdownSocket(File *fp, int how)
 	return 0;
 };
 
+int ConnectSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
+{
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		getCurrentThread()->therrno = ENOTSOCK;
+		return -1;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (sock->connect == NULL)
+	{
+		getCurrentThread()->therrno = EOPNOTSUPP;
+		return -1;
+	};
+	
+	sock->connect(sock, addr, addrlen);
+	return 0;
+};
+
+int SocketGetpeername(File *fp, struct sockaddr *addr, size_t *addrlen)
+{
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		getCurrentThread()->therrno = ENOTSOCK;
+		return -1;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (sock->getpeername == NULL)
+	{
+		getCurrentThread()->therrno = EOPNOTSUPP;
+		return -1;
+	};
+	
+	return sock->getpeername(sock, addr, addrlen);
+};
+
 void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto, uint64_t dataOffset)
 {
@@ -292,4 +335,232 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 	};
 	
 	semSignal(&sockLock);
+};
+
+int ClaimSocketAddr(const struct sockaddr *addr, struct sockaddr *dest)
+{
+	int isAnyAddr = 0;
+	uint16_t claimingPort;
+	static uint64_t zeroAddr[] = {0, 0};
+	
+	if (addr->sa_family == AF_INET)
+	{
+		const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
+		if (inaddr->sin_addr.s_addr == 0)
+		{
+			isAnyAddr = 1;
+		};
+		
+		if (inaddr->sin_port == 0)
+		{
+			// cannot claim port 0!
+			return -1;
+		};
+		
+		claimingPort = inaddr->sin_port;
+	}
+	else
+	{
+		// IPv6
+		const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
+		if (memcmp(&inaddr->sin6_addr, &zeroAddr, 16) == 0)
+		{
+			isAnyAddr = 1;
+		};
+		
+		if (inaddr->sin6_port == 0)
+		{
+			return -1;
+		};
+		
+		claimingPort = inaddr->sin6_port;
+	};
+	
+	int status = 0;
+	
+	semWait(&sockLock);
+	Socket *sock;
+	for (sock=&sockList; sock!=NULL; sock=sock->next)
+	{
+		struct sockaddr otherAddr;
+		size_t addrlen = sizeof(struct sockaddr);
+		
+		if (sock->getsockname != NULL)
+		{
+			if (sock->getsockname(sock, &otherAddr, &addrlen) == 0)
+			{
+				if (otherAddr.sa_family == AF_INET)
+				{
+					struct sockaddr_in *otherinaddr = (struct sockaddr_in*) &otherAddr;
+					if (isAnyAddr)
+					{
+						// we are binding to all addresses so just check the port
+						if (claimingPort == otherinaddr->sin_port)
+						{
+							status = -1;
+							break;
+						};
+					}
+					else if (otherinaddr->sin_addr.s_addr == 0)
+					{
+						// bound to all addresses; so if the ports match, we cannot bind
+						if (claimingPort == otherinaddr->sin_port)
+						{
+							status = -1;
+							break;
+						};
+					}
+					else if (addr->sa_family == AF_INET)
+					{
+						// if that socket is bound to an IPv4 address and we are likewise binding to
+						// IPv4, we must ensure that the address or port is different
+						const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
+						if ((inaddr->sin_addr.s_addr == otherinaddr->sin_addr.s_addr)
+							&& (inaddr->sin_port == otherinaddr->sin_port))
+						{
+							status = -1;
+							break;
+						};
+					};
+				}
+				else if (otherAddr.sa_family == AF_INET6)
+				{
+					struct sockaddr_in6 *otherinaddr = (struct sockaddr_in6*) &otherAddr;
+					if (isAnyAddr)
+					{
+						// we are binding to all addresses so just check the port
+						if (claimingPort == otherinaddr->sin6_port)
+						{
+							status = -1;
+							break;
+						};
+					}
+					else if (memcmp(&otherinaddr->sin6_addr, &zeroAddr, 16) == 0)
+					{
+						// bound to all addresses; so check the port
+						if (claimingPort == otherinaddr->sin6_port)
+						{
+							status = -1;
+							break;
+						};
+					}
+					else if (addr->sa_family == AF_INET6)
+					{
+						// that socket is bound to an IPv6 address so make sure we are not binding to
+						// the same IPv6 address and port
+						const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
+						if ((memcmp(&inaddr->sin6_addr, &otherinaddr->sin6_addr, 16) == 0)
+							&& (inaddr->sin6_port == otherinaddr->sin6_port))
+						{
+							status = -1;
+							break;
+						};
+					};
+				};
+			};
+		};
+	};
+	
+	if (status == 0)
+	{
+		memcpy(dest, addr, sizeof(struct sockaddr));
+	};
+	
+	semSignal(&sockLock);
+	return status;
+};
+
+uint16_t AllocPort()
+{
+	spinlockAcquire(&portLock);
+	
+	int index;
+	for (index=0; index<2048; index++)
+	{
+		if (ethports[index] != 0xFF)
+		{
+			int bitoff;
+			for (bitoff=0; bitoff<8; bitoff++)
+			{
+				if ((ethports[index] & (1 << bitoff)) == 0)
+				{
+					ethports[index] |= (1 << bitoff);
+					spinlockRelease(&portLock);
+					
+					uint16_t result = (uint16_t) (49152 + 8 * index + bitoff);
+					return __builtin_bswap16(result);
+				};
+			};
+		};
+	};
+	
+	spinlockRelease(&portLock);
+	return 0;
+};
+
+void FreePort(uint16_t port)
+{
+	port = __builtin_bswap16(port);
+	if (port >= 49152)
+	{
+		int portoff = (int) port - 49152;
+		int index = portoff / 8;
+		int bitoff = portoff % 8;
+		
+		spinlockAcquire(&portLock);
+		ethports[index] &= ~(1 << bitoff);
+		spinlockRelease(&portLock);
+	};
+};
+
+int SetSocketOption(File *fp, int proto, int option, uint64_t value)
+{
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		ERRNO = ENOTSOCK;
+		return -1;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (proto != 0)
+	{
+		// not SOL_SOCKET
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if ((option < 0) || (option >= GSO_COUNT))
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	sock->options[option] = value;
+	return 0;
+};
+
+uint64_t GetSocketOption(File *fp, int proto, int option)
+{
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		ERRNO = ENOTSOCK;
+		return 0;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (proto != 0)
+	{
+		// not SOL_SOCKET
+		ERRNO = EINVAL;
+		return 0;
+	};
+	
+	if ((option < 0) || (option >= GSO_COUNT))
+	{
+		ERRNO = EINVAL;
+		return 0;
+	};
+	
+	ERRNO = 0;
+	return sock->options[option];
 };
