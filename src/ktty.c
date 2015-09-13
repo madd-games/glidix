@@ -125,7 +125,7 @@ void termPutChar(char c)
 		semSignal(&semLineBuffer);
 		return;
 	}
-	else
+	else if (c < 0x80)
 	{
 		inputBuffer[inputWrite++] = c;
 		if (inputWrite == INPUT_BUFFER_SIZE) inputWrite = 0;

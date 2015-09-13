@@ -36,6 +36,7 @@
 #include <glidix/errno.h>
 #include <glidix/mount.h>
 #include <glidix/idt.h>
+#include <glidix/acpi.h>
 
 static const char *actionNames[] = {
 	"POWER OFF",
@@ -101,7 +102,7 @@ int systemDown(int action)
 		};
 	};
 
-	// mark all processes as termianted.
+	// mark all processes as terminated.
 	lockSched();
 
 	thread = ct->next;
@@ -147,6 +148,10 @@ int systemDown(int action)
 	switch (action)
 	{
 	case DOWN_POWEROFF:
+		AcpiEnterSleepStatePrep(5);
+		cli();					// AcpiEnterSleepState() must be called with interrupts disabled
+		AcpiEnterSleepState(5);
+		// in case we didn't succeed with the poweroff, panic
 		panic("power off!");
 	case DOWN_REBOOT:
 		idtReboot();

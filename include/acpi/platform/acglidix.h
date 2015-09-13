@@ -127,6 +127,7 @@
 #include <glidix/common.h>
 #include <glidix/sched.h>
 #include <glidix/spinlock.h>
+#include <glidix/semaphore.h>
 #include <stdarg.h>
 
 /* Host-dependent types and defines for in-kernel ACPICA */
@@ -136,12 +137,11 @@
 
 #define ACPI_CACHE_T                ACPI_MEMORY_LIST
 #define ACPI_USE_LOCAL_CACHE        0
-#define ACPI_SPINLOCK               Spinlock *
+#define ACPI_SPINLOCK               Spinlock*
+#define ACPI_SEMAPHORE              Semaphore*
 #define ACPI_CPU_FLAGS              unsigned long
-#define	ACPI_DEBUG_OUTPUT
-#define	ACPI_DEBUGGER
-
-/* Use native linux version of AcpiOsAllocateZeroed */
+//#define	ACPI_DEBUGGER
+//#define	ACPI_EXEC_APP
 
 #define USE_NATIVE_ALLOCATE_ZEROED
 

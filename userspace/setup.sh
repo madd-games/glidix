@@ -4,6 +4,7 @@
 # Make sure all the needed stuff is under /mnt.
 # Also, this must be run as root.
 
+mount /dev/sdb /mnt -t isofs
 /mnt/bin/mip_inst /mnt/libc.mip /mnt/sh.mip /mnt/shutils.mip
 
 # Create all the directories for default mounted filesystems.
@@ -30,4 +31,7 @@ pwdsetup
 
 # Copy the scripts.
 cp /mnt/init/login.sh /etc/init/login.sh
+cp /mnt/init/startup.sh /etc/init/startup.sh
 chmod 644 /etc/init/login.sh
+chmod 644 /etc/init/startup.sh
+reboot

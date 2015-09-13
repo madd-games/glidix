@@ -179,7 +179,6 @@ static void rtcThread(void *data)
 		spinlockRelease(&timeLock);
 		
 		sleep(RTC_UPDATE_INTERVAL);
-		//getCurrentThread()->flags |= THREAD_WAITING;
 	};
 };
 
@@ -194,4 +193,10 @@ void initRTC()
 
 void handleTodos()
 {
+};
+
+uint64_t getNanotime()
+{
+	uint64_t out = (uint64_t) getUptime();
+	return out * (uint64_t)1000000000;
 };

@@ -10,25 +10,30 @@
 
 #ifndef REGTEST
 
-char * strtok( char * _PDCLIB_restrict s1, const char * _PDCLIB_restrict s2 )
+char *strtok(char *s1, const char *s2)
 {
-    static char * tmp = NULL;
+	static char *tmp = NULL;
+	return strtok_r(s1, s2, &tmp);
+};
+
+char * strtok_r (char * _PDCLIB_restrict s1, const char * _PDCLIB_restrict s2, char **tmp )
+{
     const char * p = s2;
 
     if ( s1 != NULL )
     {
         /* new string */
-        tmp = s1;
+        (*tmp) = s1;
     }
     else
     {
         /* old string continued */
-        if ( tmp == NULL )
+        if ( (*tmp) == NULL )
         {
             /* No old string, no new string, nothing to do */
             return NULL;
         }
-        s1 = tmp;
+        s1 = (*tmp);
     }
 
     /* skipping leading s2 characters */
@@ -47,28 +52,28 @@ char * strtok( char * _PDCLIB_restrict s1, const char * _PDCLIB_restrict s2 )
     if ( ! *s1 )
     {
         /* no more to parse */
-        return ( tmp = NULL );
+        return ( (*tmp) = NULL );
     }
 
     /* skipping non-s2 characters */
-    tmp = s1;
-    while ( *tmp )
+    (*tmp) = s1;
+    while ( *(*tmp) )
     {
         p = s2;
         while ( *p )
         {
-            if ( *tmp == *p++ )
+            if ( *(*tmp) == *p++ )
             {
-                /* found seperator; overwrite with '\0', position tmp, return */
-                *tmp++ = '\0';
+                /* found seperator; overwrite with '\0', position (*tmp), return */
+                *(*tmp)++ = '\0';
                 return s1;
             }
         }
-        ++tmp;
+        ++(*tmp);
     }
 
     /* parsed to end of string */
-    tmp = NULL;
+    (*tmp) = NULL;
     return s1;
 }
 

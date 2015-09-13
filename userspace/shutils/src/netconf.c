@@ -72,6 +72,8 @@ void printIntfInfo(const char *ifname)
 	
 	_glidix_ifaddr4 *addrs = (_glidix_ifaddr4*) malloc(sizeof(_glidix_ifaddr4) * netstat.numAddrs4);
 	_glidix_netconf_getaddrs(ifname, AF_INET, addrs, sizeof(_glidix_ifaddr4) * netstat.numAddrs4);
+	_glidix_ifaddr6 *addrs6 = (_glidix_ifaddr6*) malloc(sizeof(_glidix_ifaddr6) * netstat.numAddrs6);
+	_glidix_netconf_getaddrs(ifname, AF_INET6, addrs6, sizeof(_glidix_ifaddr6) * netstat.numAddrs6);
 	
 	printf("Interface: %s\n", netstat.ifname);
 	printf("\tpackets sent: %d\n", netstat.numTrans);
@@ -89,7 +91,7 @@ void printIntfInfo(const char *ifname)
 	};
 	
 	printf("\tAddresses:\n");
-	char netaddr[INET_ADDRSTRLEN];
+	char netaddr[INET6_ADDRSTRLEN];
 	int netsize;
 	int i;
 	for (i=0; i<netstat.numAddrs4; i++)
@@ -100,6 +102,33 @@ void printIntfInfo(const char *ifname)
 		int j;
 		netsize = 0;
 		for (j=0; j<4; j++)
+		{
+			if (bytes[j] == 0xFF)
+			{
+				netsize += 8;
+			}
+			else
+			{
+				uint8_t byte = bytes[j];
+				while (byte & 0x80)
+				{
+					netsize++;
+					byte <<= 1;
+				};
+				break;
+			};
+		};
+		printf("\t\t%s/%d\n", netaddr, netsize);
+	};
+
+	for (i=0; i<netstat.numAddrs6; i++)
+	{
+		inet_ntop(AF_INET6, &addrs6[i].addr, netaddr, INET6_ADDRSTRLEN);
+		netsize = 0;
+		uint8_t *bytes = (uint8_t*) &addrs6[i].mask;
+		int j;
+		netsize = 0;
+		for (j=0; j<16; j++)
 		{
 			if (bytes[j] == 0xFF)
 			{

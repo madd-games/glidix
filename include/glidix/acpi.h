@@ -30,6 +30,7 @@
 #define __glidix_acpi_h
 
 #include <glidix/common.h>
+#include <acpi/acpi.h>
 
 typedef struct
 {

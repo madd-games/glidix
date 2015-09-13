@@ -541,7 +541,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	vfsRead(fp, symtab, symtabSection.sh_size);
 
 	// search for necessary symbols
-	void (*moduleInitEvent)(const char*) = NULL;
+	int (*moduleInitEvent)(const char*) = NULL;
 	for (i=0; i<(symtabSection.sh_size / sizeof(Elf64_Sym)); i++)
 	{
 		Elf64_Sym *symbol = &symtab[i];
@@ -555,7 +555,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 				{
 					kprintf("insmod(%s): found __module_init at %a\n", modname, addr);
 				};
-				moduleInitEvent = (void (*)(const char*)) addr;
+				moduleInitEvent = (int (*)(const char*)) addr;
 			}
 			else if (strcmp(symname, "_fini") == 0)
 			{
@@ -665,6 +665,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			kfree(symtab);
 			unmapModuleArea(module);
 			spinlockRelease(&modLock);
+			kfree(module);
 			return -1;
 		};
 	};
@@ -674,8 +675,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	module->baseAddr = baseAddr;
 	module->next = NULL;
 	vfsClose(fp);
-	//kfree(symtab);
-	//kfree(strings);
+
 	if (firstModule == NULL)
 	{
 		firstModule = module;
@@ -698,7 +698,30 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		{
 			kprintf("insmod(%s): calling module init event\n", modname);
 		};
-		moduleInitEvent(opt);
+		
+		int status = moduleInitEvent(opt);
+		if (status != MODINIT_OK)
+		{
+			rmmod(modname, 0);
+			if (status == MODINIT_CANCEL)
+			{
+				if (flags & INSMOD_VERBOSE)
+				{
+					kprintf("insmod(%s): module not needed\n");
+				};
+				
+				return 0;
+			}
+			else if (status == MODINIT_FATAL)
+			{
+				if (flags & INSMOD_VERBOSE)
+				{
+					kprintf("insmod(%s): module init fatal error\n");
+				};
+				
+				return -1;
+			};
+		};
 	};
 
 	if (flags & INSMOD_VERBOSE)

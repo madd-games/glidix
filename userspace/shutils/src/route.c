@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <arpa/inet.h>
 
 void ip_to_string(struct in_addr *addr, struct in_addr *mask, char *str)
 {
@@ -74,20 +75,22 @@ void ip_to_string(struct in_addr *addr, struct in_addr *mask, char *str)
 
 void ip6_to_string(struct in6_addr *addr, struct in6_addr *mask, char *str)
 {
-	uint16_t *groups = (uint16_t*) addr;
-	sprintf(str, "%x:%x:%x:%x:%x:%x:%x:%x",
-		__builtin_bswap16(groups[0]),
-		__builtin_bswap16(groups[1]),
-		__builtin_bswap16(groups[2]),
-		__builtin_bswap16(groups[3]),
-		__builtin_bswap16(groups[4]),
-		__builtin_bswap16(groups[5]),
-		__builtin_bswap16(groups[6]),
-		__builtin_bswap16(groups[7])
-	);
+	char buf[INET6_ADDRSTRLEN];
+	inet_ntop(AF_INET6, addr, buf, INET6_ADDRSTRLEN);
+	
+	if (strlen(buf) > 30)
+	{
+		memcpy(str, buf, 29);
+		strcpy(&str[29], "...");
+	}
+	else
+	{
+		strcpy(str, buf);
+	};
 	
 	if (mask != NULL)
 	{
+		//printf("MASK: %s\n", inet_ntop(AF_INET6, mask, buf, INET6_ADDRSTRLEN));
 		int bitCount = 0;
 		uint8_t *scan = (uint8_t*) mask;
 		int i;
@@ -114,8 +117,8 @@ void ip6_to_string(struct in6_addr *addr, struct in6_addr *mask, char *str)
 		strcat(str, suffix);
 	};
 	
-	memset(&str[strlen(str)], ' ', 44-strlen(str));
-	str[44] = 0;
+	memset(&str[strlen(str)], ' ', 34-strlen(str));
+	str[34] = 0;
 };
 
 int mainUtil(int argc, char *argv[])
@@ -124,19 +127,21 @@ int mainUtil(int argc, char *argv[])
 	{
 		if (argc < 4)
 		{
-			fprintf(stderr, "USAGE:\t%s add subnet interface [-g gateway] [-i index]\n", argv[0]);
-			fprintf(stderr, "\tAdds an entry for the specified subnet to the routing table. If the network size\n");
-			fprintf(stderr, "\tis not given, adds just the specified address. You can also optionally specify a\n");
-			fprintf(stderr, "\tgateway, as well as the position within the interface's routing table.\n");
+			fprintf(stderr, "USAGE:\t%s add subnet interface [-g gateway] [-i index] [-6]\n", argv[0]);
+			fprintf(stderr, "\tAdds an entry for the specified subnet to the routing table. If the\n");
+			fprintf(stderr, "\tnetwork size is not given, adds just the specified address. You can\n");
+			fprintf(stderr, "\talso optionally specify a gateway, as well as the position within the\n");
+			fprintf(stderr, "\tinterface's routing table. The '-6' indicates that the route is IPv6.\n");
 			return 1;
 		};
 		
-		char subnet[19];
-		char gateway[16] = "0.0.0.0";
+		char subnet[INET6_ADDRSTRLEN+4];
+		char gateway[INET6_ADDRSTRLEN] = "";
 		char ifname[16];
 		int pos = -1;
+		int family = AF_INET;
 		
-		if (strlen(argv[2]) > 18)
+		if (strlen(argv[2]) > (INET6_ADDRSTRLEN+4))
 		{
 			fprintf(stderr, "%s: invalid address or subnet: %s\n", argv[0], argv[2]);
 			return 1;
@@ -169,6 +174,10 @@ int mainUtil(int argc, char *argv[])
 				i++;
 				pos = atoi(argv[i]);
 			}
+			else if (strcmp(argv[i], "-6") == 0)
+			{
+				family = AF_INET6;
+			}
 			else
 			{
 				fprintf(stderr, "%s: unrecognised command-line option: %s\n", argv[0], argv[i]);
@@ -176,10 +185,26 @@ int mainUtil(int argc, char *argv[])
 			};
 		};
 		
+		if (gateway[0] == 0)
+		{
+			if (family == AF_INET)
+			{
+				strcpy(gateway, "0.0.0.0");
+			}
+			else
+			{
+				strcpy(gateway, "::");
+			};
+		};
+		
 		_glidix_gen_route genroute;
 		_glidix_in_route *inroute = (_glidix_in_route*) &genroute;
-		strcpy(inroute->ifname, ifname);
-		memset(&inroute->mask, 0xFF, 4);
+		_glidix_in6_route *in6route = (_glidix_in6_route*) &genroute;
+		if (family == AF_INET) strcpy(inroute->ifname, ifname);
+		else strcpy(in6route->ifname, ifname);
+		
+		if (family == AF_INET) memset(&inroute->mask, 0xFF, 4);
+		else memset(&in6route->mask, 0xFF, 16);
 		
 		char *slashpos = strchr(subnet, '/');
 		if (slashpos != NULL)
@@ -187,14 +212,20 @@ int mainUtil(int argc, char *argv[])
 			*slashpos = 0;
 			int netsize = atoi(slashpos+1);
 			
-			if ((netsize < 0) || (netsize > 32))
+			int maxNetSize = 32;
+			if (family == AF_INET6) maxNetSize = 128;
+			if ((netsize < 0) || (netsize > maxNetSize))
 			{
 				fprintf(stderr, "%s: invalid subnet size: /%d\n", argv[0], netsize);
 				return 1;
 			};
 			
-			uint8_t *out = (uint8_t*) &inroute->mask;
-			memset(out, 0, 4);
+			uint8_t *out;
+			if (family == AF_INET) out = (uint8_t*) &inroute->mask;
+			else out = (uint8_t*) &in6route->mask;
+			
+			if (family == AF_INET) memset(out, 0, 4);
+			else memset(out, 0, 16);
 			
 			while (netsize >= 8)
 			{
@@ -212,20 +243,39 @@ int mainUtil(int argc, char *argv[])
 			};
 		};
 		
-		if (inet_pton(AF_INET, subnet, &inroute->dest) != 1)
+		if (family == AF_INET)
 		{
-			fprintf(stderr, "%s: failed to parse address %s: %s\n", argv[0], subnet, strerror(errno));
-			return 1;
+			if (inet_pton(AF_INET, subnet, &inroute->dest) != 1)
+			{
+				fprintf(stderr, "%s: failed to parse address %s: %s\n", argv[0], subnet, strerror(errno));
+				return 1;
+			};
+		
+			if (inet_pton(AF_INET, gateway, &inroute->gateway) != 1)
+			{
+				fprintf(stderr, "%s: failed to parse address %s: %s\n", argv[0], gateway, strerror(errno));
+				return 1;
+			};
+		}
+		else
+		{
+			if (inet_pton(AF_INET6, subnet, &in6route->dest) != 1)
+			{
+				fprintf(stderr, "%s: failed to parse address %s: %s\n", argv[0], subnet, strerror(errno));
+				return 1;
+			};
+		
+			if (inet_pton(AF_INET6, gateway, &in6route->gateway) != 1)
+			{
+				fprintf(stderr, "%s: failed to parse address %s: %s\n", argv[0], gateway, strerror(errno));
+				return 1;
+			};
 		};
 		
-		if (inet_pton(AF_INET, gateway, &inroute->gateway) != 1)
-		{
-			fprintf(stderr, "%s: failed to parse address %s: %s\n", argv[0], gateway, strerror(errno));
-			return 1;
-		};
+		if (family == AF_INET) inroute->flags = 0;
+		else in6route->flags = 0;
 		
-		inroute->flags = 0;
-		if (_glidix_route_add(AF_INET, pos, &genroute) != 0)
+		if (_glidix_route_add(family, pos, &genroute) != 0)
 		{
 			fprintf(stderr, "%s: failed to add the route: %s\n", argv[0], strerror(errno));
 			return 1;
@@ -265,6 +315,7 @@ int main(int argc, char *argv[])
 	close(fd);
 	
 	printf("\nKernel IPv6 routing table:\n");
+	printf("Network                           Next hop                          Interface\n");
 	fd = _glidix_routetab(AF_INET6);
 	
 	_glidix_in6_route route6;
@@ -276,8 +327,8 @@ int main(int argc, char *argv[])
 			break;
 		};
 		
-		char network[44];
-		char gateway[44];
+		char network[35];
+		char gateway[35];
 		
 		ip6_to_string(&route6.dest, &route6.mask, network);
 		ip6_to_string(&route6.gateway, NULL, gateway);

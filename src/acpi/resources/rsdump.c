@@ -117,6 +117,7 @@
 #include "accommon.h"
 #include "acresrc.h"
 
+#if 0
 #define _COMPONENT          ACPI_RESOURCES
         ACPI_MODULE_NAME    ("rsdump")
 
@@ -738,3 +739,4 @@ AcpiRsDumpWordList (
             "Word", i, Data[i]);
     }
 }
+#endif

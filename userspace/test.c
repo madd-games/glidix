@@ -55,25 +55,23 @@ uint16_t checksum(void* vdata,size_t length)
 
 int main()
 {
-	const char *ipAddr = "56.45.104.69";
-	uint32_t addr;
+	char *strAddr = "::ffff:0567:2345";
+	uint8_t addr[16];
 	
-	if (inet_pton(AF_INET, ipAddr, &addr) != 1)
+	if (inet_pton(AF_INET6, strAddr, addr) != 1)
 	{
 		printf("inet_pton failed\n");
 		return 1;
 	};
 	
-	printf("Numeric: %u\n", addr);
+	char buffer[INET6_ADDRSTRLEN];
 	
-	char buffer[INET_ADDRSTRLEN];
-	if (inet_ntop(AF_INET, &addr, buffer, INET_ADDRSTRLEN) == NULL)
+	if (inet_ntop(AF_INET6, addr, buffer, INET6_ADDRSTRLEN) == NULL)
 	{
 		printf("inet_ntop failed\n");
 		return 1;
 	};
 	
-	printf("Got back: %s\n", buffer);
-
+	printf("Got back: [%s]\n", buffer);
 	return 0;
 };

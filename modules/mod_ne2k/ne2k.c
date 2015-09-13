@@ -119,7 +119,13 @@ MODULE_INIT(const char *opt)
 		};
 	};
 	
-	return 0;
+	if (interfaces == NULL)
+	{
+		// no interfaces available
+		return MODINIT_CANCEL;
+	};
+	
+	return MODINIT_OK;
 };
 
 MODULE_FINI()

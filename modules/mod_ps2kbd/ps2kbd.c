@@ -172,8 +172,8 @@ static void kbdThread(void *data)
 
 				if (key == 'c')
 				{
-					//signalPid(1, SIGINT);
 					termPutChar(CC_VINTR);
+					//signalPid(1, SIGINT);
 				};
 			}
 			else

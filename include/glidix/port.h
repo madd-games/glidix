@@ -29,9 +29,9 @@
 #ifndef __glidix_port_h
 #define __glidix_port_h
 
-void outb(unsigned int port, unsigned int value);
+void outb(unsigned int port, uint8_t value);
 uint8_t inb(unsigned int port);
-void outw(unsigned int port, uint64_t value);
+void outw(unsigned int port, uint16_t value);
 uint16_t inw(unsigned int port);
 void outd(unsigned int port, uint32_t value);
 uint32_t ind(unsigned int port);

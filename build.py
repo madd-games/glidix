@@ -94,7 +94,7 @@ def opCreateBuildMK():
 	f.write("TARGET_AR=%s\n" % config["ar"])
 	f.write("TARGET_RANLIB=%s\n" % config["ranlib"])
 	f.write("SYSROOT=%s\n" % config["sysroot"])
-	f.write("CFLAGS=-ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -fno-omit-frame-pointer -I include -I include/acpi -D__KERNEL__ -DCONFIG_ACPI -DACPI_DISASSEMBLER -Wall -Werror\n")
+	f.write("CFLAGS=-ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -fno-omit-frame-pointer -I include -I include/acpi -D__KERNEL__ -DCONFIG_ACPI -Wall -Werror\n")
 	f.write("out/vmglidix: linker.ld %s\n" % (" ".join(objectFiles)))
 	f.write("\t%s -T linker.ld -o $@ -ffreestanding -O2 -nostdlib %s -lgcc\n" % (config["compiler"], " ".join(objectFiles)))
 	f.write("-include %s\n" % (" ".join(depFiles)))

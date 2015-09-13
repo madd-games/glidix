@@ -49,6 +49,13 @@
 #define	RMMOD_FORCE			(1 << 1)
 
 /**
+ * Possible return values from MODULE_INIT.
+ */
+#define	MODINIT_OK			0			/* initialization successful and module loaded */
+#define	MODINIT_FATAL			1			/* fatal error occured and module force-unloaded */
+#define	MODINIT_CANCEL			2			/* module decided it's not needed, so it was safely unloaded */
+
+/**
  * Those macros are to be used by modules.
  */
 #define	MODULE_INIT(...)		int __module_init(__VA_ARGS__)

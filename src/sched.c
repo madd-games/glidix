@@ -290,8 +290,6 @@ void switchTask(Regs *regs)
 
 static void kernelThreadExit()
 {
-	panic("TODO: we must properly implement kernel thrads exiting");
-
 	// just to be safe
 	if (currentThread == &firstThread)
 	{
@@ -306,7 +304,11 @@ static void kernelThreadExit()
 	currentThread->prev->next = currentThread->next;
 	currentThread->next->prev = currentThread->prev;
 
-	kfree(currentThread->stack);
+	/**
+	 * TODO:
+	 * We must free the thread's stack, but can't do this HERE, because we are on that stack!
+	 */
+	//kfree(currentThread->stack);
 	kfree(currentThread);
 
 	// switch tasks

@@ -100,7 +100,7 @@ static void ioapicInit(uint64_t ioapicbasephys)
 	int i;
 	for (i=0; i<15; i++)
 	{
-		kprintf("SYSINT %d -> LOCAL INT %d\n", irqMap[i], i+32);
+		//kprintf("SYSINT %d -> LOCAL INT %d\n", irqMap[i], i+32);
 		*regsel = (0x10+2*irqMap[i]);
 		__sync_synchronize();
 		uint64_t entry = (uint64_t)(i+32) | ((uint64_t)(apic->id) << 56);
@@ -204,10 +204,13 @@ void acpiInit()
 					kprintf("INTOVR: BUS=%d, IRQ=%d, SYSINT=%d, FLAGS=%a\n", intovr.bus, intovr.irq, intovr.sysint, intovr.flags);
 					if (intovr.bus == 0)
 					{
-						irqMap[intovr.irq] = intovr.sysint;
-						if (intovr.sysint < 16)
+						if (intovr.irq != intovr.sysint)
 						{
-							irqMap[intovr.sysint] = 7;
+							irqMap[intovr.irq] = intovr.sysint;
+							if (intovr.sysint < 16)
+							{
+								irqMap[intovr.sysint] = 7;
+							};
 						};
 					};
 				};
@@ -224,6 +227,5 @@ void acpiInit()
 	};
 	
 	ioapicInit(ioapicphys);
-	
 	//panic("ye");
 };

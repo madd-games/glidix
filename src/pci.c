@@ -124,7 +124,7 @@ void pciInit()
 void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig *config)
 {
 	spinlockAcquire(&pciLock);
-	uint32_t addr;
+	uint32_t addr = 0;
 	uint32_t lbus = (uint32_t) bus;
 	uint32_t lslot = (uint32_t) slot;
 	uint32_t lfunc = (uint32_t) func;

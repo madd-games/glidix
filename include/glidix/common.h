@@ -45,6 +45,9 @@
 #define	ATOMIC(t)		ALIGN(sizeof(t)) t
 #define	SECTION(n)		__attribute__ ((section(n)))
 #define	PER_CPU			SECTION(".data_per_cpu")
+#define	cli()			ASM ("cli")
+#define	hlt()			ASM ("hlt")
+#define	sti()			ASM ("sti")
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 

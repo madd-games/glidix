@@ -422,6 +422,29 @@ static void spawnProc(void *stack)
 
 extern uint64_t getFlagsRegister();
 
+static UINT32 onPowerButton(void *ignore)
+{
+	(void)ignore;
+	Thread *thread = getCurrentThread();
+	while (thread->pid != 1)
+	{
+		thread = thread->next;
+	};
+	
+	siginfo_t info;
+	info.si_signo = SIGHUP;
+	info.si_code = 0;
+	info.si_errno = 0;
+	info.si_pid = 0;
+	info.si_uid = 0;
+	info.si_addr = NULL;
+	info.si_status = 0;
+	info.si_band = 0;
+	info.si_value.sival_int = 0;
+	sendSignal(thread, &info);
+	return 0;
+};
+
 void kmain2()
 {
 	kprintf("Initializing SDI... ");
@@ -431,6 +454,42 @@ void kmain2()
 	initMount();
 	initSymtab();
 
+	kprintf("Initializing ACPICA...\n");
+	ACPI_STATUS status = AcpiInitializeSubsystem();
+	if (ACPI_FAILURE(status))
+	{
+		panic("AcpiInitializeSubsystem failed");
+	};
+	
+	status = AcpiInitializeTables(NULL, 16, FALSE);
+	if (ACPI_FAILURE(status))
+	{
+		panic("AcpiInitializeTables failed");
+	};
+	
+	status = AcpiLoadTables();
+	if (ACPI_FAILURE(status))
+	{
+		panic("AcpiLoadTables failed");
+	};
+	
+	status = AcpiEnableSubsystem(ACPI_FULL_INITIALIZATION);
+	if (ACPI_FAILURE(status))
+	{
+		panic("AcpiEnableSubsystem failed");
+	};
+	
+	status = AcpiInitializeObjects(ACPI_FULL_INITIALIZATION);
+	if (ACPI_FAILURE(status))
+	{
+		panic("AcpiInitializeObjects failed");
+	};
+	
+	if (AcpiInstallFixedEventHandler(ACPI_EVENT_POWER_BUTTON, onPowerButton, NULL) != AE_OK)
+	{
+		panic("failed to register power button event");
+	};
+	
 	kprintf("Initializing the RTC... ");
 	initRTC();
 	kprintf("%$\x02" "Done%#\n");

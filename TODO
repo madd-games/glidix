@@ -1,3 +1,4 @@
  * Make sure that dup() in filesystem drivers actually causes both descriptions to point to the same offset.
  * Check IDE IRQs (mod_sdide) - and make sure it scans the full space (see the "/*2*/1" comment). If we send a command
    to a non-existent controller, interrupts stop arriving in VirtualBox.
+ * sched.c: must free kernel thread stacks, see relevant comment in kernelThreadExit.

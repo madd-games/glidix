@@ -123,3 +123,21 @@ void pmem_read(void *buffer, uint64_t physAddr, size_t len)
 	};
 	ispUnlock();
 };
+
+void pmem_write(uint64_t physAddr, const void *buffer, size_t len)
+{
+	ispLock();
+	while (len != 0)
+	{
+		uint64_t frame = physAddr / 0x1000;
+		uint64_t offset = physAddr % 0x1000;
+		size_t toCopy = 0x1000 - offset;
+		if (toCopy > len) toCopy = len;
+
+		ispSetFrame(frame);
+		memcpy((void*)((uint64_t)ispGetPointer() + offset), buffer, toCopy);
+		len -= toCopy;
+		buffer = (void*)((uint64_t)buffer+toCopy);
+	};
+	ispUnlock();
+};

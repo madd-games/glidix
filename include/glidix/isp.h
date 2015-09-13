@@ -44,5 +44,6 @@ void ispLock();
 void ispUnlock();
 
 void pmem_read(void *buffer, uint64_t physAddr, size_t len);
+void pmem_write(uint64_t physAddr, const void *buffer, size_t len);
 
 #endif

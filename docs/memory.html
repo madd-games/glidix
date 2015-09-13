@@ -1,3 +1,10 @@
+<style type="text/css">
+body {font-family: sans-serif;}
+p, li {letter-spacing: 1px; line-height: 150%;}
+h1 {line-height: 150%; letter-spacing: 2px}
+code {font-size: 14px;}
+</style>
+
 <title>Glidix Memory Map</title>
 <h1>Glidix Memory Map</h1>
 
@@ -15,6 +22,7 @@ Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divid
 <li><code>pml4[259]</code> is module space; each module is assigned a 1GB block within this PML4e, which limits the number of modules to 512.</li>
 <li><code>pml4[260]</code> is used for the copy-on-write cache.</li>
 <li><code>pml4[261]</code> is used for the per-CPU variable area (starts at <code>0xFFFF828000000000</code>).</li>
+<li><code>pml4[262]</code> is used for ACPICA (<i>AcpiOsMapMemory()</i> and <i>AcpiOsUnmapMemory()</i>). Starts at <code>0xFFFF830000000000</code>.</li>
 </ul>
 
 <p>
