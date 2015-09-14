@@ -6,4 +6,4 @@ build/src__command.o build/src__command.d : src/command.c /glidix/usr/include/sy
  /glidix/usr/include/stdlib.h /glidix/usr/include/stdio.h \
  /usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h \
  /glidix/usr/include/string.h /glidix/usr/include/unistd.h \
- /glidix/usr/include/ctype.h src/command.h
+ /glidix/usr/include/ctype.h src/command.h src/sh.h

@@ -153,7 +153,7 @@ void termPutChar(char c)
 		lineBufferSize = 0;
 	};
 
-	if (c == CC_VINTR)
+	if ((unsigned char)c == CC_VINTR)
 	{
 		kprintf("^C");
 		if (termState.c_lflag & ICANON)

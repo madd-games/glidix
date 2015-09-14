@@ -628,6 +628,8 @@ int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 		return -1;
 	};
 
+	int sigcnt = getCurrentThread()->sigcnt;
+
 	lockSched();
 	ASM("cli");
 	Thread *threadToKill = NULL;
@@ -655,7 +657,7 @@ int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 	};
 
 	// when WNOHANG is clear
-	if ((threadToKill == NULL) && ((flags & WNOHANG) == 0))
+	while ((threadToKill == NULL) && ((flags & WNOHANG) == 0))
 	{
 		//currentThread->flags |= THREAD_WAITING;
 		//currentThread->therrno = ECHILD;
@@ -664,7 +666,12 @@ int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 		getCurrentThread()->flags |= THREAD_WAITING;
 		unlockSched();
 		kyield();
-		return -2;
+		if (getCurrentThread()->sigcnt > sigcnt)
+		{
+			ERRNO = EINTR;
+			return -1;
+		};
+		lockSched();
 	};
 
 	unlockSched();

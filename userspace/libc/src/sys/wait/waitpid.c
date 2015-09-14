@@ -61,6 +61,7 @@ pid_t waitpid(pid_t pid, int *stat_loc, int flags)
 	};
 #endif
 
+#if 0
 	if (flags & WNOHANG)
 	{
 		return _glidix_pollpid(pid, stat_loc, flags);
@@ -71,4 +72,7 @@ pid_t waitpid(pid_t pid, int *stat_loc, int flags)
 		while ((ret = _glidix_pollpid(pid, stat_loc, flags)) == -2);
 		return ret;
 	};
+#endif
+
+	return _glidix_pollpid(pid, stat_loc, flags);
 };

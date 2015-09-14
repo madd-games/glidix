@@ -31,6 +31,8 @@
 
 #include <stdio.h>
 
+extern pid_t shellChildPid;
+
 /**
  * Returns -1 if the line was too long.
  */

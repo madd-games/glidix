@@ -172,8 +172,8 @@ static void kbdThread(void *data)
 
 				if (key == 'c')
 				{
+					//kprintf("PUTTING INT IN BUFFER\n");
 					termPutChar(CC_VINTR);
-					//signalPid(1, SIGINT);
 				};
 			}
 			else

@@ -35,6 +35,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include "command.h"
+#include "sh.h"
 
 int findCommand(char *path, char *cmd)
 {
@@ -253,8 +254,20 @@ int execCommand(char *cmd)
 	else
 	{
 		free(argv);
+		shellChildPid = pid;
 		int status;
-		waitpid(pid, &status, 0);
+		while (1)
+		{
+			int ret = waitpid(pid, &status, 0);
+			
+			// EINTR is the only possible error here, so if it occurs, try again.
+			if (ret != -1)
+			{
+				break;
+			};
+		};
+
+		shellChildPid = 0;		
 		return status;
 	};
 };

@@ -34,8 +34,22 @@
 #include <fcntl.h>
 #include <string.h>
 #include <pwd.h>
+#include <signal.h>
 #include "command.h"
 #include "sh.h"
+
+pid_t shellChildPid = 0;
+
+void on_signal(int sig, siginfo_t *si, void *ignore)
+{
+	if (sig == SIGINT)
+	{
+		if (shellChildPid != 0)
+		{
+			kill(shellChildPid, SIGINT);
+		};
+	};
+};
 
 int getline(int fd, char *buf, size_t max)
 {
@@ -162,6 +176,15 @@ int runScript(const char *filename, int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+	struct sigaction sa;
+	sa.sa_sigaction = on_signal;
+	sa.sa_flags = SA_SIGINFO;
+	if (sigaction(SIGINT, &sa, NULL) != 0)
+	{
+		perror("sigaction SIGINT");
+		return 1;
+	};
+	
 	if (argc == 1)
 	{
 		return startInteractive();
