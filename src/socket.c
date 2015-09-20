@@ -35,6 +35,7 @@
 #include <glidix/console.h>
 #include <glidix/netif.h>
 #include <glidix/spinlock.h>
+#include <glidix/icmp.h>
 
 Socket* CreateRawSocket();				/* rawsock.c */
 Socket* CreateUDPSocket();				/* udpsock.c */
@@ -117,9 +118,11 @@ File* CreateSocket(int domain, int type, int proto)
 		switch (proto)
 		{
 		case 0:
+#if 0
 		case IPPROTO_UDP:
 			sock = CreateUDPSocket();
 			break;
+#endif
 		default:
 			getCurrentThread()->therrno = EPROTONOSUPPORT;
 			return NULL;
@@ -135,6 +138,8 @@ File* CreateSocket(int domain, int type, int proto)
 	sock->domain = domain;
 	sock->type = type;
 	sock->proto = proto;
+	
+	memset(sock->options, 0, 8*GSO_COUNT);
 	
 	// append the socket to the beginning of the socket list.
 	// (the order does not acutally matter by adding to the beginning is faster).
@@ -316,7 +321,9 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 			pong->checksum = 0;
 			pong->checksum = ipv4_checksum(pong, sizeof(PingPongPacket));
 			
-			sendPacket(src, response, size);
+			struct sockaddr srcaddr;
+			srcaddr.sa_family = AF_UNSPEC;
+			sendPacket(&srcaddr, src, response, size, IPPROTO_ICMP | PKT_HDRINC | PKT_DONTFRAG, NT_SECS(1), NULL);
 			kfree(response);
 		};
 	};

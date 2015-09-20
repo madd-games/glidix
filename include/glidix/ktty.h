@@ -36,6 +36,38 @@
 
 #include <glidix/ftab.h>
 
+/**
+ * Start with 33 (the '!' sign) to make as many sequences as possible ASCII characters.
+ */
+#define	ESC_CLEAR_SCREEN			33
+#define	ESC_SET_COLOR				34
+#define	ESC_SET_CURSOR				35
+
+/**
+ * This union represents different kinds of escape sequences for the terminal.
+ */
+typedef union
+{
+	struct
+	{
+		char				escape;			/* '\e' */
+		uint8_t				command;		/* start with '!' */
+	} head;
+	
+	struct
+	{
+		uint16_t			ign;
+		uint8_t				attr;			/* background/foreground */
+	} setcolor;
+	
+	struct
+	{
+		uint16_t			ign;
+		uint8_t				x;
+		uint8_t				y;
+	} setcursor;
+} EscapeSequence;
+
 void setupTerminal(FileTable *ftab);
 void termPutChar(char c);
 

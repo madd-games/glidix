@@ -41,36 +41,29 @@ static void defSigHandler(siginfo_t *si)
 	switch (si->si_signo)
 	{
 	case SIGABRT:
-		write(2, "Aborted\n", 8);
 		_Exit(-SIGABRT);
 	case SIGALRM:
 		exit(-SIGALRM);
 	case SIGBUS:
-		write(2, "Bus error\n", 10);
 		_Exit(-SIGBUS);
 	case SIGCHLD:
 		break;
 	case SIGCONT:
 		break;
 	case SIGFPE:
-		write(2, "Floating-point arithmetic error\n", 32);
 		_Exit(-SIGFPE);
 	case SIGHUP:
 		_Exit(-SIGHUP);
 	case SIGILL:
-		write(2, "Illegal instruction\n", 20);
 		_Exit(-SIGILL);
 	case SIGINT:
-		write(2, "Interrupted\n", 12);
 		exit(-SIGINT);
 	/* SIGKILL cannot be caught or ignored */
 	case SIGPIPE:
 		exit(-SIGPIPE);
 	case SIGQUIT:
-		write(2, "Terminal quit\n", 14);
 		_Exit(-SIGQUIT);
 	case SIGSEGV:
-		write(2, "Invalid memory reference\n", 25);
 		_Exit(-SIGSEGV);
 	/* SIGSTOP cannot be caught or ignored */
 	case SIGTERM:
@@ -93,20 +86,16 @@ static void defSigHandler(siginfo_t *si)
 	case SIGPROF:
 		exit(-SIGPROF);
 	case SIGSYS:
-		write(2, "Bad system call\n", 16);
 		_Exit(-SIGSYS);
 	case SIGTRAP:
-		write(2, "Trap\n", 5);
 		exit(-SIGTRAP);
 	case SIGURG:
 		break;
 	case SIGVTALRM:
 		exit(-SIGVTALRM);
 	case SIGXCPU:
-		write(2, "CPU time limit exceeded\n", 24);
 		_Exit(-SIGXCPU);
 	case SIGXFSZ:
-		write(2, "File size limit exceeded\n", 25);
 		_Exit(-SIGXFSZ);
 	};
 };

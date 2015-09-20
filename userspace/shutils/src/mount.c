@@ -36,6 +36,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 const char *progName;
 
@@ -45,6 +47,82 @@ void usage()
 	fprintf(stderr, "\tMount a filesystem.\n");
 };
 
+int parseFstabLine(char *line)
+{
+	char *saveptr;
+	
+	char *mountpoint = strtok_r(line, " \t", &saveptr);
+	if (mountpoint == NULL) return 1;
+	
+	char *type = strtok_r(NULL, " \t", &saveptr);
+	if (type == NULL) return 1;
+	
+	char *device = strtok_r(NULL, " \t", &saveptr);
+	if (device == NULL) return 1;
+	
+	char mountPrefix[256];
+	strcpy(mountPrefix, mountpoint);
+	if (mountPrefix[strlen(mountPrefix)-1] != '/') strcat(mountPrefix, "/");
+
+	if (_glidix_mount(type, device, mountPrefix, 0) != 0)
+	{
+		perror(progName);
+		return 1;
+	};
+	
+	return 0;
+};
+
+int doMountAll()
+{
+	if (geteuid() != 0)
+	{
+		fprintf(stderr, "%s: only root can do this\n", progName);
+		return 1;
+	};
+	
+	struct stat st;
+	if (stat("/etc/fstab", &st) != 0)
+	{
+		fprintf(stderr, "%s: cannot stat /etc/fstab: %s\n", progName, strerror(errno));
+		return 1;
+	};
+	
+	int fd = open("/etc/fstab", O_RDONLY);
+	if (fd == -1)
+	{
+		fprintf(stderr, "%s: cannot open /etc/fstab: %s\n", progName, strerror(errno));
+		return 1;
+	};
+	
+	char *data = (char*) malloc(st.st_size+1);
+	data[st.st_size] = 0;
+	read(fd, data, st.st_size);
+	
+	close(fd);
+	
+	char *saveptr;
+	char *line;
+	
+	for (line=strtok_r(data, "\n", &saveptr); line!=NULL; line=strtok_r(NULL, "\n", &saveptr))
+	{
+		if (line[0] == '#')
+		{
+			continue;
+		}
+		else
+		{
+			if (parseFstabLine(line) != 0)
+			{
+				fprintf(stderr, "%s: fs table parse error at:\n`%s`\n", progName, line);
+				return 1;
+			};
+		};
+	};
+	
+	return 0;
+};
+
 int main(int argc, char *argv[])
 {
 	progName = argv[0];
@@ -52,7 +130,8 @@ int main(int argc, char *argv[])
 	const char *fstype = NULL;
 	const char *mountpoint = NULL;
 	const char *device = NULL;
-
+	int mountAll = 0;
+	
 	int i;
 	for (i=1; i<argc; i++)
 	{
@@ -73,6 +152,10 @@ int main(int argc, char *argv[])
 				fstype = argv[i];
 			};
 		}
+		else if (strcmp(argv[i], "-a") == 0)
+		{
+			mountAll = 1;
+		}
 		else if (device == NULL)
 		{
 			device = argv[i];
@@ -83,6 +166,11 @@ int main(int argc, char *argv[])
 		};
 	};
 
+	if (mountAll)
+	{
+		return doMountAll();
+	};
+	
 	if ((mountpoint == NULL) || (device == NULL))
 	{
 		usage();

@@ -30,6 +30,7 @@
 #define __glidix_netif_h
 
 #include <glidix/common.h>
+#include <glidix/ethernet.h>
 
 /**
  * This header file defines structures and routines that describe glidix network interfaces.
@@ -69,14 +70,23 @@
 #define	IPPROTO_RAW			255		/* Raw IP packets.  */
 #define	IPPROTO_MAX			256
 
+/* sendPacket() flags (start with bit 8 because the bottom 8 bits are the protocol number) */
+#define	PKT_HDRINC			(1 << 8)
+#define	PKT_DONTROUTE			(1 << 9)
+#define	PKT_DONTFRAG			(1 << 10)
+
 /* types of connections */
 #define	IF_LOOPBACK			0		/* loopback interface (localhost) */
 #define	IF_ETHERNET			1		/* ethernet controller */
 #define	IF_TUNNEL			2		/* software tunnel */
 
+/* the default hop limit */
+#define	DEFAULT_HOP_LIMIT		64
+
 /**
  * Type-specific network interface options.
  */
+struct NetIf_;
 typedef union
 {
 	/**
@@ -101,10 +111,22 @@ typedef union
 		int			type;			// IF_ETHERNET
 		
 		/**
-		 * The controller's MAC address (used as source address of transmitted
-		 * packets).
+		 * The interface's MAC address (used as source address of transmitted frames).
 		 */
-		uint8_t			mac[6];
+		MacAddress		mac;
+		
+		/**
+		 * Send an ethernet frame through the interface. 'frame' points to the ethernet frame,
+		 * which already has an EthernetHeader at the front. 'framelen' is the length, in bytes,
+		 * of that frame. The destination and source MAC addresses are in the EthernetHeader.
+		 */
+		void (*send)(struct NetIf_ *netif, const void *frame, size_t framelen);
+		
+		/**
+		 * Number of currently-resolved addresses, and the list of them.
+		 */
+		int 			numRes;
+		MacResolution*		res;
 	} ethernet;
 	
 	/**
@@ -192,6 +214,14 @@ typedef struct
 	uint8_t				daddr[16];
 } PACKED IPHeader6;
 
+typedef struct
+{
+	uint8_t				nextHeader;
+	uint8_t				zero;
+	uint16_t			fragResM;
+	uint32_t			id;
+} PACKED IPFragmentHeader6;
+
 /**
  * IPv4 handling functions.
  * PacketInfo4 is a "decomposed" version of an IPv4 packet that can be read/written directly.
@@ -217,7 +247,6 @@ int	ipv4_header2info(IPHeader4 *head, PacketInfo4 *info);
 
 /**
  * IPv6 handling functions. Works the same way as the IPv4 ones.
- * TODO: Additional IPv6 headers not yet supported.
  */
 typedef struct
 {
@@ -228,6 +257,9 @@ typedef struct
 	uint64_t			size;			/* size of the payload */
 	uint8_t				hop;			/* hop count, discard when it reaches 0 */
 	uint32_t			flowinfo;
+	uint64_t			fragOff;		/* offset into the fragment that the payload should be loaded into */
+	uint32_t			id;			/* ID for the particular datagram if it is fragmented */
+	int				moreFrags;		/* 1 if more fragments incoming, 0 otherwise */
 } PacketInfo6;
 
 void	ipv6_info2header(PacketInfo6 *info, IPHeader6 *head);
@@ -336,7 +368,7 @@ typedef struct NetIf_
 	IPConfig6			ipv6;
 	
 	/**
-	 * Interface configuration (described above, near "conenction types").
+	 * Interface configuration (described above, near "connection types").
 	 */
 	NetIfConfig			ifconfig;
 
@@ -355,21 +387,6 @@ typedef struct NetIf_
 	int				numRecv;
 	int				numDropped;
 	int				numErrors;
-	
-	/**
-	 * Send a packet through this link. 'addr' and 'addrlen' are the IP address and its size,
-	 * respectively (this will be 4 for IPv4 and 16 for IPv6). 'packet' and 'packetlen' are a
-	 * pointer to the packet, and its size, respectively. The packet is an IP packet, which the
-	 * interface may need to encapsulate in a link layer packet.
-	 *
-	 * The interface shall look at its ARP cache to determine the target MAC address, or, if not
-	 * found, run another ARP discovery. If the IP address still cannot be resolved, a failure is
-	 * reported. If the interface does not use the ARP protocol, then it shall use whatever other
-	 * protocol is necessary to understand the address.
-	 *
-	 * Upon success, numTrans shall be incremented. Upon failure, numErrors shall be incremented.
-	 */
-	void (*send)(struct NetIf_ *netif, const void *addr, size_t addrlen, const void *packet, size_t packetlen);
 	
 	struct NetIf_ *prev;
 	struct NetIf_ *next;
@@ -433,12 +450,8 @@ typedef struct
  */
 int sysRouteTable(uint64_t family);
 
-/**
- * Send a packet over the network, selecting the interface based on the specified address (which must be AF_INET or AF_INET6).
- * Port numbers are ignored. The address may be swapped for a gateway address of necessary. Returns 0 on success; -1 if the
- * packet could not be delivered.
- */
-int sendPacket(const struct sockaddr *addr, const void *packet, size_t len);
+int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *packet, size_t packetlen, int flags,
+		uint64_t nanotimeout, const char *ifname);
 
 /**
  * Load an IPv4 or IPv6 address which is the default source address for the interface that "dest" goes to.
@@ -494,8 +507,8 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
 /**
  * These 2 functions are used by network device drivers. The first one adds a new network interface that a driver has detected,
  * and returns a pointer to a new NetIf structure that refers to it. This new structure can then be passed to DeleteNetworkInterface()
- * when the driver is being unloaded. 3 parameters are needed to define such an interface: driver-specific data (assigned to the
- * NetIf structure directly), an interface configuration, and a send function, as described in the NetIf structure. Details of the
+ * when the driver is being unloaded. 2 parameters are needed to define such an interface: driver-specific data (assigned to the
+ * NetIf structure directly) and an interface configuration, as described in the NetIf structure. Details of the
  * creation of the new interface depends on the value of ifconfig->type:
  *
  *	IF_LOOPBACK
@@ -514,7 +527,7 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
  *
  * Upon error, NULL is returned; otherwise, the new interface handle is returned.
  */
-NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig, void (*send)(NetIf*, const void*, size_t, const void*, size_t));
+NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig);
 void DeleteNetworkInterface(NetIf *netif);
 
 #endif

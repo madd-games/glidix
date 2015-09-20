@@ -16,8 +16,11 @@ mkdir /initrd
 mkdir /proc
 mkdir /mnt
 mkdir /media
+mkdir /media/cdrom
 mkdir /etc
 mkdir /etc/init
+
+cp /mnt/fstab /etc/fstab
 
 # We must make additional links to the "halt" program, which will reboot and power off
 # the system. The "halt" executable can do all those things, but requires the program

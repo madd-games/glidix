@@ -141,113 +141,17 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 		return -1;
 	};
 	
-	if (sock->proto == IPPROTO_RAW)
+	//kprintf("ABOUT TO sendPacket\n");
+	int status = sendPacket((struct sockaddr*) &rawsock->addr, addr, message, len, sock->proto | PKT_DONTFRAG,
+					sock->options[GSO_SNDTIMEO], NULL);
+	//kprintf("AFTER sendPacket\n");
+	if (status < 0)
 	{
-		if (sendPacket(addr, message, len) != 0)
-		{
-			ERRNO = ENETUNREACH;
-			return -1;
-		}
-		else
-		{
-			return (ssize_t) len;
-		};
-	};
-	
-	void *data;
-	size_t dataLen;
-	if (addr->sa_family == AF_INET)
-	{
-		IPHeader4 *ipPacket = (IPHeader4*) kmalloc(20+len);
-		PacketInfo4 info;
-		
-		memset(&info.saddr, 0, 4);
-		if (rawsock->addr.sa_family == AF_INET)
-		{
-			struct sockaddr_in *sin = (struct sockaddr_in*) &rawsock->addr;
-			memcpy(&info.saddr, &sin->sin_addr, 4);
-		};
-		
-		static const uint32_t zeroAddr = 0;
-		if (memcmp(&info.saddr, &zeroAddr, 4) == 0)
-		{
-			// zero address, use default address for the interface
-			const struct sockaddr_in *sin = (const struct sockaddr_in*) addr;
-			getDefaultAddr4(&info.saddr, &sin->sin_addr);
-			
-			if (rawsock->addr.sa_family == AF_INET)
-			{
-				// also configure the socket to listen on that address since it is currently a wildcard
-				struct sockaddr_in *sa = (struct sockaddr_in*) &rawsock->addr;
-				memcpy(&sa->sin_addr, &info.saddr, 4);
-			};
-		};
-		
-		const struct sockaddr_in *sin = (const struct sockaddr_in*) addr;
-		memcpy(&info.daddr, &sin->sin_addr, 4);
-		
-		info.proto = sock->proto;
-		info.dataOffset = 20;
-		info.size = len;
-		info.hop = 64;
-		
-		ipv4_info2header(&info, ipPacket);
-		memcpy((char*)ipPacket + 20, message, len);
-		data = ipPacket;
-		dataLen = len + 20;
-	}
-	else
-	{
-		// IPv6
-		IPHeader6 *ipPacket = (IPHeader6*) kmalloc(40+len);
-		PacketInfo6 info;
-		
-		memset(&info.saddr, 0, 16);
-		if (rawsock->addr.sa_family == AF_INET6)
-		{
-			struct sockaddr_in6 *sin = (struct sockaddr_in6*) &rawsock->addr;
-			memcpy(&info.saddr, &sin->sin6_addr, 16);
-		};
-		
-		static const uint64_t zeroAddr[2] = {0, 0};
-		if (memcmp(&info.saddr, zeroAddr, 16) == 0)
-		{
-			// zero address, use default address for the interface
-			const struct sockaddr_in6 *sin = (const struct sockaddr_in6*) addr;
-			getDefaultAddr6(&info.saddr, &sin->sin6_addr);
-			
-			if (rawsock->addr.sa_family == AF_INET6)
-			{
-				// also configure the socket to listen on that address since it is currently a wildcard
-				struct sockaddr_in6 *sa = (struct sockaddr_in6*) &rawsock->addr;
-				memcpy(&sa->sin6_addr, &info.saddr, 16);
-			};
-		};
-		
-		const struct sockaddr_in6 *sin = (const struct sockaddr_in6*) addr;
-		memcpy(&info.daddr, &sin->sin6_addr, 4);
-		
-		info.proto = sock->proto;
-		info.dataOffset = 40;
-		info.size = len;
-		info.hop = 64;
-		
-		ipv6_info2header(&info, ipPacket);
-		memcpy((char*)ipPacket + 40, message, len);
-		data = ipPacket;
-		dataLen = len + 40;
-	};
-	
-	if (sendPacket(addr, data, dataLen) != 0)
-	{
-		kfree(data);
-		ERRNO = ENETUNREACH;
+		ERRNO = -status;
 		return -1;
 	};
 	
-	kfree(data);
-	
-	return (ssize_t) len;
+	return 0;
 };
 
 static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,

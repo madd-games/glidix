@@ -96,6 +96,40 @@ void usage()
 	fprintf(stderr, "\tTest whether the specified IPv4 address is reachable\n");
 };
 
+const char *getUnreachMsg(uint8_t code)
+{
+	switch (code)
+	{
+	case 0:
+		return "Network unreacheable";
+	case 1:
+		return "Host unreacheable";
+	case 2:
+		return "Protocol unreacheable";
+	case 3:
+		return "Port unreacheable";
+	case 4:
+		return "Packet too big";
+	case 5:
+		return "Source route failed";
+	default:
+		return "Unknown error";
+	};
+};
+
+const char *getTimexMsg(uint8_t code)
+{
+	switch (code)
+	{
+	case 0:
+		return "Hop limit exceeded";
+	case 1:
+		return "Fragment reassembly time exceeded";
+	default:
+		return "Unknown error";
+	};
+};
+
 int main(int argc, char *argv[])
 {
 	progName = argv[0];
@@ -122,13 +156,6 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	// 10 second timeout
-	if (_glidix_setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, 10000000000) != 0)
-	{
-		fprintf(stderr, "%s: setsockopt SO_RCVTIMEO: %s\n", argv[0], strerror(errno));
-		return 1;
-	};
-	
 	struct sockaddr_in wildcard_addr;
 	memset(&wildcard_addr, 0, sizeof(struct sockaddr_in));
 	wildcard_addr.sin_family = AF_INET;
@@ -139,7 +166,7 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	PingPongPacket ping;
+	PingPongPacket ping, pong;
 	ping.type = 8;
 	ping.code = 0;
 	ping.checksum = 0;
@@ -147,63 +174,73 @@ int main(int argc, char *argv[])
 	ping.seq = 0;
 	
 	printf("PING %s\n", argv[1]);
-	clock_t pingtimes[5];
 	int i;
-	for (i=0; i<5; i++)
+	for (i=0;; i++)
 	{
+		sleep(1);			// don't hog the CPU and netowkr too much
+		
+		struct sockaddr_in src;
+		
 		ping.checksum = 0;
 		ping.seq = i;
 		ping.checksum = checksum(&ping, sizeof(PingPongPacket));
 		
-		pingtimes[i] = clock();
+		clock_t sendTime = clock();
 		if (sendto(sockfd, &ping, sizeof(PingPongPacket), 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) == -1)
 		{
 			fprintf(stderr, "%s: sendto: %s\n", argv[0], strerror(errno));
-			close(sockfd);
-			return 1;
-		};
-	};
-	
-	int gotBack = 0;
-	while (gotBack < 5)
-	{
-		struct sockaddr_in src;
-		PingPongPacket pong;
-		
-		socklen_t addrlen = sizeof(struct sockaddr_in);
-		ssize_t count = recvfrom(sockfd, &pong, sizeof(PingPongPacket), 0, (struct sockaddr*) &src, &addrlen);
-		if (count == -1)
-		{
-			fprintf(stderr, "%s: recvfrom: %s\n", argv[0], strerror(errno));
-			close(sockfd);
-			return 1;
-		};
-
-		clock_t pongtime = clock();
-		
-		char buffer[INET_ADDRSTRLEN];
-		inet_ntop(AF_INET, &src.sin_addr, buffer, INET_ADDRSTRLEN);
-		
-		if (checksum(&pong, sizeof(PingPongPacket)) != 0)
-		{
-			// discard
 			continue;
 		};
 		
-		if (pong.type != 0)
+		while (1)
 		{
-			// discard
-			continue;
-		};
+			socklen_t addrlen = sizeof(struct sockaddr_in);
+			ssize_t count = recvfrom(sockfd, &pong, sizeof(PingPongPacket), 0, (struct sockaddr*) &src, &addrlen);
 		
-		if (pong.id != getpid())
-		{
-			// discard (this is for another process)
-			continue;
-		};
+			if (count == -1)
+			{
+				fprintf(stderr, "%s: recvfrom: %s\n", argv[0], strerror(errno));
+				break;
+			};
 		
-		printf("PONG from %s: id=%d, seq=%d, time=%u ns\n", buffer, pong.id, pong.seq, pongtime-pingtimes[pong.seq]);
-		gotBack++;
+			clock_t endtime = clock();
+			char buffer[INET_ADDRSTRLEN];
+			inet_ntop(AF_INET, &src.sin_addr, buffer, INET_ADDRSTRLEN);
+		
+			if (checksum(&pong, sizeof(PingPongPacket)) != 0)
+			{
+				// invalid checksum
+				fprintf(stderr, "Reply from %s: invalid checksum\n", buffer);
+				break;
+			};
+		
+			if (pong.type != 0)
+			{
+				// that's not a PONG!
+				if (pong.type == 8)
+				{
+					// ping-back; ignore
+					continue;
+				}
+				else if (pong.type == 3)
+				{
+					fprintf(stderr, "Reply from %s: Destination unreachable: %s\n", buffer, getUnreachMsg(pong.code));
+				}
+				else if (pong.type == 11)
+				{
+					fprintf(stderr, "Reply from %s: Time exceeded: %s\n", buffer, getTimexMsg(pong.code));
+				}
+				else
+				{
+					fprintf(stderr, "Reply from %s: Unknown response\n", buffer);
+				};
+			
+				break;
+			};
+		
+			fprintf(stderr, "Reply from %s: id=%d, seq=%d, time=%u ns\n", buffer, pong.id, pong.seq, endtime-sendTime);
+			break;
+		};
 	};
 	
 	return 0;

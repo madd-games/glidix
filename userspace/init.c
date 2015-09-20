@@ -47,6 +47,37 @@ char* confRootType = NULL;
 char* confRootDevice = NULL;
 char** confExec = NULL;
 
+typedef struct
+{
+	/**
+	 * The name of the service.
+	 */
+	char					name[128];
+	
+	/**
+	 * The pid assigned to the service if it is running. 0 if not.
+	 */
+	pid_t					pid;
+	
+	/**
+	 * The minimum System State for the process to start automatically. If the
+	 * state falls below this, the service is stopped. It can also be started
+	 * or stopped manually using the 'service' command.
+	 */
+	int					level;
+	
+	/**
+	 * The signal with which to stop the service.
+	 */
+	int					stopsig;
+	
+	/**
+	 * The timeout (in seconds), after which the SIGKILL signal shall be sent if the
+	 * service doesn't stop.
+	 */
+	int					stoptimeout;
+} Service;
+
 void loadmods()
 {
 	DIR *dirp = opendir("/initrd/initmod");

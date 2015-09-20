@@ -44,11 +44,12 @@ static Spinlock consoleLock;
 
 void initConsole()
 {
-	consoleState.curX = 0;
-	consoleState.curY = 0;
-	consoleState.curColor = 0x07;
-	consoleState.putcon = 1;
+	//consoleState.curX = 0;
+	//consoleState.curY = 0;
+	//consoleState.curColor = 0x07;
+	//consoleState.putcon = 1;
 	spinlockRelease(&consoleLock);
+	clearScreen();
 };
 
 static void updateVGACursor()
@@ -58,6 +59,43 @@ static void updateVGACursor()
 	outb(0x3D5, pos & 0xFF);
 	outb(0x3D4, 0x0E);
 	outb(0x3D5, (pos >> 8) & 0xFF);
+};
+
+void clearScreen()
+{
+	spinlockAcquire(&consoleLock);
+	consoleState.curX = 0;
+	consoleState.curY = 0;
+	consoleState.curColor = 0x07;
+	consoleState.putcon = 1;
+	
+	uint8_t *videoram = (uint8_t*) VRAM_BASE;
+	uint64_t i;
+	
+	for (i=0; i<80*25; i++)
+	{
+		videoram[2*i+0] = 0;
+		videoram[2*i+1] = 0x07;
+	};
+	
+	updateVGACursor();
+	spinlockRelease(&consoleLock);
+};
+
+void setCursorPos(uint8_t x, uint8_t y)
+{
+	spinlockAcquire(&consoleLock);
+	consoleState.curX = x;
+	consoleState.curY = y;
+	updateVGACursor();
+	spinlockRelease(&consoleLock);
+};
+
+void setConsoleColor(uint8_t col)
+{
+	spinlockAcquire(&consoleLock);
+	consoleState.curColor = col;
+	spinlockRelease(&consoleLock);
 };
 
 static void scroll()
@@ -85,6 +123,8 @@ static void kputch(char c)
 	outb(0xE9, c);
 	if (!consoleState.putcon) return;
 
+	if (consoleState.curY == 25) scroll();
+	
 	if (c == '\n')
 	{
 		consoleState.curX = 0;
@@ -129,7 +169,7 @@ static void kputch(char c)
 		{
 			consoleState.curX = 0;
 			consoleState.curY++;
-			if (consoleState.curY == 25) scroll();
+			//if (consoleState.curY == 25) scroll();
 		};
 	};
 };

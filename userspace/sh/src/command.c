@@ -34,6 +34,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <signal.h>
 #include "command.h"
 #include "sh.h"
 
@@ -267,7 +268,22 @@ int execCommand(char *cmd)
 			};
 		};
 
-		shellChildPid = 0;		
+		shellChildPid = 0;
+		
+		if (WIFSIGNALLED(status))
+		{
+			int termsig = WTERMSIG(status);
+			switch (termsig)
+			{
+			case SIGSEGV:
+				fprintf(stderr, "Invalid memory access\n");
+				break;
+			case SIGSYS:
+				fprintf(stderr, "Invalid system call\n");
+				break;
+			};
+		};
+		
 		return status;
 	};
 };

@@ -36,8 +36,9 @@
 #include <glidix/memory.h>
 #include <glidix/socket.h>
 #include <glidix/console.h>
+#include <glidix/mutex.h>
 
-static Semaphore iflistLock;
+static Mutex iflistLock;
 static NetIf iflist;
 
 uint16_t ipv4_checksum(void* vdata,size_t length)
@@ -78,11 +79,17 @@ uint16_t ipv4_checksum(void* vdata,size_t length)
 
 void ipv4_info2header(PacketInfo4 *info, IPHeader4 *head)
 {
+	uint16_t flags = 0;
+	if (info->moreFrags)
+	{
+		flags |= (1 << 15);
+	};
+	
 	head->versionIHL = 0x45;				// IPv4, 5 dwords (20 bytes) header
 	head->dscpECN = 0;					// XXX ??
 	head->len = 20 + info->size;
 	head->id = info->id;
-	head->flagsFragOff = 0;
+	head->flagsFragOff = __builtin_bswap16((uint16_t) info->fragOff | flags);
 	head->hop = info->hop;
 	head->proto = (uint8_t) info->proto;
 	head->checksum = 0;
@@ -129,6 +136,19 @@ void ipv6_info2header(PacketInfo6 *info, IPHeader6 *head)
 	head->hop = info->hop;
 	memcpy(&head->saddr, &info->saddr, 16);
 	memcpy(&head->daddr, &info->daddr, 16);
+	
+	if ((info->fragOff > 0) || (info->moreFrags))
+	{
+		// sending a fragmented packet; embed fragment header
+		head->nextHeader = 44;
+		IPFragmentHeader6 *fraghead = (IPFragmentHeader6*) &head[1];
+		fraghead->nextHeader = (uint8_t) info->proto;
+		fraghead->zero = 0;
+		uint16_t flags = 0;
+		if (info->moreFrags) flags |= 1;
+		fraghead->fragResM = __builtin_bswap16((info->fragOff << 3) | flags);
+		fraghead->id = info->id;
+	}; 
 };
 
 int ipv6_header2info(IPHeader6 *head, PacketInfo6 *info)
@@ -144,9 +164,24 @@ int ipv6_header2info(IPHeader6 *head, PacketInfo6 *info)
 	info->hop = head->hop;
 	info->dataOffset = 40;
 	info->flowinfo = head->versionClassFlow & ~0xF;
+	info->fragOff = 0;
+	info->moreFrags = 0;
 	
 	memcpy(&info->saddr, &head->saddr, 16);
 	memcpy(&info->daddr, &head->daddr, 16);
+	
+	if (head->nextHeader == 44)
+	{
+		// fragment header
+		IPFragmentHeader6 *fraghead = (IPFragmentHeader6*) &head[1];
+		info->proto = (int) fraghead->nextHeader;
+		uint16_t fragResM = __builtin_bswap16(fraghead->fragResM);
+		info->fragOff = fragResM >> 3;
+		info->moreFrags = fragResM & 1;
+		info->id = fraghead->id;
+		info->dataOffset += 8;
+	};
+
 	return 0;
 };
 
@@ -162,7 +197,8 @@ typedef struct lopacket_
 
 static lopacket *loQueue = NULL;
 
-static void loopbackSend(NetIf *netif, const void *addr, size_t addrlen, const void *packet, size_t packetlen)
+//static void loopbackSend(NetIf *netif, const void *addr, size_t addrlen, const void *packet, size_t packetlen)
+static void loopbackSend(NetIf *netif, const void *packet, size_t packetlen)
 {
 	__sync_fetch_and_add(&netif->numTrans, 1);
 	//onPacket(netif, packet, packetlen);
@@ -208,7 +244,7 @@ static void loopbackThread(void *ignore)
 void initSocket();		/* socket.c */
 void initNetIf()
 {
-	semInit(&iflistLock);
+	mutexInit(&iflistLock);
 	semInit(&loLock);
 	semInit2(&loPacketCounter, 0);
 	
@@ -257,7 +293,7 @@ void initNetIf()
 	iflist.numDropped = 0;
 	iflist.numErrors = 0;
 	
-	iflist.send = loopbackSend;
+	//iflist.send = loopbackSend;
 	iflist.prev = NULL;
 	iflist.next = NULL;
 	
@@ -375,7 +411,7 @@ void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 
 QFileEntry *getRoutes4()
 {
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	QFileEntry *first = NULL;
 	QFileEntry *last = NULL;
 	
@@ -411,13 +447,13 @@ QFileEntry *getRoutes4()
 		netif = netif->next;
 	};
 	
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 	return first;
 };
 
 QFileEntry *getRoutes6()
 {
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	QFileEntry *first = NULL;
 	QFileEntry *last = NULL;
 	
@@ -453,7 +489,7 @@ QFileEntry *getRoutes6()
 		netif = netif->next;
 	};
 	
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 	return first;
 };
 
@@ -504,117 +540,423 @@ int sysRouteTable(uint64_t family)
 	return i;
 };
 
-int sendPacket4(const struct in_addr *addr_, const void *packet, size_t len)
+int isMatchingMask(const void *a_, const void *b_, const void *mask_, size_t count)
 {
-	uint32_t addr = *((uint32_t*)addr_);
-
-	semWait(&iflistLock);
+	const uint8_t *a = (const uint8_t*) a_;
+	const uint8_t *b = (const uint8_t*) b_;
+	const uint8_t *mask = (const uint8_t*) mask_;
 	
-	NetIf *netif = &iflist;
-	while (netif != NULL)
+	size_t i;
+	for (i=0; i<count; i++)
 	{
-		int i;
-		for (i=0; i<netif->ipv4.numRoutes; i++)
+		if ((a[i] & mask[i]) != (b[i] & mask[i]))
 		{
-			IPRoute4 *route = &netif->ipv4.routes[i];
+			return 0;
+		};
+	};
+	
+	return 1;
+};
 
-			uint32_t dest = *((uint32_t*)&route->dest);
-			uint32_t mask = *((uint32_t*)&route->mask);
-			uint32_t gateway = *((uint32_t*)&route->gateway);
+int isMappedAddress46(const struct sockaddr *addr)
+{
+	static uint8_t mappedNetwork46[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0};
+	static uint8_t mappedMask46[16] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0};
+	
+	if (addr->sa_family == AF_INET6)
+	{
+		const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
+		if (isMatchingMask(&inaddr->sin6_addr, mappedNetwork46, mappedMask46, 16))
+		{
+			return 1;
+		};
+	};
+	
+	return 0;
+};
+
+void remapAddress64(const struct sockaddr_in6 *addr, struct sockaddr_in *result)
+{
+	result->sin_family = AF_INET;
+	memcpy(&result->sin_addr, &addr->sin6_addr.s6_addr[12], 4);
+};
+
+void remapAddress46(const struct sockaddr_in *addr, struct sockaddr_in6 *result)
+{
+	static uint8_t mappedNetwork46[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0};
+	result->sin6_family = AF_INET6;
+	memcpy(&result->sin6_addr, mappedNetwork46, 16);
+	memcpy(&result->sin6_addr.s6_addr[12], &addr->sin_addr, 4);
+	result->sin6_scope_id = 0;
+};
+
+uint32_t getNextPacketID()
+{
+	static uint32_t nextPacketID = 1;
+	return nextPacketID++;
+};
+
+static int sendPacketToInterface(NetIf *netif, const struct sockaddr *gateway, const void *packet, size_t packetlen, uint64_t nanotimeout)
+{
+	// this is called when iflistLock is locked, and 'gateway' is supposedly reacheable directly.
+	// depending on the type of interface, different address-resolution methods may be used.
+	switch (netif->ifconfig.type)
+	{
+	case IF_LOOPBACK:
+		loopbackSend(netif, packet, packetlen);
+		return 0;
+	default:
+		return -EHOSTUNREACH;
+	};
+};
+
+int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *packet, size_t packetlen, int flags,
+		uint64_t nanotimeout, const char *ifname)
+{
+	static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	
+	if (isMappedAddress46(dest))
+	{
+		struct sockaddr_in src4;
+		struct sockaddr_in dest4;
+		src4.sin_family = AF_UNSPEC;
+		
+		if (src->sa_family != AF_UNSPEC)
+		{
+			if (!isMappedAddress46(src))
+			{
+				// destination is IPv4 but source is IPv6
+				return -EINVAL;
+			};
 			
-			if ((addr & mask) == (dest & mask))
-			{
-				if (gateway != 0)
-				{
-					addr = gateway;
-				};
-				
-				if (netif->send == NULL)
-				{
-					semSignal(&iflistLock);
-					return -1;
-				};
-
-				netif->send(netif, &addr, 4, packet, len);
-				semSignal(&iflistLock);
-				return 0;
-			};
+			remapAddress64((struct sockaddr_in6*) src, (struct sockaddr_in*)&src4);
 		};
 		
-		netif = netif->next;
-	};
-	
-	semSignal(&iflistLock);
-	return -1;
-};
-
-int sendPacket6(const struct in6_addr *addr_, const void *packet, size_t len)
-{
-	uint64_t *addr = ((uint64_t*)addr_);
-
-	semWait(&iflistLock);
-	
-	NetIf *netif = &iflist;
-	while (netif != NULL)
-	{
-		int i;
-		for (i=0; i<netif->ipv6.numRoutes; i++)
+		remapAddress64((struct sockaddr_in6*) dest, (struct sockaddr_in*) &dest4);
+		
+		// send the packet over IPv4
+		int status = sendPacket((struct sockaddr*) &src4, (const struct sockaddr*) &dest4, packet, packetlen, flags,
+						nanotimeout, ifname);
+		
+		// if the IPv4 source address was just determined, map it onto an IPv6 address.
+		if (src->sa_family == AF_UNSPEC)
 		{
-			IPRoute6 *route = &netif->ipv6.routes[i];
-
-			uint64_t *dest = ((uint64_t*)&route->dest);
-			uint64_t *mask = ((uint64_t*)&route->mask);
-			uint64_t *gateway = ((uint64_t*)&route->gateway);
-
-			if (((addr[0] & mask[0]) == (dest[0] & mask[0])) && ((addr[1] & mask[1]) == (dest[1] & mask[1])))
-			{
-				if ((gateway[0] != 0) || (gateway[1] != 0))
-				{
-					addr = gateway;
-				};
-				
-				if (netif->send == NULL)
-				{
-					semSignal(&iflistLock);
-					return -1;
-				};
-
-				netif->send(netif, addr, 16, packet, len);
-				semSignal(&iflistLock);
-				return 0;
-			};
+			remapAddress46((struct sockaddr_in*) &src4, (struct sockaddr_in6*) src);
 		};
 		
-		netif = netif->next;
+		return status;
 	};
 	
-	semSignal(&iflistLock);
-	return -1;
-};
-
-int sendPacket(const struct sockaddr *addr, const void *packet, size_t len)
-{
-	if (addr->sa_family == AF_INET)
+	if (isMappedAddress46(src))
 	{
-		const struct sockaddr_in *addr4 = (const struct sockaddr_in*) addr;
-		return sendPacket4(&addr4->sin_addr, packet, len);
-	}
-	else if (addr->sa_family == AF_INET6)
+		// source is IPv4 but destination is IPv6
+		return -EINVAL;
+	};
+	
+	if (src->sa_family == AF_UNSPEC)
 	{
-		const struct sockaddr_in6 *addr6 = (const struct sockaddr_in6*) addr;
-		return sendPacket6(&addr6->sin6_addr, packet, len);
+		if (dest->sa_family == AF_INET)
+		{
+			struct sockaddr_in *insrc = (struct sockaddr_in*) src;
+			struct sockaddr_in *indst = (struct sockaddr_in*) dest;
+			insrc->sin_family = AF_INET;
+			getDefaultAddr4(&insrc->sin_addr, &indst->sin_addr);
+		}
+		else if (dest->sa_family == AF_INET6)
+		{
+			struct sockaddr_in6 *insrc = (struct sockaddr_in6*) src;
+			struct sockaddr_in6 *indst = (struct sockaddr_in6*) dest;
+			insrc->sin6_family = AF_INET6;
+			insrc->sin6_scope_id = indst->sin6_scope_id;
+			getDefaultAddr6(&insrc->sin6_addr, &indst->sin6_addr);
+		}
+		else
+		{
+			return -EINVAL;
+		};
+	};
+	
+	if (src->sa_family != dest->sa_family)
+	{
+		// family mismatch
+		return -EINVAL;
+	};
+	
+	if (src->sa_family == AF_INET)
+	{
+		struct sockaddr_in *insrc = (struct sockaddr_in*) src;
+		const struct sockaddr_in *indst = (const struct sockaddr_in*) dest;
+		
+		if (memcmp(&insrc->sin_addr, zeroes, 4) == 0)
+		{
+			getDefaultAddr4(&insrc->sin_addr, &indst->sin_addr);
+		};
 	}
 	else
 	{
-		return -1;
+		struct sockaddr_in6 *insrc = (struct sockaddr_in6*) src;
+		const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
+		
+		if (memcmp(&insrc->sin6_addr, zeroes, 16) == 0)
+		{
+			getDefaultAddr6(&insrc->sin6_addr, &indst->sin6_addr);
+		};
 	};
+	
+	int proto = flags & 0xFF;
+	if (proto == IPPROTO_RAW)
+	{
+		flags |= PKT_HDRINC | PKT_DONTFRAG;
+	};
+	
+	if (flags & PKT_HDRINC)
+	{
+		flags |= PKT_DONTFRAG;
+	};
+	
+	// TODO: proper path MTU discovery!
+	size_t mtu = 1280;
+	if (dest->sa_family == AF_INET)
+	{
+		mtu = 576;
+	};
+	
+	if ((flags & PKT_HDRINC) == 0)
+	{
+		if (dest->sa_family == AF_INET)
+		{
+			mtu -= 20;			// IPv4 header is 20 bytes
+		}
+		else
+		{
+			mtu -= 40;			// IPv6 header is 40 bytes
+		};
+	};
+	
+	if (packetlen > mtu)
+	{
+		if (flags & PKT_DONTFRAG)
+		{
+			return -E2BIG;
+		};
+		
+		// we're fragmenting, so for IPv6 we must also append a fragment extension header!
+		if (dest->sa_family == AF_INET6)
+		{
+			mtu -= 8;
+		};
+		
+		size_t numFullDatagrams = packetlen / mtu;
+		size_t sizeLeft = packetlen % mtu;
+		if (sizeLeft > 0) numFullDatagrams++;
+		
+		uint32_t packetID = getNextPacketID();
+		
+		size_t i;
+		for (i=0; i<numFullDatagrams; i++)
+		{
+			uint8_t *encapPacket;
+			size_t encapSize;
+			if (dest->sa_family == AF_INET)
+			{
+				PacketInfo4 info;
+				struct sockaddr_in *insrc = (struct sockaddr_in*) src;
+				const struct sockaddr_in *indst = (const struct sockaddr_in*) dest;
+				memcpy(&info.saddr, &insrc->sin_addr, 4);
+				memcpy(&info.daddr, &indst->sin_addr, 4);
+				info.proto = proto;
+				info.size = mtu;
+				info.id = packetID;
+				info.fragOff = i * mtu;
+				info.hop = DEFAULT_HOP_LIMIT;
+				info.moreFrags = (i != (numFullDatagrams-1));
+				
+				if (!info.moreFrags)
+				{
+					info.size = sizeLeft;
+				};
+				
+				encapSize = 20+info.size;
+				encapPacket = (uint8_t*) kmalloc(20+info.size);
+				ipv4_info2header(&info, (IPHeader4*)encapPacket);
+				memcpy(&encapPacket[20], ((uint8_t*)packet+(i*mtu)), info.size);
+			}
+			else
+			{
+				// IPv6
+				PacketInfo6 info;
+				struct sockaddr_in6 *insrc = (struct sockaddr_in6*) src;
+				const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
+				memcpy(&info.saddr, &insrc->sin6_addr, 16);
+				memcpy(&info.daddr, &indst->sin6_addr, 16);
+				info.proto = proto;
+				info.size = mtu;
+				info.id = packetID;
+				info.fragOff = i * mtu;
+				info.hop = DEFAULT_HOP_LIMIT;
+				info.moreFrags = (i != (numFullDatagrams-1));
+				
+				if (!info.moreFrags)
+				{
+					info.size = sizeLeft;
+				};
+				
+				encapSize = 48+info.size;
+				encapPacket = (uint8_t*) kmalloc(48+info.size);
+				ipv6_info2header(&info, (IPHeader6*)encapPacket);
+				memcpy(&encapPacket[48], ((uint8_t*)packet+(i*mtu)), info.size);
+			};
+			
+			int status = sendPacket(src, dest, encapPacket, encapSize, flags | PKT_HDRINC, nanotimeout, ifname);
+			kfree(encapPacket);
+			
+			if (status != 0) return status;
+		};
+		
+		return 0;
+	};
+	
+	// add an IP header if needed
+	if ((flags & PKT_HDRINC) == 0)
+	{
+		uint8_t *encapPacket;
+		size_t encapSize;
+		
+		if (dest->sa_family == AF_INET)
+		{
+			PacketInfo4 info;
+			struct sockaddr_in *insrc = (struct sockaddr_in*) src;
+			const struct sockaddr_in *indst = (const struct sockaddr_in*) dest;
+			memcpy(&info.saddr, &insrc->sin_addr, 4);
+			memcpy(&info.daddr, &indst->sin_addr, 4);
+			info.proto = proto;
+			info.size = packetlen;
+			info.id = getNextPacketID();
+			info.fragOff = 0;
+			info.hop = DEFAULT_HOP_LIMIT;
+			info.moreFrags = 0;
+			
+			encapSize = 20+info.size;
+			encapPacket = (uint8_t*) kmalloc(20+info.size);
+			ipv4_info2header(&info, (IPHeader4*)encapPacket);
+			memcpy(&encapPacket[20], packet, packetlen);
+		}
+		else
+		{
+			// IPv6
+			PacketInfo6 info;
+			struct sockaddr_in6 *insrc = (struct sockaddr_in6*) src;
+			const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
+			memcpy(&info.saddr, &insrc->sin6_addr, 16);
+			memcpy(&info.daddr, &indst->sin6_addr, 16);
+			info.proto = proto;
+			info.size = packetlen;
+			info.id = getNextPacketID();
+			info.fragOff = 0;
+			info.hop = DEFAULT_HOP_LIMIT;
+			info.moreFrags = 0;
+			
+			encapSize = 40+info.size;
+			encapPacket = (uint8_t*) kmalloc(40+info.size);
+			ipv6_info2header(&info, (IPHeader6*)encapPacket);
+			memcpy(&encapPacket[40], packet, packetlen);
+		};
+		
+		int status = sendPacket(src, dest, encapPacket, encapSize, flags | PKT_HDRINC, nanotimeout, ifname);
+		kfree(encapPacket);
+		return status;
+	};
+	
+	// at this point, we have an IP packet with a complete header, which we just have to send to an interface.
+	// so we look through the routing tables, select an interface, and attempt to transmit by using address
+	// resolution.
+	//kprintf("TRY MUTEX LOCK\n");
+	mutexLock(&iflistLock);
+	//kprintf("MUTEX OK\n");
+	
+	NetIf *netif;
+	for (netif=&iflist; netif!=NULL; netif=netif->next)
+	{
+		int useThisOne = 1;
+		
+		if (ifname != NULL)
+		{
+			if (strcmp(ifname, netif->name) != 0)
+			{
+				useThisOne = 0;
+			};
+		};
+		
+		if (useThisOne)
+		{
+			if (dest->sa_family == AF_INET)
+			{
+				const struct sockaddr_in *indst = (const struct sockaddr_in*) dest;
+				struct sockaddr_in gateway;
+				gateway.sin_family = AF_INET;
+				
+				int i;
+				for (i=0; i<netif->ipv4.numRoutes; i++)
+				{
+					IPRoute4 *route = &netif->ipv4.routes[i];
+					if (isMatchingMask(&route->dest, &indst->sin_addr, &route->mask, 4))
+					{
+						if (memcmp(&route->gateway, zeroes, 4) == 0)
+						{
+							memcpy(&gateway.sin_addr, &indst->sin_addr, 4);
+						}
+						else
+						{
+							memcpy(&gateway.sin_addr, &route->gateway, 4);
+						};
+						
+						int status = sendPacketToInterface(netif, (struct sockaddr*) &gateway,
+											packet, packetlen, nanotimeout);
+						mutexUnlock(&iflistLock);
+						return status;
+					};
+				};
+			}
+			else
+			{
+				const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
+				struct sockaddr_in6 gateway;
+				gateway.sin6_family = AF_INET6;
+				
+				int i;
+				for (i=0; i<netif->ipv6.numRoutes; i++)
+				{
+					IPRoute6 *route = &netif->ipv6.routes[i];
+					if (isMatchingMask(&route->dest, &indst->sin6_addr, &route->mask, 16))
+					{
+						if (memcmp(&route->gateway, zeroes, 16) == 0)
+						{
+							memcpy(&gateway.sin6_addr, &indst->sin6_addr, 16);
+						}
+						else
+						{
+							memcpy(&gateway.sin6_addr, &route->gateway, 16);
+						};
+						
+						int status = sendPacketToInterface(netif, (struct sockaddr*) &gateway,
+											packet, packetlen, nanotimeout);
+						mutexUnlock(&iflistLock);
+						return status;
+					};
+				};
+			};
+		};
+	};
+	
+	mutexUnlock(&iflistLock);
+	return -ENETUNREACH;
 };
 
 void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest)
 {
 	uint32_t addr = *((uint32_t*)dest);
 
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	
 	NetIf *netif = &iflist;
 	while (netif != NULL)
@@ -632,12 +974,12 @@ void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest)
 				if (netif->ipv4.numAddrs == 0)
 				{
 					memset(src, 0, 4);
-					semSignal(&iflistLock);
+					mutexUnlock(&iflistLock);
 					return;
 				};
 				
 				memcpy(src, &netif->ipv4.addrs[0].addr, 4);
-				semSignal(&iflistLock);
+				mutexUnlock(&iflistLock);
 				return;
 			};
 		};
@@ -646,14 +988,14 @@ void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest)
 	};
 	
 	memset(src, 0, 4);
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 };
 
 void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest)
 {
 	uint64_t *addr = ((uint64_t*)dest);
 
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	
 	NetIf *netif = &iflist;
 	while (netif != NULL)
@@ -670,13 +1012,13 @@ void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest)
 			{
 				if (netif->ipv6.numAddrs == 0)
 				{
-					semSignal(&iflistLock);
+					mutexUnlock(&iflistLock);
 					memset(src, 0, 16);
 					return;
 				};
 				
 				memcpy(src, &netif->ipv6.addrs[0].addr, 16);
-				semSignal(&iflistLock);
+				mutexUnlock(&iflistLock);
 				return;
 			};
 		};
@@ -685,7 +1027,7 @@ void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest)
 	};
 	
 	memset(src, 0, 16);
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 };
 
 int route_add(int family, int pos, gen_route *route)
@@ -702,7 +1044,7 @@ int route_add(int family, int pos, gen_route *route)
 		return -1;
 	};
 	
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	
 	NetIf *netif = &iflist;
 	while (netif != NULL)
@@ -730,7 +1072,7 @@ int route_add(int family, int pos, gen_route *route)
 				memcpy(&netif->ipv4.routes[pos].mask, &inroute->mask, 4);
 				memcpy(&netif->ipv4.routes[pos].gateway, &inroute->gateway, 4);
 				kfree(oldRoutes);
-				semSignal(&iflistLock);
+				mutexUnlock(&iflistLock);
 				return 0;
 			}
 			else if (family == AF_INET6)
@@ -754,7 +1096,7 @@ int route_add(int family, int pos, gen_route *route)
 				memcpy(&netif->ipv6.routes[pos].mask, &inroute->mask, 16);
 				memcpy(&netif->ipv6.routes[pos].gateway, &inroute->gateway, 16);
 				kfree(oldRoutes);
-				semSignal(&iflistLock);
+				mutexUnlock(&iflistLock);
 				return 0;
 			};
 		};
@@ -762,7 +1104,7 @@ int route_add(int family, int pos, gen_route *route)
 		netif = netif->next;
 	};
 	
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 	
 	// the interface was not found!
 	getCurrentThread()->therrno = ENOENT;
@@ -772,7 +1114,7 @@ int route_add(int family, int pos, gen_route *route)
 ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size)
 {
 	NetStat netstat;
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	
 	NetIf *netif = &iflist;
 	while (netif != NULL)
@@ -794,14 +1136,14 @@ ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size)
 			};
 			
 			memcpy(buffer, &netstat, size);
-			semSignal(&iflistLock);
+			mutexUnlock(&iflistLock);
 			return (ssize_t) size;
 		};
 		
 		netif = netif->next;
 	};
 	
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 	
 	// the interface was not found!
 	getCurrentThread()->therrno = ENOENT;
@@ -811,7 +1153,7 @@ ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size)
 ssize_t netconf_statidx(unsigned int index, NetStat *buffer, size_t size)
 {
 	NetStat netstat;
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	
 	NetIf *netif = &iflist;
 	while (netif != NULL)
@@ -833,14 +1175,14 @@ ssize_t netconf_statidx(unsigned int index, NetStat *buffer, size_t size)
 			};
 			
 			memcpy(buffer, &netstat, size);
-			semSignal(&iflistLock);
+			mutexUnlock(&iflistLock);
 			return (ssize_t) size;
 		};
 		
 		netif = netif->next;
 	};
 	
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 	
 	// the interface was not found!
 	getCurrentThread()->therrno = ENOENT;
@@ -855,7 +1197,7 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
 		return -1;
 	};
 	
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	
 	NetIf *netif = &iflist;
 	while (netif != NULL)
@@ -875,14 +1217,14 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
 				memcpy(buffer, netif->ipv6.addrs, bufsiz);
 			};
 			
-			semSignal(&iflistLock);
+			mutexUnlock(&iflistLock);
 			return (ssize_t) bufsiz;
 		};
 		
 		netif = netif->next;
 	};
 	
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 	
 	// the interface was not found!
 	getCurrentThread()->therrno = ENOENT;
@@ -892,35 +1234,35 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
 static int nextEthNumber = 0;
 static int nextTnlNumber = 0;
 
-NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig, void (*send)(NetIf*, const void*, size_t, const void*, size_t))
+NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig)
 {
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	char ifname[16];
 	if (ifconfig->type == IF_LOOPBACK)
 	{
-		semSignal(&iflistLock);
+		mutexUnlock(&iflistLock);
 		return NULL;
 	}
 	else if (ifconfig->type == IF_ETHERNET)
 	{
 		if (nextEthNumber == 100)
 		{
-			semSignal(&iflistLock);
+			mutexUnlock(&iflistLock);
 			return NULL;
 		};
 		
 		// validate mac address: it must not be broadcast (ff:ff:ff:ff:ff:ff), or multicast
 		// (bit 0 of first byte set).
-		if (ifconfig->ethernet.mac[0] & 1)
+		if (ifconfig->ethernet.mac.addr[0] & 1)
 		{
-			semSignal(&iflistLock);
+			mutexUnlock(&iflistLock);
 			return NULL;
 		};
 		
 		static uint8_t macBroadcast[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-		if (memcmp(ifconfig->ethernet.mac, macBroadcast, 6) == 0)
+		if (memcmp(&ifconfig->ethernet.mac, macBroadcast, 6) == 0)
 		{
-			semSignal(&iflistLock);
+			mutexUnlock(&iflistLock);
 			return NULL;
 		};
 		
@@ -943,7 +1285,7 @@ NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig, void (*send)
 	{
 		if (nextTnlNumber == 100)
 		{
-			semSignal(&iflistLock);
+			mutexUnlock(&iflistLock);
 			return NULL;
 		};
 		
@@ -963,7 +1305,7 @@ NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig, void (*send)
 	}
 	else
 	{
-		semSignal(&iflistLock);
+		mutexUnlock(&iflistLock);
 		return NULL;
 	};
 	
@@ -972,7 +1314,6 @@ NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig, void (*send)
 	netif->drvdata = drvdata;
 	strcpy(netif->name, ifname);
 	memcpy(&netif->ifconfig, ifconfig, sizeof(NetIfConfig));
-	netif->send = send;
 	
 	NetIf *last = &iflist;
 	while (last->next != NULL)
@@ -983,16 +1324,16 @@ NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig, void (*send)
 	last->next = netif;
 	netif->prev = last;
 	
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 	return netif;
 };
 
 void DeleteNetworkInterface(NetIf *netif)
 {
-	semWait(&iflistLock);
+	mutexLock(&iflistLock);
 	if (netif->prev != NULL) netif->prev->next = netif->next;
 	if (netif->next != NULL) netif->next->prev = netif->prev;
-	semSignal(&iflistLock);
+	mutexUnlock(&iflistLock);
 	
 	kfree(netif);
 };

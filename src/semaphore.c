@@ -197,7 +197,7 @@ int semWaitTimeout(Semaphore *sem, int count, uint64_t timeout)
 			spinlockRelease(&sem->lock);
 			return SEM_INTERRUPT;
 		};
-		if (getUptime() >= deadline)
+		if ((getUptime() >= deadline) && (deadline != 0))
 		{
 			sem->countWaiter = NULL;
 			spinlockRelease(&sem->lock);

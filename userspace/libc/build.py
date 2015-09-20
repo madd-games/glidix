@@ -89,7 +89,7 @@ for asmfile in os.listdir("asm"):
 def opCreateBuildMK():
 	f = open("build.mk", "wb")
 	f.write(".PHONY: all\n")
-	f.write("all: out/lib/libc.so out/lib/libdl.so out/lib/libcrypt.so out/lib/libc.a out/lib/crt0.o out/lib/crti.o out/lib/crtn.o\n")
+	f.write("all: out/lib/libc.so out/lib/libdl.so out/lib/libm.so out/lib/libcrypt.so out/lib/libc.a out/lib/crt0.o out/lib/crti.o out/lib/crtn.o\n")
 	f.write("TARGET_CC=%s\n" % config["compiler"])
 	f.write("TARGET_AR=%s\n" % config["ar"])
 	f.write("TARGET_RANLIB=%s\n" % config["ranlib"])
@@ -98,6 +98,8 @@ def opCreateBuildMK():
 	f.write("out/lib/libc.so: libglidix.o %s\n" % (" ".join(objectFiles)))
 	f.write("\t$(TARGET_CC) -shared -o $@ $^\n");
 	f.write("out/lib/libdl.so: support/libdl.c\n")
+	f.write("\t$(TARGET_CC) -shared -o $@ $^ -fPIC\n")
+	f.write("out/lib/libm.so: support/libm.c\n")
 	f.write("\t$(TARGET_CC) -shared -o $@ $^ -fPIC\n")
 	f.write("out/lib/libcrypt.so: support/libcrypt.c\n")
 	f.write("\t$(TARGET_CC) -shared -o $@ $^ -fPIC\n")

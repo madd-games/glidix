@@ -61,15 +61,15 @@ static unsigned char keymap[128] =
     0,	/* 69 - Num lock*/
     0,	/* Scroll Lock */
     0,	/* Home key */
-    0,	/* Up Arrow */
+    CC_ARROW_UP,	/* Up Arrow */
     0,	/* Page Up */
   '-',
-    0,	/* Left Arrow */
+    CC_ARROW_LEFT,	/* Left Arrow */
     0,
-    0,	/* Right Arrow */
+    CC_ARROW_RIGHT,	/* Right Arrow */
   '+',
     0,	/* 79 - End key*/
-    0,	/* Down Arrow */
+    CC_ARROW_DOWN,	/* Down Arrow */
     0,	/* Page Down */
     0,	/* Insert Key */
     0,	/* Delete Key */

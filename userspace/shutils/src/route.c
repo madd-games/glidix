@@ -78,10 +78,10 @@ void ip6_to_string(struct in6_addr *addr, struct in6_addr *mask, char *str)
 	char buf[INET6_ADDRSTRLEN];
 	inet_ntop(AF_INET6, addr, buf, INET6_ADDRSTRLEN);
 	
-	if (strlen(buf) > 30)
+	if (strlen(buf) > 27)
 	{
-		memcpy(str, buf, 29);
-		strcpy(&str[29], "...");
+		memcpy(str, buf, 26);
+		strcpy(&str[26], "...");
 	}
 	else
 	{

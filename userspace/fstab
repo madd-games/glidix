@@ -1,0 +1,5 @@
+# /etc/fstab
+# The filesystem table.
+# This file lists filesystems to be mounted automatically upon startup.
+# <MOUNTPOINT>	<TYPE>		<DEVICE>
+/media/cdrom	isofs		/dev/sdb
