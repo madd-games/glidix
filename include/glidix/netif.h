@@ -276,8 +276,7 @@ typedef struct
 	struct in_addr			addr;
 	
 	/**
-	 * The subnet mask. All addresses in the subnet of 'addr' with this mask are available for use
-	 * by bind() on the given interface.
+	 * The subnet mask.
 	 */
 	struct in_addr			mask;
 } IPNetIfAddr4;
@@ -377,10 +376,10 @@ typedef struct NetIf_
 	 * passed to the driver's send() implementation. If bigger packets are to be
 	 * transferred, they are fragmented.
 	 */
-	uint64_t		mtu;
+	uint64_t			mtu;
 
 	/**
-	 * Interface statistics. Number of successfully transmitted and recevied packets,
+	 * Interface statistics. Number of successfully transmitted and received packets,
 	 * number of dropped packets and number of errors.
 	 */
 	int				numTrans;
@@ -462,7 +461,7 @@ void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest);
 /**
  * Calculate the "internet checksum" of the data specified.
  */
-uint16_t ipv4_checksum(void *data, size_t size);
+uint16_t ipv4_checksum(const void *data, size_t size);
 
 /**
  * System call to add a new route. Only 'root' is allowed to do this (effective UID must be 0).
@@ -529,5 +528,10 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
  */
 NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig);
 void DeleteNetworkInterface(NetIf *netif);
+
+/**
+ * Returns true if the specified address belongs to one of the interfaces on this system.
+ */
+int isLocalAddr(const struct sockaddr *addr);
 
 #endif

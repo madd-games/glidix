@@ -191,6 +191,7 @@ int		_glidix_setsockopt(int socket, int proto, int option, uint64_t value);
 uint64_t	_glidix_getsockopt(int socket, int proto, int option);
 ssize_t		_glidix_netconf_statidx(unsigned int index, _glidix_netstat *buffer, size_t bufsize);
 ssize_t		_glidix_pcistat(int id, _glidix_pcidev *buffer, size_t bufsize);
+int		_glidix_setgroups(size_t count, const gid_t *groups);
 
 #ifdef __cplusplus
 }	/* extern "C" */

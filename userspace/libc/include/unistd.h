@@ -76,7 +76,6 @@ int		truncate(const char *path, off_t length);
 long		fpathconf(int fd, int name);
 long		pathconf(const char *path, int name);
 long		sysconf(int name);
-int		getgroups(int count, gid_t *out);
 int		rmdir(const char *path);
 int		access(const char *path, int amode);
 int		getdtablesize(void);
@@ -112,6 +111,7 @@ int		link(const char *oldname, const char *newname);
 ssize_t		readlink(const char *path, char *buf, size_t bufsiz);
 int		symlink(const char *oldname, const char *newname);
 unsigned	sleep(unsigned seconds);
+int		getgroups(int count, gid_t *out);
 
 /* libcrypt */
 char*		crypt(const char *key, const char *salt);

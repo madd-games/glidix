@@ -58,6 +58,11 @@
 #define	IPPROTO_RAW	255		/* Raw IP packets.  */
 #define	IPPROTO_MAX	256
 
+#define	ntohs		__builtin_bswap16
+#define	htons		__builtin_bswap16
+#define	ntohl		__builtin_bswap32
+#define	htonl		__builtin_bswap32
+
 struct in_addr
 {
 	in_addr_t			s_addr;

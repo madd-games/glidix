@@ -219,6 +219,12 @@ typedef struct _Thread
 	mode_t				umask;
 
 	/**
+	 * Supplementary group IDs (max 16) and the number that is actually set.
+	 */
+	gid_t				groups[16];
+	int				numGroups;
+	
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;

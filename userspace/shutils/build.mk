@@ -1,10 +1,12 @@
 .PHONY: all
-all: out/cp out/lspci out/clear-screen out/route out/sudo out/mip-install out/passwd out/mount out/gxpad out/mkdir out/sigsegv out/chown out/ls out/sleep out/date out/rmmod out/login out/color out/chgrp out/ping out/ln out/insmod out/whoami out/whois out/env out/halt out/stat out/pwdsetup out/rm out/umount out/crypt out/mkmip out/chmod out/touch out/cat out/netconf
+all: out/cp out/lspci out/clear-screen out/resolve out/route out/sudo out/mip-install out/passwd out/mount out/gxpad out/mkdir out/sigsegv out/chown out/ls out/sleep out/date out/rmmod out/login out/color out/chgrp out/ping out/ln out/insmod out/whoami out/whois out/env out/halt out/stat out/pwdsetup out/rm out/umount out/crypt out/mkmip out/chmod out/touch out/cat out/netconf
 out/cp: src/cp.c
 	x86_64-glidix-gcc $< -o $@ 
 out/lspci: src/lspci.c
 	x86_64-glidix-gcc $< -o $@ 
 out/clear-screen: src/clear-screen.c
+	x86_64-glidix-gcc $< -o $@ 
+out/resolve: src/resolve.c
 	x86_64-glidix-gcc $< -o $@ 
 out/route: src/route.c
 	x86_64-glidix-gcc $< -o $@ 
@@ -42,6 +44,7 @@ out/chgrp: src/chgrp.c
 	x86_64-glidix-gcc $< -o $@ 
 out/ping: src/ping.c
 	x86_64-glidix-gcc $< -o $@ 
+	chmod 6755 $@
 out/ln: src/ln.c
 	x86_64-glidix-gcc $< -o $@ 
 out/insmod: src/insmod.c

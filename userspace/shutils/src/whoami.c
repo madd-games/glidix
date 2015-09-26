@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <grp.h>
 
 void printUser(const char *idname, uid_t uid)
 {
@@ -43,5 +44,29 @@ int main()
 {
 	printUser("euid", geteuid());
 	printUser("uid", getuid());
+	
+	int count = getgroups(0, NULL);
+	gid_t *groups = (gid_t*) malloc(sizeof(gid_t)*count);
+	getgroups(count, groups);
+	
+	printf("groups: ");
+	
+	int i;
+	for (i=0; i<count; i++)
+	{
+		gid_t gid = groups[i];
+		const char *name = "?";
+		
+		struct group *grp = getgrgid(gid);
+		if (grp != NULL)
+		{
+			name = grp->gr_name;
+		};
+		
+		printf("%u <%s>", (unsigned int) gid, name);
+		if (i != (count-1)) printf(", ");
+	};
+	printf("\n");
+	
 	return 0;
 };

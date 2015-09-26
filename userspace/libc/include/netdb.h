@@ -33,6 +33,27 @@
 extern "C" {
 #endif
 
+#include <sys/socket.h>
+
+#define	EAI_AGAIN			1
+#define	EAI_BADFLAGS			2
+#define	EAI_FAIL			3
+#define	EAI_FAMILY			4
+#define	EAI_MEMORY			5
+#define	EAI_NONAME			6
+#define	EAI_SERVICE			7
+#define	EAI_SOCKTYPE			8
+#define	EAI_SYSTEM			9
+#define	EAI_OVERFLOW			10
+
+#define	AI_PASSIVE			(1 << 0)
+#define	AI_CANONNAME			(1 << 1)
+#define	AI_NUMERICHOST			(1 << 2)
+#define	AI_NUMERICSERV			(1 << 3)
+#define	AI_V4MAPPED			(1 << 4)
+#define	AI_ALL				(1 << 5)
+#define	AI_ADDRCONFIG			(1 << 6)
+
 struct hostent
 {
 	char*				h_name;
@@ -42,7 +63,27 @@ struct hostent
 	char**				h_addr_list;
 };
 
+struct addrinfo
+{
+	int				ai_flags;
+	int				ai_family;
+	int				ai_socktype;
+	int				ai_protocol;
+	socklen_t			ai_addrlen;
+	struct sockaddr*		ai_addr;
+	char*				ai_canonname;
+	struct addrinfo*		ai_next;
+	
+	/**
+	 * Private (glidix only).
+	 */
+	struct sockaddr_storage		__ai_storage;
+};
+
 struct hostent *gethostbyname(const char *name);
+int getaddrinfo(const char *nodename, const char *servname, const struct addrinfo *hints, struct addrinfo **out);
+void freeaddrinfo(struct addrinfo *ai);
+const char* gai_strerror(int errcode);
 
 #ifdef __cplusplus
 };	/* extern "C" */

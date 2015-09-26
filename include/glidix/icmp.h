@@ -37,8 +37,10 @@ typedef struct
 	uint8_t			type;
 	uint8_t			code;
 	uint16_t		checksum;
-	
-} ErrorPacket;
+	uint32_t		zero;
+	uint8_t			payload[28];
+} ErrorPacket4;
+
 int sendErrorPacket(struct sockaddr *src, const struct sockaddr *dest, int errnum, const void *packet, size_t packetlen);
 
 #endif

@@ -32,6 +32,7 @@
 #include <termios.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <grp.h>
 
 char username[128];
 char password[128];
@@ -172,6 +173,31 @@ int main(int argc, char *argv[])
 
 		if (strcmp(crypt(password, passcrypt), passcrypt) == 0)
 		{
+			// search all groups to find which ones we are in
+			gid_t *groups = NULL;
+			size_t numGroups = 0;
+			
+			struct group *grp;
+			while ((grp = getgrent()) != NULL)
+			{
+				int i;
+				for (i=0; grp->gr_mem[i]!=NULL; i++)
+				{
+					if (strcmp(grp->gr_mem[i], username) == 0)
+					{
+						groups = realloc(groups, sizeof(gid_t)*(numGroups+1));
+						groups[numGroups++] = grp->gr_gid;
+						break;
+					};
+				};
+			};
+			
+			if (_glidix_setgroups(numGroups, groups) != 0)
+			{
+				perror("_glidix_setgroups");
+				return 1;;
+			};
+			
 			if (setgid(pwd->pw_gid) != 0)
 			{
 				perror("setgid");

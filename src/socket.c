@@ -46,6 +46,11 @@ static Socket sockList;
 static Spinlock portLock;
 static uint8_t *ethports;
 
+/**
+ * If 1, then packet forwarding is enabled.
+ */
+int optForwardPackets = 1;
+
 void initSocket()
 {
 	semInit(&sockLock);
@@ -300,9 +305,87 @@ int SocketGetpeername(File *fp, struct sockaddr *addr, size_t *addrlen)
 	return sock->getpeername(sock, addr, addrlen);
 };
 
+int isValidAddr(const struct sockaddr *addr)
+{
+	static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	if (addr->sa_family == AF_INET)
+	{
+		const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
+		if (memcmp(&inaddr->sin_addr, zeroes, 4) == 0)
+		{
+			return 0;
+		};
+	}
+	else
+	{
+		const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
+		if (memcmp(&inaddr->sin6_addr, zeroes, 16) == 0)
+		{
+			return 0;
+		};
+	};
+	
+	return 1;
+};
+
 void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto, uint64_t dataOffset)
 {
+	if (!isValidAddr(dest))
+	{
+		// drop the packet silently
+		return;
+	};
+	
+	if (!isValidAddr(src))
+	{
+		// drop the packet silently because the source is invalid
+		return;
+	};
+	
+	if (!isLocalAddr(dest))
+	{
+		// not our address, forward if enabled
+		if (optForwardPackets)
+		{
+			struct sockaddr fake_src;
+			fake_src.sa_family = AF_UNSPEC;
+			
+			uint8_t hop;
+			if (dest->sa_family == AF_INET)
+			{
+				hop = ((IPHeader4*)packet)->hop;
+			}
+			else
+			{
+				hop = ((IPHeader6*)packet)->hop;
+			};
+			
+			if (hop == 0)
+			{
+				// hop count exceeded; do not forward
+				sendErrorPacket(&fake_src, src, ETIMEDOUT, packet, size);
+			}
+			else
+			{
+				int status = sendPacket(&fake_src, dest, packet, size, IPPROTO_RAW, NT_SECS(1), NULL);
+				if (status < 0)
+				{
+					// send an error packet to the source
+					if (status == -ETIMEDOUT)
+					{
+						status = -EHOSTUNREACH;
+					};
+				
+					fake_src.sa_family = AF_UNSPEC;
+					sendErrorPacket(&fake_src, src, -status, packet, size);
+				};
+			};
+		};
+		
+		return;
+	};
+
 	if ((proto == IPPROTO_ICMP) && (src->sa_family == AF_INET))
 	{
 		ICMPPacket *icmp = (ICMPPacket*) ((char*)packet + dataOffset);
@@ -315,6 +398,8 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 			uint32_t temp = header->saddr;
 			header->saddr = header->daddr;
 			header->daddr = temp;
+			header->checksum = 0;
+			header->checksum = ipv4_checksum(header, 20);
 			
 			PingPongPacket *pong = (PingPongPacket*) ((char*)response + dataOffset);
 			pong->type = 0;
@@ -323,7 +408,11 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 			
 			struct sockaddr srcaddr;
 			srcaddr.sa_family = AF_UNSPEC;
-			sendPacket(&srcaddr, src, response, size, IPPROTO_ICMP | PKT_HDRINC | PKT_DONTFRAG, NT_SECS(1), NULL);
+			int status = sendPacket(&srcaddr, src, response, size, IPPROTO_ICMP | PKT_HDRINC | PKT_DONTFRAG, NT_SECS(1), NULL);
+			if (status != 0)
+			{
+				kprintf("ERROR: %d\n", status);
+			};
 			kfree(response);
 		};
 	};

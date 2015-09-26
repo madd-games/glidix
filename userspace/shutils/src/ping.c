@@ -41,6 +41,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
+#include <netdb.h>
 
 char *progName;
 
@@ -92,8 +93,9 @@ uint16_t checksum(void* vdata,size_t length)
 
 void usage()
 {
-	fprintf(stderr, "USAGE:\t%s inet_addr\n", progName);
-	fprintf(stderr, "\tTest whether the specified IPv4 address is reachable\n");
+	fprintf(stderr, "USAGE:\t%s hostname\n", progName);
+	fprintf(stderr, "\tTest whether the specified IPv4 host is reachable.\n");
+	fprintf(stderr, "\tFor IPv6, use `ping6'.\n");
 };
 
 const char *getUnreachMsg(uint8_t code)
@@ -140,12 +142,15 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	struct sockaddr_in addr;
-	addr.sin_family = AF_INET;
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_INET;
 	
-	if (inet_pton(AF_INET, argv[1], &addr.sin_addr) != 1)
+	struct addrinfo *addrs;
+	int status = getaddrinfo(argv[1], NULL, &hints, &addrs);
+	if (status != 0)
 	{
-		fprintf(stderr, "%s: %s: %s\n", argv[0], argv[1], strerror(errno));
+		fprintf(stderr, "%s: getaddrinfo %s: %s\n", argv[0], argv[1], gai_strerror(status));
 		return 1;
 	};
 	
@@ -173,11 +178,14 @@ int main(int argc, char *argv[])
 	ping.id = getpid();
 	ping.seq = 0;
 	
-	printf("PING %s\n", argv[1]);
+	char destaddrstr[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &((struct sockaddr_in*)(addrs->ai_addr))->sin_addr, destaddrstr, INET_ADDRSTRLEN);
+	
+	printf("PING %s (%s)\n", argv[1], destaddrstr);
 	int i;
 	for (i=0;; i++)
 	{
-		sleep(1);			// don't hog the CPU and netowkr too much
+		sleep(1);			// don't hog the CPU and network too much
 		
 		struct sockaddr_in src;
 		
@@ -186,7 +194,7 @@ int main(int argc, char *argv[])
 		ping.checksum = checksum(&ping, sizeof(PingPongPacket));
 		
 		clock_t sendTime = clock();
-		if (sendto(sockfd, &ping, sizeof(PingPongPacket), 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) == -1)
+		if (sendto(sockfd, &ping, sizeof(PingPongPacket), 0, addrs->ai_addr, sizeof(struct sockaddr_in)) == -1)
 		{
 			fprintf(stderr, "%s: sendto: %s\n", argv[0], strerror(errno));
 			continue;

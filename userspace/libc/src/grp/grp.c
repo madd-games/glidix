@@ -239,3 +239,41 @@ struct group* getgrgid(gid_t gid)
 	};
 	return out;
 };
+
+static FILE *fpGroups = NULL;
+void setgrent()
+{
+	endgrent();
+};
+
+void endgrent()
+{
+	if (fpGroups != NULL)
+	{
+		fclose(fpGroups);
+		fpGroups = NULL;
+	};
+};
+
+struct group *getgrent()
+{
+	if (fpGroups == NULL)
+	{
+		fpGroups = fopen("/etc/group", "r");
+		if (fpGroups == NULL)
+		{
+			errno = EIO;
+			return NULL;
+		};
+	};
+	
+	char *nextbuf;
+	if (__grpnextent(fpGroups, &__grp_static, __grp_static_buf, &nextbuf) != -1)
+	{
+		__grpmemparse(&__grp_static, nextbuf);
+		return &__grp_static;
+	};
+	
+	errno = 0;
+	return NULL;
+};

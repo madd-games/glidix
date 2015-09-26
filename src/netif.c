@@ -41,10 +41,10 @@
 static Mutex iflistLock;
 static NetIf iflist;
 
-uint16_t ipv4_checksum(void* vdata,size_t length)
+uint16_t ipv4_checksum(const void* vdata,size_t length)
 {
 	// Cast the data pointer to one that can be indexed.
-	char* data=(char*)vdata;
+	const char* data=(const char*)vdata;
 
 	// Initialise the accumulator.
 	uint32_t acc=0xffff;
@@ -201,7 +201,6 @@ static lopacket *loQueue = NULL;
 static void loopbackSend(NetIf *netif, const void *packet, size_t packetlen)
 {
 	__sync_fetch_and_add(&netif->numTrans, 1);
-	//onPacket(netif, packet, packetlen);
 	lopacket *newPacket = (lopacket*) kmalloc(sizeof(lopacket) + packetlen);
 	newPacket->next = NULL;
 	newPacket->size = packetlen;
@@ -320,17 +319,15 @@ void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 		PacketInfo4 info;
 		if (ipv4_header2info((IPHeader4*) packet, &info) != 0)
 		{
+			//kprintf("failed to parse header\n");
 			__sync_fetch_and_add(&netif->numDropped, 1);
 			return;
 		};
 		
 		if (info.hop != 0) info.hop--;
-		if (info.hop == 0)
-		{
-			// TODO: send a timeout packet when echo is enabled on the interface
-			__sync_fetch_and_add(&netif->numDropped, 1);
-			return;
-		};
+		((IPHeader4*)packet)->hop = (uint8_t) info.hop;
+		((IPHeader4*)packet)->checksum = 0;
+		((IPHeader4*)packet)->checksum = ipv4_checksum(packet, 20);
 		
 		if ((info.moreFrags) || (info.fragOff != 0))
 		{
@@ -373,14 +370,8 @@ void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 		};
 		
 		if (info.hop != 0) info.hop--;
-		if (info.hop == 0)
-		{
-			// TODO: send a timeout packet when echo is enabled on the interface
-			__sync_fetch_and_add(&netif->numDropped, 1);
-			return;
-		};
+		((IPHeader6*)packet)->hop = (uint8_t) info.hop;
 
-		// TODO: reassembly! (handle protocol 44 for fragmented packets)
 		__sync_fetch_and_add(&netif->numRecv, 1);
 		
 		// find out the source and destination address of the packet
@@ -1336,4 +1327,60 @@ void DeleteNetworkInterface(NetIf *netif)
 	mutexUnlock(&iflistLock);
 	
 	kfree(netif);
+};
+
+int isLocalAddr(const struct sockaddr *addr)
+{
+	mutexLock(&iflistLock);
+	
+	NetIf *netif;
+	for (netif=&iflist; netif!=NULL; netif=netif->next)
+	{
+		if (addr->sa_family == AF_INET)
+		{
+			const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
+			
+			int i;
+			for (i=0; i<netif->ipv4.numAddrs; i++)
+			{
+				IPNetIfAddr4 *ifaddr = &netif->ipv4.addrs[i];
+				if (memcmp(&ifaddr->addr, &inaddr->sin_addr, 4) == 0)
+				{
+					mutexUnlock(&iflistLock);
+					return 1;
+				};
+				
+				// also count the broadcast address as a local address!
+				uint32_t laddr = *((uint32_t*)&ifaddr->addr);
+				uint32_t mask = *((uint32_t*)&ifaddr->mask);
+				uint32_t thisaddr = *((uint32_t*)&inaddr->sin_addr);
+				uint32_t broadcast = (laddr & mask) | (~mask);
+				
+				if (thisaddr == broadcast)
+				{
+					mutexUnlock(&iflistLock);
+					return 1;
+				};
+			};
+		}
+		else
+		{
+			// IPv6
+			const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
+			
+			int i;
+			for (i=0; i<netif->ipv6.numAddrs; i++)
+			{
+				IPNetIfAddr6 *ifaddr = &netif->ipv6.addrs[i];
+				if (memcmp(&ifaddr->addr, &inaddr->sin6_addr, 16) == 0)
+				{
+					mutexUnlock(&iflistLock);
+					return 1;
+				};
+			};
+		};
+	};
+	
+	mutexUnlock(&iflistLock);
+	return 0;
 };

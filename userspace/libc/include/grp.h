@@ -44,4 +44,8 @@ struct group *getgrnam(const char *);
 int getgrgid_r(gid_t, struct group *, char *, size_t, struct group **);
 int getgrnam_r(const char *, struct group *, char *, size_t , struct group **);
 
+void setgrent();
+struct group *getgrent();
+void endgrent();
+
 #endif

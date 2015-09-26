@@ -27,8 +27,75 @@
 */
 
 #include <glidix/icmp.h>
+#include <glidix/errno.h>
+#include <glidix/string.h>
+
+static int sendErrorPacket4(struct sockaddr *src, const struct sockaddr *dest, int errnum, const void *packet, size_t packetlen)
+{
+	if (packetlen < 28)
+	{
+		// don't bother replying to extremely short packets made of less than 8 bytes
+		// after the IPv4 header.
+		return 0;
+	};
+	
+	/**
+	 * We must not respond to ICMP messages 3, 11 and 12 as they are error messages,
+	 * and we should not reply to an error message with an error messages.
+	 */
+	IPHeader4 *header = (IPHeader4*) packet;
+	if (header->proto == (uint8_t)IPPROTO_ICMP)
+	{
+		ErrorPacket4 *icmp = (ErrorPacket4*) &header[1];
+		if ((icmp->type == 3) || (icmp->type == 11) || (icmp->type == 12))
+		{
+			return 0;
+		};
+	};
+	
+	if (packetlen > 28)
+	{
+		packetlen = 28;
+	};
+	
+	ErrorPacket4 errpack;
+
+	switch (errnum)
+	{
+	case ETIMEDOUT:
+		errpack.type = 11;
+		errpack.code = 0;
+		break;
+	case ENETUNREACH:
+		errpack.type = 3;
+		errpack.code = 0;
+		break;
+	case EHOSTUNREACH:
+		errpack.type = 3;
+		errpack.code = 1;
+		break;
+	default:
+		return -EINVAL;
+	};
+	
+	errpack.checksum = 0;
+	errpack.zero = 0;
+	memcpy(errpack.payload, packet, packetlen);
+	
+	errpack.checksum = ipv4_checksum(&errpack, sizeof(ErrorPacket4));
+	
+	return sendPacket(src, dest, &errpack, sizeof(ErrorPacket4), IPPROTO_ICMP | PKT_DONTFRAG, NT_SECS(1), NULL);
+};
 
 int sendErrorPacket(struct sockaddr *src, const struct sockaddr *dest, int errnum, const void *packet, size_t packetlen)
 {
-	return 0;
+	if (dest->sa_family == AF_INET)
+	{
+		return sendErrorPacket4(src, dest, errnum, packet, packetlen);
+	}
+	else
+	{
+		// TODO: IPv6
+		return 0;
+	};
 };

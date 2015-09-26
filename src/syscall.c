@@ -2619,6 +2619,46 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		};
 		*((ssize_t*)&regs->rax) = sys_pcistat((int) regs->rdi, (PCIDevice*) regs->rsi, (size_t) regs->rdx);
 		break;
+	case 89:
+		/* getgroups */
+		if (!isPointerValid(regs->rsi, sizeof(gid_t)*(*((int*)&regs->rdi)), PROT_WRITE))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+			break;
+		};
+		if (*((int*)&regs->rdi) <= getCurrentThread()->numGroups)
+		{
+			memcpy((void*)regs->rsi, getCurrentThread()->groups, sizeof(gid_t)*(*((int*)&regs->rdi)));
+		}
+		else
+		{
+			memcpy((void*)regs->rsi, getCurrentThread()->groups, sizeof(gid_t)*getCurrentThread()->numGroups);
+		};
+		*((int*)&regs->rax) = getCurrentThread()->numGroups;
+		break;
+	case 90:
+		/* _glidix_setgroups */
+		if (!isPointerValid(regs->rsi, sizeof(gid_t)*regs->rdi, PROT_READ))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+			break;
+		};
+		if (getCurrentThread()->egid != 0)
+		{
+			ERRNO = EPERM;
+			*((int*)&regs->rax) = -1;
+			break;
+		};
+		if (regs->rdi > 16)
+		{
+			ERRNO = EINVAL;
+			*((int*)regs->rax) = -1;
+			break;
+		};
+		memcpy(getCurrentThread()->groups, (const void*)regs->rsi, sizeof(gid_t)*regs->rdi);
+		getCurrentThread()->numGroups = regs->rdi;
+		*((int*)&regs->rax) = 0;
+		break;	
 	default:
 		signalOnBadSyscall(regs);
 		break;

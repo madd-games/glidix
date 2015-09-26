@@ -39,7 +39,7 @@ utilmap = {}
 cryptUsers = ["src/crypt.c", "src/pwdsetup.c", "src/login.c", "src/passwd.c", "src/sudo.c"]
 
 # the executables will have the set-UID and set-GID bit set.
-suidUsers = ["src/passwd.c", "src/sudo.c"]
+suidUsers = ["src/passwd.c", "src/sudo.c", "src/ping.c", "src/ping6.c"]
 
 for name in os.listdir("src"):
 	if name.endswith(".c"):
@@ -60,4 +60,4 @@ for key, value in utilmap.items():
 
 f.close()
 
-os.system("make -f build.mk")
+sys.exit(os.system("make -f build.mk"))

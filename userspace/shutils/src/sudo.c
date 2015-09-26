@@ -133,6 +133,30 @@ int findPassword(const char *username)
 	return -1;
 };
 
+int isAdmin()
+{
+	if ((getegid() == 0) || (getegid() == 1))
+	{
+		return 1;
+	};
+	
+	int numGroups = getgroups(0, NULL);
+	gid_t *groups = (gid_t*) malloc(sizeof(gid_t)*numGroups);
+	getgroups(numGroups, groups);
+	
+	int i;
+	for (i=0; i<numGroups; i++)
+	{
+		if ((groups[i] == 0) || (groups[i] == 1))
+		{
+			free(groups);
+			return 1;
+		};
+	};
+	
+	return 0;
+};
+
 // TODO: sudoers file!
 int main(int argc, char *argv[])
 {
@@ -142,7 +166,7 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 
-	if ((getgid() != 1) && (getuid() != 0))
+	if (!isAdmin())
 	{
 		fprintf(stderr, "%s: you are not an admin\n", argv[0]);
 		return 1;
@@ -202,7 +226,8 @@ int main(int argc, char *argv[])
 	};
 
 	// now run
-	execv("/usr/bin/env", &argv[1]);
+	argv[0] = "env";
+	execv("/usr/bin/env", argv);
 	perror("execv");
 	return 1;
 };

@@ -162,6 +162,9 @@ void initSched()
 	// no umask
 	firstThread.umask = 0;
 
+	// no supplementary groups
+	firstThread.numGroups = 0;
+	
 	// linking
 	firstThread.prev = &firstThread;
 	firstThread.next = &firstThread;
@@ -240,6 +243,7 @@ int canSched(Thread *thread)
 	return 1;
 };
 
+static volatile uint64_t switchTaskCounter = 0;
 void switchTask(Regs *regs)
 {
 	ASM("sti");
@@ -254,6 +258,8 @@ void switchTask(Regs *regs)
 		apic->timerInitCount = quantumTicks;
 		return;
 	};
+
+	__sync_fetch_and_add(&switchTaskCounter, 1);
 
 	// remember the context of this thread.
 	fpuSave(&currentThread->fpuRegs);
@@ -541,6 +547,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->wakeTime = 0;
 	thread->umask = 0;
 
+	memcpy(thread->groups, currentThread->groups, sizeof(gid_t)*16);
+	thread->numGroups = currentThread->numGroups;
+	
 	// if the address space is shared, the errnoptr is now invalid;
 	// otherwise, it can just stay where it is.
 	if (flags & CLONE_SHARE_MEMORY)
@@ -827,4 +836,23 @@ void kyield()
 	{
 		ASM("sti; hlt");
 	};
+
+#if 0
+	cli();
+	uint64_t counter = switchTaskCounter;
+	apic->timerInitCount = 0;
+	sti();
+	
+	// at this point, we have 2 possiblities:
+	// 1) the APIC timer fired before we turned it off above. in this case, "switchTaskCounter" changed,
+	//    and we have already rescheduled, so just return.
+	// 2) we turned the APIC timer off before it fired, so "switchTaskCounter" did not change. in this case
+	//    we must reprogram it to 1, and we can be sure that we reschedule before this function returns.
+	
+	if (switchTaskCounter == counter)
+	{
+		apic->timerInitCount = 2;
+		nop();				// make sure it fires before we return by using at least 1 CPU cycle
+	};
+#endif
 };
