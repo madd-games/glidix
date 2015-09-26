@@ -1,4 +1,4 @@
 echo "Mounting all filesystems..."
 mount -a
-echo "Starting shell..."
-sh
+echo "Starting login manager..."
+logmgr

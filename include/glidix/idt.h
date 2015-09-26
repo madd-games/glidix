@@ -53,7 +53,6 @@
 #define	I_SIMD_EX			19
 #define	I_VIRT_EX			20
 #define	I_SECURITY_EX			30
-#define	I_APIC_TIMER			48
 
 // IRQ interrupt numbers.
 #define	IRQ0				32
@@ -72,6 +71,29 @@
 #define	IRQ13				45
 #define	IRQ14				46
 #define	IRQ15				47
+
+// PCI interrupts
+#define	I_PCI0				48
+#define	I_PCI1				49
+#define	I_PCI2				50
+#define	I_PCI3				51
+#define	I_PCI4				52
+#define	I_PCI5				53
+#define	I_PCI6				54
+#define	I_PCI7				55
+#define	I_PCI8				56
+#define	I_PCI9				57
+#define	I_PCI10				58
+#define	I_PCI11				59
+#define	I_PCI12				60
+#define	I_PCI13				61
+#define	I_PCI14				62
+#define	I_PCI15				63
+
+// really weird stuff
+#define	IRQ_IDE				64
+
+#define	I_APIC_TIMER			65
 
 typedef struct
 {

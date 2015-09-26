@@ -87,3 +87,7 @@ int sendErrorPacket(struct sockaddr <i>*src</i>, const struct sockaddr <i>*dest<
 <p>
 <i>src</i> and <i>dest</i> are the source and destination addresses for the ICMP packet; they are treated as in <code>sendPacket()</code>. <i>errnum</i> is an error number (from &lt;glidix/errno.h&gt;) which is then mapped onto the appropriate ICMPv4 or ICMPv6 type and code. <i>packet</i> points to the IP header of the packet that caused the error, and <i>packetlen</i> is the size of that packet. Return values are the same as for <code>sendPacket()</code>. The flags passed to <code>sendPacket()</code> are: <code>IPPROTO_ICMP | PKT_DONTFRAG</code>.
 </p>
+
+<p>
+There is also a function for decoding ICMP error packets:
+</p>

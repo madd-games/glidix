@@ -93,6 +93,23 @@ extern void irq13();
 extern void irq14();
 extern void irq15();
 extern void isr48();
+extern void isr49();
+extern void isr50();
+extern void isr51();
+extern void isr52();
+extern void isr53();
+extern void isr54();
+extern void isr55();
+extern void isr56();
+extern void isr57();
+extern void isr58();
+extern void isr59();
+extern void isr60();
+extern void isr61();
+extern void isr62();
+extern void isr63();
+extern void isr64();
+extern void isr65();
 
 int kernelDead = 0;
 
@@ -182,6 +199,23 @@ void initIDT()
 	setGate(46, irq14);
 	setGate(47, irq15);
 	setGate(48, isr48);
+	setGate(49, isr49);
+	setGate(50, isr50);
+	setGate(51, isr51);
+	setGate(52, isr52);
+	setGate(53, isr53);
+	setGate(54, isr54);
+	setGate(55, isr55);
+	setGate(56, isr56);
+	setGate(57, isr57);
+	setGate(58, isr58);
+	setGate(59, isr59);
+	setGate(60, isr60);
+	setGate(61, isr61);
+	setGate(62, isr62);
+	setGate(63, isr63);
+	setGate(64, isr64);
+	setGate(65, isr65);
 
 	idtPtr.addr = (uint64_t) &idt[0];
 	idtPtr.limit = (sizeof(IDTEntry) * 256) - 1;
@@ -369,22 +403,16 @@ void onInvalidOpcodeOrSyscall(Regs *regs)
 };
 
 void isrHandler(Regs *regs)
-{
-	//kprintf("INTNO: %d\n", regs->intNo);
-	if ((regs->intNo == IRQ14) && (regs->intNo == IRQ15))
-	{
-		panic("INT: %d\n", regs->intNo);
-	};
-	
+{	
 	if (kernelDead)
 	{
 		panic("interrupt %d after kernel died.", regs->intNo);
 	};
-
+	
 	// ignore spurious IRQs
 	if ((regs->intNo == IRQ7) || (regs->intNo == IRQ15))
 	{
-		//apic->eoi = 0;
+		apic->eoi = 0;
 		return;
 	};
 
@@ -424,6 +452,8 @@ void isrHandler(Regs *regs)
 	case 15:
 		// sometimes generated for seemingly no reason... perhaps related to the PIT going off before
 		// the interrupts are reprogremmed? i don't know
+		break;
+	case IRQ_IDE:
 		break;
 	default:
 		if (regs->intNo >= IRQ0)
