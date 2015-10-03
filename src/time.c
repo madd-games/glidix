@@ -31,6 +31,7 @@
 #include <glidix/sched.h>
 #include <glidix/port.h>
 #include <glidix/semaphore.h>
+#include <glidix/string.h>
 
 #define	SECONDS_PER_HOUR				3600
 #define	SECONDS_PER_MINUTE				60
@@ -186,6 +187,7 @@ void initRTC()
 {
 	spinlockRelease(&timeLock);
 	KernelThreadParams rtcPars;
+	memset(&rtcPars, 0, sizeof(KernelThreadParams));
 	rtcPars.stackSize = 0x4000;
 	rtcPars.name = "RTC reader daemon";
 	CreateKernelThread(rtcThread, &rtcPars, NULL);

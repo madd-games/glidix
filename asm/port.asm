@@ -84,6 +84,14 @@ outsw:
 	rep outsw
 	ret
 
+[global outsb]
+outsb:
+	mov rcx,	rdx
+	mov dx,		di
+	rep outsb
+	ret
+
+
 [global insd]
 insd:
 	mov rcx,	rdx

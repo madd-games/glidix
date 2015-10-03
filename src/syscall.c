@@ -48,6 +48,7 @@
 #include <glidix/netif.h>
 #include <glidix/socket.h>
 #include <glidix/pci.h>
+#include <glidix/utsname.h>
 
 void sys_exit(Regs *regs, int status)
 {
@@ -1133,6 +1134,12 @@ int isPointerValid(uint64_t ptr, uint64_t size, int flags)
 	return 1;
 };
 
+int isStringValid(uint64_t ptr)
+{
+	// TODO
+	return 1;
+};
+
 int sys_insmod(const char *modname, const char *path, const char *opt, int flags)
 {
 	if (getCurrentThread()->euid != 0)
@@ -2103,6 +2110,83 @@ uint64_t sys_getsockopt(int fd, int proto, int option)
 	return out;
 };
 
+int sys_uname(struct utsname *buf)
+{
+	strcpy(buf->sysname, UNAME_SYSNAME);
+	strcpy(buf->nodename, UNAME_NODENAME);
+	strcpy(buf->release, UNAME_RELEASE);
+	strcpy(buf->version, UNAME_VERSION);
+	strcpy(buf->machine, UNAME_MACHINE);
+	return 0;
+};
+
+int fcntl_getfd(int fd)
+{
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			return -1;
+		}
+		else
+		{
+			int flags = fp->oflag;
+			spinlockRelease(&ftab->spinlock);
+			return flags & FD_ALL;
+		};
+	};
+};
+
+int fcntl_setfd(int fd, int flags)
+{
+	if ((flags & ~FD_ALL) != 0)
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return -1;
+	};
+	
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			return -1;
+		}
+		else
+		{
+			fp->oflag = (fp->oflag & ~FD_ALL) | flags;
+			spinlockRelease(&ftab->spinlock);
+			return 0;
+		};
+	};
+};
+
+int sys_isatty(int fd)
+{
+	// TODO: detect of 'fd' is a terminal; for now, nothing is reported as a terminal
+	ERRNO = EINVAL;
+	return -1;
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	siginfo_t siginfo;
@@ -2133,6 +2217,12 @@ void signalOnBadSyscall(Regs *regs)
 
 void dumpRunqueue();
 
+static uint32_t uniqueAssigner = 0;
+uint32_t sys_unique()
+{
+	return __sync_fetch_and_add(&uniqueAssigner, 1);
+};
+
 void syscallDispatch(Regs *regs, uint16_t num)
 {
 	if (getCurrentThread()->errnoptr != NULL)
@@ -2160,6 +2250,11 @@ void syscallDispatch(Regs *regs, uint16_t num)
 	// for the magical pipe() system call
 	int pipefd[2];
 
+	// if we return due to signalOnBadPointer() on signalOnBadSyscall(), we want to return (int)-1
+	// and set errno to EFAULT
+	//*((int*)&regs->rax) = -1;
+	//ERRNO = EFAULT;
+	
 	switch (num)
 	{
 	case 0:
@@ -2658,7 +2753,42 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		memcpy(getCurrentThread()->groups, (const void*)regs->rsi, sizeof(gid_t)*regs->rdi);
 		getCurrentThread()->numGroups = regs->rdi;
 		*((int*)&regs->rax) = 0;
-		break;	
+		break;
+	case 91:
+		if (!isPointerValid(regs->rdi, sizeof(struct utsname), PROT_WRITE))
+		{
+			signalOnBadPointer(regs, regs->rdi);
+			break;
+		};
+		*((int*)&regs->rax) = sys_uname((struct utsname*)regs->rdi);
+		break;
+	case 92:
+		if (!isPointerValid(regs->rdx, regs->rcx, PROT_READ))
+		{
+			*((int*)&regs->rax) = -1;
+			ERRNO = EFAULT;
+			break;
+		};
+		if (!isStringValid(regs->rsi))
+		{
+			*((int*)&regs->rax) = -1;
+			ERRNO = EFAULT;
+			break;
+		};
+		*((int*)&regs->rax) = netconf_addr((int)regs->rdi, (const char*)regs->rsi, (void*)regs->rdx, regs->rcx);
+		break;
+	case 93:
+		*((int*)&regs->rax) = fcntl_getfd((int)regs->rdi);
+		break;
+	case 94:
+		*((int*)&regs->rax) = fcntl_setfd((int)regs->rdi, (int)regs->rsi);
+		break;
+	case 95:
+		regs->rax = (uint64_t) sys_unique();
+		break;
+	case 96:
+		*((int*)&regs->rax) = sys_isatty((int) regs->rdi);
+		break;
 	default:
 		signalOnBadSyscall(regs);
 		break;

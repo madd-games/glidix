@@ -15,7 +15,7 @@ A <i>network interface</i> is what connects network nodes together. An interface
 
 <h2>Receiving Packets</h2>
 <p>
-When an interface receives a packet from the outside, it must first put it in an internal queue, then a "receive thread" must call <code>onPacket()</code> (as it is not interrupt-safe!). It is declared as follows:
+When an interface receives a packet from the outside, it must first put it in an internal queue, then a "receive thread" must call a receving function (as they are not interrupt-safe!). The generic receiving function is <code>onPacket()</code> (although usually you do not call it directly; see specific interface types below). It is declared as follows:
 </p>
 
 <pre>
@@ -88,6 +88,11 @@ int sendErrorPacket(struct sockaddr <i>*src</i>, const struct sockaddr <i>*dest<
 <i>src</i> and <i>dest</i> are the source and destination addresses for the ICMP packet; they are treated as in <code>sendPacket()</code>. <i>errnum</i> is an error number (from &lt;glidix/errno.h&gt;) which is then mapped onto the appropriate ICMPv4 or ICMPv6 type and code. <i>packet</i> points to the IP header of the packet that caused the error, and <i>packetlen</i> is the size of that packet. Return values are the same as for <code>sendPacket()</code>. The flags passed to <code>sendPacket()</code> are: <code>IPPROTO_ICMP | PKT_DONTFRAG</code>.
 </p>
 
+<h2>Specific Types of Interfaces</h2>
 <p>
-There is also a function for decoding ICMP error packets:
+Glidix specifically implements certain types of interfaces. They are explained on separate pages:
 </p>
+
+<ul>
+<li><a href="ethernet.html">Ethernet</a></li>
+</ul>

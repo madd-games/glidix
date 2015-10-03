@@ -123,10 +123,10 @@ typedef union
 		void (*send)(struct NetIf_ *netif, const void *frame, size_t framelen);
 		
 		/**
-		 * Number of currently-resolved addresses, and the list of them.
+		 * Number of currently-resolved addresses, the head of the list, and the list spinlock.
 		 */
-		int 			numRes;
 		MacResolution*		res;
+		Spinlock		resLock;
 	} ethernet;
 	
 	/**
@@ -534,4 +534,20 @@ void DeleteNetworkInterface(NetIf *netif);
  */
 int isLocalAddr(const struct sockaddr *addr);
 
+/**
+ * Userspace function to configure an interface's address(es).
+ * @param family The address family (AF_INET or AF_INET6).
+ * @param ifname Name of the interface to configure.
+ * @param buffer A buffer containing an array of IPNetIfAddr4 or IPNetIfAddr6 structures.
+ * @param size   Size of the buffer, used to extrapolate the number of addresses.
+ * @return 0 on success, -1 on error, 'errno' set appropriately:
+ *
+ * ENOENT	The named interface does not exist.
+ * EINVAL	The family is invalid or 'size' is not divisible by the size of an address structure.
+ * EPERM	You are not root.
+ */
+int netconf_addr(int family, const char *ifname, const void *buffer, size_t size);
+
+void releaseNetIfLock();
+void acquireNetIfLock();
 #endif

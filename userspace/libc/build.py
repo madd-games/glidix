@@ -79,10 +79,10 @@ for cfile in cfiles:
 	makeRule(cfile)
 
 for asmfile in os.listdir("asm"):
-	if asmfile.endswith(".asm"):
-		asmfile = asmfile[:-4]
-		rule = "build/asm_%s.o: asm/%s.asm\n" % (asmfile, asmfile)
-		rule += "\tnasm -felf64 -o $@ $<\n"
+	if asmfile.endswith(".s"):
+		asmfile = asmfile[:-2]
+		rule = "build/asm_%s.o: asm/%s.s\n" % (asmfile, asmfile)
+		rule += "\t%s -c $< -o $@\n" % config["assembler"]
 		objectFiles.append("build/asm_%s.o" % asmfile)
 		rules.append(rule)
 
@@ -94,7 +94,7 @@ def opCreateBuildMK():
 	f.write("TARGET_AR=%s\n" % config["ar"])
 	f.write("TARGET_RANLIB=%s\n" % config["ranlib"])
 	f.write("PREFIX=%s\n" % config["prefix"])
-	f.write("CFLAGS=-mno-mmx -mno-sse -mno-sse2 -I include -Wall -Werror -fPIC\n")
+	f.write("CFLAGS=-mno-mmx -I include -Wall -Werror -fPIC\n")
 	f.write("out/lib/libc.so: libglidix.o %s\n" % (" ".join(objectFiles)))
 	f.write("\t$(TARGET_CC) -shared -o $@ $^\n");
 	f.write("out/lib/libdl.so: support/libdl.c\n")

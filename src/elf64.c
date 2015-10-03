@@ -283,6 +283,22 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	// the errnoptr is now invalid
 	thread->errnoptr = NULL;
 
+	// close all files marked with O_CLOEXEC (on glidx a.k.a. FD_CLOEXEC)
+	spinlockAcquire(&getCurrentThread()->ftab->spinlock);
+	for (i=0; i<MAX_OPEN_FILES; i++)
+	{
+		File *fp = getCurrentThread()->ftab->entries[i];
+		if (fp != NULL)
+		{
+			if (fp->oflag & O_CLOEXEC)
+			{
+				getCurrentThread()->ftab->entries[i] = NULL;
+				vfsClose(fp);
+			};
+		};
+	};
+	spinlockRelease(&getCurrentThread()->ftab->spinlock);
+	
 	// suid/sgid stuff
 	if (st.st_mode & VFS_MODE_SETUID)
 	{

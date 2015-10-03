@@ -8,11 +8,11 @@
 	modification, are permitted provided that the following conditions are met:
 	
 	* Redistributions of source code must retain the above copyright notice, this
-	  list of conditions and the following disclaimer.
+		list of conditions and the following disclaimer.
 	
 	* Redistributions in binary form must reproduce the above copyright notice,
-	  this list of conditions and the following disclaimer in the documentation
-	  and/or other materials provided with the distribution.
+		this list of conditions and the following disclaimer in the documentation
+		and/or other materials provided with the distribution.
 	
 	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -41,4 +41,30 @@ long atol(const char *str)
 long long atoll(const char *str)
 {
 	return strtoll(str, NULL, 10);
+};
+
+double atof(const char* s)
+{
+	double rez = 0, fact = 1;
+	if (*s == '-')
+	{
+		s++;
+		fact = -1;
+	};
+	int point_seen;
+	for (point_seen = 0; *s; s++)
+	{
+		if (*s == '.')
+		{
+			point_seen = 1; 
+			continue;
+		};
+		int d = *s - '0';
+		if (d >= 0 && d <= 9)
+		{
+			if (point_seen) fact /= 10.0f;
+			rez = rez * 10.0f + (float)d;
+		};
+	};
+	return rez * fact;
 };

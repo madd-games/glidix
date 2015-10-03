@@ -304,36 +304,48 @@ static void kernelThreadExit()
 
 	Thread *nextThread = currentThread->next;
 
-	// we need to do all of this with interrupts disabled, else if this gets interrupted
-	// half way though, we might get a memory leak due to something not being kfree()'d.
+	// we need to do all of this with interrupts disabled. we remove ourselves from the runqueue,
+	// but do not free the stack nor the thread description; this will be done by ReleaseKernelThread()
 	ASM("cli");
 	currentThread->prev->next = currentThread->next;
 	currentThread->next->prev = currentThread->prev;
-
-	/**
-	 * TODO:
-	 * We must free the thread's stack, but can't do this HERE, because we are on that stack!
-	 */
-	//kfree(currentThread->stack);
-	kfree(currentThread);
+	currentThread->flags |= THREAD_TERMINATED;
 
 	// switch tasks
 	currentThread = nextThread;
 	jumpToTask();
 };
 
-void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, void *data)
+void ReleaseKernelThread(Thread *thread)
+{
+	// busy-wait until the thread terminates
+	while ((thread->flags & THREAD_TERMINATED) != 0)
+	{
+		__sync_synchronize();
+	};
+	
+	// release the stack and thread description
+	kfree(thread->stack);
+	kfree(thread);
+};
+
+Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, void *data)
 {
 	// params
 	uint64_t stackSize = DEFAULT_STACK_SIZE;
 	if (params != NULL)
 	{
-		stackSize = params->stackSize;
+		if (params->stackSize != 0) stackSize = params->stackSize;
 	};
 	const char *name = "Nameless thread";
 	if (params != NULL)
 	{
-		name = params->name;
+		if (params->name != NULL) name = params->name;
+	};
+	int threadFlags = 0;
+	if (params != NULL)
+	{
+		threadFlags = params->flags;
 	};
 
 	// allocate and fill in the thread structure
@@ -350,7 +362,7 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	thread->regs.ss = 0;
 	thread->regs.rflags = getFlagsRegister() | (1 << 9);				// enable interrupts in that thread
 	strcpy(thread->name, name);
-	thread->flags = 0;
+	thread->flags = threadFlags;
 	thread->pm = NULL;
 	thread->pid = 0;
 	thread->pidParent = 0;
@@ -397,6 +409,8 @@ void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, voi
 	// there is no need to update currentThread->prev, it will only be broken for the init
 	// thread, which never exits, and therefore its prev will never need to be valid.
 	spinlockRelease(&schedLock);
+	
+	return thread;
 };
 
 Thread *getCurrentThread()

@@ -36,12 +36,17 @@
 #include <glidix/errno.h>
 #include <glidix/memory.h>
 #include <glidix/console.h>
+#include <glidix/acpi.h>
+#include <glidix/apic.h>
+#include <glidix/idt.h>
 
 static Spinlock pciLock;
 
 static PCIDevice *pciDevices = NULL;
 static PCIDevice *lastDevice = NULL;
 static int nextPCIID = 0;
+
+static int pciIntInitDone = 0;
 
 static void checkBus(uint8_t bus);
 static void checkSlot(uint8_t bus, uint8_t slot)
@@ -84,6 +89,9 @@ static void checkSlot(uint8_t bus, uint8_t slot)
 				dev->driver = NULL;
 				strcpy(dev->driverName, "null");
 				strcpy(dev->deviceName, "Unknown");
+				memcpy(dev->bar, config.std.bar, 4*6);
+				dev->intNo = 0;
+				wcInit(&dev->wcInt);
 				
 				if (lastDevice == NULL)
 				{
@@ -115,10 +123,217 @@ static void checkBus(uint8_t bus)
 	};
 };
 
+/**
+ * Called when the local interrupt for a device was determined.
+ */
+static void pciMapLocalInterrupt(uint8_t bus, uint8_t slot, uint8_t intpin, int intNo)
+{
+	PCIDevice *dev;
+	for (dev=pciDevices; dev!=NULL; dev=dev->next)
+	{
+		if ((dev->bus == bus) && (dev->slot == slot) && (dev->intpin == intpin))
+		{
+			dev->intNo = intNo;
+			return;
+		};
+	};
+};
+
+typedef struct
+{
+	int			gsi;
+	int			intNo;
+} PCIGlobalInterruptMapping;
+static PCIGlobalInterruptMapping *gsiMapCache = NULL;
+static int gsiMapSize = 0;
+
+/**
+ * Called when we have determined that a given device is connected to a given Global System Interrupt (GSI).
+ * If that GSI was previously mapped, we look back at our mapping cache and use the local interrupt it was
+ * connected to. Otherwise we get the next free local interrupt (or reuse one) and add that to the cache.
+ */
+static void pciMapInterruptFromGSI(uint8_t bus, uint8_t slot, uint8_t intpin, int gsi)
+{
+	kprintf_debug("PCI %d/%d INT%c# -> GSI %d\n", (int) bus, (int) slot, 'A'+intpin, gsi);
+	static int nextLocalInt = 0;
+	
+	int i;
+	for (i=0; i<gsiMapSize; i++)
+	{
+		if (gsiMapCache[i].gsi == gsi)
+		{
+			pciMapLocalInterrupt(bus, slot, intpin, gsiMapCache[i].intNo);
+			return;
+		};
+	};
+	
+	int intNo = I_PCI0 + nextLocalInt;
+	nextLocalInt = (nextLocalInt + 1) % 16;
+	
+	PCIGlobalInterruptMapping *newCache = (PCIGlobalInterruptMapping*) kmalloc(sizeof(PCIGlobalInterruptMapping)*(gsiMapSize+1));
+	memcpy(newCache, gsiMapCache, sizeof(PCIGlobalInterruptMapping)*gsiMapSize);
+	newCache[gsiMapSize].gsi = gsi;
+	newCache[gsiMapSize].intNo = intNo;
+	if (gsiMapCache != NULL) kfree(gsiMapCache);
+	gsiMapCache = newCache;
+	
+	// remap the interrupt
+	uint32_t volatile* regsel = (uint32_t volatile*) 0xFFFF808000002000;
+	uint32_t volatile* iowin = (uint32_t volatile*) 0xFFFF808000002010;
+	*regsel = (0x10+2*gsi);
+	__sync_synchronize();
+	uint64_t entry = (uint64_t)(intNo) | ((uint64_t)(apic->id) << 56);
+	*iowin = (uint32_t) entry;
+	__sync_synchronize();
+	*regsel = (0x10+2*gsi+1);
+	__sync_synchronize();
+	*iowin = (uint32_t)(entry>>32);
+	__sync_synchronize();
+	
+	// and register with the device
+	pciMapLocalInterrupt(bus, slot, intpin, intNo);
+};
+
+/**
+ * Called on an ISA IRQ for PCI.
+ */
+static void pciOnIRQ(int irq)
+{
+	pciInterrupt(IRQ0+irq);
+};
+
+/**
+ * Called when we have determined that a PCI device receives its interrupt from an ISA IRQ.
+ */
+static void pciMapInterruptFromIRQ(uint8_t bus, uint8_t slot, uint8_t intpin, int irq)
+{
+	pciMapLocalInterrupt(bus, slot, intpin, IRQ0+irq);
+	registerIRQHandler(irq, pciOnIRQ);
+};
+
+static int foundRootBridge = 0;
+static ACPI_STATUS pciWalkCallback(ACPI_HANDLE object, UINT32 nestingLevel, void *context, void **returnvalue)
+{
+	ACPI_DEVICE_INFO *info;
+	ACPI_STATUS status = AcpiGetObjectInfo(object, &info);
+	
+	if (status != AE_OK)
+	{
+		panic("AcpiGetObjectInfo failed");
+	};
+	
+	if (info->Flags & ACPI_PCI_ROOT_BRIDGE)
+	{
+		foundRootBridge = 1;
+		
+		ACPI_BUFFER prtbuf;
+		prtbuf.Length = ACPI_ALLOCATE_BUFFER;
+		prtbuf.Pointer = NULL;
+		
+		status = AcpiGetIrqRoutingTable(object, &prtbuf);
+		if (status != AE_OK)
+		{
+			panic("AcpiGetIrqRoutingTable failed");
+		};
+		
+		char *scan = (char*) prtbuf.Pointer;
+		while (1)
+		{
+			ACPI_PCI_ROUTING_TABLE *table = (ACPI_PCI_ROUTING_TABLE*) scan;
+			if (table->Length == 0)
+			{
+				break;
+			};
+			
+			uint8_t slot = (uint8_t) (table->Address >> 16);
+			if (table->Source == 0)
+			{
+				// static assignment
+				pciMapInterruptFromGSI(0, slot, table->Pin+1, table->SourceIndex);
+			}
+			else
+			{
+				// get the PCI Link Object
+				ACPI_HANDLE linkObject;
+				status = AcpiGetHandle(object, table->Source, &linkObject);
+				if (status != AE_OK)
+				{
+					panic("AcpiGetHandle failed for '%s'", table->Source);
+				};
+				
+				// get the IRQ it is using
+				ACPI_BUFFER resbuf;
+				resbuf.Length = ACPI_ALLOCATE_BUFFER;
+				resbuf.Pointer = NULL;
+				
+				status = AcpiGetCurrentResources(linkObject, &resbuf);
+				if (status != AE_OK)
+				{
+					panic("AcpiGetCurrentResources failed for '%s'", table->Source);
+				};
+				
+				char *rscan = (char*) resbuf.Pointer;
+				int devIRQ = -1;
+				while (1)
+				{
+					ACPI_RESOURCE *res = (ACPI_RESOURCE*) rscan;
+					if (res->Type == ACPI_RESOURCE_TYPE_END_TAG)
+					{
+						break;
+					};
+					
+					if (res->Type == ACPI_RESOURCE_TYPE_IRQ)
+					{
+						devIRQ = res->Data.Irq.Interrupts[table->SourceIndex];
+						break;
+					};
+					
+					rscan += res->Length;
+				};
+				
+				kfree(resbuf.Pointer);
+				
+				if (devIRQ == -1)
+				{
+					panic("failed to derive IRQ for device %d from '%s'", (int)slot, table->Source);
+				};
+				
+				//kprintf("DEVICE %d intpin INT%c# -> IRQ %d (from '%s')\n", (int) slot, 'A'+table->Pin, devIRQ, table->Source);
+				pciMapInterruptFromIRQ(0, slot, table->Pin+1, devIRQ);
+			};
+			
+			scan += table->Length;
+		};
+		
+		kfree(prtbuf.Pointer);
+		//panic("end of tables");
+	};
+	
+	ACPI_FREE(info);
+	return AE_OK;
+};
+
 void pciInit()
 {
 	spinlockRelease(&pciLock);
 	checkBus(0);
+};
+
+void pciInitACPI()
+{
+	void *retval;
+	ACPI_STATUS status = AcpiGetDevices(NULL, pciWalkCallback, NULL, &retval);
+	if (status != AE_OK)
+	{
+		panic("AcpiGetDevices failed");
+	};
+	
+	if (!foundRootBridge)
+	{
+		panic("failed to find PCI root bridge");
+	};
+	
+	pciIntInitDone = 1;
 };
 
 void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig *config)
@@ -194,4 +409,23 @@ void pciReleaseDevice(PCIDevice *dev)
 	strcpy(dev->driverName, "null");
 	strcpy(dev->deviceName, "Unknown");
 	spinlockRelease(&pciLock);
+};
+
+void pciInterrupt(int intNo)
+{
+	if (!pciIntInitDone) return;
+	
+	PCIDevice *dev;
+	for (dev=pciDevices; dev!=NULL; dev=dev->next)
+	{
+		if (dev->intNo == intNo)
+		{
+			wcUp(&dev->wcInt);
+		};
+	};
+};
+
+void pciWaitInt(PCIDevice *dev)
+{
+	wcDown(&dev->wcInt);
 };

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <stdlib.h>
 
 uint8_t srcAddr[] = {127, 0, 0, 1};
 uint8_t destAddr[] = {127, 0, 0, 1};
@@ -55,23 +56,61 @@ uint16_t checksum(void* vdata,size_t length)
 
 int main()
 {
-	char *strAddr = "::ffff:0567:2345";
-	uint8_t addr[16];
-	
-	if (inet_pton(AF_INET6, strAddr, addr) != 1)
+	char *buffer = (char*) malloc(6000);
+	int i;
+	for (i=0; i<6000; i++)
 	{
-		printf("inet_pton failed\n");
+		buffer[i] = (char) i;
+	};
+	
+	int sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	if (sockfd == -1)
+	{
+		perror("socket");
 		return 1;
 	};
 	
-	char buffer[INET6_ADDRSTRLEN];
+	struct sockaddr_in localhost;
+	localhost.sin_family = AF_INET;
+	inet_pton(AF_INET, "127.0.0.1", &localhost.sin_addr);
 	
-	if (inet_ntop(AF_INET6, addr, buffer, INET6_ADDRSTRLEN) == NULL)
+	ssize_t size = sendto(sockfd, buffer, 6000, 0, (struct sockaddr*) &localhost, sizeof(struct sockaddr_in));
+	if (size == -1)
 	{
-		printf("inet_ntop failed\n");
+		perror("sendto");
+		close(sockfd);
 		return 1;
 	};
 	
-	printf("Got back: [%s]\n", buffer);
+	printf("sending OK, now trying to receive...\n");
+	memset(buffer, 0, 6000);
+	
+	socklen_t len = sizeof(struct sockaddr_in);
+	struct sockaddr_in addr;
+	size = recvfrom(sockfd, buffer, 6000, 0, (struct sockaddr*) &addr, &len);
+	if (size == -1)
+	{
+		perror("recvfrom");
+		close(sockfd);
+		return 1;
+	};
+	
+	char convbuf[INET_ADDRSTRLEN];
+	printf("Received %d bytes from: %s\n", (int)size, inet_ntop(AF_INET, &addr.sin_addr, convbuf, INET_ADDRSTRLEN));
+	printf("Validating...\n");
+	
+	for (i=0; i<6000; i++)
+	{
+		char c = (char) i;
+		if (buffer[i] != c)
+		{
+			printf("ERROR! at %d\n", i);
+			close(sockfd);
+			return 1;
+		};
+	};
+	
+	printf("Everything is valid!\n");
+	close(sockfd);
 	return 0;
 };

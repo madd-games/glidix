@@ -47,6 +47,8 @@
 #define	O_CLOEXEC			(1 << 11)
 #define	O_ACCMODE			(O_RDWR)
 
+#define	FD_CLOEXEC			O_CLOEXEC
+
 #define	F_DUPFD				0
 #define	F_GETFD				1
 #define	F_SETFD				2

@@ -142,6 +142,10 @@ int	vsscanf(const char *s, const char *format, va_list arg);
 int	fscanf(FILE *stream, const char *format, ... );
 int	scanf(const char *format, ... );
 int	sscanf(const char *s, const char *format, ... );
+char*	fgets(char *s, int size, FILE *stream);
+void	clearerr(FILE *fp);
+void	rewind(FILE *fp);
+int	getchar();
 
 /* off_t is the same as long on Glidix */
 #define	fseeko					fseek

@@ -30,6 +30,7 @@
 #define _STDLIB_H
 
 #include <sys/types.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,10 +58,13 @@ unsigned long long	strtoull(const char *str, char **str_end, int base);
 int			atoi(const char *str);
 long			atol(const char *str);
 long long		atoll(const char *str);
+double			atof(const char *nptr);
 void			qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
 void*			bsearch(const void *key, const void *base, size_t num, size_t size, int (*cmp)(const void *, const void *));
 int			wctomb(char *s, wchar_t wc);
 int			mbtowc(wchar_t *pwc, const char *s, size_t n);
+size_t			mbstowcs(wchar_t *dest, const char *src, size_t n);
+char*			mktemp(char *templ);
 
 /* implemented by libglidix directly */
 char*	realpath(const char*, char*);

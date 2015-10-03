@@ -115,6 +115,7 @@ void sdInit()
 		devsToDelete[i] = NULL;
 	};
 	KernelThreadParams sdPars;
+	memset(&sdPars, 0, sizeof(KernelThreadParams));
 	sdPars.stackSize = DEFAULT_STACK_SIZE;
 	sdPars.name = "SDI control daemon";
 	CreateKernelThread(sdThread, &sdPars, NULL);

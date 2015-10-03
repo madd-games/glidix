@@ -1,4 +1,4 @@
  * Make sure that dup() in filesystem drivers actually causes both descriptions to point to the same offset.
- * Check IDE IRQs (mod_sdide) - and make sure it scans the full space (see the "/*2*/1" comment). If we send a command
-   to a non-existent controller, interrupts stop arriving in VirtualBox.
- * sched.c: must free kernel thread stacks, see relevant comment in kernelThreadExit.
+ * When ne2k.c returns MODINIT_CANCEL, it corrupts the heap and the "strings" block allocated by module.c gets a
+   broken footer. Should look into how the module unloading happens. For now, insmod() does not unload cancelled
+   modules.

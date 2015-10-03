@@ -220,6 +220,8 @@ ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE sem, UINT32 units, UINT16 timeout
 	int count = (int) units;
 	if (sem == NULL)
 	{
+		kprintf("AcpiOsWaitSemaphore called with NULL");
+		while(1);
 		return AE_BAD_PARAMETER;
 	};
 	
@@ -322,6 +324,7 @@ ACPI_STATUS AcpiOsExecute(ACPI_EXECUTE_TYPE type, ACPI_OSD_EXEC_CALLBACK func, v
 	(void)type;
 	if (func == NULL) return AE_BAD_PARAMETER;
 	KernelThreadParams pars;
+	memset(&pars, 0, sizeof(KernelThreadParams));
 	pars.stackSize = DEFAULT_STACK_SIZE;
 	pars.name = "ACPICA thread";
 	CreateKernelThread(func, &pars, ctx);
@@ -370,41 +373,17 @@ ACPI_STATUS AcpiOsPhysicalTableOverride(ACPI_TABLE_HEADER *ExistingTable, ACPI_P
 
 ACPI_STATUS AcpiOsReadPciConfiguration(ACPI_PCI_ID *id, UINT32 reg, UINT64 *value, UINT32 width)
 {
-	uint32_t addr;
-	uint32_t lbus = (uint32_t) id->Bus;
-	uint32_t lslot = (uint32_t) id->Device;
-	uint32_t lfunc = (uint32_t) id->Function;
-	addr = (lbus << 16) | (lslot << 11) | (lfunc << 8) | (1 << 31) | reg;
-
-	uint32_t *put = (uint32_t*) value;
-	int count = 1;
-	if (width == 64) count = 2;
-
-	while (count--)
-	{
-		outd(PCI_CONFIG_ADDR, addr);
-		*put++ = ind(PCI_CONFIG_DATA);
-		addr += 4;
-	};
+	uint32_t regAligned = reg & ~3;
+	uint32_t offsetIntoReg = reg & 3;
+	uint32_t addr = (id->Bus << 16) | (id->Device << 11) | (id->Function << 8) | (1 << 31) | regAligned;
 	
-	UINT64 mask;
-	switch (width)
-	{
-	case 8:
-		mask = 0xFF;
-		break;
-	case 16:
-		mask = 0xFFFF;
-		break;
-	case 32:
-		mask = 0xFFFFFFFF;
-		break;
-	case 64:
-		mask = 0xFFFFFFFFFFFFFFFF;
-		break;
-	};
+	outd(PCI_CONFIG_ADDR, addr);
+	uint32_t regval = ind(PCI_CONFIG_DATA);
 	
-	*value &= mask;
+	char *fieldptr = (char*) &regval + offsetIntoReg;
+	size_t count = width/8;	
+	*value = 0;
+	memcpy(value, fieldptr, count);
 	return AE_OK;
 };
 

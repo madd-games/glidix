@@ -35,6 +35,7 @@
 #include <glidix/ktty.h>
 #include <glidix/waitcnt.h>
 #include <glidix/term.h>
+#include <glidix/string.h>
 
 static IRQHandler oldHandler;
 
@@ -195,6 +196,7 @@ MODULE_INIT()
 	oldHandler = registerIRQHandler(1, onKeyboardIRQ);
 
 	KernelThreadParams kbdPars;
+	memset(&kbdPars, 0, sizeof(KernelThreadParams));
 	kbdPars.stackSize = 0x4000;
 	kbdPars.name = "PS/2 keyboard driver";
 	CreateKernelThread(kbdThread, &kbdPars, NULL);

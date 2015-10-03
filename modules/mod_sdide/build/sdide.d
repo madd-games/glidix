@@ -18,6 +18,7 @@ build/sdide.o build/sdide.d : sdide.c /glidix/kernel-include/glidix/module.h \
  /glidix/kernel-include/glidix/ioctl.h \
  /glidix/kernel-include/glidix/string.h \
  /glidix/kernel-include/glidix/pci.h \
+ /glidix/kernel-include/glidix/waitcnt.h \
  /glidix/kernel-include/glidix/memory.h \
  /glidix/kernel-include/glidix/port.h \
  /glidix/kernel-include/glidix/time.h /glidix/kernel-include/glidix/idt.h \

@@ -262,6 +262,7 @@ typedef struct
 {
 	size_t				stackSize;
 	const char			*name;
+	int				flags;
 } KernelThreadParams;
 
 /**
@@ -269,8 +270,15 @@ typedef struct
  * @param entry Thread entry point.
  * @param params Thread initialization params (may be NULL).
  * @param data An arbitrary pointer to pass to the thread.
+ * @return The thread handle to later pass to ReleaseKernelThread().
  */
-void CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, void *data);
+Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, void *data);
+
+/**
+ * Release a kernel thread. This must be called by the same thread that called CreateKernelThread()
+ * to create it in the first place. This function will busy-wait until the thread terminates!
+ */
+void ReleaseKernelThread(Thread *thread);
 
 /**
  * Return the current thread on this CPU.

@@ -54,3 +54,8 @@ int fgetc(FILE *fp)
 	fp->_flags |= __FILE_FERROR;
 	return EOF;
 };
+
+int getchar()
+{
+	return fgetc(stdin);
+};

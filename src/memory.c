@@ -311,7 +311,7 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 };
 
 void *_kxmalloc(size_t size, int flags, const char *aid, int lineno)
-{
+{	
 	if (size == 0) return NULL;
 
 	if (readyForDynamic)
@@ -409,9 +409,6 @@ void _kfree(void *block, const char *who, int line)
 		panic("%s:%d: heap corruption detected: the header for %a does not agree with the footer on block size", who, line, addr);
 	};
 
-	// mark this block as free
-	head->flags &= ~HEAP_BLOCK_TAKEN;
-
 	// try to join with adjacent blocks
 	HeapHeader *headLeft = NULL;
 	HeapFooter *footRight = NULL;
@@ -421,7 +418,9 @@ void _kfree(void *block, const char *who, int line)
 		HeapFooter *footLeft = (HeapFooter*) (addr - sizeof(HeapHeader) - sizeof(HeapFooter));
 		if (footLeft->magic != HEAP_FOOTER_MAGIC)
 		{
-			panic("%s:%d: heap corruption detected: block to the left of %a is marked as existing but has invalid footer magic", who, line, addr);
+			//kprintf("ALLOCATED BY: %s\n", heapHeaderFromFooter(footLeft)->aid);
+			heapDump();
+			panic("%s:%d: heap corruption detected: block to the left of %a is marked as existing but has invalid footer magic (%a, size=%d)", who, line, addr, footLeft->magic, (int)footLeft->size);
 		};
 
 		HeapHeader *tmpHead = heapHeaderFromFooter(footLeft);
@@ -445,6 +444,9 @@ void _kfree(void *block, const char *who, int line)
 			footRight = tmpFoot;
 		};
 	};
+
+	// mark this block as free
+	head->flags &= ~HEAP_BLOCK_TAKEN;
 
 	if ((headLeft != NULL) && (footRight == NULL))
 	{
@@ -490,33 +492,35 @@ void heapDump()
 	while (1)
 	{
 		uint64_t addr = (uint64_t) &head[1];
-
-		kprintf("%a     ", addr);
-		const char *stat = "%$\x02" "FREE%#";
-		if (head->flags & HEAP_BLOCK_TAKEN)
-		{
-			stat = "%$\x04" "USED%#";
-		};
-		kprintf(stat);
-		kprintf("     %d", head->size);
 		HeapFooter *foot = heapFooterFromHeader(head);
+		if ((addr > 0xFFFF8100004DA000) && (addr < 0xFFFF8100004DB000))
+		{
+			kprintf("%a     ", addr);
+			const char *stat = "%$\x02" "FREE%#";
+			if (head->flags & HEAP_BLOCK_TAKEN)
+			{
+				stat = "%$\x04" "USED%#";
+			};
+			kprintf(stat);
+			kprintf("     %d", head->size);
 
-		kprintf(" %$\x0E");
-		if (head->magic != HEAP_HEADER_MAGIC)
-		{
-			kprintf("H");
-		};
-		if (foot->magic != HEAP_FOOTER_MAGIC)
-		{
-			kprintf("F");
-		};
-		kprintf("%#");
+			kprintf(" %$\x0E");
+			if (head->magic != HEAP_HEADER_MAGIC)
+			{
+				kprintf("H");
+			};
+			if (foot->magic != HEAP_FOOTER_MAGIC)
+			{
+				kprintf("F");
+			};
+			kprintf("%#");
 
-		if (head->flags & HEAP_BLOCK_TAKEN)
-		{
-			kprintf(" [%s:%d]", head->aid, head->lineno);
+			if (head->flags & HEAP_BLOCK_TAKEN)
+			{
+				kprintf(" [%s:%d]", head->aid, head->lineno);
+			};
+			kprintf("\n");
 		};
-		kprintf("\n");
 
 		heapsz += head->size + sizeof(HeapHeader) + sizeof(HeapFooter);
 		if ((foot->flags & HEAP_BLOCK_HAS_RIGHT) || (foot->magic != HEAP_FOOTER_MAGIC))
@@ -534,4 +538,28 @@ void heapDump()
 	kprintf("Total heap usage: %d/1024MB (%d%%)\n", heapszMB, heapszPercent);
 	kprintf("Lowest free header: %a, so lowest addr: %a\n", lowestFreeHeader, &lowestFreeHeader[1]);
 	kprintf("---\n");
+};
+
+void checkBlockValidity(void *addr_)
+{
+	uint64_t addr = (uint64_t) addr_;
+	
+	HeapHeader *head = (HeapHeader*) (addr - sizeof(HeapHeader));
+	if (head->magic != HEAP_HEADER_MAGIC)
+	{
+		panic("Block at %a broken: invalid header magic!", addr);
+	};
+	
+	HeapFooter *foot = heapFooterFromHeader(head);
+	if (foot->magic != HEAP_FOOTER_MAGIC)
+	{
+		panic("Block at %a broken: invalid footer magic!", addr);
+	};
+	
+	if (head->size != foot->size)
+	{
+		panic("Block at %a broken: header claims size is %d, footer claims %d", addr, (int)head->size, (int)foot->size);
+	};
+	
+	kprintf("[DEBUG] Block %a OK\n", addr);
 };

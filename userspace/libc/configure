@@ -39,10 +39,13 @@ for param in sys.argv[1:]:
 compiler = "gcc"
 ar = "ar"
 ranlib = "ranlib"
+assembler = "as"
+
 if host != "":
 	compiler = host + "-gcc"
 	ar = host + "-ar"
 	ranlib = host + "-ranlib"
+	assembler = host + "-as"
 
 def assertCommand(cmd, msg = None):
 	if msg is None:
@@ -82,6 +85,7 @@ def checkLib(name):
 assertCommand(compiler)
 assertCommand(ar)
 assertCommand(ranlib)
+assertCommand(assembler)
 assertCommand("nasm")
 checkLib("-lglidix")
 
@@ -97,7 +101,8 @@ config = {
 	"compiler":	compiler,
 	"prefix":	prefix,
 	"ar":		ar,
-	"ranlib":	ranlib
+	"ranlib":	ranlib,
+	"assembler":	assembler
 }
 
 # Write the configuration to config.json

@@ -96,13 +96,21 @@
 #define	O_NONBLOCK			(1 << 8)
 #define	O_RSYNC				(1 << 9)
 #define	O_SYNC				(1 << 10)
+#define	O_CLOEXEC			(1 << 11)
 #define	O_ACCMODE			(O_RDWR)
-#define	O_ALL				((1 << 11)-1)
+#define	O_ALL				((1 << 12)-1)
 
 /**
  * Additional flags, cannot be passed to open().
  */
 #define	O_SOCKET			(1 << 16)
+
+/**
+ * File descriptor flags settable with fcntl(). They share space with the O_* flags because
+ * they are stored in the same field. Some match up with the O_* flags.
+ */
+#define	FD_CLOEXEC			O_CLOEXEC
+#define	FD_ALL				(FD_CLOEXEC)
 
 #define	FILENAME_MAX			128
 #define	PATH_MAX			256

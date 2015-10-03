@@ -206,6 +206,29 @@ static void put_d(int d)
 	kputs(ptr+1);
 };
 
+static void put_x(int d)
+{
+	if (d < 0)
+	{
+		kputch('-');
+		d = -d;
+	};
+
+	char buffer[20];
+	buffer[19] = 0;
+
+	char *ptr = &buffer[18];
+	do
+	{
+		if ((d % 16) < 10) *ptr = '0' + (d % 16);
+		else *ptr = 'a' + ((d % 16) - 10);
+		ptr--;
+		d /= 16;
+	} while (d != 0);
+
+	kputs(ptr+1);
+};
+
 static void put_a(uint64_t addr)
 {
 	kputs("0x");
@@ -255,6 +278,11 @@ void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 			{
 				int d = va_arg(ap, int);
 				put_d(d);
+			}
+			else if (c == 'x')
+			{
+				int d = va_arg(ap, int);
+				put_x(d);
 			}
 			else if (c == 'a')			// 64-bit unsigned
 			{

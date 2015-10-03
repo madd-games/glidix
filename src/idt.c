@@ -37,6 +37,7 @@
 #include <glidix/memory.h>
 #include <glidix/apic.h>
 #include <glidix/time.h>
+#include <glidix/pci.h>
 
 IDTEntry idt[256];
 IDTPointer idtPtr;
@@ -454,6 +455,24 @@ void isrHandler(Regs *regs)
 		// the interrupts are reprogremmed? i don't know
 		break;
 	case IRQ_IDE:
+		break;
+	case I_PCI0:
+	case I_PCI1:
+	case I_PCI2:
+	case I_PCI3:
+	case I_PCI4:
+	case I_PCI5:
+	case I_PCI6:
+	case I_PCI7:
+	case I_PCI8:
+	case I_PCI9:
+	case I_PCI10:
+	case I_PCI11:
+	case I_PCI12:
+	case I_PCI13:
+	case I_PCI14:
+	case I_PCI15:
+		pciInterrupt(regs->intNo);
 		break;
 	default:
 		if (regs->intNo >= IRQ0)

@@ -134,7 +134,13 @@ syscallTable = {
 	87:	"_glidix_netconf_statidx",
 	88:	"_glidix_pcistat",
 	89:	"getgroups",
-	90:	"_glidix_setgroups"
+	90:	"_glidix_setgroups",
+	91:	"uname",
+	92:	"_glidix_netconf_addr",
+	93:	"_glidix_fcntl_getfd",
+	94:	"_glidix_fcntl_setfd",
+	95:	"_glidix_unique",
+	96:	"isatty"
 }
 
 f = open("_libglidix.s", "wb")

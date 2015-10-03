@@ -37,6 +37,18 @@
 #include <string.h>
 #include <errno.h>
 
+typedef struct
+{
+	struct in_addr			addr;
+	struct in_addr			mask;
+} IPNetIfAddr4;
+
+typedef struct
+{
+	struct in6_addr			addr;
+	struct in6_addr			mask;
+} IPNetIfAddr6;
+
 char *progName;
 
 void usage()
@@ -151,6 +163,91 @@ void printIntfInfo(const char *ifname)
 	printf("\n");
 };
 
+void parseAddr(int family, char *addrname, void *addrout, void *maskout)
+{
+	char *slashpos = strchr(addrname, '/');
+	if (slashpos == NULL)
+	{
+		fprintf(stderr, "%s: %s is not a valid CIDR address\n", progName, addrname);
+		exit(1);
+	};
+	
+	*slashpos = 0;
+	int netsize = atoi(slashpos+1);
+	
+	if (netsize < 0)
+	{
+		fprintf(stderr, "%s: invalid subnet size: /%d\n", progName, netsize);
+		exit(1);
+	};
+	
+	if ((family == AF_INET) && (netsize > 32))
+	{
+		fprintf(stderr, "%s: invalid subnet size for IPv4: /%d\n", progName, netsize);
+		exit(1);
+	};
+	
+	if ((family == AF_INET6) && (netsize > 128))
+	{
+		fprintf(stderr, "%s: invalid subnet size for IPv6: /%d\n", progName, netsize);
+		exit(1);
+	};
+	
+	if (!inet_pton(family, addrname, addrout))
+	{
+		fprintf(stderr, "%s: invalid address: %s\n", progName, addrname);
+		exit(1);
+	};
+	
+	uint8_t *out = (uint8_t*) maskout;
+	while (netsize >= 8)
+	{
+		*out++ = 0xFF;
+		netsize -= 8;
+	};
+	
+	if (netsize > 0)
+	{
+		// number of bits at the end that should be 0
+		int zeroBits = 8 - netsize;
+		
+		// make a number which has this many '1's at the end, and then NOT it
+		*out = ~((1 << zeroBits)-1);
+	};
+};
+
+void doAddrConf(int family, const char *ifname, char **addrnames, int count)
+{
+	size_t addrsize = sizeof(IPNetIfAddr4);
+	if (family == AF_INET6)
+	{
+		addrsize = sizeof(IPNetIfAddr6);
+	};
+	
+	size_t maskoff = 4;
+	if (family == AF_INET6)
+	{
+		maskoff = 16;
+	};
+	
+	void *buffer = malloc(addrsize * count);
+	
+	int i;
+	for (i=0; i<count; i++)
+	{
+		size_t offset = addrsize * i;
+		size_t offMask = offset + maskoff;
+		
+		parseAddr(family, addrnames[i], (char*) buffer + offset, (char*) buffer + offMask);
+	};
+	
+	if (_glidix_netconf_addr(family, ifname, buffer, addrsize * count) != 0)
+	{
+		fprintf(stderr, "%s: cannot configure %s: %s\n", progName, ifname, strerror(errno));
+		exit(1);
+	};
+};
+
 int main(int argc, char *argv[])
 {
 	progName = argv[0];
@@ -181,6 +278,14 @@ int main(int argc, char *argv[])
 	else if (argc == 2)
 	{
 		printIntfInfo(argv[1]);
+	}
+	else if (strcmp(argv[2], "addr") == 0)
+	{
+		doAddrConf(AF_INET, argv[1], &argv[3], argc-3);
+	}
+	else if (strcmp(argv[2], "addr6") == 0)
+	{
+		doAddrConf(AF_INET6, argv[1], &argv[3], argc-3);
 	}
 	else
 	{

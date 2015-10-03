@@ -142,7 +142,7 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 	};
 	
 	//kprintf("ABOUT TO sendPacket\n");
-	int status = sendPacket((struct sockaddr*) &rawsock->addr, addr, message, len, sock->proto | PKT_DONTFRAG,
+	int status = sendPacket((struct sockaddr*) &rawsock->addr, addr, message, len, sock->proto,
 					sock->options[GSO_SNDTIMEO], NULL);
 	//kprintf("AFTER sendPacket\n");
 	if (status < 0)
@@ -155,8 +155,9 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 };
 
 static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
-			const void *packet, size_t size, int proto, uint64_t dataOffset)
+			const void *packet, size_t size, int proto)
 {
+	kprintf_debug("got some raw packet\n");
 	RawSocket *rawsock = (RawSocket*) sock;
 	if (rawsock->addr.sa_family != AF_UNSPEC)
 	{
@@ -206,34 +207,30 @@ static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struc
 			// different protocol, discard
 			return;
 		};
-		
-		// strip off the IP header as we're listening to protocol packets rather than IP packets
-		packet = ((char*)packet) + dataOffset;
-		size -= dataOffset;
+	
+		RawPacket *rawpack = (RawPacket*) kmalloc(sizeof(RawPacket) + size);
+		rawpack->next = NULL;
+		memcpy(&rawpack->src, src, addrlen);
+		rawpack->addrlen = addrlen;
+		rawpack->size = size;
+		memcpy(rawpack->data, packet, size);
+	
+		semWait(&rawsock->queueLock);
+		if (rawsock->first == NULL)
+		{
+			rawsock->first = rawpack;
+			rawsock->last = rawpack;
+		}
+		else
+		{
+			rawsock->last->next = rawpack;
+			rawsock->last = rawpack;
+		};
+		semSignal(&rawsock->queueLock);
+	
+		// announce to any waiting processes that a packet was received
+		semSignal2(&rawsock->packetCounter, 1);
 	};
-	
-	RawPacket *rawpack = (RawPacket*) kmalloc(sizeof(RawPacket) + size);
-	rawpack->next = NULL;
-	memcpy(&rawpack->src, src, addrlen);
-	rawpack->addrlen = addrlen;
-	rawpack->size = size;
-	memcpy(rawpack->data, packet, size);
-	
-	semWait(&rawsock->queueLock);
-	if (rawsock->first == NULL)
-	{
-		rawsock->first = rawpack;
-		rawsock->last = rawpack;
-	}
-	else
-	{
-		rawsock->last->next = rawpack;
-		rawsock->last = rawpack;
-	};
-	semSignal(&rawsock->queueLock);
-	
-	// announce to any waiting processes that a packet was received
-	semSignal2(&rawsock->packetCounter, 1);
 };
 
 static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)

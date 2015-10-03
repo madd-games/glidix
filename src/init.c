@@ -54,6 +54,8 @@
 #include <glidix/apic.h>
 #include <glidix/acpi.h>
 #include <glidix/netif.h>
+#include <glidix/ipreasm.h>
+#include <glidix/ethernet.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -255,6 +257,11 @@ void kmain(MultibootInfo *info)
 	{
 		panic("the initrd was not loaded");
 	};
+	
+	kprintf_debug(" *** TO TRAP THE KERNEL *** \n");
+	kprintf_debug(" set r15=rip\n");
+	kprintf_debug(" set rip=%a\n", &trapKernel);
+	kprintf_debug(" *** END OF INFO *** \n");
 
 	kprintf("Initializing the IDT... ");
 	initIDT();
@@ -366,11 +373,6 @@ void kmain(MultibootInfo *info)
 	// put the timer in single-shot mode at the appropriate interrupt vector.
 	apic->lvtTimer = I_APIC_TIMER;
 	DONE();
-
-	kprintf_debug(" *** TO TRAP THE KERNEL *** \n");
-	kprintf_debug(" set r15=rip\n");
-	kprintf_debug(" set rip=%a\n", &trapKernel);
-	kprintf_debug(" *** END OF INFO *** \n");
 
 	kprintf("Initializing the scheduler and syscalls... ");
 	//msrWrite(0xC0000080, msrRead(0xC0000080) | 1);
@@ -490,11 +492,14 @@ void kmain2()
 		panic("failed to register power button event");
 	};
 	
+	pciInitACPI();
+	
 	kprintf("Initializing the RTC... ");
 	initRTC();
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the network interface... ");
+	ipreasmInit();
 	initNetIf();
 	kprintf("%$\x02" "Done%#\n");
 	

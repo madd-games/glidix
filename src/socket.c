@@ -36,6 +36,7 @@
 #include <glidix/netif.h>
 #include <glidix/spinlock.h>
 #include <glidix/icmp.h>
+#include <glidix/ipreasm.h>
 
 Socket* CreateRawSocket();				/* rawsock.c */
 Socket* CreateUDPSocket();				/* udpsock.c */
@@ -416,7 +417,56 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 			kfree(response);
 		};
 	};
+
+	// if the packet is fragmented, pass it to the reassembler
+	if (src->sa_family == AF_INET)
+	{
+		PacketInfo4 info;
+		ipv4_header2info((IPHeader4*) packet, &info);
+		//kprintf("RECEIVED PACKET WITH: fragOff=%d, size=%d, moreFrags=%d\n", (int) info.fragOff, (int) info.size, info.moreFrags);
+		if ((info.fragOff != 0) || (info.moreFrags))
+		{
+			const struct sockaddr_in *insrc = (const struct sockaddr_in*) src;
+			const struct sockaddr_in *indst = (const struct sockaddr_in*) dest;
+			
+			char srcaddr[16];
+			char destaddr[16];
+			
+			memset(srcaddr, 0, 16);
+			memset(destaddr, 0, 16);
+			
+			memcpy(srcaddr, &insrc->sin_addr, 4);
+			memcpy(destaddr, &indst->sin_addr, 4);
+			
+			ipreasmPass(AF_INET, srcaddr, destaddr, proto, info.id, info.fragOff, 
+					((char*)packet + dataOffset), info.size, info.moreFrags);
+			return;
+		};
+	}
+	else
+	{
+		PacketInfo6 info;
+		ipv6_header2info((IPHeader6*) packet, &info);
+		if ((info.fragOff != 0) || (info.moreFrags))
+		{
+			const struct sockaddr_in6 *insrc = (const struct sockaddr_in6*) src;
+			const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
+			
+			char srcaddr[16];
+			char destaddr[16];
+			
+			memcpy(srcaddr, &insrc->sin6_addr, 16);
+			memcpy(destaddr, &indst->sin6_addr, 16);
+			
+			ipreasmPass(AF_INET6, srcaddr, destaddr, proto, info.id, info.fragOff,
+					((char*)packet + dataOffset), info.size, info.moreFrags);
+			return;
+		};
+	};
+
+	onTransportPacket(src, dest, addrlen, (char*)packet + dataOffset, size, proto);
 	
+#if 0	
 	semWait(&sockLock);
 	
 	Socket *sock = &sockList;
@@ -425,6 +475,25 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 		if (sock->packet != NULL)
 		{
 			sock->packet(sock, src, dest, addrlen, packet, size, proto, dataOffset);
+		};
+		
+		sock = sock->next;
+	};
+	
+	semSignal(&sockLock);
+#endif
+};
+
+void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen, const void *packet, size_t size, int proto)
+{
+	semWait(&sockLock);
+	
+	Socket *sock = &sockList;
+	while (sock != NULL)
+	{
+		if (sock->packet != NULL)
+		{
+			sock->packet(sock, src, dest, addrlen, packet, size, proto);
 		};
 		
 		sock = sock->next;

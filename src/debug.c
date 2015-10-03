@@ -58,9 +58,12 @@ void stackTrace(uint64_t rip, uint64_t rbp)
 void debugKernel(Regs *regs)
 {
 	Thread *thread = getCurrentThread();
-	fpuSave(&thread->fpuRegs);
-	memcpy(&thread->regs, regs, sizeof(Regs));
-
+	if (thread != NULL)
+	{
+		fpuSave(&thread->fpuRegs);
+		memcpy(&thread->regs, regs, sizeof(Regs));
+	};
+	
 	while (1)
 	{
 		kprintf_debug("RAX=0 - panic and stop\n");
@@ -72,6 +75,7 @@ void debugKernel(Regs *regs)
 		kprintf_debug("RAX=6 - dump memory mappings\n");
 		kprintf_debug("RAX=7 - show semaphore state\n");
 		kprintf_debug("RAX=8 - debug the current context in bochs\n");
+		kprintf_debug("RAX=9 - show stack trace of interrupted state\n");
 		uint64_t option = getDebugInput();
 
 		switch (option)
@@ -114,6 +118,9 @@ void debugKernel(Regs *regs)
 		case 8:
 			getCurrentThread()->regs.rflags &= ~(1 << 9);	// cli
 			enterDebugContext(&getCurrentThread()->regs);
+			break;
+		case 9:
+			stackTrace(regs->rip, regs->rbp);
 			break;
 		};
 	};

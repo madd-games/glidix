@@ -1,0 +1,64 @@
+<style type="text/css">
+body {font-family: sans-serif;}
+p, li, table, div {letter-spacing: 1px; line-height: 150%;}
+h1 {line-height: 150%; letter-spacing: 2px}
+p code {font-size: 14px;}
+table code {font-size: 14px;}
+</style>
+
+<title>Ethernet</title>
+<h1>Ethernet</h1>
+
+<p>
+Ethernet is a specific type of network implemented in Glidix. This article explains how to write Ethernet drivers. All Ethernet-related stuff is defined in <code>&lt;glidix/ethernet.h&gt;</code>.
+</p>
+
+<h2>Receiving Packets</h2>
+<p>
+When an Ethernet packet is received, an Ethernet II frame should be passed to Glidix by calling <code>onEtherFrame()</code> (please note that it is not interrupt-safe; you should store the frame in an internal buffer first if it is received by an asynchronous interrupt). It si declared as follows:
+</p>
+
+<pre>
+void onEtherFrame(NetIf <i>*netif</i>, const void <i>*frame</i>, size_t <i>size</i>);
+</pre>
+
+<p>
+Where <i>netif</i> is the network interface that received the frame (the type must be <code>IF_ETHERNET</code>!), <i>frame</i> points to the start of the frame, and <i>size</i> is its total size in bytes. The function then unwraps whatever payload is contained in the frame and calls <code>onPacket()</code> or adds an ARP resolution to the device's cache.
+</p>
+
+<h2>Interface Definition and Sending Packets</h2>
+<p>
+When calling <code>CreateNetworkInterface()</code> for an Ethernet device, you must fill in the <code>ethernet</code> strucutre in the <code>NetIfConfig</code> union. The fields are as follows:
+</p>
+
+<div style="margin-left: 1cm;">
+	<code>ifconfig.ethernet.type</code>
+	<div style="margin-left: 1cm; margin-top: 0; margin-bottom: 0.5cm;">
+		Must be set to <code>IF_ETHERNET</code>.
+	</div>
+	
+	<code>ifconfig.ethernet.mac</code>
+	<div style="margin-left: 1cm; margin-top: 0; margin-bottom: 0.5cm;">
+		The MAC address of the device.
+	</div>
+	
+	<code>void ifconfig.ethernet.send(NetIf <i>*netif</i>, const void <i>*frame</i>, size_t <i>size</i>)</code>
+	<div style="margin-left: 1cm; margin-top: 0; margin-bottom: 0.5cm;">
+		Points to a function responsible for sending Ethernet packets. <i>netif</i> is the interface we are sending from (guaranteed to be one of the devices you have registered yourself), <i>frame</i> points to an Ethernet II frame, and <i>size</i> is its total size in bytes.
+	</div>
+</div>
+
+<p>
+The rest of the structure must be filled with zeroes (e.g. using <code>memset()</code>)!.
+</p>
+
+<h2>Working of <code>sendPacket()</code> on Ethernet Devices</h2>
+<p>
+Once <code>sendPacket()</code> appropriately processes a packet (fragmentation, IP header attachment, etc), it passes all fragments with appropriate IP headers to <code>sendPacketToInterface()</code> which, in turn, for Ethernet devices, calls <code>sendPacketToEthernet()</code>. This function is given the gateway IP address, and so it attempts to transmit the packet as follows:
+</p>
+
+<ol>
+<li>It looks at the MAC resolution cache of the device, attempting to find the MAC addressfor the given IP.</li>
+<li>If there was no resolution in the cache, it sends an ARP or NDP request for that MAC address, waiting up to 1 second for the response to arrive (currently, no packets can be sent during this time due to locks; we should look at this in the future).</li>
+<li>Once the destination MAC is known, the IP packet is wrapped into an Ethernet frame and passed to the device.</li>
+</ol>

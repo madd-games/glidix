@@ -89,16 +89,15 @@ typedef struct Socket_
 	 * used by the socket. Do not free the Socket structure itself! close() does that after this call.
 	 */
 	void (*close)(struct Socket_ *sock);
-	
+
 	/**
 	 * This is called on every socket upon the reception of a packet. "src" and "dest" represent the source and
-	 * destination address of the packet (usually they have the same address family). "addrlen" is the size of
-	 * both address structures. "packet" and "size" point to the packet (including the IP header), and specify
-	 * the size of the packet. "proto" is the protocol given on the IP header, and dataOffset is the offset into
-	 * the packet to the payload. The socket should ignore the packet if it does not belong to it.
+	 * destination address of the packet (they both have the same address family, either AF_INET or AF_INET6).
+	 * "addrlen" is the size of both address structures. "packet" and "size" point to the packet (excluding the
+	 * IP header), and specify the size of the packet. "proto" is the protocol given on the IP header.
 	 */
 	void (*packet)(struct Socket_ *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
-			const void *packet, size_t size, int proto, uint64_t dataOffset);
+			const void *packet, size_t size, int proto);
 
 	/**
 	 * Called to handle a connect() on this socket.
@@ -141,6 +140,11 @@ typedef struct
  */
 void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto, uint64_t dataOffset);
+
+/**
+ * Called by passPacketToSocket() or the IP reassembler once we have a full transport-layer packet.
+ */
+void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen, const void *packet, size_t size, int proto);
 
 /**
  * Create a socket file description. The returned description will be marked with the O_SOCKET flag, and the 'fsdata'

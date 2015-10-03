@@ -436,6 +436,7 @@ static void ideInit(uint32_t *bars)
 				thparams->sd = sdCreate(&sdparams);
 
 				KernelThreadParams ataPars;
+				memset(&ataPars, 0, sizeof(KernelThreadParams));
 				ataPars.stackSize = 0x4000;
 				ataPars.name = "ATA device";
 				CreateKernelThread(ataThread, &ataPars, thparams);
@@ -493,6 +494,7 @@ static void ideInit(uint32_t *bars)
 				thparams->sd = sdCreate(&sdparams);
 				
 				KernelThreadParams atapiPars;
+				memset(&atapiPars, 0, sizeof(KernelThreadParams));
 				atapiPars.stackSize = 0x4000;
 				atapiPars.name = "ATAPI device";
 				CreateKernelThread(atapiThread, &atapiPars, thparams);

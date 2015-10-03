@@ -26,6 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <sys/glidix.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdarg.h>
@@ -40,6 +41,10 @@ int fcntl(int fd, int cmd, ...)
 	{
 	case F_DUPFD:
 		return dup2(fd, va_arg(ap, int));
+	case F_GETFD:
+		return _glidix_fcntl_getfd(fd);
+	case F_SETFD:
+		return _glidix_fcntl_setfd(fd, va_arg(ap, int));
 	default:
 		errno = EINVAL;
 		return -1;

@@ -32,6 +32,7 @@
 #include <glidix/common.h>
 #include <glidix/ioctl.h>
 #include <glidix/module.h>
+#include <glidix/waitcnt.h>
 
 #define	PCI_CONFIG_ADDR					0xCF8
 #define	PCI_CONFIG_DATA					0xCFC
@@ -128,6 +129,12 @@ typedef struct PCIDevice_
 	Module*						driver;
 	char						driverName[128];	// name of driver module
 	char						deviceName[128];	// name of device (default = "Unknown")
+	uint32_t					bar[6];			// base address registers (BARs)
+	
+	// -- END OF USER AREA --
+	
+	int						intNo;			// which interrupt the device was mapped to
+	WaitCounter					wcInt;			// interrupt wait counter
 } PCIDevice;
 
 void pciInit();
@@ -159,5 +166,24 @@ void pciEnumDevices(Module *module, int (*enumerator)(PCIDevice *dev, void *para
  * is being unloaded).
  */
 void pciReleaseDevice(PCIDevice *dev);
+
+/**
+ * Initialize PCI ACPI information.
+ */
+void pciInitACPI();
+
+/**
+ * Called to report a PCI interrupt.
+ */
+void pciInterrupt(int intNo);
+
+/**
+ * Called by a driver's interrupt-waiting thread to sleep until an interrupt arrives.
+ * WARNING: If this function returns, it means we have received an interrupt on the device's
+ *          interrupt line - by that line might be shared with other devices! So make sure that
+ *          it was actually the device in question sending the interrupt (you can do this by
+ *          reading certain device-specific registers usually).
+ */
+void pciWaitInt(PCIDevice *dev);
 
 #endif

@@ -82,12 +82,12 @@ void ipv4_info2header(PacketInfo4 *info, IPHeader4 *head)
 	uint16_t flags = 0;
 	if (info->moreFrags)
 	{
-		flags |= (1 << 15);
+		flags |= (1 << 13);
 	};
 	
 	head->versionIHL = 0x45;				// IPv4, 5 dwords (20 bytes) header
 	head->dscpECN = 0;					// XXX ??
-	head->len = 20 + info->size;
+	head->len = __builtin_bswap16(20 + info->size);
 	head->id = info->id;
 	head->flagsFragOff = __builtin_bswap16((uint16_t) info->fragOff | flags);
 	head->hop = info->hop;
@@ -112,7 +112,7 @@ int ipv4_header2info(IPHeader4 *head, PacketInfo4 *info)
 		return -1;
 	};
 
-	info->size = head->len - 20;
+	info->size = __builtin_bswap16(head->len) - 20;
 	info->id = head->id;
 	uint16_t flagsFragOff = __builtin_bswap16(head->flagsFragOff);
 	uint16_t flags = (flagsFragOff >> 13) & 0x7;
@@ -131,7 +131,7 @@ int ipv4_header2info(IPHeader4 *head, PacketInfo4 *info)
 void ipv6_info2header(PacketInfo6 *info, IPHeader6 *head)
 {
 	head->versionClassFlow = 6 | (info->flowinfo & ~0xF);		/* low-order 6 gets loaded into lowest byte */
-	head->payloadLen = (uint16_t) info->size;
+	head->payloadLen = __builtin_bswap16((uint16_t) info->size);
 	head->nextHeader = (uint8_t) info->proto;
 	head->hop = info->hop;
 	memcpy(&head->saddr, &info->saddr, 16);
@@ -148,6 +148,7 @@ void ipv6_info2header(PacketInfo6 *info, IPHeader6 *head)
 		if (info->moreFrags) flags |= 1;
 		fraghead->fragResM = __builtin_bswap16((info->fragOff << 3) | flags);
 		fraghead->id = info->id;
+		head->payloadLen = __builtin_bswap16(info->size+sizeof(IPFragmentHeader6));
 	}; 
 };
 
@@ -159,7 +160,7 @@ int ipv6_header2info(IPHeader6 *head, PacketInfo6 *info)
 		return -1;
 	};
 	
-	info->size = head->payloadLen;
+	info->size = __builtin_bswap16(head->payloadLen);
 	info->proto = (int) head->nextHeader;
 	info->hop = head->hop;
 	info->dataOffset = 40;
@@ -180,6 +181,7 @@ int ipv6_header2info(IPHeader6 *head, PacketInfo6 *info)
 		info->moreFrags = fragResM & 1;
 		info->id = fraghead->id;
 		info->dataOffset += 8;
+		info->size -= sizeof(IPFragmentHeader6);
 	};
 
 	return 0;
@@ -249,6 +251,7 @@ void initNetIf()
 	
 	// the loopback thread shall call onPacket() on all packets waiting on the loopback interface.
 	KernelThreadParams pars;
+	memset(&pars, 0, sizeof(KernelThreadParams));
 	pars.stackSize = DEFAULT_STACK_SIZE;
 	pars.name = "inet_loopback";
 	CreateKernelThread(loopbackThread, &pars, NULL);
@@ -328,13 +331,6 @@ void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 		((IPHeader4*)packet)->hop = (uint8_t) info.hop;
 		((IPHeader4*)packet)->checksum = 0;
 		((IPHeader4*)packet)->checksum = ipv4_checksum(packet, 20);
-		
-		if ((info.moreFrags) || (info.fragOff != 0))
-		{
-			// TODO: packet reassembler
-			__sync_fetch_and_add(&netif->numDropped, 1);
-			return;
-		};
 		
 		__sync_fetch_and_add(&netif->numRecv, 1);
 		
@@ -596,6 +592,8 @@ static int sendPacketToInterface(NetIf *netif, const struct sockaddr *gateway, c
 	case IF_LOOPBACK:
 		loopbackSend(netif, packet, packetlen);
 		return 0;
+	case IF_ETHERNET:
+		return sendPacketToEthernet(netif, gateway, packet, packetlen, nanotimeout);
 	default:
 		return -EHOSTUNREACH;
 	};
@@ -767,6 +765,7 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 					info.size = sizeLeft;
 				};
 				
+				//kprintf("SENDING: fragOff=%d, size=%d, moreFrags=%d\n", (int)info.fragOff, (int)info.size, info.moreFrags);
 				encapSize = 20+info.size;
 				encapPacket = (uint8_t*) kmalloc(20+info.size);
 				ipv4_info2header(&info, (IPHeader4*)encapPacket);
@@ -1383,4 +1382,89 @@ int isLocalAddr(const struct sockaddr *addr)
 	
 	mutexUnlock(&iflistLock);
 	return 0;
+};
+
+int netconf_addr(int family, const char *ifname, const void *buffer, size_t size)
+{
+	if (getCurrentThread()->euid != 0)
+	{
+		ERRNO = EPERM;
+		return -1;
+	};
+	
+	if ((family != AF_INET) && (family != AF_INET6))
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (family == AF_INET)
+	{
+		if ((size % sizeof(IPNetIfAddr4)) != 0)
+		{
+			ERRNO = EINVAL;
+			return -1;
+		};
+	}
+	else
+	{
+		if ((size % sizeof(IPNetIfAddr6)) != 0)
+		{
+			ERRNO = EINVAL;
+			return -1;
+		};
+	};
+	
+	mutexLock(&iflistLock);
+	
+	NetIf *netif;
+	for (netif=&iflist; netif!=NULL; netif=netif->next)
+	{
+		if (strcmp(netif->name, ifname) == 0)
+		{
+			if (family == AF_INET)
+			{
+				if (netif->ipv4.numAddrs != 0)
+				{
+					kfree(netif->ipv4.addrs);
+				};
+				
+				netif->ipv4.numAddrs = (int) (size / sizeof(IPNetIfAddr4));
+				netif->ipv4.addrs = (IPNetIfAddr4*) kmalloc(size);
+				memcpy(netif->ipv4.addrs, buffer, size);
+				
+				mutexUnlock(&iflistLock);
+				return 0;
+			}
+			else
+			{
+				// IPv6 (AF_INET6)
+				if (netif->ipv6.numAddrs != 0)
+				{
+					kfree(netif->ipv6.addrs);
+				};
+				
+				netif->ipv6.numAddrs = (int) (size / sizeof(IPNetIfAddr6));
+				netif->ipv6.addrs = (IPNetIfAddr6*) kmalloc(size);
+				memcpy(netif->ipv6.addrs, buffer, size);
+				
+				mutexUnlock(&iflistLock);
+				return 0;
+			};
+		};
+	};
+	
+	mutexUnlock(&iflistLock);
+	ERRNO = ENOENT;
+	return -1;
+};
+
+void releaseNetIfLock()
+{
+	mutexUnlock(&iflistLock);
+};
+
+void acquireNetIfLock()
+{
+	mutexLock(&iflistLock);
 };

@@ -484,7 +484,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	fp->seek(fp, strtabSection.sh_offset, SEEK_SET);
 	strings = (char*) kmalloc(strtabSection.sh_size);
 	vfsRead(fp, strings, strtabSection.sh_size);
-
+	
 	int modblock = allocModuleBlock();
 	if (modblock == -1)
 	{
@@ -643,6 +643,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			kfree(symtab);
 			unmapModuleArea(module);
 			spinlockRelease(&modLock);
+			return -1;
 		};
 
 		// address of the field to relocate
@@ -702,7 +703,8 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		int status = moduleInitEvent(opt);
 		if (status != MODINIT_OK)
 		{
-			rmmod(modname, 0);
+			// TODO: add rmmod() below but read TODO
+			//rmmod(modname, 0);
 			if (status == MODINIT_CANCEL)
 			{
 				if (flags & INSMOD_VERBOSE)

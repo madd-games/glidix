@@ -50,6 +50,8 @@
 #define	sti()			ASM ("sti")
 #define	nop()			ASM ("nop")
 #define	NT_SECS(secs)		((secs)*1000000000)
+#define	NEW(type)		((type*)kmalloc(sizeof(type)))		/* only use after including <glidix/memory.h> */
+#define	NEW_EX(type, size)	((type*)kmalloc(sizeof(type)+(size)))
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
