@@ -126,13 +126,35 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 	kprintf_debug("\tSRC: %x:%x:%x:%x:%x:%x\n", head->src.addr[0], head->src.addr[1], head->src.addr[2],
 						head->src.addr[3], head->src.addr[4], head->src.addr[5]);
 	kprintf_debug("\tTYP: 0x%x\n", __builtin_bswap16(head->type));
-	kprintf_debug("\tCHK: 0x%x\n", ether_checksum(frame, framelen));
-
+	kprintf_debug("\tCRC: 0x%x\n", ether_checksum(frame, framelen));
+	kprintf_debug("\tBuffer address: %a\n", frame);
+	
+	if (framelen >= 64)
+	{
+		size_t line, offset;
+		for (line=0; line<4; line++)
+		{
+			for (offset=0; offset<16; offset++)
+			{
+				uint8_t byte = (*((uint8_t*)frame + (line*16+offset)));
+				if (byte < 0x10)
+				{
+					kprintf_debug("0%x ", (int) byte);
+				}
+				else
+				{
+					kprintf_debug("%x ", (int) byte);
+				};
+			};
+			kprintf_debug("\n");
+		};
+	};
+	
 	NeInterface *nif = (NeInterface*) netif->drvdata;
 	spinlockAcquire(&nif->lock);
 	
 	// write the frame to the transmit buffer
-	ne2k_write(nif, (16*1024)/256, frame, framelen);
+	ne2k_write(nif, 16*1024, frame, framelen);
 	
 	// specify the location of transmission buffer in NIC memory
 	outb(nif->iobase + 0x04, (16*1024)/256);
