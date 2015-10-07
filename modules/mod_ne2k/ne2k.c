@@ -149,6 +149,9 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 	(void)netif;
 	(void)frame;
 	(void)framelen;
+	
+	// remove CRC
+	framelen -= 4;
 
 #if 0
 	kprintf_debug("ne2k_send called (size=%d):\n", (int) framelen);
