@@ -493,7 +493,7 @@ void heapDump()
 	{
 		uint64_t addr = (uint64_t) &head[1];
 		HeapFooter *foot = heapFooterFromHeader(head);
-		if ((addr > 0xFFFF8100004DA000) && (addr < 0xFFFF8100004DB000))
+		if (/*(addr > 0xFFFF8100004DA000) && (addr < 0xFFFF8100004DB000)*/1)
 		{
 			kprintf("%a     ", addr);
 			const char *stat = "%$\x02" "FREE%#";

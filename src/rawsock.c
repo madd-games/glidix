@@ -157,7 +157,6 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto)
 {
-	kprintf_debug("got some raw packet\n");
 	RawSocket *rawsock = (RawSocket*) sock;
 	if (rawsock->addr.sa_family != AF_UNSPEC)
 	{

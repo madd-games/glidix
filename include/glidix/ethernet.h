@@ -40,6 +40,11 @@
 #define	ETHER_TYPE_IP			0x0800
 #define	ETHER_TYPE_IPV6			0x86DD
 
+/**
+ * Flags for onEtherPacket().
+ */
+#define	ETHER_IGNORE_CRC		(1 << 0)
+
 struct NetIf_;
 struct sockaddr;
 
@@ -112,7 +117,10 @@ int sendPacketToEthernet(struct NetIf_ *netif, const struct sockaddr *gateway, c
 
 /**
  * Called by drivers upon receiving an Ethernet frame.
+ * Flags:
+ *	ETHER_IGNORE_CRC - This frame had its CRC checked by the hardware and might not be valid
+ *	                   in the received buffer.
  */
-void onEtherFrame(struct NetIf_ *netif, const void *frame, size_t framelen);
+void onEtherFrame(struct NetIf_ *netif, const void *frame, size_t framelen, int flags);
 
 #endif

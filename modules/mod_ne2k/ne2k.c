@@ -35,6 +35,11 @@
 #include <glidix/port.h>
 #include <glidix/spinlock.h>
 #include <glidix/sched.h>
+#include <glidix/idt.h>
+#include <glidix/ethernet.h>
+
+#define	RX_BUFFER_START			((16*1024)/256+6)
+#define	RX_BUFFER_END			((32*1024)/256)
 
 typedef struct
 {
@@ -43,8 +48,24 @@ typedef struct
 	const char*			name;
 } NeDevice;
 
+typedef struct
+{
+	uint8_t				rsr;
+	uint8_t				next;
+	uint16_t			totalSize;
+} PACKED NePacketHeader;
+
 static NeDevice knownDevices[] = {
-	{0x10EC, 0x8029, "Realtek RTL8191SE Wireless LAN 802.11n PCI-E NIC"},
+	{0x10EC, 0x8029, "Realtek RTL-8029"},
+	{0x1050, 0x0940, "Winbond 89C940"},
+	{0x11f6, 0x1401, "Compex RL2000"},
+	{0x8e2e, 0x3000, "KTI ET32P2"},
+	{0x4a14, 0x5000, "NetVin NV5000SC"},
+	{0x1106, 0x0926, "Via 86C926"},
+	{0x10bd, 0x0e34, "SureCom NE34"},
+	{0x1050, 0x5a5a, "Winbond W89C940F"},
+	{0x12c3, 0x0058, "Holtek HT80232"},
+	{0x12c3, 0x5598, "Holtek HT80229"},
 	{0, 0, NULL}
 };
 
@@ -61,7 +82,6 @@ typedef struct NeInterface_
 static NeInterface *interfaces;
 static NeInterface *lastIf;
 
-#if 0
 static uint8_t readRegister(NeInterface *nif, uint8_t page, uint8_t index)
 {
 	// select page
@@ -70,7 +90,6 @@ static uint8_t readRegister(NeInterface *nif, uint8_t page, uint8_t index)
 	// read the register
 	return inb(nif->iobase + index);
 };
-#endif
 
 static void writeRegister(NeInterface *nif, uint8_t page, uint8_t index, uint8_t value)
 {
@@ -107,6 +126,18 @@ static void ne2k_write(NeInterface *nif, uint32_t addr, const void *buffer, size
 	while ((inb(nif->iobase + 0x07) & 0x40) == 0);
 };
 
+static void ne2k_read(NeInterface *nif, uint32_t addr, void *buffer, size_t size)
+{
+	ne2k_setremaddr(nif, addr);
+	ne2k_setremcount(nif, size);
+	
+	uint8_t *put = (uint8_t*) buffer;
+	while (size--)
+	{
+		*put++ = inb(nif->iobase + 0x10);
+	};
+};
+
 static void ne2k_settxcount(NeInterface *nif, size_t count)
 {
 	outb(nif->iobase + 0x05, (uint8_t) (count & 0xFF));
@@ -119,6 +150,7 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 	(void)frame;
 	(void)framelen;
 
+#if 0
 	kprintf_debug("ne2k_send called (size=%d):\n", (int) framelen);
 	EthernetHeader *head = (EthernetHeader*) frame;
 	kprintf_debug("\tDST: %x:%x:%x:%x:%x:%x\n", head->dest.addr[0], head->dest.addr[1], head->dest.addr[2],
@@ -149,7 +181,8 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 			kprintf_debug("\n");
 		};
 	};
-	
+#endif
+
 	NeInterface *nif = (NeInterface*) netif->drvdata;
 	spinlockAcquire(&nif->lock);
 	
@@ -168,18 +201,54 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 	// wait for transmit to complete
 	while ((inb(nif->iobase) & 0x04) == 0);
 	
+	// go to START mode
+	outb(nif->iobase, 0x02);
+	
 	spinlockRelease(&nif->lock);
-	kprintf_debug("PACKET SENT\n");
+	//kprintf_debug("PACKET SENT\n");
 };
 
 static void ne2k_thread(void *context)
 {
+	// buffer to store largest possible frame:
+	// max payload (1500) + size of thernet header (14) + FCS (4)
+	// we do this to avoid using kmalloc() and kfree() as this would
+	// fragment the heap too much.
+	char recvBuffer[1518];
+	NePacketHeader packetHeader;
 	NeInterface *nif = (NeInterface*) context;
 	
 	while (1)
 	{
 		pciWaitInt(nif->pcidev);
-		kprintf_debug("NE2000 interrupt\n");
+		
+		spinlockAcquire(&nif->lock);
+		uint8_t isr = readRegister(nif, 0, 0x07);
+		//kprintf_debug("NE2000 interrupt, ISR=0x%x\n", (int)isr);
+		if (isr & 1)
+		{
+			// received a frame!
+			uint32_t addr = readRegister(nif, 0, 0x03) * 256;	// get address using boundary register
+			ne2k_read(nif, addr, &packetHeader, sizeof(NePacketHeader));
+			
+			size_t frameSize = packetHeader.totalSize-sizeof(NePacketHeader);
+			//kprintf_debug("RECEIVING FRAME OF SIZE: %d\n", (int)frameSize);
+			
+			// copy frame from NIC memory to buffer
+			ne2k_read(nif, addr+sizeof(NePacketHeader), recvBuffer, frameSize);
+			
+			// release the buffer, go to next boundary
+			writeRegister(nif, 0, 0x03, packetHeader.next);
+
+			// we append a random uninitialised CRC (4 bytes) to the end, as this is required,
+			// but we tell Glidix to ignore it
+			onEtherFrame(nif->netif, recvBuffer, frameSize+4, ETHER_IGNORE_CRC);
+			
+			// acknowledge the receive
+			writeRegister(nif, 0, 0x07, 0x01);	
+		};
+		
+		spinlockRelease(&nif->lock);
 	};
 };
 
@@ -239,8 +308,8 @@ MODULE_INIT(const char *opt)
 		outb(nif->iobase + 0x0B, 0);
 		outb(nif->iobase + 0x0F, 0);		// mask completion IRQ
 		outb(nif->iobase + 0x07, 0xFF);
-		outb(nif->iobase + 0x0C, 0x20);		// set to monitor
-		outb(nif->iobase + 0x0D, 0x02);		// and loopback mode.
+		//outb(nif->iobase + 0x0C, 0x20);		// set to monitor
+		//outb(nif->iobase + 0x0D, 0x02);		// and loopback mode.
 		outb(nif->iobase + 0x0A, 32);		// reading 32 bytes
 		outb(nif->iobase + 0x0B, 0);		// count high
 		outb(nif->iobase + 0x08, 0);		// start DMA at 0
@@ -285,9 +354,22 @@ MODULE_INIT(const char *opt)
 		
 		nif->thread = CreateKernelThread(ne2k_thread, &pars, nif);
 		
-		writeRegister(nif, 0, 0x07, 0xFF);		// mask interrupts except 1
-		writeRegister(nif, 0, 0x0F, 0x01);		// [bit 0 = interrupt on reception of packets with no errors]
-		writeRegister(nif, 0, 0x0D, 0);			// normal operation
+		writeRegister(nif, 0, 0x07, 0xFF);		// clear interrupt status
+		writeRegister(nif, 0, 0x0F, 0x01);		// enable reception interrupt
+		writeRegister(nif, 0, 0x0D, 0x00);		// normal operation
+		
+		// set up receive buffer, 6 pages away from the transmit buffer
+		writeRegister(nif, 0, 0x01, RX_BUFFER_START);
+		writeRegister(nif, 0, 0x02, RX_BUFFER_END);
+		
+		// enable receiving
+		writeRegister(nif, 0, 0x03, RX_BUFFER_START);
+		writeRegister(nif, 1, 0x07, RX_BUFFER_START);
+		writeRegister(nif, 0, 0x0C, 0x04);
+		writeRegister(nif, 0, 0x0E, 0x48);
+		
+		// start the card
+		outb(nif->iobase, 0x02);
 	};
 	
 	if (interfaces == NULL)

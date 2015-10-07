@@ -59,7 +59,7 @@ static MacResolution *getMacResolution(NetIf *netif, int family, uint8_t *ip)
 	
 	spinlockAcquire(&netif->ifconfig.ethernet.resLock);
 	MacResolution *scan;
-	MacResolution *last;
+	MacResolution *last = NULL;
 	for (scan=netif->ifconfig.ethernet.res; scan!=NULL; scan=scan->next)
 	{
 		last = scan;
@@ -130,6 +130,7 @@ static int resolveAddress(NetIf *netif, int family, uint8_t *ip, MacAddress *mac
 		{
 			// before waiting, send an ARP request
 			ARPPacket arp;
+			memset(&arp, 0, sizeof(ARPPacket));
 			memset(&arp.header.dest, 0xFF, 6);
 			memcpy(&arp.header.src, &netif->ifconfig.ethernet.mac, 6);
 			arp.header.type = __builtin_bswap16(ETHER_TYPE_ARP);
@@ -277,22 +278,18 @@ static void onARPPacket(NetIf *netif, ARPPacket *arp)
 		{
 			if (res->family == AF_INET)
 			{
-				uint32_t raddr = *((uint32_t*)res->ip);
-				if (raddr == 0)
+				if (memcmp(res->ip, arp->spa, 4) == 0)
 				{
-					if (memcmp(&res->mac, &arp->sha, 6) == 0)
-					{
-						memcpy(res->ip, arp->spa, 4);
-						cvSignal(&res->cond);
-						break;
-					};
+					memcpy(&res->mac, &arp->sha, 6);
+					cvSignal(&res->cond);
+					break;
 				};
 			};
 		};
 	};
 };
 
-void onEtherFrame(NetIf *netif, const void *frame, size_t framelen)
+void onEtherFrame(NetIf *netif, const void *frame, size_t framelen, int flags)
 {
 	static uint8_t broadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 	
@@ -308,8 +305,11 @@ void onEtherFrame(NetIf *netif, const void *frame, size_t framelen)
 		return;
 	};
 	
-	uint32_t crc = ether_checksum(frame, framelen);
-	kprintf_debug("RECEIVED CRC: %a\n", (uint64_t)crc);
+	if ((flags & ETHER_IGNORE_CRC) == 0)
+	{
+		uint32_t crc = ether_checksum(frame, framelen);
+		kprintf_debug("RECEIVED CRC: %a\n", (uint64_t)crc);
+	};
 	
 	size_t overheadSize = sizeof(EthernetHeader) + 4;
 	EthernetHeader *head = (EthernetHeader*) frame;

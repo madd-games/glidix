@@ -20,4 +20,4 @@ build/ne2k.o build/ne2k.d : ne2k.c /glidix/kernel-include/glidix/module.h \
  /glidix/kernel-include/glidix/ethernet.h \
  /glidix/kernel-include/glidix/condvar.h \
  /glidix/kernel-include/glidix/memory.h \
- /glidix/kernel-include/glidix/port.h
+ /glidix/kernel-include/glidix/port.h /glidix/kernel-include/glidix/idt.h
