@@ -30,6 +30,7 @@
 #include <glidix/console.h>
 #include <glidix/time.h>
 #include <glidix/string.h>
+#include <glidix/memory.h>
 
 void GXDumpInode(GXFileSystem *gxfs, ino_t ino)
 {
@@ -155,6 +156,56 @@ int GXOpenInode(GXFileSystem *gxfs, GXInode *gxino, ino_t inode)
 	return 0;
 };
 
+/**
+ * Try to find a given file offset in an XFT (recursively traversing subsequent XFTs),
+ * return 0 if successful, -1 otherwise. The block number and the offset into the block
+ * are returned in the given pointers.
+ */
+static int GXPositionXFT(GXFileSystem *gxfs, uint64_t xftBlock, uint64_t pos, uint64_t *outBlock, uint64_t *outOffsetIntoBlock)
+{
+	int status = -1;
+	gxfsXFT *xft = (gxfsXFT*) kmalloc(gxfs->cis.cisBlockSize);
+	
+	while (xftBlock != 0)
+	{
+		uint64_t sectionContainingBlock = xftBlock / gxfs->cis.cisBlocksPerSection;
+		uint64_t blockIndexInSection = xftBlock % gxfs->cis.cisBlocksPerSection;
+		uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxfs->cis.cisBlockSize;
+		gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
+		vfsRead(gxfs->fp, xft, gxfs->cis.cisBlockSize);
+		
+		uint16_t numFragsExpected = (gxfs->cis.cisBlockSize-10)/20;
+		if (xft->xftCount > numFragsExpected)
+		{
+			// return error on bad XFTs.
+			kprintf_debug("[GXFS] bad XFT: xftCount is %d, max possible is %d\n", (int)xft->xftCount, (int)numFragsExpected);
+			break;
+		};
+		
+		uint16_t i;
+		for (i=0; i<xft->xftCount; i++)
+		{
+			uint64_t fragStart = xft->xftFrags[i].fOff;
+			uint64_t fragEnd = fragStart + xft->xftFrags[i].fExtent * gxfs->cis.cisBlockSize;
+			if ((fragStart <= pos) && (fragEnd > pos))
+			{
+				// found a block!
+				uint64_t offsetIntoFragment = pos - fragStart;
+				*outBlock = xft->xftFrags[i].fBlock + offsetIntoFragment / gxfs->cis.cisBlockSize;
+				*outOffsetIntoBlock = offsetIntoFragment % gxfs->cis.cisBlockSize;
+				status = 0;
+				break;
+			};
+		};
+		
+		// try next XFT
+		xftBlock = xft->xftNext;
+	};
+	
+	kfree(xft);
+	return status;
+};
+
 size_t GXReadInode(GXInode *gxino, void *buffer, size_t size)
 {
 	//kprintf_debug("GXReadInode(%d)\n", gxino->ino);
@@ -177,7 +228,7 @@ size_t GXReadInode(GXInode *gxino, void *buffer, size_t size)
 		// find the index of the block which stores the current position
 		uint64_t block, offsetIntoBlock;
 		int i;
-		for (i=0; i<16; i++)
+		for (i=0; i<14; i++)
 		{
 			uint64_t fragStart = inode.inoFrags[i].fOff;
 			uint64_t fragEnd = fragStart + inode.inoFrags[i].fExtent * gxfs->cis.cisBlockSize;
@@ -190,11 +241,15 @@ size_t GXReadInode(GXInode *gxino, void *buffer, size_t size)
 			};
 		};
 
-		// no fragment contains this position
-		if (i == 16)
+		
+		// no fragment in the main table contains this position; try XFT
+		if (i == 14)
 		{
-			//kprintf_debug("gxfs: no fragment contains position %d\n", gxino->pos);
-			break;
+			if (GXPositionXFT(gxino->gxfs, inode.inoExFrag, gxino->pos, &block, &offsetIntoBlock) != 0)
+			{
+				// not found in XFT either, stop trying to read
+				break;
+			};
 		};
 
 		// find out where this block is.
@@ -220,13 +275,158 @@ size_t GXReadInode(GXInode *gxino, void *buffer, size_t size)
 	return sizeRead;
 };
 
-void GXExpandInodeToSize(GXInode *gxino, gxfsInode *inode, size_t newSize)
+/**
+ * Create an XFT at the specified block, and place a single fragment with a single
+ * block in it.
+ */
+static void GXCreateXFT(GXInode *gxino, gxfsInode *inode, uint64_t xftBlock)
 {
+	gxfsXFT *xft = (gxfsXFT*) kmalloc(gxino->gxfs->cis.cisBlockSize);
+	memset(xft, 0, gxino->gxfs->cis.cisBlockSize);
+	
+	// set the count to maximum cause why waste space
+	xft->xftCount = (gxino->gxfs->cis.cisBlockSize-10)/20;
+	
+	uint16_t initBlock = GXAllocBlock(gxino->gxfs, xftBlock+1);
+	xft->xftFrags[0].fOff = inode->inoSize;
+	xft->xftFrags[0].fBlock = initBlock;
+	xft->xftFrags[0].fExtent = 1;
+	
+	uint64_t sectionContainingBlock = xftBlock / gxino->gxfs->cis.cisBlocksPerSection;
+	uint64_t blockIndexInSection = xftBlock % gxino->gxfs->cis.cisBlocksPerSection;
+	uint64_t offsetToBlock = gxino->gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxino->gxfs->cis.cisBlockSize;
+	gxino->gxfs->fp->seek(gxino->gxfs->fp, offsetToBlock, SEEK_SET);
+	vfsWrite(gxino->gxfs->fp, xft, gxino->gxfs->cis.cisBlockSize);
+	
+	kfree(xft);
+};
+
+/**
+ * Expand an inode in its XFS - that is, allocate a new block to the XFT. Expand inoSize by 1 block,
+ * or up to 'newSize', whichever is smaller.
+ */
+static void GXExpandXFT(GXInode *gxino, gxfsInode *inode, size_t newSize)
+{
+	GXFileSystem *gxfs = gxino->gxfs;
+	gxfsXFT *xft = (gxfsXFT*) kmalloc(gxfs->cis.cisBlockSize);
+	
+	uint64_t xftBlock = inode->inoExFrag;
+	while (xftBlock != 0)
+	{
+		uint64_t sectionContainingBlock = xftBlock / gxfs->cis.cisBlocksPerSection;
+		uint64_t blockIndexInSection = xftBlock % gxfs->cis.cisBlocksPerSection;
+		uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxfs->cis.cisBlockSize;
+		gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
+		vfsRead(gxfs->fp, xft, gxfs->cis.cisBlockSize);
+		
+		uint16_t numFragsExpected = (gxfs->cis.cisBlockSize-10)/20;
+		if (xft->xftCount > numFragsExpected)
+		{
+			// return error on bad XFTs.
+			kprintf_debug("[GXFS] bad XFT: xftCount is %d, max possible is %d\n", (int)xft->xftCount, (int)numFragsExpected);
+			break;
+		};
+		
+		uint16_t i;
+		for (i=0; i<xft->xftCount; i++)
+		{
+			if (xft->xftFrags[i].fExtent == 0)
+			{
+				break;
+			};
+		};
+		
+		if (i == 0)
+		{
+			panic("[GXFS] Empty XFT encountered");
+		};
+		
+		// select the last fragment
+		i--;
+		
+		// expand to max extent if possible
+		uint64_t maxExtent = xft->xftFrags[i].fOff + inode->inoFrags[i].fExtent * gxfs->cis.cisBlockSize;
+		if (maxExtent >= newSize)
+		{
+			inode->inoSize = newSize;
+			break;
+		}
+		else if ((maxExtent > inode->inoSize) && (maxExtent <= newSize))
+		{
+			// we first have to make sure that we're up to maximum extent before
+			// increasing the extent.
+			inode->inoSize = maxExtent;
+			break;
+		};
+
+		uint64_t prefferedBlock = xft->xftFrags[i].fBlock + xft->xftFrags[i].fExtent;
+		uint64_t actualBlock = GXAllocBlock(gxino->gxfs, prefferedBlock);
+
+		if (prefferedBlock == actualBlock)
+		{
+			xft->xftFrags[i].fExtent++;
+			if (inode->inoSize + gxfs->cis.cisBlockSize > newSize)
+			{
+				inode->inoSize = newSize;
+			}
+			else
+			{
+				inode->inoSize += gxfs->cis.cisBlockSize;
+			};
+
+			break;
+		};
+		
+		i++;
+		if (i == xft->xftCount)
+		{
+			if (xft->xftNext == 0)
+			{
+				GXCreateXFT(gxino, inode, actualBlock);
+				xft->xftNext = actualBlock;
+			}
+			else
+			{
+				GXFreeBlock(gxfs, actualBlock);
+				xftBlock = xft->xftNext;
+				continue;
+			};
+		}
+		else
+		{
+			xft->xftFrags[i].fOff = inode->inoSize;
+			xft->xftFrags[i].fBlock = actualBlock;
+			xft->xftFrags[i].fExtent = 1;
+		};
+		
+		if (inode->inoSize + gxfs->cis.cisBlockSize > newSize)
+		{
+			inode->inoSize = newSize;
+		}
+		else
+		{
+			inode->inoSize += gxfs->cis.cisBlockSize;
+		};
+		
+		break;
+	};
+
+	uint64_t sectionContainingBlock = xftBlock / gxfs->cis.cisBlocksPerSection;
+	uint64_t blockIndexInSection = xftBlock % gxfs->cis.cisBlocksPerSection;
+	uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxfs->cis.cisBlockSize;
+	gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
+	vfsWrite(gxfs->fp, xft, gxfs->cis.cisBlockSize);
+		
+	kfree(xft);
+};
+
+void GXExpandInodeToSize(GXInode *gxino, gxfsInode *inode, size_t newSize)
+{	
 	//kprintf_debug("gxfs: expanding inode %d (current size=%d, target size=%d)\n", gxino->ino, inode->inoSize, newSize);
 	GXFileSystem *gxfs = gxino->gxfs;
 
 	int i;
-	for (i=0; i<16; i++)
+	for (i=0; i<14; i++)
 	{
 		if (inode->inoFrags[i].fExtent == 0)
 		{
@@ -289,15 +489,32 @@ void GXExpandInodeToSize(GXInode *gxino, gxfsInode *inode, size_t newSize)
 
 	// we must make a new fragment
 	i++;
-	if (i == 16)
+	if (i == 14)
 	{
-		// TODO: defrag or something
-		panic("gxfs: fragmentation problem");
+		// if there is no XFT, create it in the newly-allocated block, allocating
+		// an initial fragment (in GXCreateXFT() ). otherwise expand existing XFTs
+		// with an extra block.
+		if (inode->inoExFrag == 0)
+		{
+			GXCreateXFT(gxino, inode, actualBlock);
+			inode->inoExFrag = actualBlock;
+		}
+		else
+		{
+			// this function will also free "actualBlock" if it's not actually needed.
+			// it will take care of adding the size to inoSize etc so we can safely
+			// just return straight after.
+			GXFreeBlock(gxino->gxfs, actualBlock);
+			GXExpandXFT(gxino, inode, newSize);
+			return;
+		};
+	}
+	else
+	{
+		inode->inoFrags[i].fOff = inode->inoSize;
+		inode->inoFrags[i].fBlock = actualBlock;
+		inode->inoFrags[i].fExtent = 1;
 	};
-
-	inode->inoFrags[i].fOff = inode->inoSize;
-	inode->inoFrags[i].fBlock = actualBlock;
-	inode->inoFrags[i].fExtent = 1;
 
 	if (inode->inoSize + gxfs->cis.cisBlockSize > newSize)
 	{
@@ -337,7 +554,7 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 		// find the index of the block which stores the current position
 		uint64_t block, offsetIntoBlock;
 		int i;
-		for (i=0; i<16; i++)
+		for (i=0; i<14; i++)
 		{
 			uint64_t fragStart = inode.inoFrags[i].fOff;
 			uint64_t fragEnd = fragStart + inode.inoFrags[i].fExtent * gxfs->cis.cisBlockSize;
@@ -351,10 +568,13 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 		};
 
 		// no fragment contains this position
-		if (i == 16)
+		if (i == 14)
 		{
-			//kprintf_debug("gxfs: no fragment contains position %d\n", gxino->pos);
-			break;
+			if (GXPositionXFT(gxino->gxfs, inode.inoExFrag, gxino->pos, &block, &offsetIntoBlock) != 0)
+			{
+				// not found in XFT either, stop trying to write
+				break;
+			};
 		};
 
 		// find out where this block is.
@@ -479,23 +699,145 @@ void GXWriteInodeHeader(GXInode *gxino, gxfsInode *inode)
 	vfsWrite(gxino->gxfs->fp, inode, sizeof(gxfsInode));
 };
 
+/**
+ * Shrinks an inode by removing its last few blocks from XFTs. This finds the last XFT,
+ * shrinks as much as possible, and if no fragments are left on that XFT, it deletes it,
+ * seeting xftNext of the previous XFT to zero. If this is the only XFT, then 'xftOut'
+ * is set to zero. 'repeat' is set to 1 if the function must be called again, or 0 if
+ * that is not needed.
+ */
+static void GXShrinkXFT(GXInode *gxino, size_t shrinkBy, gxfsInode *inode, uint64_t *xftOut, int *repeat, uint64_t *outBlocksToFree)
+{
+	GXFileSystem *gxfs = gxino->gxfs;
+	if ((*outBlocksToFree) == 0)
+	{
+		*repeat = 0;
+		return;
+	};
+	
+	gxfsXFT *xft = (gxfsXFT*) kmalloc(gxfs->cis.cisBlockSize);
+	xft->xftNext = 0;
+	
+	uint64_t xftBlock = *xftOut;
+	uint64_t prevXFT = 0;
+	while (1)
+	{
+		uint64_t sectionContainingBlock = xftBlock / gxfs->cis.cisBlocksPerSection;
+		uint64_t blockIndexInSection = xftBlock % gxfs->cis.cisBlocksPerSection;
+		uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxfs->cis.cisBlockSize;
+		gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
+		vfsRead(gxfs->fp, xft, gxfs->cis.cisBlockSize);
+		
+		if (xft->xftNext != 0)
+		{
+			prevXFT = xftBlock;
+			xftBlock = xft->xftNext;
+		}
+		else
+		{
+			break;
+		};
+	};
+	
+	uint16_t i;
+	for (i=0; i<xft->xftCount; i++)
+	{
+		if (xft->xftFrags[i].fExtent == 0)
+		{
+			break;
+		};
+	};
+	
+	// select last fragment
+	i--;
+
+	// don't worry about remainders because they cancel out when calculating blocksToFree.
+	uint64_t blocksToFree = *outBlocksToFree;
+	if (blocksToFree == 0xffffffffffffffff)
+	{
+		size_t blocksBefore = inode->inoSize / gxino->gxfs->cis.cisBlockSize;
+		size_t blocksAfter = (inode->inoSize-shrinkBy) / gxino->gxfs->cis.cisBlockSize;
+		blocksToFree = blocksBefore-blocksAfter;
+	};
+	
+	while (blocksToFree--)
+	{
+		xft->xftFrags[i].fExtent--;
+		uint64_t block = xft->xftFrags[i].fBlock + xft->xftFrags[i].fExtent;
+		GXFreeBlock(gxino->gxfs, block);
+		if (xft->xftFrags[i].fExtent == 0)
+		{
+			if (i == 0)
+			{
+				GXFreeBlock(gxino->gxfs, xftBlock);
+				if (prevXFT == 0)
+				{
+					*xftOut = 0;
+					*repeat = 0;
+					*outBlocksToFree = blocksToFree;
+				}
+				else
+				{
+					*repeat = 1;
+					*outBlocksToFree = blocksToFree;
+					*xftOut = prevXFT;
+					
+					uint64_t sectionContainingBlock = prevXFT / gxfs->cis.cisBlocksPerSection;
+					uint64_t blockIndexInSection = prevXFT % gxfs->cis.cisBlocksPerSection;
+					uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks
+								+ blockIndexInSection * gxfs->cis.cisBlockSize;
+					gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
+					vfsRead(gxfs->fp, xft, gxfs->cis.cisBlockSize);
+					
+					xft->xftNext = 0;
+					
+					gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
+					vfsWrite(gxfs->fp, xft, gxfs->cis.cisBlockSize);
+				};
+				break;
+			};
+			
+			i--;
+		};
+	};
+	
+	kfree(xft);
+};
+
 void GXShrinkInode(GXInode *gxino, size_t shrinkBy, gxfsInode *inode)
 {
 	//gxfsFragment frags[16];
 	//gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset+39, SEEK_SET);
 	//vfsRead(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
+	
+	uint64_t blocksToFree = 0xffffffffffffffff;
+	if (inode->inoExFrag != 0)
+	{
+		int repeat;
+		uint64_t xftBlock = inode->inoExFrag;
+		do
+		{
+			GXShrinkXFT(gxino, shrinkBy, inode, &xftBlock, &repeat, &blocksToFree);
+		} while (repeat);
+		inode->inoExFrag = xftBlock;
+	};
+	
 	gxfsFragment *frags = inode->inoFrags;
 
 	int i;
-	for (i=0; i<16; i++)
+	for (i=0; i<14; i++)
 	{
 		if (frags[i].fExtent == 0) break;
 	};
 	i--;
 
-	size_t blocksBefore = inode->inoSize / gxino->gxfs->cis.cisBlockSize;
-	size_t blocksAfter = (inode->inoSize-shrinkBy) / gxino->gxfs->cis.cisBlockSize;
-	size_t blocksToFree = blocksBefore-blocksAfter;
+	// don't worry about remainders because they cancel out when calculating blocksToFree.
+	if (blocksToFree == 0xffffffffffffffff)
+	{
+		size_t blocksBefore = inode->inoSize / gxino->gxfs->cis.cisBlockSize;
+		size_t blocksAfter = (inode->inoSize-shrinkBy) / gxino->gxfs->cis.cisBlockSize;
+		blocksToFree = blocksBefore-blocksAfter;
+	};
 
 	while (blocksToFree--)
 	{
@@ -506,13 +848,52 @@ void GXShrinkInode(GXInode *gxino, size_t shrinkBy, gxfsInode *inode)
 		{
 			if (i == 0) break;
 			i--;
-		};	
+		};
 	};
 
 	inode->inoSize -= shrinkBy;
 	//gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset+39, SEEK_SET);
 	//vfsWrite(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
 	GXWriteInodeHeader(gxino, inode);
+};
+
+static void GXFreeXFT(GXFileSystem *gxfs, uint64_t xftBlock)
+{
+	gxfsXFT *xft = (gxfsXFT*) kmalloc(gxfs->cis.cisBlockSize);
+	
+	while (xftBlock != 0)
+	{
+		uint64_t sectionContainingBlock = xftBlock / gxfs->cis.cisBlocksPerSection;
+		uint64_t blockIndexInSection = xftBlock % gxfs->cis.cisBlocksPerSection;
+		uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxfs->cis.cisBlockSize;
+		gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
+		vfsRead(gxfs->fp, xft, gxfs->cis.cisBlockSize);
+		
+		uint16_t numFragsExpected = (gxfs->cis.cisBlockSize-10)/20;
+		if (xft->xftCount > numFragsExpected)
+		{
+			// return error on bad XFTs.
+			kprintf_debug("[GXFS] bad XFT: xftCount is %d, max possible is %d\n", (int)xft->xftCount, (int)numFragsExpected);
+			break;
+		};
+		
+		uint16_t i;
+		for (i=0; i<xft->xftCount; i++)
+		{
+			while (xft->xftFrags[i].fExtent != 0)
+			{
+				GXFreeBlock(gxfs, xft->xftFrags[i].fBlock);
+				xft->xftFrags[i].fBlock++;
+				xft->xftFrags[i].fExtent--;
+			};
+		};
+		
+		// next
+		GXFreeBlock(gxfs, xftBlock);
+		xftBlock = xft->xftNext;
+	};
+	
+	kfree(xft);
 };
 
 void GXUnlinkInode(GXInode *gxino)
@@ -533,7 +914,7 @@ void GXUnlinkInode(GXInode *gxino)
 		if ((inode.inoMode & 0xF000) != 0x5000)
 		{
 			int i;
-			for (i=0; i<16; i++)
+			for (i=0; i<14; i++)
 			{
 				while (frags[i].fExtent != 0)
 				{
@@ -542,6 +923,8 @@ void GXUnlinkInode(GXInode *gxino)
 					frags[i].fExtent--;
 				};
 			};
+			
+			GXFreeXFT(gxino->gxfs, inode.inoExFrag);
 		};
 
 		uint64_t section = (gxino->ino-1) / gxino->gxfs->cis.cisInoPerSection;

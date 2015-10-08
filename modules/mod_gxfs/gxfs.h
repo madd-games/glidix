@@ -77,7 +77,9 @@ typedef struct
 	int64_t				inoMTime;
 	uint16_t			inoOwner;
 	uint16_t			inoGroup;
-	gxfsFragment			inoFrags[16];
+	gxfsFragment			inoFrags[14];
+	uint64_t			inoExFrag;
+	char				inoPad[32];
 } __attribute__ ((packed)) gxfsInode;
 
 typedef struct
@@ -93,6 +95,13 @@ typedef struct
 	uint32_t			dhCount;
 	uint8_t				dhFirstSz;
 } __attribute__ ((packed)) gxfsDirHeader;
+
+typedef struct
+{
+	uint16_t			xftCount;
+	uint64_t			xftNext;
+	gxfsFragment			xftFrags[];
+} __attribute__ ((packed)) gxfsXFT;
 
 typedef struct
 {

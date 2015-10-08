@@ -105,10 +105,11 @@ static void gxdir_getstat(Dir *dir)
 
 	// symlinks take up no blocks; for everything else, count up the blocks
 	// (in fact, the link path is written on top of the fragment table!)
+	// who cares about XFTs these days anyway
 	if ((inode.inoMode & 0xF000) != 0x5000)
 	{
 		int i;
-		for (i=0; i<16; i++)
+		for (i=0; i<14; i++)
 		{
 			dir->stat.st_blocks += inode.inoFrags[i].fExtent;
 		};
@@ -218,7 +219,8 @@ static int gxdir_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	newInode.inoMTime = now;
 	newInode.inoOwner = (uint16_t) uid;
 	newInode.inoGroup = (uint16_t) gid;
-	memset(&newInode.inoFrags, 0, sizeof(gxfsFragment)*16);
+	memset(&newInode.inoFrags, 0, sizeof(gxfsFragment)*14);
+	newInode.inoExFrag = 0;
 	GXWriteInodeHeader(&gxNewInode, &newInode);
 
 	gxfsDirHeader emptyhead;
@@ -452,7 +454,8 @@ static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	newInode.inoMTime = now;
 	newInode.inoOwner = (uint16_t) uid;
 	newInode.inoGroup = (uint16_t) gid;
-	memset(&newInode.inoFrags, 0, sizeof(gxfsFragment)*16);
+	memset(&newInode.inoFrags, 0, sizeof(gxfsFragment)*14);
+	newInode.inoExFrag = 0;
 	GXWriteInodeHeader(&gxNewInode, &newInode);
 
 	gxfsInode inode;
