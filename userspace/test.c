@@ -56,61 +56,33 @@ uint16_t checksum(void* vdata,size_t length)
 
 int main()
 {
-	char *buffer = (char*) malloc(6000);
-	int i;
-	for (i=0; i<6000; i++)
-	{
-		buffer[i] = (char) i;
-	};
+	char data[16] = "0123456789ABCDEF";
 	
-	int sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	printf("Create socket...\n");
+	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sockfd == -1)
 	{
 		perror("socket");
 		return 1;
 	};
 	
-	struct sockaddr_in localhost;
-	localhost.sin_family = AF_INET;
-	inet_pton(AF_INET, "127.0.0.1", &localhost.sin_addr);
+	printf("Loading address...\n");
+	struct sockaddr_in addr;
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(1234);
+	inet_pton(AF_INET, "192.168.10.1", &addr.sin_addr);
 	
-	ssize_t size = sendto(sockfd, buffer, 6000, 0, (struct sockaddr*) &localhost, sizeof(struct sockaddr_in));
-	if (size == -1)
+	printf("Sending...\n");
+	if (sendto(sockfd, data, 16, 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) == -1)
 	{
 		perror("sendto");
 		close(sockfd);
 		return 1;
 	};
 	
-	printf("sending OK, now trying to receive...\n");
-	memset(buffer, 0, 6000);
-	
-	socklen_t len = sizeof(struct sockaddr_in);
-	struct sockaddr_in addr;
-	size = recvfrom(sockfd, buffer, 6000, 0, (struct sockaddr*) &addr, &len);
-	if (size == -1)
-	{
-		perror("recvfrom");
-		close(sockfd);
-		return 1;
-	};
-	
-	char convbuf[INET_ADDRSTRLEN];
-	printf("Received %d bytes from: %s\n", (int)size, inet_ntop(AF_INET, &addr.sin_addr, convbuf, INET_ADDRSTRLEN));
-	printf("Validating...\n");
-	
-	for (i=0; i<6000; i++)
-	{
-		char c = (char) i;
-		if (buffer[i] != c)
-		{
-			printf("ERROR! at %d\n", i);
-			close(sockfd);
-			return 1;
-		};
-	};
-	
-	printf("Everything is valid!\n");
+	printf("Closing...\n");
 	close(sockfd);
+	
+	printf("UDP datagram sent\n");
 	return 0;
 };

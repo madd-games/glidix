@@ -196,6 +196,8 @@ int		_glidix_netconf_addr(int family, const char *ifname, const void *buffer, si
 int		_glidix_fcntl_getfd(int fd);
 int		_glidix_fcntl_setfd(int fd, int flags);
 uint32_t	_glidix_unique();
+int		_glidix_bindif(int fd, const char *ifname);
+int		_glidix_route_clear(int family, const char *ifname);
 
 #ifdef __cplusplus
 }	/* extern "C" */

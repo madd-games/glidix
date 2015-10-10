@@ -74,6 +74,7 @@
 #define	PKT_HDRINC			(1 << 8)
 #define	PKT_DONTROUTE			(1 << 9)
 #define	PKT_DONTFRAG			(1 << 10)
+#define	PKT_MASK			(PKT_HDRINC|PKT_DONTROUTE|PKT_DONTFRAG)
 
 /* types of connections */
 #define	IF_LOOPBACK			0		/* loopback interface (localhost) */
@@ -476,6 +477,11 @@ uint16_t ipv4_checksum(const void *data, size_t size);
  * - EACCES	Access denied (you are not root).
  */
 int route_add(int family, int pos, gen_route *route);
+
+/**
+ * System call to clear an interface's routing table for a given protocol.
+ */
+int route_clear(int family, const char *ifname);
 
 /**
  * Return the statistics for a particular network interface. The statistics include the number of

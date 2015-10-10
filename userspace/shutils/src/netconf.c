@@ -95,7 +95,7 @@ void printIntfInfo(const char *ifname)
 	printf("\tLink: %s\n", linkname(netstat.ifconfig.type));
 	if (netstat.ifconfig.type == 1)
 	{
-		// IF_ETHER
+		// IF_ETHERNET
 		printf("\t\tMAC: %x:%x:%x:%x:%x:%x\n", netstat.ifconfig.ethernet.mac[0], netstat.ifconfig.ethernet.mac[1],
 			netstat.ifconfig.ethernet.mac[2], netstat.ifconfig.ethernet.mac[3], netstat.ifconfig.ethernet.mac[4],
 			netstat.ifconfig.ethernet.mac[5]

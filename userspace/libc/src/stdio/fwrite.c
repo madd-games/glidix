@@ -73,5 +73,6 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 	};
 
 	//BREAKPOINT();
+	fflush(fp);		// TODO: shit, we need some way to call fflush() at exit instead.
 	return ret;
 };

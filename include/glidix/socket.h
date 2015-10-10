@@ -48,7 +48,8 @@
 
 #define	GSO_RCVTIMEO			0
 #define	GSO_SNDTIMEO			1
-#define	GSO_COUNT			2
+#define	GSO_SNDFLAGS			2
+#define	GSO_COUNT			3
 
 typedef struct Socket_
 {
@@ -63,6 +64,11 @@ typedef struct Socket_
 	 */
 	uint64_t			options[GSO_COUNT];
 	
+	/**
+	 * Name of the interface to which the socket is bound. Empty string means all interfaces.
+	 */
+	char				ifname[16];
+
 	/**
 	 * Called to handle a bind() on this socket.
 	 */
@@ -187,6 +193,11 @@ int ConnectSocket(File *fp, const struct sockaddr *addr, size_t addrlen);
  * Implements getpeername().
  */
 int SocketGetpeername(File *fp, struct sockaddr *addr, size_t *addrlenptr);
+
+/**
+ * Specify which interface a socket is to be bound to.
+ */
+int SocketBindif(File *fp, const char *ifname);
 
 /**
  * Try claiming a specific unique local address (used by bind()). Returns 0 if the claim was successful and no other

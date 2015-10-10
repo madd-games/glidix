@@ -52,7 +52,7 @@ typedef struct RawPacket_
  * to the wildcard address (all zeroes), it receives every packet marked with the specified protocol.
  * If it is bound to a specific address, only packets directed to that address and the given protocol are
  * received. If the protocol is IPPROTO_ANY, then:
- *  - packets aimed for all protocols are received, along with their IP headers.
+ *  - no packets are received.
  *  - when you send a packet, it must include an IP header. The destination address passed to sendto() is
  *    considered to be a gateway (which may pass through another gateway according to the routing table).
  * Please note that if you bind to the wildcard address, then sending a packet shall cause the socket to
@@ -141,10 +141,9 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 		return -1;
 	};
 	
-	//kprintf("ABOUT TO sendPacket\n");
-	int status = sendPacket((struct sockaddr*) &rawsock->addr, addr, message, len, sock->proto,
-					sock->options[GSO_SNDTIMEO], NULL);
-	//kprintf("AFTER sendPacket\n");
+	int status = sendPacket((struct sockaddr*) &rawsock->addr, addr, message, len, sock->proto | (sock->options[GSO_SNDFLAGS] & PKT_MASK),
+					sock->options[GSO_SNDTIMEO], sock->ifname);
+
 	if (status < 0)
 	{
 		ERRNO = -status;

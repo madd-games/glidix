@@ -140,7 +140,9 @@ syscallTable = {
 	93:	"_glidix_fcntl_getfd",
 	94:	"_glidix_fcntl_setfd",
 	95:	"_glidix_unique",
-	96:	"isatty"
+	96:	"isatty",
+	97:	"_glidix_bindif",
+	98:	"_glidix_route_clear"
 }
 
 f = open("_libglidix.s", "wb")

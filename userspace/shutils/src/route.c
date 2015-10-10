@@ -280,6 +280,49 @@ int mainUtil(int argc, char *argv[])
 			fprintf(stderr, "%s: failed to add the route: %s\n", argv[0], strerror(errno));
 			return 1;
 		};
+		
+		return 0;
+	}
+	else if (strcmp(argv[1], "clear") == 0)
+	{
+		if (argc != 3)
+		{
+			fprintf(stderr, "USAGE:\t%s clear <interface>\n", argv[0]);
+			fprintf(stderr, "\tDelete all IPv4 routes of an interface.\n");
+			fprintf(stderr, "\tSee also: clear6\n");
+			return 1;
+		};
+		
+		if (_glidix_route_clear(AF_INET, argv[2]) != 0)
+		{
+			fprintf(stderr, "%s: cannot clear %s: %s\n", argv[0], argv[2], strerror(errno));
+			return 1;
+		};
+		
+		return 0;
+	}
+	else if (strcmp(argv[1], "clear6") == 0)
+	{
+		if (argc != 3)
+		{
+			fprintf(stderr, "USAGE:\t%s clear6 <interface>\n", argv[0]);
+			fprintf(stderr, "\tDelete all IPv6 routes of an interface.\n");
+			fprintf(stderr, "\tSee also: clear\n");
+			return 1;
+		};
+		
+		if (_glidix_route_clear(AF_INET6, argv[2]) != 0)
+		{
+			fprintf(stderr, "%s: cannot clear6 %s: %s\n", argv[0], argv[2], strerror(errno));
+			return 1;
+		};
+		
+		return 0;
+	}
+	else
+	{
+		fprintf(stderr, "%s: unknown command: %s\n", argv[0], argv[1]);
+		return 1;
 	};
 };
 

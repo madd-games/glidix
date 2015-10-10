@@ -108,6 +108,12 @@ File* CreateSocket(int domain, int type, int proto)
 		return NULL;
 	};
 
+	if ((proto < 0) || (proto > 255))
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return NULL;
+	};
+	
 	Socket *sock;	
 	if (type == SOCK_RAW)
 	{
@@ -124,11 +130,9 @@ File* CreateSocket(int domain, int type, int proto)
 		switch (proto)
 		{
 		case 0:
-#if 0
 		case IPPROTO_UDP:
 			sock = CreateUDPSocket();
 			break;
-#endif
 		default:
 			getCurrentThread()->therrno = EPROTONOSUPPORT;
 			return NULL;
@@ -306,6 +310,29 @@ int SocketGetpeername(File *fp, struct sockaddr *addr, size_t *addrlen)
 	return sock->getpeername(sock, addr, addrlen);
 };
 
+int SocketBindif(File *fp, const char *ifname)
+{
+	if (ifname != NULL)
+	{
+		if (strlen(ifname) > 15)
+		{
+			ERRNO = EINVAL;
+			return -1;
+		};
+	};
+	
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		getCurrentThread()->therrno = ENOTSOCK;
+		return -1;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (ifname != NULL) strcpy(sock->ifname, ifname);
+	else sock->ifname[0] = 0;
+	return 0;
+};
+
 int isValidAddr(const struct sockaddr *addr)
 {
 	static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -465,23 +492,6 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 	};
 
 	onTransportPacket(src, dest, addrlen, (char*)packet + dataOffset, size, proto);
-	
-#if 0	
-	semWait(&sockLock);
-	
-	Socket *sock = &sockList;
-	while (sock != NULL)
-	{
-		if (sock->packet != NULL)
-		{
-			sock->packet(sock, src, dest, addrlen, packet, size, proto, dataOffset);
-		};
-		
-		sock = sock->next;
-	};
-	
-	semSignal(&sockLock);
-#endif
 };
 
 void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen, const void *packet, size_t size, int proto)

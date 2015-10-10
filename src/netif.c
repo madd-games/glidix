@@ -603,6 +603,13 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 		uint64_t nanotimeout, const char *ifname)
 {
 	static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	if (ifname != NULL)
+	{
+		if (ifname[0] == 0)
+		{
+			ifname = NULL;
+		};
+	};
 	
 	if (isMappedAddress46(dest))
 	{
@@ -885,26 +892,42 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 				struct sockaddr_in gateway;
 				gateway.sin_family = AF_INET;
 				
+				int gatewayFound = 0;
 				int i;
-				for (i=0; i<netif->ipv4.numRoutes; i++)
+				
+				if (flags & PKT_DONTROUTE)
 				{
-					IPRoute4 *route = &netif->ipv4.routes[i];
-					if (isMatchingMask(&route->dest, &indst->sin_addr, &route->mask, 4))
+					gatewayFound = 1;
+					memcpy(&gateway, indst, sizeof(struct sockaddr_in));
+				}
+				else
+				{
+					for (i=0; i<netif->ipv4.numRoutes; i++)
 					{
-						if (memcmp(&route->gateway, zeroes, 4) == 0)
+						IPRoute4 *route = &netif->ipv4.routes[i];
+						if (isMatchingMask(&route->dest, &indst->sin_addr, &route->mask, 4))
 						{
-							memcpy(&gateway.sin_addr, &indst->sin_addr, 4);
-						}
-						else
-						{
-							memcpy(&gateway.sin_addr, &route->gateway, 4);
-						};
+							if (memcmp(&route->gateway, zeroes, 4) == 0)
+							{
+								memcpy(&gateway.sin_addr, &indst->sin_addr, 4);
+							}
+							else
+							{
+								memcpy(&gateway.sin_addr, &route->gateway, 4);
+							};
 						
-						int status = sendPacketToInterface(netif, (struct sockaddr*) &gateway,
-											packet, packetlen, nanotimeout);
-						mutexUnlock(&iflistLock);
-						return status;
+							gatewayFound = 1;
+							break;
+						};
 					};
+				};
+				
+				if (gatewayFound)
+				{
+					int status = sendPacketToInterface(netif, (struct sockaddr*) &gateway,
+										packet, packetlen, nanotimeout);
+					mutexUnlock(&iflistLock);
+					return status;
 				};
 			}
 			else
@@ -913,26 +936,42 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 				struct sockaddr_in6 gateway;
 				gateway.sin6_family = AF_INET6;
 				
+				int gatewayFound = 0;
 				int i;
-				for (i=0; i<netif->ipv6.numRoutes; i++)
+				
+				if (flags & PKT_DONTROUTE)
 				{
-					IPRoute6 *route = &netif->ipv6.routes[i];
-					if (isMatchingMask(&route->dest, &indst->sin6_addr, &route->mask, 16))
+					gatewayFound = 1;
+					memcpy(&gateway, indst, sizeof(struct sockaddr_in6));
+				}
+				else
+				{
+					for (i=0; i<netif->ipv6.numRoutes; i++)
 					{
-						if (memcmp(&route->gateway, zeroes, 16) == 0)
+						IPRoute6 *route = &netif->ipv6.routes[i];
+						if (isMatchingMask(&route->dest, &indst->sin6_addr, &route->mask, 16))
 						{
-							memcpy(&gateway.sin6_addr, &indst->sin6_addr, 16);
-						}
-						else
-						{
-							memcpy(&gateway.sin6_addr, &route->gateway, 16);
-						};
+							if (memcmp(&route->gateway, zeroes, 16) == 0)
+							{
+								memcpy(&gateway.sin6_addr, &indst->sin6_addr, 16);
+							}
+							else
+							{
+								memcpy(&gateway.sin6_addr, &route->gateway, 16);
+							};
 						
-						int status = sendPacketToInterface(netif, (struct sockaddr*) &gateway,
-											packet, packetlen, nanotimeout);
-						mutexUnlock(&iflistLock);
-						return status;
+							gatewayFound = 1;
+							break;
+						};
 					};
+				};
+				
+				if (gatewayFound)
+				{
+					int status = sendPacketToInterface(netif, (struct sockaddr*) &gateway,
+										packet, packetlen, nanotimeout);
+					mutexUnlock(&iflistLock);
+					return status;
 				};
 			};
 		};
@@ -1086,6 +1125,63 @@ int route_add(int family, int pos, gen_route *route)
 				memcpy(&netif->ipv6.routes[pos].mask, &inroute->mask, 16);
 				memcpy(&netif->ipv6.routes[pos].gateway, &inroute->gateway, 16);
 				kfree(oldRoutes);
+				mutexUnlock(&iflistLock);
+				return 0;
+			};
+		};
+		
+		netif = netif->next;
+	};
+	
+	mutexUnlock(&iflistLock);
+	
+	// the interface was not found!
+	getCurrentThread()->therrno = ENOENT;
+	return -1;
+};
+
+int route_clear(int family, const char *ifname)
+{
+	if ((family != AF_INET) && (family != AF_INET6))
+	{
+		getCurrentThread()->therrno = EINVAL;
+		return -1;
+	};
+	
+	if (getCurrentThread()->euid != 0)
+	{
+		getCurrentThread()->therrno = EACCES;
+		return -1;
+	};
+	
+	mutexLock(&iflistLock);
+	
+	NetIf *netif = &iflist;
+	while (netif != NULL)
+	{
+		if (strcmp(ifname, netif->name) == 0)
+		{
+			if (family == AF_INET)
+			{	
+				if (netif->ipv4.numRoutes != 0)
+				{
+					kfree(netif->ipv4.routes);
+				};
+				
+				netif->ipv4.numRoutes = 0;
+				netif->ipv4.routes = NULL;
+				mutexUnlock(&iflistLock);
+				return 0;
+			}
+			else if (family == AF_INET6)
+			{
+				if (netif->ipv6.numRoutes != 0)
+				{
+					kfree(netif->ipv6.routes);
+				};
+				
+				netif->ipv6.numRoutes = 0;
+				netif->ipv6.routes = NULL;
 				mutexUnlock(&iflistLock);
 				return 0;
 			};
@@ -1330,6 +1426,15 @@ void DeleteNetworkInterface(NetIf *netif)
 
 int isLocalAddr(const struct sockaddr *addr)
 {
+	if (addr->sa_family == AF_INET)
+	{
+		const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
+		if (inaddr->sin_addr.s_addr == 0xFFFFFFFF)
+		{
+			return 1;
+		};
+	};
+	
 	mutexLock(&iflistLock);
 	
 	NetIf *netif;
@@ -1338,7 +1443,7 @@ int isLocalAddr(const struct sockaddr *addr)
 		if (addr->sa_family == AF_INET)
 		{
 			const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
-			
+
 			int i;
 			for (i=0; i<netif->ipv4.numAddrs; i++)
 			{

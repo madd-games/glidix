@@ -2187,6 +2187,35 @@ int sys_isatty(int fd)
 	return -1;
 };
 
+int sys_bindif(int fd, const char *ifname)
+{
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			out = SocketBindif(fp, ifname);
+			spinlockRelease(&ftab->spinlock);
+		};
+	};
+
+	return out;
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	siginfo_t siginfo;
@@ -2788,6 +2817,24 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 96:
 		*((int*)&regs->rax) = sys_isatty((int) regs->rdi);
+		break;
+	case 97:
+		if (!isStringValid(regs->rsi))
+		{
+			*((int*)&regs->rax) = -1;
+			ERRNO = EFAULT;
+			break;
+		};
+		*((int*)&regs->rax) = sys_bindif((int)regs->rdi, (const char*)regs->rsi);
+		break;
+	case 98:
+		if (!isStringValid(regs->rsi))
+		{
+			*((int*)&regs->rax) = -1;
+			ERRNO = EFAULT;
+			break;
+		};
+		*((int*)&regs->rax) = route_clear((int)regs->rdi, (const char*) regs->rsi);
 		break;
 	default:
 		signalOnBadSyscall(regs);
