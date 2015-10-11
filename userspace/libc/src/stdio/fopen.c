@@ -38,6 +38,7 @@ void __fd_flush(FILE *fp);
 
 FILE *fopen(const char *path, const char *mode)
 {
+	printf("{fopen '%s', mode '%s'}\n", path, mode);
 	int oflags = 0;
 	int fpflags;
 	if (*mode == 'r')
@@ -73,7 +74,7 @@ FILE *fopen(const char *path, const char *mode)
 		fpflags = __FILE_READ | __FILE_WRITE;
 	};
 
-	int fd = open(path, oflags, 0644);
+	int fd = open(path, oflags | O_CLOEXEC, 0644);
 	if (fd < 0)
 	{
 		return NULL;

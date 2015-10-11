@@ -31,6 +31,7 @@
 
 int fseek(FILE *fp, long offset, int whence)
 {
+	printf("{fseek %d:%d in %d}\n", (int)offset, whence, fp->_fd);
 	fp->_ungot = -1;
 	fflush(fp);
 	off_t ret = lseek(fp->_fd, (off_t) offset, whence);
@@ -44,6 +45,7 @@ int fseek(FILE *fp, long offset, int whence)
 
 long ftell(FILE *fp)
 {
+	fflush(fp);
 	off_t ret = lseek(fp->_fd, 0, SEEK_CUR);
 	if (ret == (off_t)-1)
 	{
