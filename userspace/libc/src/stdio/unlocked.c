@@ -27,36 +27,23 @@
 */
 
 #include <stdio.h>
-#include <unistd.h>
 
-int fseek(FILE *fp, long offset, int whence)
+int getc_unlocked(FILE *stream)
 {
-	//printf("{fseek %d:%d in %d}\n", (int)offset, whence, fp->_fd);
-	fp->_ungot = -1;
-	fflush(fp);
-	off_t ret = lseek(fp->_fd, (off_t) offset, whence);
-	if (ret == (off_t)-1)
-	{
-		fp->_flags |= __FILE_FERROR;
-		return -1;
-	};
-	return 0;
+	return getc(stream);
 };
 
-long ftell(FILE *fp)
+int getchar_unlocked(void)
 {
-	fflush(fp);
-	off_t ret = lseek(fp->_fd, 0, SEEK_CUR);
-	if (ret == (off_t)-1)
-	{
-		fp->_flags |= __FILE_FERROR;
-		return -1L;
-	};
-	
-	if (fp->_ungot != -1)
-	{
-		ret--;
-	};
-	
-	return (long) ret;
+	return getchar();
+};
+
+int putc_unlocked(int c, FILE *stream)
+{
+	return putc(c, stream);
+};
+
+int putchar_unlocked(int c)
+{
+	return putchar(c);
 };

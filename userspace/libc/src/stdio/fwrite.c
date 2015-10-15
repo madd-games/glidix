@@ -35,7 +35,7 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 {
 	if (fp->_fd > 2)
 	{
-		printf("{fwrite %d+%d -> %d}\n", (int) ftell(fp), (int) (size*count), fp->_fd);
+		//printf("{fwrite %d+%d -> %d}\n", (int) ftell(fp), (int) (size*count), fp->_fd);
 	};
 	
 	//BREAKPOINT();

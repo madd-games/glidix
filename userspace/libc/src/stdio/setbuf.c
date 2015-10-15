@@ -30,6 +30,7 @@
 
 int setvbuf(FILE *fp, char *buf, int type, size_t size)
 {
+	fflush(fp);
 	fp->_buf = buf;
 	fp->_rdbuf = buf;
 	fp->_wrbuf = buf;

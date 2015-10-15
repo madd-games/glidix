@@ -53,8 +53,10 @@ static void __instr_initf(struct __instr *_is, FILE *_fp)
 
 static int __instr_getc(struct __instr *_is)
 {
+	//printf("{__instr_getc}\n");
 	if (_is->_maxget == 0)
 	{
+		//printf("_maxget=0\n");
 		return EOF;
 	}
 	else if (_is->_maxget != -1)
@@ -64,10 +66,12 @@ static int __instr_getc(struct __instr *_is)
 
 	if (_is->_fp != NULL)
 	{
+		//printf("_fp not null\n");
 		return fgetc(_is->_fp);
 	}
 	else
 	{
+		//printf("{getc returning %c}\n", *_is->_s);
 		if (*_is->_s == 0) return EOF;
 		else return *_is->_s++;
 	};
@@ -137,6 +141,7 @@ int _FUNCNAME(struct __instr *_is, int base, _TYPE *outp)\
 	};\
 \
 	_TYPE llbase = (_TYPE) base;\
+	int matchedOne = 0;\
 	while (1)\
 	{\
 		c = __instr_getc(_is);\
@@ -147,6 +152,7 @@ int _FUNCNAME(struct __instr *_is, int base, _TYPE *outp)\
 \
 		if (((c < '0') || (c > '9')) && ((c < 'a') || (c > 'z')) && ((c < 'A') || (c > 'Z')))\
 		{\
+			__instr_ungetc(_is, c);\
 			goto finished;\
 		};\
 \
@@ -166,22 +172,25 @@ int _FUNCNAME(struct __instr *_is, int base, _TYPE *outp)\
 \
 		if (digit >= llbase)\
 		{\
+			__instr_ungetc(_is, c);\
 			goto finished;\
 		};\
 \
 		if (out > ((_LIMIT-digit)/llbase))\
 		{\
 			out = _LIMIT;\
+			__instr_ungetc(_is, c);\
 			goto finished;\
 		};\
 \
+		matchedOne = 1;\
 		out = out * llbase + digit;\
 	};\
 \
 	finished:\
 	if (negative) out = -out;\
 	if (outp != NULL) *outp = out;\
-	return 0;\
+	return !matchedOne;\
 }
 
 #define	_UINTCONVFUNC(_TYPE, _FUNCNAME, _LIMIT) \
@@ -218,6 +227,7 @@ int _FUNCNAME(struct __instr *_is, int base, _TYPE *outp)\
 	};\
 \
 	_TYPE llbase = (_TYPE) base;\
+	int matchedOne = 0;\
 	while (1)\
 	{\
 		c = __instr_getc(_is);\
@@ -228,6 +238,7 @@ int _FUNCNAME(struct __instr *_is, int base, _TYPE *outp)\
 \
 		if (((c < '0') || (c > '9')) && ((c < 'a') || (c > 'z')) && ((c < 'A') || (c > 'Z')))\
 		{\
+			__instr_ungetc(_is, c);\
 			goto finished;\
 		};\
 \
@@ -247,21 +258,24 @@ int _FUNCNAME(struct __instr *_is, int base, _TYPE *outp)\
 \
 		if (digit >= llbase)\
 		{\
+			__instr_ungetc(_is, c);\
 			goto finished;\
 		};\
 \
 		if (out > ((_LIMIT-digit)/llbase))\
 		{\
+			__instr_ungetc(_is, c);\
 			out = _LIMIT;\
 			goto finished;\
 		};\
 \
+		matchedOne = 1;\
 		out = out * llbase + digit;\
 	};\
 \
 	finished:\
 	if (outp != NULL) *outp = out;\
-	return 0;\
+	return !matchedOne;\
 }
 
 _INTCONVFUNC(int, __scanf_conv_noned, 2147483647);
@@ -301,6 +315,7 @@ int __scanf_conv_sint(struct __instr *_is, int lenmod, int base, void *outp)
 	switch (lenmod)
 	{
 	case _LM_NONE:
+		//printf("{using conv: __scanf_conv_noned}\n");
 		return __scanf_conv_noned(_is, base, (int*)outp);
 	case _LM_hh:
 		return __scanf_conv_hhd(_is, base, (char*)outp);
@@ -381,6 +396,90 @@ int __scanf_conv_chars(struct __instr *_is, int count, char *outp)
 	return 0;
 };
 
+int __scanf_conv_float(struct __instr *_is, int lenmod, void *outp)
+{
+	// TODO: exponents!
+	uint64_t result = 0;
+	int sign = 1;
+	uint64_t div = 1;
+	int scannedYet = 0;
+	int pointSeen = 0;
+	
+	int c = __instr_getc(_is);
+	if (c == EOF)
+	{
+		return -1;
+	};
+	
+	if (c == '+')
+	{
+		sign = 1;
+	}
+	else if (c == '-')
+	{
+		sign = -1;
+	}
+	else
+	{
+		__instr_ungetc(_is, c);
+	};
+	
+	while (1)
+	{
+		c = __instr_getc(_is);
+		if (c == EOF)
+		{
+			break;
+		};
+		
+		if (c == '.')
+		{
+			if (pointSeen)
+			{
+				__instr_ungetc(_is, c);
+				break;
+			};
+			
+			pointSeen = 1;
+		};
+		
+		if ((c < '0') || (c > '9'))
+		{
+			__instr_ungetc(_is, c);
+			break;
+		};
+		
+		result = (result*10) + (c-'0');
+		if (pointSeen) div *= 10;
+		scannedYet = 1;
+	};
+	
+	if (!scannedYet)
+	{
+		return -1;
+	};
+	
+	if (outp != NULL)
+	{
+		switch (lenmod)
+		{
+		case _LM_NONE:
+			*((float*)outp) = (float) sign * (float) result / (float) div;
+			break;
+		case _LM_l:
+			*((double*)outp) = (double) sign * (double) result / (double) div;
+			break;
+		case _LM_L:
+			*((long double*)outp) = (long double) sign * (long double) result / (long double) div;
+			break;
+		default:
+			return -1;
+		};
+	};
+	
+	return 0;
+};
+
 int __scanf_conv_n(struct __instr *_is, int lenmod, int count, void *outp)
 {
 	switch (lenmod)
@@ -418,7 +517,7 @@ int __scanf_conv_n(struct __instr *_is, int lenmod, int count, void *outp)
 
 int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 {
-	int suppress=0, maxwidth=0, lenmod=_LM_NONE, matchcount=0, c;
+	int suppress=0, maxwidth=-1, lenmod=_LM_NONE, matchcount=0, c;
 
 	while (*format != 0)
 	{
@@ -434,25 +533,48 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 					break;
 				};
 			};
+			
+			format++;
 		}
 		else if (*format != '%')
 		{
 			c = __instr_getc(_is);
-			if (c != *format)
+			if (c == EOF)
 			{
-				if (c != EOF)
-				{
-					__instr_ungetc(_is, c);
-				};
-
 				goto finish;
 			};
+
+			if ((char)c != *format)
+			{
+				__instr_ungetc(_is, c);
+				goto finish;
+			};
+			
+			format++;
 		}
 		else
 		{
 			format++;
+			if (*format == '%')
+			{
+				c = __instr_getc(_is);
+				if (c == EOF)
+				{
+					goto finish;
+				};
+				
+				if (c != '%')
+				{
+					__instr_ungetc(_is, c);
+					goto finish;
+				};
+				
+				format++;
+				continue;
+			};
+			
 			suppress = 0;
-			maxwidth = 0;
+			maxwidth = -1;
 			lenmod = _LM_NONE;
 
 			if (*format == '*')
@@ -461,8 +583,17 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 				format++;
 			};
 
-			maxwidth = (int) strtol(format, (char**)&format, 10);
-
+			char *endptr;
+			maxwidth = (int) strtol(format, (char**)&endptr, 10);
+			if (endptr == format)
+			{
+				maxwidth = -1;
+			}
+			else
+			{
+				format = endptr;
+			};
+			
 			// read optional length modifier if any.
 			switch (*format)
 			{
@@ -476,6 +607,7 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 				else
 				{
 					lenmod = _LM_h;
+					format++;
 				};
 				break;
 			case 'l':
@@ -488,18 +620,23 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 				else
 				{
 					lenmod = _LM_l;
+					format++;
 				};
 				break;
 			case 'j':
+				format++;
 				lenmod = _LM_j;
 				break;
 			case 'z':
+				format++;
 				lenmod = _LM_z;
 				break;
 			case 't':
+				format++;
 				lenmod = _LM_t;
 				break;
 			case 'L':
+				format++;
 				lenmod = _LM_L;
 				break;
 			};
@@ -514,6 +651,7 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 
 			// read the convertion specifier
 			char convspec = *format++;
+			//printf("{spec:  %c}\n", convspec);
 			switch (convspec)
 			{
 			case 'd':
@@ -531,9 +669,17 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 			case 'x':
 				if (__scanf_conv_uint(_is, lenmod, 16, outp) != 0) goto finish;
 				break;
+			case 'a':
+			case 'e':
+			case 'f':
+			case 'g':
+				if (__scanf_conv_float(_is, lenmod, outp) != 0) goto finish;
+				break;
+			case 'S':
 			case 's':
 				__scanf_conv_str(_is, (char*)outp);
 				break;
+			case 'C':
 			case 'c':
 				if (maxwidth == 0) maxwidth = 1;
 				if (__scanf_conv_chars(_is, maxwidth, (char*)outp) != 0) goto finish;

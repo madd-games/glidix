@@ -146,6 +146,10 @@ char*	fgets(char *s, int size, FILE *stream);
 void	clearerr(FILE *fp);
 void	rewind(FILE *fp);
 int	getchar();
+int     getc_unlocked(FILE *stream);
+int     getchar_unlocked(void);
+int     putc_unlocked(int c, FILE *stream);
+int     putchar_unlocked(int c);
 
 /* off_t is the same as long on Glidix */
 #define	fseeko					fseek

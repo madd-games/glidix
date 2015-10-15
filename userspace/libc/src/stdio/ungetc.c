@@ -30,8 +30,10 @@
 
 int ungetc(int c, FILE *fp)
 {
+	//printf("{ungetc %c}\n", (char)c);
 	if (fp->_ungot != -1) return EOF;
 	if (c == EOF) return EOF;
 	fp->_ungot = c;
+	fp->_flags &= ~__FILE_EOF;
 	return c;
 };

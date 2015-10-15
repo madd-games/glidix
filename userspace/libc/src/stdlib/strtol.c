@@ -98,6 +98,7 @@ long long strtoll(const char *str, char **str_end, int base)
 		char c = *str++;
 		if (((c < '0') || (c > '9')) && ((c < 'a') || (c > 'z')) && ((c < 'A') || (c > 'Z')))
 		{
+			str--;
 			goto finished;
 		};
 
@@ -117,11 +118,13 @@ long long strtoll(const char *str, char **str_end, int base)
 
 		if (digit >= llbase)
 		{
+			str--;
 			goto finished;
 		};
 
 		if (out > ((LLONG_MAX-digit)/llbase))
 		{
+			str--;
 			errno = ERANGE;
 			if (str_end != NULL) *str_end = (char*)str;
 			if (negative) return LLONG_MIN;
@@ -192,6 +195,7 @@ unsigned long long strtoull(const char *str, char **str_end, int base)
 		char c = *str++;
 		if (((c < '0') || (c > '9')) && ((c < 'a') || (c > 'z')) && ((c < 'A') || (c > 'Z')))
 		{
+			str--;
 			goto finished;
 		};
 
@@ -211,11 +215,13 @@ unsigned long long strtoull(const char *str, char **str_end, int base)
 
 		if (digit >= llbase)
 		{
+			str--;
 			goto finished;
 		};
 
 		if (out > ((ULLONG_MAX-digit)/llbase))
 		{
+			str--;
 			errno = ERANGE;
 			if (str_end != NULL) *str_end = (char*)str;
 			return ULLONG_MAX;
@@ -277,6 +283,7 @@ intmax_t strtoimax(const char *str, char **str_end, int base)
 		char c = *str++;
 		if (((c < '0') || (c > '9')) && ((c < 'a') || (c > 'z')) && ((c < 'A') || (c > 'Z')))
 		{
+			str--;
 			goto finished;
 		};
 
@@ -296,11 +303,13 @@ intmax_t strtoimax(const char *str, char **str_end, int base)
 
 		if (digit >= llbase)
 		{
+			str--;
 			goto finished;
 		};
 
 		if (out > ((INTMAX_MAX-digit)/llbase))
 		{
+			str--;
 			errno = ERANGE;
 			if (str_end != NULL) *str_end = (char*)str;
 			if (negative) return LLONG_MIN;
@@ -353,6 +362,7 @@ uintmax_t strtoumax(const char *str, char **str_end, int base)
 		char c = *str++;
 		if (((c < '0') || (c > '9')) && ((c < 'a') || (c > 'z')) && ((c < 'A') || (c > 'Z')))
 		{
+			str--;
 			goto finished;
 		};
 
@@ -372,11 +382,13 @@ uintmax_t strtoumax(const char *str, char **str_end, int base)
 
 		if (digit >= llbase)
 		{
+			str--;
 			goto finished;
 		};
 
 		if (out > ((UINTMAX_MAX-digit)/llbase))
 		{
+			str--;
 			errno = ERANGE;
 			if (str_end != NULL) *str_end = (char*)str;
 			return ULLONG_MAX;

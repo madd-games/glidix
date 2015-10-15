@@ -38,7 +38,7 @@ void __fd_flush(FILE *fp);
 
 FILE *fopen(const char *path, const char *mode)
 {
-	printf("{fopen '%s', mode '%s'}\n", path, mode);
+	//printf("{fopen '%s', mode '%s'}\n", path, mode);
 	int oflags = 0;
 	int fpflags;
 	if (*mode == 'r')

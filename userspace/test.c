@@ -54,35 +54,96 @@ uint16_t checksum(void* vdata,size_t length)
 	return __builtin_bswap16(~acc);
 }
 
+void test_disp(const char *expr, int result, int lineno)
+{
+	if (result)
+	{
+		printf("TEST(%s) at %d OK\n", expr, lineno);
+	}
+	else
+	{
+		printf("TEST(%s) at %d FAILED\n", expr, lineno);
+		abort();
+	};
+};
+
+#define	TEST(expr)	test_disp(#expr, expr, __LINE__)
+
+void test_strtol()
+{
+	char *endptr;
+	int x = (int) strtol("123", &endptr, 10);
+	printf("x=%d, endptr='%s'\n", x, endptr);
+	TEST((x == 123) && (*endptr == 0));
+	
+	x = (int) strtol("  123", &endptr, 10);
+	printf("x=%d, endptr='%s'\n", x, endptr);
+	TEST((x == 123) && (*endptr == 0));
+	
+	x = (int) strtol("  123abc", &endptr, 10);
+	printf("x=%d, endptr='%s'\n", x, endptr);
+	TEST((x == 123) && (*endptr == 'a'));
+
+	x = (int) strtol("123abc", &endptr, 10);
+	printf("x=%d, endptr='%s'\n", x, endptr);
+	TEST((x == 123) && (*endptr == 'a'));
+	
+	x = (int) strtol("feFE", &endptr, 16);
+	printf("x=%x, endptr='%s'\n", x, endptr);
+	TEST((x == 0xFEFE) && (*endptr == 0));
+	
+	x = (int) strtol("feFEX", &endptr, 16);
+	printf("x=%x, endptr='%s'\n", x, endptr);
+	TEST((x == 0xFEFE) && (*endptr == 'X'));
+
+	x = (int) strtol("12345x", &endptr, 0);
+	printf("x=%d, endptr='%s'\n", x, endptr);
+	TEST((x == 12345) && (*endptr == 'x'));
+	
+	x = (int) strtol("12345", &endptr, 0);
+	printf("x=%d, endptr='%s'\n", x, endptr);
+	TEST((x == 12345) && (*endptr == 0));
+
+	x = (int) strtol("0765", &endptr, 0);
+	printf("x=%o, endptr='%s'\n", x, endptr);
+	TEST((x == 0765) && (*endptr == 0));
+
+	x = (int) strtol("0xBEEF", &endptr, 0);
+	printf("x=%x, endptr='%s'\n", x, endptr);
+	TEST((x == 0xBEEF) && (*endptr == 0));
+
+	x = (int) strtol("0xBEEF?", &endptr, 0);
+	printf("x=%x, endptr='%s'\n", x, endptr);
+	TEST((x == 0xBEEF) && (*endptr == '?'));
+};
+
+void test_scan()
+{
+	char buf1[64];
+	char buf2[64];
+	
+	int a, b, c, d;
+	int count = sscanf("56", "%d", &a);
+	printf("count=%d, a=%d\n", count, a);
+	TEST((count == 1) && (a == 56));
+	
+	count = sscanf("40/90/100/23", "%d/%d/%d/%d", &a, &b, &c, &d);
+	printf("count=%d, a=%d, b=%d, c=%d, d=%d\n", count, a, b, c, d);
+	TEST((count == 4) && (a == 40) && (b == 90) && (c == 100) && (d == 23));
+	
+	count = sscanf("40/90//100/23", "%d/%d/%d/%d", &a, &b, &c, &d);
+	printf("count=%d, a=%d, b=%d, c=%d, d=%d\n", count, a, b, c, d);
+	TEST((count == 2) && (a == 40) && (b == 90));
+	
+	count = sscanf("hello world", "%s %s", buf1, buf2);
+	printf("count=%d, buf1='%s', buf2='%s'\n", count, buf1, buf2);
+	TEST((count == 2) && (strcmp(buf1, "hello") == 0) && (strcmp(buf2, "world") == 0));
+};
+
 int main()
 {
-	char data[16] = "0123456789ABCDEF";
-	
-	printf("Create socket...\n");
-	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (sockfd == -1)
-	{
-		perror("socket");
-		return 1;
-	};
-	
-	printf("Loading address...\n");
-	struct sockaddr_in addr;
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(1234);
-	inet_pton(AF_INET, "192.168.10.1", &addr.sin_addr);
-	
-	printf("Sending...\n");
-	if (sendto(sockfd, data, 16, 0, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) == -1)
-	{
-		perror("sendto");
-		close(sockfd);
-		return 1;
-	};
-	
-	printf("Closing...\n");
-	close(sockfd);
-	
-	printf("UDP datagram sent\n");
+	test_strtol();
+	test_scan();
+	printf("All tests completed successfully.\n");
 	return 0;
 };

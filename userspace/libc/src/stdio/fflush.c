@@ -30,7 +30,17 @@
 
 int fflush(FILE *fp)
 {
+	//int shift = (fp->_ungot != -1);
 	if (fp->_flush != NULL) fp->_flush(fp);
 	fp->_bufsiz = fp->_bufsiz_org;
+	//fp->_ungot = -1;
+
+#if 0
+	if (shift)
+	{
+		fseek(fp, -1, SEEK_CUR);
+	};
+#endif
+
 	return 0;
 };

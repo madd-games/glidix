@@ -158,6 +158,11 @@ int putchar(int ch)
 
 int vfprintf(FILE *fp, const char *fmt, va_list ap)
 {
+	//if (fp->_fd > 2)
+	//{
+	//	printf("{fprintf '%s'}\n", fmt);
+	//};
+	
 	int ret = 0;
 	while (*fmt != 0)
 	{

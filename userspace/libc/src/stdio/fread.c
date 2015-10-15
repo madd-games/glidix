@@ -37,13 +37,34 @@ size_t fread(void *buf, size_t a, size_t b, FILE *fp)
 		return 0;
 	};
 
+	size_t size = a * b;
+	if (size == 0)
+	{
+		return 0;
+	};
+	
+	ssize_t addret = 0;
+	if (fp->_ungot != -1)
+	{
+		char *out = (char*) buf;
+		*out++ = (char) fp->_ungot;
+		fp->_ungot = -1;
+		buf = out;
+		size--;
+		addret++;
+	};
+	
+	if (size == 0)
+	{
+		return 0;
+	};
+
 	if (fp->_flags & __FILE_WRITE)
 	{
 		// flush before reading!
 		fflush(fp);
 	};
 	
-	size_t size = a * b;
 	ssize_t ret = read(fp->_fd, buf, size);
 	if (ret >= 0)
 	{
@@ -51,7 +72,7 @@ size_t fread(void *buf, size_t a, size_t b, FILE *fp)
 		{
 			fp->_flags |= __FILE_EOF;
 		};
-		return ret / a;
+		return (ret+addret) / a;
 	}
 	else
 	{

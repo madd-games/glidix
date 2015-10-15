@@ -31,7 +31,7 @@
 
 int fclose(FILE *fp)
 {
-	printf("{fclose}\n");
+	//printf("{fclose}\n");
 	fflush(fp);
 	if ((fp != stdin) && (fp != stdout) && (fp != stderr))
 	{
