@@ -36,7 +36,26 @@
 extern "C" {
 #endif
 
-#define	MB_CUR_MAX				1
+#define	MB_CUR_MAX			1
+#define	RAND_MAX			4294967295
+
+typedef struct
+{
+	int				quot;
+	int				rem;
+} div_t;
+
+typedef struct
+{
+	long				quot;
+	long				rem;
+} ldiv_t;
+
+typedef struct
+{
+	long long			quot;
+	long long			rem;
+} lldiv_t;
 
 /* implemented by the runtime */
 void			abort(void);
@@ -55,6 +74,9 @@ long			strtol(const char *str, char **str_end, int base);
 long long		strtoll(const char *str, char **str_end, int base);
 unsigned long		strtoul(const char *str, char **str_end, int base);
 unsigned long long	strtoull(const char *str, char **str_end, int base);
+double			strtod(const char *nptr, char **endptr);
+float			strtof(const char *nptr, char **endptr);
+long double		strtold(const char *nptr, char **endptr);
 int			atoi(const char *str);
 long			atol(const char *str);
 long long		atoll(const char *str);
@@ -65,6 +87,16 @@ int			wctomb(char *s, wchar_t wc);
 int			mbtowc(wchar_t *pwc, const char *s, size_t n);
 size_t			mbstowcs(wchar_t *dest, const char *src, size_t n);
 char*			mktemp(char *templ);
+int			system(const char *command);
+int			abs(int i);
+long			labs(long i);
+long long		llabs(long long i);
+div_t			div(int a, int b);
+ldiv_t			ldiv(long a, long b);
+lldiv_t			lldiv(long long a, long long b);
+int			rand();
+int			rand_r(unsigned *seed);
+void			srand(unsigned seed);
 
 /* implemented by libglidix directly */
 char*	realpath(const char*, char*);

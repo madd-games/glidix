@@ -83,6 +83,7 @@ int		rmdir(const char *path);
 int		access(const char *path, int amode);
 int		getdtablesize(void);
 int		getopt(int argc, char* const argv[], const char* optstring);
+int		getpagesize();
 
 /* implemented by libglidix directly */
 ssize_t		write(int fildes, const void *buf, size_t nbyte);

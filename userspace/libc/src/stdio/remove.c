@@ -29,38 +29,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
-int fgetc(FILE *fp)
+int remove(const char *path)
 {
-	if (fp->_ungot != -1)
-	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
-	};
-
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
-	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
-	};
-
-	if (ret == 1)
-	{
-		return (int) c;
-	};
-
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
-};
-
-int getc(FILE *fp)
-{
-	return fgetc(fp);
-};
-
-int getchar()
-{
-	return fgetc(stdin);
+	// GLIDIX SPECIFIC:
+	// unlink() can also remove empty directories, like rmdir() does.
+	return unlink(path);
 };

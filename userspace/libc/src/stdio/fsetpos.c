@@ -27,40 +27,15 @@
 */
 
 #include <stdio.h>
-#include <unistd.h>
 
-int fgetc(FILE *fp)
+int fgetpos(FILE *fp, fpos_t *pos)
 {
-	if (fp->_ungot != -1)
-	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
-	};
-
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
-	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
-	};
-
-	if (ret == 1)
-	{
-		return (int) c;
-	};
-
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
+	*pos = (fpos_t) ftell(fp);
+	return 0;
 };
 
-int getc(FILE *fp)
+int fsetpos(FILE *fp, const fpos_t *pos)
 {
-	return fgetc(fp);
-};
-
-int getchar()
-{
-	return fgetc(stdin);
+	fseek(fp, (long)(*pos), SEEK_SET);
+	return 0;
 };

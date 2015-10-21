@@ -84,6 +84,11 @@
 #define	SA_RESTART	(1 << 5)		/* ignored by Glidix currently */
 #define	SA_SIGINFO	(1 << 6)
 
+/**
+ * 'int' is signal-atomic on x86_64 according to Intel spec.
+ */
+typedef int sig_atomic_t;
+
 union sigval
 {
 	int		sival_int;

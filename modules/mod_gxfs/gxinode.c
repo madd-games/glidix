@@ -535,10 +535,12 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 	GXReadInodeHeader(gxino, &inode);
 	int inodeDirty = 0;
 
+#if 0
 	if (gxino->pos > inode.inoSize)
 	{
 		gxino->pos = inode.inoSize;
 	};
+#endif
 
 	while ((gxino->pos+size) > inode.inoSize)
 	{

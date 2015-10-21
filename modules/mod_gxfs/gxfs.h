@@ -133,6 +133,9 @@ typedef struct
 
 	// inode buffer
 	BufferedInode			ibuf[INODE_BUFFER_SIZE];
+	
+	// filled with zeroes, with the block size
+	char				zeroBlock[];
 } GXFileSystem;
 
 /**

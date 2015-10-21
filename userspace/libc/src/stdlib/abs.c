@@ -26,41 +26,20 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
-#include <unistd.h>
-
-int fgetc(FILE *fp)
+int abs(int i)
 {
-	if (fp->_ungot != -1)
-	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
-	};
-
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
-	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
-	};
-
-	if (ret == 1)
-	{
-		return (int) c;
-	};
-
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
+	if (i < 0) return -i;
+	else return i;
 };
 
-int getc(FILE *fp)
+long labs(long i)
 {
-	return fgetc(fp);
+	if (i < 0) return -i;
+	else return i;
 };
 
-int getchar()
+long long llabs(long long i)
 {
-	return fgetc(stdin);
+	if (i < 0) return -i;
+	else return i;
 };

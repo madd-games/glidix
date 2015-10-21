@@ -32,11 +32,20 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void __assert(int cond, const char *file, const char *expr);
+
+#ifdef __cplusplus
+}	/* extern "C" */
+#endif
+
 #ifdef NDEBUG
 #define	assert(ignore) ((void)(0))
 #else
-#define	assert(expr) \
-	if (!(expr)) {fprintf(stderr, "%s", __FILE__ ": Assertion `" #expr "` failed.\n"); abort(); }
+#define	assert(expr) __assert(!!(expr), __FILE__, #expr)
 #endif
 
 #endif

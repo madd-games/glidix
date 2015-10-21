@@ -26,41 +26,21 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
-#include <unistd.h>
+#ifndef _STDLIB_H
+#define _STDLIB_H
 
-int fgetc(FILE *fp)
-{
-	if (fp->_ungot != -1)
-	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
-	};
+#include <stddef.h>
 
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
-	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
-	};
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-	if (ret == 1)
-	{
-		return (int) c;
-	};
+int ffs(int i);
+int strcasecmp(const char *s1, const char *s2);
+int strncasecmp(const char *s1, const char *s2, size_t n);
 
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
-};
+#ifdef __cplusplus
+}
+#endif
 
-int getc(FILE *fp)
-{
-	return fgetc(fp);
-};
-
-int getchar()
-{
-	return fgetc(stdin);
-};
+#endif

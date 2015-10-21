@@ -30,5 +30,8 @@
 #define _WCHAR_H
 
 #include <stddef.h>		/* wchar_t */
+#define WEOF			((wint_t)-1)
+
+typedef int	wint_t;
 
 #endif

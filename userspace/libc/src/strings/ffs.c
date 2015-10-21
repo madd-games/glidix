@@ -26,41 +26,18 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
-#include <unistd.h>
+#include <strings.h>
 
-int fgetc(FILE *fp)
+int ffs(int i)
 {
-	if (fp->_ungot != -1)
+	int n;
+	for (n=0; n<31; n++)
 	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
+		if (i & (1 << n))
+		{
+			return n+1;
+		};
 	};
-
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
-	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
-	};
-
-	if (ret == 1)
-	{
-		return (int) c;
-	};
-
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
-};
-
-int getc(FILE *fp)
-{
-	return fgetc(fp);
-};
-
-int getchar()
-{
-	return fgetc(stdin);
+	
+	return 0;
 };

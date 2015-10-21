@@ -56,7 +56,7 @@ size_t fread(void *buf, size_t a, size_t b, FILE *fp)
 	
 	if (size == 0)
 	{
-		return 0;
+		return addret;
 	};
 
 	if (fp->_flags & __FILE_WRITE)

@@ -26,41 +26,22 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
 
-int fgetc(FILE *fp)
+static unsigned __seed;
+
+int rand()
 {
-	if (fp->_ungot != -1)
-	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
-	};
-
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
-	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
-	};
-
-	if (ret == 1)
-	{
-		return (int) c;
-	};
-
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
+	return rand_r(&__seed);
 };
 
-int getc(FILE *fp)
+int rand_r(unsigned *seed)
 {
-	return fgetc(fp);
+	(*seed) = (*seed) * 1103515245 + 12345;
+	return((unsigned)((*seed)/65536));
 };
 
-int getchar()
+void srand(unsigned seed)
 {
-	return fgetc(stdin);
+	__seed = seed;
 };

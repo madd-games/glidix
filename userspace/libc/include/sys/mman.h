@@ -41,8 +41,12 @@ extern "C" {
 #define	PROT_EXEC			(1 << 2)
 #define	PROT_ALLOC			(1 << 3)
 
+#define	MAP_PRIVATE			(1 << 0)
+#define	MAP_SHARED			(1 << 1)
+
 /* implemented by libglidix directly */
 int mprotect(void *addr, size_t len, int prot);
+int munmap(void *addr, size_t len);
 
 /* implemented by the runtime */
 void* mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset);

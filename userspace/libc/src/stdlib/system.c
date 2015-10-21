@@ -26,41 +26,54 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+#include <signal.h>
 #include <unistd.h>
+#include <errno.h>
 
-int fgetc(FILE *fp)
+int system(const char *cmd)
 {
-	if (fp->_ungot != -1)
+	const char *shell = getenv("SHELL");
+	if (shell == NULL)
 	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
+		shell = "/bin/sh";
 	};
-
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
+	
+	int stat;
+	pid_t pid;
+	struct sigaction sa, savintr, savequit;
+	if (cmd == NULL) return 1;
+	sa.sa_handler = SIG_IGN;
+	sa.sa_flags = 0;
+	sigaction(SIGINT, &sa, &savintr);
+	sigaction(SIGQUIT, &sa, &savequit);
+	
+	if ((pid = fork()) == 0)
 	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
+		sigaction(SIGINT, &savintr, NULL);
+		sigaction(SIGQUIT, &savequit, NULL);
+		execl(shell, "sh", "-c", cmd, NULL);
+		_exit(127);
 	};
-
-	if (ret == 1)
+	
+	if (pid == -1)
 	{
-		return (int) c;
+		stat = -1; /* errno comes from fork() */
+	}
+	else
+	{
+		while (waitpid(pid, &stat, 0) == -1)
+		{
+			if (errno != EINTR)
+			{
+				stat = -1;
+				break;
+			};
+		};
 	};
-
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
-};
-
-int getc(FILE *fp)
-{
-	return fgetc(fp);
-};
-
-int getchar()
-{
-	return fgetc(stdin);
+	
+	sigaction(SIGINT, &savintr, NULL);
+	sigaction(SIGQUIT, &savequit, NULL);
+	return stat;
 };

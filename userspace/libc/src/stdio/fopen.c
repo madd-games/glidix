@@ -36,7 +36,7 @@
 /* internal/file.c */
 void __fd_flush(FILE *fp);
 
-FILE *fopen(const char *path, const char *mode)
+FILE *__fopen_strm(FILE *fp, const char *path, const char *mode)
 {
 	//printf("{fopen '%s', mode '%s'}\n", path, mode);
 	int oflags = 0;
@@ -80,7 +80,7 @@ FILE *fopen(const char *path, const char *mode)
 		return NULL;
 	};
 
-	FILE *fp = (FILE*) malloc(sizeof(FILE));
+	//FILE *fp = (FILE*) malloc(sizeof(FILE));
 	fp->_buf = &fp->_nanobuf;
 	fp->_rdbuf = fp->_buf;
 	fp->_wrbuf = fp->_buf;
@@ -92,4 +92,28 @@ FILE *fopen(const char *path, const char *mode)
 	fp->_flags = fpflags;
 	fp->_ungot = -1;
 	return fp;
+};
+
+FILE *fopen(const char *filename, const char *mode)
+{
+	FILE *fp = (FILE*) malloc(sizeof(FILE));
+	FILE *out = __fopen_strm(fp, filename, mode);
+	if (out == NULL) free(fp);
+	return out;
+};
+
+FILE *freopen(const char *filename, const char *mode, FILE *fp)
+{
+	fflush(fp);
+	
+	FILE *out = __fopen_strm(fp, filename, mode);
+	if (out == NULL)
+	{
+		if ((fp != stdin) && (fp != stdout) && (fp != stderr))
+		{
+			free(fp);
+		};
+	};
+	
+	return out;
 };

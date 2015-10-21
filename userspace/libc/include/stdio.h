@@ -109,6 +109,8 @@ extern FILE* stderr;
 int	fclose(FILE*);
 int	fflush(FILE*);
 FILE*	fopen(const char*, const char*);
+FILE*	__fopen_strm(FILE *fp, const char*, const char*);
+FILE*	freopen(const char*, const char*, FILE *fp);
 int	fprintf(FILE*, const char*, ...);
 size_t	fread(void*, size_t, size_t, FILE*);
 int	fseek(FILE*, long, int);
@@ -150,12 +152,16 @@ int     getc_unlocked(FILE *stream);
 int     getchar_unlocked(void);
 int     putc_unlocked(int c, FILE *stream);
 int     putchar_unlocked(int c);
+int	fgetpos(FILE *fp, fpos_t *pos);
+int	fsetpos(FILE *fp, const fpos_t *pos);
+int	getc(FILE *fp);
+int	putc(int c, FILE *fp);
+int	remove(const char *path);
+FILE*	tmpfile();
 
 /* off_t is the same as long on Glidix */
 #define	fseeko					fseek
 #define	ftello					ftell
-#define	getc					fgetc
-#define	putc					fputc
 
 #ifdef __cplusplus
 }

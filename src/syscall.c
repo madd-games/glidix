@@ -2836,6 +2836,11 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		};
 		*((int*)&regs->rax) = route_clear((int)regs->rdi, (const char*) regs->rsi);
 		break;
+	case 99:
+		/* TODO: munmap(); for now, just return EINVAL */
+		ERRNO = EINVAL;
+		*((int*)&regs->rax) = -1;
+		break;
 	default:
 		signalOnBadSyscall(regs);
 		break;

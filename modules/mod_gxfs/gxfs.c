@@ -127,7 +127,8 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 
 	kprintf_debug("gxfs: this filesystem has %d sections\n", numSections);
 
-	GXFileSystem *gxfs = (GXFileSystem*) kmalloc(sizeof(GXFileSystem));
+	GXFileSystem *gxfs = (GXFileSystem*) kmalloc(sizeof(GXFileSystem) + cis.cisBlockSize);
+	memset(gxfs, 0, sizeof(GXFileSystem) + cis.cisBlockSize);
 	gxfs->fp = fp;
 	semInit(&gxfs->sem);
 	memcpy(&gxfs->cis, &cis, sizeof(gxfsCIS));

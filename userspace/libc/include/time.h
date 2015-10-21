@@ -81,6 +81,7 @@ char*		ctime(const time_t *timer);
 char*		ctime_r(const time_t *timer, char *buf);
 time_t		mktime(struct tm *tm);
 size_t		strftime(char *s, size_t maxsize, const char *format, const struct tm *timeptr);
+double		difftime(time_t time1, time_t time0);
 
 /* implemented by libglidix directly */
 clock_t		clock();

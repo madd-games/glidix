@@ -26,41 +26,26 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
-#include <unistd.h>
+#include <strings.h>
+#include <ctype.h>
+#include <stddef.h>
 
-int fgetc(FILE *fp)
+int strcasecmp(const char *s1, const char *s2)
 {
-	if (fp->_ungot != -1)
+	while (1)
 	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
+		int c1 = tolower( (unsigned char) *s1++ );
+		int c2 = tolower( (unsigned char) *s2++ );
+		if (c1 == 0 || c1 != c2) return c1 - c2;
 	};
-
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
-	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
-	};
-
-	if (ret == 1)
-	{
-		return (int) c;
-	};
-
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
 };
 
-int getc(FILE *fp)
+int strncasecmp(const char *s1, const char *s2, size_t n)
 {
-	return fgetc(fp);
-};
-
-int getchar()
-{
-	return fgetc(stdin);
+	while (1)
+	{
+		int c1 = tolower( (unsigned char) *s1++ );
+		int c2 = tolower( (unsigned char) *s2++ );
+		if (c1 == 0 || c1 != c2 || (!(n--))) return c1 - c2;
+	};
 };

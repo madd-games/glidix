@@ -81,58 +81,57 @@ _start:
 	jz _crash              ; They aren't, there is no long mode.
 
 	; clear page tables.
+	; PML4 at 0x1000
 	mov edi, 0x1000    ; Set the destination index to 0x1000.
 	mov cr3, edi       ; Set control register 3 to the destination index.
 	xor eax, eax       ; Nullify the A-register.
-	mov ecx, 0x9000    ; Set the C-register to 4096.
+	mov ecx, 0x5000    ; Set the C-register to 4096.
 	rep stosb          ; Clear the memory.
 	mov edi, cr3       ; Set the destination index to control register 3.
 
+	; PDPT at 0x2000
 	mov dword [edi], 0x2003      ; Set the double word at the destination index to 0x2003.
 	add edi, 0x1000              ; Add 0x1000 to the destination index.
+	; PD at 0x3000
 	mov dword [edi], 0x3003      ; Set the double word at the destination index to 0x3003.
 	add edi, 0x1000              ; Add 0x1000 to the destination index.
+	; PT (first 2MB) at 0x4000, PT (next 2MB) at 0x5000
 	mov dword [edi], 0x4003      ; Set the double word at the destination index to 0x4003.
+	mov dword [edi+8], 0x5003
 	add edi, 0x1000              ; Add 0x1000 to the destination index.
 
 	mov ebx, 0x00000003          ; Set the B-register to 0x00000003.
-	mov ecx, 511                 ; Set the C-register to 511.
+	mov ecx, 1024                ; Set the C-register to 1024.
 
-	; the first 4KB of the address space will not be present, else we will not
-	; get page fault on NULL-references.
-	mov dword [edi], 0
-	add ebx, 0x1000
-	add edi, 8
-
-	; the rest (above 4KB up to 2MB) is mapped.
+	; memory above 4KB up to 4MB is mapped.
 	SetEntry:
 	mov dword [edi], ebx         ; Set the double word at the destination index to the B-register.
 	add ebx, 0x1000              ; Add 0x1000 to the B-register.
 	add edi, 8                   ; Add eight to the destination index.
 	loop SetEntry               ; Set the next entry.
 
-	; pml4[256]
+	; pml4[256], mapped to the same PDPT.
 	mov edi, 0x1800
-	mov dword [edi], 0x5003
-	mov edi, 0x5000
-	mov dword [edi], 0x6003
-	add edi, 0x1000
-	mov dword [edi], 0x7003
-	add edi, 0x1000
+	mov dword [edi], 0x2003
+	;mov edi, 0x5000
+	;mov dword [edi], 0x6003
+	;add edi, 0x1000
+	;mov dword [edi], 0x7003
+	;add edi, 0x1000
 
-	mov ebx, 0x00000003          ; Set the B-register to 0x00000003.
-	mov ecx, 512                 ; Set the C-register to 511.
+	;mov ebx, 0x00000003          ; Set the B-register to 0x00000003.
+	;mov ecx, 512                 ; Set the C-register to 511.
 
 	;mov dword [edi], 0
 	;add ebx, 0x1000
 	;add edi, 8
 
 	; map everything up to pml4[256]+2MB
-	SetEntry2:
-	mov dword [edi], ebx         ; Set the double word at the destination index to the B-register.
-	add ebx, 0x1000              ; Add 0x1000 to the B-register.
-	add edi, 8                   ; Add eight to the destination index.
-	loop SetEntry2               ; Set the next entry.
+	;SetEntry2:
+	;mov dword [edi], ebx         ; Set the double word at the destination index to the B-register.
+	;add ebx, 0x1000              ; Add 0x1000 to the B-register.
+	;add edi, 8                   ; Add eight to the destination index.
+	;loop SetEntry2               ; Set the next entry.
 
 	; enable PAE paging
 	mov eax, cr4                 ; Set the A-register to control register 4.
@@ -296,7 +295,7 @@ _bootstrap64_upper:
 	mov rax,			qword GDT64.Pointer
 	lgdt [rax]
 
-	; unmap the bottom 2MB
+	; unmap the bottom memory
 	mov rdi,			0x1000
 	xor rax,			rax
 	stosq

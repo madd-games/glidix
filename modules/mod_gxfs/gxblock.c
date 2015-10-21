@@ -29,6 +29,15 @@
 #include "gxfs.h"
 #include <glidix/console.h>
 
+void GXWipeBlock(GXFileSystem *gxfs, uint64_t block)
+{
+	uint64_t sectionContainingBlock = block / gxfs->cis.cisBlocksPerSection;
+	uint64_t blockIndexInSection = block % gxfs->cis.cisBlocksPerSection;
+	uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxfs->cis.cisBlockSize;
+	gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
+	vfsWrite(gxfs->fp, gxfs->zeroBlock, gxfs->cis.cisBlockSize);
+};
+
 uint64_t GXAllocBlockInSection(GXFileSystem *gxfs, uint64_t section)
 {
 	uint64_t offbitmap = gxfs->sections[section].sdOffMapBlocks;
@@ -47,7 +56,9 @@ uint64_t GXAllocBlockInSection(GXFileSystem *gxfs, uint64_t section)
 			vfsWrite(gxfs->fp, &byte, 1);
 
 			//kprintf_debug("gxfs: allocated block %d\n", block);
-			return block + gxfs->cis.cisBlocksPerSection * section;
+			uint64_t outblock = block + gxfs->cis.cisBlocksPerSection * section;
+			GXWipeBlock(gxfs, outblock);
+			return outblock;
 		};
 
 		block++;

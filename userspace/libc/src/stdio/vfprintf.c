@@ -63,6 +63,11 @@ int fputc(int ch, FILE *fp)
 	return fwrite(&c, 1, 1, fp);
 };
 
+int putc(int c, FILE *fp)
+{
+	return fputc(c, fp);
+};
+
 int putchar(int ch)
 {
 	return fputc(ch, stdout);

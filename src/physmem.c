@@ -65,14 +65,14 @@ static int isFrameInArea(MultibootMemoryMap *mmap, uint64_t frame)
 void initPhysMem(uint64_t numPages, MultibootMemoryMap *mmap, uint64_t mmapEnd)
 {
 	frameStackPointer = 0;
-	nextFrame = 0x200;
+	nextFrame = 0x400;
 	numSystemFrames = numPages;
 
 	while ((uint64_t)mmap < mmapEnd)
 	{
 		if (isUseableMemory(mmap))
 		{
-			if (isFrameInArea(mmap, 0x200))
+			if (isFrameInArea(mmap, 0x400))
 			{
 				break;
 			};

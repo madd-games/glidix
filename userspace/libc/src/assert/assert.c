@@ -26,41 +26,16 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <assert.h>
 #include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
+#include <signal.h>
 
-int fgetc(FILE *fp)
+void __assert(int cond, const char *file, const char *expr)
 {
-	if (fp->_ungot != -1)
+	if (!cond)
 	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
+		fprintf(stderr, "%s: Assertion `%s` failed.\n", file, expr);
+		abort();
 	};
-
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
-	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
-	};
-
-	if (ret == 1)
-	{
-		return (int) c;
-	};
-
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
-};
-
-int getc(FILE *fp)
-{
-	return fgetc(fp);
-};
-
-int getchar()
-{
-	return fgetc(stdin);
 };

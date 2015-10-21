@@ -26,41 +26,22 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
 
-int fgetc(FILE *fp)
+div_t div(int a, int b)
 {
-	if (fp->_ungot != -1)
-	{
-		int out = fp->_ungot;
-		fp->_ungot = -1;
-		return out;
-	};
-
-	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
-	if (ret == 0)
-	{
-		fp->_flags |= __FILE_EOF;
-		return EOF;
-	};
-
-	if (ret == 1)
-	{
-		return (int) c;
-	};
-
-	fp->_flags |= __FILE_FERROR;
-	return EOF;
+	div_t ret = {a/b, a%b};
+	return ret;
 };
 
-int getc(FILE *fp)
+ldiv_t ldiv(long a, long b)
 {
-	return fgetc(fp);
+	ldiv_t ret = {a/b, a%b};
+	return ret;
 };
 
-int getchar()
+lldiv_t lldiv(long long a, long long b)
 {
-	return fgetc(stdin);
+	lldiv_t ret = {a/b, a%b};
+	return ret;
 };
