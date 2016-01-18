@@ -389,32 +389,21 @@ ACPI_STATUS AcpiOsReadPciConfiguration(ACPI_PCI_ID *id, UINT32 reg, UINT64 *valu
 
 ACPI_STATUS AcpiOsWritePciConfiguration(ACPI_PCI_ID *id, UINT32 reg, UINT64 value, UINT32 width)
 {
-	uint32_t addr;
-	uint32_t lbus = (uint32_t) id->Bus;
-	uint32_t lslot = (uint32_t) id->Device;
-	uint32_t lfunc = (uint32_t) id->Function;
-	addr = (lbus << 16) | (lslot << 11) | (lfunc << 8) | (1 << 31) | reg;
+	uint32_t regAligned = reg & ~3;
+	uint32_t offsetIntoReg = reg & 3;
+	uint32_t addr = (id->Bus << 16) | (id->Device << 11) | (id->Function << 8) | (1 << 31) | regAligned;
 	
 	outd(PCI_CONFIG_ADDR, addr);
+	uint32_t regval = ind(PCI_CONFIG_DATA);
 	
-	switch (width)
-	{
-	case 8:
-		outb(PCI_CONFIG_DATA, (uint8_t) value);
-		break;
-	case 16:
-		outw(PCI_CONFIG_DATA, (uint16_t) value);
-		break;
-	case 32:
-		outd(PCI_CONFIG_DATA, (uint32_t) value);
-		break;
-	default:
-		outd(PCI_CONFIG_DATA, (uint32_t) value);
-		addr += 4;
-		outd(PCI_CONFIG_ADDR, addr);
-		outd(PCI_CONFIG_DATA, (uint32_t) (value >> 32));
-		break;
-	};
+	char *fieldptr = (char*) &regval + offsetIntoReg;
+	size_t count = width/8;	
+	//*value = 0;
+	//memcpy(value, fieldptr, count);
+	memcpy(fieldptr, &value, count);
+	
+	outd(PCI_CONFIG_ADDR, addr);
+	outd(PCI_CONFIG_DATA, regval);
 	
 	return AE_OK;
 };

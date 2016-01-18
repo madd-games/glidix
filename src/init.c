@@ -56,6 +56,7 @@
 #include <glidix/netif.h>
 #include <glidix/ipreasm.h>
 #include <glidix/ethernet.h>
+#include <glidix/dma.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -314,10 +315,14 @@ void kmain(MultibootInfo *info)
 	initMemoryPhase2();
 	kprintf("%$\x02" "Done%#\n");
 
-	kprintf("Initializing the frame stack... ");
+	kprintf("Initializing the frame bitmap... ");
 	initPhysMem2();
 	kprintf("%$\x02" "Done%#\n");
 
+	kprintf("Initializing DMA... ");
+	dmaInit();
+	DONE();
+	
 	initModuleInterface();
 
 	kprintf("Getting ACPI info... ");

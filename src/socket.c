@@ -40,6 +40,7 @@
 
 Socket* CreateRawSocket();				/* rawsock.c */
 Socket* CreateUDPSocket();				/* udpsock.c */
+Socket* CreateTCPSocket();				/* tcpsock.c */
 
 static Semaphore sockLock;
 static Socket sockList;
@@ -138,9 +139,21 @@ File* CreateSocket(int domain, int type, int proto)
 			return NULL;
 		};
 	}
+	else if (type == SOCK_STREAM)
+	{
+		switch (proto)
+		{
+		case 0:
+		case IPPROTO_TCP:
+			sock = CreateTCPSocket();
+			break;
+		default:
+			ERRNO = EPROTONOSUPPORT;
+			return NULL;
+		};
+	}
 	else
 	{
-		// TODO: support other socket types tbh
 		getCurrentThread()->therrno = EPROTONOSUPPORT;
 		return NULL;
 	};
@@ -152,7 +165,7 @@ File* CreateSocket(int domain, int type, int proto)
 	memset(sock->options, 0, 8*GSO_COUNT);
 	
 	// append the socket to the beginning of the socket list.
-	// (the order does not acutally matter by adding to the beginning is faster).
+	// (the order does not acutally matter but adding to the beginning is faster).
 	semWait(&sockLock);
 	sock->prev = &sockList;
 	sock->next = sockList.next;

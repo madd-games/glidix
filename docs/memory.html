@@ -23,6 +23,7 @@ Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divid
 <li><code>pml4[260]</code> is used for the copy-on-write cache.</li>
 <li><code>pml4[261]</code> is used for the per-CPU variable area (starts at <code>0xFFFF828000000000</code>).</li>
 <li><code>pml4[262]</code> is used for ACPICA (<i>AcpiOsMapMemory()</i> and <i>AcpiOsUnmapMemory()</i>). Starts at <code>0xFFFF830000000000</code>.</li>
+<li><code>pml4[263]</code> is used to map DMA buffers. Starts at <code>0xFFFF838000000000</code>.</li>
 </ul>
 
 <p>

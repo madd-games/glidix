@@ -36,6 +36,13 @@ void initPhysMem(uint64_t numPages, MultibootMemoryMap *mmap, uint64_t mmapEnd);
 void initPhysMem2();
 
 /**
+ * Allocate a list of consecutive frames, and return the index of the first one.
+ * Flags should be 0.
+ * Return 0 on failure.
+ */
+uint64_t phmAllocFrameEx(uint64_t count, int flags);
+
+/**
  * Finds any free frame, marks it as used, and returns the frame index. The return value shifted
  * left by 12 bits gives the physical address of the first byte of this frame.
  */
@@ -45,5 +52,6 @@ uint64_t phmAllocFrame();
  * NOTE: Do not free frames until the heap is set up and initPhysMem2() was called.
  */
 void phmFreeFrame(uint64_t frame);
+void phmFreeFrameEx(uint64_t start, uint64_t count);
 
 #endif

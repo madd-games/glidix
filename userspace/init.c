@@ -47,37 +47,6 @@ char* confRootType = NULL;
 char* confRootDevice = NULL;
 char** confExec = NULL;
 
-typedef struct
-{
-	/**
-	 * The name of the service.
-	 */
-	char					name[128];
-	
-	/**
-	 * The pid assigned to the service if it is running. 0 if not.
-	 */
-	pid_t					pid;
-	
-	/**
-	 * The minimum System State for the process to start automatically. If the
-	 * state falls below this, the service is stopped. It can also be started
-	 * or stopped manually using the 'service' command.
-	 */
-	int					level;
-	
-	/**
-	 * The signal with which to stop the service.
-	 */
-	int					stopsig;
-	
-	/**
-	 * The timeout (in seconds), after which the SIGKILL signal shall be sent if the
-	 * service doesn't stop.
-	 */
-	int					stoptimeout;
-} Service;
-
 void loadmods()
 {
 	DIR *dirp = opendir("/initrd/initmod");
@@ -120,7 +89,7 @@ int interpret_config_option(char *line)
 		confRootType = strtok_r(NULL, " ", &saveptr);
 		if (confRootType == NULL)
 		{
-			fprintf(stderr, "init: snytax error in 'root' command\n");
+			fprintf(stderr, "init: syntax error in 'root' command\n");
 			return -1;
 		};
 		
@@ -220,6 +189,30 @@ int load_config(const char *filename)
 		printf("init: cannot stat executable %s\n", confExec[0]);
 		return -1;
 	};
+
+	printf("init: cleaning up service pid files\n");
+	DIR *dp = opendir("/etc/services");
+	if (dp != NULL)
+	{
+		struct dirent *ent;
+		while ((ent = readdir(dp)) != NULL)
+		{
+			const char *name = ent->d_name;
+			if (strlen(name) > 4)
+			{
+				if (memcmp(&name[strlen(name)-4], ".pid", 4) == 0)
+				{
+					printf("init: removing pid file %s\n", name);
+					
+					char pidpath[256];
+					sprintf(pidpath, "/etc/services/%s", name);
+					unlink(pidpath);
+				};
+			};
+		};
+		
+		closedir(dp);
+	};
 	
 	if (fork() == 0)
 	{
@@ -254,24 +247,6 @@ void on_signal(int sig, siginfo_t *si, void *ignore)
 void init_parts()
 {
 	close(open("/dev/sda", O_RDONLY));
-	/*
-	DIR *dp = opendir("/dev");
-	struct dirent *ent;
-	
-	while ((ent = readdir(dp)) != NULL)
-	{
-		if (memcmp(ent->d_name, "sd", 2) == 0)
-		{
-			char devname[256];
-			strcpy(devname, "/dev/");
-			strcat(devname, ent->d_name);
-			printf("OPENCLOSE: %s\n", devname);
-			close(open(devname, O_RDONLY));
-		};
-	};
-	
-	closedir(dp);
-	*/
 };
 
 int main(int argc, char *argv[])
@@ -319,33 +294,7 @@ int main(int argc, char *argv[])
 				printf("init: failed to start up\n");
 			};
 		};
-		
-		/*
-		if (_glidix_mount("isofs", "/dev/sdb", "/mnt/", 0) != 0)
-		{
-			perror("init: mount failed");
-		};
 
-		close(open("/dev/sda", O_RDONLY));
-		if (_glidix_mount("gxfs", "/dev/sda0", "/", 0) != 0)
-		{
-			perror("init: mount gxfs on /");
-		};
-		*/
-
-		/*
-		if (fork() == 0)
-		{
-			setenv("PATH", "/bin:/usr/local/bin:/usr/bin:/mnt/bin", 1);
-			setenv("HOME", "/root", 1);
-			if (execl("/mnt/bin/sh", "sh", NULL) != 0)
-			{
-				perror("exec");
-				exit(1);
-			};
-		};
-		*/
-		
 		while (1)
 		{
 			pause();

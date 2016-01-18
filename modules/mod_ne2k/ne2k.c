@@ -76,11 +76,12 @@ typedef struct NeInterface_
 	NetIf*				netif;
 	uint16_t			iobase;
 	Spinlock			lock;
+	int				running;
 	Thread*				thread;
 } NeInterface;
 
-static NeInterface *interfaces;
-static NeInterface *lastIf;
+static NeInterface *interfaces = NULL;
+static NeInterface *lastIf = NULL;
 
 static uint8_t readRegister(NeInterface *nif, uint8_t page, uint8_t index)
 {
@@ -208,20 +209,21 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 	outb(nif->iobase, 0x02);
 	
 	spinlockRelease(&nif->lock);
+	__sync_fetch_and_add(&netif->numRecv, 1);
 	//kprintf_debug("PACKET SENT\n");
 };
 
 static void ne2k_thread(void *context)
 {
 	// buffer to store largest possible frame:
-	// max payload (1500) + size of thernet header (14) + FCS (4)
+	// max payload (1500) + size of ethernet header (14) + FCS (4)
 	// we do this to avoid using kmalloc() and kfree() as this would
 	// fragment the heap too much.
 	char recvBuffer[1518];
 	NePacketHeader packetHeader;
 	NeInterface *nif = (NeInterface*) context;
 	
-	while (1)
+	while (nif->running)
 	{
 		pciWaitInt(nif->pcidev);
 		
@@ -350,11 +352,12 @@ MODULE_INIT(const char *opt)
 			kprintf("ne2k: created interface: %s\n", nif->netif->name);
 		};
 		
+		nif->running = 1;
+		
 		KernelThreadParams pars;
 		memset(&pars, 0, sizeof(KernelThreadParams));
 		pars.name = "NE2000 Interrupt Handler";
 		pars.stackSize = DEFAULT_STACK_SIZE;
-		
 		nif->thread = CreateKernelThread(ne2k_thread, &pars, nif);
 		
 		writeRegister(nif, 0, 0x07, 0xFF);		// clear interrupt status
@@ -391,11 +394,20 @@ MODULE_FINI()
 	NeInterface *next;
 	while (nif != NULL)
 	{
+		// mark the device as not running, then interrupt the thread so that it exits,
+		// then release it. after this, we are safe to release the device itself.
+		nif->running = 0;
+		wcUp(&nif->pcidev->wcInt);
+		ReleaseKernelThread(nif->thread);
+		
 		pciReleaseDevice(nif->pcidev);
+		DeleteNetworkInterface(nif->netif);
+		
 		next = nif->next;
 		kfree(nif);
 		nif = next;
 	};
 	
+	kprintf("ne2k: exiting\n");
 	return 0;
 };

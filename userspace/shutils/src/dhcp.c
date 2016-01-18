@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
 	};
 	
 	VERBOSE("Determining MAC address of %s...\n", ifname);
-	char mac[6];
+	unsigned char mac[6];
 	_glidix_netstat netstat;
 	if (_glidix_netconf_stat(ifname, &netstat, sizeof(_glidix_netstat)) == -1)
 	{
@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	VERBOSE("MAC: %x:%x:%x:%x:%x:%x\n", (int)mac[0], (int)mac[1], (int)mac[2], (int)mac[3], (int)mac[4], (int)mac[5]);
+	VERBOSE("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", (int)mac[0], (int)mac[1], (int)mac[2], (int)mac[3], (int)mac[4], (int)mac[5]);
 	
 	VERBOSE("Clearing all routes of %s...\n", ifname);
 	if (_glidix_route_clear(AF_INET, ifname) != 0)

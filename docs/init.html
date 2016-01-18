@@ -20,11 +20,9 @@ The reason <code>init</code> is on the initial ramdisk (<code>initrd</code>) is 
 <li>It tries to load every module from the <code>/initrd/initmod</code> directory. This directory is expected to contain all drivers required for the next stages of startup.</li>
 <li>It reads the startup configuration file <code>/initrd/startup.conf</code> (if it fails to boot with this configuration, it tries <code>/initrd/startup-fallback.conf</code>, and if that doesn't work, it simply hangs).</li>
 <li>Using the configuration file, it finds out which device is the root filesystem, and using the previously-loaded drivers, mounts that filesystem at <code>/</code>.</li>
-<li>At this point, the system is in <i>System State 0</i>.</li>
-<li>The configuration files in <code>/etc/services</code> are parsed at this point, but no service is actually started.</li>
 <li><code>init</code> then runs the application specified in the startup configuration, along with any given arguments. This usually starts the shell (<code>/bin/sh</code>) and runs the script <code>/etc/init/startup.sh</code>.</li>
 <li>The startup script then mounts all filesystems by running <code>mount -a</code> (which mounts according to the configuration file <code>/etc/fstab</code>).</li>
-<li>After this, it brings the system into <i>System State 1</i> (and all services appropriate for this state are started).</li>
+<li>Next, the system is brought into <i>System State 1</i> and the appropriate services are started.</li>
 <li>Standard initialization steps follow: this includes loading network configuration etc.</li>
 <li>After this standard initialization, the system is brought into <i>System State 2</i> (and of course all appropriate services are started).</li>
 <li>Now the system goes into a constant loop running <code>login</code> (until it is shut down).</li>
@@ -32,7 +30,7 @@ The reason <code>init</code> is on the initial ramdisk (<code>initrd</code>) is 
 
 <h2>Normal Operation</h2>
 <p>
-During normal system operation, the <code>init</code> process accepts commands on the message queue <code>/init-control</code> and forwards the <code>SIGINT</code> signal to its immediate child (the startup script), which typically ends up forwarding it to the user's shell, as appropriate. The reception of <code>SIGTERM</code> (typically sent by <code>poweroff</code>, <code>reboot</code> or <code>halt</code>) causes shutdown.
+During normal system operation, the <code>init</code> process does nothing other than waiting for signals and handling them. It also forwards the <code>SIGINT</code> signal to the shell.
 </p>
 
 <h2>Shutdown</h2>

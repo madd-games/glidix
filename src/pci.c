@@ -429,3 +429,29 @@ void pciWaitInt(PCIDevice *dev)
 {
 	wcDown(&dev->wcInt);
 };
+
+void pciSetBusMastering(PCIDevice *dev, int enable)
+{
+	spinlockAcquire(&pciLock);
+	uint32_t addr = 0;
+	uint32_t lbus = (uint32_t) dev->bus;
+	uint32_t lslot = (uint32_t) dev->slot;
+	uint32_t lfunc = (uint32_t) dev->func;
+	addr = (lbus << 16) | (lslot << 11) | (lfunc << 8) | (1 << 31) | 0x4;
+	
+	outd(PCI_CONFIG_ADDR, addr);
+	uint32_t statcmd = ind(PCI_CONFIG_DATA);
+	
+	if (enable)
+	{
+		statcmd |= (1 << 2);
+	}
+	else
+	{
+		statcmd &= ~(1 << 2);
+	};
+	
+	outd(PCI_CONFIG_ADDR, addr);
+	outd(PCI_CONFIG_DATA, statcmd);
+	spinlockRelease(&pciLock);
+};

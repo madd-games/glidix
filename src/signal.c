@@ -55,9 +55,9 @@ void dispatchSignal(Thread *thread)
 	{
 		// not allowed to override SIGKILL
 		Regs regs;				// doesn't matter, it will die
-		threadExit(thread, -SIGKILL);
 		ASM("cli");
-		unlockSched();
+		unlockSched();				// threadExit() calls lockSched()
+		threadExit(thread, -SIGKILL);
 		switchTask(&regs);
 	};
 
