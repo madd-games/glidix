@@ -427,37 +427,6 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 		return;
 	};
 
-	if ((proto == IPPROTO_ICMP) && (src->sa_family == AF_INET))
-	{
-		ICMPPacket *icmp = (ICMPPacket*) ((char*)packet + dataOffset);
-		if ((icmp->type == 8) && (icmp->code == 0))
-		{
-			void *response = kmalloc(size);
-			memcpy(response, packet, size);
-			
-			IPHeader4 *header = (IPHeader4*) response;
-			uint32_t temp = header->saddr;
-			header->saddr = header->daddr;
-			header->daddr = temp;
-			header->checksum = 0;
-			header->checksum = ipv4_checksum(header, 20);
-			
-			PingPongPacket *pong = (PingPongPacket*) ((char*)response + dataOffset);
-			pong->type = 0;
-			pong->checksum = 0;
-			pong->checksum = ipv4_checksum(pong, sizeof(PingPongPacket));
-			
-			struct sockaddr srcaddr;
-			srcaddr.sa_family = AF_UNSPEC;
-			int status = sendPacket(&srcaddr, src, response, size, IPPROTO_ICMP | PKT_HDRINC | PKT_DONTFRAG, NT_SECS(1), NULL);
-			if (status != 0)
-			{
-				kprintf("ERROR: %d\n", status);
-			};
-			kfree(response);
-		};
-	};
-
 	// if the packet is fragmented, pass it to the reassembler
 	if (src->sa_family == AF_INET)
 	{
