@@ -9,12 +9,12 @@ Then do the same for GCC 4.9.0. This will patch the source code such that they c
 
 To build binutils for cross-compilation, configure and build as follows:
 
-`../binutils-2.24/configure --target=x86_64-glidix --prefix=/glidix/usr --with-sysroot=/glidix --disable-werror --exec-prefix=/usr`  
-`make`  
+`../binutils-2.24/configure --target=x86_64-glidix --prefix=/glidix/usr --with-sysroot=/glidix --disable-werror`
+`make`
 `make install`
 
 To build gcc for cross-compilation, configure and build as follows:
 
-`../gcc-4.9.0/configure --target=x86_64-glidix --prefix=/glidix/usr --with-sysroot=/glidix --enable-languages=c --exec-prefix=/usr`  
-`make all-gcc all-target-libgcc`  
+`../gcc-4.9.0/configure --target=x86_64-glidix --prefix=/glidix/usr --with-sysroot=/glidix --enable-languages=c,c++`
+`make all-gcc all-target-libgcc`
 `make install-gcc install-target-libgcc`
