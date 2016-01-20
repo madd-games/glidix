@@ -26,6 +26,10 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdlib.h>
+#include <math.h>
 
-
+double fabs(double x)
+{
+	*(((int *) &x) + 1) &= 0x7fffffff;
+	return x;
+};

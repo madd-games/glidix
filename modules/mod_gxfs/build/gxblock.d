@@ -1,6 +1,6 @@
 build/gxblock.o build/gxblock.d : gxblock.c gxfs.h /glidix/kernel-include/glidix/common.h \
  /glidix/kernel-include/stdint.h \
- /usr/lib/gcc/x86_64-glidix/4.9.0/include/stddef.h \
+ /glidix/usr/lib/gcc/x86_64-glidix/4.9.0/include/stddef.h \
  /glidix/kernel-include/glidix/vfs.h \
  /glidix/kernel-include/glidix/procmem.h \
  /glidix/kernel-include/glidix/pagetab.h \
@@ -11,4 +11,4 @@ build/gxblock.o build/gxblock.d : gxblock.c gxfs.h /glidix/kernel-include/glidix
  /glidix/kernel-include/glidix/signal.h \
  /glidix/kernel-include/glidix/fpu.h \
  /glidix/kernel-include/glidix/console.h \
- /usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h
+ /glidix/usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h

@@ -1,6 +1,6 @@
 build/gxdir.o build/gxdir.d : gxdir.c gxfs.h /glidix/kernel-include/glidix/common.h \
  /glidix/kernel-include/stdint.h \
- /usr/lib/gcc/x86_64-glidix/4.9.0/include/stddef.h \
+ /glidix/usr/lib/gcc/x86_64-glidix/4.9.0/include/stddef.h \
  /glidix/kernel-include/glidix/vfs.h \
  /glidix/kernel-include/glidix/procmem.h \
  /glidix/kernel-include/glidix/pagetab.h \
@@ -12,6 +12,6 @@ build/gxdir.o build/gxdir.d : gxdir.c gxfs.h /glidix/kernel-include/glidix/commo
  /glidix/kernel-include/glidix/fpu.h \
  /glidix/kernel-include/glidix/memory.h \
  /glidix/kernel-include/glidix/console.h \
- /usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h \
+ /glidix/usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h \
  /glidix/kernel-include/glidix/time.h \
  /glidix/kernel-include/glidix/string.h

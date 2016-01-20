@@ -32,12 +32,6 @@
  * NOTE: As stated in math.h, this implementation is terrible.
  */
 
-double fabs(double x)
-{
-	*(((int *) &x) + 1) &= 0x7fffffff;
-	return x;
-};
-
 double sin(double x)
 {
 	const double B = 4/M_PI;
