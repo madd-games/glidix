@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -255,6 +255,7 @@ int main(int argc, char *argv[])
 	{
 		setenv("PATH", "/bin:/usr/local/bin:/usr/bin:/mnt/bin", 1);
 		setenv("HOME", "/root", 1);
+		setenv("LD_LIBRARY_PATH", "/usr/lib:/lib", 1);
 
 		struct sigaction sa;
 		sa.sa_sigaction = on_signal;

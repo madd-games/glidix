@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,8 @@
 #define __glidix_time_h
 
 #include <glidix/common.h>
+
+#define	NANO_PER_SEC			1000000000
 
 int getUptime();			// idt.c
 #define	getTicks getUptime

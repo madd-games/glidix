@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -69,12 +69,15 @@ void dispatchSignal(Thread *thread)
 
 	// try pushing the signal stack frame. also, don't break the red zone!
 	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & (uint64_t)(~0xF);
-	//if ((addr < 0x1000) || ((addr+sizeof(SignalStackFrame)) > 0x7FC0000000))
 	if (!isPointerValid(addr, sizeof(SignalStackFrame)))
 	{
-		// extreme case, discard the signal :'(
-		kprintf("discarding signal\n");
-		return;
+		// signal stack broken, kill the process with SIGABRT.
+		kprintf("cannot handle signal %d, addr=%p\n", siginfo->si_signo, siginfo->si_addr);
+		Regs regs;
+		ASM("cli");
+		unlockSched();
+		threadExit(thread, -SIGABRT);
+		switchTask(&regs);
 	};
 
 	SetProcessMemory(thread->pm);

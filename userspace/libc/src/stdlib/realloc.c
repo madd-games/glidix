@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -28,8 +28,15 @@
 
 #include <stdlib.h>
 #include <_heap.h>
+#include <pthread.h>
+#include <stdio.h>
+
+extern pthread_spinlock_t __heap_lock;
 
 void* realloc(void *block, size_t newsize)
 {
-	return _heap_realloc(block, newsize);
+	pthread_spin_lock(&__heap_lock);
+	void *ret = _heap_realloc(block, newsize);
+	pthread_spin_unlock(&__heap_lock);
+	return ret;
 };

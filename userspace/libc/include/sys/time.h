@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -28,10 +28,6 @@
 
 #ifndef _SYS_TIME_H
 #define _SYS_TIME_H
-
-#ifdef __cpluplus
-extern "C" {
-#endif
 
 #include <sys/types.h>
 
@@ -64,6 +60,10 @@ enum
 #define	FD_SET(fd, set) (set)->fds_bits[0] |= (1 << fd)
 #define	FD_ZERO(set) (set)->fds_bits[0] = 0
 #define	FD_SETSIZE 32
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int   getitimer(int, struct itimerval *);
 int   setitimer(int, const struct itimerval *, struct itimerval *);

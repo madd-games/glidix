@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -39,6 +39,10 @@ struct group
 	char*			_gr_memraw;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct group *getgrgid(gid_t);
 struct group *getgrnam(const char *);
 int getgrgid_r(gid_t, struct group *, char *, size_t, struct group **);
@@ -47,5 +51,9 @@ int getgrnam_r(const char *, struct group *, char *, size_t , struct group **);
 void setgrent();
 struct group *getgrent();
 void endgrent();
+
+#ifdef __cplusplus
+};	/* extern "C" */
+#endif
 
 #endif

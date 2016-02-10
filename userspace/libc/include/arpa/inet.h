@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -34,8 +34,16 @@
 #define	INET_ADDRSTRLEN				16
 #define	INET6_ADDRSTRLEN			82
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* functions implemented by the runtime */
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 int inet_pton(int af, const char *src, void *dst);
+
+#ifdef __cplusplus
+};	/* extern "C" */
+#endif
 
 #endif

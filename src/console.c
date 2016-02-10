@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -284,7 +284,7 @@ void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 				int d = va_arg(ap, int);
 				put_x(d);
 			}
-			else if (c == 'a')			// 64-bit unsigned
+			else if ((c == 'a') || (c == 'p'))			// 64-bit unsigned
 			{
 				uint64_t d = va_arg(ap, uint64_t);
 				put_a(d);

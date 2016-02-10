@@ -1,6 +1,6 @@
 ;	Glidix kernel
 ;
-;	Copyright (c) 2014-2015, Madd Games.
+;	Copyright (c) 2014-2016, Madd Games.
 ;	All rights reserved.
 ;	
 ;	Redistribution and use in source and binary forms, with or without
@@ -100,6 +100,31 @@ trapKernel:
 	mov	rdi,		rsp
 	and	rsp,		~0xF
 	call	debugKernel
+
+[global atomic_swap8]
+atomic_swap8:
+	mov		cx,	si
+	lock xchg	[rdi],	cl
+	mov		rax,	rcx
+	ret
+
+[global atomic_swap16]
+atomic_swap16:
+	lock xchg	[rdi],	si
+	mov		ax,	si
+	ret
+
+[global atomic_swap32]
+atomic_swap32:
+	lock xchg	[rdi],	esi
+	mov		eax,	esi
+	ret
+
+[global atomic_swap64]
+atomic_swap64:
+	lock xchg	[rdi],	rsi
+	mov		rax,	rsi
+	ret
 
 section .bss
 align 16

@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -65,6 +65,8 @@ char *getenv(const char *name)
 	return NULL;
 };
 
+static int __putenv(char *newent, int update);
+
 int setenv(const char *name, const char *value, int update)
 {
 	if (name == NULL)
@@ -88,14 +90,25 @@ int setenv(const char *name, const char *value, int update)
 	strcat(newent, "=");
 	strcat(newent, value);
 
-	size_t namelen = strlen(name);
+	return __putenv(newent, update);
+};
+
+static int __putenv(char *newent, int update)
+{
+	if (strchr(newent, '=') == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	};
+	
+	size_t namelen = strchr(newent, '=') - newent;
 	char **scan = environ;
 	int i = 0;
 	while (*scan != NULL)
 	{
 		if (strlen(*scan) > namelen)
 		{
-			if (memcmp(*scan, name, namelen) == 0)
+			if (memcmp(*scan, newent, namelen) == 0)
 			{
 				if ((*scan)[namelen] == '=')
 				{
@@ -122,5 +135,63 @@ int setenv(const char *name, const char *value, int update)
 	environ[i+1] = NULL;
 	environ[i] = newent;
 
+	return 0;
+};
+
+int putenv(const char *ent)
+{
+	return __putenv(strdup(ent), 1);
+};
+
+static void __rmenv(int rmidx)
+{
+	int i;
+	for (i=0; environ[i]!=NULL; i++);
+	char **newEnv = (char**) malloc(sizeof(char*)*i);
+	memcpy(newEnv, environ, sizeof(char*)*rmidx);
+	memcpy(&newEnv[rmidx], &environ[rmidx+1], i-rmidx-1);
+	newEnv[i-1] = NULL;
+	
+	char **oldenv = environ;
+	environ = newEnv;
+	free(oldenv);
+};
+
+int unsetenv(const char *name)
+{
+	if (name == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	};
+	
+	if (strchr(name, '=') != NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	};
+	
+	if (*name == 0)
+	{
+		errno = EINVAL;
+		return -1;
+	};
+	
+	int i;
+	for (i=0; environ[i]!=NULL; i++)
+	{
+		if (strlen(environ[i]) > strlen(name))
+		{
+			if (memcmp(environ[i], name, strlen(name)) == 0)
+			{
+				if (environ[i][strlen(name)] == '=')
+				{
+					__rmenv(i);
+					return 0;
+				};
+			};
+		};
+	};
+	
 	return 0;
 };

@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -45,10 +45,18 @@ typedef struct
 	char _rpath[256];
 } DIR;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 DIR *opendir(const char *dirname);
 struct dirent *readdir(DIR *dirp);
 int readdir_r(DIR *dirp, struct dirent *entry, struct dirent **result);
 int closedir(DIR *dirp);
 void rewinddir(DIR *dirp);
+
+#ifdef __cplusplus
+};	/* extern "C" */
+#endif
 
 #endif

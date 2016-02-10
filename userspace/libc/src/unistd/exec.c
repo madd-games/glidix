@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <errno.h>
+#include <sys/stat.h>
 
 extern char **environ;
 
@@ -86,14 +88,12 @@ int execv(const char *pathname, char *const argv[])
 	return execve(pathname, argv, environ);
 };
 
-int execl(const char *pathname, const char *arg0, ...)
+static int __execl(const char *pathname, const char *arg0, va_list ap)
 {
 	char **argv = (char**) malloc(sizeof(char*));
 	argv[0] = (char*) arg0;
 	int argc = 1;
-	va_list ap;
-	va_start(ap, arg0);
-
+	
 	while (1)
 	{
 		char *str = va_arg(ap, char*);
@@ -102,9 +102,17 @@ int execl(const char *pathname, const char *arg0, ...)
 		if (str == NULL) break;
 	};
 
-	va_end(ap);
 	int r = execv(pathname, argv);
 	free(argv);
+	return r;
+};
+
+int execl(const char *pathname, const char *arg0, ...)
+{
+	va_list ap;
+	va_start(ap, arg0);
+	int r = __execl(pathname, arg0, ap);
+	va_end(ap);
 	return r;
 };
 
@@ -129,5 +137,91 @@ int execle(const char *pathname, const char *arg0, ...)
 	va_end(ap);
 	int r = execve(pathname, argv, env);
 	free(argv);
+	return r;
+};
+
+int __find_command(char *path, char *cmd)
+{
+	const char *scan = cmd;
+	while (*scan != 0)
+	{
+		if (*scan == '/')
+		{
+			strcpy(path, cmd);
+			return 0;
+		};
+		scan++;
+	};
+
+	char *save;
+	char *search = strdup(getenv("PATH"));
+	char *token = strtok_r(search, ":", &save);
+
+	do
+	{
+		strcpy(path, token);
+		if (path[strlen(path)-1] != '/') strcat(path, "/");
+		strcat(path, cmd);
+
+		struct stat st;
+		if (stat(path, &st) == 0)
+		{
+			free(search);
+			return 0;
+		};
+		token = strtok_r(NULL, ":", &save);
+	} while (token != NULL);
+
+	free(search);
+	return -1;
+};
+
+int execvp(const char *cmd, char *const argv[])
+{
+	if (strchr(cmd, '/') != NULL)
+	{
+		return execv(cmd, argv);
+	};
+	
+	char path[256];
+	char *cmddup = strdup(cmd);
+	int ok = __find_command(path, cmddup);
+	free(cmddup);
+	
+	if (ok == -1)
+	{
+		errno = ENOENT;
+		return -1;
+	};
+	
+	return execv(path, argv);
+};
+
+int execlp(const char *cmd, const char *arg0, ...)
+{
+	int r;
+	va_list ap;
+	va_start(ap, arg0);
+	
+	if (strchr(cmd, '/') != NULL)
+	{
+		r = __execl(cmd, arg0, ap);
+		va_end(ap);
+		return r;
+	};
+	
+	char path[256];
+	char *cmddup = strdup(cmd);
+	int ok = __find_command(path, cmddup);
+	free(cmddup);
+	
+	if (ok == -1)
+	{
+		errno = ENOENT;
+		return -1;
+	};
+	
+	r = __execl(path, arg0, ap);
+	va_end(ap);
 	return r;
 };

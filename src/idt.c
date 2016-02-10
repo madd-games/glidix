@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -441,7 +441,9 @@ void isrHandler(Regs *regs)
 	case I_PAGE_FAULT:
 		onPageFault(regs);
 		break;
+	case I_FLOAT_EX:
 	case I_SIMD_EX:
+		//kprintf("SIMD WITH: %a\n", (uint64_t)fpuGetMXCSR());
 		sendCPUErrorSignal(regs, SIGFPE, FPE_FLTUND, (void*) regs->rip);
 		break;
 	case I_APIC_TIMER:

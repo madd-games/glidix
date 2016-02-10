@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -34,6 +34,10 @@
  * The implementation of the math library, at this point, is ABSOLUTELY TERRIBLE.
  * Replacing the library with a better implementation is a TODO.
  */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define	M_E							2.71828182846
 #define	M_LOG2E							1.44269504089
@@ -95,5 +99,9 @@ double nextafter(double, double);
 double remainder(double, double);
 double rint(double);
 double scalb(double, double);
+
+#ifdef __cplusplus
+};	/* extern "C" */
+#endif
 
 #endif

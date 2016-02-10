@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -33,18 +33,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if 0
-void*  memcpy(void *dst, const void *src, size_t size);
-void*  memset(void *dst, int value, size_t size);
-void*  strcpy(char *dst, const char *src);
-size_t strlen(const char *str);
-int    memcmp(const void *a, const void *b, size_t size);
-int    strcmp(const char *a, const char *b);
-void*  strcat(char *dst, const char *a);
-char*  strerror(int errnum);
-int    strerror_r(int errnum, char *strerrbuf, size_t buflen);
 #endif
 
 /* copied from PDCLib and not really cleaned up */

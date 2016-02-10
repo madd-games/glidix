@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -49,6 +49,7 @@
 #include <glidix/socket.h>
 #include <glidix/pci.h>
 #include <glidix/utsname.h>
+#include <glidix/thsync.h>
 
 void sys_exit(Regs *regs, int status)
 {
@@ -1100,6 +1101,7 @@ int sys_dup2(int oldfd, int newfd)
 		kfree(toclose);
 	};
 	ftab->entries[newfd] = newfp;
+	spinlockRelease(&ftab->spinlock);
 
 	return newfd;
 };
@@ -1192,7 +1194,7 @@ char *sys_getcwd(char *buf, size_t size)
 };
 
 /**
- * Userspace mmap() should map around this. Returns the address of the END of the mapped region,
+ * Userspace mmap() should wrap around this. Returns the address of the END of the mapped region,
  * and 'addr' must be a valid address where the specified region can fit without segment collisions.
  */
 uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset)
@@ -2216,6 +2218,39 @@ int sys_bindif(int fd, const char *ifname)
 	return out;
 };
 
+int sys_thsync(int type, int par)
+{
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+
+	int i;
+	for (i=0; i<MAX_OPEN_FILES; i++)
+	{
+		if (ftab->entries[i] == NULL)
+		{
+			break;
+		};
+	};
+
+	if (i == MAX_OPEN_FILES)
+	{
+		spinlockRelease(&ftab->spinlock);
+		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
+	};
+	
+	File *fp = thsync(type, par);
+	if (fp == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		// errno set by thsync()
+		return -1;
+	};
+	
+	ftab->entries[i] = fp;
+	spinlockRelease(&ftab->spinlock);
+	return i;
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	siginfo_t siginfo;
@@ -2252,6 +2287,16 @@ uint32_t sys_unique()
 	return __sync_fetch_and_add(&uniqueAssigner, 1);
 };
 
+unsigned sys_alarm(unsigned sec)
+{
+	uint64_t currentTime = getNanotime();
+	uint64_t timeToSignal = currentTime + (uint64_t) sec * NANO_PER_SEC;
+	uint64_t old = atomic_swap64(&getCurrentThread()->alarmTime, timeToSignal);
+	
+	if (old == 0) return 0;
+	return (unsigned) ((old - currentTime) / NANO_PER_SEC);
+};
+
 void syscallDispatch(Regs *regs, uint16_t num)
 {
 	if (getCurrentThread()->errnoptr != NULL)
@@ -2261,7 +2306,7 @@ void syscallDispatch(Regs *regs, uint16_t num)
 
 	if ((getCurrentThread()->sigcnt > 0) && ((regs->cs & 3) == 3) && ((getCurrentThread()->flags & THREAD_SIGNALLED) == 0))
 	{
-		// before doing any syscalls, we dispatch all interrupts.
+		// before doing any syscalls, we dispatch all signals.
 		ASM("cli");
 		lockSched();
 		memcpy(&getCurrentThread()->regs, regs, sizeof(Regs));
@@ -2270,7 +2315,7 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		unlockSched();
 		return;					// interrupts will be enabled on return
 	};
-
+	
 	regs->rip += 4;
 
 	// store the return registers; this is in case some syscall, such as read(), requests a return-on-signal.
@@ -2837,9 +2882,16 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((int*)&regs->rax) = route_clear((int)regs->rdi, (const char*) regs->rsi);
 		break;
 	case 99:
-		/* TODO: munmap(); for now, just return EINVAL */
-		ERRNO = EINVAL;
-		*((int*)&regs->rax) = -1;
+		*((int*)&regs->rax) = mprotect(regs->rdi, regs->rsi, 0);
+		break;
+	case 100:
+		*((int*)&regs->rax) = sys_thsync((int)regs->rdi, (int)regs->rsi);
+		break;
+	case 101:
+		regs->rax = getCurrentThread()->pidParent;
+		break;
+	case 102:
+		*((unsigned*)&regs->rax) = sys_alarm(*((unsigned*)&regs->rdi));
 		break;
 	default:
 		signalOnBadSyscall(regs);

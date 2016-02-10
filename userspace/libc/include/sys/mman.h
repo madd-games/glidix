@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -43,6 +43,9 @@ extern "C" {
 
 #define	MAP_PRIVATE			(1 << 0)
 #define	MAP_SHARED			(1 << 1)
+#define	MAP_ANONYMOUS			(1 << 2)
+
+#define	MAP_ANON			MAP_ANONYMOUS
 
 /* implemented by libglidix directly */
 int mprotect(void *addr, size_t len, int prot);

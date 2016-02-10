@@ -1,7 +1,7 @@
 /*
 	Glidix Shell Utilities
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -92,16 +92,24 @@ int installPackage(const char *path)
 				return 1;
 			};
 
-			void *buffer = malloc(fileinfo.size);
-			if (buffer == NULL)
+			//void *buffer = malloc(fileinfo.size);
+			//if (buffer == NULL)
+			//{
+			//	fprintf(stderr, "out of memory!\n");
+			//	return 1;
+			//};
+			char buffer[4096];
+			uint64_t togo = fileinfo.size;
+			
+			while (togo > 0)
 			{
-				fprintf(stderr, "out of memory!");
-				return 1;
+				uint64_t doNow = togo;
+				if (doNow > 4096) doNow = 4096;
+				
+				fread(buffer, 1, doNow, fp);
+				write(fd, buffer, doNow);
+				togo -= doNow;
 			};
-
-			fread(buffer, 1, fileinfo.size, fp);
-			write(fd, buffer, fileinfo.size);
-			free(buffer);
 
 			close(fd);
 		};

@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -118,6 +118,10 @@ struct sigaction
 	void (*sa_sigaction)(int, siginfo_t*, void*);
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* implemented by the runtime */
 int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
 void (*signal(int sig, void (*func)(int)))(int);
@@ -125,5 +129,9 @@ void (*signal(int sig, void (*func)(int)))(int);
 /* implemented by libglidix directly */
 int raise(int sig);
 int kill(pid_t pid, int sig);
+
+#ifdef __cplusplus
+};	/* extern "C" */
+#endif
 
 #endif

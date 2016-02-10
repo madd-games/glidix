@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -80,7 +80,6 @@ FILE *__fopen_strm(FILE *fp, const char *path, const char *mode)
 		return NULL;
 	};
 
-	//FILE *fp = (FILE*) malloc(sizeof(FILE));
 	fp->_buf = &fp->_nanobuf;
 	fp->_rdbuf = fp->_buf;
 	fp->_wrbuf = fp->_buf;

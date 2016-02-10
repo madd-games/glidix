@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -165,6 +165,9 @@ void initSched()
 	// no supplementary groups
 	firstThread.numGroups = 0;
 	
+	// do not send alarms
+	firstThread.alarmTime = 0;
+	
 	// linking
 	firstThread.prev = &firstThread;
 	firstThread.next = &firstThread;
@@ -214,32 +217,34 @@ int canSched(Thread *thread)
 	if (thread->wakeTime != 0)
 	{
 		uint64_t currentTime = (uint64_t) getTicks();
-		//if (thread->pid == 1)
-		//{
-		//	kprintf("process %d, wakeTime=%d, now=%d\n", (int) thread->pid, (int) thread->wakeTime, (int) currentTime);
-		//};
-		//kprintf("TIME: %d; WAKEY: %d, FLAGS: %a\n", currentTime, thread->wakeTime, getFlagsRegister());
 		if (currentTime >= thread->wakeTime)
 		{
-			//kprintf("WAKING UP\n");
 			thread->wakeTime = 0;
 			thread->flags &= ~THREAD_WAITING;
 		};
 	};
 
-	if (thread->flags & THREAD_NOSCHED) return 0;
-#if 0
-	if (thread->pm != NULL)
+	if (thread->alarmTime != 0)
 	{
-		if (spinlockTry(&thread->pm->lock))
+		uint64_t currentTime = getNanotime();
+		if (currentTime >= thread->alarmTime)
 		{
-			return 0;
+			siginfo_t si;
+			si.si_signo = SIGALRM;
+			si.si_code = 0;
+			si.si_errno = 0;
+			si.si_pid = 0;
+			si.si_uid = 0;
+			si.si_addr = NULL;
+			si.si_status = 0;
+			si.si_band = 0;
+			si.si_value.sival_int = 0;
+			thread->alarmTime = 0;
+			sendSignal(thread, &si);
 		};
-
-		spinlockRelease(&thread->pm->lock);
 	};
-#endif
-
+	
+	if (thread->flags & THREAD_NOSCHED) return 0;
 	return 1;
 };
 
@@ -564,6 +569,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	memcpy(thread->groups, currentThread->groups, sizeof(gid_t)*16);
 	thread->numGroups = currentThread->numGroups;
 	
+	// alarms shall be cancelled in the new process/thread
+	thread->alarmTime = 0;
+	
 	// if the address space is shared, the errnoptr is now invalid;
 	// otherwise, it can just stay where it is.
 	if (flags & CLONE_SHARE_MEMORY)
@@ -643,18 +651,8 @@ void threadExit(Thread *thread, int status)
 	ASM("sti");
 };
 
-int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
+static Thread *findThreadToKill(int pid, int *stat_loc, int flags)
 {
-	if (kernelStatus != KERNEL_RUNNING)
-	{
-		currentThread->therrno = EPERM;
-		return -1;
-	};
-
-	int sigcnt = getCurrentThread()->sigcnt;
-
-	lockSched();
-	ASM("cli");
 	Thread *threadToKill = NULL;
 	Thread *thread = currentThread->next;
 	while (thread != currentThread)
@@ -673,28 +671,61 @@ int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 					thread->next->prev = thread->prev;
 
 					break;
+				}
+				else if (flags & WDETACH)
+				{
+					// we can detach
+					thread->pidParent = 1;
+					unlockSched();
+					ASM("sti");
+					return 0;
 				};
 			};
 		};
 		thread = thread->next;
 	};
+	return threadToKill;
+};
+
+int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
+{
+	if (kernelStatus != KERNEL_RUNNING)
+	{
+		currentThread->therrno = EPERM;
+		return -1;
+	};
+
+	// a thread cannot wait for itself.
+	if (pid == currentThread->pid)
+	{
+		ERRNO = ECHILD;
+		return -1;
+	};
+	
+	int sigcnt = getCurrentThread()->sigcnt;
+
+	lockSched();
+	ASM("cli");
+	Thread *threadToKill = findThreadToKill(pid, stat_loc, flags);
 
 	// when WNOHANG is clear
 	while ((threadToKill == NULL) && ((flags & WNOHANG) == 0))
 	{
-		//currentThread->flags |= THREAD_WAITING;
-		//currentThread->therrno = ECHILD;
-		//*((int*)&regs->rax) = -1;
-		//switchTask(regs);
 		getCurrentThread()->flags |= THREAD_WAITING;
 		unlockSched();
 		kyield();
+		lockSched();
+		ASM("cli");
+		threadToKill = findThreadToKill(pid, stat_loc, flags);
+		if (threadToKill != NULL) break;
+		
 		if (getCurrentThread()->sigcnt > sigcnt)
 		{
+			unlockSched();
+			ASM("sti");
 			ERRNO = EINTR;
 			return -1;
 		};
-		lockSched();
 	};
 
 	unlockSched();
@@ -708,19 +739,19 @@ int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
 	};
 
 	// there is a process ready to be deleted, it's already removed from the runqueue.
-	kfree(thread->stack);
-	DownrefProcessMemory(thread->pm);
-	ftabDownref(thread->ftab);
+	kfree(threadToKill->stack);
+	DownrefProcessMemory(threadToKill->pm);
+	ftabDownref(threadToKill->ftab);
 
-	if (thread->fpexec != NULL)
+	if (threadToKill->fpexec != NULL)
 	{
-		if (thread->fpexec->close != NULL) thread->fpexec->close(thread->fpexec);
-		kfree(thread->fpexec);
+		if (threadToKill->fpexec->close != NULL) threadToKill->fpexec->close(threadToKill->fpexec);
+		kfree(threadToKill->fpexec);
 	};
 
-	if (thread->execPars != NULL) kfree(thread->execPars);
-	int ret = thread->pid;
-	kfree(thread);
+	if (threadToKill->execPars != NULL) kfree(threadToKill->execPars);
+	int ret = threadToKill->pid;
+	kfree(threadToKill);
 
 	return ret;
 };
@@ -738,6 +769,8 @@ static int canSendSignal(Thread *src, Thread *dst, int signo)
 	case SIGSTOP:
 	case SIGTERM:
 	case SIGTSTP:
+	case SIGUSR1:
+	case SIGUSR2:
 	case 0:
 		break;
 	default:

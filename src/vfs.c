@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -164,6 +164,11 @@ char *realpath_from(const char *relpath, char *buffer, const char *fromdir)
 	while (1)
 	{
 		char c = *scan++;
+		while ((c == '/') && ((*scan) == '/'))
+		{
+			c = *scan++;
+		};
+		
 		if ((c != '/') && (c != 0))
 		{
 			if (toksz == 127)
@@ -177,7 +182,7 @@ char *realpath_from(const char *relpath, char *buffer, const char *fromdir)
 		else
 		{
 			*tokput = 0;
-
+			
 			if (strcmp(token, ".") == 0)
 			{
 				if (szput != 1)
@@ -244,7 +249,7 @@ char *realpath_from(const char *relpath, char *buffer, const char *fromdir)
 
 			szput += toksz + 1;
 			if (c == 0) break;
-
+			
 			tokput = token;
 			toksz = 0;
 		};

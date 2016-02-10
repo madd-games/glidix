@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,15 @@
 #define	__IOCTL_NOARG(intf, cmd)				((intf << 16) | cmd)
 #define	__IOCTL_ARG(type, intf, cmd)				((sizeof(type) << 32) | __IOCTL_NOARG(intf, cmd))
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* implemented by the runtime */
 int ioctl(int fd, unsigned long cmd, ...);
+
+#ifdef __cplusplus
+};	/* extern "C" */
+#endif
 
 #endif

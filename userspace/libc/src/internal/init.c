@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -32,18 +32,23 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
+#include <unistd.h>
 
 char **environ;
 
-int __errno_initial;
 void __init_sig();
 static int __init_done = 0;
 static int __argc;
 static char **__argv;
+static __pthread __thread_initial;
+static __thread_local_info __thread_ili;
 
 void __do_init()
 {
-	_glidix_seterrnoptr(&__errno_initial);
+	__thread_initial._pid = getpid();
+	_glidix_seterrnoptr(&__thread_ili._errno);
+	__thread_ili._tid = &__thread_initial;
 	_heap_init();
 	__init_sig();
 

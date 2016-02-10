@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -28,10 +28,46 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
+
+typedef void (*__atexit_func)(void);
+static __atexit_func *atexit_array = NULL;
+static int atexit_count = 0;
+static pthread_spinlock_t atexit_lock;
+
+typedef void (*__cxa_atexit_func)(void*);
+typedef struct
+{
+	__cxa_atexit_func func;
+	void *arg;
+} __cxa_atexit_info;
+static __cxa_atexit_info *cxa_atexit_array = NULL;
+static int cxa_atexit_count = 0;
+
+int atexit(__atexit_func func)
+{
+	pthread_spin_lock(&atexit_lock);
+	atexit_count++;
+	atexit_array = realloc(atexit_array, sizeof(__atexit_func)*(atexit_count));
+	atexit_array[atexit_count-1] = func;
+	pthread_spin_unlock(&atexit_lock);
+	return 0;
+};
 
 void exit(int status)
 {
-	/* TODO: atexit() stuff */
+	// iterate with index, because atexit() might be called by one of the exit functions.
+	int i;
+	for (i=0; i<atexit_count; i++)
+	{
+		atexit_array[i]();
+	};
+	
+	for (i=0; i<cxa_atexit_count; i++)
+	{
+		cxa_atexit_array[i].func(cxa_atexit_array[i].arg);
+	};
+	
 	_Exit(status);
 };
 
@@ -39,3 +75,15 @@ void _Exit(int status)
 {
 	_exit(status);
 };
+
+int __cxa_atexit(void (*func) (void *), void *arg, void *d)
+{
+	pthread_spin_lock(&atexit_lock);
+	cxa_atexit_count++;
+	cxa_atexit_array = realloc(cxa_atexit_array, sizeof(__cxa_atexit_info)*cxa_atexit_count);
+	cxa_atexit_array[cxa_atexit_count-1].func = func;
+	cxa_atexit_array[cxa_atexit_count-1].arg = arg;
+	pthread_spin_unlock(&atexit_lock);
+	return 0;
+};
+

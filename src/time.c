@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -65,33 +65,24 @@ static Spinlock timeLock;
 
 void sleep(int ticks)
 {
-	//kprintf("sleep() called\n");
 	if (getCurrentThread() == NULL)
 	{
-		//kprintf("here maybe???\n");
 		// not ready to wait!
 		int then = getUptime() + ticks;
 		while (getUptime() < then);
 	}
 	else
 	{
-		//kprintf("here then aye?\n");
 		int then = getUptime() + ticks;
-		//kprintf("got to this part; will break at %d (now=%d)\n", then, getUptime());
 		while (getUptime() < then)
 		{
-			//kprintf("time: %d\n", getUptime());
 			lockSched();
-			//ASM("cli");
-			//kprintf("locked sched\n");
 			getCurrentThread()->wakeTime = then;
 			getCurrentThread()->flags |= THREAD_WAITING;
 			unlockSched();
-			//kprintf("about to kyield\n");
 			kyield();
 		};
 	};
-	//kprintf("sleep() returned\n");
 };
 
 time_t makeUnixTime(int64_t year, int64_t month, int64_t day, int64_t hour, int64_t minute, int64_t second)
@@ -200,5 +191,5 @@ void handleTodos()
 uint64_t getNanotime()
 {
 	uint64_t out = (uint64_t) getUptime();
-	return out * (uint64_t)1000000000;
+	return out * (uint64_t)1000000;		// 10^6 nanoseconds in a milliseond because 10^9 in a second
 };

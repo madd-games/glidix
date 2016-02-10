@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,7 @@
 
 /**
  * An ioctl() command is a 64-bit value, structured as follows:
- * Top 16 bits: reserved; should be 0.
+ * 	Top 16 bits: reserved; should be 0.
  * 	Next 16 bits: size of the param structure.
  * 	Next 16 bits: type of interface; see below.
  *	Next 8 bits: reserved; should be 0.
@@ -52,5 +52,6 @@
 #define	IOCTL_INT_VIDEO						0x0003
 #define	IOCTL_INT_GPU						0x0004
 #define	IOCTL_INT_TERM						0x0005
+#define	IOCTL_INT_THSYNC					0x0006
 
 #endif

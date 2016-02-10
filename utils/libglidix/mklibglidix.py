@@ -143,7 +143,10 @@ syscallTable = {
 	96:	"isatty",
 	97:	"_glidix_bindif",
 	98:	"_glidix_route_clear",
-	99:	"munmap"
+	99:	"munmap",
+	100:	"_glidix_thsync",
+	101:	"getppid",
+	102:	"alarm"
 }
 
 f = open("_libglidix.s", "wb")

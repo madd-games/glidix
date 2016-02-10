@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,6 @@ void			abort(void);
 int			atexit(void (*)(void));
 int			atoi(const char*);
 void			free(void*);
-char*			getenv(const char*);
 void*			malloc(size_t);
 void*			realloc(void*, size_t);
 void			exit(int);
@@ -70,6 +69,7 @@ void			_Exit(int);
 void*			calloc(size_t nitems, size_t size);
 char*			getenv(const char *name);
 int			setenv(const char *name, const char *value, int update);
+int			putenv(const char *str);
 long			strtol(const char *str, char **str_end, int base);
 long long		strtoll(const char *str, char **str_end, int base);
 unsigned long		strtoul(const char *str, char **str_end, int base);
@@ -97,6 +97,7 @@ lldiv_t			lldiv(long long a, long long b);
 int			rand();
 int			rand_r(unsigned *seed);
 void			srand(unsigned seed);
+int			unsetenv(const char *name);
 
 /* implemented by libglidix directly */
 char*	realpath(const char*, char*);

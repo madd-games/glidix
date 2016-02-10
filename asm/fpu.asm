@@ -1,6 +1,6 @@
 ;	Glidix kernel
 ;
-;	Copyright (c) 2014-2015, Madd Games.
+;	Copyright (c) 2014-2016, Madd Games.
 ;	All rights reserved.
 ;	
 ;	Redistribution and use in source and binary forms, with or without
@@ -29,8 +29,11 @@ bits 64
 global fpuInit
 global fpuSave
 global fpuLoad
+global fpuGetMXCSR
+global fpuSetMXCSR
 
 fpuInit:
+	finit
 	mov	rax,	cr0
 	and	ax,	0xFFFB
 	or	ax,	0x2
@@ -38,6 +41,13 @@ fpuInit:
 	mov	rax,	cr4
 	or	ax,	(3 << 9)
 	mov	cr4,	rax
+	
+	; flush to zero, mask precision errors
+	mov	eax,	(1 << 15) | (1 << 12)
+	sub	rsp,	4
+	mov	[rsp],	eax
+	ldmxcsr	[rsp]
+	add	rsp,	4
 	ret
 
 fpuSave:
@@ -48,3 +58,16 @@ fpuLoad:
 	fxrstor	[rdi]
 	ret
 
+fpuGetMXCSR:
+	sub	rsp,	4
+	stmxcsr	[rsp]
+	mov	eax,	[rsp]
+	add	rsp,	4
+	ret
+
+fpuSetMXCSR:
+	sub	rsp,	4
+	mov	[rsp],	edi
+	ldmxcsr	[rsp]
+	add	rsp,	4
+	ret

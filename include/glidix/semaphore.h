@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -56,7 +56,7 @@ typedef struct
 	SemWaitThread *first;
 	SemWaitThread *last;
 
-	// for semWait2/semSignal2, to keep some synchronisation of blocks
+	// for semWait2/semSignal2, to keep some synchronisation of locks
 	Thread *countWaiter;
 	Spinlock countLock;
 } Semaphore;

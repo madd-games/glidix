@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,9 @@ extern "C" {
 #endif
 
 #define	WNOHANG			(1 << 0)
+#define	WDETACH			(1 << 1)
+#define	WUNTRACED		(1 << 2)
+#define	WCONTINUED		(1 << 3)
 
 #define	WIFEXITED(status)	((status) >= 0)
 #define	WEXITSTATUS(status)	(status)

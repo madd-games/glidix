@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -39,6 +39,7 @@
 
 typedef struct
 {
+	char fpu[512];
 	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
 	uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
 	uint64_t rip, rsp;
@@ -143,17 +144,27 @@ typedef struct
 extern "C" {
 #endif
 
-#define	_GLIDIX_CLONE_SHARE_MEMORY		(1 << 0)
-#define	_GLIDIX_CLONE_SHARE_FTAB		(1 << 1)
+#define	_GLIDIX_CLONE_SHARE_MEMORY			(1 << 0)
+#define	_GLIDIX_CLONE_SHARE_FTAB			(1 << 1)
 
-#define	_GLIDIX_INSMOD_VERBOSE			(1 << 0)
+#define	_GLIDIX_INSMOD_VERBOSE				(1 << 0)
 
-#define	_GLIDIX_RMMOD_VERBOSE			(1 << 0)
-#define	_GLIDIX_RMMOD_FORCE			(1 << 1)
+#define	_GLIDIX_RMMOD_VERBOSE				(1 << 0)
+#define	_GLIDIX_RMMOD_FORCE				(1 << 1)
 
 #define	_GLIDIX_DOWN_POWEROFF				0
 #define	_GLIDIX_DOWN_REBOOT				1
 #define	_GLIDIX_DOWN_HALT				2
+
+#define	_GLIDIX_IOCTL_NOARG(intf, cmd)			((intf << 16) | cmd)
+#define	_GLIDIX_IOCTL_ARG(type, intf, cmd)		((sizeof(type) << 32) | IOCTL_NOARG(intf, cmd))
+
+#define	_GLIDIX_IOCTL_INT_PCI				0x0001
+#define	_GLIDIX_IOCTL_INT_SDI				0x0002
+#define	_GLIDIX_IOCTL_INT_VIDEO				0x0003
+#define	_GLIDIX_IOCTL_INT_GPU				0x0004
+#define	_GLIDIX_IOCTL_INT_TERM				0x0005
+#define	_GLIDIX_IOCTL_INT_THSYNC			0x0006
 
 int		_glidix_exec(const char *path, const char *pars, size_t parsz);
 int		_glidix_open(const char *path, int flags, mode_t mode);
@@ -198,6 +209,7 @@ int		_glidix_fcntl_setfd(int fd, int flags);
 uint32_t	_glidix_unique();
 int		_glidix_bindif(int fd, const char *ifname);
 int		_glidix_route_clear(int family, const char *ifname);
+int		_glidix_thsync(int type, int par);
 
 #ifdef __cplusplus
 }	/* extern "C" */

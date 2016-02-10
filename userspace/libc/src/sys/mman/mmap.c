@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -28,6 +28,9 @@
 
 #include <sys/mman.h>
 #include <sys/glidix.h>
+#include <stdio.h>
+#include <errno.h>
+#include <unistd.h>
 
 /* dlfcn.c */
 uint64_t __alloc_pages(size_t len);
@@ -38,8 +41,45 @@ void* mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset)
 	actualAddr &= ~0xFFF;
 	if (actualAddr == 0) actualAddr = __alloc_pages(len);
 
-	uint64_t outAddr = _glidix_mmap(actualAddr, len, prot, flags, fd, offset);
-	if (outAddr == 0) return (void*) -1;
+	if (flags & MAP_ANONYMOUS)
+	{
+		if (mprotect((void*)actualAddr, len, prot | PROT_ALLOC) != 0)
+		{
+			return (void*) -1;
+		};
+	}
+	else
+	{
+		uint64_t outAddr = _glidix_mmap(actualAddr, len, prot, flags, fd, offset);
+		if (outAddr == 0)
+		{
+			if (errno == ENODEV)
+			{
+				if ((flags & PROT_WRITE) == 0)
+				{
+					// the specified file does not support mmap() but we can emulate
+					// read-only mmap()s by means of map-and-read
+					// stuff like 'gcc' really needs that apparently
+					if (mmap(addr, len, prot, flags | MAP_ANONYMOUS, 0, offset) != (void*)-1)
+					{
+						off_t pos = lseek(fd, 0, SEEK_CUR);
+						if (pos == (off_t)-1)
+						{
+							errno = ENODEV;
+							return (void*)-1;
+						};
+						
+						lseek(fd, offset, SEEK_SET);
+						read(fd, (void*)actualAddr, len);
+						lseek(fd, pos, SEEK_SET);
+						return (void*) actualAddr;
+					};
+				};
+			};
+			
+			return (void*) -1;
+		};
+	};
 
 	return (void*) actualAddr;
 };

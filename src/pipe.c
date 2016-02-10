@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -248,6 +248,7 @@ int sys_pipe(int *pipefd)
 
 	if ((rfd == -1) || (wfd == -1))
 	{
+		spinlockRelease(&ftab->spinlock);
 		getCurrentThread()->therrno = EMFILE;
 		return -1;
 	};

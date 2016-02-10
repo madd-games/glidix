@@ -1,6 +1,6 @@
 ;	Glidix Runtime
 ;
-;	Copyright (c) 2014-2015, Madd Games.
+;	Copyright (c) 2014-2016, Madd Games.
 ;	All rights reserved.
 ;	
 ;	Redistribution and use in source and binary forms, with or without
@@ -33,10 +33,12 @@ extern __glidixrt_init
 extern main
 
 STACK_SIZE equ 0x100000
+__default_mxcsr dd (1 << 15) | (1 << 12)
 
 _start:
 	mov		rsp, stack + STACK_SIZE
 	call		_init
+	ldmxcsr		[__default_mxcsr]
 	mov		rdi, main
 	call		__glidixrt_init
 	jmp $

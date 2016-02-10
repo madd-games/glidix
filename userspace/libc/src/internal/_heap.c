@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+pthread_spinlock_t __heap_lock = 0;
 
 /**
  * WARNING: Do not implement locks in this code! Instead, go to the definitions of malloc(),
@@ -143,12 +145,13 @@ void* _heap_malloc(size_t len)
 	return (void*) &head[1];
 };
 
+void _heap_free(void *block);
 void *_heap_realloc(void *block, size_t newsize)
 {
 	if (block == NULL) return _heap_malloc(newsize);
 	uint64_t addr = (uint64_t) block - sizeof(__heap_header);
 	__heap_header *header = (__heap_header*) addr;
-	void *newblock = malloc(newsize);
+	void *newblock = _heap_malloc(newsize);
 	if (newsize > header->size)
 	{
 		memcpy(newblock, block, header->size);
@@ -158,7 +161,7 @@ void *_heap_realloc(void *block, size_t newsize)
 		memcpy(newblock, block, newsize);
 	};
 
-	free(block);
+	_heap_free(block);
 	return newblock;
 };
 

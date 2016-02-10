@@ -1,7 +1,7 @@
 /*
 	Glidix Shell
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -280,6 +280,9 @@ int execCommand(char *cmd)
 				break;
 			case SIGSYS:
 				fprintf(stderr, "Invalid system call\n");
+				break;
+			case SIGFPE:
+				fprintf(stderr, "Arithmetic error\n");
 				break;
 			};
 		};

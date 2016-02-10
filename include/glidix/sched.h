@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -91,6 +91,9 @@ typedef struct
  * Flags for pollThread().
  */
 #define	WNOHANG				(1 << 0)
+#define	WDETACH				(1 << 1)
+#define	WUNTRACED			(1 << 2)
+#define	WCONTINUED			(1 << 3)
 
 typedef struct _Thread
 {
@@ -209,7 +212,7 @@ typedef struct _Thread
 
 	/**
 	 * The time at which to wake this process up; 0 if it should not be awaken by clock.
-	 * This is used by stuff like sleep().
+	 * This is used by stuff like sleep(). Given in milliseconds.
 	 */
 	uint64_t			wakeTime;
 
@@ -223,6 +226,12 @@ typedef struct _Thread
 	 */
 	gid_t				groups[16];
 	int				numGroups;
+	
+	/**
+	 * The time at which to send the SIGALRM signal; 0 means the signal shall not be sent.
+	 * Given in nanoseconds.
+	 */
+	uint64_t			alarmTime;
 	
 	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.

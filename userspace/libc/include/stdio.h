@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -95,6 +95,11 @@ typedef struct __file
 	 * Flags.
 	 */
 	int _flags;
+	
+	/**
+	 * pid of the child process if this stream was opened with popen().
+	 */
+	int _pid;
 } FILE;
 
 #ifdef __cplusplus
@@ -158,6 +163,8 @@ int	getc(FILE *fp);
 int	putc(int c, FILE *fp);
 int	remove(const char *path);
 FILE*	tmpfile();
+FILE*	popen(const char *cmd, const char *mode);
+int	pclose(FILE *fp);
 
 /* off_t is the same as long on Glidix */
 #define	fseeko					fseek

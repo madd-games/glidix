@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -52,3 +52,9 @@ double cos(double x)
 {
 	return sin(x + M_PI_2);
 }
+
+double fabs(double x)
+{
+	if (x < 0.0) return -x;
+	return x;
+};

@@ -1,7 +1,7 @@
 /*
 	Glidix Runtime
 
-	Copyright (c) 2014-2015, Madd Games.
+	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
@@ -74,6 +74,7 @@ int		execve(const char*, char* const[], char* const[]);
 int		execvp(const char*, char* const[]);
 int		execl(const char *, const char *arg0, ...);
 int		execle(const char *, const char *arg0, ...);
+int		execlp(const char *, const char *arg0, ...);
 pid_t		fork(void);
 int		truncate(const char *path, off_t length);
 long		fpathconf(int fd, int name);
@@ -118,12 +119,13 @@ int		symlink(const char *oldname, const char *newname);
 unsigned	sleep(unsigned seconds);
 int		getgroups(int count, gid_t *out);
 int		isatty(int fd);
+int		getpid();
+void		_exit(int status);
+int		getppid();
+unsigned	alarm(unsigned sec);
 
 /* libcrypt */
 char*		crypt(const char *key, const char *salt);
-
-#define	execlp	execl
-#define	execvp	execv
 
 #ifdef __cplusplus
 }	/* extern "C" */
