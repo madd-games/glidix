@@ -47,12 +47,12 @@ typedef struct
 
 typedef struct
 {
-	uint64_t		dynSize;
-	void*			dynSection;
-	uint64_t		loadAddr;
-	uint64_t		nextLoadAddr;
-	uint64_t		textIndex;
-	uint64_t		dataIndex;
+	uint64_t			dynSize;
+	void*				dynSection;
+	uint64_t			loadAddr;
+	uint64_t			nextLoadAddr;
+	uint64_t			textIndex;
+	uint64_t			dataIndex;
 } _glidix_libinfo;
 
 typedef struct
@@ -79,6 +79,15 @@ typedef struct
 	char				data[3*16];
 	uint64_t			flags;
 } _glidix_gen_route;
+
+typedef struct
+{
+	int				type;
+	int				pid;
+	int				fd;
+	uid_t				uid;
+	gid_t				gid;
+} _glidix_msginfo;
 
 typedef union
 {
@@ -166,6 +175,10 @@ extern "C" {
 #define	_GLIDIX_IOCTL_INT_TERM				0x0005
 #define	_GLIDIX_IOCTL_INT_THSYNC			0x0006
 
+#define	_GLIDIX_MQ_CONNECT				0
+#define	_GLIDIX_MQ_INCOMING				1
+#define	_GLIDIX_MQ_HANGUP				2
+
 int		_glidix_exec(const char *path, const char *pars, size_t parsz);
 int		_glidix_open(const char *path, int flags, mode_t mode);
 uid_t		_glidix_getsuid();
@@ -210,6 +223,11 @@ uint32_t	_glidix_unique();
 int		_glidix_bindif(int fd, const char *ifname);
 int		_glidix_route_clear(int family, const char *ifname);
 int		_glidix_thsync(int type, int par);
+int		_glidix_condwait(uint8_t *cond, uint8_t *lock);
+int		_glidix_mqserver();
+int		_glidix_mqclient(int pid, int fd);
+int		_glidix_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgsize);
+ssize_t		_glidix_mqrecv(int fd, _glidix_msginfo *info, void *buffer, size_t bufsize);
 
 #ifdef __cplusplus
 }	/* extern "C" */

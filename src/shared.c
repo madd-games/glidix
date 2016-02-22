@@ -38,7 +38,11 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 {
 	int error;
 	File *fp = vfsOpen(path, VFS_CHECK_ACCESS, &error);
-
+	if (fp == NULL)
+	{
+		return -1;
+	};
+	
 	Elf64_Ehdr elfHeader;
 	if (vfsRead(fp, &elfHeader, sizeof(Elf64_Ehdr)) < sizeof(Elf64_Ehdr))
 	{
@@ -185,7 +189,7 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 	size_t indexBase = loadAddr / 0x1000;
 	size_t indexText = indexBase + hdrText->p_vaddr / 0x1000;
 	size_t indexData = indexBase + hdrData->p_vaddr / 0x1000;
-
+	
 	ProcMem *pm = getCurrentThread()->pm;
 	if (AddSegment(pm, indexText, flText, PROT_READ | PROT_EXEC) != 0)
 	{
@@ -195,7 +199,7 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 		vfsClose(fp);
 		return -1;
 	};
-
+	
 	if (AddSegment(pm, indexData, flData, PROT_READ | PROT_WRITE) != 0)
 	{
 		DeleteSegment(pm, indexText);
@@ -205,7 +209,7 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 		vfsClose(fp);
 		return -1;
 	};
-
+	
 	pdownref(flText);
 	pdownref(flData);
 	SetProcessMemory(pm);
@@ -223,6 +227,7 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 	info->dynSection = (Elf64_Dyn*) (loadAddr + hdrDynamic->p_vaddr);
 	info->loadAddr = loadAddr;
 	info->nextLoadAddr = loadAddr + hdrData->p_vaddr + hdrData->p_memsz;
+	kprintf_debug("nextLoadAddr=%p\n", info->nextLoadAddr);
 	info->textIndex = indexText;
 	info->dataIndex = indexData;
 

@@ -474,29 +474,34 @@ void kmain2()
 		panic("AcpiInitializeTables failed");
 	};
 	
+	kprintf("Loading ACPI tables...\n");
 	status = AcpiLoadTables();
 	if (ACPI_FAILURE(status))
 	{
 		panic("AcpiLoadTables failed");
 	};
 	
+	kprintf("Initializing all ACPI subsystems...\n");
 	status = AcpiEnableSubsystem(ACPI_FULL_INITIALIZATION);
 	if (ACPI_FAILURE(status))
 	{
 		panic("AcpiEnableSubsystem failed");
 	};
 	
+	kprintf("Initializing ACPI objects...\n");
 	status = AcpiInitializeObjects(ACPI_FULL_INITIALIZATION);
 	if (ACPI_FAILURE(status))
 	{
 		panic("AcpiInitializeObjects failed");
 	};
 	
+	kprintf("Installing power button handler...\n");
 	if (AcpiInstallFixedEventHandler(ACPI_EVENT_POWER_BUTTON, onPowerButton, NULL) != AE_OK)
 	{
 		panic("failed to register power button event");
 	};
 	
+	kprintf("Enumerating PCI with ACPI...\n");
 	pciInitACPI();
 	
 	kprintf("Initializing the RTC... ");

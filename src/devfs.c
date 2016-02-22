@@ -38,7 +38,8 @@ typedef struct _DeviceFile
 	char		name[16];
 	void		*data;
 	int		(*open)(void *data, File *file, size_t szFile);
-
+	mode_t		mode;
+	
 	struct _DeviceFile *prev;
 	struct _DeviceFile *next;
 } DeviceFile;
@@ -79,6 +80,7 @@ static int next(Dir *dir)
 	strcpy(dir->dirent.d_name, dev->name);
 	dir->dirent.d_ino++;
 	dir->stat.st_ino++;
+	dir->stat.st_mode = dev->mode;
 
 	return 0;
 };
@@ -95,7 +97,7 @@ static int openroot(FileSystem *fs, Dir *dir, size_t szDir)
 	strcpy(dir->dirent.d_name, "null");
 	dir->stat.st_dev = 0;
 	dir->stat.st_ino = 0;
-	dir->stat.st_mode = 0644 | VFS_MODE_CHARDEV;
+	dir->stat.st_mode = 0666 | VFS_MODE_CHARDEV;
 	dir->stat.st_nlink = 1;
 	dir->stat.st_uid = 0;
 	dir->stat.st_gid = 0;
@@ -143,6 +145,8 @@ Device AddDevice(const char *name, void *data, int (*open)(void*, File*, size_t)
 	strcpy(dev->name, name);
 	dev->data = data;
 	dev->open = open;
+	dev->mode = (mode_t) (flags & 0xFFFF);
+	if (flags == 0) dev->mode = 0644 | VFS_MODE_CHARDEV;
 	dev->prev = NULL;
 	dev->next = NULL;
 

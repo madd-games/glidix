@@ -77,6 +77,8 @@ void loadmods()
 	};
 
 	closedir(dirp);
+	
+	_glidix_insmod("mod_sdide", "/initrd/sdide.gkm", NULL, 0);
 };
 
 int interpret_config_option(char *line)
@@ -164,23 +166,20 @@ int load_config(const char *filename)
 		};
 	};
 	
-	if (confRootType == NULL)
-	{
-		fprintf(stderr, "init: no root filesystem sepcified\n");
-		return -1;
-	};
-	
 	if (confExec == NULL)
 	{
 		fprintf(stderr, "init: no exec command specified\n");
 		return -1;
 	};
 	
-	if (_glidix_mount(confRootType, confRootDevice, "/", 0) != 0)
+	if (confRootType != NULL)
 	{
-		perror("init: mount root");
-		printf("init: failed to mount root device %s (%s)\n", confRootDevice, confRootType);
-		return -1;
+		if (_glidix_mount(confRootType, confRootDevice, "/", 0) != 0)
+		{
+			perror("init: mount root");
+			printf("init: failed to mount root device %s (%s)\n", confRootDevice, confRootType);
+			return -1;
+		};
 	};
 	
 	if (stat(confExec[0], &st) != 0)
@@ -247,6 +246,7 @@ void on_signal(int sig, siginfo_t *si, void *ignore)
 void init_parts()
 {
 	close(open("/dev/sda", O_RDONLY));
+	close(open("/dev/sdc", O_RDONLY));
 };
 
 int main(int argc, char *argv[])

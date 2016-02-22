@@ -29,6 +29,7 @@
 #include <glidix/console.h>
 #include <glidix/port.h>
 #include <glidix/spinlock.h>
+#include <glidix/string.h>
 #include <stdint.h>
 
 #define	VRAM_BASE 0xFFFF8000000B8000
@@ -318,6 +319,14 @@ void kvprintf(const char *fmt, va_list ap)
 
 void kprintf(const char *fmt, ...)
 {
+	if (strlen(fmt) >= 4)
+	{
+		if (memcmp(fmt, "ACPI", 4) == 0)
+		{
+			return;
+		};
+	};
+	
 	va_list ap;
 	va_start(ap, fmt);
 	kvprintf(fmt, ap);

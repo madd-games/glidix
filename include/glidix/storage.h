@@ -36,8 +36,14 @@
 #include <glidix/ioctl.h>
 
 #define	SD_FILE_NO_BUF				0xFFFFFFFFFFFFFFFF
+#define	SD_NOT_CACHED				0xFFFFFFFFFFFFFFFF
 
 #define	IOCTL_SDI_IDENTITY			IOCTL_ARG(SDParams, IOCTL_INT_SDI, 0)
+
+/**
+ * Number of pages to cache per device.
+ */
+#define	SD_CACHE_SIZE				64
 
 /**
  * Storage device flags.
@@ -91,6 +97,20 @@ typedef struct _SDCommand
 typedef struct
 {
 	/**
+	 * Index of the first sector that makes up this cached page.
+	 * SD_NOT_CACHED = no data here
+	 */
+	uint64_t				index;
+	
+	/**
+	 * Payload of the cached data.
+	 */
+	char					data[4096];
+} SDCachedPage;
+
+typedef struct
+{
+	/**
 	 * The semaphore which controls access to this device.
 	 */
 	Semaphore				sem;
@@ -119,10 +139,26 @@ typedef struct
 	 * The kernel thread waiting for commands on this device.
 	 */
 	Thread*					thread;
+
 	/**
 	 * Command queue.
 	 */
 	SDCommand*				cmdq;
+	
+	/**
+	 * List of cached pages recalled from this device.
+	 */
+	SDCachedPage				cache[SD_CACHE_SIZE];
+	
+	/**
+	 * Current index into the cache ring.
+	 */
+	int					cacheIndex;
+	
+	/**
+	 * Blocks per page.
+	 */
+	uint64_t				blocksPerPage;
 } StorageDevice;
 
 typedef struct
@@ -169,6 +205,7 @@ SDCommand*	sdTryPop(StorageDevice *dev);
 SDCommand*	sdPop(StorageDevice *dev);
 void		sdPostComplete(SDCommand *cmd);
 int		sdRead(StorageDevice *dev, uint64_t block, void *buffer);
+int		sdRead2(StorageDevice *dev, uint64_t block, void *buffer, uint64_t count);
 int		sdWrite(StorageDevice *dev, uint64_t block, const void *buffer);
 
 #endif

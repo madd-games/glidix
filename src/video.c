@@ -66,7 +66,6 @@ static int lgi_ioctl(File *fp, uint64_t cmd, void *argp)
 static void lgi_close(File *fp)
 {
 	DisplayData *data = (DisplayData*) fp->fsdata;
-	kfree(data->intf);
 	kfree(data);
 };
 

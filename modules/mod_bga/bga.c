@@ -41,7 +41,7 @@
 #include <glidix/isp.h>
 #include <glidix/port.h>
 
-#define	BGA_NUM_MODES			3
+#define	BGA_NUM_MODES			4
 
 #define VBE_DISPI_TOTAL_VIDEO_MEMORY_MB  16
 #define VBE_DISPI_4BPP_PLANE_SHIFT       22
@@ -133,7 +133,8 @@ void bgaSetVideoMode(unsigned int width, unsigned int height)
 static LGIDisplayMode displayModes[BGA_NUM_MODES] = {
 	{0, 640, 480},
 	{1, 800, 600},
-	{2, 1024, 720}
+	{2, 1024, 720},
+	{3, 1280, 1024}
 };
 
 static int bga_getModeInfo(LGIDeviceInterface *intf, LGIDisplayMode *mode)
@@ -215,43 +216,38 @@ static void initBGA(uint32_t bar0)
 };
 
 static int bgaFound = 0;
-static void checkBus(uint8_t bus)
-{
-	uint8_t slot, func;
-	PCIDeviceConfig config;
 
-	for (slot=0; slot<32; slot++)
+static int bga_enumerator(PCIDevice *dev, void *ignore)
+{
+	(void)ignore;
+	
+	if (
+		((dev->vendor == 0x1234) && (dev->device == 0x1111))
+	||	((dev->vendor == 0x80EE) && (dev->device == 0xBEEF))
+	)
 	{
-		for (func=0; func<8; func++)
-		{
-			pciGetDeviceConfig(bus, slot, func, &config);
-			if ((config.std.vendor == 0x1234) && (config.std.device == 0x1111))
-			{
-				kprintf("bga: found BGA on PCI bus %d, slot %d, func %d, IRQ %d, intpin %d\n",
-					bus, slot, func, config.std.intline, config.std.intpin);
-				bgaFound = 1;
-				initBGA(config.std.bar[0]);
-			};
-		};
+		kprintf("bga: found BGA\n");
+		bgaFound = 1;
+		strcpy(dev->deviceName, "Bochs Graphics Adapter (BGA)");
+		initBGA(dev->bar[0]);
+		return 1;
 	};
+	
+	return 0;
 };
 
 MODULE_INIT()
 {
-	int bus = 0;
-	do
-	{
-		kprintf("bga: scanning for the BGA on bus %d\n", bus);
-		checkBus(bus++);
-	} while ((!bgaFound) && (bus < 16));
+	kprintf("bga: enumerating BGA-compatible devices\n");
+	pciEnumDevices(THIS_MODULE, bga_enumerator, NULL);
 
 	if (!bgaFound)
 	{
 		kprintf("bga: device not found\n");
-		return 1;
+		return MODINIT_CANCEL;
 	};
 
-	return 0;
+	return MODINIT_OK;
 };
 
 MODULE_FINI()

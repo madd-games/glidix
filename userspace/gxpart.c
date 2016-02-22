@@ -85,9 +85,9 @@ void printPartitionTable()
 		char boot = ' ';
 		if (mbr.parts[i].flags & 0x80) boot = '*';
 		//printf("%d\t%c\t0x%x\t%d\t%d\n", i, boot, mbr.parts[i].systemID, start, len);
-		printf("%d\t%c\t0x%x\t%d", i, boot, mbr.parts[i].systemID, start);
+		printf("%d\t%c\t0x%x\t%lu", i, boot, mbr.parts[i].systemID, start);
 		if (start <= 9999999) printf("\t");
-		printf("\t%d\n", len);
+		printf("\t%lu\n", len);
 	};
 };
 
@@ -179,7 +179,7 @@ void runcmd(char *cmd)
 		};
 
 		uint64_t offset = getFirstUnusedOffset();
-		printf("Offset? [%d] ", offset);
+		printf("Offset? [%lu] ", offset);
 		fflush(stdout);
 		getline(buffer);
 		if (buffer[0] != 0) offset = _toint(buffer);
@@ -190,7 +190,7 @@ void runcmd(char *cmd)
 		};
 
 		uint64_t size = params.totalSize - offset;
-		printf("Size? [%d] ", size);
+		printf("Size? [%lu] ", size);
 		fflush(stdout);
 		getline(buffer);
 		if (buffer[0] != 0) size = _toint(buffer);
@@ -354,7 +354,7 @@ int main(int argc, char *argv[])
 
 	while (1)
 	{
-		printf("Block size: %d\tCapacity (bytes): %d\n", params.blockSize, params.totalSize);
+		printf("Block size: %lu\tCapacity (bytes): %lu\n", params.blockSize, params.totalSize);
 		printPartitionTable();
 		printf("gxpart> ");
 		fflush(stdout);

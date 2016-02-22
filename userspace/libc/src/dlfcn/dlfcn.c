@@ -366,7 +366,8 @@ Library* __libopen_found(const char *path, const char *soname, int mode)
 	memset(lib, 0, sizeof(Library));
 	strcpy(lib->soname, soname);
 	lib->mode = mode;
-
+	nextLoadAddr = (info.nextLoadAddr & ~0xFFFL) + 0x1000;
+	
 	if (__lib_process(lib, info) != 0)
 	{
 		_glidix_libclose(&info);
@@ -376,7 +377,6 @@ Library* __libopen_found(const char *path, const char *soname, int mode)
 
 	lib->refcount = 1;
 	memcpy(&lib->info, &info, sizeof(_glidix_libinfo));
-	nextLoadAddr = info.nextLoadAddr;
 	return lib;
 };
 

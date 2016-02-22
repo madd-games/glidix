@@ -544,17 +544,20 @@ ProcMem *DuplicateProcessMemory(ProcMem *pm)
 	while (seg != NULL)
 	{
 		/**
-		 * Mark the pages read-only, for copy-on-write.
+		 * Mark the pages read-only, for copy-on-write, as long as the framelist is not shared.
 		 */
-		int i;
-		for (i=0; i<seg->fl->count; i++)
+		if ((seg->fl->flags & FL_SHARED) == 0)
 		{
-			PTe *pte = getPage(pm, MEM_CURRENT, seg->start + i, 0);
-			if (pte != NULL)			// pte might be NULL for load-on-demand pages
+			int i;
+			for (i=0; i<seg->fl->count; i++)
 			{
-				if (pte->present)		// may be non-present if its load-on-demand and unloaded
+				PTe *pte = getPage(pm, MEM_CURRENT, seg->start + i, 0);
+				if (pte != NULL)			// pte might be NULL for load-on-demand pages
 				{
-					pte->rw = 0;
+					if (pte->present)		// may be non-present if its load-on-demand and unloaded
+					{
+						pte->rw = 0;
+					};
 				};
 			};
 		};

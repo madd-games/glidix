@@ -523,6 +523,7 @@ static void checkBus(uint8_t bus)
 				kprintf("sdide: found IDE controller on PCI bus %d, slot %d, func %d, IRQ %d, intpin %d\n",
 					bus, slot, func, config.std.intline, config.std.intpin);
 				ideInit(config.std.bar);
+				return;
 			};
 		};
 	};

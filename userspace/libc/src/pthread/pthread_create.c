@@ -32,9 +32,11 @@
 #include <errno.h>
 #include <unistd.h>
 #include <_heap.h>
+#include <string.h>
 
 extern pthread_spinlock_t __heap_lock;
 extern void __release_and_exit(pthread_spinlock_t *lock);
+extern void __init_fpuregs();
 
 static void thread_entry_func(__pthread *thread)
 {
@@ -51,6 +53,7 @@ static void thread_entry_func(__pthread *thread)
 	void *stack = vp->_stack;
 	while (vp->_pid == 0) __sync_synchronize();
 	_glidix_seterrnoptr(&li._errno);
+	__init_fpuregs();
 	thread->_cont_ok = 1;
 	thread->_ret = thread->_start(thread->_start_param);
 	
@@ -84,6 +87,7 @@ int pthread_create(pthread_t *thread_out, const pthread_attr_t *attr, void*(*sta
 	 * which will set everything up and call start_routine().
 	 */
 	_glidix_mstate mstate;
+	memset(&mstate, 0, sizeof(_glidix_mstate));
 	mstate.rbp = 0;
 	mstate.rsp = (uint64_t) thread->_stack + 0x200000;
 	mstate.rip = (uint64_t) &thread_entry_func;

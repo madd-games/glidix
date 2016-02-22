@@ -246,7 +246,7 @@ AcpiEvAddressSpaceDispatch (
     if (!HandlerDesc)
     {
         ACPI_ERROR ((AE_INFO,
-            "No handler for Region [%4.4s] (%p) [%s]",
+            "No handler for Region [%s] (%p) [%s]",
             AcpiUtGetNodeName (RegionObj->Region.Node),
             RegionObj, AcpiUtGetRegionName (RegionObj->Region.SpaceId)));
 

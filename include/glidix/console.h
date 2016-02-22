@@ -48,6 +48,6 @@ void setCursorPos(uint8_t x, uint8_t y);
 #define	DONE()						kprintf("%$\x02" "Done%#\n")
 #define	FAILED()					kprintf("%$\x04" "Failed%#\n")
 
-#define	PRINTFLAG(cond, c)	if (cond) {kprintf("%$\x02" "%c%#", c);} else {kprintf("%$\x04" "%c%#", c);}
+#define	PRINTFLAG(cond, c)	if (cond) {kprintf("%$\x02" "%c%#", c);} else {kprintf("%$\x04" "%c%#", c-'A'+'a');}
 
 #endif

@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <string.h>
+#include <errno.h>
 
 const char *progName;
 char transferBuffer[2048];
@@ -155,7 +156,13 @@ void copyFile(const char *src, const char *dst)
 			exit(1);
 		};
 
-		write(fdDst, transferBuffer, count);
+		ssize_t writeOK;
+		if ((writeOK = write(fdDst, transferBuffer, count)) < count)
+		{
+			fprintf(stderr, "%s: write %s: %s (%d written)\n", progName, dst, strerror(errno), (int)writeOK);
+			exit(1);
+		};
+		
 		if (count < 2048)
 		{
 			break;

@@ -233,7 +233,9 @@ static ACPI_STATUS pciWalkCallback(ACPI_HANDLE object, UINT32 nestingLevel, void
 		status = AcpiGetIrqRoutingTable(object, &prtbuf);
 		if (status != AE_OK)
 		{
-			panic("AcpiGetIrqRoutingTable failed");
+			kprintf("WARNING: AcpiGetIrqRoutingTable failed for a root bridge!\n");
+			ACPI_FREE(info);
+			return AE_OK;
 		};
 		
 		char *scan = (char*) prtbuf.Pointer;

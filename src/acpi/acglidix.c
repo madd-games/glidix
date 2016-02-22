@@ -60,14 +60,16 @@ void AcpiOsFree(void *ptr)
 
 void AcpiOsVprintf(const char *fmt, va_list ap)
 {
-	kvprintf(fmt, ap);
+	(void)fmt;
+	//kvprintf(fmt, ap);
 };
 
 void AcpiOsPrintf(const char *fmt, ...)
 {
+	(void)fmt;
 	va_list ap;
 	va_start(ap, fmt);
-	kvprintf(fmt, ap);
+	//kvprintf(fmt, ap);
 	va_end(ap);
 };
 
@@ -514,4 +516,14 @@ void AcpiOsUnmapMemory(void *laddr, ACPI_SIZE len)
 	
 	refreshAddrSpace();
 	spinlockRelease(&acpiMemoryLock);
+};
+
+void* mapPhysMemory(uint64_t phaddr, uint64_t len)
+{
+	return AcpiOsMapMemory(phaddr, len);
+};
+
+void unmapPhysMemory(void *laddr, uint64_t len)
+{
+	AcpiOsUnmapMemory(laddr, len);
 };

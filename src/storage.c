@@ -30,6 +30,7 @@
 #include <glidix/memory.h>
 #include <glidix/string.h>
 #include <glidix/console.h>
+#include <glidix/time.h>
 
 static char nextDriveLetter = 'a';
 
@@ -117,7 +118,7 @@ void sdInit()
 	KernelThreadParams sdPars;
 	memset(&sdPars, 0, sizeof(KernelThreadParams));
 	sdPars.stackSize = DEFAULT_STACK_SIZE;
-	sdPars.name = "SDI control daemon";
+	sdPars.name = "SDI control thread";
 	CreateKernelThread(sdThread, &sdPars, NULL);
 };
 
@@ -125,7 +126,8 @@ static void reloadPartitionTable(SDFile *sdfile)
 {
 	MBR *mbr = (MBR*) kmalloc(sdfile->sd->blockSize);
 	sdRead(sdfile->sd, 0, mbr);
-
+	kprintf_debug("sdi: reading partition table for /dev/sd%c\n", sdfile->letter);
+	
 	int i;
 	for (i=0; i<4; i++)
 	{
@@ -150,20 +152,70 @@ static void reloadPartitionTable(SDFile *sdfile)
 			name[2] = diskfile->letter;
 			name[3] = (char)i + '0';
 
-			sdfile->partdevs[i] = AddDevice(name, diskfile, diskfile_open, 0);
+			sdfile->partdevs[i] = AddDevice(name, diskfile, diskfile_open, 0600);
 		};
 	};
 
 	kfree(mbr);
 };
 
-static void diskfile_close(File *fp)
+static void doCachedWrite(StorageDevice *sd, uint64_t block, const void *data)
 {
+	uint64_t page = block & ~(sd->blocksPerPage-1);
+	uint64_t offset = (block & (sd->blocksPerPage-1)) * sd->blockSize;
+	
+	int index = sd->cacheIndex;
+	
+	int i;
+	for (i=0; i<SD_CACHE_SIZE; i++)
+	{
+		if (index == 0) index = SD_CACHE_SIZE;
+		index--;
+		
+		if (sd->cache[index].index == page)
+		{
+			memcpy(&sd->cache[index].data[offset], data, sd->blockSize);
+		};
+	};
+	
+	sdWrite(sd, block, data);
+};
+
+static void diskfile_fsync(File *fp)
+{
+	//kprintf("diskfile_fsync() called\n");
 	DiskFile *data = (DiskFile*) fp->fsdata;
 	if (data->dirty)
 	{
+#if 0
+		uint64_t invpage = (data->offset+data->bufCurrent) & ~(data->file->sd->blocksPerPage-1);
+		
+		int i;
+		for (i=0; i<SD_CACHE_SIZE; i++)
+		{
+			if (data->file->sd->cache[i].index == invpage)
+			{
+				data->file->sd->cache[i].index = SD_NOT_CACHED;
+			};
+		};
+		sdWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
+#endif
+		doCachedWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
+		data->dirty = 0;
+	};
+};
+
+static void diskfile_close(File *fp)
+{
+	DiskFile *data = (DiskFile*) fp->fsdata;
+#if 0
+	if (data->dirty)
+	{
+
 		sdWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
 	};
+#endif
+	diskfile_fsync(fp);
 	int idx = data->file->index;
 	if (idx != -1)
 	{
@@ -177,30 +229,66 @@ static void diskfile_close(File *fp)
 	kfree(data);
 };
 
-static void diskfile_fsync(File *fp)
-{
-	DiskFile *data = (DiskFile*) fp->fsdata;
-	if (data->dirty)
-	{
-		sdWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
-		data->dirty = 0;
-	};
-};
-
 static void diskfile_setblock(DiskFile *data, uint64_t block, int shouldRead)
 {
+	block += data->offset;
+	//kprintf("SETBLOCK %p\n", block);
 	if (data->bufCurrent != SD_FILE_NO_BUF)
 	{
 		if (data->dirty)
 		{
+			// TODO: cache!
+			// for now just invalidate all previous cached blocks from this page
+#if 0
+			uint64_t invpage = (data->offset+data->bufCurrent) & ~(data->file->sd->blocksPerPage-1);
+			
+			int i;
+			for (i=0; i<SD_CACHE_SIZE; i++)
+			{
+				if (data->file->sd->cache[i].index == invpage)
+				{
+					data->file->sd->cache[i].index = SD_NOT_CACHED;
+				};
+			};
+			
 			sdWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
+#endif
+			doCachedWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
 		};
 	};
 
-	data->bufCurrent = block;
-	// TODO: the condition for shouldRead causes it to fail and corrupt disk data if the writing starts
-	// on a weird boundary.
-	/*if (shouldRead)*/ sdRead(data->file->sd, data->offset+block, data->buf);
+	uint64_t page = block & ~(data->file->sd->blocksPerPage-1);
+	uint64_t offset = (block & (data->file->sd->blocksPerPage-1)) * data->file->sd->blockSize;
+	int cacheLoaded = 0;
+	char pagebuf[4096];
+	
+	int index = data->file->sd->cacheIndex;
+	int it;
+	for (it=0; it<SD_CACHE_SIZE; it++)
+	{
+		if (index == 0) index = SD_CACHE_SIZE;
+		index--;
+		
+		if (data->file->sd->cache[index].index == page)
+		{
+			memcpy(pagebuf, data->file->sd->cache[index].data, 4096);
+			cacheLoaded = 1;
+			break;
+		};
+	};
+	
+	if (!cacheLoaded)
+	{
+		//sdRead(data->file->sd, block, data->buf);
+		sdRead2(data->file->sd, page, pagebuf, data->file->sd->blocksPerPage);
+	};
+	
+	data->file->sd->cache[data->file->sd->cacheIndex].index = page;
+	memcpy(data->file->sd->cache[data->file->sd->cacheIndex].data, pagebuf, 4096);
+	data->file->sd->cacheIndex = (data->file->sd->cacheIndex+1) % SD_CACHE_SIZE;
+	
+	memcpy(data->buf, pagebuf + offset, data->file->sd->blockSize);
+	data->bufCurrent = block - data->offset;
 };
 
 static ssize_t diskfile_read(File *fp, void *buffer, size_t size)
@@ -390,6 +478,10 @@ StorageDevice *sdCreate(SDParams *params)
 	name[2] = diskfile->letter;
 	sd->diskfile = AddDevice(name, diskfile, diskfile_open, 0);
 	
+	memset(sd->cache, 0xFF, sizeof(SDCachedPage)*SD_CACHE_SIZE);		// set all to SD_NOT_CACHED (all 0xFF)
+	sd->cacheIndex = 0;
+	sd->blocksPerPage = 4096 / sd->blockSize;
+	
 	return sd;
 };
 
@@ -454,10 +546,12 @@ void sdPostComplete(SDCommand *cmd)
 	kfree(cmd);
 };
 
-int sdRead(StorageDevice *dev, uint64_t block, void *buffer)
+int sdRead2(StorageDevice *dev, uint64_t block, void *buffer, uint64_t count)
 {
 	if (dev->blockSize*(block+1) > dev->totalSize) return -1;
 
+	//kprintf("sdRead %p\n", block);
+	//int startTime = getTicks();
 	Semaphore lock;
 	semInit2(&lock, 0);
 
@@ -465,14 +559,21 @@ int sdRead(StorageDevice *dev, uint64_t block, void *buffer)
 	cmd->type = SD_CMD_READ;
 	cmd->block = buffer;
 	cmd->index = block;
-	cmd->count = 1;
+	cmd->count = count;
 	cmd->cmdlock = &lock;
 
 	sdPush(dev, cmd);
 	semWait(&lock);				// wait for the read operation to finish
-
+	//int endTime = getTicks();
+	//kprintf("sdRead %p end (%d ticks)\n", block, (endTime-startTime));
+	
 	// (cmd was freed by the driver)
 	return 0;
+};
+
+int sdRead(StorageDevice *dev, uint64_t block, void *buffer)
+{
+	return sdRead2(dev, block, buffer, 1);
 };
 
 int sdWrite(StorageDevice *dev, uint64_t block, const void *buffer)
@@ -480,6 +581,7 @@ int sdWrite(StorageDevice *dev, uint64_t block, const void *buffer)
 	if (dev->blockSize*(block+1) > dev->totalSize) return -1;
 	if (dev->flags & SD_READONLY) return -1;
 
+	//kprintf("sdWrite %p\n", block);
 	SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand) + dev->blockSize);
 	cmd->type = SD_CMD_WRITE;
 	cmd->block = &cmd[1];			// the block will be stored right after the struct.

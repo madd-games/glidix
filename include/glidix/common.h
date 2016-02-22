@@ -148,4 +148,10 @@ uint16_t atomic_swap16(uint16_t *ptr, uint16_t newval);
 uint32_t atomic_swap32(uint32_t *ptr, uint32_t newval);
 uint64_t atomic_swap64(uint64_t *ptr, uint64_t newval);
 
+/**
+ * Those are implemented in acpi/acglidix.c because reusing code is cool and who cares about
+ * the mess amirite?
+ */
+void* mapPhysMemory(uint64_t phaddr, uint64_t len);
+void unmapPhysMemory(void *laddr, uint64_t len);
 #endif

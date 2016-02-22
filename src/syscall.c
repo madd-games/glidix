@@ -50,6 +50,7 @@
 #include <glidix/pci.h>
 #include <glidix/utsname.h>
 #include <glidix/thsync.h>
+#include <glidix/message.h>
 
 void sys_exit(Regs *regs, int status)
 {
@@ -142,8 +143,8 @@ uint64_t sys_read(int fd, void *buf, size_t size)
 				}
 				else
 				{
-					out = fp->read(fp, buf, size);
 					spinlockRelease(&ftab->spinlock);
+					out = fp->read(fp, buf, size);
 				};
 			};
 		};
@@ -2251,6 +2252,35 @@ int sys_thsync(int type, int par)
 	return i;
 };
 
+int sys_condwait(uint8_t *cond, uint8_t *lock)
+{
+	// this system call allows userspace to implement blocking locks.
+	// it atomically does the following:
+	// 1) store "1" in *cond, while reading out its old value.
+	// 2) if the old value was 0, store 0 in *lock and return 0.
+	// 3) otherwise, store 0 in *lock, and block, waiting for a signal.
+	// 4) once unblocked, return -1 and set errno to EINTR.
+	lockSched();
+	cli();
+	
+	if (atomic_swap8(cond, 1) == 0)
+	{
+		*lock = 0;
+		unlockSched();
+		sti();
+		
+		return 0;
+	};
+	
+	*lock = 0;
+	getCurrentThread()->flags |= THREAD_WAITING;
+	unlockSched();
+	kyield();
+	
+	ERRNO = EINTR;
+	return -1;
+};
+
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
 {
 	siginfo_t siginfo;
@@ -2323,11 +2353,6 @@ void syscallDispatch(Regs *regs, uint16_t num)
 
 	// for the magical pipe() system call
 	int pipefd[2];
-
-	// if we return due to signalOnBadPointer() on signalOnBadSyscall(), we want to return (int)-1
-	// and set errno to EFAULT
-	//*((int*)&regs->rax) = -1;
-	//ERRNO = EFAULT;
 	
 	switch (num)
 	{
@@ -2359,7 +2384,14 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((ssize_t*)&regs->rax) = sys_read(*((int*)&regs->rdi), (void*) regs->rsi, *((size_t*)&regs->rdx));
 		break;
 	case 4:
+		if (!isStringValid(regs->rdi))
+		{
+			*((int*)&regs->rax) = -1;
+			ERRNO = EFAULT;
+			break;
+		};
 		*((int*)&regs->rax) = sys_open((const char*) regs->rdi, (int) regs->rsi, (mode_t) regs->rdx);
+		kprintf_debug("[*] sys_open: '%s'\n", (const char*) regs->rdi);
 		break;
 	case 5:
 		regs->rax = 0;
@@ -2405,6 +2437,7 @@ void syscallDispatch(Regs *regs, uint16_t num)
 			break;
 		};
 		*((int*)&regs->rax) = sys_stat((const char*) regs->rdi, (struct stat*) regs->rsi);
+		//kprintf_debug("[*] sys_stat: '%s', returned %d\n", (const char*) regs->rdi, *((int*)&regs->rax));
 		break;
 	case 16:
 		regs->rax = (uint64_t) getCurrentThread()->szExecPars;
@@ -2579,7 +2612,7 @@ void syscallDispatch(Regs *regs, uint16_t num)
 			signalOnBadPointer(regs, regs->rdi);
 			break;
 		};
-		libClose((libInfo*) regs->rdx);
+		libClose((libInfo*) regs->rdi);
 		break;
 	case 54:
 		regs->rax = sys_mmap(regs->rdi, (size_t)regs->rsi, (int)regs->rdx, (int)regs->rcx, (int)regs->r8, (off_t)regs->r9);
@@ -2892,6 +2925,46 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		break;
 	case 102:
 		*((unsigned*)&regs->rax) = sys_alarm(*((unsigned*)&regs->rdi));
+		break;
+	case 103:
+		if (!isPointerValid(regs->rdi, 1, PROT_READ | PROT_WRITE))
+		{
+			signalOnBadPointer(regs, regs->rdi);
+			break;
+		};
+		if (!isPointerValid(regs->rsi, 1, PROT_READ | PROT_WRITE))
+		{
+			signalOnBadPointer(regs, regs->rsi);
+			break;
+		};
+		*((int*)&regs->rax) = sys_condwait((uint8_t*)regs->rdi, (uint8_t*)regs->rsi);
+		break;
+	case 104:
+		*((int*)&regs->rax) = sys_mqserver();
+		break;
+	case 105:
+		*((int*)&regs->rax) = sys_mqclient((int)regs->rdi, (int)regs->rsi);
+		break;
+	case 106:
+		if (!isPointerValid(regs->rcx, regs->r8, PROT_READ))
+		{
+			ERRNO = EFAULT;
+			*((int*)&regs->rax) = -1;
+		};
+		*((int*)&regs->rax) = sys_mqsend((int)regs->rdi, (int)regs->rsi, (int)regs->rdx, (const void*)regs->rcx, (size_t)regs->r8);
+		break;
+	case 107:
+		if (!isPointerValid(regs->rsi, sizeof(MessageInfo), PROT_WRITE))
+		{
+			ERRNO = EFAULT;
+			*((int*)&regs->rax) = -1;
+		};
+		if (!isPointerValid(regs->rdx, regs->rcx, PROT_WRITE))
+		{
+			ERRNO = EFAULT;
+			*((int*)&regs->rax) = -1;
+		};
+		*((ssize_t*)&regs->rax) = sys_mqrecv((int)regs->rdi, (MessageInfo*)regs->rsi, (void*)regs->rdx, (size_t)regs->rcx);
 		break;
 	default:
 		signalOnBadSyscall(regs);

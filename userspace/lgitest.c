@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <glidix/video.h>
+#include <libddi.h>
 
 int main(int argc, char *argv[])
 {
@@ -50,16 +51,24 @@ int main(int argc, char *argv[])
 		while (1);
 	};
 
-	printf("Loaded at: %p\n", videoram);
-	char *data = (char*) malloc(size);
-	memset(data, 0xFF, size);
+	DDIPixelFormat format;
+	format.bpp = 4;
+	format.redMask = 0xFF0000;
+	format.greenMask = 0x00FF00;
+	format.blueMask = 0x0000FF;
+	format.alphaMask = 0;
+	format.pixelSpacing = 0;
+	format.scanlineSpacing = 0;
+	DDISurface *screen = ddiCreateSurface(&format, mode.width, mode.height, videoram, DDI_STATIC_FRAMEBUFFER);
 
-	printf("Literally spamming.\n");
-	_glidix_diag();
-	asm volatile("xchg %bx, %bx");
-	memcpy(videoram, data, size);
-	asm volatile("xchg %bx, %bx");
-
+	DDISurface *back = ddiCreateSurface(&format, mode.width, mode.height, NULL, 0);
+	DDIColor color = {0x33, 0x33, 0xAA, 0xFF};
+	printf("Drawing rectangle in back buffer..\n");
+	ddiFillRect(back, 0, 0, mode.width, mode.height, &color);
+	
+	printf("Blitting rectangle to screen...\n");
+	ddiBlit(back, 0, 0, screen, 0, 0, mode.width, mode.height);
+	
 	printf("done.\n");
 	while (1);
 

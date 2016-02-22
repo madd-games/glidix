@@ -16,4 +16,7 @@ build/ps2kbd.o build/ps2kbd.d : ps2kbd.c /glidix/kernel-include/glidix/module.h 
  /glidix/kernel-include/glidix/waitcnt.h \
  /glidix/kernel-include/glidix/term.h \
  /glidix/kernel-include/glidix/ioctl.h \
- /glidix/kernel-include/glidix/string.h
+ /glidix/kernel-include/glidix/string.h \
+ /glidix/kernel-include/glidix/humin.h \
+ /glidix/kernel-include/glidix/devfs.h \
+ /glidix/kernel-include/glidix/semaphore.h

@@ -69,7 +69,7 @@ static void printThreadFlags(uint64_t flags)
 		}
 		else
 		{
-			kprintf("%$\x04%c%#", info->symbol);
+			kprintf("%$\x04%c%#", info->symbol-'A'+'a');
 		};
 	};
 };
@@ -678,7 +678,7 @@ static Thread *findThreadToKill(int pid, int *stat_loc, int flags)
 					thread->pidParent = 1;
 					unlockSched();
 					ASM("sti");
-					return 0;
+					return NULL;
 				};
 			};
 		};

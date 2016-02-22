@@ -59,4 +59,15 @@ int    islower(int c);							/* init.c */
 unsigned long strtoul(const char *nptr, char **endptr, int base);	/* init.c */
 char *strstr(const char *in, const char *str);				/* init.c */
 
+/**
+ * Performs string formatting. Similar to userspace sprintf(), but accepts a slightly different
+ * format (just like the kernel kprintf()). Supported format specifiers:
+ * %c (char) - outputs a literal character.
+ * %s (const char *) - outputs a string
+ * %d (int) - outputs a decimal integer.
+ * Returns 0 on success, -1 on buffer overflow or format error.
+ * Defined in strformat.c.
+ */
+int strformat(char *buffer, size_t bufsize, const char *format, ...);
+
 #endif

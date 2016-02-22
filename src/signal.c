@@ -119,6 +119,13 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 		return;
 	};
 
+	if (siginfo->si_signo == SIGCONT)
+	{
+		// wake up the thread but do not dispatch any signal
+		thread->flags &= ~THREAD_WAITING;
+		return;
+	};
+	
 	if (thread->sigcnt == SIGQ_SIZE)
 	{
 		// drop the signal because the queue is full.

@@ -251,6 +251,7 @@ static void onPageFault(Regs *regs)
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 
+	sti();
 	if (getCurrentThread() != NULL)
 	{
 		if (regs->errCode & 2)

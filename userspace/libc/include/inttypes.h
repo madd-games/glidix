@@ -35,6 +35,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <limits.h>
+#include <stddef.h>
 
 #ifndef INTMAX_MAX
 #define	INTMAX_MAX	9223372036854775807L

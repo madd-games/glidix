@@ -40,13 +40,36 @@ void GXDumpInode(GXFileSystem *gxfs, ino_t ino)
 	gxfsInode inode;
 	vfsRead(gxfs->fp, &inode, sizeof(gxfsInode));
 
-	kprintf_debug("Dumping fragment list for inode %d\n", ino);
-	kprintf_debug("#\tOffset\tBlock\tExtent\n");
+	kprintf("Dumping fragment list for inode %d\n", ino);
+	kprintf("#\tOffset\tBlock\tExtent\n");
 	int i;
-	for (i=0; i<16; i++)
+	for (i=0; i<14; i++)
 	{
 		gxfsFragment *frag = &inode.inoFrags[i];
-		kprintf_debug("%d\t%d\t%d\t%d\n", i, frag->fOff, frag->fBlock, frag->fExtent);
+		kprintf("%d\t%p\t%p\t%p\n", i, frag->fOff, frag->fBlock, frag->fExtent);
+	};
+
+	gxfsXFT *xft = (gxfsXFT*) kmalloc(gxfs->cis.cisBlockSize);
+
+	uint64_t xftBlock = inode.inoExFrag;
+	int count = 0;
+	while (xftBlock != 0)
+	{
+		uint64_t sectionContainingBlock = xftBlock / gxfs->cis.cisBlocksPerSection;
+		uint64_t blockIndexInSection = xftBlock % gxfs->cis.cisBlocksPerSection;
+		uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxfs->cis.cisBlockSize;
+		gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
+		vfsRead(gxfs->fp, xft, gxfs->cis.cisBlockSize);
+		kprintf("<XFT at %p, level %d, count %d>\n", xftBlock, count++, xft->xftCount);
+		
+		for (i=0; i<xft->xftCount; i++)
+		{
+			gxfsFragment *frag = &xft->xftFrags[i];
+			if (frag->fExtent == 0) break;
+			kprintf("%d\t%p\t%p\t%p\n", i, frag->fOff, frag->fBlock, frag->fExtent);
+		};
+		
+		xftBlock = xft->xftNext;
 	};
 };
 
@@ -178,8 +201,7 @@ static int GXPositionXFT(GXFileSystem *gxfs, uint64_t xftBlock, uint64_t pos, ui
 		if (xft->xftCount > numFragsExpected)
 		{
 			// return error on bad XFTs.
-			kprintf_debug("[GXFS] bad XFT: xftCount is %d, max possible is %d\n", (int)xft->xftCount, (int)numFragsExpected);
-			break;
+			panic("[GXFS] bad XFT: xftCount is %d, max possible is %d", (int)xft->xftCount, (int)numFragsExpected);
 		};
 		
 		uint16_t i;
@@ -307,6 +329,7 @@ static void GXCreateXFT(GXInode *gxino, gxfsInode *inode, uint64_t xftBlock)
  */
 static void GXExpandXFT(GXInode *gxino, gxfsInode *inode, size_t newSize)
 {
+	//kprintf("EXPAND TO %p (from %p)\n", newSize, inode->inoSize);
 	GXFileSystem *gxfs = gxino->gxfs;
 	gxfsXFT *xft = (gxfsXFT*) kmalloc(gxfs->cis.cisBlockSize);
 	
@@ -323,7 +346,7 @@ static void GXExpandXFT(GXInode *gxino, gxfsInode *inode, size_t newSize)
 		if (xft->xftCount > numFragsExpected)
 		{
 			// return error on bad XFTs.
-			kprintf_debug("[GXFS] bad XFT: xftCount is %d, max possible is %d\n", (int)xft->xftCount, (int)numFragsExpected);
+			panic("[GXFS] bad XFT: xftCount is %d, max possible is %d\n", (int)xft->xftCount, (int)numFragsExpected);
 			break;
 		};
 		
@@ -345,7 +368,7 @@ static void GXExpandXFT(GXInode *gxino, gxfsInode *inode, size_t newSize)
 		i--;
 		
 		// expand to max extent if possible
-		uint64_t maxExtent = xft->xftFrags[i].fOff + inode->inoFrags[i].fExtent * gxfs->cis.cisBlockSize;
+		uint64_t maxExtent = xft->xftFrags[i].fOff + xft->xftFrags[i].fExtent * gxfs->cis.cisBlockSize;
 		if (maxExtent >= newSize)
 		{
 			inode->inoSize = newSize;
@@ -530,22 +553,14 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 {
 	GXFileSystem *gxfs = gxino->gxfs;
 	gxfsInode inode;
-	//gxfs->fp->seek(gxfs->fp, gxino->offset, SEEK_SET);
-	//vfsRead(gxfs->fp, &inode, sizeof(gxfsInode));
 	GXReadInodeHeader(gxino, &inode);
 	int inodeDirty = 0;
-
-#if 0
-	if (gxino->pos > inode.inoSize)
-	{
-		gxino->pos = inode.inoSize;
-	};
-#endif
 
 	while ((gxino->pos+size) > inode.inoSize)
 	{
 		inodeDirty = 1;
 		GXExpandInodeToSize(gxino, &inode, gxino->pos + size);
+		//kprintf("NOW SIZE IS %p\n", inode.inoSize);
 	};
 
 	size_t sizeWritten = 0;
@@ -575,6 +590,8 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 			if (GXPositionXFT(gxino->gxfs, inode.inoExFrag, gxino->pos, &block, &offsetIntoBlock) != 0)
 			{
 				// not found in XFT either, stop trying to write
+				GXDumpInode(gxino->gxfs, gxino->ino);
+				panic("cannot find position %p in the file!", gxino->pos);
 				break;
 			};
 		};
@@ -584,7 +601,6 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 		uint64_t blockIndexInSection = block % gxfs->cis.cisBlocksPerSection;
 		uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxfs->cis.cisBlockSize;
 
-		//kprintf_debug("gxfs: write block %d\n", block);
 		size_t sizeLeftInBlock = gxfs->cis.cisBlockSize - offsetIntoBlock;
 		if (sizeLeftInBlock > (size-sizeWritten)) sizeLeftInBlock = size - sizeWritten;
 		gxfs->fp->seek(gxfs->fp, offsetToBlock + offsetIntoBlock, SEEK_SET);
