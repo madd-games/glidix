@@ -154,4 +154,5 @@ uint64_t atomic_swap64(uint64_t *ptr, uint64_t newval);
  */
 void* mapPhysMemory(uint64_t phaddr, uint64_t len);
 void unmapPhysMemory(void *laddr, uint64_t len);
+
 #endif

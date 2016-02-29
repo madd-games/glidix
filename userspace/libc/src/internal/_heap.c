@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 pthread_spinlock_t __heap_lock = 0;
 
@@ -87,6 +88,14 @@ void _heap_split_block(__heap_header *head, size_t newSize)
 	};
 
 	__heap_footer *foot = _heap_get_footer(head);
+	if ((uint64_t)foot > 0xF000000000000000)
+	{
+		_heap_dump();
+		fprintf(stderr, "size: %lu\n", head->size);
+		fprintf(stderr, "header at: %p\n", head);
+		fprintf(stderr, "footer at: %p\n", foot);
+		_exit(1);
+	};
 	head->size = newSize;
 
 	__heap_footer *newFoot = _heap_get_footer(head);
@@ -106,10 +115,31 @@ void _heap_split_block(__heap_header *head, size_t newSize)
 	newHead->flags = _HEAP_BLOCK_HAS_LEFT;
 };
 
+static int __i_debug = 0;
+void __i_am_debug()
+{
+	__i_debug = 1;
+};
+
 void* _heap_malloc(size_t len)
 {
 	if (len == 0) return NULL;
 
+	if (len & 0xF)
+	{
+		len &= ~0xF;
+		len += 0x10;
+	};
+	
+	if (len == 112)
+	{
+		if (__i_debug)
+		{
+			fprintf(stderr, "ALLOCATING 112 bytes\n");
+			*((int*)0xf000000000000000) = 5;
+		};
+	};
+	
 	__heap_header *head = (__heap_header*) _HEAP_BASE_ADDR;
 	while ((head->size < len) || (head->flags & _HEAP_BLOCK_USED))
 	{
@@ -140,6 +170,14 @@ void* _heap_malloc(size_t len)
 		head = (__heap_header*) &foot[1];
 	};
 
+	if (head->magic != _HEAP_HEADER_MAGIC)
+	{
+		_heap_dump();
+		fprintf(stderr, "libc: invalid header magic at %p\n", head);
+		abort();
+		_exit(1);
+	};
+	
 	head->flags |= _HEAP_BLOCK_USED;
 	_heap_split_block(head, len);
 	return (void*) &head[1];
@@ -251,7 +289,7 @@ void _heap_dump()
 			printf(" ");
 		};
 
-		printf("size=%u\n", (unsigned int) head->size);
+		printf("size=%lu, footsz=%lu\n", head->size, foot->size);
 		if (foot->flags & _HEAP_BLOCK_HAS_RIGHT)
 		{
 			head = (__heap_header*) &foot[1];

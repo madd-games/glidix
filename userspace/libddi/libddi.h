@@ -103,6 +103,11 @@ typedef struct
 } DDIColor;
 
 /**
+ * Returns the amount of data required to represent an image of a certain size in the given format.
+ */
+size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned int height);
+
+/**
  * Creates a new surface out of pixel data in the specified format. The possible flags are as
  * follows:
  *

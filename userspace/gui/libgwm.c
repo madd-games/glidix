@@ -31,6 +31,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
 #include "gui.h"
 
 static int guiPid;
@@ -50,8 +52,19 @@ typedef struct GWMWaiter_
 	pthread_spinlock_t		lock;
 } GWMWaiter;
 
+typedef struct EventBuffer_
+{
+	struct EventBuffer_*		prev;
+	struct EventBuffer_*		next;
+	GWMEvent			payload;
+} EventBuffer;
+
 static pthread_spinlock_t waiterLock;
 static GWMWaiter* waiters = NULL;
+static int eventCounterFD;
+static pthread_spinlock_t eventLock;
+static EventBuffer *firstEvent;
+static EventBuffer *lastEvent;
 
 static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 {
@@ -98,21 +111,46 @@ static void* listenThreadFunc(void *ignore)
 			};
 		
 			GWMMessage *msg = (GWMMessage*) msgbuf;
-			pthread_spin_lock(&waiterLock);
-			GWMWaiter *waiter;
-			for (waiter=waiters; waiter!=NULL; waiter=waiter->next)
+			if (msg->generic.seq != 0)
 			{
-				if (waiter->seq == msg->generic.seq)
+				pthread_spin_lock(&waiterLock);
+				GWMWaiter *waiter;
+				for (waiter=waiters; waiter!=NULL; waiter=waiter->next)
 				{
-					memcpy(&waiter->resp, msg, sizeof(GWMWaiter));
-					if (waiter->prev != NULL) waiter->prev->next = waiter->next;
-					if (waiter->next != NULL) waiter->next->prev = waiter->prev;
-					if (waiter->prev == NULL) waiters = waiter->next;
-					pthread_spin_unlock(&waiter->lock);
-					break;
+					if (waiter->seq == msg->generic.seq)
+					{
+						memcpy(&waiter->resp, msg, sizeof(GWMMessage));
+						if (waiter->prev != NULL) waiter->prev->next = waiter->next;
+						if (waiter->next != NULL) waiter->next->prev = waiter->prev;
+						if (waiter->prev == NULL) waiters = waiter->next;
+						pthread_spin_unlock(&waiter->lock);
+						break;
+					};
 				};
+				pthread_spin_unlock(&waiterLock);
+			}
+			else if (msg->generic.type == GWM_MSG_EVENT)
+			{
+				EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
+				memcpy(&buf->payload, &msg->event.payload, sizeof(GWMEvent));
+				
+				pthread_spin_lock(&eventLock);
+				if (firstEvent == NULL)
+				{
+					buf->prev = buf->next = NULL;
+					firstEvent = lastEvent = NULL;
+				}
+				else
+				{
+					buf->prev = lastEvent;
+					buf->next = NULL;
+					lastEvent->next = buf;
+					lastEvent = buf;
+				};
+				pthread_spin_unlock(&eventLock);
+				int one = 1;
+				ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
 			};
-			pthread_spin_unlock(&waiterLock);
 		};
 	};
 };
@@ -128,6 +166,7 @@ int gwmInit()
 	
 	nextWindowID = 1;
 	nextSeq = 1;
+	eventCounterFD = _glidix_thsync(1, 0);	// semaphore, start at zero
 	
 	if (pthread_create(&listenThread, NULL, listenThreadFunc, NULL) != 0)
 	{
@@ -138,8 +177,9 @@ int gwmInit()
 	return 0;
 };
 
-GWMWindowHandle gwmCreateWindow(
-	GWMWindowHandle parent,
+void _heap_dump();
+GWMWindow* gwmCreateWindow(
+	GWMWindow* parent,
 	const char *caption,
 	unsigned int x, unsigned int y,
 	unsigned int width, unsigned int height,
@@ -151,7 +191,8 @@ GWMWindowHandle gwmCreateWindow(
 	GWMCommand cmd;
 	cmd.createWindow.cmd = GWM_CMD_CREATE_WINDOW;
 	cmd.createWindow.id = id;
-	cmd.createWindow.parent = (uint64_t) parent;
+	cmd.createWindow.parent = 0;
+	if (parent != NULL) cmd.createWindow.parent = parent->id;
 	strcpy(cmd.createWindow.pars.caption, caption);
 	strcpy(cmd.createWindow.pars.iconName, caption);
 	cmd.createWindow.pars.flags = flags;
@@ -160,14 +201,54 @@ GWMWindowHandle gwmCreateWindow(
 	cmd.createWindow.pars.x = x;
 	cmd.createWindow.pars.y = y;
 	cmd.createWindow.seq = seq;
+	cmd.createWindow.painterPid = getpid();
 	
 	GWMMessage resp;
 	gwmPostWaiter(seq, &resp, &cmd);
 	
 	if (resp.createWindowResp.status == 0)
 	{
-		return (GWMWindowHandle) id;
+		GWMWindow *win = (GWMWindow*) malloc(sizeof(GWMWindow));
+		win->id = id;
+		
+		uint64_t canvasBase = __alloc_pages(resp.createWindowResp.shmemSize);
+		if (_glidix_shmap(canvasBase, resp.createWindowResp.shmemSize, resp.createWindowResp.shmemID, PROT_READ|PROT_WRITE) != 0)
+		{
+			perror("_glidix_shmap");
+			free(win);
+			return NULL;
+		};
+
+		win->shmemAddr = canvasBase;
+		win->shmemSize = resp.createWindowResp.shmemSize;
+		win->canvas = ddiCreateSurface(&resp.createWindowResp.format, resp.createWindowResp.width,
+						resp.createWindowResp.height, (char*)canvasBase, DDI_STATIC_FRAMEBUFFER);
+		return win;
 	};
 	
 	return NULL;
+};
+
+DDISurface* gwmGetWindowCanvas(GWMWindow *win)
+{
+	return win->canvas;
+};
+
+void gwmPostDirty()
+{
+	GWMCommand cmd;
+	cmd.cmd = GWM_CMD_POST_DIRTY;
+	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+};
+
+void gwmWaitEvent(GWMEvent *ev)
+{
+	int one = 1;
+	while (ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_WAIT, &one) == -1);
+
+	pthread_spin_lock(&eventLock);
+	memcpy(ev, &firstEvent->payload, sizeof(GWMEvent));
+	firstEvent = firstEvent->next;
+	if (firstEvent != NULL) firstEvent->prev = NULL;
+	pthread_spin_unlock(&eventLock);
 };

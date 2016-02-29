@@ -36,7 +36,7 @@
 #include <glidix/time.h>
 
 static Thread firstThread;
-static Thread *currentThread;
+Thread *currentThread;			// don't make it static; used by syscall.asm
 static Spinlock schedLock;		// for PID and stuff
 static int nextPid;
 
@@ -185,6 +185,7 @@ static void jumpToTask()
 	// switch kernel stack
 	ASM("cli");
 	_tss.rsp0 = ((uint64_t) currentThread->stack + currentThread->stackSize) & (uint64_t)~0xF;
+	currentThread->syscallStackPointer = ((uint64_t) currentThread->stack + currentThread->stackSize) & (uint64_t)~0xF;
 
 	// reload the TSS
 	reloadTR();

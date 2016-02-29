@@ -105,11 +105,6 @@ void validatePartition(int i)
 {
 	Partition *part = &mbr.parts[i];
 	int valid = 1;
-	if ((part->flags & 1) == 0)
-	{
-		valid = 0;
-	};
-
 	if (part->sig1 != 0x14)
 	{
 		valid = 0;
@@ -292,9 +287,9 @@ void runcmd(char *cmd)
 		int j;
 		for (j=0; j<4; j++)
 		{
-			mbr.parts[j].flags &= ~0x80;
+			mbr.parts[j].flags = 0;
 		};
-		part->flags |= 0x80;
+		part->flags = 0x80;
 		printf("The partition is now bootable!\n");
 	}
 	else if ((strcmp(cmd, "wipe") == 0) || (strcmp(cmd, "clear") == 0))

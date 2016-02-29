@@ -30,6 +30,7 @@
 #define GUI_H_
 
 #include <stdint.h>
+#include <libddi.h>
 
 #define	GWM_WINDOW_HIDDEN			(1 << 0)
 #define	GWM_WINDOW_NODECORATE			(1 << 1)
@@ -49,9 +50,20 @@ typedef struct
 } GWMWindowParams;
 
 /**
+ * Event structure.
+ */
+#define	GWM_EVENT_CLOSE				0
+typedef struct
+{
+	int					type;
+	uint64_t				win;		// window IDGWM
+} GWMEvent;
+
+/**
  * Commands understood by the window manager.
  */
 #define	GWM_CMD_CREATE_WINDOW			0
+#define	GWM_CMD_POST_DIRTY			1
 typedef union
 {
 	int					cmd;
@@ -63,6 +75,7 @@ typedef union
 		uint64_t			parent;
 		GWMWindowParams			pars;
 		uint64_t			seq;	// sequence number for responses
+		int				painterPid;
 	} createWindow;
 } GWMCommand;
 
@@ -70,6 +83,7 @@ typedef union
  * Messages sent by the window manager to clients.
  */
 #define GWM_MSG_CREATE_WINDOW_RESP		0
+#define	GWM_MSG_EVENT				1
 typedef union
 {
 	struct
@@ -83,14 +97,31 @@ typedef union
 		int				type;	// GWM_MSG_CREATE_WINDOW_RESP
 		uint64_t			seq;
 		int				status;	// 0 = success, everything else = error
+		DDIPixelFormat			format;
+		uint64_t			shmemID;
+		uint64_t			shmemSize;
+		unsigned int			width;
+		unsigned int			height;
 	} createWindowResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_EVENT
+		uint64_t			seq;	// always zero for events
+		GWMEvent			payload;
+	} event;
 } GWMMessage;
 
 /**
- * A GWMWindowHandle is actually the 64-bit window ID, but we want to allow
- * the use of NULL as a value.
+ * Describes a window on the application side.
  */
-typedef void* GWMWindowHandle;
+typedef struct
+{
+	uint64_t				id;
+	uint64_t				shmemAddr;
+	uint64_t				shmemSize;
+	DDISurface*				canvas;
+} GWMWindow;
 
 /**
  * Initialises the GWM library. This must be called before using any other functions.
@@ -101,11 +132,26 @@ int gwmInit();
 /**
  * Creates a new window. On success, returns a window handle; on error, returns NULL.
  */
-GWMWindowHandle gwmCreateWindow(
-	GWMWindowHandle parent,
+GWMWindow* gwmCreateWindow(
+	GWMWindow *parent,
 	const char *caption,
 	unsigned int x, unsigned int y,
 	unsigned int width, unsigned int height,
 	int flags);
+
+/**
+ * Return the DDI surface representing the window.
+ */
+DDISurface* gwmGetWindowCanvas(GWMWindow *win);
+
+/**
+ * Tell the window manager that the screen needs re-drawing.
+ */
+void gwmPostDirty();
+
+/**
+ * Wait until an event is received and store it in the event structure.
+ */
+void gwmWaitEvent(GWMEvent *ev);
 
 #endif

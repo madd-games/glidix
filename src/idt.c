@@ -400,7 +400,9 @@ void onInvalidOpcodeOrSyscall(Regs *regs)
 	}
 	else
 	{
-		panic("invalid opcode");
+		kprintf("INVALID OPCODE\n");
+		debugKernel(regs);
+		panic("I died");
 	};
 };
 

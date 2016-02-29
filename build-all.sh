@@ -34,6 +34,14 @@ cd ..
 sudo make install-dev || exit 1
 mkdir -p initrd/initmod
 
+# bootloader
+cd userspace/gxld
+make || exit 1
+x86_64-glidix-gcc gxld-install.c -o ../../isodir/bin/gxld-install || exit 1
+cp mbr.bin ../../isodir/boot/mbr.bin
+cp stage2.bin ../../isodir/boot/stage2.bin
+cd ../..
+
 # shutils
 chmod 6755 mipdir/usr/bin/passwd
 chmod 6755 mipdir/usr/bin/sudo
@@ -57,7 +65,7 @@ cd ../..
 cd userspace/gui
 #x86_64-glidix-gcc lgitest.c -o ../isodir/bin/lgitest -I ../include -lddi || exit 1
 x86_64-glidix-gcc gui.c -o ../../mipdir/usr/bin/gui -I ../../include -lddi || exit 1
-x86_64-glidix-gcc -fPIC -shared libgwm.c -o ../../mipdir/usr/lib/libgwm.so || exit 1
+x86_64-glidix-gcc -fPIC -shared libgwm.c -o ../../mipdir/usr/lib/libgwm.so -lddi || exit 1
 sudo cp ../../mipdir/usr/lib/libgwm.so /glidix/usr/lib/libgwm.so || exit 1
 x86_64-glidix-gcc gui-init.c -o ../../mipdir/usr/libexec/gui-init -lddi -lgwm || exit 1
 cd ../..

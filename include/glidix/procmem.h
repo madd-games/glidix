@@ -102,6 +102,15 @@ typedef struct
 	 * If this is a copy-on-write frame list.
 	 */
 	COWList *cowList;
+	
+	/**
+	 * If not NULL, then this is the function that is called when this
+	 * frame list is deleted. Used for managing shared memory. It is
+	 * called before actually deleting the structure; so you can safely
+	 * perform synchronisation.
+	 */
+	void (*on_destroy)(void*);
+	void* on_destroy_arg;
 } FrameList;
 
 typedef struct _Segment
@@ -160,7 +169,7 @@ typedef struct
 FrameList *palloc_later(int count, off_t fileOffset, size_t fileSize);
 FrameList *palloc(int count);
 FrameList *pmap(uint64_t start, int count);
-void pupref(FrameList *fl);
+int pupref(FrameList *fl);			// returns the new refcount
 void pdownref(FrameList *fl);
 
 /**

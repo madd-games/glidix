@@ -104,15 +104,20 @@ typedef struct _Thread
 	FPURegs				fpuRegs;
 
 	/**
-	 * The thread's registers.
+	 * OFFSET 512. The value to load into RSI upon a syscall.
 	 */
-	Regs				regs;
-
+	uint64_t			syscallStackPointer;
+	
 	/**
 	 * The thread's stack and its size. Must be kfree()'d when the thread terminates.
 	 */
 	void				*stack;
 	size_t				stackSize;
+	
+	/**
+	 * The thread's registers.
+	 */
+	Regs				regs;
 
 	/**
 	 * Thread name (for debugging of kernel threads), or the path to the executable in

@@ -51,16 +51,61 @@
 #include <glidix/utsname.h>
 #include <glidix/thsync.h>
 #include <glidix/message.h>
+#include <glidix/shmem.h>
 
-void sys_exit(Regs *regs, int status)
+int isPointerValid(uint64_t ptr, uint64_t size, int flags)
 {
+	if (size == 0) return 1;
+
+	if (ptr < 0x1000)
+	{
+		return 0;
+	};
+
+	if ((ptr+size) > 0x7FC0000000)
+	{
+		return 0;
+	};
+
+	uint64_t start = ptr / 0x1000;
+	uint64_t count = size / 0x1000;
+	if (size % 0x1000) count++;
+	
+	uint64_t i;
+	for (i=start; i<start+count; i++)
+	{
+		if (!canAccessPage(getCurrentThread()->pm, i, flags))
+		{
+			return 0;
+		};
+	};
+	
+	return 1;
+};
+
+int isStringValid(uint64_t ptr)
+{
+	// TODO
+	return 1;
+};
+
+void sys_exit(int status)
+{
+	Regs regs;				// it's OK to destroy the registers as we're exiting
 	threadExit(getCurrentThread(), status);
 	ASM("cli");
-	switchTask(regs);
+	switchTask(&regs);
 };
 
 uint64_t sys_write(int fd, const void *buf, size_t size)
 {
+	if (!isPointerValid((uint64_t)buf, (uint64_t)size, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		ssize_t err = -1;
+		return *((uint64_t*)&err);
+	};
+	
 	ssize_t out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -348,8 +393,8 @@ int sys_ioctl(int fd, uint64_t cmd, void *argp)
 		return -1;
 	};
 
-	int ret = fp->ioctl(fp, cmd, argp);
 	spinlockRelease(&ftab->spinlock);
+	int ret = fp->ioctl(fp, cmd, argp);
 	return ret;
 };
 
@@ -1105,42 +1150,6 @@ int sys_dup2(int oldfd, int newfd)
 	spinlockRelease(&ftab->spinlock);
 
 	return newfd;
-};
-
-int isPointerValid(uint64_t ptr, uint64_t size, int flags)
-{
-	if (size == 0) return 1;
-
-	if (ptr < 0x1000)
-	{
-		return 0;
-	};
-
-	if ((ptr+size) > 0x7FC0000000)
-	{
-		return 0;
-	};
-
-	uint64_t start = ptr / 0x1000;
-	uint64_t count = size / 0x1000;
-	if (size % 0x1000) count++;
-	
-	uint64_t i;
-	for (i=start; i<start+count; i++)
-	{
-		if (!canAccessPage(getCurrentThread()->pm, i, flags))
-		{
-			return 0;
-		};
-	};
-	
-	return 1;
-};
-
-int isStringValid(uint64_t ptr)
-{
-	// TODO
-	return 1;
 };
 
 int sys_insmod(const char *modname, const char *path, const char *opt, int flags)
@@ -2327,6 +2336,41 @@ unsigned sys_alarm(unsigned sec)
 	return (unsigned) ((old - currentTime) / NANO_PER_SEC);
 };
 
+/**
+ * System call table for fast syscalls, and the number of system calls.
+ */
+#define SYSCALL_NUMBER 2
+void* sysTable[SYSCALL_NUMBER] = {
+	&sys_exit,				// 0
+	&sys_write,				// 1
+};
+uint64_t sysNumber = SYSCALL_NUMBER;
+
+uint64_t sysEpilog(uint64_t retval)
+{
+	if (getCurrentThread()->errnoptr != NULL)
+	{
+		*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
+	};
+
+	// TODO: signal dispatching
+#if 0
+	if ((getCurrentThread()->sigcnt > 0) && ((regs->cs & 3) == 3) && ((getCurrentThread()->flags & THREAD_SIGNALLED) == 0))
+	{
+		// also dispatching after calls.
+		ASM("cli");
+		lockSched();
+		memcpy(&getCurrentThread()->regs, regs, sizeof(Regs));
+		dispatchSignal(getCurrentThread());
+		memcpy(regs, &getCurrentThread()->regs, sizeof(Regs));
+		unlockSched();
+		return;					// interrupts will be enabled on return
+	};
+#endif
+
+	return retval;
+};
+
 void syscallDispatch(Regs *regs, uint16_t num)
 {
 	if (getCurrentThread()->errnoptr != NULL)
@@ -2357,14 +2401,9 @@ void syscallDispatch(Regs *regs, uint16_t num)
 	switch (num)
 	{
 	case 0:
-		sys_exit(regs, (int) regs->rdi);
+		sys_exit((int) regs->rdi);
 		break;					/* never actually reached */
 	case 1:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
 		*((ssize_t*)&regs->rax) = sys_write(*((int*)&regs->rdi), (const void*) regs->rsi, *((size_t*)&regs->rdx));
 		break;
 	case 2:
@@ -2965,6 +3004,12 @@ void syscallDispatch(Regs *regs, uint16_t num)
 			*((int*)&regs->rax) = -1;
 		};
 		*((ssize_t*)&regs->rax) = sys_mqrecv((int)regs->rdi, (MessageInfo*)regs->rsi, (void*)regs->rdx, (size_t)regs->rcx);
+		break;
+	case 108:
+		regs->rax = sys_shmalloc(regs->rdi, regs->rsi, *((int*)&regs->rdx), *((int*)&regs->rcx), *((int*)&regs->r8));
+		break;
+	case 109:
+		*((int*)&regs->rax) = sys_shmap(regs->rdi, regs->rsi, regs->rdx, *((int*)&regs->rcx));
 		break;
 	default:
 		signalOnBadSyscall(regs);

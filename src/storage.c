@@ -132,7 +132,7 @@ static void reloadPartitionTable(SDFile *sdfile)
 	for (i=0; i<4; i++)
 	{
 		Partition *part = &mbr->parts[i];
-		if ((part->flags & 1) && (part->sig1 == 0x14) && (part->sig2 == 0xEB) && (part->systemID != 0))
+		if ((part->sig1 == 0x14) && (part->sig2 == 0xEB) && (part->systemID != 0))
 		{
 			uint64_t offset = ((uint64_t)part->startHigh << 32) + (uint64_t)part->startLow;
 			uint64_t limit = offset + ((uint64_t)part->lenHigh << 32) + (uint64_t)part->lenLow;

@@ -170,6 +170,22 @@ static char ddiDefaultFont[128][8] = {
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}	// U+007F
 };
 
+size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned int height)
+{
+	size_t scanlineLen = format->scanlineSpacing
+		+ (format->bpp + format->pixelSpacing) * width;
+	size_t size = scanlineLen * height;
+	
+	// make sure the size is a multiple of 4 bytes as that helps with certain operations
+	if (size & 3)
+	{
+		size &= ~((size_t)3);
+		size += 4;
+	};
+	
+	return size;
+};
+
 static size_t ddiGetSurfaceDataSize(DDISurface *surface)
 {
 	size_t scanlineLen = surface->format.scanlineSpacing
@@ -776,12 +792,21 @@ void ddiDrawText(DDISurface *surface, unsigned int x, unsigned int y, const char
 	static DDIColor black = {0, 0, 0, 255};
 	if (color == NULL) color = &black;
 	
+	unsigned int originalX = x;
 	while (*text != 0)
 	{
 		char c = *text++;
 		if (c & 0x80) continue;
 		
-		ddiExpandBitmap(surface, x, y, DDI_BITMAP_8x8, ddiDefaultFont[c], color);
-		x += 8;
+		if (c == '\n')
+		{
+			y += 8;
+			x = originalX;
+		}
+		else
+		{
+			ddiExpandBitmap(surface, x, y, DDI_BITMAP_8x8, ddiDefaultFont[c], color);
+			x += 8;
+		};
 	};
 };

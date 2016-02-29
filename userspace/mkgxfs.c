@@ -1,5 +1,5 @@
 /*
-	Glidix Runtime
+	GXFS Formatting Utility
 
 	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
@@ -33,48 +33,153 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include "gxfs.h"
+#include <stdlib.h>
+#include <errno.h>
 
 #include <glidix/storage.h>
 
+char *progName;
 size_t diskBlockSize;
 size_t diskTotalSize;
 
-void calculateBlocksToMake(uint64_t space, uint64_t blockSize, uint64_t *outBlocks, uint64_t *outBitmapSize)
+void usage()
 {
-	// TODO: make this more space efficient
-	uint64_t blocks = 0;
-	uint64_t bitmapSize = 0;
-
-	while (space > (blockSize*8+1))
-	{
-		blocks += 8;
-		bitmapSize++;
-		space -= (blockSize*8+1);
-	};
-
-	*outBlocks = blocks;
-	*outBitmapSize = bitmapSize;
+	fprintf(stderr, "USAGE:\t%s device [-v vbr_size] [-i data_per_inode] [-s sections]\n", progName);
+	fprintf(stderr, "\tFormats the specified drive (or file) for the Glidix fileystem.\n");
+	fprintf(stderr, "\tOptions:\n");
+	fprintf(stderr, "\t-v vbr_size\n");
+	fprintf(stderr, "\t\tSpecifies how much space to reserve for the\n");
+	fprintf(stderr, "\t\tbootloader. Default is 4KB.\n");
+	fprintf(stderr, "\t-i data_per_inode\n");
+	fprintf(stderr, "\t\tSpecifies the amount of space to reserve\n");
+	fprintf(stderr, "\t\tper inode. Default is 1MB.\n");
+	fprintf(stderr, "\t-s sections\n");
+	fprintf(stderr, "\t\tSpecifies the number of sections to create.\n");
+	fprintf(stderr, "\t\tDefault is 16.\n");
+	exit(1);
 };
 
-void writeZeroes(int fd, size_t count)
+size_t parseSize(const char *str)
 {
-	char c = 0;
-	while (count--) write(fd, &c, 1);
+	size_t size;
+	char unit;
+	int count = sscanf(str, "%lu%c", &size, &unit);
+	
+	if (count == 1)
+	{
+		return size;
+	};
+	
+	switch (unit)
+	{
+	case 'T':
+		size *= 1024;
+	case 'G':
+		size *= 1024;
+	case 'M':
+		size *= 1024;
+	case 'K':
+		size *= 1024;
+	case 'B':
+		break;
+	default:
+		usage();
+		exit(1);
+	};
+	
+	return size;
+};
+
+void writeZeroes(int fd, size_t size)
+{
+	char zeroes[4096];
+	memset(zeroes, 0, 4096);
+	
+	while (size > 0)
+	{
+		size_t writeNow = size;
+		if (writeNow > 4096) writeNow = 4096;
+		write(fd, zeroes, writeNow);
+		size -= writeNow;
+	};
 };
 
 int main(int argc, char *argv[])
 {
-	if (argc != 2)
+	progName = argv[0];
+	const char *deviceName = NULL;
+	size_t vbrSize = 0x1000;		// default 4KB for the Volume Boot Record
+	size_t dataPerInode = 0x400;		// default 16KB per inode
+	size_t numSections = 2;			// default 2 sections
+	size_t blockSize = 512;			// default 512-byte blocks
+	
+	size_t i;
+	for (i=1; i<argc; i++)
 	{
-		fprintf(stderr, "%s <device>\n", argv[0]);
-		fprintf(stderr, "  Create a Glidix File System on the specified device.\n");
-		return 1;
+		if (argv[i][0] != '-')
+		{
+			if (deviceName != NULL)
+			{
+				usage();
+				return 1;
+			};
+			
+			deviceName = argv[i];
+		}
+		else if (strcmp(argv[i], "-v") == 0)
+		{
+			if (i == argc-1)
+			{
+				usage();
+				return 1;
+			};
+			
+			vbrSize = parseSize(argv[i+1]);
+			i++;
+		}
+		else if (strcmp(argv[i], "-i") == 0)
+		{
+			if (i == argc-1)
+			{
+				usage();
+				return 1;
+			};
+			
+			dataPerInode = parseSize(argv[i+1]);
+			i++;
+		}
+		else if (strcmp(argv[i], "-s") == 0)
+		{
+			if (i == argc-1)
+			{
+				usage();
+				return 1;
+			};
+			
+			if (sscanf(argv[i+1], "%lu", &numSections) != 1)
+			{
+				usage();
+				return 1;
+			};
+			i++;
+		}
+		else
+		{
+			usage();
+			return 1;
+		};
 	};
 
-	int fd = open(argv[1], O_RDWR);
+	if (deviceName == NULL)
+	{
+		usage();
+		return 1;
+	};
+	
+	int fd = open(deviceName, O_RDWR);
 	if (fd < 0)
 	{
-		fprintf(stderr, "%s: error: could not open %s\n", argv[0], argv[1]);
+		fprintf(stderr, "%s: error: could not open %s: %s\n", argv[0], deviceName, strerror(errno));
 		return 1;
 	};
 
@@ -82,88 +187,102 @@ int main(int argc, char *argv[])
 	if (ioctl(fd, IOCTL_SDI_IDENTITY, &pars) != 0)
 	{
 		close(fd);
-		fprintf(stderr, "%s: error: could not get information about %s\n", argv[0], argv[1]);
+		fprintf(stderr, "%s: error: could not get information about %s: %s\n", argv[0], deviceName, strerror(errno));
 		return 1;
 	};
 	diskBlockSize = pars.blockSize;
 	diskTotalSize = pars.totalSize;
+	
+	size_t offCIS = vbrSize;				// CIS right after the VBR
+	size_t offSections = offCIS + 64;			// sections right after the CIS
+	size_t offSpace = offSections + 32 * numSections;
+	
+	size_t spacePerSection = (diskTotalSize - offSpace) / numSections;
+	size_t inodesPerSection = 8;
+	size_t blockTableSize, inodeTableSize, blockMapSize, inodeMapSize, blocksPerSection;
+	
+	while (1)
+	{
+		blocksPerSection = ((inodesPerSection * dataPerInode) / blockSize) & ~((size_t)7);
+		blockTableSize = blockSize * blocksPerSection;
+		inodeTableSize = 359 * inodesPerSection;
+		blockMapSize = blocksPerSection / 8;
+		inodeMapSize = inodesPerSection / 8;
+		size_t totalSize = blockTableSize + inodeTableSize + blockMapSize + inodeMapSize;
+		
+		if (totalSize > spacePerSection)
+		{
+			inodesPerSection -= 8;
+			break;
+		};
+		
+		inodesPerSection += 8;
+	};
+
+	blocksPerSection = ((inodesPerSection * dataPerInode) / blockSize) & ~((size_t)7);
+	blockTableSize = blockSize * blocksPerSection;
+	inodeTableSize = 359 * inodesPerSection;
+	blockMapSize = blocksPerSection / 8;
+	inodeMapSize = inodesPerSection / 8;
+
+	if (inodesPerSection < 16)
+	{
+		close(fd);
+		fprintf(stderr, "%s: the current configuration has less than 16 inodes per section", argv[0]);
+		return 1;
+	};
+	
+	printf("Filesystem plan:\n");
+	printf("\tInodes per section: %lu\n", inodesPerSection);
+	printf("\tBlocks per section: %lu\n", blocksPerSection);
 
 	lseek(fd, 0x10, SEEK_SET);
-	uint64_t f = 0x400;
-	write(fd, &f, 8);
-
-	uint64_t sectionsToMake = 2;
-	uint64_t bytesPerInode = 0x4000;		// 16KB
-	uint64_t fsBlockSize = pars.blockSize;
-
-	uint64_t sectionPlacement = 0x400 + sizeof(gxfsCIS) + sectionsToMake * sizeof(gxfsSD);
-	uint64_t inodesPerSection = (diskTotalSize - sectionPlacement) / bytesPerInode / sectionsToMake;
-	uint64_t inodeBitmapSize = inodesPerSection / 8;
-	if (inodesPerSection % 8) inodeBitmapSize++;
-	uint64_t blocksPerSection, blockBitmapSize;
-	calculateBlocksToMake((diskTotalSize - sectionPlacement - inodesPerSection * sectionsToMake * sizeof(gxfsInode) - inodeBitmapSize)/sectionsToMake,
-				fsBlockSize, &blocksPerSection, &blockBitmapSize);
-
-	printf("GXFS Details (consistency check):\n");
-	printf("\tSize of CIS:           %d\n", sizeof(gxfsCIS));
-	printf("\tSize of SD:            %d\n", sizeof(gxfsSD));
-	printf("\tSize of inode:         %d\n", sizeof(gxfsInode));
-	printf("\tSize of dirent:        %d\n", sizeof(struct dirent));
-
-	printf("Filesystem plan:\n");
-	printf("\tSections:              %d\n", sectionsToMake);
-	printf("\tData per inode:        %dKB\n", bytesPerInode/1024);
-	printf("\tBlock size:            %d bytes\n", fsBlockSize);
-	printf("\tInodes per section:    %d\n", inodesPerSection);
-	printf("\tInode bitmap size:     %d bytes\n", inodeBitmapSize);
-	printf("\tBlocks per section:    %d\n", blocksPerSection);
-	printf("\tBlock bitmap size:     %d bytes\n", blockBitmapSize);
-
-	lseek(fd, 0x400, SEEK_SET);
+	write(fd, &offCIS, 8);
+	
+	lseek(fd, offCIS, SEEK_SET);
 	gxfsCIS cis;
 	memcpy(cis.cisMagic, "GXFS", 4);
-	cis.cisTotalIno = inodesPerSection * sectionsToMake;
+	cis.cisTotalIno = inodesPerSection * numSections;
 	cis.cisInoPerSection = inodesPerSection;
-	cis.cisTotalBlocks = blocksPerSection * sectionsToMake;
+	cis.cisTotalBlocks = blocksPerSection * numSections;
 	cis.cisBlocksPerSection = blocksPerSection;
-	cis.cisBlockSize = fsBlockSize;
+	cis.cisBlockSize = blockSize;
 	cis.cisCreateTime = time(NULL);
 	cis.cisFirstDataIno = 8;
-	cis.cisOffSections = 0x440;		// straight after the CIS
+	cis.cisOffSections = offSections;
 	cis.cisZero = 0;
 	write(fd, &cis, 64);
-
+	
 	uint64_t imap0, bmap0, itab0, btab0;
-
-	uint64_t i;
+	
 	gxfsSD sect;
-	for (i=0; i<sectionsToMake; i++)
+	for (i=0; i<numSections; i++)
 	{
-		sect.sdOffMapIno = sectionPlacement;
-		if (i == 0) imap0 = sectionPlacement;
-		sectionPlacement += inodeBitmapSize;
-		sect.sdOffMapBlocks = sectionPlacement;
-		if (i == 0) bmap0 = sectionPlacement;
-		sectionPlacement += blockBitmapSize;
-		sect.sdOffTabIno = sectionPlacement;
-		if (i == 0) itab0 = sectionPlacement;
-		sectionPlacement += inodesPerSection * sizeof(gxfsInode);
-		sect.sdOffTabBlocks = sectionPlacement;
-		if (i == 0) btab0 = sectionPlacement;
-		sectionPlacement += blocksPerSection * fsBlockSize;
+		size_t placement = offSpace + spacePerSection * i;
+		sect.sdOffMapIno = placement;
+		if (i == 0) imap0 = placement;
+		placement += inodeMapSize;
+		sect.sdOffMapBlocks = placement;
+		if (i == 0) bmap0 = placement;
+		placement += blockMapSize;
+		sect.sdOffTabIno = placement;
+		if (i == 0) itab0 = placement;
+		placement += inodeTableSize;
+		sect.sdOffTabBlocks = placement;
+		if (i == 0) btab0 = placement;
 		write(fd, &sect, 32);
-		printf("Section %d: imap=%p; bmap=%p; itab=%p; btab=%p\n", i, (void*)sect.sdOffMapIno, (void*)sect.sdOffMapBlocks,
-				(void*)sect.sdOffTabIno, (void*)sect.sdOffTabBlocks);
+		printf("Section %d: imap=%p; bmap=%p; itab=%p; btab=%p\n", (int)i, (void*)sect.sdOffMapIno,
+			 (void*)sect.sdOffMapBlocks, (void*)sect.sdOffTabIno, (void*)sect.sdOffTabBlocks);
 	};
-
-	// we need to clear the inode and block bitmaps
-	for (i=0; i<sectionsToMake; i++)
+	
+	// zero out the bitmaps
+	for (i=0; i<numSections; i++)
 	{
-		writeZeroes(fd, inodeBitmapSize);
-		writeZeroes(fd, blockBitmapSize);
-		lseek(fd, inodesPerSection * sizeof(gxfsInode) + blocksPerSection * fsBlockSize, SEEK_CUR);
+		size_t pos = offSpace + spacePerSection * i;
+		lseek(fd, pos, SEEK_SET);
+		writeZeroes(fd, blockMapSize + inodeMapSize);
 	};
-
+	
 	// mark inode 2 (index 1) and inode 3 (index 2) as used, and fill in the structure.
 	// This effectively creates the root and lost+found directory.
 	printf("Creating root directory (inode 2) imap0=%p...\n", (void*)imap0);
@@ -206,7 +325,7 @@ int main(int argc, char *argv[])
 	write(fd, &inode, sizeof(gxfsInode));
 
 	// create the directory entry for lost+found in the root directory.
-	lseek(fd, btab0 + 7 * fsBlockSize, SEEK_SET);
+	lseek(fd, btab0 + 7 * blockSize, SEEK_SET);
 	//struct dirent ent;
 	//ent.d_ino = 3;
 	//strcpy(ent.d_name, "lost+found");
@@ -223,7 +342,7 @@ int main(int argc, char *argv[])
 	write(fd, direntdata, 25);
 
 	// create the null entry in lost+found
-	lseek(fd, btab0 + fsBlockSize, SEEK_SET);
+	lseek(fd, btab0 + blockSize, SEEK_SET);
 	dhead->dhCount = 1;
 	dhead->dhFirstSz = 0;
 	lfent->deInode = 0;

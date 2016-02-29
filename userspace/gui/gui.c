@@ -39,7 +39,7 @@
 #include <glidix/humin.h>
 #include <sys/glidix.h>
 #include <sys/wait.h>
-
+#include <sys/mman.h>
 #include "gui.h"
 
 #define	GUI_WINDOW_BORDER				2
@@ -51,6 +51,7 @@ DDISurface *screen;
 DDISurface *frontBuffer;
 DDISurface *mouseCursor;
 DDISurface *defWinIcon;
+DDISurface *winButtons;
 
 unsigned int screenWidth, screenHeight;
 int mouseX, mouseY;
@@ -77,6 +78,9 @@ typedef struct Window_
 	uint64_t				id;
 	int					pid;
 	int					fd;
+	uint64_t				shmemID;
+	uint64_t				shmemAddr;
+	uint64_t				shmemSize;
 } Window;
 
 pthread_spinlock_t windowLock;
@@ -96,10 +100,14 @@ Window *movingWindow = NULL;
 int movingOffX;
 int movingOffY;
 
+pthread_spinlock_t redrawSignal;
+
 /**
  * The file descriptor representing the message queue.
  */
 int guiQueue = -1;
+
+int mouseLeftDown = 0;
 
 int isWindowFocused(Window *win)
 {
@@ -144,6 +152,28 @@ void PaintWindows(Window *win, DDISurface *target)
 					ddiBlit(win->icon, 0, 0, target, win->params.x+2, win->params.y+2, 16, 16);
 					ddiDrawText(target, win->params.x+20, win->params.y+6, win->params.caption,
 						&winCaptionColor, NULL);
+					
+					int btnIndex = ((mouseX - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/16;
+					if ((mouseY < (int)win->params.y+GUI_WINDOW_BORDER) || (mouseY > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
+					{
+						btnIndex = -1;
+					};
+					
+					int i;
+					for (i=0; i<3; i++)
+					{
+						int yi = 0;
+						if (i == btnIndex)
+						{
+							yi = 1;
+							if (mouseLeftDown)
+							{
+								yi = 2;
+							};
+						};
+						ddiBlit(winButtons, 16*i, 16*yi, target, win->params.x+(win->params.width-48)+16*i, win->params.y+GUI_WINDOW_BORDER, 16, 16);
+					};
+					
 					ddiOverlay(display, 0, 0, target,
 						win->params.x+GUI_WINDOW_BORDER,
 						win->params.y+GUI_WINDOW_BORDER+GUI_CAPTION_HEIGHT,
@@ -242,27 +272,24 @@ void DeleteWindowsOf(int pid, int fd)
 	};
 };
 
-Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, int pid, int fd)
+Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, int pid, int fd, int painterPid)
 {
 	if (myID == 0)
 	{
 		return NULL;
 	};
 	
-	pthread_spin_lock(&windowLock);
 	Window *parent = NULL;
 	if (parentID != 0)
 	{
 		parent = GetWindowByID(parentID);
 		if (parent == NULL)
 		{
-			pthread_spin_unlock(&windowLock);
 			return NULL;
 		};
 		
 		if ((parent->pid != pid) && (parent->fd != fd))
 		{
-			pthread_spin_unlock(&windowLock);
 			return NULL;
 		};
 	};
@@ -273,7 +300,25 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	win->children = NULL;
 	win->parent = parent;
 	memcpy(&win->params, pars, sizeof(GWMWindowParams));
-	win->clientArea = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, 0);
+	
+	uint64_t memoryNeeded = ddiGetFormatDataSize(&screen->format, pars->width, pars->height);
+	if (memoryNeeded & 0xFFF)
+	{
+		memoryNeeded &= ~0xFFF;
+		memoryNeeded += 0x1000;
+	};
+	
+	win->shmemAddr = __alloc_pages(memoryNeeded);
+	win->shmemSize = memoryNeeded;
+	win->shmemID = _glidix_shmalloc(win->shmemAddr, win->shmemSize, painterPid, PROT_READ|PROT_WRITE, 0);
+	if (win->shmemID == 0)
+	{
+		printf("Shared memory allocation failed!\n");
+		free(win);
+		return NULL;
+	};
+	
+	win->clientArea = ddiCreateSurface(&screen->format, pars->width, pars->height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
 	ddiFillRect(win->clientArea, 0, 0, pars->width, pars->height, &winBackColor);
 	win->icon = defWinIcon;
 	win->id = myID;
@@ -308,7 +353,6 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 			win->prev = last;
 		};
 	};
-	pthread_spin_unlock(&windowLock);
 	return win;
 };
 
@@ -391,6 +435,7 @@ Window* FindWindowAt(int x, int y)
 
 void onMouseLeft()
 {
+	mouseLeftDown = 1;
 	int x, y;
 	pthread_spin_lock(&mouseLock);
 	x = mouseX;
@@ -442,10 +487,52 @@ void onMouseLeft()
 	pthread_spin_unlock(&windowLock);
 };
 
+void PostWindowEvent(Window *win, GWMEvent *event)
+{
+	GWMMessage msg;
+	msg.event.type = GWM_MSG_EVENT;
+	msg.event.seq = 0;
+	memcpy(&msg.event.payload, event, sizeof(GWMEvent));
+	_glidix_mqsend(guiQueue, win->pid, win->fd, &msg, sizeof(GWMMessage));
+};
+
 void onMouseLeftRelease()
 {
+	mouseLeftDown = 0;
+	
+	pthread_spin_lock(&mouseLock);
+	int x = mouseX;
+	int y = mouseY;
+	pthread_spin_unlock(&mouseLock);
+	
 	pthread_spin_lock(&windowLock);
-	movingWindow = NULL;
+	movingWindow = NULL;	
+	Window *win = FindWindowAt(x, y);
+	
+	if (win != NULL)
+	{
+		if (win->parent == NULL)
+		{
+			if ((win->params.flags & GWM_WINDOW_NODECORATE) == 0)
+			{
+				int btnIndex = ((x - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/16;
+				if ((y < (int)win->params.y+GUI_WINDOW_BORDER) || (y > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
+				{
+					btnIndex = -1;
+				};
+				
+				if (btnIndex == 2)
+				{
+					// clicked the close button
+					GWMEvent event;
+					event.type = GWM_EVENT_CLOSE;
+					event.win = win->id;
+					PostWindowEvent(win, &event);
+				};
+			};
+		};
+	};
+	
 	pthread_spin_unlock(&windowLock);
 };
 
@@ -545,6 +632,7 @@ void *inputThreadFunc(void *ignore)
 		
 		if (screenDirty)
 		{
+			pthread_spin_unlock(&redrawSignal);
 			pthread_kill(redrawThread, SIGCONT);
 		};
 	};
@@ -552,6 +640,7 @@ void *inputThreadFunc(void *ignore)
 	return NULL;
 };
 
+volatile int msgReady = 0;
 void *msgThreadFunc(void *ignore)
 {
 	static char msgbuf[65536];
@@ -566,6 +655,7 @@ void *msgThreadFunc(void *ignore)
 	FILE *fp = fopen("/usr/share/gui.pid", "wb");
 	fprintf(fp, "%d.%d", getpid(), guiQueue);
 	fclose(fp);
+	msgReady = 1;
 	
 	while (1)
 	{
@@ -586,17 +676,33 @@ void *msgThreadFunc(void *ignore)
 			GWMCommand *cmd = (GWMCommand*) msgbuf;
 			if (cmd->cmd == GWM_CMD_CREATE_WINDOW)
 			{
+				pthread_spin_lock(&windowLock);
 				Window * win = CreateWindow(cmd->createWindow.parent,
 						&cmd->createWindow.pars, cmd->createWindow.id,
-						info.pid, info.fd);
-				pthread_kill(redrawThread, SIGCONT);
+						info.pid, info.fd, cmd->createWindow.painterPid);
 				
 				GWMMessage msg;
 				msg.createWindowResp.type = GWM_MSG_CREATE_WINDOW_RESP;
 				msg.createWindowResp.seq = cmd->createWindow.seq;
 				msg.createWindowResp.status = 0;
 				if (win == NULL) msg.createWindowResp.status = 1;
+				else
+				{
+					memcpy(&msg.createWindowResp.format, &screen->format, sizeof(DDIPixelFormat));
+					msg.createWindowResp.shmemID = win->shmemID;
+					msg.createWindowResp.shmemSize = win->shmemSize;
+					msg.createWindowResp.width = win->params.width;
+					msg.createWindowResp.height = win->params.height;
+				};
+				pthread_spin_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+				pthread_spin_unlock(&redrawSignal);
+				pthread_kill(redrawThread, SIGCONT);
+			}
+			else if (cmd->cmd == GWM_CMD_POST_DIRTY)
+			{
+				pthread_spin_unlock(&redrawSignal);
+				pthread_kill(redrawThread, SIGCONT);
 			};
 		}
 		else if (info.type == _GLIDIX_MQ_HANGUP)
@@ -636,7 +742,11 @@ int main()
 		printf("%d\t%dx%d\n", (int)mode.index, (int)mode.width, (int)mode.height);
 	};
 
-	mode.index = 3;
+	printf("Select video mode: ");
+	fflush(stdout);
+	int modeSelected;
+	fscanf(stdin, "%d", &modeSelected);
+	mode.index = modeSelected;
 	ioctl(fd, IOCTL_VIDEO_MODSTAT, &mode);
 
 	printf("Switching to: %dx%d\n", mode.width, mode.height);
@@ -700,6 +810,13 @@ int main()
 		defWinIcon = ddiCreateSurface(&screenFormat, 16, 16, NULL, 0);
 		ddiFillRect(defWinIcon, 0, 0, 16, 16, &mouseColor);
 	};
+	
+	winButtons = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/winbuttons.png", NULL);
+	if (winButtons == NULL)
+	{
+		winButtons = ddiCreateSurface(&screenFormat, 48, 64, NULL, 0);
+		ddiFillRect(winButtons, 0, 0, 48, 64, &mouseColor);
+	};
 
 #if 0
 	GWMWindowParams testpars;
@@ -738,6 +855,8 @@ int main()
 		return 1;
 	};
 	
+	while (!msgReady) __sync_synchronize();
+	
 	pid_t child = fork();
 	if (child == -1)
 	{
@@ -756,10 +875,11 @@ int main()
 	};
 
 	redrawThread = pthread_self();
+	uint8_t ignoreByte;
 	while (1)
 	{
 		PaintDesktop();
-		pause();
+		while (_glidix_condwait(&redrawSignal, &ignoreByte) != 0);
 	};
 	
 	return 0;

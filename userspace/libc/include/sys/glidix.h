@@ -166,7 +166,7 @@ extern "C" {
 #define	_GLIDIX_DOWN_HALT				2
 
 #define	_GLIDIX_IOCTL_NOARG(intf, cmd)			((intf << 16) | cmd)
-#define	_GLIDIX_IOCTL_ARG(type, intf, cmd)		((sizeof(type) << 32) | IOCTL_NOARG(intf, cmd))
+#define	_GLIDIX_IOCTL_ARG(type, intf, cmd)		((sizeof(type) << 32) | _GLIDIX_IOCTL_NOARG(intf, cmd))
 
 #define	_GLIDIX_IOCTL_INT_PCI				0x0001
 #define	_GLIDIX_IOCTL_INT_SDI				0x0002
@@ -178,6 +178,11 @@ extern "C" {
 #define	_GLIDIX_MQ_CONNECT				0
 #define	_GLIDIX_MQ_INCOMING				1
 #define	_GLIDIX_MQ_HANGUP				2
+
+#define	_GLIDIX_IOCTL_MUTEX_LOCK			_GLIDIX_IOCTL_NOARG(_GLIDIX_IOCTL_INT_THSYNC, 0)
+#define	_GLIDIX_IOCTL_MUTEX_UNLOCK			_GLIDIX_IOCTL_NOARG(_GLIDIX_IOCTL_INT_THSYNC, 1)
+#define	_GLIDIX_IOCTL_SEMA_WAIT				_GLIDIX_IOCTL_ARG(int, _GLIDIX_IOCTL_INT_THSYNC, 2)
+#define	_GLIDIX_IOCTL_SEMA_SIGNAL			_GLIDIX_IOCTL_ARG(int, _GLIDIX_IOCTL_INT_THSYNC, 3)
 
 int		_glidix_exec(const char *path, const char *pars, size_t parsz);
 int		_glidix_open(const char *path, int flags, mode_t mode);
@@ -228,6 +233,11 @@ int		_glidix_mqserver();
 int		_glidix_mqclient(int pid, int fd);
 int		_glidix_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgsize);
 ssize_t		_glidix_mqrecv(int fd, _glidix_msginfo *info, void *buffer, size_t bufsize);
+uint64_t	_glidix_shmalloc(uint64_t addr, uint64_t size, int assocPid, int protAssoc, int protWorld);
+int		_glidix_shmap(uint64_t addr, uint64_t size, uint64_t id, int prot);
+
+// some runtime stuff
+uint64_t	__alloc_pages(size_t len);
 
 #ifdef __cplusplus
 }	/* extern "C" */

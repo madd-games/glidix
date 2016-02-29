@@ -27,6 +27,10 @@
 section .text
 bits 64
 
+extern currentThread
+extern sysNumber
+extern sysTable
+extern sysEpilog
 extern _kfree
 extern heapDump
 global _jmp_usbs
@@ -63,8 +67,79 @@ _jmp_usbs:
 
 global _syscall_entry
 _syscall_entry:
-	cli
-	hlt
+	; the fourth argument, that is normally in RCX, is passed in R10 in this context
+	; as RCX contains the return address
+	; we preserve RFLAGS in RBP; so we are allowed to destroy userspace RBP!
+	; the system call wrapper must preserve it!
+	mov rbp, r11
+	xchg rax, r11
+	mov ax, 0x10
+	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
+	xor ax, ax
+	mov ss, ax
+	xchg rax, r11
+	
+	mov r11, currentThread
+	mov r11, [r11]				; get the pointer
+	mov r11, [r11+512]			; get syscall stack pointer
+	
+	; preserve userspace stack pointer while loading kernel stack pointer
+	xchg r11, rsp
+	
+	; it's now safe to enable interrupts
+	sti
+	
+	; preserve user stack pointer and return address on the kernel stack
+	push rcx			; return RIP
+	push r11			; user RSP
+	push rbp			; user RFLAGS
+
+	; move the fourth argument back into RCX
+	mov rcx, r10
+	
+	; make sure the system call number is within bounds
+	mov r10, sysNumber
+	mov r10, [r10]
+	cmp rax, r10
+	jae .invalid
+	
+	mov r10, sysTable
+	shl rax, 3			; multiply RAX by 8
+	add rax, r10
+	mov rax, [rax]
+	
+	test rax, rax
+	jz .invalid			; entry is NULL
+	
+	; invoke the system call
+	call rax
+	
+	; we must always perform the epilog
+	mov rdi, rax
+	call sysEpilog
+	
+	; restore user stack pointer into R10, return RIP into RCX, and we can do a sysret.
+	; we store a zero in RDX to indicate the system call was a valid one.
+	xor rdx, rdx
+	.common_exit:
+	pop r11				; userspace RFLAGS
+	pop r10
+	pop rcx
+	mov dx, 0x23
+	mov ds, dx
+	mov es, dx
+	mov fs, dx
+	mov gs, dx
+	o64 sysret
+	
+	.invalid:
+	; restore the stack and RIP as we would, but set RDX to 1 to indicate a bad system call;
+	; the userspace side may choose to handle it.
+	mov rdx, 1
+	jmp .common_exit
 
 section .data
 syscall_name db 'syscall.asm', 0

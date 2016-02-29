@@ -42,7 +42,11 @@ msrRead:
 	mov	ecx,		edi
 	rdmsr
 	rol	rax,		32
-	mov	eax,		edx
+	mov	rdi,		0xFFFFFFFF00000000
+	and	rax,		rdi
+	mov	rdi,		0x00000000FFFFFFFF
+	and	rdx,		rdi
+	or	rax,		rdx
 	rol	rax,		32
 	ret
 

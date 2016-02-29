@@ -47,6 +47,7 @@ FrameList *palloc_later(int count, off_t fileOffset, size_t fileSize)
 	fl->fileSize = fileSize;
 	fl->flags = 0;
 	fl->cowList = NULL;
+	fl->on_destroy = NULL;
 	memset(fl->frames, 0, 8*count);
 	spinlockRelease(&fl->lock);
 	return fl;
@@ -62,6 +63,7 @@ FrameList *palloc(int count)
 	fl->fileSize = 0;
 	fl->flags = 0;
 	fl->cowList = NULL;
+	fl->on_destroy = NULL;
 	spinlockRelease(&fl->lock);
 
 	int i;
@@ -83,6 +85,7 @@ FrameList *pmap(uint64_t start, int count)
 	fl->fileSize = 0;
 	fl->flags = FL_SHARED;
 	fl->cowList = NULL;
+	fl->on_destroy = NULL;
 	spinlockRelease(&fl->lock);
 	
 	int i;
@@ -94,11 +97,12 @@ FrameList *pmap(uint64_t start, int count)
 	return fl;
 };
 
-void pupref(FrameList *fl)
+int pupref(FrameList *fl)
 {
 	spinlockAcquire(&fl->lock);
-	fl->refcount++;
+	int ret = ++fl->refcount;
 	spinlockRelease(&fl->lock);
+	return ret;
 };
 
 uint64_t getFlagsRegister();
@@ -146,6 +150,11 @@ void pdownref(FrameList *fl)
 			};
 		};
 
+		if (fl->on_destroy != NULL)
+		{
+			fl->on_destroy(fl->on_destroy_arg);
+		};
+		
 		kfree(fl->frames);
 		kfree(fl);
 	};
@@ -170,6 +179,7 @@ FrameList *pdup(FrameList *old)
 	fl->frames = (uint64_t*) kmalloc(8*old->count);
 	fl->fileOffset = old->fileOffset;
 	fl->fileSize = old->fileSize;
+	fl->on_destroy = NULL;
 	spinlockRelease(&fl->lock);
 
 	if (old->cowList == NULL)
@@ -440,7 +450,6 @@ int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 int DeleteSegment(ProcMem *pm, uint64_t start)
 {
 	if (pm != getCurrentThread()->pm) panic("DeleteSegment can only be called on the current memory\n");
-	kprintf_debug("start of DeleteSegment\n");
 	spinlockAcquire(&pm->lock);
 
 	Segment *seg = pm->firstSegment;
@@ -486,7 +495,6 @@ int DeleteSegment(ProcMem *pm, uint64_t start)
 	pdownref(seg->fl);
 	kfree(seg);
 
-	kprintf_debug("end of DeleteSegment\n");
 	spinlockRelease(&pm->lock);
 	return 0;
 };

@@ -30,22 +30,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libddi.h>
 #include "gui.h"
 
+//void __i_am_debug();
 int main()
 {
+	//__i_am_debug();
 	printf("Waiting for GUI...\n");
 	FILE *fp = NULL;
 	
 	while (1)
 	{
+		sleep(1);
 		fp = fopen("/usr/share/gui.pid", "rb");
 		if (fp == NULL) continue;
 		int pid, fd;
 		int count = (int) fscanf(fp, "%d.%d", &pid, &fd);
 		if (count != 2)
 		{
-			printf("count is %d\n", count);
 			fclose(fp);
 			continue;
 		};
@@ -55,9 +58,28 @@ int main()
 	
 	gwmInit();
 	printf("About to call gwmCreateWindow\n");
-	GWMWindowHandle wnd = gwmCreateWindow(NULL, "Hello world meme", 10, 10, 200, 200, 0);
+	GWMWindow *wnd = gwmCreateWindow(NULL, "Hello world meme", 10, 10, 200, 200, 0);
 	if (wnd == NULL) fprintf(stderr, "Error\n");
-	printf("end of gwmCreateWindow\n");
+	else
+	{
+		printf("gwmCreatewindow was OK, i draw a meme\n");
+		DDISurface *surface = gwmGetWindowCanvas(wnd);
+		ddiDrawText(surface, 6, 6, "Nothing happened yet.", NULL, NULL);
+		gwmPostDirty();
+
+		while (1)
+		{
+			GWMEvent ev;
+			//gwmWaitEvent(&ev);
+			
+			if (ev.type == GWM_EVENT_CLOSE)
+			{
+				ddiDrawText(surface, 6, 14, "You clicked close.", NULL, NULL);
+				gwmPostDirty();
+			};
+		};
+	};
+	
 	while (1) pause();
 	
 	return 0;

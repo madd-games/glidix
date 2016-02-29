@@ -57,6 +57,7 @@
 #include <glidix/ipreasm.h>
 #include <glidix/ethernet.h>
 #include <glidix/dma.h>
+#include <glidix/shmem.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -380,10 +381,12 @@ void kmain(MultibootInfo *info)
 	DONE();
 
 	kprintf("Initializing the scheduler and syscalls... ");
-	//msrWrite(0xC0000080, msrRead(0xC0000080) | 1);
-	//msrWrite(0xC0000081, ((uint64_t)8 << 32));
-	//msrWrite(0xC0000082, (uint64_t)(&_syscall_entry));
-	//msrWrite(0xC0000084, (1 << 9));
+	msrWrite(0xC0000081, ((uint64_t)8 << 32) | ((uint64_t)0x1B << 48));
+	msrWrite(0xC0000082, (uint64_t)(&_syscall_entry));
+	msrWrite(0xC0000083, (uint64_t)(&_syscall_entry));		// we don't actually use compat mode
+	msrWrite(0xC0000084, (1 << 9));					// disable interrupts on syscall
+	msrWrite(0xC0000080, msrRead(0xC0000080) | 1);
+	//kprintf("value of EFER: %p\n", msrRead(0xC0000080));
 	initSched();
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
 };
@@ -512,6 +515,10 @@ void kmain2()
 	ipreasmInit();
 	initNetIf();
 	kprintf("%$\x02" "Done%#\n");
+	
+	kprintf("Initializing the shared memory API... ");
+	shmemInit();
+	DONE();
 	
 	kprintf("Starting the spawn process... ");
 	MachineState state;

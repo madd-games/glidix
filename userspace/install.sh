@@ -9,11 +9,17 @@ echo
 
 gxpart /dev/sda
 mkgxfs /dev/sda0
+gxld_ins /boot/mbr.bin /boot/stage2.bin /dev/sda
 mount /dev/sda0 /mnt
+mkdir /mnt/boot
+cp /boot/vmglidix /mnt/boot/vmglidix
+cp /boot/vmglidix.tar /mnt/boot/vmglidix.tar
+#exit
 mkdir /mnt/mnt
 mkdir /mnt/bin
 mkdir /mnt/etc
 mkdir /mnt/etc/init
+mkdir /mnt/etc/services
 cp /bin/sh /mnt/bin/sh
 cp /bin/mount /mnt/bin/mount
 cp /setup.sh /mnt/etc/init/startup.sh
