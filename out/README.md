@@ -6,3 +6,5 @@ The CD image `glidix.iso` is the "standard distribution" image. Upon booting up 
 Currently, even though the OS is installed on the hard drive, you must still boot from the CD to get the system up. This is because Glidix is not developed enough to support `grub-install` yet.
 
 On the default distribution OS, the Glidix shell and the shell utilities (`shutils`) are all installed. Currently, no programming environment is available (this is coming soon). The CD is mounted under `/media/cdrom` (as specified in `/etc/fstab`). To force a full reinstallation of the OS, just delete the shell using `rm /bin/sh` and `reboot`. This will install everything again, starting with the initial format.
+
+When the OS first boots, you are asked to create a partition. To do this easily, you can wipe the partition table by typing `clear`, then create a new partition by typing `create` and keep pressing ENTER, entering default options, then type `setboot` to make it bootable, and finally `done` followed by a `yes`.
