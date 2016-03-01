@@ -47,10 +47,12 @@ typedef struct
 } ProgramSegment;
 
 int sysOpenErrno();			// syscall.c
-int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
+int elfExec(const char *path, const char *pars, size_t parsz)
 {
 	//getCurrentThread()->therrno = ENOEXEC;
-
+	Regs regs;
+	initUserRegs(&regs);
+	
 	vfsLockCreation();
 	struct stat st;
 	int error = vfsStat(path, &st);
@@ -278,12 +280,12 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	thread->fpexec = fp;
 
 	// make sure we jump to the entry upon return
-	regs->rip = elfHeader.e_entry;
+	regs.rip = elfHeader.e_entry;
 
 	// the errnoptr is now invalid
 	thread->errnoptr = NULL;
 
-	// close all files marked with O_CLOEXEC (on glidx a.k.a. FD_CLOEXEC)
+	// close all files marked with O_CLOEXEC (on glidix a.k.a. FD_CLOEXEC)
 	spinlockAcquire(&getCurrentThread()->ftab->spinlock);
 	for (i=0; i<MAX_OPEN_FILES; i++)
 	{
@@ -303,23 +305,20 @@ int elfExec(Regs *regs, const char *path, const char *pars, size_t parsz)
 	if (st.st_mode & VFS_MODE_SETUID)
 	{
 		thread->euid = st.st_uid;
-		//thread->ruid = st.st_uid;
-		//thread->suid = st.st_uid;
 		thread->flags |= THREAD_REBEL;
 	};
 
 	if (st.st_mode & VFS_MODE_SETGID)
 	{
 		thread->egid = st.st_gid;
-		//thread->rgid = st.st_gid;
-		//thread->sgid = st.st_gid;
 		thread->flags |= THREAD_REBEL;
 	};
 
 	if (interpNeeded)
 	{
-		linkInterp(regs, dynamic, pm);
+		linkInterp(&regs, dynamic, pm);
 	};
 
+	switchContext(&regs);
 	return 0;
 };

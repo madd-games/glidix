@@ -223,6 +223,6 @@ typedef struct
 	} d_un;
 } Elf64_Dyn;
 
-int elfExec(Regs *regs, const char *path, const char *execPars, size_t parsz);
+int elfExec(const char *path, const char *execPars, size_t parsz);
 
 #endif

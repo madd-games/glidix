@@ -123,6 +123,6 @@ extern uint64_t sizeSignalStackFrame;
 struct _Thread;
 void dispatchSignal(struct _Thread *thread);
 void sendSignal(struct _Thread *thread, siginfo_t *siginfo);
-void sigret(Regs *regs, void *ret);
+void sigret(void *ret);
 
 #endif

@@ -139,22 +139,25 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 	thread->flags &= ~THREAD_WAITING;
 };
 
-void sigret(Regs *regs, void *ret)
+void sigret(void *ret)
 {
+	Regs regs;
+	initUserRegs(&regs);
 	SignalStackFrame *frame = (SignalStackFrame*) ret;
-	regs->rax = frame->mstate.rax;
-	regs->rbx = frame->mstate.rbx;
-	regs->rcx = frame->mstate.rcx;
-	regs->rdx = frame->mstate.rdx;
-	regs->rbp = frame->mstate.rbp;
-	regs->rsp = frame->mstate.rsp;
-	regs->rip = frame->mstate.rip;
-	regs->rdi = frame->mstate.rdi;
-	regs->rsi = frame->mstate.rsi;
+	regs.rax = frame->mstate.rax;
+	regs.rbx = frame->mstate.rbx;
+	regs.rcx = frame->mstate.rcx;
+	regs.rdx = frame->mstate.rdx;
+	regs.rbp = frame->mstate.rbp;
+	regs.rsp = frame->mstate.rsp;
+	regs.rip = frame->mstate.rip;
+	regs.rdi = frame->mstate.rdi;
+	regs.rsi = frame->mstate.rsi;
 	fpuLoad(&frame->mstate.fpuRegs);
 	getCurrentThread()->therrno = frame->mstate.therrno;
 
-	ASM("cli");
+	lockSched();
 	getCurrentThread()->flags &= ~THREAD_SIGNALLED;
-	switchTask(regs);
+	unlockSched();
+	switchContext(&regs);
 };

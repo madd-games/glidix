@@ -151,8 +151,14 @@ uint64_t sys_write(int fd, const void *buf, size_t size)
 	return *((uint64_t*)&out);
 };
 
-uint64_t sys_read(int fd, void *buf, size_t size)
+ssize_t sys_read(int fd, void *buf, size_t size)
 {
+	if (!isPointerValid((uint64_t)buf, (uint64_t)size, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	ssize_t out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -195,7 +201,7 @@ uint64_t sys_read(int fd, void *buf, size_t size)
 		};
 	};
 
-	return *((uint64_t*)&out);
+	return out;
 };
 
 int sysOpenErrno(int vfsError)
@@ -230,6 +236,12 @@ int sysOpenErrno(int vfsError)
 
 int sys_open(const char *path, int oflag, mode_t mode)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	mode &= 0x0FFF;
 	mode &= ~(getCurrentThread()->umask);
 
@@ -347,11 +359,11 @@ int sys_open(const char *path, int oflag, mode_t mode)
 	return i;
 };
 
-void sys_close(int fd)
+int sys_close(int fd)
 {
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
-		return;
+		return 0;
 	};
 
 	FileTable *ftab = getCurrentThread()->ftab;
@@ -365,6 +377,7 @@ void sys_close(int fd)
 	};
 
 	spinlockRelease(&ftab->spinlock);
+	return 0;
 };
 
 int sys_ioctl(int fd, uint64_t cmd, void *argp)
@@ -440,10 +453,11 @@ off_t sys_lseek(int fd, off_t offset, int whence)
 	return ret;
 };
 
-int sys_raise(Regs *regs, int sig)
+int sys_raise(int sig)
 {
 	if ((sig < 0) || (sig >= SIG_NUM))
 	{
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -451,10 +465,7 @@ int sys_raise(Regs *regs, int sig)
 	siginfo.si_signo = sig;
 	siginfo.si_code = 0;
 
-	ASM("cli");
 	sendSignal(getCurrentThread(), &siginfo);
-	regs->rax = 0;
-	switchTask(regs);
 
 	// not actually stored in RAX because of the task switch, but libglidix should set
 	// RAX to zero before executing UD2.
@@ -463,6 +474,18 @@ int sys_raise(Regs *regs, int sig)
 
 int sys_stat(const char *path, struct stat *buf)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isPointerValid((uint64_t)buf, sizeof(struct stat), PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+
 	int status = vfsStat(path, buf);
 	if (status == 0)
 	{
@@ -2336,13 +2359,118 @@ unsigned sys_alarm(unsigned sec)
 	return (unsigned) ((old - currentTime) / NANO_PER_SEC);
 };
 
+int sys_exec(const char *path, const char *pars, uint64_t parsz)
+{
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isPointerValid((uint64_t)pars, parsz, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	return elfExec(path, pars, parsz);
+};
+
+int sys_getpid()
+{
+	return getCurrentThread()->pid;
+};
+
+uid_t sys_getuid()
+{
+	return getCurrentThread()->ruid;
+};
+
+uid_t sys_geteuid()
+{
+	return getCurrentThread()->euid;
+};
+
+uid_t sys_getsuid()
+{
+	return getCurrentThread()->suid;
+};
+
+gid_t sys_getgid()
+{
+	return getCurrentThread()->rgid;
+};
+
+gid_t sys_getegid()
+{
+	return getCurrentThread()->egid;
+};
+
+gid_t sys_getsgid()
+{
+	return getCurrentThread()->sgid;
+};
+
+uint64_t sys_sighandler(uint64_t handler)
+{
+	getCurrentThread()->rootSigHandler = handler;
+	return 0;
+};
+
+void sys_sigret(void *ret)
+{
+	if (!isPointerValid((uint64_t)ret, sizeSignalStackFrame, PROT_READ))
+	{
+		ERRNO = EFAULT;
+	}
+	else
+	{
+		sigret(ret);
+	};
+};
+
+uint64_t sys_getparsz()
+{
+	return getCurrentThread()->szExecPars;
+};
+
+void sys_getpars(void *buffer, size_t size)
+{
+	if (!isPointerValid((uint64_t)buffer, size, PROT_WRITE))
+	{
+		return;
+	};
+	if (size > getCurrentThread()->szExecPars)
+	{
+		size = getCurrentThread()->szExecPars;
+	};
+	memcpy(buffer, getCurrentThread()->execPars, size);
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 2
+#define SYSCALL_NUMBER 19
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
+	&sys_exec,				// 2
+	&sys_read,				// 3
+	&sys_open,				// 4
+	&sys_close,				// 5
+	&sys_getpid,				// 6
+	&sys_getuid,				// 7
+	&sys_geteuid,				// 8
+	&sys_getsuid,				// 9
+	&sys_getgid,				// 10
+	&sys_getegid,				// 11
+	&sys_getsgid,				// 12
+	&sys_sighandler,			// 13
+	&sys_sigret,				// 14
+	&sys_stat,				// 15
+	&sys_getparsz,				// 16
+	&sys_getpars,				// 17
+	&sys_raise,				// 18
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 
@@ -2407,28 +2535,12 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		*((ssize_t*)&regs->rax) = sys_write(*((int*)&regs->rdi), (const void*) regs->rsi, *((size_t*)&regs->rdx));
 		break;
 	case 2:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		regs->rax = elfExec(regs, (const char*) regs->rdi, (const char*) regs->rsi, regs->rdx);
+		*((int*)&regs->rax) = sys_exec((const char*)regs->rdi, (const char*) regs->rsi, regs->rdx);
 		break;
 	case 3:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
 		*((ssize_t*)&regs->rax) = sys_read(*((int*)&regs->rdi), (void*) regs->rsi, *((size_t*)&regs->rdx));
 		break;
 	case 4:
-		if (!isStringValid(regs->rdi))
-		{
-			*((int*)&regs->rax) = -1;
-			ERRNO = EFAULT;
-			break;
-		};
 		*((int*)&regs->rax) = sys_open((const char*) regs->rdi, (int) regs->rsi, (mode_t) regs->rdx);
 		kprintf_debug("[*] sys_open: '%s'\n", (const char*) regs->rdi);
 		break;
@@ -2467,14 +2579,9 @@ void syscallDispatch(Regs *regs, uint16_t num)
 			signalOnBadPointer(regs, regs->rdi);
 			break;
 		};
-		sigret(regs, (void*) regs->rdi);
+		sigret((void*) regs->rdi);
 		break;
 	case 15:
-		if (!isPointerValid(regs->rsi, sizeof(struct stat), PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
 		*((int*)&regs->rax) = sys_stat((const char*) regs->rdi, (struct stat*) regs->rsi);
 		//kprintf_debug("[*] sys_stat: '%s', returned %d\n", (const char*) regs->rdi, *((int*)&regs->rax));
 		break;
@@ -2490,7 +2597,7 @@ void syscallDispatch(Regs *regs, uint16_t num)
 		memcpy((void*)regs->rdi, getCurrentThread()->execPars, regs->rsi);
 		break;
 	case 18:
-		*((int*)&regs->rax) = sys_raise(regs, (int) regs->rdi);
+		*((int*)&regs->rax) = sys_raise((int) regs->rdi);
 		break;
 	case 19:
 		*((int*)&regs->rax) = getCurrentThread()->therrno;

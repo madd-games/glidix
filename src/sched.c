@@ -904,3 +904,12 @@ void kyield()
 	};
 #endif
 };
+
+void initUserRegs(Regs *regs)
+{
+	memset(regs, 0, sizeof(Regs));
+	regs->ds = 0x23;
+	regs->cs = 0x1B;
+	regs->ss = 0x23;
+	regs->rflags = getFlagsRegister() | (1 << 9);
+};

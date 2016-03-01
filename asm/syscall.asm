@@ -69,9 +69,6 @@ global _syscall_entry
 _syscall_entry:
 	; the fourth argument, that is normally in RCX, is passed in R10 in this context
 	; as RCX contains the return address
-	; we preserve RFLAGS in RBP; so we are allowed to destroy userspace RBP!
-	; the system call wrapper must preserve it!
-	mov rbp, r11
 	xchg rax, r11
 	mov ax, 0x10
 	mov ds, ax
@@ -95,7 +92,6 @@ _syscall_entry:
 	; preserve user stack pointer and return address on the kernel stack
 	push rcx			; return RIP
 	push r11			; user RSP
-	push rbp			; user RFLAGS
 
 	; move the fourth argument back into RCX
 	mov rcx, r10
@@ -122,12 +118,18 @@ _syscall_entry:
 	call sysEpilog
 	
 	; restore user stack pointer into R10, return RIP into RCX, and we can do a sysret.
-	; we store a zero in RDX to indicate the system call was a valid one.
-	xor rdx, rdx
+	; we store a zero in R8 to indicate the system call was a valid one.
+	xor r8, r8
 	.common_exit:
-	pop r11				; userspace RFLAGS
 	pop r10
 	pop rcx
+	
+	; disable interrupts, and store the return RFLAGS in R11, where we set IF=1
+	pushf
+	pop r11
+	
+	cli
+	mov rsp, r10
 	mov dx, 0x23
 	mov ds, dx
 	mov es, dx
@@ -136,9 +138,9 @@ _syscall_entry:
 	o64 sysret
 	
 	.invalid:
-	; restore the stack and RIP as we would, but set RDX to 1 to indicate a bad system call;
+	; restore the stack and RIP as we would, but set R8 to 1 to indicate a bad system call;
 	; the userspace side may choose to handle it.
-	mov rdx, 1
+	mov r8, 1
 	jmp .common_exit
 
 section .data
