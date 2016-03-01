@@ -126,17 +126,18 @@ static void reloadPartitionTable(SDFile *sdfile)
 {
 	MBR *mbr = (MBR*) kmalloc(sdfile->sd->blockSize);
 	sdRead(sdfile->sd, 0, mbr);
-	kprintf_debug("sdi: reading partition table for /dev/sd%c\n", sdfile->letter);
+	//kprintf("sdi: reading partition table for /dev/sd%c\n", sdfile->letter);
 	
 	int i;
 	for (i=0; i<4; i++)
 	{
 		Partition *part = &mbr->parts[i];
+		//kprintf("SIG1: %a, SIG2: %a, SYSID: %a\n", (uint64_t)part->sig1, (uint64_t)part->sig2, (uint64_t)part->systemID);
 		if ((part->sig1 == 0x14) && (part->sig2 == 0xEB) && (part->systemID != 0))
 		{
 			uint64_t offset = ((uint64_t)part->startHigh << 32) + (uint64_t)part->startLow;
 			uint64_t limit = offset + ((uint64_t)part->lenHigh << 32) + (uint64_t)part->lenLow;
-			kprintf_debug("sdi: partition %d, offset %a, size %a\n", i, offset, limit);
+			//kprintf("sdi: partition %d, offset %a, size %a\n", i, offset, limit);
 
 			SDFile *diskfile = (SDFile*) kmalloc(sizeof(SDFile));
 			diskfile->sd = sdfile->sd;

@@ -414,7 +414,7 @@ void isrHandler(Regs *regs)
 	};
 	
 	// ignore spurious IRQs
-	if ((regs->intNo == IRQ7) || (regs->intNo == IRQ15))
+	if (regs->intNo == IRQ7)
 	{
 		apic->eoi = 0;
 		return;
@@ -480,7 +480,7 @@ void isrHandler(Regs *regs)
 		pciInterrupt(regs->intNo);
 		break;
 	default:
-		if (regs->intNo >= IRQ0)
+		if ((regs->intNo >= IRQ0) && (regs->intNo <= IRQ15))
 		{
 			if (irqHandlers[regs->intNo-IRQ0] != NULL) irqHandlers[regs->intNo-IRQ0](regs->intNo-IRQ0);
 			break;

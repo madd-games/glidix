@@ -82,7 +82,7 @@ static ACPI_RSDPDescriptor *findRSDP()
 };
 
 // maps an IRQ to a system interrupt
-static int irqMap[15];
+static int irqMap[16];
 
 static void ioapicInit(uint64_t ioapicbasephys)
 {
@@ -98,16 +98,16 @@ static void ioapicInit(uint64_t ioapicbasephys)
 	memset(checkInts, 0, maxintr+1);
 	
 	int i;
-	for (i=0; i<15; i++)
+	for (i=0; i<16; i++)
 	{
-		//kprintf("SYSINT %d -> LOCAL INT %d\n", irqMap[i], i+32);
+		kprintf("SYSINT %d -> LOCAL INT %d\n", irqMap[i], i+32);
 		*regsel = (0x10+2*irqMap[i]);
 		__sync_synchronize();
 		uint64_t entry = (uint64_t)(i+32) | ((uint64_t)(apic->id) << 56);
-		if (i == 15)
-		{
-			entry = (uint64_t)(64) | ((uint64_t)(apic->id) << 56);
-		};
+		//if (i == 15)
+		//{
+		//	entry = (uint64_t)(64) | ((uint64_t)(apic->id) << 56);
+		//};
 		*iowin = (uint32_t)(entry);
 		__sync_synchronize();
 		*regsel = (0x10+2*irqMap[i]+1);
@@ -122,7 +122,7 @@ static void ioapicInit(uint64_t ioapicbasephys)
 	{
 		if (!checkInts[i])
 		{
-			//kprintf("SYSINT %d -> LOCAL INT 7\n", i);
+			kprintf("SYSINT %d -> LOCAL INT 7\n", i);
 			*regsel = (0x10+2*i);
 			__sync_synchronize();
 			uint64_t entry = (uint64_t)(39) | ((uint64_t)(apic->id) << 56);
@@ -168,7 +168,7 @@ void acpiInit()
 	pmem_read(acpiTables, rsdp->rsdtAddr+sizeof(ACPI_SDTHeader), acpiNumTables*4);
 
 	int i;
-	for (i=0; i<15; i++)
+	for (i=0; i<16; i++)
 	{
 		irqMap[i] = i;
 	};

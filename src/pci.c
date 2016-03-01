@@ -290,6 +290,12 @@ static ACPI_STATUS pciWalkCallback(ACPI_HANDLE object, UINT32 nestingLevel, void
 						break;
 					};
 					
+					if (res->Type == ACPI_RESOURCE_TYPE_EXTENDED_IRQ)
+					{
+						devIRQ = res->Data.ExtendedIrq.Interrupts[table->SourceIndex];
+						break;
+					};
+					
 					rscan += res->Length;
 				};
 				
