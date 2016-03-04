@@ -7,7 +7,6 @@ echo "installed from the CD."
 echo "*** END ATTENTION ***"
 echo
 
-sh
 gxpart /dev/sda
 mkgxfs /dev/sda0
 gxld_ins /boot/mbr.bin /boot/stage2.bin /dev/sda

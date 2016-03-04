@@ -104,10 +104,6 @@ static void ioapicInit(uint64_t ioapicbasephys)
 		*regsel = (0x10+2*irqMap[i]);
 		__sync_synchronize();
 		uint64_t entry = (uint64_t)(i+32) | ((uint64_t)(apic->id) << 56);
-		//if (i == 15)
-		//{
-		//	entry = (uint64_t)(64) | ((uint64_t)(apic->id) << 56);
-		//};
 		*iowin = (uint32_t)(entry);
 		__sync_synchronize();
 		*regsel = (0x10+2*irqMap[i]+1);

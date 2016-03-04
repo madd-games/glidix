@@ -34,6 +34,7 @@
 #include <glidix/memory.h>
 #include <glidix/string.h>
 #include <glidix/console.h>
+#include <glidix/syscall.h>
 
 #define	MAX_MSG_SIZE				65536
 
@@ -305,6 +306,12 @@ int sys_mqclient(int pid, int fd)
 
 int sys_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgsize)
 {
+	if (!isPointerValid((uint64_t)msg, msgsize, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	if ((fd < 0) || (fd > MAX_OPEN_FILES))
 	{
 		ERRNO = EBADF;
@@ -385,6 +392,18 @@ int sys_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgs
 
 ssize_t sys_mqrecv(int fd, MessageInfo *info, void *buffer, size_t bufsize)
 {
+	if (!isPointerValid((uint64_t)info, sizeof(MessageInfo), PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isPointerValid((uint64_t)buffer, bufsize, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	if ((fd < 0) || (fd > MAX_OPEN_FILES))
 	{
 		ERRNO = EBADF;

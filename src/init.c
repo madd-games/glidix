@@ -381,7 +381,7 @@ void kmain(MultibootInfo *info)
 	DONE();
 
 	kprintf("Initializing the scheduler and syscalls... ");
-	msrWrite(0xC0000081, ((uint64_t)8 << 32) | ((uint64_t)0x1B << 48));
+	msrWrite(0xC0000081, ((uint64_t)8 << 32) | ((uint64_t)0x1b << 48));
 	msrWrite(0xC0000082, (uint64_t)(&_syscall_entry));
 	msrWrite(0xC0000083, (uint64_t)(&_syscall_entry));		// we don't actually use compat mode
 	msrWrite(0xC0000084, (1 << 9));					// disable interrupts on syscall
@@ -427,6 +427,7 @@ static void spawnProc(void *stack)
 	kprintf("%$\x02" "%d bytes%#\n", count);
 
 	kprintf("Control will be transferred to usbs now.\n");
+	//BREAKPOINT();
 	_jmp_usbs(stack);
 };
 

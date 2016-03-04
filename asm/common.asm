@@ -27,6 +27,7 @@
 bits 64
 
 section .text
+[extern switchTask]
 
 [global msrWrite]
 msrWrite:
@@ -128,6 +129,46 @@ atomic_swap32:
 atomic_swap64:
 	lock xchg	[rdi],	rsi
 	mov		rax,	rsi
+	ret
+
+[global _preempt]
+_preempt:
+	; allocate a Regs structure on the stack.
+	sub rsp, 0xC0
+	mov rdi, rsp
+	
+	; segment registers; DS=0x10, CS=0x08, SS=0
+	mov rax, 0x10
+	mov [rdi+0x00], rax
+	xor rax, rax
+	mov [rdi+0xB0], rax
+	mov rax, 0x08
+	mov [rdi+0x98], rax
+	
+	; callee-save registers
+	mov [rdi+0x20], rbx
+	mov [rdi+0x18], rbp
+	mov [rdi+0x60], r12
+	mov [rdi+0x68], r13
+	mov [rdi+0x70], r14
+	mov [rdi+0x78], r15
+	
+	; store the return RSP in the appropriate field. the return RSP is
+	; 0xC0+8 bytes below the current stack, as we've got the Regs and
+	; return RIP pushed
+	mov rax, rsp
+	add rax, 0xC8
+	mov [rdi+0xA8], rax
+	mov rax, [rsp+0xC0]
+	mov [rdi+0x90], rax		; return RIP
+	pushf
+	pop rax
+	mov [rdi+0xA0], rax
+	
+	; switch task (the Regs structure is already in RDI).
+	call switchTask
+	
+	; stack popped by the context switch
 	ret
 
 section .bss

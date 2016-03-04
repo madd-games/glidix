@@ -214,6 +214,13 @@ GDT64:                               ; Global Descriptor Table (64-bit).
 	db 11110010b                 ; Access.
 	db 00000000b                 ; Granularity.
 	db 0                         ; Base (high).
+	.UserCode2: equ $ - GDT64    ; Second user code segment, for SYSRET
+	dw 0
+	dw 0
+	db 0
+	db 11111000b                 ; Access.
+	db 00100000b                 ; Granularity.
+	db 0                         ; Base (high).
 	; The TSS
 	.TSS: equ $ - GDT64
 	.TSS_limitLow: dw 0

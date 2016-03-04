@@ -390,20 +390,11 @@ void sendCPUErrorSignal(Regs *regs, int signal, int code, void *addr)
 	switchTask(regs);
 };
 
-void onInvalidOpcodeOrSyscall(Regs *regs)
+void onInvalidOpcode(Regs *regs)
 {
-	SyscallOpcode *syscall = (SyscallOpcode*) regs->rip;
-	if (syscall->ud2 == 0x0B0F)
-	{
-		ASM("sti");
-		syscallDispatch(regs, syscall->num);
-	}
-	else
-	{
-		kprintf("INVALID OPCODE\n");
-		debugKernel(regs);
-		panic("I died");
-	};
+	kprintf("INVALID OPCODE\n");
+	debugKernel(regs);
+	panic("I died");
 };
 
 void isrHandler(Regs *regs)
@@ -436,7 +427,7 @@ void isrHandler(Regs *regs)
 		sendCPUErrorSignal(regs, SIGFPE, FPE_INTDIV, (void*) regs->rip);
 		break;
 	case I_UNDEF_OPCODE:
-		onInvalidOpcodeOrSyscall(regs);
+		onInvalidOpcode(regs);
 		break;
 	case I_GPF:
 		onGPF(regs);

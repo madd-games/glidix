@@ -6,42 +6,14 @@ proto = """
 .type $(FUNC), @function
 
 $(FUNC):
-	xor %rax, %rax
-	ud2
-	.hword $(ID)
+	mov $$(ID), %rax
+	mov %rcx, %r10
+	syscall
 	ret
-
 .size $(FUNC), .-$(FUNC)
 """
 
-extra = """
-.globl _glidix_pollpid
-.type _glidix_pollpid, @function
-
-_glidix_pollpid:
-	xor %rax, %rax
-	ud2
-	.hword 25
-	test %rsi, %rsi
-	jz .nopass
-	mov %edi, (%rsi)
-.nopass:
-	ret
-
-.size _glidix_pollpid, .-_glidix_pollpid
-
-.globl pipe
-.type pipe, @function
-
-pipe:
-	xor %rax, %rax
-	ud2
-	.hword 48
-	mov %r8d, (%rdi)
-	mov %r9d, 4(%rdi)
-	ret
-.size pipe, .-pipe
-"""
+extra = ""
 
 syscallTable = {
 	0:	"_exit",
@@ -69,7 +41,7 @@ syscallTable = {
 	22:	"lseek",
 	23:	"_glidix_clone",
 	24:	"pause",
-	# 25: see 'extra'
+	25:	"waitpid",
 	26:	"kill",
 	27:	"_glidix_insmod",
 	28:	"_glidix_ioctl",
@@ -92,7 +64,7 @@ syscallTable = {
 	45:	"unlink",
 	46:	"dup",
 	47:	"dup2",
-	# 48: see 'extra'
+	48:	"pipe",
 	49:	"_glidix_seterrnoptr",
 	50:	"_glidix_geterrnoptr",
 	51:	"clock",

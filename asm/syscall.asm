@@ -81,6 +81,14 @@ _syscall_entry:
 	
 	mov r11, currentThread
 	mov r11, [r11]				; get the pointer
+	mov [r11+0x208], rbx
+	mov [r11+0x210], rsp
+	mov [r11+0x218], rbp
+	mov [r11+0x220], r12
+	mov [r11+0x228], r13
+	mov [r11+0x230], r14
+	mov [r11+0x238], r15
+	mov [r11+0x240], rcx			; return RIP
 	mov r11, [r11+512]			; get syscall stack pointer
 	
 	; preserve userspace stack pointer while loading kernel stack pointer

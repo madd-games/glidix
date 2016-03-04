@@ -37,12 +37,23 @@
 #include <glidix/mount.h>
 #include <glidix/idt.h>
 #include <glidix/acpi.h>
+#include <glidix/port.h>
 
 static const char *actionNames[] = {
 	"POWER OFF",
 	"REBOOT",
 	"HALT"
 };
+
+void reboot()
+{
+	ASM("cli");
+	uint8_t good = 0x02;
+	while (good & 0x02)
+		good = inb(0x64);
+	outb(0x64, 0xFE);
+	while (1) ASM("hlt");
+}
 
 int systemDown(int action)
 {
@@ -154,7 +165,7 @@ int systemDown(int action)
 		// in case we didn't succeed with the poweroff, panic
 		panic("power off!");
 	case DOWN_REBOOT:
-		idtReboot();
+		reboot();
 	case DOWN_HALT:
 		panic("halt");
 	};

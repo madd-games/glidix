@@ -34,8 +34,10 @@ org 0x1000
 mov rdi, str_path
 mov rsi, str_execpars
 mov rdx, sz_execpars
-ud2
-dw 2
+mov rax, 2
+syscall
+;ud2
+;dw 2
 
 jmp $
 

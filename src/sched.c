@@ -34,6 +34,7 @@
 #include <glidix/errno.h>
 #include <glidix/apic.h>
 #include <glidix/time.h>
+#include <glidix/syscall.h>
 
 static Thread firstThread;
 Thread *currentThread;			// don't make it static; used by syscall.asm
@@ -439,11 +440,10 @@ void signalThread(Thread *thread)
 };
 
 int threadClone(Regs *regs, int flags, MachineState *state)
-{
+{	
 	Thread *thread = (Thread*) kmalloc(sizeof(Thread));
 	fpuSave(&thread->fpuRegs);
 	memcpy(&thread->regs, regs, sizeof(Regs));
-	thread->regs.rax = 0;
 
 	if (state != NULL)
 	{
@@ -465,6 +465,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 		thread->regs.r15 = state->r15;
 		thread->regs.rip = state->rip;
 		thread->regs.rsp = state->rsp;
+		thread->regs.rflags = getFlagsRegister() | (1 << 9);
 	};
 
 	// kernel stack
@@ -688,7 +689,7 @@ static Thread *findThreadToKill(int pid, int *stat_loc, int flags)
 	return threadToKill;
 };
 
-int pollThread(Regs *regs, int pid, int *stat_loc, int flags)
+int pollThread(int pid, int *stat_loc, int flags)
 {
 	if (kernelStatus != KERNEL_RUNNING)
 	{
@@ -878,31 +879,15 @@ Thread *getThreadByID(int pid)
 	return th;
 };
 
+void _preempt(); /* common.asm */
 void kyield()
 {
-	while (getCurrentThread()->flags & THREAD_WAITING)
-	{
-		ASM("sti; hlt");
-	};
-
-#if 0
-	cli();
-	uint64_t counter = switchTaskCounter;
+	// first disable the APIC, so it doesn't fire half way through trying to switch task.
 	apic->timerInitCount = 0;
 	sti();
 	
-	// at this point, we have 2 possiblities:
-	// 1) the APIC timer fired before we turned it off above. in this case, "switchTaskCounter" changed,
-	//    and we have already rescheduled, so just return.
-	// 2) we turned the APIC timer off before it fired, so "switchTaskCounter" did not change. in this case
-	//    we must reprogram it to 1, and we can be sure that we reschedule before this function returns.
-	
-	if (switchTaskCounter == counter)
-	{
-		apic->timerInitCount = 2;
-		nop();				// make sure it fires before we return by using at least 1 CPU cycle
-	};
-#endif
+	// call the assembly-level _preempt() which saves callee-save registers and switches task.
+	_preempt();
 };
 
 void initUserRegs(Regs *regs)

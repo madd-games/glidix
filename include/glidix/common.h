@@ -56,12 +56,29 @@
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
 typedef struct {
-	uint64_t ds;
-	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
-	uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
-	uint64_t intNo;
-	uint64_t errCode;
-	uint64_t rip, cs, rflags, rsp, ss;
+	uint64_t ds;			// 0x00
+	uint64_t rdi;			// 0x08
+	uint64_t rsi;			// 0x10
+	uint64_t rbp;			// 0x18
+	uint64_t rbx;			// 0x20
+	uint64_t rdx;			// 0x28
+	uint64_t rcx;			// 0x30
+	uint64_t rax;			// 0x38
+	uint64_t r8;			// 0x40
+	uint64_t r9;			// 0x48
+	uint64_t r10;			// 0x50
+	uint64_t r11;			// 0x58
+	uint64_t r12;			// 0x60
+	uint64_t r13;			// 0x68
+	uint64_t r14;			// 0x70
+	uint64_t r15;			// 0x78
+	uint64_t intNo;			// 0x80
+	uint64_t errCode;		// 0x88
+	uint64_t rip;			// 0x90
+	uint64_t cs;			// 0x98
+	uint64_t rflags;		// 0xA0
+	uint64_t rsp;			// 0xA8
+	uint64_t ss;			// 0xB0
 } PACKED Regs;
 
 typedef struct
@@ -116,6 +133,8 @@ typedef enum
 } KernelStatus;
 extern KernelStatus kernelStatus;
 
+uint64_t	getFlagsRegister();
+
 /* common.asm */
 uint64_t	msrRead(uint32_t msr);
 void		msrWrite(uint32_t msr, uint64_t value);
@@ -159,5 +178,5 @@ void unmapPhysMemory(void *laddr, uint64_t len);
  * Defined in sched.c. Initializes a register structure for userspace.
  */
 void initUserRegs(Regs *regs);
-
+ 
 #endif

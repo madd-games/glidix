@@ -382,6 +382,12 @@ int sys_close(int fd)
 
 int sys_ioctl(int fd, uint64_t cmd, void *argp)
 {
+	if (!isPointerValid((uint64_t)argp, (cmd >> 32) & 0xFFFF, PROT_READ | PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
 		getCurrentThread()->therrno = EBADF;
@@ -499,6 +505,18 @@ int sys_stat(const char *path, struct stat *buf)
 
 int sys_lstat(const char *path, struct stat *buf)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isPointerValid((uint64_t)buf, sizeof(struct stat), PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	int status = vfsLinkStat(path, buf);
 	if (status == 0)
 	{
@@ -510,19 +528,25 @@ int sys_lstat(const char *path, struct stat *buf)
 	};
 };
 
-void sys_pause(Regs *regs)
+int sys_pause()
 {
 	ASM("cli");
 	lockSched();
-	*((int*)&regs->rax) = -1;
 	getCurrentThread()->therrno = EINTR;
 	getCurrentThread()->flags |= THREAD_WAITING;
 	unlockSched();
-	switchTask(regs);
+	kyield();
+	return -1;
 };
 
 int sys_fstat(int fd, struct stat *buf)
 {
+	if (!isPointerValid((uint64_t)buf, sizeof(struct stat), PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
 	{
 		getCurrentThread()->therrno = EBADF;
@@ -560,6 +584,12 @@ int sys_fstat(int fd, struct stat *buf)
 
 int sys_chmod(const char *path, mode_t mode)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	int error;
 	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
 
@@ -698,6 +728,12 @@ static int canChangeOwner(struct stat *st, uid_t uid, gid_t gid)
 
 int sys_chown(const char *path, uid_t uid, gid_t gid)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	if ((uid == (uid_t)-1) && (gid == (gid_t)-1)) return 0;
 
 	int error;
@@ -811,6 +847,12 @@ int sys_fchown(int fd, uid_t uid, gid_t gid)
 
 int sys_mkdir(const char *path, mode_t mode)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	mode &= 0xFFF;
 	mode &= ~(getCurrentThread()->umask);
 
@@ -950,6 +992,12 @@ int sys_ftruncate(int fd, off_t length)
 
 int sys_unlink(const char *path)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{
@@ -1177,6 +1225,27 @@ int sys_dup2(int oldfd, int newfd)
 
 int sys_insmod(const char *modname, const char *path, const char *opt, int flags)
 {
+	if (!isStringValid((uint64_t)modname))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (opt != NULL)
+	{
+		if (!isStringValid((uint64_t)opt))
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+	};
+	
 	if (getCurrentThread()->euid != 0)
 	{
 		// only root can load modules.
@@ -1189,6 +1258,12 @@ int sys_insmod(const char *modname, const char *path, const char *opt, int flags
 
 int sys_chdir(const char *path)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	struct stat st;
 	int error = vfsStat(path, &st);
 	if (error != 0)
@@ -1221,6 +1296,12 @@ int sys_chdir(const char *path)
 
 char *sys_getcwd(char *buf, size_t size)
 {
+	if (!isPointerValid((uint64_t)buf, size, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return NULL;
+	};
+	
 	if (size > 256) size = 256;
 	memcpy(buf, getCurrentThread()->cwd, size);
 	return buf;
@@ -1483,6 +1564,12 @@ int setegid(gid_t egid)
 
 int sys_rmmod(const char *modname, int flags)
 {
+	if (!isStringValid((uint64_t)modname))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	// only root can remove modules!
 	if (getCurrentThread()->euid != 0)
 	{
@@ -1495,6 +1582,18 @@ int sys_rmmod(const char *modname, int flags)
 
 int sys_link(const char *oldname, const char *newname)
 {
+	if (!isStringValid((uint64_t)oldname))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isStringValid((uint64_t)newname))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	char rpath[256];
 	if (realpath(newname, rpath) == NULL)
 	{
@@ -1625,6 +1724,18 @@ int sys_link(const char *oldname, const char *newname)
 
 int sys_symlink(const char *target, const char *path)
 {
+	if (!isStringValid((uint64_t)target))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	if (strlen(target) > PATH_MAX)
 	{
 		getCurrentThread()->therrno = ENAMETOOLONG;
@@ -1728,6 +1839,18 @@ int sys_symlink(const char *target, const char *path)
 
 ssize_t sys_readlink(const char *path, char *buf, size_t bufsize)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isPointerValid((uint64_t)buf, bufsize, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	char tmpbuf[PATH_MAX];
 	int error;
 	Dir *dir = parsePath(path, VFS_NO_FOLLOW | VFS_CHECK_ACCESS, &error);
@@ -1795,6 +1918,12 @@ unsigned sys_sleep(unsigned seconds)
 
 int sys_utime(const char *path, time_t atime, time_t mtime)
 {
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	int error;
 	Dir *dirp = parsePath(path, VFS_CHECK_ACCESS, &error);
 
@@ -1880,6 +2009,12 @@ int sys_socket(int domain, int type, int proto)
 
 int sys_bind(int fd, const struct sockaddr *addr, size_t addrlen)
 {
+	if (!isPointerValid((uint64_t)addr, addrlen, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	int out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -1909,6 +2044,18 @@ int sys_bind(int fd, const struct sockaddr *addr, size_t addrlen)
 
 ssize_t sys_sendto(int fd, const void *message, size_t len, int flags, const struct sockaddr *addr, size_t addrlen)
 {
+	if (!isPointerValid((uint64_t)message, len, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isPointerValid((uint64_t)addr, addrlen, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	int out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -1938,6 +2085,27 @@ ssize_t sys_sendto(int fd, const void *message, size_t len, int flags, const str
 
 ssize_t sys_recvfrom(int fd, void *message, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)
 {
+	if (!isPointerValid((uint64_t)message, len, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if ((addr != NULL) || (addrlen != NULL))
+	{
+		if (!isPointerValid((uint64_t)addrlen, 8, PROT_READ | PROT_WRITE))
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+		
+		if (!isPointerValid((uint64_t)addr, *addrlen, PROT_READ | PROT_WRITE))
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+	};
+	
 	ssize_t out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -1967,6 +2135,18 @@ ssize_t sys_recvfrom(int fd, void *message, size_t len, int flags, struct sockad
 
 int sys_getsockname(int fd, struct sockaddr *addr, size_t *addrlenptr)
 {
+	if (!isPointerValid((uint64_t)addrlenptr, 8, PROT_READ | PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isPointerValid((uint64_t)addr, *addrlenptr, PROT_READ | PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	int out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -2031,6 +2211,12 @@ int sys_shutdown(int fd, int how)
 
 int sys_connect(int fd, struct sockaddr *addr, size_t addrlen)
 {
+	if (!isPointerValid((uint64_t)addr, addrlen, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	int out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -2060,6 +2246,17 @@ int sys_connect(int fd, struct sockaddr *addr, size_t addrlen)
 
 int sys_getpeername(int fd, struct sockaddr *addr, size_t *addrlenptr)
 {
+	if (!isPointerValid((uint64_t)addrlenptr, 8, PROT_READ | PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isPointerValid((uint64_t)addr, *addrlenptr, PROT_READ | PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+	};
+	
 	int out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -2147,6 +2344,12 @@ uint64_t sys_getsockopt(int fd, int proto, int option)
 
 int sys_uname(struct utsname *buf)
 {
+	if (!isPointerValid((uint64_t)buf, sizeof(struct utsname), PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	strcpy(buf->sysname, UNAME_SYSNAME);
 	strcpy(buf->nodename, UNAME_NODENAME);
 	strcpy(buf->release, UNAME_RELEASE);
@@ -2224,6 +2427,12 @@ int sys_isatty(int fd)
 
 int sys_bindif(int fd, const char *ifname)
 {
+	if (!isStringValid((uint64_t)ifname))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	int out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -2286,6 +2495,17 @@ int sys_thsync(int type, int par)
 
 int sys_condwait(uint8_t *cond, uint8_t *lock)
 {
+	if (!isPointerValid((uint64_t)cond, 1, PROT_READ | PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	if (!isPointerValid((uint64_t)lock, 1, PROT_READ | PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+
 	// this system call allows userspace to implement blocking locks.
 	// it atomically does the following:
 	// 1) store "1" in *cond, while reading out its old value.
@@ -2447,10 +2667,254 @@ void sys_getpars(void *buffer, size_t size)
 	memcpy(buffer, getCurrentThread()->execPars, size);
 };
 
+int sys_geterrno()
+{
+	return ERRNO;
+};
+
+void sys_seterrno(int num)
+{
+	ERRNO = num;
+};
+
+int sys_clone(int flags, MachineState *state)
+{
+	if (state != NULL)
+	{
+		if (!isPointerValid((uint64_t)state, sizeof(MachineState), PROT_READ))
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+	};
+	
+	Thread *me = getCurrentThread();
+	Regs regs;
+	initUserRegs(&regs);
+	regs.rbx = me->urbx;
+	regs.rbp = me->urbp;
+	regs.rsp = me->ursp;
+	regs.r12 = me->ur12;
+	regs.r13 = me->ur13;
+	regs.r14 = me->ur14;
+	regs.r15 = me->ur15;
+	regs.rip = me->urip;
+	regs.rflags = getFlagsRegister();
+	return threadClone(&regs, flags, state);
+};
+
+int sys_waitpid(int pid, int *stat_loc, int flags)
+{
+	if (stat_loc != NULL)
+	{
+		if (!isPointerValid((uint64_t)stat_loc, sizeof(int), PROT_WRITE))
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+	};
+	
+	return pollThread(pid, stat_loc, flags);
+};
+
+void sys_yield()
+{
+	kyield();
+};
+
+char* sys_realpath(const char *path, char *buffer)
+{
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return NULL;
+	};
+	
+	if (!isPointerValid((uint64_t)buffer, 256, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return NULL;
+	};
+	
+	ERRNO = ENAMETOOLONG;
+	return realpath(path, buffer);
+};
+
+void sys_seterrnoptr(int *ptr)
+{
+	if (!isPointerValid((uint64_t)ptr, sizeof(int), PROT_READ | PROT_WRITE))
+	{
+		return;
+	};
+	getCurrentThread()->errnoptr = ptr;
+};
+
+int* sys_geterrnoptr()
+{
+	return getCurrentThread()->errnoptr;
+};
+
+int sys_libopen(const char *path, uint64_t loadAddr, libInfo *info)
+{
+	if (!isPointerValid((uint64_t)info, sizeof(libInfo), PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	return libOpen(path, loadAddr, info);
+};
+
+void sys_libclose(libInfo *info)
+{
+	if (!isPointerValid((uint64_t)info, sizeof(libInfo), PROT_READ | PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return;
+	};
+	libClose(info);
+};
+
+int sys_unmount(const char *path)
+{
+	if (!isStringValid((uint64_t)path))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+
+	ERRNO = EIO;	
+	return unmount(path);
+};
+
+ssize_t sys_send(int socket, const void *buffer, size_t length, int flags)
+{
+	return sys_sendto(socket, buffer, length, flags, NULL, 0);
+};
+
+ssize_t sys_recv(int socket, void *buffer, size_t length, int flags)
+{
+	return sys_recvfrom(socket, buffer, length, flags, NULL, NULL);
+};
+
+int sys_route_add(int a, int b, gen_route *c)
+{
+	if (!isPointerValid((uint64_t)c, sizeof(gen_route), PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	return route_add(a, b, c);
+};
+
+ssize_t sys_netconf_stat(const char *a, NetStat *b, size_t c)
+{
+	if (!isPointerValid((uint64_t)b, c, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	return netconf_stat(a, b, c);
+};
+
+ssize_t sys_netconf_getaddrs(const char *a, int b, void *c, size_t d)
+{
+	if (!isPointerValid((uint64_t)c, d, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	return netconf_getaddrs(a, b, c, d);
+};
+
+ssize_t sys_netconf_statidx(unsigned int a, NetStat *b, size_t c)
+{
+	if (!isPointerValid((uint64_t)b, c, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	return netconf_statidx(a, b, c);
+};
+
+int sys_getgroups(int count, gid_t *buffer)
+{
+	if (!isPointerValid((uint64_t)buffer, sizeof(gid_t)*count, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	if (count <= getCurrentThread()->numGroups)
+	{
+		memcpy(buffer, getCurrentThread()->groups, sizeof(gid_t)*count);
+	}
+	else
+	{
+		memcpy(buffer, getCurrentThread()->groups, sizeof(gid_t)*getCurrentThread()->numGroups);
+	};
+	return getCurrentThread()->numGroups;
+};
+
+int sys_setgroups(int count, const gid_t *groups)
+{
+	if (!isPointerValid((uint64_t)groups, sizeof(gid_t)*count, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	if (getCurrentThread()->egid != 0)
+	{
+		ERRNO = EPERM;
+		return -1;
+	};
+	if (count > 16)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	memcpy(getCurrentThread()->groups, groups, sizeof(gid_t)*count);
+	getCurrentThread()->numGroups = count;
+	return 0;
+};
+
+int sys_netconf_addr(int a, const char *b, void *c, uint64_t d)
+{
+	if (!isPointerValid((uint64_t)c, d, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	if (!isStringValid((uint64_t)b))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	return netconf_addr(a, b, c, d);
+};
+
+int sys_route_clear(int a, const char *b)
+{
+	if (!isStringValid((uint64_t)b))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	return route_clear(a, b);
+};
+
+int sys_munmap(uint64_t addr, uint64_t size)
+{
+	return mprotect(addr, size, 0);
+};
+
+int sys_getppid()
+{
+	return getCurrentThread()->pidParent;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 19
+#define SYSCALL_NUMBER 110
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -2471,6 +2935,97 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_getparsz,				// 16
 	&sys_getpars,				// 17
 	&sys_raise,				// 18
+	&sys_geterrno,				// 19
+	&sys_seterrno,				// 20
+	&mprotect,				// 21
+	&sys_lseek,				// 22
+	&sys_clone,				// 23
+	&sys_pause,				// 24
+	&sys_waitpid,				// 25
+	&signalPid,				// 26
+	&sys_insmod,				// 27
+	&sys_ioctl,				// 28
+	&sys_fdopendir,				// 29
+	NULL,					// 30 (_glidix_diag())
+	&sys_mount,				// 31
+	&sys_yield,				// 32
+	&time,					// 33
+	&sys_realpath,				// 34
+	&sys_chdir,				// 35
+	&sys_getcwd,				// 36
+	&sys_fstat,				// 37
+	&sys_chmod,				// 38
+	&sys_fchmod,				// 39
+	&sys_fsync,				// 40
+	&sys_chown,				// 41
+	&sys_fchown,				// 42
+	&sys_mkdir,				// 43
+	&sys_ftruncate,				// 44
+	&sys_unlink,				// 45
+	&sys_dup,				// 46
+	&sys_dup2,				// 47
+	&sys_pipe,				// 48
+	&sys_seterrnoptr,			// 49
+	&sys_geterrnoptr,			// 50
+	&getNanotime,				// 51
+	&sys_libopen,				// 52
+	&sys_libclose,				// 53
+	&sys_mmap,				// 54
+	&setuid,				// 55
+	&setgid,				// 56
+	&seteuid,				// 57
+	&setegid,				// 58
+	&setreuid,				// 59
+	&setregid,				// 60
+	&sys_rmmod,				// 61
+	&sys_link,				// 62
+	&sys_unmount,				// 63
+	&sys_lstat,				// 64
+	&sys_symlink,				// 65
+	&sys_readlink,				// 66
+	&systemDown,				// 67
+	&sys_sleep,				// 68
+	&sys_utime,				// 69
+	&sys_umask,				// 70
+	&sysRouteTable,				// 71
+	&sys_socket,				// 72
+	&sys_bind,				// 73
+	&sys_sendto,				// 74
+	&sys_send,				// 75
+	&sys_recvfrom,				// 76
+	&sys_recv,				// 77
+	&sys_route_add,				// 78
+	&sys_netconf_stat,			// 79
+	&sys_netconf_getaddrs,			// 80
+	&sys_getsockname,			// 81
+	&sys_shutdown,				// 82
+	&sys_connect,				// 83
+	&sys_getpeername,			// 84
+	&sys_setsockopt,			// 85
+	&sys_getsockopt,			// 86
+	&sys_netconf_statidx,			// 87
+	&sys_pcistat,				// 88
+	&sys_getgroups,				// 89
+	&sys_setgroups,				// 90
+	&sys_uname,				// 91
+	&sys_netconf_addr,			// 92
+	&fcntl_getfd,				// 93
+	&fcntl_setfd,				// 94
+	&sys_unique,				// 95
+	&sys_isatty,				// 96
+	&sys_bindif,				// 97
+	&sys_route_clear,			// 98
+	&sys_munmap,				// 99
+	&sys_thsync,				// 100
+	&sys_getppid,				// 101
+	&sys_alarm,				// 102
+	&sys_condwait,				// 103
+	&sys_mqserver,				// 104
+	&sys_mqclient,				// 105
+	&sys_mqsend,				// 106
+	&sys_mqrecv,				// 107
+	&sys_shmalloc,				// 108
+	&sys_shmap,				// 109
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 
@@ -2496,647 +3051,23 @@ uint64_t sysEpilog(uint64_t retval)
 	};
 #endif
 
+	if (getCurrentThread()->sigcnt > 0)
+	{
+		Thread *me = getCurrentThread();
+		Regs regs;
+		initUserRegs(&regs);
+		regs.rbx = me->urbx;
+		regs.rbp = me->urbp;
+		regs.rsp = me->ursp;
+		regs.r12 = me->ur12;
+		regs.r13 = me->ur13;
+		regs.r14 = me->ur14;
+		regs.r15 = me->ur15;
+		regs.rip = me->urip;
+		regs.rflags = getFlagsRegister(); 
+		ASM("cli");
+		switchTask(&regs);
+	};
+
 	return retval;
-};
-
-void syscallDispatch(Regs *regs, uint16_t num)
-{
-	if (getCurrentThread()->errnoptr != NULL)
-	{
-		getCurrentThread()->therrno = *(getCurrentThread()->errnoptr);
-	};
-
-	if ((getCurrentThread()->sigcnt > 0) && ((regs->cs & 3) == 3) && ((getCurrentThread()->flags & THREAD_SIGNALLED) == 0))
-	{
-		// before doing any syscalls, we dispatch all signals.
-		ASM("cli");
-		lockSched();
-		memcpy(&getCurrentThread()->regs, regs, sizeof(Regs));
-		dispatchSignal(getCurrentThread());
-		memcpy(regs, &getCurrentThread()->regs, sizeof(Regs));
-		unlockSched();
-		return;					// interrupts will be enabled on return
-	};
-	
-	regs->rip += 4;
-
-	// store the return registers; this is in case some syscall, such as read(), requests a return-on-signal.
-	memcpy(&getCurrentThread()->intSyscallRegs, regs, sizeof(Regs));
-
-	// for the magical pipe() system call
-	int pipefd[2];
-	
-	switch (num)
-	{
-	case 0:
-		sys_exit((int) regs->rdi);
-		break;					/* never actually reached */
-	case 1:
-		*((ssize_t*)&regs->rax) = sys_write(*((int*)&regs->rdi), (const void*) regs->rsi, *((size_t*)&regs->rdx));
-		break;
-	case 2:
-		*((int*)&regs->rax) = sys_exec((const char*)regs->rdi, (const char*) regs->rsi, regs->rdx);
-		break;
-	case 3:
-		*((ssize_t*)&regs->rax) = sys_read(*((int*)&regs->rdi), (void*) regs->rsi, *((size_t*)&regs->rdx));
-		break;
-	case 4:
-		*((int*)&regs->rax) = sys_open((const char*) regs->rdi, (int) regs->rsi, (mode_t) regs->rdx);
-		kprintf_debug("[*] sys_open: '%s'\n", (const char*) regs->rdi);
-		break;
-	case 5:
-		regs->rax = 0;
-		sys_close((int)regs->rdi);
-		break;
-	case 6:
-		regs->rax = getCurrentThread()->pid;
-		break;
-	case 7:
-		regs->rax = getCurrentThread()->ruid;
-		break;
-	case 8:
-		regs->rax = getCurrentThread()->euid;
-		break;
-	case 9:
-		regs->rax = getCurrentThread()->suid;
-		break;
-	case 10:
-		regs->rax = getCurrentThread()->rgid;
-		break;
-	case 11:
-		regs->rax = getCurrentThread()->egid;
-		break;
-	case 12:
-		regs->rax = getCurrentThread()->sgid;
-		break;
-	case 13:
-		getCurrentThread()->rootSigHandler = regs->rdi;
-		regs->rax = 0;
-		break;
-	case 14:
-		if (!isPointerValid(regs->rdi, sizeSignalStackFrame, PROT_READ))
-		{
-			signalOnBadPointer(regs, regs->rdi);
-			break;
-		};
-		sigret((void*) regs->rdi);
-		break;
-	case 15:
-		*((int*)&regs->rax) = sys_stat((const char*) regs->rdi, (struct stat*) regs->rsi);
-		//kprintf_debug("[*] sys_stat: '%s', returned %d\n", (const char*) regs->rdi, *((int*)&regs->rax));
-		break;
-	case 16:
-		regs->rax = (uint64_t) getCurrentThread()->szExecPars;
-		break;
-	case 17:
-		if (!isPointerValid(regs->rdi, regs->rsi, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdi);
-			break;
-		};
-		memcpy((void*)regs->rdi, getCurrentThread()->execPars, regs->rsi);
-		break;
-	case 18:
-		*((int*)&regs->rax) = sys_raise((int) regs->rdi);
-		break;
-	case 19:
-		*((int*)&regs->rax) = getCurrentThread()->therrno;
-		break;
-	case 20:
-		getCurrentThread()->therrno = *((int*)&regs->rdi);
-		break;
-	case 21:
-		*((int*)&regs->rax) = mprotect(regs->rdi, regs->rsi, (int) regs->rdx);
-		break;
-	case 22:
-		*((off_t*)&regs->rax) = sys_lseek((int) regs->rdi, *((off_t*)&regs->rsi), (int) regs->rdx);
-		break;
-	case 23:
-		if (kernelStatus == KERNEL_STOPPING)
-		{
-			getCurrentThread()->therrno = EPERM;
-			*((int*)&regs->rax) = -1;
-			break;
-		};
-		*((int*)&regs->rax) = threadClone(regs, (int) regs->rdi, (MachineState*) regs->rsi);
-		break;
-	case 24:
-		sys_pause(regs);
-		break;
-	case 25:
-		// yes, the second argument is a pointer to RDI :)
-		*((int*)&regs->rax) = pollThread(regs, *((int*)&regs->rdi), (int*) &regs->rdi, (int) regs->rdx);
-		break;
-	case 26:
-		*((int*)&regs->rax) = signalPid((int) regs->rdi, (int) regs->rsi);
-		break;
-	case 27:
-		*((int*)&regs->rax) = sys_insmod((const char*) regs->rdi, (const char*) regs->rsi, (const char*) regs->rdx, (int) regs->rcx);
-		break;
-	case 28:
-		if (!isPointerValid(regs->rdx, (regs->rsi >> 32) & 0xFFFF, PROT_READ | PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdx);
-			break;
-		};
-		*((int*)&regs->rax) = sys_ioctl((int) regs->rdi, regs->rsi, (void*) regs->rdx);
-		break;
-	case 29:
-		*((int*)&regs->rax) = sys_fdopendir((const char*) regs->rdi);
-		break;
-	case 30:
-		/* _glidix_diag */
-		//heapDump();
-		//kdumpregs(regs);
-		//dumpRunqueue();
-		//regs->rflags &= ~(1 << 9);
-		//BREAKPOINT();
-		//dumpModules();
-		break;
-	case 31:
-		*((int*)&regs->rax) = sys_mount((const char*)regs->rdi, (const char*)regs->rsi, (const char*)regs->rdx, (int)regs->rcx);
-		break;
-	case 32:
-		/* _glidix_yield */
-		//ASM("cli");
-		//switchTask(regs);
-		break;
-	case 33:
-		*((time_t*)&regs->rax) = time();
-		break;
-	case 34:
-		if (!isPointerValid(regs->rsi, 256, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		regs->rax = (uint64_t) realpath((const char*) regs->rdi, (char*) regs->rsi);
-		if (regs->rax == 0)
-		{
-			getCurrentThread()->therrno = ENAMETOOLONG;
-		};
-		break;
-	case 35:
-		*((int*)&regs->rax) = sys_chdir((const char*)regs->rdi);
-		break;
-	case 36:
-		if (!isPointerValid(regs->rdi, regs->rsi, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdi);
-			break;
-		};
-		regs->rax = (uint64_t) sys_getcwd((char*) regs->rdi, regs->rsi);
-		break;
-	case 37:
-		if (!isPointerValid(regs->rsi, sizeof(struct stat), PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((int*)&regs->rax) = sys_fstat((int)regs->rdi, (struct stat*) regs->rsi);
-		break;
-	case 38:
-		*((int*)&regs->rax) = sys_chmod((const char*) regs->rdi, (mode_t) regs->rsi);
-		break;
-	case 39:
-		*((int*)&regs->rax) = sys_fchmod((int) regs->rdi, (mode_t) regs->rsi);
-		break;
-	case 40:
-		*((int*)&regs->rax) = sys_fsync((int)regs->rdi);
-		break;
-	case 41:
-		*((int*)&regs->rax) = sys_chown((const char*)regs->rdi, (uid_t)regs->rsi, (gid_t)regs->rdx);
-		break;
-	case 42:
-		*((int*)&regs->rax) = sys_fchown((int)regs->rdi, (uid_t)regs->rsi, (gid_t)regs->rdx);
-		break;
-	case 43:
-		*((int*)&regs->rax) = sys_mkdir((const char*)regs->rdi, (mode_t)regs->rsi);
-		break;
-	case 44:
-		*((int*)&regs->rax) = sys_ftruncate((int)regs->rdi, (off_t)regs->rsi);
-		break;
-	case 45:
-		*((int*)&regs->rax) = sys_unlink((const char*)regs->rdi);
-		break;
-	case 46:
-		*((int*)&regs->rax) = sys_dup((int)regs->rdi);
-		break;
-	case 47:
-		*((int*)&regs->rax) = sys_dup2((int)regs->rdi, (int)regs->rsi);
-		break;
-	case 48:
-		*((int*)&regs->rax) = sys_pipe(pipefd);
-		*((int*)&regs->r8) = pipefd[0];
-		*((int*)&regs->r9) = pipefd[1];
-		break;
-	case 49:
-		if (!isPointerValid(regs->rdi, sizeof(int), PROT_READ | PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdi);
-			break;
-		};
-		getCurrentThread()->errnoptr = (int*) regs->rdi;
-		break;
-	case 50:
-		regs->rax = (uint64_t) getCurrentThread()->errnoptr;
-		break;
-	case 51:
-		*((clock_t*)&regs->rax) = (clock_t) getUptime() * 1000000;
-		break;
-	case 52:
-		if (!isPointerValid(regs->rdx, sizeof(libInfo), PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdx);
-			break;
-		};
-		*((int*)&regs->rax) = libOpen((const char*) regs->rdi, regs->rsi, (libInfo*) regs->rdx);
-		break;
-	case 53:
-		if (!isPointerValid(regs->rdi, sizeof(libInfo), PROT_READ | PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdi);
-			break;
-		};
-		libClose((libInfo*) regs->rdi);
-		break;
-	case 54:
-		regs->rax = sys_mmap(regs->rdi, (size_t)regs->rsi, (int)regs->rdx, (int)regs->rcx, (int)regs->r8, (off_t)regs->r9);
-		break;
-	case 55:
-		regs->rax = setuid(regs->rdi);
-		break;
-	case 56:
-		regs->rax = setgid(regs->rdi);
-		break;
-	case 57:
-		regs->rax = seteuid(regs->rdi);
-		break;
-	case 58:
-		regs->rax = setegid(regs->rdi);
-		break;
-	case 59:
-		regs->rax = setreuid(regs->rdi, regs->rsi);
-		break;
-	case 60:
-		regs->rax = setregid(regs->rdi, regs->rsi);
-		break;
-	case 61:
-		*((int*)&regs->rax) = sys_rmmod((const char*) regs->rdi, (int) regs->rsi);
-		break;
-	case 62:
-		*((int*)&regs->rax) = sys_link((const char*) regs->rdi, (const char*) regs->rsi);
-		break;
-	case 63:
-		*((int*)&regs->rax) = unmount((const char*) regs->rdi);
-		break;
-	case 64:
-		if (!isPointerValid(regs->rsi, sizeof(struct stat), PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((int*)&regs->rax) = sys_lstat((const char*) regs->rdi, (struct stat*) regs->rsi);
-		break;
-	case 65:
-		*((int*)&regs->rax) = sys_symlink((const char*) regs->rdi, (const char*) regs->rsi);
-		break;
-	case 66:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((ssize_t*)&regs->rax) = sys_readlink((const char*) regs->rdi, (char*) regs->rsi, (size_t) regs->rdx);
-		break;
-	case 67:
-		*((int*)&regs->rax) = systemDown((int) regs->rdi);
-		break;
-	case 68:
-		*((unsigned*)&regs->rax) = sys_sleep((unsigned) regs->rdi);
-		break;
-	case 69:
-		*((int*)&regs->rax) = sys_utime((const char*) regs->rdi, (time_t) regs->rsi, (time_t) regs->rdx);
-		break;
-	case 70:
-		*((mode_t*)&regs->rax) = sys_umask((mode_t) regs->rdi);
-		break;
-	case 71:
-		*((int*)&regs->rax) = sysRouteTable(regs->rdi);
-		break;
-	case 72:
-		*((int*)&regs->rax) = sys_socket((int) regs->rdi, (int) regs->rsi, (int) regs->rdx);
-		break;
-	case 73:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((int*)&regs->rax) = sys_bind((int) regs->rdi, (const struct sockaddr*) regs->rsi, (size_t) regs->rdx);
-		break;
-	case 74:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))	// message
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		if (!isPointerValid(regs->r8, regs->r9, PROT_READ))	// addr
-		{
-			signalOnBadPointer(regs, regs->r8);
-			break;
-		};
-		*((ssize_t*)&regs->rax) = sys_sendto((int) regs->rdi, (const void*) regs->rsi, (size_t) regs->rdx,
-							(int) regs->rcx, (const struct sockaddr*) regs->r8, (size_t) regs->r9);
-		break;
-	case 75:	// send
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((ssize_t*)&regs->rax) = sys_sendto((int) regs->rdi, (const void*) regs->rsi, (size_t) regs->rdx, (int) regs->rcx, NULL, 0);
-		break;
-	case 76:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))	// message
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		if (!isPointerValid(regs->r9, 8, PROT_READ | PROT_WRITE))		// addrlen
-		{
-			signalOnBadPointer(regs, regs->r9);
-			break;
-		};
-		if (!isPointerValid(regs->r8, *((uint64_t*)regs->r9), PROT_WRITE)) // addr
-		{
-			signalOnBadPointer(regs, regs->r8);
-			break;
-		};
-		*((ssize_t*)&regs->rax) = sys_recvfrom((int) regs->rdi, (void*) regs->rsi, (size_t) regs->rdx,
-							(int) regs->rcx, (struct sockaddr*) regs->r8, (size_t*) regs->r9);
-		break;
-	case 77:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((ssize_t*)&regs->rax) = sys_recvfrom((int) regs->rdi, (void*) regs->rsi, (size_t) regs->rdx, (int) regs->rcx, NULL, NULL);
-		break;
-	case 78:
-		if (!isPointerValid(regs->rdx, sizeof(gen_route), PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdx);
-			break;
-		};
-		*((int*)&regs->rax) = route_add((int) regs->rdi, *((int*)&regs->rsi), (gen_route*) regs->rdx);
-		break;
-	case 79:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((ssize_t*)&regs->rax) = netconf_stat((const char*) regs->rdi, (NetStat*) regs->rsi, (size_t) regs->rdx);
-		break;
-	case 80:
-		if (!isPointerValid(regs->rdx, regs->rcx, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdx);
-			break;
-		};
-		*((ssize_t*)&regs->rax) = netconf_getaddrs((const char*) regs->rdi, (int) regs->rsi, (void*) regs->rdx, (size_t) regs->rcx);
-		break;
-	case 81:
-		if (!isPointerValid(regs->rdx, 8, PROT_READ | PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdx);
-			break;
-		};
-		if (!isPointerValid(regs->rsi, *((uint64_t*)regs->rdx), PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((int*)&regs->rax) = sys_getsockname((int) regs->rdi, (struct sockaddr*) regs->rsi, (size_t*) regs->rdx);
-		break;
-	case 82:
-		*((int*)&regs->rax) = sys_shutdown((int) regs->rdi, (int) regs->rsi);
-		break;
-	case 83:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_READ))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((int*)&regs->rax) = sys_connect((int) regs->rdi, (struct sockaddr*) regs->rsi, (size_t) regs->rdx);
-		break;
-	case 84:
-		if (!isPointerValid(regs->rdx, 8, PROT_READ | PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdx);
-			break;
-		};
-		if (!isPointerValid(regs->rsi, *((uint64_t*)regs->rdx), PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((int*)&regs->rax) = sys_getpeername((int) regs->rdi, (struct sockaddr*) regs->rsi, (size_t*) regs->rdx);
-		break;
-	case 85:
-		*((int*)&regs->rax) = sys_setsockopt((int) regs->rdi, (int) regs->rsi, (int) regs->rdx, regs->rcx);
-		break;
-	case 86:
-		regs->rax = sys_getsockopt((int) regs->rdi, (int) regs->rsi, (int) regs->rdx);
-		break;
-	case 87:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((ssize_t*)&regs->rax) = netconf_statidx((unsigned int) regs->rdi, (NetStat*) regs->rsi, (size_t) regs->rdx);
-		break;
-	case 88:
-		if (!isPointerValid(regs->rsi, regs->rdx, PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((ssize_t*)&regs->rax) = sys_pcistat((int) regs->rdi, (PCIDevice*) regs->rsi, (size_t) regs->rdx);
-		break;
-	case 89:
-		/* getgroups */
-		if (!isPointerValid(regs->rsi, sizeof(gid_t)*(*((int*)&regs->rdi)), PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		if (*((int*)&regs->rdi) <= getCurrentThread()->numGroups)
-		{
-			memcpy((void*)regs->rsi, getCurrentThread()->groups, sizeof(gid_t)*(*((int*)&regs->rdi)));
-		}
-		else
-		{
-			memcpy((void*)regs->rsi, getCurrentThread()->groups, sizeof(gid_t)*getCurrentThread()->numGroups);
-		};
-		*((int*)&regs->rax) = getCurrentThread()->numGroups;
-		break;
-	case 90:
-		/* _glidix_setgroups */
-		if (!isPointerValid(regs->rsi, sizeof(gid_t)*regs->rdi, PROT_READ))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		if (getCurrentThread()->egid != 0)
-		{
-			ERRNO = EPERM;
-			*((int*)&regs->rax) = -1;
-			break;
-		};
-		if (regs->rdi > 16)
-		{
-			ERRNO = EINVAL;
-			*((int*)regs->rax) = -1;
-			break;
-		};
-		memcpy(getCurrentThread()->groups, (const void*)regs->rsi, sizeof(gid_t)*regs->rdi);
-		getCurrentThread()->numGroups = regs->rdi;
-		*((int*)&regs->rax) = 0;
-		break;
-	case 91:
-		if (!isPointerValid(regs->rdi, sizeof(struct utsname), PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdi);
-			break;
-		};
-		*((int*)&regs->rax) = sys_uname((struct utsname*)regs->rdi);
-		break;
-	case 92:
-		if (!isPointerValid(regs->rdx, regs->rcx, PROT_READ))
-		{
-			*((int*)&regs->rax) = -1;
-			ERRNO = EFAULT;
-			break;
-		};
-		if (!isStringValid(regs->rsi))
-		{
-			*((int*)&regs->rax) = -1;
-			ERRNO = EFAULT;
-			break;
-		};
-		*((int*)&regs->rax) = netconf_addr((int)regs->rdi, (const char*)regs->rsi, (void*)regs->rdx, regs->rcx);
-		break;
-	case 93:
-		*((int*)&regs->rax) = fcntl_getfd((int)regs->rdi);
-		break;
-	case 94:
-		*((int*)&regs->rax) = fcntl_setfd((int)regs->rdi, (int)regs->rsi);
-		break;
-	case 95:
-		regs->rax = (uint64_t) sys_unique();
-		break;
-	case 96:
-		*((int*)&regs->rax) = sys_isatty((int) regs->rdi);
-		break;
-	case 97:
-		if (!isStringValid(regs->rsi))
-		{
-			*((int*)&regs->rax) = -1;
-			ERRNO = EFAULT;
-			break;
-		};
-		*((int*)&regs->rax) = sys_bindif((int)regs->rdi, (const char*)regs->rsi);
-		break;
-	case 98:
-		if (!isStringValid(regs->rsi))
-		{
-			*((int*)&regs->rax) = -1;
-			ERRNO = EFAULT;
-			break;
-		};
-		*((int*)&regs->rax) = route_clear((int)regs->rdi, (const char*) regs->rsi);
-		break;
-	case 99:
-		*((int*)&regs->rax) = mprotect(regs->rdi, regs->rsi, 0);
-		break;
-	case 100:
-		*((int*)&regs->rax) = sys_thsync((int)regs->rdi, (int)regs->rsi);
-		break;
-	case 101:
-		regs->rax = getCurrentThread()->pidParent;
-		break;
-	case 102:
-		*((unsigned*)&regs->rax) = sys_alarm(*((unsigned*)&regs->rdi));
-		break;
-	case 103:
-		if (!isPointerValid(regs->rdi, 1, PROT_READ | PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rdi);
-			break;
-		};
-		if (!isPointerValid(regs->rsi, 1, PROT_READ | PROT_WRITE))
-		{
-			signalOnBadPointer(regs, regs->rsi);
-			break;
-		};
-		*((int*)&regs->rax) = sys_condwait((uint8_t*)regs->rdi, (uint8_t*)regs->rsi);
-		break;
-	case 104:
-		*((int*)&regs->rax) = sys_mqserver();
-		break;
-	case 105:
-		*((int*)&regs->rax) = sys_mqclient((int)regs->rdi, (int)regs->rsi);
-		break;
-	case 106:
-		if (!isPointerValid(regs->rcx, regs->r8, PROT_READ))
-		{
-			ERRNO = EFAULT;
-			*((int*)&regs->rax) = -1;
-		};
-		*((int*)&regs->rax) = sys_mqsend((int)regs->rdi, (int)regs->rsi, (int)regs->rdx, (const void*)regs->rcx, (size_t)regs->r8);
-		break;
-	case 107:
-		if (!isPointerValid(regs->rsi, sizeof(MessageInfo), PROT_WRITE))
-		{
-			ERRNO = EFAULT;
-			*((int*)&regs->rax) = -1;
-		};
-		if (!isPointerValid(regs->rdx, regs->rcx, PROT_WRITE))
-		{
-			ERRNO = EFAULT;
-			*((int*)&regs->rax) = -1;
-		};
-		*((ssize_t*)&regs->rax) = sys_mqrecv((int)regs->rdi, (MessageInfo*)regs->rsi, (void*)regs->rdx, (size_t)regs->rcx);
-		break;
-	case 108:
-		regs->rax = sys_shmalloc(regs->rdi, regs->rsi, *((int*)&regs->rdx), *((int*)&regs->rcx), *((int*)&regs->r8));
-		break;
-	case 109:
-		*((int*)&regs->rax) = sys_shmap(regs->rdi, regs->rsi, regs->rdx, *((int*)&regs->rcx));
-		break;
-	default:
-		signalOnBadSyscall(regs);
-		break;
-	};
-
-	if (getCurrentThread()->errnoptr != NULL)
-	{
-		*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
-	};
-
-	if ((getCurrentThread()->sigcnt > 0) && ((regs->cs & 3) == 3) && ((getCurrentThread()->flags & THREAD_SIGNALLED) == 0))
-	{
-		// also dispatching after calls.
-		ASM("cli");
-		lockSched();
-		memcpy(&getCurrentThread()->regs, regs, sizeof(Regs));
-		dispatchSignal(getCurrentThread());
-		memcpy(regs, &getCurrentThread()->regs, sizeof(Regs));
-		unlockSched();
-		return;					// interrupts will be enabled on return
-	};
 };

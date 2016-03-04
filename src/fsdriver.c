@@ -32,6 +32,7 @@
 #include <glidix/memory.h>
 #include <glidix/mount.h>
 #include <glidix/string.h>
+#include <glidix/syscall.h>
 
 static Semaphore semFS;
 static FSDriver *firstDriver;
@@ -64,6 +65,24 @@ void registerFSDriver(FSDriver *drv)
 
 int sys_mount(const char *fsname, const char *image, const char *mountpoint, int flags)
 {
+	if (!isStringValid((uint64_t)fsname))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isStringValid((uint64_t)image))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (!isStringValid((uint64_t)mountpoint))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	Thread *ct = getCurrentThread();
 	if (ct->euid != 0)
 	{

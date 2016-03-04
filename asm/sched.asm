@@ -113,6 +113,6 @@ enterDebugContext:
 [extern _tss_reload_access]
 reloadTR:
 	call	_tss_reload_access
-	mov	rax,		0x2b
+	mov	rax,		0x33
 	ltr	ax
 	ret

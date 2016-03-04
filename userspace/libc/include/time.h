@@ -36,7 +36,7 @@ extern "C" {
 #include <sys/types.h>
 
 #define	CLK_TCK				1000
-#define	CLOCKS_PER_SEC			1000000
+#define	CLOCKS_PER_SEC			1000000000
 #define	TIME_MAX			9223372036854775807L
 
 struct tm

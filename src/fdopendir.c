@@ -34,6 +34,7 @@
 #include <glidix/string.h>
 #include <glidix/errno.h>
 #include <glidix/console.h>
+#include <glidix/syscall.h>
 
 static ssize_t readdir(File *fp, void *buffer, size_t size)
 {
@@ -66,6 +67,12 @@ static void closedir(File *fp)
 
 int sys_fdopendir(const char *dirname)
 {
+	if (!isStringValid((uint64_t)dirname))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	char fulldir[512];
 	strcpy(fulldir, dirname);
 	if (dirname[strlen(dirname)-1] != '/') strcat(fulldir, "/");

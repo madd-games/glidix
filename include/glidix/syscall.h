@@ -32,5 +32,7 @@
 #include <glidix/common.h>
 
 void syscallDispatch(Regs *regs, uint16_t num);
+int isPointerValid(uint64_t ptr, uint64_t size, int flags);
+int isStringValid(uint64_t ptr);
 
 #endif

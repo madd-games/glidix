@@ -31,6 +31,7 @@
 #include <glidix/memory.h>
 #include <glidix/errno.h>
 #include <glidix/string.h>
+#include <glidix/syscall.h>
 
 static File *openPipe(Pipe *pipe, int mode);
 
@@ -224,6 +225,12 @@ static File *openPipe(Pipe *pipe, int mode)
 
 int sys_pipe(int *pipefd)
 {
+	if (!isPointerValid((uint64_t)pipefd, sizeof(int)*2, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	int rfd=-1, wfd=-1;
 
 	FileTable *ftab = getCurrentThread()->ftab;

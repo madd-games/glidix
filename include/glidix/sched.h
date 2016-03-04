@@ -95,18 +95,38 @@ typedef struct
 #define	WUNTRACED			(1 << 2)
 #define	WCONTINUED			(1 << 3)
 
+/**
+ * WARNING: The first few fields of this structure must not be reordered as they are accessed by
+ * assembly code. The end of this "assembly region" is marked with a comment.
+ */
 typedef struct _Thread
 {
 	/**
 	 * The thread's FPU registers. This must be the first member of this structure
 	 * so that they are 16-byte-aligned without any waste.
 	 */
-	FPURegs				fpuRegs;
+	FPURegs				fpuRegs;				// 0
 
 	/**
 	 * OFFSET 512. The value to load into RSI upon a syscall.
 	 */
-	uint64_t			syscallStackPointer;
+	uint64_t			syscallStackPointer;			// 0x200
+	
+	/**
+	 * Registers that must be preserved across system calls. Those are stored
+	 * by the system call dispatcher and may be read by functions like fork()
+	 * which need to know the return state.
+	 */
+	uint64_t			urbx;					// 0x208
+	uint64_t			ursp;					// 0x210
+	uint64_t			urbp;					// 0x218
+	uint64_t			ur12;					// 0x220
+	uint64_t			ur13;					// 0x228
+	uint64_t			ur14;					// 0x230
+	uint64_t			ur15;					// 0x238
+	uint64_t			urip;					// 0x240
+
+	// --- END OF ASSEMBLY REGION --- //
 	
 	/**
 	 * The thread's stack and its size. Must be kfree()'d when the thread terminates.
@@ -312,8 +332,6 @@ void signalThread(Thread *thread);
 /**
  * This function is used to create new user threads and processes, it can be used to implement
  * pthread_create() as well as fork(), by passing the appropriate options.
- * The passed regs structure is for the parent.
- * This function returns 0 on success, or negative numbers on error.
  */
 int threadClone(Regs *regs, int flags, MachineState *state);
 
@@ -325,7 +343,7 @@ void threadExit(Thread *thread, int status);
 /**
  * Poll a thread.
  */
-int pollThread(Regs *regs, int pid, int *stat_loc, int flags);
+int pollThread(int pid, int *stat_loc, int flags);
 
 /**
  * Send a signal to a specific pid.
