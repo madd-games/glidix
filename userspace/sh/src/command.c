@@ -257,9 +257,10 @@ int execCommand(char *cmd)
 		free(argv);
 		shellChildPid = pid;
 		int status;
+		int ret;
 		while (1)
 		{
-			int ret = waitpid(pid, &status, 0);
+			ret = waitpid(pid, &status, 0);
 			
 			// EINTR is the only possible error here, so if it occurs, try again.
 			if (ret != -1)

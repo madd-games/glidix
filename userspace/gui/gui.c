@@ -802,6 +802,8 @@ int main()
 
 	mouseX = mode.width / 2 - 8;
 	mouseY = mode.height / 2 - 8;
+	mouseX = 205;
+	mouseY = 15;
 	
 	// system images
 	defWinIcon = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/defwinicon.png", NULL);

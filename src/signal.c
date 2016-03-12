@@ -33,6 +33,7 @@
 #include <glidix/memory.h>
 #include <glidix/console.h>
 #include <glidix/procmem.h>
+#include <glidix/syscall.h>
 
 typedef struct
 {
@@ -41,7 +42,6 @@ typedef struct
 } PACKED SignalStackFrame;
 
 uint64_t sizeSignalStackFrame = sizeof(SignalStackFrame);
-int isPointerValid(uint64_t ptr, uint64_t size);		// syscall.c
 
 void dispatchSignal(Thread *thread)
 {
@@ -55,7 +55,7 @@ void dispatchSignal(Thread *thread)
 	{
 		// not allowed to override SIGKILL
 		Regs regs;				// doesn't matter, it will die
-		ASM("cli");
+		cli();
 		unlockSched();				// threadExit() calls lockSched()
 		threadExit(thread, -SIGKILL);
 		switchTask(&regs);
@@ -66,13 +66,12 @@ void dispatchSignal(Thread *thread)
 		// there is no sig handler; discard.
 		return;
 	};
-
+	
 	// try pushing the signal stack frame. also, don't break the red zone!
 	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & (uint64_t)(~0xF);
-	if (!isPointerValid(addr, sizeof(SignalStackFrame)))
+	if (!isPointerValid(addr, sizeof(SignalStackFrame), PROT_READ | PROT_WRITE))
 	{
 		// signal stack broken, kill the process with SIGABRT.
-		kprintf("cannot handle signal %d, addr=%p\n", siginfo->si_signo, siginfo->si_addr);
 		Regs regs;
 		ASM("cli");
 		unlockSched();
@@ -82,7 +81,7 @@ void dispatchSignal(Thread *thread)
 
 	SetProcessMemory(thread->pm);
 	SignalStackFrame *frame = (SignalStackFrame*) addr;
-	fpuSave(&frame->mstate.fpuRegs);
+	memcpy(&frame->mstate.fpuRegs, &thread->fpuRegs, sizeof(FPURegs));
 	frame->mstate.rdi = thread->regs.rdi;
 	frame->mstate.rsi = thread->regs.rsi;
 	frame->mstate.rbp = thread->regs.rbp;
@@ -100,7 +99,6 @@ void dispatchSignal(Thread *thread)
 	frame->mstate.r15 = thread->regs.r15;
 	frame->mstate.rip = thread->regs.rip;
 	frame->mstate.rsp = thread->regs.rsp;
-	frame->mstate.therrno = thread->therrno;
 	memcpy(&frame->si, siginfo, sizeof(siginfo_t));
 
 	thread->regs.rsp = addr;
@@ -108,7 +106,6 @@ void dispatchSignal(Thread *thread)
 	thread->regs.rsi = (uint64_t) (&frame->si);
 	thread->regs.rip = thread->rootSigHandler;
 
-	//thread->flags |= THREAD_SIGNALLED;
 	thread->flags &= ~THREAD_WAITING;
 };
 
@@ -153,11 +150,16 @@ void sigret(void *ret)
 	regs.rip = frame->mstate.rip;
 	regs.rdi = frame->mstate.rdi;
 	regs.rsi = frame->mstate.rsi;
+	regs.r8 = frame->mstate.r8;
+	regs.r9 = frame->mstate.r9;
+	regs.r10 = frame->mstate.r10;
+	regs.r11 = frame->mstate.r11;
+	regs.r12 = frame->mstate.r12;
+	regs.r13 = frame->mstate.r13;
+	regs.r14 = frame->mstate.r14;
+	regs.r15 = frame->mstate.r15;
 	fpuLoad(&frame->mstate.fpuRegs);
-	getCurrentThread()->therrno = frame->mstate.therrno;
 
-	lockSched();
-	getCurrentThread()->flags &= ~THREAD_SIGNALLED;
-	unlockSched();
+	cli();
 	switchContext(&regs);
 };

@@ -70,7 +70,7 @@ int main()
 		while (1)
 		{
 			GWMEvent ev;
-			//gwmWaitEvent(&ev);
+			gwmWaitEvent(&ev);
 			
 			if (ev.type == GWM_EVENT_CLOSE)
 			{

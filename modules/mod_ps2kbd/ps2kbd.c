@@ -152,6 +152,24 @@ static void onMouseIRQ(int irq)
 
 static uint8_t mouseStateWas = 0;
 
+#if 0
+void spamThread(void *data)
+{
+	int x = 0;
+	while (1)
+	{
+		HuminEvent ev;
+		memset(&ev, 0, sizeof(HuminEvent));
+		if (x == 0) ev.button.type = HUMIN_EV_BUTTON_DOWN;
+		else ev.button.type = HUMIN_EV_BUTTON_UP;
+		ev.button.scancode = HUMIN_SC_MOUSE_LEFT;
+		huminPostEvent(hups, &ev);
+		x = (x+1) & 1;
+		sleep(5);
+	};
+};
+#endif
+
 static void kbdThread(void *data)
 {
 	int ctrl = 0;
@@ -381,6 +399,7 @@ MODULE_INIT()
 	kbdPars.stackSize = 0x4000;
 	kbdPars.name = "PS/2 keyboard driver";
 	CreateKernelThread(kbdThread, &kbdPars, NULL);
+	CreateKernelThread(spamThread, NULL, NULL);
 	return 0;
 };
 

@@ -160,6 +160,7 @@ static void reloadPartitionTable(SDFile *sdfile)
 	kfree(mbr);
 };
 
+#ifdef SD_CACHE_ENABLE
 static void doCachedWrite(StorageDevice *sd, uint64_t block, const void *data)
 {
 	uint64_t page = block & ~(sd->blocksPerPage-1);
@@ -181,27 +182,18 @@ static void doCachedWrite(StorageDevice *sd, uint64_t block, const void *data)
 	
 	sdWrite(sd, block, data);
 };
+#endif
 
 static void diskfile_fsync(File *fp)
 {
-	//kprintf("diskfile_fsync() called\n");
 	DiskFile *data = (DiskFile*) fp->fsdata;
 	if (data->dirty)
 	{
-#if 0
-		uint64_t invpage = (data->offset+data->bufCurrent) & ~(data->file->sd->blocksPerPage-1);
-		
-		int i;
-		for (i=0; i<SD_CACHE_SIZE; i++)
-		{
-			if (data->file->sd->cache[i].index == invpage)
-			{
-				data->file->sd->cache[i].index = SD_NOT_CACHED;
-			};
-		};
+#ifdef SD_CACHE_ENABLE
+		doCachedWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
+#else
 		sdWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
 #endif
-		doCachedWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
 		data->dirty = 0;
 	};
 };
@@ -209,13 +201,7 @@ static void diskfile_fsync(File *fp)
 static void diskfile_close(File *fp)
 {
 	DiskFile *data = (DiskFile*) fp->fsdata;
-#if 0
-	if (data->dirty)
-	{
 
-		sdWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
-	};
-#endif
 	diskfile_fsync(fp);
 	int idx = data->file->index;
 	if (idx != -1)
@@ -232,28 +218,12 @@ static void diskfile_close(File *fp)
 
 static void diskfile_setblock(DiskFile *data, uint64_t block, int shouldRead)
 {
+#ifdef SD_CACHE_ENABLE
 	block += data->offset;
-	//kprintf("SETBLOCK %p\n", block);
 	if (data->bufCurrent != SD_FILE_NO_BUF)
 	{
 		if (data->dirty)
 		{
-			// TODO: cache!
-			// for now just invalidate all previous cached blocks from this page
-#if 0
-			uint64_t invpage = (data->offset+data->bufCurrent) & ~(data->file->sd->blocksPerPage-1);
-			
-			int i;
-			for (i=0; i<SD_CACHE_SIZE; i++)
-			{
-				if (data->file->sd->cache[i].index == invpage)
-				{
-					data->file->sd->cache[i].index = SD_NOT_CACHED;
-				};
-			};
-			
-			sdWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
-#endif
 			doCachedWrite(data->file->sd, data->offset+data->bufCurrent, data->buf);
 		};
 	};
@@ -290,6 +260,19 @@ static void diskfile_setblock(DiskFile *data, uint64_t block, int shouldRead)
 	
 	memcpy(data->buf, pagebuf + offset, data->file->sd->blockSize);
 	data->bufCurrent = block - data->offset;
+#else
+	// no caching
+	if (data->bufCurrent != SD_FILE_NO_BUF)
+	{
+		if (data->dirty)
+		{
+			sdWrite(data->file->sd, data->bufCurrent + data->offset, data->buf);
+		};
+	};
+	
+	sdRead(data->file->sd, block + data->offset, data->buf);
+	data->bufCurrent = block;
+#endif
 };
 
 static ssize_t diskfile_read(File *fp, void *buffer, size_t size)
@@ -551,7 +534,7 @@ int sdRead2(StorageDevice *dev, uint64_t block, void *buffer, uint64_t count)
 {
 	if (dev->blockSize*(block+1) > dev->totalSize) return -1;
 
-	//kprintf("sdRead %p\n", block);
+	kprintf("sdRead %p\n", block);
 	//int startTime = getTicks();
 	Semaphore lock;
 	semInit2(&lock, 0);

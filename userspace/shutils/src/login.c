@@ -195,7 +195,7 @@ int main(int argc, char *argv[])
 			if (_glidix_setgroups(numGroups, groups) != 0)
 			{
 				perror("_glidix_setgroups");
-				return 1;;
+				return 1;
 			};
 			
 			if (setgid(pwd->pw_gid) != 0)

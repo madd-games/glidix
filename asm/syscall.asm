@@ -33,6 +33,8 @@ extern sysTable
 extern sysEpilog
 extern _kfree
 extern heapDump
+extern sysInvalid
+
 global _jmp_usbs
 _jmp_usbs:
 	; move the stack to a userspace area.
@@ -126,9 +128,6 @@ _syscall_entry:
 	call sysEpilog
 	
 	; restore user stack pointer into R10, return RIP into RCX, and we can do a sysret.
-	; we store a zero in R8 to indicate the system call was a valid one.
-	xor r8, r8
-	.common_exit:
 	pop r10
 	pop rcx
 	
@@ -146,10 +145,7 @@ _syscall_entry:
 	o64 sysret
 	
 	.invalid:
-	; restore the stack and RIP as we would, but set R8 to 1 to indicate a bad system call;
-	; the userspace side may choose to handle it.
-	mov r8, 1
-	jmp .common_exit
+	call sysInvalid
 
 section .data
 syscall_name db 'syscall.asm', 0

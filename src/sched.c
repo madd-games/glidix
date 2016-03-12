@@ -117,7 +117,8 @@ void initSched()
 	// create a new stack for this initial process
 	firstThread.stack = kmalloc(DEFAULT_STACK_SIZE);
 	firstThread.stackSize = DEFAULT_STACK_SIZE;
-
+	fpuSave(&firstThread.fpuRegs);
+	
 	// the value of registers do not matter except RSP and RIP,
 	// also the startup function should never return.
 	memset(&firstThread.fpuRegs, 0, 512);
@@ -666,7 +667,7 @@ static Thread *findThreadToKill(int pid, int *stat_loc, int flags)
 				if (thread->flags & THREAD_TERMINATED)
 				{
 					threadToKill = thread;
-					*stat_loc = thread->status;
+					if (stat_loc != NULL) *stat_loc = thread->status;
 
 					// unlink from the runqueue
 					thread->prev->next = thread->next;
@@ -679,13 +680,14 @@ static Thread *findThreadToKill(int pid, int *stat_loc, int flags)
 					// we can detach
 					thread->pidParent = 1;
 					unlockSched();
-					ASM("sti");
+					sti();
 					return NULL;
 				};
 			};
 		};
 		thread = thread->next;
 	};
+
 	return threadToKill;
 };
 
@@ -703,11 +705,9 @@ int pollThread(int pid, int *stat_loc, int flags)
 		ERRNO = ECHILD;
 		return -1;
 	};
-	
-	int sigcnt = getCurrentThread()->sigcnt;
 
 	lockSched();
-	ASM("cli");
+	cli();
 	Thread *threadToKill = findThreadToKill(pid, stat_loc, flags);
 
 	// when WNOHANG is clear
@@ -717,21 +717,21 @@ int pollThread(int pid, int *stat_loc, int flags)
 		unlockSched();
 		kyield();
 		lockSched();
-		ASM("cli");
+		cli();
 		threadToKill = findThreadToKill(pid, stat_loc, flags);
 		if (threadToKill != NULL) break;
 		
-		if (getCurrentThread()->sigcnt > sigcnt)
+		if (getCurrentThread()->sigcnt > 0)
 		{
 			unlockSched();
-			ASM("sti");
+			sti();
 			ERRNO = EINTR;
 			return -1;
 		};
 	};
 
 	unlockSched();
-	ASM("sti");
+	sti();
 
 	// when WNOHANG is set
 	if (threadToKill == NULL)
@@ -754,7 +754,7 @@ int pollThread(int pid, int *stat_loc, int flags)
 	if (threadToKill->execPars != NULL) kfree(threadToKill->execPars);
 	int ret = threadToKill->pid;
 	kfree(threadToKill);
-
+	
 	return ret;
 };
 

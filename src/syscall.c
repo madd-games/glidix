@@ -2550,7 +2550,7 @@ void signalOnBadPointer(Regs *regs, uint64_t ptr)
 	kyield();
 };
 
-void signalOnBadSyscall(Regs *regs)
+void sysInvalid()
 {
 	siginfo_t si;
 	si.si_signo = SIGSYS;
@@ -2558,7 +2558,22 @@ void signalOnBadSyscall(Regs *regs)
 	lockSched();
 	sendSignal(getCurrentThread(), &si);
 	unlockSched();
-	kyield();
+	
+	Thread *me = getCurrentThread();
+	Regs regs;
+	initUserRegs(&regs);
+	regs.rax = 0;
+	regs.rbx = me->urbx;
+	regs.rbp = me->urbp;
+	regs.rsp = me->ursp;
+	regs.r12 = me->ur12;
+	regs.r13 = me->ur13;
+	regs.r14 = me->ur14;
+	regs.r15 = me->ur15;
+	regs.rip = me->urip;
+	regs.rflags = getFlagsRegister(); 
+	cli();
+	switchTask(&regs);
 };
 
 void dumpRunqueue();
@@ -3036,26 +3051,12 @@ uint64_t sysEpilog(uint64_t retval)
 		*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
 	};
 
-	// TODO: signal dispatching
-#if 0
-	if ((getCurrentThread()->sigcnt > 0) && ((regs->cs & 3) == 3) && ((getCurrentThread()->flags & THREAD_SIGNALLED) == 0))
-	{
-		// also dispatching after calls.
-		ASM("cli");
-		lockSched();
-		memcpy(&getCurrentThread()->regs, regs, sizeof(Regs));
-		dispatchSignal(getCurrentThread());
-		memcpy(regs, &getCurrentThread()->regs, sizeof(Regs));
-		unlockSched();
-		return;					// interrupts will be enabled on return
-	};
-#endif
-
 	if (getCurrentThread()->sigcnt > 0)
 	{
 		Thread *me = getCurrentThread();
 		Regs regs;
 		initUserRegs(&regs);
+		regs.rax = retval;
 		regs.rbx = me->urbx;
 		regs.rbp = me->urbp;
 		regs.rsp = me->ursp;
@@ -3065,7 +3066,7 @@ uint64_t sysEpilog(uint64_t retval)
 		regs.r15 = me->ur15;
 		regs.rip = me->urip;
 		regs.rflags = getFlagsRegister(); 
-		ASM("cli");
+		cli();
 		switchTask(&regs);
 	};
 

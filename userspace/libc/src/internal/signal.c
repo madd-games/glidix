@@ -102,6 +102,9 @@ static void defSigHandler(siginfo_t *si)
 
 void __rootSigHandler(void *ret, siginfo_t *si)
 {
+	// preserve errno
+	int errnum = errno;
+	
 	struct sigaction *sa = &sighandlers[si->si_signo];
 	if (sa->sa_flags & SA_SIGINFO)
 	{
@@ -128,6 +131,10 @@ void __rootSigHandler(void *ret, siginfo_t *si)
 		};
 	};
 
+	// restore errno.
+	// _glidix_sigret() performs a direct context switch so the errno will NOT
+	// be loaded from the thread description.
+	errno = errnum;
 	_glidix_sigret(ret);
 };
 

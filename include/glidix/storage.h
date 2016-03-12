@@ -41,6 +41,12 @@
 #define	IOCTL_SDI_IDENTITY			IOCTL_ARG(SDParams, IOCTL_INT_SDI, 0)
 
 /**
+ * Uncomment to actually enable the cache.
+ * Currently appears to be really buggy, e.g. different threads see different data.
+ */
+//#define	SD_CACHE_ENABLE
+
+/**
  * Number of pages to cache per device.
  */
 #define	SD_CACHE_SIZE				64
