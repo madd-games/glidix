@@ -399,7 +399,6 @@ MODULE_INIT()
 	kbdPars.stackSize = 0x4000;
 	kbdPars.name = "PS/2 keyboard driver";
 	CreateKernelThread(kbdThread, &kbdPars, NULL);
-	CreateKernelThread(spamThread, NULL, NULL);
 	return 0;
 };
 

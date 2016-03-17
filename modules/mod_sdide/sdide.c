@@ -183,10 +183,6 @@ static void ataThread(void *data)
 		while (ideReadReg(ctrl, channel, ATA_REG_STATUS) & ATA_SR_BSY);
 		ideWriteReg(ctrl, channel, ATA_REG_HDDEVSEL, 0xE0 | (slavebit << 4) | head);
 
-		/**
-		 "If you are using LBA48 and want to write to the LBA0 and LBA3 registers, you should write LBA3 to Register 3, then write LBA0 to Register 3. ide_write function makes it quite simple, refer to the function and you will fully understand the code."
-		 What the fuck? I'll have to go back to this. TODO
-		**/
 		if (lbaMode == 2)
 		{
 			ideWriteReg(ctrl, channel, ATA_REG_SECCOUNT1, 0);
@@ -252,50 +248,42 @@ static void atapiThread(void *data)
 		SDCommand *sdcmd = sdPop(sd);
 		semWait(&ideSem);
 
-		//kprintf_debug("sdide: read atapi device, sector %d\n", sdcmd->index);
-
-		uint32_t channel = idev->channel;
-		uint32_t slavebit = idev->drive;
-		uint16_t bus = ctrl->channels[channel].base;
-		unsigned long words = 1024 * sdcmd->count;
-		uint8_t err;
-		int i;
-
-		ideWriteReg(ctrl, channel, ATA_REG_CONTROL, ctrl->channels[channel].nIEN = ideWaitIRQ[channel] = 0);
-		ctrl->atapiPacket[0] = ATAPI_CMD_READ;
-		ctrl->atapiPacket[1] = 0;
-		ctrl->atapiPacket[2] = (sdcmd->index >> 24) & 0xFF;
-		ctrl->atapiPacket[3] = (sdcmd->index >> 16) & 0xFF;
-		ctrl->atapiPacket[4] = (sdcmd->index >> 8) & 0xFF;
-		ctrl->atapiPacket[5] = sdcmd->index & 0xFF;
-		ctrl->atapiPacket[6] = 0;
-		ctrl->atapiPacket[7] = 0;
-		ctrl->atapiPacket[8] = 0;
-		ctrl->atapiPacket[9] = sdcmd->count;
-		ctrl->atapiPacket[10] = 0;
-		ctrl->atapiPacket[11] = 0;
-
-		ideWriteReg(ctrl, channel, ATA_REG_HDDEVSEL, slavebit << 4);
-		for (i=0; i<4; i++)
+		if (sdcmd->type == SD_CMD_READ)
 		{
-			ideReadReg(ctrl, channel, ATA_REG_ALTSTATUS);
-		};
+			//kprintf_debug("sdide: read atapi device, sector %d\n", sdcmd->index);
 
-		ideWriteReg(ctrl, channel, ATA_REG_FEATURES, 0);
-		ideWriteReg(ctrl, channel, ATA_REG_LBA1, (words * 2) & 0xFF);
-		ideWriteReg(ctrl, channel, ATA_REG_LBA2, ((words * 2) >> 8) & 0xFF);
-		ideWriteReg(ctrl, channel, ATA_REG_COMMAND, ATA_CMD_PACKET);
+			uint32_t channel = idev->channel;
+			uint32_t slavebit = idev->drive;
+			uint16_t bus = ctrl->channels[channel].base;
+			unsigned long words = 1024 * sdcmd->count;
+			uint8_t err;
+			int i;
 
-		err = idePoll(ctrl, channel, 1);
-		if (err)
-		{
-			//kprintf_debug("atapi read error: %d\n", err);
-		}
-		else
-		{
-			outsw(bus, ctrl->atapiPacket, 6);
-			while (!ideWaitIRQ[channel]);
-			ideWaitIRQ[channel] = 0;
+			ideWriteReg(ctrl, channel, ATA_REG_CONTROL, ctrl->channels[channel].nIEN = ideWaitIRQ[channel] = 0);
+			ctrl->atapiPacket[0] = ATAPI_CMD_READ;
+			ctrl->atapiPacket[1] = 0;
+			ctrl->atapiPacket[2] = (sdcmd->index >> 24) & 0xFF;
+			ctrl->atapiPacket[3] = (sdcmd->index >> 16) & 0xFF;
+			ctrl->atapiPacket[4] = (sdcmd->index >> 8) & 0xFF;
+			ctrl->atapiPacket[5] = sdcmd->index & 0xFF;
+			ctrl->atapiPacket[6] = 0;
+			ctrl->atapiPacket[7] = 0;
+			ctrl->atapiPacket[8] = 0;
+			ctrl->atapiPacket[9] = sdcmd->count;
+			ctrl->atapiPacket[10] = 0;
+			ctrl->atapiPacket[11] = 0;
+
+			ideWriteReg(ctrl, channel, ATA_REG_HDDEVSEL, slavebit << 4);
+			for (i=0; i<4; i++)
+			{
+				ideReadReg(ctrl, channel, ATA_REG_ALTSTATUS);
+			};
+
+			ideWriteReg(ctrl, channel, ATA_REG_FEATURES, 0);
+			ideWriteReg(ctrl, channel, ATA_REG_LBA1, (words * 2) & 0xFF);
+			ideWriteReg(ctrl, channel, ATA_REG_LBA2, ((words * 2) >> 8) & 0xFF);
+			ideWriteReg(ctrl, channel, ATA_REG_COMMAND, ATA_CMD_PACKET);
+
 			err = idePoll(ctrl, channel, 1);
 			if (err)
 			{
@@ -303,10 +291,109 @@ static void atapiThread(void *data)
 			}
 			else
 			{
-				insw(bus, sdcmd->block, words);
+				outsw(bus, ctrl->atapiPacket, 6);
 				while (!ideWaitIRQ[channel]);
-				while (ideReadReg(ctrl, channel, ATA_REG_STATUS) & (ATA_SR_BSY | ATA_SR_DRQ));
+				ideWaitIRQ[channel] = 0;
+				err = idePoll(ctrl, channel, 1);
+				if (err)
+				{
+					//kprintf_debug("atapi read error: %d\n", err);
+				}
+				else
+				{
+					insw(bus, sdcmd->block, words);
+					while (!ideWaitIRQ[channel]);
+					while (ideReadReg(ctrl, channel, ATA_REG_STATUS) & (ATA_SR_BSY | ATA_SR_DRQ));
+				};
 			};
+		}
+		else if (sdcmd->type == SD_CMD_GET_SIZE)
+		{
+			kprintf_debug("sdide: ATAPI device asked for size\n");
+
+			uint32_t channel = idev->channel;
+			uint32_t slavebit = idev->drive;
+			int k;
+			
+			ideWriteReg(ctrl, channel, ATA_REG_CONTROL, ctrl->channels[channel].nIEN = ideWaitIRQ[channel] = 0);
+			ideWriteReg(ctrl, channel, ATA_REG_HDDEVSEL, slavebit << 4);
+			for (k=0; k<4; k++)
+			{
+				ideReadReg(ctrl, channel, ATA_REG_ALTSTATUS);
+			};
+
+			ideWriteReg(ctrl, channel, ATA_REG_FEATURES, 0);
+			ideWriteReg(ctrl, channel, ATA_REG_LBA1, 8);
+			ideWriteReg(ctrl, channel, ATA_REG_LBA2, 0);
+
+			memset(&ctrl->atapiPacket, 0, 24);
+			ctrl->atapiPacket[0] = 0x25;
+			ideWriteReg(ctrl, channel, ATA_REG_COMMAND, ATA_CMD_PACKET);
+			if (idePoll(ctrl, channel, 1))
+			{
+				kprintf_debug("sdide: error while attempting to read medium size, skipping\n");
+			}
+			else
+			{
+				outsw(ctrl->channels[channel].base, ctrl->atapiPacket, 6);
+				while (!ideWaitIRQ[channel]);
+				if (idePoll(ctrl, channel, 1))
+				{
+					kprintf_debug("sdide: error while attempting to read medium size, skipping\n");
+				}
+				else
+				{
+					uint8_t buffer[8];
+					insw(ctrl->channels[channel].base, buffer, 4);
+					idePoll(ctrl, channel, 0);
+					uint8_t rdbuf[4];				// converting to little endian
+					rdbuf[0] = buffer[3];
+					rdbuf[1] = buffer[2];
+					rdbuf[2] = buffer[1];
+					rdbuf[3] = buffer[0];
+					uint32_t sectors = *((uint32_t*)&rdbuf[0]);
+					kprintf_debug("sdide: ATAPI sector count: %d\n", sectors);
+					*((off_t*)sdcmd->block) = (off_t) sectors * 2048;
+				};
+			};
+		}
+		else if (sdcmd->type == SD_CMD_EJECT)
+		{
+			kprintf_debug("sdide: ejecting ATAPI device\n");
+
+			uint32_t channel = idev->channel;
+			uint32_t slavebit = idev->drive;
+			int k;
+			
+			ideWriteReg(ctrl, channel, ATA_REG_CONTROL, ctrl->channels[channel].nIEN = ideWaitIRQ[channel] = 0);
+			ideWriteReg(ctrl, channel, ATA_REG_HDDEVSEL, slavebit << 4);
+			for (k=0; k<4; k++)
+			{
+				ideReadReg(ctrl, channel, ATA_REG_ALTSTATUS);
+			};
+
+			ideWriteReg(ctrl, channel, ATA_REG_FEATURES, 0);
+			ideWriteReg(ctrl, channel, ATA_REG_LBA1, 8);
+			ideWriteReg(ctrl, channel, ATA_REG_LBA2, 0);
+
+			memset(&ctrl->atapiPacket, 0, 24);
+			ctrl->atapiPacket[0] = 0x1B;
+			ctrl->atapiPacket[4] = 2;
+			ideWriteReg(ctrl, channel, ATA_REG_COMMAND, ATA_CMD_PACKET);
+			if (idePoll(ctrl, channel, 1))
+			{
+				kprintf_debug("sdide: error while attempting to eject, skipping\n");
+			}
+			else
+			{
+				outsw(ctrl->channels[channel].base, ctrl->atapiPacket, 6);
+				while (!ideWaitIRQ[channel]);
+				if (idePoll(ctrl, channel, 1))
+				{
+					kprintf_debug("sdide: error while attempting to eject, skipping\n");
+				};
+			};
+			
 		};
 
 		semSignal(&ideSem);
@@ -443,50 +530,11 @@ static void ideInit(uint32_t *bars)
 			}
 			else
 			{
-				// ATAPI, so we need the medium size
-				ideWriteReg(ctrl, i, ATA_REG_CONTROL, ctrl->channels[i].nIEN = ideWaitIRQ[i] = 0);
-				ideWriteReg(ctrl, i, ATA_REG_HDDEVSEL, j << 4);
-				for (k=0; k<4; k++)
-				{
-					ideReadReg(ctrl, i, ATA_REG_ALTSTATUS);
-				};
-
-				ideWriteReg(ctrl, i, ATA_REG_FEATURES, 0);
-				ideWriteReg(ctrl, i, ATA_REG_LBA1, 8);
-				ideWriteReg(ctrl, i, ATA_REG_LBA2, 0);
-
-				memset(&ctrl->atapiPacket, 0, 24);
-				ctrl->atapiPacket[0] = 0x25;
-				ideWriteReg(ctrl, i, ATA_REG_COMMAND, ATA_CMD_PACKET);
-				if (idePoll(ctrl, i, 1))
-				{
-					kprintf("sdide: error while attempting to read medium size, skipping\n");
-					continue;
-				};
-
-				outsw(ctrl->channels[i].base, ctrl->atapiPacket, 6);
-				while (!ideWaitIRQ[i]);
-				if (idePoll(ctrl, i, 1))
-				{
-					kprintf("sdide: error while attempting to read medium size, skipping\n");
-					continue;
-				};
-
-				uint8_t buffer[8];
-				insw(ctrl->channels[i].base, buffer, 4);
-				idePoll(ctrl, i, 0);
-				uint8_t rdbuf[4];				// converting to little endian
-				rdbuf[0] = buffer[3];
-				rdbuf[1] = buffer[2];
-				rdbuf[2] = buffer[1];
-				rdbuf[3] = buffer[0];
-				uint32_t sectors = *((uint32_t*)&rdbuf[0]);
-				kprintf("sdide: ATAPI sector count: %d\n", sectors);
-
+				// ATAPI; dynamically determined size
 				SDParams sdparams;
 				sdparams.flags = SD_READONLY;
 				sdparams.blockSize = 2048;
-				sdparams.totalSize = (uint64_t)sectors * (uint64_t)2048;
+				sdparams.totalSize = 0;
 
 				IDEThreadParams *thparams = (IDEThreadParams*) kmalloc(sizeof(IDEThreadParams));
 				thparams->ctrl = ctrl;

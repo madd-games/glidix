@@ -33,6 +33,8 @@
 #include <time.h>
 #include <pwd.h>
 #include <grp.h>
+#include <errno.h>
+#include <fcntl.h>
 
 const char *sizeScales[] = {
 	"B", "KB", "MB", "GB", "TB", "PB", "EB"
@@ -80,19 +82,62 @@ const char *getFileType(mode_t mode)
 
 int main(int argc, char *argv[])
 {
-	if (argc != 2)
+	if ((argc != 2) && (argc != 3))
 	{
-		fprintf(stderr, "USAGE:\tstat filename\n\n");
+		fprintf(stderr, "USAGE:\t%s [-f] filename\n\n", argv[0]);
 		fprintf(stderr, "\tDisplays information about a file.\n");
+		fprintf(stderr, "\t-f causes the file to be opened and fstat() called\n");
 		return 1;
 	};
 
-	struct stat st;
-	if (lstat(argv[1], &st) != 0)
+	const char *filename = NULL;
+	int do_fstat = 0;
+	int i;
+	for (i=1; i<argc; i++)
 	{
-		fprintf(stderr, "%s: ", argv[0]);
-		perror(argv[1]);
+		if (strcmp(argv[i], "-f") == 0)
+		{
+			do_fstat = 1;
+		}
+		else
+		{
+			filename = argv[i];
+		};
+	};
+	
+	if (filename == NULL)
+	{
+		fprintf(stderr, "%s: filename not specified\n", argv[0]);
 		return 1;
+	};
+	
+	struct stat st;
+	if (!do_fstat)
+	{
+		if (lstat(filename, &st) != 0)
+		{
+			fprintf(stderr, "%s: ", argv[0]);
+			perror(argv[1]);
+			return 1;
+		};
+	}
+	else
+	{
+		int fd = open(filename, O_RDONLY);
+		if (fd == -1)
+		{
+			fprintf(stderr, "%s: cannot open %s: %s\n", argv[0], filename, strerror(errno));
+			return 1;
+		};
+		
+		if (fstat(fd, &st) != 0)
+		{
+			fprintf(stderr, "%s: fstat failed: %s\n", argv[0], strerror(errno));
+			close(fd);
+			return 1;
+		};
+		
+		close(fd);
 	};
 
 	struct passwd *pwd = getpwuid(st.st_uid);

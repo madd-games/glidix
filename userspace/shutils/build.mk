@@ -1,5 +1,5 @@
 .PHONY: all
-all: out/cp out/lspci out/clear-screen out/dhcp out/resolve out/route out/sudo out/mip-install out/passwd out/mount out/gxpad out/mkdir out/sigsegv out/ping out/ls out/sleep out/date out/rmmod out/login out/color out/chgrp out/chown out/srv-wrapper out/insmod out/whoami out/whois out/env out/halt out/service out/logmgr out/stat out/pwdsetup out/rm out/umount out/kill out/crypt out/mkmip out/chmod out/touch out/cat out/ln out/netconf
+all: out/cp out/lspci out/clear-screen out/dhcp out/resolve out/route out/sudo out/mip-install out/passwd out/mount out/gxpad out/mkdir out/sigsegv out/ping out/ls out/sleep out/date out/rmmod out/login out/color out/chgrp out/chown out/srv-wrapper out/insmod out/whoami out/whois out/env out/halt out/service out/logmgr out/stat out/pwdsetup out/rm out/umount out/kill out/crypt out/mkmip out/chmod out/touch out/cat out/ln out/netconf out/eject
 out/cp: src/cp.c
 	x86_64-glidix-gcc $< -o $@ 
 out/lspci: src/lspci.c
@@ -86,4 +86,6 @@ out/cat: src/cat.c
 out/ln: src/ln.c
 	x86_64-glidix-gcc $< -o $@ 
 out/netconf: src/netconf.c
+	x86_64-glidix-gcc $< -o $@ 
+out/eject: src/eject.c
 	x86_64-glidix-gcc $< -o $@ 

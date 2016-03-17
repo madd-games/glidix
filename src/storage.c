@@ -124,6 +124,7 @@ void sdInit()
 
 static void reloadPartitionTable(SDFile *sdfile)
 {
+	if (sdfile->sd->totalSize == 0) return;
 	MBR *mbr = (MBR*) kmalloc(sdfile->sd->blockSize);
 	sdRead(sdfile->sd, 0, mbr);
 	//kprintf("sdi: reading partition table for /dev/sd%c\n", sdfile->letter);
@@ -368,9 +369,66 @@ static int diskfile_ioctl(File *fp, uint64_t cmd, void *params)
 		sdpars->blockSize = data->file->sd->blockSize;
 		sdpars->totalSize = (data->file->limit - data->file->offset) * sdpars->blockSize;
 		return 0;
+	}
+	else if (cmd == IOCTL_SDI_EJECT)
+	{
+		DiskFile *data = (DiskFile*) fp->fsdata;
+		if (data->file->sd->totalSize != 0)
+		{
+			// non-removable
+			return -1;
+		};
+		
+		Semaphore lock;
+		semInit2(&lock, 0);
+
+		SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
+		cmd->type = SD_CMD_EJECT;
+		cmd->block = NULL;
+		cmd->cmdlock = &lock;
+
+		sdPush(data->file->sd, cmd);
+		semWait(&lock);				// wait for the eject operation to finish
+	
+		// (cmd was freed by the driver)
+		return 0;
 	};
 
 	return -1;
+};
+
+int diskfile_fstat(File *fp, struct stat *st)
+{
+	DiskFile *data = (DiskFile*) fp->fsdata;
+	st->st_dev = 0;
+	st->st_ino = 0;
+	st->st_mode = 0;
+	st->st_nlink = 1;
+	st->st_uid = 0;
+	st->st_gid = 0;
+	st->st_rdev = 0;
+	st->st_size = (data->file->limit - data->file->offset) * data->file->sd->blockSize;
+	st->st_blksize = data->file->sd->blockSize;
+	st->st_blocks = st->st_size / st->st_blksize;
+	st->st_atime = 0;
+	st->st_mtime = 0;
+	st->st_ctime = 0;
+	
+	if (data->file->sd->blockSize == 0)
+	{
+		Semaphore lock;
+		semInit2(&lock, 0);
+
+		SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
+		cmd->type = SD_CMD_GET_SIZE;
+		cmd->block = &st->st_size;
+		cmd->cmdlock = &lock;
+
+		sdPush(data->file->sd, cmd);
+		semWait(&lock);		// cmd freed by the driver
+	};
+	
+	return 0;
 };
 
 static int diskfile_open(void *_diskfile_void, File *fp, size_t szFile)
@@ -412,10 +470,23 @@ static int diskfile_open(void *_diskfile_void, File *fp, size_t szFile)
 
 	DiskFile *data = (DiskFile*) kmalloc(sizeof(DiskFile)+diskfile->sd->blockSize);
 	data->file = diskfile;
-	//data->offset = 0;
-	//data->limit = diskfile->sd->totalSize / diskfile->sd->blockSize;
 	data->offset = diskfile->offset;
 	data->limit = diskfile->limit;
+	if (diskfile->sd->totalSize == 0)
+	{
+		off_t totalSize;
+		Semaphore lock;
+		semInit2(&lock, 0);
+
+		SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
+		cmd->type = SD_CMD_GET_SIZE;
+		cmd->block = &totalSize;
+		cmd->cmdlock = &lock;
+
+		sdPush(diskfile->sd, cmd);
+		semWait(&lock);		// cmd freed by the driver
+		data->limit = (uint64_t) totalSize / diskfile->sd->blockSize;
+	};
 	data->buf = (uint8_t*) &data[1];
 	data->bufCurrent = SD_FILE_NO_BUF;
 	data->pos = 0;
@@ -428,6 +499,7 @@ static int diskfile_open(void *_diskfile_void, File *fp, size_t szFile)
 	fp->close = diskfile_close;
 	fp->ioctl = diskfile_ioctl;
 	fp->fsync = diskfile_fsync;
+	fp->fstat = diskfile_fstat;
 
 	return 0;
 };
@@ -460,7 +532,7 @@ StorageDevice *sdCreate(SDParams *params)
 
 	char name[4] = "sd_";
 	name[2] = diskfile->letter;
-	sd->diskfile = AddDevice(name, diskfile, diskfile_open, 0);
+	sd->diskfile = AddDevice(name, diskfile, diskfile_open, 0600);
 	
 	memset(sd->cache, 0xFF, sizeof(SDCachedPage)*SD_CACHE_SIZE);		// set all to SD_NOT_CACHED (all 0xFF)
 	sd->cacheIndex = 0;
@@ -532,10 +604,6 @@ void sdPostComplete(SDCommand *cmd)
 
 int sdRead2(StorageDevice *dev, uint64_t block, void *buffer, uint64_t count)
 {
-	if (dev->blockSize*(block+1) > dev->totalSize) return -1;
-
-	kprintf("sdRead %p\n", block);
-	//int startTime = getTicks();
 	Semaphore lock;
 	semInit2(&lock, 0);
 
@@ -548,8 +616,6 @@ int sdRead2(StorageDevice *dev, uint64_t block, void *buffer, uint64_t count)
 
 	sdPush(dev, cmd);
 	semWait(&lock);				// wait for the read operation to finish
-	//int endTime = getTicks();
-	//kprintf("sdRead %p end (%d ticks)\n", block, (endTime-startTime));
 	
 	// (cmd was freed by the driver)
 	return 0;

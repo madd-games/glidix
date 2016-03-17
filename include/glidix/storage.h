@@ -39,6 +39,7 @@
 #define	SD_NOT_CACHED				0xFFFFFFFFFFFFFFFF
 
 #define	IOCTL_SDI_IDENTITY			IOCTL_ARG(SDParams, IOCTL_INT_SDI, 0)
+#define	IOCTL_SDI_EJECT				IOCTL_NOARG(IOCTL_INT_SDI, 1)
 
 /**
  * Uncomment to actually enable the cache.
@@ -62,7 +63,9 @@
 enum SDCommandType
 {
 	SD_CMD_READ,
-	SD_CMD_WRITE
+	SD_CMD_WRITE,
+	SD_CMD_EJECT,
+	SD_CMD_GET_SIZE,
 };
 
 typedef struct _SDCommand
@@ -76,6 +79,10 @@ typedef struct _SDCommand
 	 *
 	 * For read commands, it points to an arbitrary area in memory to which the block
 	 * will be stored once read from disk.
+	 *
+	 * For eject commands, it must be NULL.
+	 *
+	 * For getsize commands, points to an off_t where the size is to be stored.
 	 */
 	void					*block;
 
@@ -132,7 +139,9 @@ typedef struct
 	size_t					blockSize;
 
 	/**
-	 * Total size of the drive, in bytes.
+	 * Total size of the drive, in bytes. If set to 0, then the storage
+	 * device contains removable media and current size is determined
+	 * dynamically with the SD_CMD_GET_SIZE command.
 	 */
 	size_t					totalSize;
 

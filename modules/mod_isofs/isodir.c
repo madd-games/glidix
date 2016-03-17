@@ -82,10 +82,18 @@ static int readDirent(ISODirScanner *isodir, Dir *dir)
 	vfsRead(fp, &head, sizeof(ISODirentHeader));
 	isodir->nextPos = isodir->pos + head.size;
 
-	if (head.size == 0)
+	while ((head.size == 0) && (isodir->pos < isodir->end))
 	{
-		semSignal(&isodir->isofs->sem);
-		return -1;
+		isodir->pos++;
+		if (isodir->pos == isodir->end)
+		{
+			semSignal(&isodir->isofs->sem);
+			return -1;
+		};
+		
+		fp->seek(fp, isodir->pos, SEEK_SET);
+		vfsRead(fp, &head, sizeof(ISODirentHeader));
+		isodir->nextPos = isodir->pos + head.size;
 	};
 
 	dir->dirent.d_ino = isodir->pos;
