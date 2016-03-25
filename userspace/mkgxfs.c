@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
 {
 	progName = argv[0];
 	const char *deviceName = NULL;
-	size_t vbrSize = 0x1000;		// default 4KB for the Volume Boot Record
+	size_t vbrSize = 0x2000;		// default 8KB for the Volume Boot Record
 	size_t dataPerInode = 0x400;		// default 16KB per inode
 	size_t numSections = 2;			// default 2 sections
 	size_t blockSize = 512;			// default 512-byte blocks

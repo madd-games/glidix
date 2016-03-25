@@ -30,12 +30,14 @@ mkdir -p ../isodir/bin
 x86_64-glidix-gcc gxpart.c -o ../isodir/bin/gxpart -I ../include || exit 1
 x86_64-glidix-gcc mkgxfs.c -o ../isodir/bin/mkgxfs -I ../include || exit 1
 x86_64-glidix-gcc test.c -o ../isodir/bin/test || exit 1
+x86_64-glidix-gcc ldmods.c -o ../isodir/ldmods || exit 1
 cd ..
 sudo make install-dev || exit 1
 mkdir -p initrd/initmod
 
 # bootloader
 cd userspace/gxld
+export PATH=$PATH:/usr/i686-elf/bin
 make || exit 1
 x86_64-glidix-gcc gxld-install.c -o ../../isodir/bin/gxld-install || exit 1
 cp mbr.bin ../../isodir/boot/mbr.bin

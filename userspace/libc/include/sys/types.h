@@ -32,6 +32,18 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifndef UINT8_MAX
+#define	UINT8_MAX			0xFF
+#endif
+
+#ifndef UINT16_MAX
+#define	UINT16_MAX			0xFFFF
+#endif
+
+#ifndef UINT32_MAX
+#define UINT32_MAX			0xFFFFFFFF
+#endif
+
 typedef	uint64_t			dev_t;
 typedef	uint64_t			ino_t;
 typedef	uint64_t			mode_t;

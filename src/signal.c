@@ -35,6 +35,19 @@
 #include <glidix/procmem.h>
 #include <glidix/syscall.h>
 
+/**
+ * OR of all flags that userspace should be allowed to set.
+ */
+#define	OK_USER_FLAGS (\
+	(1 << 0)	/* carry flag */ \
+	| (1 << 2)	/* parity flag */ \
+	| (1 << 4)	/* adjust flag */ \
+	| (1 << 6)	/* zero flag */ \
+	| (1 << 7)	/* sign flag */ \
+	| (1 << 10)	/* direction flag */ \
+	| (1 << 11)	/* overflow flag */ \
+)
+
 typedef struct
 {
 	MachineState			mstate;
@@ -99,6 +112,7 @@ void dispatchSignal(Thread *thread)
 	frame->mstate.r15 = thread->regs.r15;
 	frame->mstate.rip = thread->regs.rip;
 	frame->mstate.rsp = thread->regs.rsp;
+	frame->mstate.rflags = thread->regs.rflags;
 	memcpy(&frame->si, siginfo, sizeof(siginfo_t));
 
 	thread->regs.rsp = addr;
@@ -158,6 +172,7 @@ void sigret(void *ret)
 	regs.r13 = frame->mstate.r13;
 	regs.r14 = frame->mstate.r14;
 	regs.r15 = frame->mstate.r15;
+	regs.rflags = (frame->mstate.rflags & OK_USER_FLAGS) | (getFlagsRegister() & ~OK_USER_FLAGS) | (1 << 9);
 	fpuLoad(&frame->mstate.fpuRegs);
 
 	cli();

@@ -269,7 +269,7 @@ void kmain(MultibootInfo *info)
 	initIDT();
 	kprintf("%$\x02" "Done%#\n");
 
-	kprintf("Checking amount of memory... ");
+#if 0
 	int memSize = info->memLower + info->memUpper;
 	if (info->flags & 1)
 	{
@@ -285,6 +285,7 @@ void kmain(MultibootInfo *info)
 	{
 		panic("no memory map from bootloader");
 	};
+#endif
 
 	uint64_t mmapAddr = (uint64_t) info->mmapAddr + 0xFFFF800000000000;
 	uint64_t mmapEnd = mmapAddr + info->mmapLen;
@@ -300,12 +301,23 @@ void kmain(MultibootInfo *info)
 	MultibootModule *mod = (MultibootModule*) ((uint64_t) info->modsAddr + 0xFFFF800000000000);
 	uint64_t end = (uint64_t) mod->modEnd + 0xFFFF800000000000;
 
+	kprintf("Checking amount of memory... ");
+	uint64_t memSize = 0;
+	mmap = (MultibootMemoryMap*) mmapAddr;
+	while ((uint64_t)mmap < mmapEnd)
+	{
+		uint64_t end = mmap->baseAddr + mmap->len;
+		if (end > memSize) memSize = end;
+		mmap = (MultibootMemoryMap*) ((uint64_t) mmap + mmap->size + 4);
+	};
+	kprintf("%$\x01%dMB%#\n", (int)(memSize/1024/1024));
+	
 	kprintf("Initializing memory allocation phase 1 (base=%a)... ", end);
 	initMemoryPhase1(end);
 	kprintf("%$\x02" "Done%#\n");
 
-	kprintf("Initializing the physical memory manager (%d pages)... ", (memSize/4));
-	initPhysMem(memSize/4, (MultibootMemoryMap*) mmapAddr, mmapEnd);
+	kprintf("Initializing the physical memory manager (%d pages)... ", (int)(memSize/0x1000));
+	initPhysMem(memSize/0x1000, (MultibootMemoryMap*) mmapAddr, mmapEnd);
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the ISP... ");
@@ -384,7 +396,7 @@ void kmain(MultibootInfo *info)
 	msrWrite(0xC0000081, ((uint64_t)8 << 32) | ((uint64_t)0x1b << 48));
 	msrWrite(0xC0000082, (uint64_t)(&_syscall_entry));
 	msrWrite(0xC0000083, (uint64_t)(&_syscall_entry));		// we don't actually use compat mode
-	msrWrite(0xC0000084, (1 << 9));					// disable interrupts on syscall
+	msrWrite(0xC0000084, (1 << 9) | (1 << 10));			// disable interrupts on syscall and set DF=0
 	msrWrite(0xC0000080, msrRead(0xC0000080) | 1);
 	//kprintf("value of EFER: %p\n", msrRead(0xC0000080));
 	initSched();

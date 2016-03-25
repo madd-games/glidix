@@ -48,7 +48,7 @@ typedef struct
 	uint64_t	rdi, rsi, rbp, rbx, rdx, rcx, rax;
 	uint64_t	r8, r9, r10, r11, r12, r13, r14, r15;
 	uint64_t	rip, rsp;
-	int		therrno;
+	uint64_t	rflags;
 } PACKED MachineState;
 
 #define	DEFAULT_STACK_SIZE		0x200000

@@ -14,13 +14,15 @@ mount /dev/sda0 /mnt
 mkdir /mnt/boot
 cp /boot/vmglidix /mnt/boot/vmglidix
 cp /boot/vmglidix.tar /mnt/boot/vmglidix.tar
-#exit
 mkdir /mnt/mnt
 mkdir /mnt/bin
 mkdir /mnt/etc
 mkdir /mnt/etc/init
 mkdir /mnt/etc/services
+mkdir /mnt/usr
+mkdir /mnt/usr/libexec
 cp /bin/sh /mnt/bin/sh
 cp /bin/mount /mnt/bin/mount
 cp /setup.sh /mnt/etc/init/startup.sh
+cp /ldmods /mnt/usr/libexec/ldmods
 echo "complete!"

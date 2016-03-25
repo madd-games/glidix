@@ -25,9 +25,13 @@ SECTIONS
 		*(.bss)
 		. = ALIGN(4096);
 		end = .;
-		/*. = 0xFFFF828000000000;
-		_per_cpu_start = .;
-		*(.data_per_cpu)
-		_per_cpu_end = .*/;
 	}
+	
+	. = 0xFFFF828000000000;
+	_per_cpu_start = .;
+	.per_cpu_bss (phys + (_per_cpu_start - code)) (NOLOAD) : AT(phys + (_per_cpu_start - code))
+	{
+		*(.data_per_cpu)
+	}
+	_per_cpu_end = .;
 }

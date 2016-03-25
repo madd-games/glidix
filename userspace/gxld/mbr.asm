@@ -142,7 +142,7 @@ shl cl, 6
 or cl, bl
 mov dh, al		; DH = head
 mov ah, 0x02		; read sectors
-mov al, 8		; we're reading 8 of them
+mov al, 16		; we're reading 16 of them
 mov dl,	[boot_drive]
 
 ; buffer (ES:BX) at 0x7C0:0
