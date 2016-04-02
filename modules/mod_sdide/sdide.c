@@ -45,6 +45,7 @@ static volatile ATOMIC(uint8_t) ideWaitIRQ[2];
 static void ideHandleIRQ(int irq)
 {
 	ideWaitIRQ[irq-ATA_IRQ_PRIMARY] = 1;
+	__sync_synchronize();
 };
 
 static void ideWriteReg(IDEController *ctrl, uint8_t channel, uint8_t reg, uint8_t data)

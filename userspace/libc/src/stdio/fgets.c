@@ -37,6 +37,7 @@ char* fgets(char *s, int size, FILE *stream)
 	};
 	
 	char *ret = s;
+	int readAny = 0;
 	
 	size--;
 	while (size--)
@@ -47,6 +48,7 @@ char* fgets(char *s, int size, FILE *stream)
 			break;
 		};
 		
+		readAny = 1;
 		if (c == '\n')
 		{
 			*s++ = c;
@@ -57,5 +59,6 @@ char* fgets(char *s, int size, FILE *stream)
 	};
 	
 	*s = 0;
+	if (!readAny) return NULL;
 	return ret;
 };

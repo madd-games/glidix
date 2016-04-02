@@ -81,7 +81,7 @@ typedef struct
 } PACKED HeapFooter;
 
 /**
- * Check if the specified heap block is valid (not broken). Usedfor debugging purposes. Prints "[DEBUG] Block (addr) OK"
+ * Check if the specified heap block is valid (not broken). Used for debugging purposes. Prints "[DEBUG] Block (addr) OK"
  * if the block is still valid, or a panic if not.
  */
 void checkBlockValidity(void *addr);

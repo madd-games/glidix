@@ -30,5 +30,6 @@
 
 int feof(FILE *fp)
 {
-	return fp->_flags & __FILE_EOF;
+	int ret = fp->_flags & __FILE_EOF;
+	return ret;
 };

@@ -52,6 +52,7 @@
 #define	NT_SECS(secs)		((secs)*1000000000)
 #define	NEW(type)		((type*)kmalloc(sizeof(type)))		/* only use after including <glidix/memory.h> */
 #define	NEW_EX(type, size)	((type*)kmalloc(sizeof(type)+(size)))
+#define	kalloca(x)		__builtin_alloca(x)
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
@@ -134,10 +135,21 @@ typedef enum
 extern KernelStatus kernelStatus;
 
 uint64_t	getFlagsRegister();
+void		setFlagsRegister(uint64_t flags);
 
 /* common.asm */
 uint64_t	msrRead(uint32_t msr);
 void		msrWrite(uint32_t msr, uint64_t value);
+
+/**
+ * Print a stack trace from the specified stack frame.
+ */
+void stackTrace(uint64_t rip, uint64_t rbp);
+
+/**
+ * Print the stack trace of the call to this function.
+ */
+void stackTraceHere();
 
 /**
  * Give up remaining CPU time (implemented in sched.c, don't ask for reasons).
@@ -179,4 +191,10 @@ void unmapPhysMemory(void *laddr, uint64_t len);
  */
 void initUserRegs(Regs *regs);
  
+/**
+ * Defined in common.asm. Call this to let the CPU cool off. This preserve RFLAGS (along with the IF),
+ * then enables interrupts and halts. Returns with the old value of the interrupt flag.
+ */
+void cooloff();
+
 #endif

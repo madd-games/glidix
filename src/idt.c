@@ -38,6 +38,7 @@
 #include <glidix/apic.h>
 #include <glidix/time.h>
 #include <glidix/pci.h>
+#include <glidix/cpu.h>
 
 IDTEntry idt[256];
 IDTPointer idtPtr;
@@ -111,6 +112,8 @@ extern void isr62();
 extern void isr63();
 extern void isr64();
 extern void isr65();
+extern void isr112();
+extern void isr113();
 
 int kernelDead = 0;
 
@@ -217,7 +220,9 @@ void initIDT()
 	setGate(63, isr63);
 	setGate(64, isr64);
 	setGate(65, isr65);
-
+	setGate(0x70, isr112);
+	setGate(0x71, isr113);
+	
 	idtPtr.addr = (uint64_t) &idt[0];
 	idtPtr.limit = (sizeof(IDTEntry) * 256) - 1;
 	loadIDT();
@@ -251,6 +256,47 @@ static void onPageFault(Regs *regs)
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 
+#if 0
+	if (isSchedLocked())
+	{
+		if ((regs->errCode & 1) == 0)
+		{
+			kprintf("[non-present]");
+		};
+
+		if (regs->errCode & 2)
+		{
+			kprintf("[write]");
+		}
+		else
+		{
+			kprintf("[read]");
+		};
+
+		if (regs->errCode & 4)
+		{
+			kprintf("[user]");
+		}
+		else
+		{
+			kprintf("[kernel]");
+		};
+
+		if (regs->errCode & 8)
+		{
+			kprintf("[reserved]");
+		};
+
+		if (regs->errCode & 16)
+		{
+			kprintf("[fetch]");
+		};
+		kprintf("\nPAGE FAULT WHEN SCHEDULER LOCKED (%a)\n", faultAddr);
+		debugKernel(regs);
+		panic("stop");
+	};
+#endif
+	
 	sti();
 	if (getCurrentThread() != NULL)
 	{
@@ -276,7 +322,7 @@ static void onPageFault(Regs *regs)
 		kernelDead = 1;
 		//heapDump();
 		kdumpregs(regs);
-		kprintf("A page fault occured (rip=%a)\n", regs->rip);
+		kprintf("A page fault occured (rip=%a, cpu=%d)\n", regs->rip, getCurrentCPU()->id);
 		if ((regs->errCode & 1) == 0)
 		{
 			kprintf("[non-present]");
@@ -352,10 +398,12 @@ static void onGPF(Regs *regs)
 	if (1)
 	{
 		ASM("cli");
+		haltAllCPU();
 		kernelDead = 1;
 		//heapDump();
 		kdumpregs(regs);
 		kprintf("GPF (rip=%a)\n", regs->rip);
+		stackTrace(regs->rip, regs->rbp);
 		kprintf("Peek at RIP: ");
 		uint8_t *peek = (uint8_t*) regs->rip;
 		size_t sz = 16;
@@ -365,6 +413,7 @@ static void onGPF(Regs *regs)
 		};
 		kprintf("\n");
 		debugKernel(regs);
+		//panic("meme");
 	};
 };
 
@@ -398,12 +447,14 @@ void onInvalidOpcode(Regs *regs)
 };
 
 void isrHandler(Regs *regs)
-{	
+{
+#if 0
 	if (kernelDead)
 	{
 		panic("interrupt %d after kernel died.", regs->intNo);
 	};
-	
+#endif
+
 	// ignore spurious IRQs
 	if (regs->intNo == IRQ7)
 	{
@@ -421,6 +472,7 @@ void isrHandler(Regs *regs)
 	{
 	case IRQ0:
 		__sync_fetch_and_add(&uptime, 1);
+		sendHintToEveryCPU();
 		//kprintf("UPTIME: %d\n", uptime);
 		break;
 	case I_DIV_ZERO:
@@ -469,6 +521,15 @@ void isrHandler(Regs *regs)
 	case I_PCI14:
 	case I_PCI15:
 		pciInterrupt(regs->intNo);
+		break;
+	case I_IPI_HALT:
+		while (1) {cli(); hlt();};
+		break;
+	case I_IPI_SCHED_HINT:
+		// scheduler hint. this basically wakes up a CPU to indicate that the state of
+		// one of its threads has changed and it might need to stop halting. we do nothing
+		// in response.
+		apic->eoi = 0;
 		break;
 	default:
 		if ((regs->intNo >= IRQ0) && (regs->intNo <= IRQ15))

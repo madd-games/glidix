@@ -113,25 +113,6 @@ _start:
 	; pml4[256], mapped to the same PDPT.
 	mov edi, 0x1800
 	mov dword [edi], 0x2003
-	;mov edi, 0x5000
-	;mov dword [edi], 0x6003
-	;add edi, 0x1000
-	;mov dword [edi], 0x7003
-	;add edi, 0x1000
-
-	;mov ebx, 0x00000003          ; Set the B-register to 0x00000003.
-	;mov ecx, 512                 ; Set the C-register to 511.
-
-	;mov dword [edi], 0
-	;add ebx, 0x1000
-	;add edi, 8
-
-	; map everything up to pml4[256]+2MB
-	;SetEntry2:
-	;mov dword [edi], ebx         ; Set the double word at the destination index to the B-register.
-	;add ebx, 0x1000              ; Add 0x1000 to the B-register.
-	;add edi, 8                   ; Add eight to the destination index.
-	;loop SetEntry2               ; Set the next entry.
 
 	; enable PAE paging
 	mov eax, cr4                 ; Set the A-register to control register 4.
@@ -150,10 +131,13 @@ _start:
 	mov cr0, eax                 ; Set control register 0 to the A-register.
 
 	; go to 64-bit long mode.
-	lgdt [(GDT64.Pointer - 0xFFFF800000100000 + 0x100000)]
+	lgdt [(GDTPointer.Pointer - 0xFFFF800000100000 + 0x100000)]
 	jmp 0x08:(_bootstrap64 - 0xFFFF800000100000 + 0x100000)
 
+.loopHalt:
+	cli
 	hlt
+	jmp .loopHalt
 
 _crash:
 	cli
@@ -178,6 +162,8 @@ _crash:
 crashMessage db 'Your CPU does not support 64-bit Long Mode, so Glidix cannot run.'
 crashMessageSize equ $ - crashMessage
 
+global GDTPointer
+global GDT64
 GDT64:                               ; Global Descriptor Table (64-bit).
 	.Null: equ $ - GDT64         ; The null descriptor.
 	dw 0                         ; Limit (low).
@@ -231,6 +217,7 @@ GDT64:                               ; Global Descriptor Table (64-bit).
 	.TSS_baseMiddleHigh: db 0
 	.TSS_baseHigh: dd 0
 	dd 0
+	GDTPointer:
 	.Pointer:                    ; The GDT-pointer.
 	dw $ - GDT64 - 1             ; Limit.
 	.Addr64: dq (GDT64 - 0xFFFF800000100000 + 0x100000)                     ; Base.
@@ -297,9 +284,9 @@ _bootstrap64:
 _bootstrap64_upper:
 	; load the 64-bit GDT with the proper address
 	mov rax,			qword GDT64
-	mov rdi,			qword GDT64.Addr64
+	mov rdi,			qword GDTPointer.Addr64
 	stosq
-	mov rax,			qword GDT64.Pointer
+	mov rax,			qword GDTPointer.Pointer
 	lgdt [rax]
 
 	; unmap the bottom memory

@@ -34,6 +34,9 @@
 #include <glidix/string.h>
 #include <glidix/semaphore.h>
 #include <glidix/time.h>
+#include <glidix/cpu.h>
+#include <glidix/memory.h>
+
 void enterDebugContext(Regs *regs);			// sched.asm
 
 void stackTrace(uint64_t rip, uint64_t rbp)
@@ -66,16 +69,18 @@ void debugKernel(Regs *regs)
 	
 	while (1)
 	{
-		kprintf_debug("RAX=0 - panic and stop\n");
-		kprintf_debug("RAX=1 - show stack trace\n");
-		kprintf_debug("RAX=2 - dump runqueue\n");
-		kprintf_debug("RAX=3 - dump module list\n");
-		kprintf_debug("RAX=4 - switch to a different process\n");
-		kprintf_debug("RAX=5 - dump current context\n");
-		kprintf_debug("RAX=6 - dump memory mappings\n");
-		kprintf_debug("RAX=7 - show semaphore state\n");
-		kprintf_debug("RAX=8 - debug the current context in bochs\n");
-		kprintf_debug("RAX=9 - show stack trace of interrupted state\n");
+		kprintf_debug("RAX=0  - panic and stop\n");
+		kprintf_debug("RAX=1  - show stack trace\n");
+		kprintf_debug("RAX=2  - dump runqueue\n");
+		kprintf_debug("RAX=3  - dump module list\n");
+		kprintf_debug("RAX=4  - switch to a different process\n");
+		kprintf_debug("RAX=5  - dump current context\n");
+		kprintf_debug("RAX=6  - dump memory mappings\n");
+		kprintf_debug("RAX=7  - show semaphore state\n");
+		kprintf_debug("RAX=8  - debug the current context in bochs\n");
+		kprintf_debug("RAX=9  - show stack trace of interrupted state\n");
+		kprintf_debug("RAX=10 - show interrupted registers\n");
+		kprintf_debug("RAX=11 - show heap dump\n");
 		uint64_t option = getDebugInput();
 
 		switch (option)
@@ -97,6 +102,7 @@ void debugKernel(Regs *regs)
 			switchTaskToIndex((int)getDebugInput());
 			break;
 		case 5:
+			kprintf("CPU: %d\n", getCurrentCPU()->id);
 			kprintf("PID: %d, '%s'\n", getCurrentThread()->pid, getCurrentThread()->name);
 			kprintf("WAKE: %d, TICKS: %d\n", (int) getCurrentThread()->wakeTime, getUptime());
 			kdumpregs(&getCurrentThread()->regs);
@@ -121,6 +127,12 @@ void debugKernel(Regs *regs)
 			break;
 		case 9:
 			stackTrace(regs->rip, regs->rbp);
+			break;
+		case 10:
+			kdumpregs(regs);
+			break;
+		case 11:
+			heapDump();
 			break;
 		};
 	};

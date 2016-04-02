@@ -28,6 +28,7 @@
 
 #include <glidix/common.h>
 #include <glidix/console.h>
+#include <glidix/cpu.h>
 #include <stdarg.h>
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...)
@@ -36,6 +37,7 @@ void _panic(const char *filename, int lineno, const char *funcname, const char *
 	va_start(ap, fmt);
 
 	ASM ("cli");
+	haltAllCPU();
 	unlockConsole();
 	kprintf("In function %s at %s:%d\n", funcname, filename, lineno);
 	kprintf("Kernel panic: ");

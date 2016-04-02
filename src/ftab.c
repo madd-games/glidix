@@ -61,8 +61,7 @@ void ftabDownref(FileTable *ftab)
 			File *fp = ftab->entries[i];
 			if (fp != NULL)
 			{
-				if (fp->close != NULL) fp->close(fp);
-				kfree(fp);
+				vfsClose(fp);
 			};
 		};
 
@@ -85,21 +84,8 @@ FileTable *ftabDup(FileTable *old)
 		File *fold = old->entries[i];
 		if (fold != NULL)
 		{
-			if (fold->dup != NULL)
-			{
-				File *fnew = (File*) kmalloc(sizeof(File));
-				memset(fnew, 0, sizeof(File));
-
-				if (fold->dup(fold, fnew, sizeof(File)) != 0)
-				{
-					// failed
-					kfree(fnew);
-				}
-				else
-				{
-					new->entries[i] = fnew;
-				};
-			};
+			vfsDup(fold);
+			new->entries[i] = fold;
 		};
 	};
 	spinlockRelease(&old->spinlock);

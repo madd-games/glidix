@@ -98,7 +98,8 @@
 #define	O_SYNC				(1 << 10)
 #define	O_CLOEXEC			(1 << 11)
 #define	O_ACCMODE			(O_RDWR)
-#define	O_ALL				((1 << 12)-1)
+//#define	O_ALL				((1 << 12)-1)
+#define	O_ALL				(O_RDWR | O_APPEND | O_CREAT | O_EXCL | O_TRUNC | O_NOCTTY | O_NONBLOCK | O_CLOEXEC)
 
 /**
  * Additional flags, cannot be passed to open().
@@ -158,6 +159,15 @@ typedef struct _File
 	int oflag;
 
 	/**
+	 * File reference count. The file is closed and the memory is released once this reaches
+	 * zero. Use vfsDup() and vfsClose() to manage this.
+	 *
+	 * For files opened by the kernel, this is allowed to be zero. In this case, you must have
+	 * only one reference, and it may be destroyed with vfsClose().
+	 */
+	int refcount;
+	
+	/**
 	 * Read the file.
 	 */
 	ssize_t (*read)(struct _File *file, void *buffer, size_t size);
@@ -174,6 +184,7 @@ typedef struct _File
 
 	/**
 	 * Close the file. Do not free this structure! The kernel will do that for you.
+	 * This is called when refcounts go to zero.
 	 */
 	void (*close)(struct _File *file);
 
@@ -184,10 +195,7 @@ typedef struct _File
 	 * if this description cannot be duplicated for whatever reason. If this entry is NULL,
 	 * the file description is considered impossible to duplicate.
 	 *
-	 * If a file description cannot be duplicated, the dup() and dup2() system calls return
-	 * errors, and the fork() and _glidix_clone() (when creating a new file table) system calls
-	 * shall make the child process see the file descriptor referring to this description as
-	 * closed.
+	 * DEPRECATED; see refcounts below. This should not be called ever.
 	 */
 	int (*dup)(struct _File *me, struct _File *file, size_t szFile);
 
@@ -407,6 +415,7 @@ int vfsLinkStat(const char *path, struct stat *st);
 File *vfsOpen(const char *path, int flags, int *error);
 ssize_t vfsRead(File *file, void *buffer, size_t size);
 ssize_t vfsWrite(File *file, const void *buffer, size_t size);
+void vfsDup(File *file);
 void vfsClose(File *file);
 
 /**

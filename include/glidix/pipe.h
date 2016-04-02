@@ -33,17 +33,34 @@
 #include <glidix/vfs.h>
 #include <glidix/semaphore.h>
 
+#define	SIDE_READ			1
+#define	SIDE_WRITE			2
+
+#define	PIPE_BUFFER_SIZE		1024
+
 typedef struct
 {
-	Semaphore	sem;
-
-	int		readcount;					// number of open O_RDONLY references.
-	int		writecount;					// number of open O_WRONLY references.
-	uint8_t		buffer[1024];					// contains pipe data.
-
-	off_t		offRead;
-	off_t		offWrite;
-	size_t		size;						// size left to read
+	/**
+	 * The semaphore which protects the pipe.
+	 */
+	Semaphore			sem;
+	
+	/**
+	 * The semaphore which counts the number of bytes in the pipe.
+	 */
+	Semaphore			counter;
+	
+	/**
+	 * Buffer and read/write pointers.
+	 */
+	char				buffer[PIPE_BUFFER_SIZE];
+	off_t				roff;
+	off_t				woff;
+	
+	/**
+	 * Which sides are open (OR of SIDE_READ and/or SIDE_WRITE or 0).
+	 */
+	int				sides;
 } Pipe;
 
 int sys_pipe(int *pipefd);

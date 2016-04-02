@@ -128,6 +128,7 @@ int sys_fdopendir(const char *dirname)
 	fp->fsdata = dir;
 	fp->read = readdir;
 	fp->close = closedir;
+	fp->refcount = 1;
 	ftab->entries[fd] = fp;
 
 	while (dir->dirent.d_ino == 0)

@@ -88,7 +88,7 @@ rm -rf mipdir
 cd userspace/libc
 sh install-dev.sh ../../mipdir
 cd ../..
-mkmip mipdir temp/libc-dev.mip
+mkmip mipdir isodir/libc-dev.mip
 
 # shell
 rm -rf mipdir
@@ -161,4 +161,4 @@ autodrop isodir/libc.mip -R GlidixPkg
 autodrop isodir/libc-dev.mip -R GlidixPkg
 autodrop isodir/shutils.mip -R GlidixPkg
 autodrop isodir/sh.mip -R GlidixPkg
-autodrop temp/libc-dev.mip -R GlidixPkg
+autodrop isodir/libc-dev.mip -R GlidixPkg

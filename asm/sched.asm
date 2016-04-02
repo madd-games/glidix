@@ -33,6 +33,12 @@ getFlagsRegister:
 	pop rax
 	ret
 
+[global setFlagsRegister]
+setFlagsRegister:
+	push rdi
+	popfq
+	ret
+
 [global switchContext]
 switchContext:
 	; The argument is stored in RDI, and is the address of a Regs structure.

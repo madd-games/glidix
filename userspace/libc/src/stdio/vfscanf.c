@@ -315,7 +315,6 @@ int __scanf_conv_sint(struct __instr *_is, int lenmod, int base, void *outp)
 	switch (lenmod)
 	{
 	case _LM_NONE:
-		//printf("{using conv: __scanf_conv_noned}\n");
 		return __scanf_conv_noned(_is, base, (int*)outp);
 	case _LM_hh:
 		return __scanf_conv_hhd(_is, base, (char*)outp);
@@ -517,6 +516,7 @@ int __scanf_conv_n(struct __instr *_is, int lenmod, int count, void *outp)
 
 int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 {
+	//printf("fscan called with: '%s'\n", format);
 	int suppress=0, maxwidth=-1, lenmod=_LM_NONE, matchcount=0, c;
 
 	while (*format != 0)
@@ -607,7 +607,6 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 				else
 				{
 					lenmod = _LM_h;
-					format++;
 				};
 				break;
 			case 'l':
@@ -620,7 +619,6 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 				else
 				{
 					lenmod = _LM_l;
-					format++;
 				};
 				break;
 			case 'j':

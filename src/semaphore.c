@@ -47,6 +47,7 @@ void semInit2(Semaphore *sem, int count)
 	sem->first = NULL;
 	sem->last = NULL;
 	sem->countWaiter = NULL;
+	sem->terminated = 0;
 };
 
 extern uint64_t getFlagsRegister();
@@ -83,7 +84,8 @@ void semWait(Semaphore *sem)
 		while (thwait->waiting)
 		{
 			ASM("cli");
-			getCurrentThread()->flags |= THREAD_WAITING;
+			//getCurrentThread()->flags |= THREAD_WAITING;
+			waitThread(getCurrentThread());
 			spinlockRelease(&sem->lock);
 			kyield();
 			spinlockAcquire(&sem->lock);
@@ -132,7 +134,8 @@ int semWait2(Semaphore *sem, int count)
 		//kprintf("try again\n");
 		sem->countWaiter = getCurrentThread();
 		ASM("cli");
-		getCurrentThread()->flags |= THREAD_WAITING;
+		//getCurrentThread()->flags |= THREAD_WAITING;
+		waitThread(getCurrentThread());
 		spinlockRelease(&sem->lock);
 		kyield();
 		spinlockAcquire(&sem->lock);
@@ -181,17 +184,26 @@ int semWaitTimeout(Semaphore *sem, int count, uint64_t timeout)
 		return 0;
 	};
 
-	int sigcnt = getCurrentThread()->sigcnt;
 	while (sem->count == 0)
 	{
+		if (sem->terminated)
+		{
+			getCurrentThread()->wakeTime = 0;
+			sem->countWaiter = NULL;
+			spinlockRelease(&sem->lock);
+			return 0;
+		};
+		
 		sem->countWaiter = getCurrentThread();
-		ASM("cli");
-		getCurrentThread()->flags |= THREAD_WAITING;
+		cli();
+		lockSched();
 		getCurrentThread()->wakeTime = deadline;
+		waitThread(getCurrentThread());
 		spinlockRelease(&sem->lock);
+		unlockSched();
 		kyield();
 		spinlockAcquire(&sem->lock);
-		if (getCurrentThread()->sigcnt > sigcnt)
+		if (getCurrentThread()->sigcnt > 0)
 		{
 			sem->countWaiter = NULL;
 			spinlockRelease(&sem->lock);
@@ -239,7 +251,13 @@ int semWaitNoblock(Semaphore *sem, int count)
 
 	if (sem->count == 0)
 	{
-		// no resources available, return -1 indicating EWOULDBLOCK
+		// no resources available, return -1 indicating EWOULDBLOCK, unless it's terminated
+		if (sem->terminated)
+		{
+			spinlockRelease(&sem->lock);
+			return 0;
+		};
+		
 		status = -1;
 	};
 
@@ -299,15 +317,26 @@ static void semSignalGen(Semaphore *sem, int wait)
 
 	if (wait)
 	{
-		ASM("cli");
-		getCurrentThread()->flags |= THREAD_WAITING;
+		cli();
+		lockSched();
+		waitThread(getCurrentThread());
 		spinlockRelease(&sem->lock);
+		unlockSched();
 		kyield();
 	}
 	else
 	{
 		spinlockRelease(&sem->lock);
 	};
+};
+
+void semTerminate(Semaphore *sem)
+{
+	kprintf_debug("semTerminate was called\n");
+	spinlockAcquire(&sem->lock);
+	sem->terminated = 1;
+	if (sem->countWaiter != NULL) signalThread(sem->countWaiter);
+	spinlockRelease(&sem->lock);
 };
 
 void semSignal(Semaphore *sem)

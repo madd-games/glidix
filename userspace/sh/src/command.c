@@ -35,6 +35,9 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <signal.h>
+#include <fcntl.h>
+#include <errno.h>
+
 #include "command.h"
 #include "sh.h"
 
@@ -97,6 +100,15 @@ int execCommand(char *cmd)
 		commentScan++;
 	};
 
+	// stdout redirection
+	const char *outfile = NULL;
+	char *arrowPtr = strrchr(cmd, '>');
+	if (arrowPtr != NULL)
+	{
+		*arrowPtr = 0;
+		outfile = arrowPtr + 1;
+	};
+	
 	if (*cmd == 0) return 0;
 
 	char processedCommand[1024];
@@ -142,16 +154,7 @@ int execCommand(char *cmd)
 
 	while (1)
 	{
-		//char *token = strtok(nextToStrtok, nextSplitString);
 		char *token = nextToStrtok;
-
-#if 0
-		nextToStrtok = NULL;
-		if (token != NULL)
-		{
-			if (strlen(token) == 0) continue;
-		};
-#endif
 
 		if (token != NULL)
 		{
@@ -242,10 +245,23 @@ int execCommand(char *cmd)
 	pid_t pid = fork();
 	if (pid == 0)
 	{
+		if (outfile != NULL)
+		{
+			int fd = open(outfile, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+			if (fd == -1)
+			{
+				fprintf(stderr, "%s: cannot open output file %s: %s\n", argv[0], outfile, strerror(errno));
+				exit(1);
+			};
+			
+			close(1);
+			dup2(fd, 1);
+		};
+			
 		if (execv(execpath, argv) != 0)
 		{
 			perror(argv[0]);
-			return 1;
+			exit(1);
 		};
 
 		// the compiler won't stop moaning otherwise.

@@ -60,9 +60,9 @@ extern "C" {
 #define	_POSIX_NAME_MAX				127
 #define	_POSIX_PATH_MAX				255
 
-#define	R_OK					(1 << 0)
+#define	X_OK					(1 << 0)
 #define	W_OK					(1 << 1)
-#define	X_OK					(1 << 2)
+#define	R_OK					(1 << 2)
 #define	F_OK					0
 
 extern char* optarg;

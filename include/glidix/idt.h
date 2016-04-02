@@ -95,6 +95,10 @@
 
 #define	I_APIC_TIMER			65
 
+// 0x70 (112) + x interrupts are IPIs
+#define	I_IPI_HALT			0x70
+#define	I_IPI_SCHED_HINT		0x71
+
 typedef struct
 {
 	uint16_t limit;

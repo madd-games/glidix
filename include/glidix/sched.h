@@ -259,6 +259,11 @@ typedef struct _Thread
 	uint64_t			alarmTime;
 	
 	/**
+	 * ID of the CPU that this thread shall run on.
+	 */
+	int				cpuID;
+	
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;
@@ -277,11 +282,13 @@ typedef struct
 extern TSS _tss;
 
 void initSched();
+void initSchedAP();				// initialize scheduling on an AP, when the main sched is already inited
 void switchContext(Regs *regs);
 void dumpRunqueue();
 void switchTask(Regs *regs);
 
-void lockSched();
+void lockSched();				// only call with IF=0!
+int isSchedLocked();
 void unlockSched();
 
 /**

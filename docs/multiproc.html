@@ -1,0 +1,35 @@
+<style type="text/css">
+body {font-family: sans-serif;}
+p, li {letter-spacing: 1px; line-height: 150%;}
+h1 {line-height: 150%; letter-spacing: 2px}
+code {font-size: 14px;}
+</style>
+
+<title>Glidix Multiprocessing</title>
+<h1>Glidix Multiprocessing</h1>
+
+<p>
+Glidix supports multiprocessing. This page described current support and also a design of how the multiprocessing system will work, and is written as it is being developed.
+</p>
+
+<h2>AP Startup</h2>
+<p>
+Glidix starts each AP one by one. The code for this is in <code>src/cpu.c</code>. There is a page of trampoline code at <code>0xA000</code> (physical) and data to be used by the trampoline in <code>0xB000</code> as well as a temporary copy of the PML4 in low memory at <code>0xC000</code>. The trampoline code never changes after it is loaded, but the data must change for each CPU, so the AP trampoline signals the BSP once it collected all the data into registers and no longer needs them. The trampoline continues to run for a bit while the trampoline data is being replaced. It calls <code>apEntry()</code> (defined in <code>src/cpu.c</code>) once ready, prepares its PML4 for normal operation, and allocates per-CPU variables.
+</p>
+
+<h2>Per-CPU Variables</h2>
+<p>
+To use per-CPU variables, you must include <code>&lt;glidix/common.h&gt;</code>. So far it is not possible to define per-CPU variables in modules. Per-CPU variables are global variables which have a different value on each CPU. You declare a per-CPU variables as follows:
+</p>
+
+<pre>
+PER_CPU int x;
+</pre>
+
+<p>
+Per-CPU variables are initialised to zero upon CPU startup. You <i>cannot</i> initialise them to any other value, this is invalid:
+</p>
+
+<pre>
+PER_CPU int y = 5;	// INVALID !!!
+</pre>

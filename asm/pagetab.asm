@@ -29,7 +29,7 @@ bits 64
 
 [global refreshAddrSpace]
 refreshAddrSpace:
-	mov	rax,	0x1000
+	mov	rax,	cr3
 	mov	cr3,	rax
 	mov	rax,	cr0
 	mov	cr0,	rax

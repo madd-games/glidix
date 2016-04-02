@@ -91,10 +91,8 @@ int isStringValid(uint64_t ptr)
 
 void sys_exit(int status)
 {
-	Regs regs;				// it's OK to destroy the registers as we're exiting
 	threadExit(getCurrentThread(), status);
-	ASM("cli");
-	switchTask(&regs);
+	kyield();
 };
 
 uint64_t sys_write(int fd, const void *buf, size_t size)
@@ -141,8 +139,10 @@ uint64_t sys_write(int fd, const void *buf, size_t size)
 				}
 				else
 				{
-					out = fp->write(fp, buf, size);
+					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
+					out = fp->write(fp, buf, size);
+					vfsClose(fp);
 				};
 			};
 		};
@@ -194,8 +194,10 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 				}
 				else
 				{
+					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
 					out = fp->read(fp, buf, size);
+					vfsClose(fp);
 				};
 			};
 		};
@@ -352,7 +354,8 @@ int sys_open(const char *path, int oflag, mode_t mode)
 	};
 
 	fp->oflag = oflag;
-
+	fp->refcount = 1;
+	
 	ftab->entries[i] = fp;
 	spinlockRelease(&ftab->spinlock);
 
@@ -373,7 +376,9 @@ int sys_close(int fd)
 	{
 		File *fp = ftab->entries[fd];
 		ftab->entries[fd] = NULL;
+		spinlockRelease(&ftab->spinlock);
 		vfsClose(fp);
+		return 0;
 	};
 
 	spinlockRelease(&ftab->spinlock);
@@ -412,8 +417,10 @@ int sys_ioctl(int fd, uint64_t cmd, void *argp)
 		return -1;
 	};
 
+	vfsDup(fp);
 	spinlockRelease(&ftab->spinlock);
 	int ret = fp->ioctl(fp, cmd, argp);
+	vfsClose(fp);
 	return ret;
 };
 
@@ -449,13 +456,16 @@ off_t sys_lseek(int fd, off_t offset, int whence)
 		return (off_t)-1;
 	};
 
+	vfsDup(fp);
+	spinlockRelease(&ftab->spinlock);
+	
 	off_t ret = fp->seek(fp, offset, whence);
 	if (ret == (off_t)-1)
 	{
 		getCurrentThread()->therrno = EOVERFLOW;
 	};
 
-	spinlockRelease(&ftab->spinlock);
+	vfsClose(fp);
 	return ret;
 };
 
@@ -471,10 +481,12 @@ int sys_raise(int sig)
 	siginfo.si_signo = sig;
 	siginfo.si_code = 0;
 
+	cli();
+	lockSched();
 	sendSignal(getCurrentThread(), &siginfo);
+	unlockSched();
+	sti();
 
-	// not actually stored in RAX because of the task switch, but libglidix should set
-	// RAX to zero before executing UD2.
 	return 0;
 };
 
@@ -533,7 +545,8 @@ int sys_pause()
 	ASM("cli");
 	lockSched();
 	getCurrentThread()->therrno = EINTR;
-	getCurrentThread()->flags |= THREAD_WAITING;
+	//getCurrentThread()->flags |= THREAD_WAITING;
+	waitThread(getCurrentThread());
 	unlockSched();
 	kyield();
 	return -1;
@@ -571,9 +584,11 @@ int sys_fstat(int fd, struct stat *buf)
 		return -1;
 	};
 
-	int status = fp->fstat(fp, buf);
-
+	vfsDup(fp);
 	spinlockRelease(&ftab->spinlock);
+	int status = fp->fstat(fp, buf);
+	vfsClose(fp);
+	
 	if (status == -1)
 	{
 		getCurrentThread()->therrno = EIO;
@@ -657,31 +672,32 @@ int sys_fchmod(int fd, mode_t mode)
 	};
 
 	struct stat st;
+	vfsDup(fp);
+	spinlockRelease(&ftab->spinlock);
 	int status = fp->fstat(fp, &st);
-
+	
 	if (status == -1)
 	{
 		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
 		return -1;
 	};
 
 	if ((getCurrentThread()->euid != 0) && (getCurrentThread()->euid != st.st_uid))
 	{
 		getCurrentThread()->therrno = EPERM;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
 		return -1;
 	};
 
 	status = fp->fchmod(fp, mode);
+	vfsClose(fp);
 	if (status == -1)
 	{
 		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
 		return -1;
 	};
 
-	spinlockRelease(&ftab->spinlock);
 	return 0;
 };
 
@@ -704,12 +720,14 @@ static int sys_fsync(int fd)
 		return -1;
 	};
 
+	vfsDup(fp);
+	spinlockRelease(&ftab->spinlock);
 	if (fp->fsync != NULL)
 	{
 		fp->fsync(fp);
 	};
+	vfsClose(fp);
 
-	spinlockRelease(&ftab->spinlock);
 	return 0;
 };
 
@@ -817,31 +835,32 @@ int sys_fchown(int fd, uid_t uid, gid_t gid)
 	};
 
 	struct stat st;
+	vfsDup(fp);
+	spinlockRelease(&ftab->spinlock);
 	int status = fp->fstat(fp, &st);
 
 	if (status == -1)
 	{
 		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
 		return -1;
 	};
 
 	if (!canChangeOwner(&st, uid, gid))
 	{
 		getCurrentThread()->therrno = EPERM;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
 		return -1;
 	};
 
 	status = fp->fchown(fp, uid, gid);
+	vfsClose(fp);
 	if (status == -1)
 	{
 		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
 		return -1;
 	};
 
-	spinlockRelease(&ftab->spinlock);
 	return 0;
 };
 
@@ -984,9 +1003,11 @@ int sys_ftruncate(int fd, off_t length)
 		return -1;
 	};
 
-	fp->truncate(fp, length);
-
+	vfsDup(fp);
 	spinlockRelease(&ftab->spinlock);
+	fp->truncate(fp, length);
+	vfsClose(fp);
+	
 	return 0;
 };
 
@@ -1126,13 +1147,6 @@ int sys_dup(int fd)
 		return -1;
 	};
 
-	if (fp->dup == NULL)
-	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EIO;
-		return -1;
-	};
-
 	int i;
 	for (i=0; i<MAX_OPEN_FILES; i++)
 	{
@@ -1148,18 +1162,8 @@ int sys_dup(int fd)
 		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
 	};
 
-	File *newfp = (File*) kmalloc(sizeof(File));
-	memset(newfp, 0, sizeof(File));
-
-	if (fp->dup(fp, newfp, sizeof(File)) != 0)
-	{
-		kfree(newfp);
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EIO;
-		return -1;
-	};
-
-	ftab->entries[i] = newfp;
+	vfsDup(fp);
+	ftab->entries[i] = fp;
 	spinlockRelease(&ftab->spinlock);
 
 	return i;
@@ -1195,29 +1199,13 @@ int sys_dup2(int oldfd, int newfd)
 		return -1;
 	};
 
-	if (fp->dup == NULL)
-	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EIO;
-		return -1;
-	};
-
-	File *newfp = (File*) kmalloc(sizeof(File));
-	memset(newfp, 0, sizeof(File));
-	if (fp->dup(fp, newfp, sizeof(File)) != 0)
-	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EIO;
-		return -1;
-	};
-
 	if (ftab->entries[newfd] != NULL)
 	{
 		File *toclose = ftab->entries[newfd];
-		if (toclose->close != NULL) toclose->close(toclose);
-		kfree(toclose);
+		vfsClose(toclose);
 	};
-	ftab->entries[newfd] = newfp;
+	vfsDup(fp);
+	ftab->entries[newfd] = fp;
 	spinlockRelease(&ftab->spinlock);
 
 	return newfd;
@@ -1401,15 +1389,15 @@ uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t 
 		return 0;
 	};
 
+	vfsDup(fp);
+	spinlockRelease(&ftab->spinlock);
 	FrameList *fl = fp->mmap(fp, len, prot, flags, offset);
+	vfsClose(fp);
 	if (fl == NULL)
 	{
-		spinlockRelease(&ftab->spinlock);
 		getCurrentThread()->therrno = ENODEV;
 		return 0;
 	};
-
-	spinlockRelease(&ftab->spinlock);
 
 	if (AddSegment(getCurrentThread()->pm, addr/0x1000, fl, prot) != 0)
 	{
@@ -1900,7 +1888,8 @@ unsigned sys_sleep(unsigned seconds)
 	uint64_t sleepStart = (uint64_t) getTicks();
 	uint64_t wakeTime = ((uint64_t) getTicks() + (uint64_t) seconds * (uint64_t) 1000);
 	getCurrentThread()->wakeTime = wakeTime;
-	getCurrentThread()->flags |= THREAD_WAITING;
+	//getCurrentThread()->flags |= THREAD_WAITING;
+	waitThread(getCurrentThread());
 	kyield();
 
 	uint64_t timeDelta = (uint64_t) getTicks() - sleepStart;
@@ -2002,6 +1991,7 @@ int sys_socket(int domain, int type, int proto)
 		return -1;
 	};
 	
+	fp->refcount = 1;
 	ftab->entries[i] = fp;
 	spinlockRelease(&ftab->spinlock);
 	return i;
@@ -2034,8 +2024,10 @@ int sys_bind(int fd, const struct sockaddr *addr, size_t addrlen)
 		}
 		else
 		{
-			out = BindSocket(fp, addr, addrlen);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = BindSocket(fp, addr, addrlen);
+			vfsClose(fp);
 		};
 	};
 
@@ -2075,8 +2067,10 @@ ssize_t sys_sendto(int fd, const void *message, size_t len, int flags, const str
 		}
 		else
 		{
-			out = SendtoSocket(fp, message, len, flags, addr, addrlen);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = SendtoSocket(fp, message, len, flags, addr, addrlen);
+			vfsClose(fp);
 		};
 	};
 
@@ -2125,8 +2119,10 @@ ssize_t sys_recvfrom(int fd, void *message, size_t len, int flags, struct sockad
 		}
 		else
 		{
-			out = RecvfromSocket(fp, message, len, flags, addr, addrlen);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = RecvfromSocket(fp, message, len, flags, addr, addrlen);
+			vfsClose(fp);
 		};
 	};
 
@@ -2166,8 +2162,10 @@ int sys_getsockname(int fd, struct sockaddr *addr, size_t *addrlenptr)
 		}
 		else
 		{
-			out = SocketGetsockname(fp, addr, addrlenptr);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = SocketGetsockname(fp, addr, addrlenptr);
+			vfsClose(fp);
 		};
 	};
 
@@ -2201,8 +2199,10 @@ int sys_shutdown(int fd, int how)
 		}
 		else
 		{
-			out = ShutdownSocket(fp, how);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = ShutdownSocket(fp, how);
+			vfsClose(fp);
 		};
 	};
 
@@ -2236,8 +2236,10 @@ int sys_connect(int fd, struct sockaddr *addr, size_t addrlen)
 		}
 		else
 		{
-			out = ConnectSocket(fp, addr, addrlen);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = ConnectSocket(fp, addr, addrlen);
+			vfsClose(fp);
 		};
 	};
 
@@ -2276,8 +2278,10 @@ int sys_getpeername(int fd, struct sockaddr *addr, size_t *addrlenptr)
 		}
 		else
 		{
-			out = SocketGetpeername(fp, addr, addrlenptr);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = SocketGetpeername(fp, addr, addrlenptr);
+			vfsClose(fp);
 		};
 	};
 
@@ -2305,8 +2309,10 @@ int sys_setsockopt(int fd, int proto, int option, uint64_t value)
 		}
 		else
 		{
-			out = SetSocketOption(fp, proto, option, value);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = SetSocketOption(fp, proto, option, value);
+			vfsClose(fp);
 		};
 	};
 
@@ -2334,8 +2340,10 @@ uint64_t sys_getsockopt(int fd, int proto, int option)
 		}
 		else
 		{
-			out = GetSocketOption(fp, proto, option);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = GetSocketOption(fp, proto, option);
+			vfsClose(fp);
 		};
 	};
 
@@ -2452,8 +2460,10 @@ int sys_bindif(int fd, const char *ifname)
 		}
 		else
 		{
-			out = SocketBindif(fp, ifname);
+			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
+			out = SocketBindif(fp, ifname);
+			vfsClose(fp);
 		};
 	};
 
@@ -2506,14 +2516,17 @@ int sys_condwait(uint8_t *cond, uint8_t *lock)
 		return -1;
 	};
 
+	*cond = *cond;
+	*lock = *lock;
+	
 	// this system call allows userspace to implement blocking locks.
 	// it atomically does the following:
 	// 1) store "1" in *cond, while reading out its old value.
 	// 2) if the old value was 0, store 0 in *lock and return 0.
 	// 3) otherwise, store 0 in *lock, and block, waiting for a signal.
 	// 4) once unblocked, return -1 and set errno to EINTR.
-	lockSched();
 	cli();
+	lockSched();
 	
 	if (atomic_swap8(cond, 1) == 0)
 	{
@@ -2525,7 +2538,8 @@ int sys_condwait(uint8_t *cond, uint8_t *lock)
 	};
 	
 	*lock = 0;
-	getCurrentThread()->flags |= THREAD_WAITING;
+	//getCurrentThread()->flags |= THREAD_WAITING;
+	waitThread(getCurrentThread());
 	unlockSched();
 	kyield();
 	
@@ -2544,6 +2558,7 @@ void signalOnBadPointer(Regs *regs, uint64_t ptr)
 	ERRNO = EINTR;
 	*((int64_t*)&regs->rax) = -1;
 	
+	cli();
 	lockSched();
 	sendSignal(getCurrentThread(), &siginfo);
 	unlockSched();
@@ -2555,6 +2570,7 @@ void sysInvalid()
 	siginfo_t si;
 	si.si_signo = SIGSYS;
 
+	cli();
 	lockSched();
 	sendSignal(getCurrentThread(), &si);
 	unlockSched();
@@ -2729,7 +2745,13 @@ int sys_waitpid(int pid, int *stat_loc, int flags)
 		};
 	};
 	
-	return pollThread(pid, stat_loc, flags);
+	// DO NOT pass the status location directly to pollThread(), because it locks scheduling
+	// and writing to stat_loc might cause a page fault (which results in load-on-demand and
+	// a possible kyield() etc)
+	int statret;
+	int ret = pollThread(pid, &statret, flags);
+	if (stat_loc != NULL) *stat_loc = statret;
+	return ret;
 };
 
 void sys_yield()

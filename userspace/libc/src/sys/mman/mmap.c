@@ -60,7 +60,7 @@ void* mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset)
 					// the specified file does not support mmap() but we can emulate
 					// read-only mmap()s by means of map-and-read
 					// stuff like 'gcc' really needs that apparently
-					if (mmap(addr, len, prot, flags | MAP_ANONYMOUS, 0, offset) != (void*)-1)
+					if (mmap((void*)actualAddr, len, prot | PROT_WRITE, flags | MAP_ANONYMOUS, 0, offset) != (void*)-1)
 					{
 						off_t pos = lseek(fd, 0, SEEK_CUR);
 						if (pos == (off_t)-1)

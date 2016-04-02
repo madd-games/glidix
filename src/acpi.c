@@ -93,14 +93,14 @@ static void ioapicInit(uint64_t ioapicbasephys)
 	uint32_t maxintr = ((*iowin) >> 16) & 0xFF;
 	__sync_synchronize();
 
-	kprintf("APIC ID: %d, NUM INTERRUPTS: %d\n", apic->id, maxintr);
+	//kprintf("APIC ID: %d, NUM INTERRUPTS: %d\n", apic->id, maxintr);
 	uint8_t *checkInts = (uint8_t*) kmalloc(maxintr+1);
 	memset(checkInts, 0, maxintr+1);
 	
 	int i;
 	for (i=0; i<16; i++)
 	{
-		kprintf("SYSINT %d -> LOCAL INT %d\n", irqMap[i], i+32);
+		//kprintf("SYSINT %d -> LOCAL INT %d\n", irqMap[i], i+32);
 		*regsel = (0x10+2*irqMap[i]);
 		__sync_synchronize();
 		uint64_t entry = (uint64_t)(i+32) | ((uint64_t)(apic->id) << 56);
@@ -118,7 +118,7 @@ static void ioapicInit(uint64_t ioapicbasephys)
 	{
 		if (!checkInts[i])
 		{
-			kprintf("SYSINT %d -> LOCAL INT 7\n", i);
+			//kprintf("SYSINT %d -> LOCAL INT 7\n", i);
 			*regsel = (0x10+2*i);
 			__sync_synchronize();
 			uint64_t entry = (uint64_t)(39) | ((uint64_t)(apic->id) << 56);
@@ -137,6 +137,9 @@ static void ioapicInit(uint64_t ioapicbasephys)
 	//panic("Stop");
 };
 
+uint8_t apicList[16];
+int apicCount = 0;
+
 void acpiInit()
 {
 	ACPI_RSDPDescriptor *rsdp = findRSDP();
@@ -149,17 +152,11 @@ void acpiInit()
 
 	DONE();
 
-#if 0
-	kprintf("ACPI RSDP addr: %a\n", rsdp);
-	kprintf("Revision: %d\n", rsdp->rev);
-	kprintf("Therefore RSDT is physically at %a\n", rsdp->rsdtAddr);
-#endif
-
 	ACPI_SDTHeader rsdtHeader;
 	pmem_read(&rsdtHeader, rsdp->rsdtAddr, sizeof(ACPI_SDTHeader));
 
 	acpiNumTables = (rsdtHeader.len - sizeof(rsdtHeader)) / 4;
-	kprintf("Number of ACPI tables: %d\n", acpiNumTables);
+	//kprintf("Number of ACPI tables: %d\n", acpiNumTables);
 	acpiTables = (uint32_t*) kmalloc(acpiNumTables*4);
 	pmem_read(acpiTables, rsdp->rsdtAddr+sizeof(ACPI_SDTHeader), acpiNumTables*4);
 
@@ -179,7 +176,7 @@ void acpiInit()
 		char buf[5];
 		buf[4] = 0;
 		memcpy(buf, head.sig, 4);
-		kprintf("Table %d: %s\n", i, buf);
+		//kprintf("Table %d: %s\n", i, buf);
 		if (memcmp(head.sig, "APIC", 4) == 0)
 		{
 			uint32_t searching = payloadPhysAddr + 8;
@@ -189,11 +186,25 @@ void acpiInit()
 				pmem_read(&rhead, searching, sizeof(MADTRecordHeader));
 
 				//kprintf("TYPE=%d, LEN=%d\n", rhead.type, rhead.len);
-				if (rhead.type == 1)
+				if (rhead.type == 0)
+				{
+					MADT_APIC apicInfo;
+					pmem_read(&apicInfo, searching+sizeof(MADTRecordHeader), sizeof(MADT_APIC));
+					
+					if (apicInfo.flags & 1)
+					{
+						//kprintf("Detected APIC: %d\n", (int) apicInfo.apicID);
+						if (apicCount < 16)
+						{
+							apicList[apicCount++] = apicInfo.apicID;
+						};
+					};
+				}
+				else if (rhead.type == 1)
 				{
 					pmem_read(&madtIOAPIC, searching+sizeof(MADTRecordHeader), sizeof(MADT_IOAPIC));
-					kprintf("BASE: %a\n", madtIOAPIC.ioapicbase);
-					kprintf("INTBASE: %a\n", madtIOAPIC.intbase);
+					//kprintf("BASE: %a\n", madtIOAPIC.ioapicbase);
+					//kprintf("INTBASE: %a\n", madtIOAPIC.intbase);
 					//ioapicInit(madtIOAPIC.ioapicbase);
 					ioapicphys = madtIOAPIC.ioapicbase;
 				}
@@ -201,7 +212,7 @@ void acpiInit()
 				{
 					MADT_IntOvr intovr;
 					pmem_read(&intovr, searching, sizeof(MADT_IntOvr));
-					kprintf("INTOVR: BUS=%d, IRQ=%d, SYSINT=%d, FLAGS=%a\n", intovr.bus, intovr.irq, intovr.sysint, intovr.flags);
+					//kprintf("INTOVR: BUS=%d, IRQ=%d, SYSINT=%d, FLAGS=%a\n", intovr.bus, intovr.irq, intovr.sysint, intovr.flags);
 					if (intovr.bus == 0)
 					{
 						if (intovr.irq != intovr.sysint)
@@ -227,5 +238,4 @@ void acpiInit()
 	};
 	
 	ioapicInit(ioapicphys);
-	//panic("ye");
 };

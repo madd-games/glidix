@@ -90,7 +90,15 @@ isrCommon:
 	mov			rdi, rsp		; pass a pointer to registers as argument to isrHandler
 	mov			rbx, rsp		; save the RSP (RBX is preserved, remember).
 	and			rsp, ~0xF		; align on 16-byte boundary.
-	xor			rbp, rbp		; mark the bottom of the stack
+	
+	; make sure we can unwind the interrupt stack
+	; so we must push the return RIP onto the stack, and then push RBP,
+	; and finally set RBP to the new stack pointer, making it look like
+	; isrCommon was called directly by the interrupted state.
+	push			qword [rdi+0x90]
+	push			rbp
+	mov			rbp, rsp
+	
 	call	 		isrHandler
 	mov			rsp, rbx		; restore the real stack
 
@@ -180,6 +188,8 @@ ISR_NOERRCODE 62
 ISR_NOERRCODE 63
 ISR_NOERRCODE 64
 ISR_NOERRCODE 65
+ISR_NOERRCODE 112		; 0x70 - I_IPI_HALT
+ISR_NOERRCODE 113		; 0x71 - I_IPI_SCHED_HINT
 
 IRQ	0,	32
 IRQ	1,	33

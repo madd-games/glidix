@@ -39,7 +39,7 @@ int fgetc(FILE *fp)
 	};
 
 	unsigned char c;
-	int ret = read(fp->_fd, &c, 1);
+	ssize_t ret = read(fp->_fd, &c, 1);
 	if (ret == 0)
 	{
 		fp->_flags |= __FILE_EOF;

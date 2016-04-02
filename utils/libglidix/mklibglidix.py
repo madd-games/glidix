@@ -6,9 +6,12 @@ proto = """
 .type $(FUNC), @function
 
 $(FUNC):
+	push %rbp
+	mov %rsp, %rbp
 	mov $$(ID), %rax
 	mov %rcx, %r10
 	syscall
+	pop %rbp
 	ret
 .size $(FUNC), .-$(FUNC)
 """

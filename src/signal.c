@@ -56,6 +56,22 @@ typedef struct
 
 uint64_t sizeSignalStackFrame = sizeof(SignalStackFrame);
 
+void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
+{
+	uint64_t addr = (frame->mstate.rsp - sizeof(SignalStackFrame) - 128) & ~((uint64_t)0xF);
+	memcpy((void*)addr, frame, sizeof(SignalStackFrame));
+	
+	SignalStackFrame *uframe = (SignalStackFrame*) addr;
+	
+	Regs regs;
+	initUserRegs(&regs);
+	regs.rip = handler;
+	regs.rsp = addr;
+	regs.rdi = addr;
+	regs.rsi = (uint64_t) (&uframe->si);
+	switchContext(&regs);
+};
+
 void dispatchSignal(Thread *thread)
 {
 	if (thread->sigcnt == 0) return;
@@ -81,19 +97,27 @@ void dispatchSignal(Thread *thread)
 	};
 	
 	// try pushing the signal stack frame. also, don't break the red zone!
-	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & (uint64_t)(~0xF);
+	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & (~((uint64_t)0xF));
+	SetProcessMemory(thread->pm);
 	if (!isPointerValid(addr, sizeof(SignalStackFrame), PROT_READ | PROT_WRITE))
 	{
 		// signal stack broken, kill the process with SIGABRT.
 		Regs regs;
-		ASM("cli");
 		unlockSched();
 		threadExit(thread, -SIGABRT);
 		switchTask(&regs);
 	};
-
-	SetProcessMemory(thread->pm);
-	SignalStackFrame *frame = (SignalStackFrame*) addr;
+	
+	// basically, the scheduler which calls us is not reentant, so we cannot copy
+	// the frame directly onto the user stack as that may cause a page fault (which
+	// is an interrupt), which will lead to absolute disaster. signals are only
+	// dispatched if the current code segment of the thread is in user mode, and so
+	// the kernel stack for that thread is empty, so we push the signal frame onto
+	// the kernel stack and transfer control to jumpToHandler, on that stack, which
+	// will then run within the context of the thread, and copy the frame onto the
+	// user stack
+	uint64_t frameAddr = (uint64_t) thread->stack;
+	SignalStackFrame *frame = (SignalStackFrame*) frameAddr;
 	memcpy(&frame->mstate.fpuRegs, &thread->fpuRegs, sizeof(FPURegs));
 	frame->mstate.rdi = thread->regs.rdi;
 	frame->mstate.rsi = thread->regs.rsi;
@@ -115,12 +139,15 @@ void dispatchSignal(Thread *thread)
 	frame->mstate.rflags = thread->regs.rflags;
 	memcpy(&frame->si, siginfo, sizeof(siginfo_t));
 
-	thread->regs.rsp = addr;
-	thread->regs.rdi = addr;
-	thread->regs.rsi = (uint64_t) (&frame->si);
-	thread->regs.rip = thread->rootSigHandler;
-
-	thread->flags &= ~THREAD_WAITING;
+	thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
+	thread->regs.rdi = frameAddr;
+	thread->regs.rsi = thread->rootSigHandler;
+	thread->regs.rip = (uint64_t) &jumpToHandler;
+	
+	// switch to kernel mode
+	thread->regs.cs = 0x08;
+	thread->regs.ds = 0x10;
+	thread->regs.ss = 0;
 };
 
 void sendSignal(Thread *thread, siginfo_t *siginfo)
@@ -133,7 +160,8 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 	if (siginfo->si_signo == SIGCONT)
 	{
 		// wake up the thread but do not dispatch any signal
-		thread->flags &= ~THREAD_WAITING;
+		//thread->flags &= ~THREAD_WAITING;
+		signalThread(thread);
 		return;
 	};
 	
@@ -147,7 +175,8 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 	thread->sigput = (thread->sigput + 1) % SIGQ_SIZE;
 	thread->sigcnt++;
 
-	thread->flags &= ~THREAD_WAITING;
+	//thread->flags &= ~THREAD_WAITING;
+	signalThread(thread);
 };
 
 void sigret(void *ret)

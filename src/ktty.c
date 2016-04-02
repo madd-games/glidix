@@ -206,6 +206,7 @@ void setupTerminal(FileTable *ftab)
 	termout->dup = &termDup;
 	termout->oflag = O_WRONLY;
 	termout->ioctl = &termIoctl;
+	termout->refcount = 1;
 
 	inputWrite = 0;
 	inputRead = 0;
@@ -217,6 +218,7 @@ void setupTerminal(FileTable *ftab)
 	termin->read = &termRead;
 	termin->dup = &termDup;
 	termin->ioctl = &termIoctl;
+	termin->refcount = 1;
 
 	ftab->entries[0] = termin;
 	ftab->entries[1] = termout;

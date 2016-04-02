@@ -38,6 +38,7 @@
 #include <glidix/idt.h>
 #include <glidix/acpi.h>
 #include <glidix/port.h>
+#include <glidix/cpu.h>
 
 static const char *actionNames[] = {
 	"POWER OFF",
@@ -75,6 +76,7 @@ int systemDown(int action)
 	siginfo_t termsig;
 	termsig.si_signo = SIGTERM;
 
+	cli();
 	lockSched();
 	kernelStatus = KERNEL_STOPPING;
 
@@ -86,6 +88,7 @@ int systemDown(int action)
 	};
 
 	unlockSched();
+	sti();
 
 	// after 10 seconds, force all processes to terminate!
 	int timeToForce = getUptime() + 10000;
@@ -114,6 +117,7 @@ int systemDown(int action)
 	};
 
 	// mark all processes as terminated.
+	cli();
 	lockSched();
 
 	thread = ct->next;
@@ -124,6 +128,7 @@ int systemDown(int action)
 	};
 
 	unlockSched();
+	sti();
 
 	// don't bother releasing memory because the system is going down.
 	thread = ct->next;
@@ -132,7 +137,7 @@ int systemDown(int action)
 		if (thread->pid != 0)
 		{
 			DownrefProcessMemory(thread->pm);
-			ftabDownref(thread->ftab);
+			if (thread->ftab != NULL) ftabDownref(thread->ftab);
 
 			if (thread->fpexec != NULL)
 			{
@@ -155,7 +160,8 @@ int systemDown(int action)
 	rmmodAll();
 
 	kprintf("Kernel going down for %s\n", actionNames[action]);
-
+	haltAllCPU();
+	
 	switch (action)
 	{
 	case DOWN_POWEROFF:

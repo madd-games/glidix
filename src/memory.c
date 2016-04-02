@@ -394,12 +394,14 @@ void _kfree(void *block, const char *who, int line)
 	HeapFooter *foot = heapFooterFromHeader(head);
 	if (foot->magic != HEAP_FOOTER_MAGIC)
 	{
+		heapDump();
 		panic("%s:%d: heap corruption detected: the header for %a is not linked to a valid footer", who, line, addr);
 	};
 
 	if ((head->flags & HEAP_BLOCK_TAKEN) == 0)
 	{
 		heapDump();
+		stackTraceHere();
 		panic("%s:%d: invalid pointer passed to kfree(): %a: already free", who, line, addr);
 	};
 

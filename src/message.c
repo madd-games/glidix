@@ -156,7 +156,7 @@ int sys_mqserver()
 	fp->fsdata = queue;
 	fp->oflag = O_MSGQ | O_CLOEXEC;
 	fp->close = mq_close;
-	
+	fp->refcount = 1;
 	ftab->entries[i] = fp;
 	spinlockRelease(&ftab->spinlock);
 	return i;
@@ -174,6 +174,7 @@ static MessageQueue *findQueue(int pid, int fd)
 		return NULL;
 	};
 	
+	cli();
 	lockSched();
 	Thread *thread = getCurrentThread();
 	
@@ -186,10 +187,12 @@ static MessageQueue *findQueue(int pid, int fd)
 	if (thread->pid != pid)
 	{
 		unlockSched();
+		sti();
 		return NULL;
 	};
 	
 	unlockSched();
+	sti();
 	
 	spinlockAcquire(&thread->ftab->spinlock);
 	File *fp = thread->ftab->entries[fd];
@@ -298,6 +301,7 @@ int sys_mqclient(int pid, int fd)
 	fp->fsdata = queue;
 	fp->oflag = O_MSGQ | O_CLOEXEC;
 	fp->close = mq_close;
+	fp->refcount = 1;
 	
 	ftab->entries[i] = fp;
 	spinlockRelease(&ftab->spinlock);
@@ -340,7 +344,8 @@ int sys_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgs
 		return -1;
 	};
 	
-	MessageQueue *queue = (MessageQueue*) fp->fsdata;	
+	MessageQueue *queue = (MessageQueue*) fp->fsdata;
+	vfsDup(fp);
 	spinlockRelease(&getCurrentThread()->ftab->spinlock);
 	
 	semWait(&queue->sem);
@@ -358,6 +363,7 @@ int sys_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgs
 	if (dest == NULL)
 	{
 		semSignal(&queue->sem);
+		vfsClose(fp);
 		ERRNO = ENOENT;
 		return -1;
 	};
@@ -386,6 +392,7 @@ int sys_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgs
 	semSignal2(&dest->counter, 1);
 	semSignal(&dest->sem);
 	semSignal(&queue->sem);
+	vfsClose(fp);
 	
 	return 0;
 };
@@ -426,12 +433,14 @@ ssize_t sys_mqrecv(int fd, MessageInfo *info, void *buffer, size_t bufsize)
 		return -1;
 	};
 	
-	MessageQueue *queue = (MessageQueue*) fp->fsdata;	
+	MessageQueue *queue = (MessageQueue*) fp->fsdata;
+	vfsDup(fp);
 	spinlockRelease(&getCurrentThread()->ftab->spinlock);
 	
 	if (semWaitTimeout(&queue->counter, 1, 0) < 0)
 	{
 		ERRNO = EINTR;
+		vfsClose(fp);
 		return -1;
 	};
 	
@@ -444,6 +453,7 @@ ssize_t sys_mqrecv(int fd, MessageInfo *info, void *buffer, size_t bufsize)
 	if (bufsize > msg->size) bufsize = msg->size;
 	memcpy(buffer, msg->data, bufsize);
 	kfree(msg);
+	vfsClose(fp);
 	
 	return (ssize_t) bufsize;
 };

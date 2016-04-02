@@ -76,9 +76,11 @@ void sleep(int ticks)
 		int then = getUptime() + ticks;
 		while (getUptime() < then)
 		{
+			cli();
 			lockSched();
 			getCurrentThread()->wakeTime = then;
-			getCurrentThread()->flags |= THREAD_WAITING;
+			//getCurrentThread()->flags |= THREAD_WAITING;
+			waitThread(getCurrentThread());
 			unlockSched();
 			kyield();
 		};

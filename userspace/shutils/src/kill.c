@@ -35,7 +35,7 @@ const char *progName;
 
 void usage()
 {
-	fprintf(stderr, "USAGE:\t%s kill [signal] <pid>\n", progName);
+	fprintf(stderr, "USAGE:\t%s [signal] <pid>\n", progName);
 	fprintf(stderr, "\tSends a signal to the given pid.\n");
 	fprintf(stderr, "\tAvaliable signals: SIGCONT, SIGINT, SIGHUP, SIGKILL,\n");
 	fprintf(stderr, "\tSIGQUIT, SIGTERM, SIGSTOP, SIGTSTP, SIGUSR, SIGUSR2.\n");

@@ -84,6 +84,20 @@ typedef struct
 	uint16_t				flags;
 } PACKED MADT_IntOvr;
 
+typedef struct
+{
+	uint8_t					acpiProcNo;
+	uint8_t					apicID;
+	uint32_t				flags;
+} PACKED MADT_APIC;
+
+/**
+ * Array of up to 16 APIC IDs corresponding to CPUs detected on the
+ * machine, and the actual number of CPUs detected.
+ */
+extern uint8_t apicList[16];
+extern int apicCount;
+
 void acpiInit();
 
 #endif

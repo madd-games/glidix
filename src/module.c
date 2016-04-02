@@ -876,7 +876,7 @@ void findDebugSymbolInModules(uint64_t addr, SymbolInfo *info)
 			{
 				Elf64_Sym *symbol = &module->symtab[i];
 				uint64_t saddr = module->baseAddr + symbol->st_value;
-				if ((symbol->st_value > best->st_value) && (saddr < addr))
+				if ((symbol->st_value > best->st_value) && (saddr <= addr))
 				{
 					best = symbol;
 				};

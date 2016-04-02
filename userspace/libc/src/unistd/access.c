@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdio.h>
 
 int access(const char *path, int amode)
 {
@@ -41,11 +42,11 @@ int access(const char *path, int amode)
 	mode_t amask = (mode_t) amode & 0777;
 	mode_t rmask;
 
-	if (st.st_uid == getuid())
+	if (st.st_uid == geteuid())
 	{
 		rmask = (st.st_mode >> 6) & 7;
 	}
-	else if (st.st_gid == getgid())
+	else if (st.st_gid == getegid())
 	{
 		rmask = (st.st_mode >> 3) & 7;
 	}

@@ -36,8 +36,11 @@ global strcmp
 global strcat
 
 memcpy:
+	push	rbp
+	mov	rbp,	rsp
 	mov	rcx,	rdx
 	rep	movsb
+	pop	rbp
 	ret
 
 memset:

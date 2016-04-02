@@ -30,5 +30,6 @@
 
 int ferror(FILE *fp)
 {
-	return fp->_flags & __FILE_FERROR;
+	int ret = fp->_flags & __FILE_FERROR;
+	return ret;
 };

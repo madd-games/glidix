@@ -59,6 +59,9 @@ typedef struct
 	// for semWait2/semSignal2, to keep some synchronisation of locks
 	Thread *countWaiter;
 	Spinlock countLock;
+	
+	// this is set to one by semTerminate()
+	int terminated;
 } Semaphore;
 
 void semInit(Semaphore *sem);
@@ -70,10 +73,12 @@ void semSignal(Semaphore *sem);
 void semSignal2(Semaphore *sem, int count);
 void semSignalAndWait(Semaphore *sem);
 void semDump(Semaphore *sem);
+void semTerminate(Semaphore *sem);
 
 /**
  * Wait for up to a specified number of resources with a timeout (given in nanoseconds). If the timeout is zero,
  * wait indefinitely. Returns a positive value, indicating the number of resources that became available, on success.
+ * Returns 0 if the semaphore was terminated.
  * Otherwise returns one of the following negative values:
  *  - SEM_INTERRUPT		The operation was interrupted by the reception of a signal.
  *  - SEM_TIMEOUT		The operation has timed out.

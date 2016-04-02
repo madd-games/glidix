@@ -69,10 +69,11 @@ int cvWait(CondVar *cv, uint64_t nanotimeout)
 
 		while (!cv->value)
 		{
+			cli();
 			lockSched();
 			getCurrentThread()->wakeTime = deadline;
-			getCurrentThread()->flags |= THREAD_WAITING;
-			cli();
+			//getCurrentThread()->flags |= THREAD_WAITING;
+			waitThread(getCurrentThread());
 			spinlockRelease(&cv->lock);
 			unlockSched();
 			kyield();

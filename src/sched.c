@@ -35,9 +35,10 @@
 #include <glidix/apic.h>
 #include <glidix/time.h>
 #include <glidix/syscall.h>
+#include <glidix/cpu.h>
 
 static Thread firstThread;
-Thread *currentThread;			// don't make it static; used by syscall.asm
+PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
 static Spinlock schedLock;		// for PID and stuff
 static int nextPid;
 
@@ -77,7 +78,7 @@ static void printThreadFlags(uint64_t flags)
 
 void dumpRunqueue()
 {
-	kprintf("#\tPID\tPARENT\tNAME                            FLAGS\tEUID\tEGID\n");
+	kprintf("#\tPID\tPARENT\tCPU\tNAME                            FLAGS\tEUID\tEGID\n");
 	Thread *th = &firstThread;
 	int i=0;
 	do
@@ -86,7 +87,7 @@ void dumpRunqueue()
 		memset(name, ' ', 32);
 		name[32] = 0;
 		memcpy(name, th->name, strlen(th->name));
-		kprintf("%d\t%d\t%d\t%s", i++, th->pid, th->pidParent, name);
+		kprintf("%d\t%d\t%d\t%d\t%s", i++, th->pid, th->pidParent, th->cpuID, name);
 		printThreadFlags(th->flags);
 		if (th->regs.cs == 8)
 		{
@@ -169,6 +170,9 @@ void initSched()
 	
 	// do not send alarms
 	firstThread.alarmTime = 0;
+
+	// run on the BSP
+	firstThread.cpuID = 0;
 	
 	// linking
 	firstThread.prev = &firstThread;
@@ -178,6 +182,34 @@ void initSched()
 	currentThread = &firstThread;
 	apic->timerInitCount = quantumTicks;
 	switchContext(&firstThread.regs);
+};
+
+void initSchedAP()
+{
+	// create a thread just like the first thread, that will be constantly sleeping,
+	// and is assigned to this CPU
+	Thread *idleThread = NEW(Thread);
+	memcpy(idleThread, &firstThread, sizeof(Thread));
+	idleThread->flags = THREAD_WAITING;
+	idleThread->cpuID = getCurrentCPU()->id;
+	strformat(idleThread->name, 256, "CPU %d idle thread", idleThread->cpuID);
+		
+	// interrupts are already disabled
+	// link the idle thread into the runqueue
+	lockSched();
+	idleThread->prev = &firstThread;
+	idleThread->next = firstThread.next;
+	firstThread.next->prev = idleThread;
+	firstThread.next = idleThread;
+	unlockSched();
+	
+	// set up any valid register set for the initial task switch
+	Regs regs;
+	memcpy(&regs, &idleThread->regs, sizeof(Regs));
+	
+	// we are ready
+	currentThread = idleThread;
+	switchTask(&regs);
 };
 
 extern void reloadTR();
@@ -210,6 +242,11 @@ void lockSched()
 	spinlockAcquire(&schedLock);
 };
 
+int isSchedLocked()
+{
+	return (schedLock._ != 0);
+};
+
 void unlockSched()
 {
 	spinlockRelease(&schedLock);
@@ -217,6 +254,12 @@ void unlockSched()
 
 int canSched(Thread *thread)
 {
+	if (getCurrentCPU() != NULL)
+	{
+		// do not even try waking/alarming threads that do not belong to this CPU!
+		if (thread->cpuID != getCurrentCPU()->id) return 0;
+	};
+
 	if (thread->wakeTime != 0)
 	{
 		uint64_t currentTime = (uint64_t) getTicks();
@@ -251,46 +294,49 @@ int canSched(Thread *thread)
 	return 1;
 };
 
-static volatile uint64_t switchTaskCounter = 0;
 void switchTask(Regs *regs)
 {
-	ASM("sti");
+	cli();
 	if (currentThread == NULL)
 	{
 		apic->timerInitCount = quantumTicks;
 		return;
 	};
-	if (spinlockTry(&schedLock))
-	{
-		//kprintf_debug("WARNING: SCHED LOCKED\n");
-		apic->timerInitCount = quantumTicks;
-		return;
-	};
+	
+	spinlockAcquire(&schedLock);
 
-	__sync_fetch_and_add(&switchTaskCounter, 1);
-
+	Thread *threadPrev = currentThread;
+	
 	// remember the context of this thread.
 	fpuSave(&currentThread->fpuRegs);
 	memcpy(&currentThread->regs, regs, sizeof(Regs));
 
 	// get the next thread
-	do
+	while (1)
 	{
-		currentThread = currentThread->next;
-	} while (!canSched(currentThread));
-
-	// if there are signals waiting, and not currently being handled, then handle them.
-	if (((currentThread->flags & THREAD_SIGNALLED) == 0) && (currentThread->sigcnt != 0))
-	{
-		// if the syscall is interruptable, do the switch-back.
-		if (currentThread->flags & THREAD_INT_SYSCALL)
+		do
 		{
-			//kprintf_debug("signal in queue, THREAD_INT_SYSCALL ok\n");
-			memcpy(&currentThread->regs, &currentThread->intSyscallRegs, sizeof(Regs));
-			*((int64_t*)&currentThread->regs.rax) = -1;
-			currentThread->therrno = EINTR;
+			currentThread = currentThread->next;
+		} while ((!canSched(currentThread)) && (currentThread != threadPrev));
+
+		if (currentThread == threadPrev)
+		{
+			if (!canSched(currentThread))
+			{
+				// got nothing to do
+				spinlockRelease(&schedLock);
+				cooloff();
+				spinlockAcquire(&schedLock);
+				continue;
+			};
 		};
 		
+		break;
+	};
+	
+	// if there are signals waiting, and not currently being handled, then handle them.
+	if (((currentThread->flags & THREAD_SIGNALLED) == 0) && (currentThread->sigcnt != 0))
+	{	
 		// i've found that catching signals in kernel mode is a bad idea
 		if ((currentThread->regs.cs & 3) == 3)
 		{
@@ -299,6 +345,10 @@ void switchTask(Regs *regs)
 	};
 
 	spinlockRelease(&schedLock);
+	
+	// the scheduler lock is now released, but we know the thread is not terminated,
+	// and so currentThread will not be suddenly released so it is safe to use it.
+	// it can only terminate when we dispatch a signal, and only this CPU can do this.
 	jumpToTask();
 };
 
@@ -310,18 +360,16 @@ static void kernelThreadExit()
 		panic("kernel startup thread tried to exit (this is a bug)");
 	};
 
-	Thread *nextThread = currentThread->next;
-
 	// we need to do all of this with interrupts disabled. we remove ourselves from the runqueue,
 	// but do not free the stack nor the thread description; this will be done by ReleaseKernelThread()
 	ASM("cli");
+	lockSched();
 	currentThread->prev->next = currentThread->next;
 	currentThread->next->prev = currentThread->prev;
 	currentThread->flags |= THREAD_TERMINATED;
-
-	// switch tasks
-	currentThread = nextThread;
-	jumpToTask();
+	downrefCPU(currentThread->cpuID);
+	unlockSched();
+	kyield();
 };
 
 void ReleaseKernelThread(Thread *thread)
@@ -408,7 +456,11 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->regs.rdi = (uint64_t) data;
 	*((uint64_t*)thread->regs.rsp) = (uint64_t) &kernelThreadExit;
 
+	// allocate a CPU to run this thread on
+	thread->cpuID = allocCPU();
+	
 	// link into the runqueue
+	cli();
 	spinlockAcquire(&schedLock);
 	currentThread->next->prev = thread;
 	thread->next = currentThread->next;
@@ -416,7 +468,9 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	currentThread->next = thread;
 	// there is no need to update currentThread->prev, it will only be broken for the init
 	// thread, which never exits, and therefore its prev will never need to be valid.
+	signalThread(thread);
 	spinlockRelease(&schedLock);
+	sti();
 	
 	return thread;
 };
@@ -428,20 +482,21 @@ Thread *getCurrentThread()
 
 void waitThread(Thread *thread)
 {
-	ASM("cli");
 	thread->flags |= THREAD_WAITING;
-	ASM("sti");
 };
 
 void signalThread(Thread *thread)
 {
-	ASM("cli");
 	thread->flags &= ~THREAD_WAITING;
-	ASM("sti");
+	if (thread->cpuID != getCurrentCPU()->id)
+	{
+		// interrupt the thread's host CPU in case it is in cooloff state
+		sendHintToCPU(thread->cpuID);
+	};
 };
 
 int threadClone(Regs *regs, int flags, MachineState *state)
-{	
+{
 	Thread *thread = (Thread*) kmalloc(sizeof(Thread));
 	fpuSave(&thread->fpuRegs);
 	memcpy(&thread->regs, regs, sizeof(Regs));
@@ -575,6 +630,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	// alarms shall be cancelled in the new process/thread
 	thread->alarmTime = 0;
 	
+	// allocate a CPU to run this thread on
+	thread->cpuID = allocCPU();
+	
 	// if the address space is shared, the errnoptr is now invalid;
 	// otherwise, it can just stay where it is.
 	if (flags & CLONE_SHARE_MEMORY)
@@ -587,12 +645,15 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	};
 
 	// link into the runqueue
+	cli();
 	spinlockAcquire(&schedLock);
 	currentThread->next->prev = thread;
 	thread->next = currentThread->next;
 	thread->prev = currentThread;
 	currentThread->next = thread;
+	signalThread(thread);
 	spinlockRelease(&schedLock);
+	sti();
 
 	return thread->pid;
 };
@@ -609,8 +670,11 @@ void threadExit(Thread *thread, int status)
 		panic("init terminated with status %d!", status);
 	};
 
+	ftabDownref(thread->ftab);
+	thread->ftab = NULL;
+	
 	// don't break the CPU runqueue
-	ASM("cli");
+	cli();
 	lockSched();
 
 	// init will adopt all orphans
@@ -627,7 +691,7 @@ void threadExit(Thread *thread, int status)
 	// terminate us
 	thread->status = status;
 	thread->flags |= THREAD_TERMINATED;
-
+	
 	// find the parent
 	Thread *parent = thread;
 	do
@@ -650,8 +714,9 @@ void threadExit(Thread *thread, int status)
 	siginfo.si_status = status;
 	siginfo.si_uid = thread->ruid;
 	sendSignal(parent, &siginfo);
+	downrefCPU(thread->cpuID);
 	unlockSched();
-	ASM("sti");
+	sti();
 };
 
 static Thread *findThreadToKill(int pid, int *stat_loc, int flags)
@@ -706,18 +771,19 @@ int pollThread(int pid, int *stat_loc, int flags)
 		return -1;
 	};
 
-	lockSched();
 	cli();
+	lockSched();
 	Thread *threadToKill = findThreadToKill(pid, stat_loc, flags);
 
 	// when WNOHANG is clear
 	while ((threadToKill == NULL) && ((flags & WNOHANG) == 0))
 	{
-		getCurrentThread()->flags |= THREAD_WAITING;
+		//getCurrentThread()->flags |= THREAD_WAITING;
+		waitThread(getCurrentThread());
 		unlockSched();
 		kyield();
-		lockSched();
 		cli();
+		lockSched();
 		threadToKill = findThreadToKill(pid, stat_loc, flags);
 		if (threadToKill != NULL) break;
 		
@@ -743,7 +809,7 @@ int pollThread(int pid, int *stat_loc, int flags)
 	// there is a process ready to be deleted, it's already removed from the runqueue.
 	kfree(threadToKill->stack);
 	DownrefProcessMemory(threadToKill->pm);
-	ftabDownref(threadToKill->ftab);
+	//ftabDownref(threadToKill->ftab);
 
 	if (threadToKill->fpexec != NULL)
 	{
@@ -815,6 +881,7 @@ int signalPid(int pid, int signo)
 		return -1;
 	};
 
+	cli();
 	lockSched();
 	Thread *thread = currentThread->next;
 
@@ -831,6 +898,7 @@ int signalPid(int pid, int signo)
 	{
 		currentThread->therrno = ESRCH;
 		unlockSched();
+		sti();
 		return -1;
 	};
 
@@ -838,6 +906,7 @@ int signalPid(int pid, int signo)
 	{
 		currentThread->therrno = ESRCH;
 		unlockSched();
+		sti();
 		return -1;
 	};
 
@@ -845,6 +914,7 @@ int signalPid(int pid, int signo)
 	{
 		currentThread->therrno = EPERM;
 		unlockSched();
+		sti();
 		return -1;
 	};
 
@@ -853,6 +923,7 @@ int signalPid(int pid, int signo)
 	if (signo != 0) sendSignal(thread, &si);
 
 	unlockSched();
+	sti();
 	return 0;
 };
 
@@ -882,9 +953,14 @@ Thread *getThreadByID(int pid)
 void _preempt(); /* common.asm */
 void kyield()
 {
-	// first disable the APIC, so it doesn't fire half way through trying to switch task.
-	apic->timerInitCount = 0;
+	// safely turn off the APIC timer, realising that _preempt() is not reentant.
+	// enable interrupts in case it already fired, disable it, do 2 NOPs, and disable
+	// it again so that there is no chance of it firing at the moment we disable it.
 	sti();
+	apic->timerInitCount = 0;
+	nop();
+	nop();
+	apic->timerInitCount = 0;
 	
 	// call the assembly-level _preempt() which saves callee-save registers and switches task.
 	_preempt();

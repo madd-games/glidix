@@ -431,10 +431,11 @@ int main(int argc, char *argv[])
 					}
 					else
 					{
+						cursorPos--;
+						
 						size_t oldsize = strlen(lines[cursorLine]);
 						memmove(&lines[cursorLine][cursorPos], &lines[cursorLine][cursorPos+1], oldsize-cursorPos);
 						lines[cursorLine][oldsize-1] = 0;
-						cursorPos--;
 						
 						if (scrollX > cursorPos)
 						{

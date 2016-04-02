@@ -98,7 +98,8 @@ static void ipreasmThread(void *ignore)
 		{
 			ASM("cli");
 			reasmHandle->wakeTime = 0;
-			reasmHandle->flags |= THREAD_WAITING;
+			//reasmHandle->flags |= THREAD_WAITING;
+			waitThread(reasmHandle);
 			kyield();
 		};
 		
@@ -111,7 +112,7 @@ static void ipreasmThread(void *ignore)
 			if (getTicks() >= list->deadlineTicks)
 			{
 				// passed the deadline, just delete all fragments
-				kprintf_debug("DEADLINE PASSED!\n");
+				//kprintf_debug("DEADLINE PASSED!\n");
 				IPFragment *frag = list->fragList;
 				while (frag != NULL)
 				{
@@ -217,7 +218,8 @@ static void ipreasmThread(void *ignore)
 		
 		ASM("cli");
 		reasmHandle->wakeTime = earliestDeadline;
-		reasmHandle->flags |= THREAD_WAITING;
+		//reasmHandle->flags |= THREAD_WAITING;
+		waitThread(reasmHandle);
 		spinlockRelease(&reasmLock);
 		kyield();
 	};

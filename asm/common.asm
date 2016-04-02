@@ -28,6 +28,7 @@ bits 64
 
 section .text
 [extern switchTask]
+[extern stackTrace]
 
 [global msrWrite]
 msrWrite:
@@ -165,10 +166,31 @@ _preempt:
 	pop rax
 	mov [rdi+0xA0], rax
 	
+	; to enable proper unwinding of this, push the return RIP onto the stack,
+	; followed by RBP and then set RBP to RSP
+	push qword [rdi+0x90]
+	push rbp
+	mov rbp, rsp
+	
 	; switch task (the Regs structure is already in RDI).
 	call switchTask
 	
 	; stack popped by the context switch
+	ret
+
+[global cooloff]
+cooloff:
+	pushf
+	sti
+	hlt
+	popf
+	ret
+
+[global stackTraceHere]
+stackTraceHere:
+	mov rdi, [rsp]
+	mov rsi, rbp
+	call stackTrace
 	ret
 
 section .bss

@@ -247,10 +247,12 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	ProcMem *pm = CreateProcessMemory();
 
 	// switch the address space, so that AddSegment() can optimize mapping
+	cli();
 	lockSched();
 	ProcMem *oldPM = thread->pm;
 	thread->pm = pm;
 	unlockSched();
+	sti();
 	SetProcessMemory(pm);
 	DownrefProcessMemory(oldPM);
 

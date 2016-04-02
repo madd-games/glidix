@@ -32,6 +32,7 @@
 #include <glidix/common.h>
 #include <glidix/console.h>
 #include <glidix/string.h>
+#include <glidix/isp.h>
 
 /**
  * The next frame to return if we are allocating using placement. This is done before
@@ -290,4 +291,14 @@ void phmFreeFrameEx(uint64_t start, uint64_t count)
 	{
 		phmFreeFrame(start+i);
 	};
+};
+
+uint64_t phmAllocZeroFrame()
+{
+	uint64_t frame = phmAllocFrame();
+	ispLock();
+	ispSetFrame(frame);
+	memset(ispGetPointer(), 0, 0x1000);
+	ispUnlock();
+	return frame;
 };

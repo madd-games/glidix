@@ -49,6 +49,11 @@ uint64_t phmAllocFrameEx(uint64_t count, int flags);
 uint64_t phmAllocFrame();
 
 /**
+ * Calls phmAllocFrame() to allcoate a frame, then zeroes it out.
+ */
+uint64_t phmAllocZeroFrame();
+
+/**
  * NOTE: Do not free frames until the heap is set up and initPhysMem2() was called.
  */
 void phmFreeFrame(uint64_t frame);

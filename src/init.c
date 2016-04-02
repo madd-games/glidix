@@ -58,6 +58,7 @@
 #include <glidix/ethernet.h>
 #include <glidix/dma.h>
 #include <glidix/shmem.h>
+#include <glidix/cpu.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -66,7 +67,6 @@ KernelStatus kernelStatus;
 
 void expandHeap();
 extern int masterHeader;
-void _syscall_entry();
 void trapKernel();
 
 int strncmp(const char *s1, const char *s2, size_t n)
@@ -260,6 +260,12 @@ void kmain(MultibootInfo *info)
 		panic("the initrd was not loaded");
 	};
 	
+	// map the last entry of the PML4 to itself.
+	PML4 *pml4 = (PML4*) 0xFFFF800000001000;
+	pml4->entries[511].present = 1;
+	pml4->entries[511].pdptPhysAddr = 1;	// 0x1000
+	refreshAddrSpace();
+	
 	kprintf_debug(" *** TO TRAP THE KERNEL *** \n");
 	kprintf_debug(" set r15=rip\n");
 	kprintf_debug(" set rip=%a\n", &trapKernel);
@@ -268,24 +274,6 @@ void kmain(MultibootInfo *info)
 	kprintf("Initializing the IDT... ");
 	initIDT();
 	kprintf("%$\x02" "Done%#\n");
-
-#if 0
-	int memSize = info->memLower + info->memUpper;
-	if (info->flags & 1)
-	{
-		kprintf("%$\x01%dMB%#\n", (memSize/1024));
-	}
-	else
-	{
-		kprintf("%$\x04" "Failed%#\n");
-		panic("could not determine memory size");
-	};
-
-	if ((info->flags & (1 << 6)) == 0)
-	{
-		panic("no memory map from bootloader");
-	};
-#endif
 
 	uint64_t mmapAddr = (uint64_t) info->mmapAddr + 0xFFFF800000000000;
 	uint64_t mmapEnd = mmapAddr + info->mmapLen;
@@ -323,6 +311,10 @@ void kmain(MultibootInfo *info)
 	kprintf("Initializing the ISP... ");
 	ispInit();
 	kprintf("%$\x02" "Done%#\n");
+
+	kprintf("Initializing per-CPU variable area... ");
+	initPerCPU();
+	DONE();
 
 	kprintf("Initializing memory allocation phase 2... ");
 	initMemoryPhase2();
@@ -393,11 +385,6 @@ void kmain(MultibootInfo *info)
 	DONE();
 
 	kprintf("Initializing the scheduler and syscalls... ");
-	msrWrite(0xC0000081, ((uint64_t)8 << 32) | ((uint64_t)0x1b << 48));
-	msrWrite(0xC0000082, (uint64_t)(&_syscall_entry));
-	msrWrite(0xC0000083, (uint64_t)(&_syscall_entry));		// we don't actually use compat mode
-	msrWrite(0xC0000084, (1 << 9) | (1 << 10));			// disable interrupts on syscall and set DF=0
-	msrWrite(0xC0000080, msrRead(0xC0000080) | 1);
 	//kprintf("value of EFER: %p\n", msrRead(0xC0000080));
 	initSched();
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
@@ -470,10 +457,6 @@ static UINT32 onPowerButton(void *ignore)
 
 void kmain2()
 {
-	kprintf("Initializing SDI... ");
-	sdInit();
-	kprintf("%$\x02" "Done%#\n");
-
 	initMount();
 	initSymtab();
 
@@ -483,6 +466,14 @@ void kmain2()
 	{
 		panic("AcpiInitializeSubsystem failed");
 	};
+	
+	// this must come after AcpiInitializeSubsystem() because ACPI calls
+	// AcpiOsInitialize() which maps more stuff into the PML4
+	initMultiProc();
+
+	kprintf("Initializing SDI... ");
+	sdInit();
+	kprintf("%$\x02" "Done%#\n");
 	
 	status = AcpiInitializeTables(NULL, 16, FALSE);
 	if (ACPI_FAILURE(status))
@@ -535,6 +526,7 @@ void kmain2()
 	
 	kprintf("Starting the spawn process... ");
 	MachineState state;
+	memset(&state.fpuRegs, 0, 512);
 	void *spawnStack = kmalloc(0x1000);
 	state.rip = (uint64_t) &spawnProc;
 	state.rsp = (uint64_t) spawnStack + 0x1000 - 16;

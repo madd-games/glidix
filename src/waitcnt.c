@@ -41,7 +41,7 @@ void wcUp(WaitCounter *wc)
 	ASM("cli");
 	spinlockAcquire(&wc->lock);
 	wc->count++;
-	if (wc->server != NULL) wc->server->flags &= ~THREAD_WAITING;
+	if (wc->server != NULL) /*wc->server->flags &= ~THREAD_WAITING;*/ signalThread(wc->server);
 	spinlockRelease(&wc->lock);
 	ASM("sti");
 };
@@ -54,7 +54,8 @@ void wcDown(WaitCounter *wc)
 
 	while (wc->count == 0)
 	{
-		getCurrentThread()->flags |= THREAD_WAITING;
+		//getCurrentThread()->flags |= THREAD_WAITING;
+		waitThread(getCurrentThread());
 		spinlockRelease(&wc->lock);
 		kyield();
 		ASM("cli");

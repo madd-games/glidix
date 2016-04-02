@@ -16,7 +16,6 @@ Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divid
 <li><code>pml4[0]</code> (except the first page) is for userspace processes.</li>
 <li><code>pml4[1]</code> is used as a buffer when data is transferred between 2 userspace blocks.</li>
 <li><code>pml4[256]</code> is the static kernel image (code, data, bss, symbols, etc). The first 2MB of this block is mapped to the first 2MB of physical memory.</li>
-<!--<li><code>pml4[257]</code> is the Interprocess Streaming Page (ISP), this is a single page that gets remapped to different addresses to send data to different address spaces etc. There may be more things in this PML4e in the future.</li>-->
 <li><code>pml4[257]</code> is initialized by <code>isp.c</code> and contains all sorts of special pages. See below.</li>
 <li><code>pml4[258]</code> is the kernel heap.</li>
 <li><code>pml4[259]</code> is module space; each module is assigned a 1GB block within this PML4e, which limits the number of modules to 512.</li>
@@ -24,6 +23,7 @@ Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divid
 <li><code>pml4[261]</code> is used for the per-CPU variable area (starts at <code>0xFFFF828000000000</code>).</li>
 <li><code>pml4[262]</code> is used for ACPICA (<i>AcpiOsMapMemory()</i> and <i>AcpiOsUnmapMemory()</i>). Starts at <code>0xFFFF830000000000</code>.</li>
 <li><code>pml4[263]</code> is used to map DMA buffers. Starts at <code>0xFFFF838000000000</code>.</li>
+<li><code>pml4[511]</code> is mapped to the PML4 itself, for recursive mapping.</code></li>
 </ul>
 
 <p>
@@ -35,4 +35,15 @@ The rest of the address space is reserved.
 <li><code>0xFFFF808000000000-0xFFFF808000000FFF</code> is the Interprocess Streaming Page (ISP), it's used by parts of kernel code to make a temporary mapping of some physical frame.</li>
 <li><code>0xFFFF808000001000-0xFFFF808000001FFF</code> contains the APIC registers (see <code>apic.h</code>).</li>
 <li><code>0xFFFF808000002000-0xFFFF808000002FFF</code> contains the IOAPIC registers.</li>
+</ul>
+
+<h2>Low Memory</h2>
+<ul>
+<li><code>0x1000 - 0x1FFF</code> - BSP PML4.</li>
+<li><code>0x2000 - 0x2FFF</code> - Kernel PDPT (pml4[0]).</li>
+<li><code>0x3000 - 0x3FFF</code> - Kernel PD (pml4[0][0]).</li>
+<li><code>0x4000 - 0x5FFF</code> - The 2 page tables that map the bottom 4MB of physical memory.</li>
+<li><code>0xA000 - 0xAFFF</code> - AP trampoline code is loaded here.</li>
+<li><code>0xB000 - 0xBFFF</code> - Trampoline support structure, contains stuff that the AP trampoline needs.</li>
+<li><code>0xC000 - 0xCFFF</code> - Temporary copy of the PML4 to be used by the trampoline code.</li>
 </ul>

@@ -163,24 +163,30 @@ static void procfs_dir_info(Dir *dir)
 
 	if (ino == PFI_EXECPARS)
 	{
+		cli();
 		lockSched();
 		Thread *th = getThreadByID(dir->dirent.d_ino / PFI_SIZE);
 		if (th != NULL) dir->stat.st_size = th->szExecPars;
 		unlockSched();
+		sti();
 	}
 	else if (ino == PFI_EXE)
 	{
+		cli();
 		lockSched();
 		Thread *th = getThreadByID(dir->dirent.d_ino / PFI_SIZE);
 		if (th != NULL) dir->stat.st_size = strlen(th->execPars);
 		unlockSched();
+		sti();
 	}
 	else if (ino == PFI_CWD)
 	{
+		cli();
 		lockSched();
 		Thread *th = getThreadByID(dir->dirent.d_ino / PFI_SIZE);
 		if (th != NULL) dir->stat.st_size = strlen(th->cwd);
 		unlockSched();
+		sti();
 	}
 	else if (ino == PFI_STATUS)
 	{
@@ -202,6 +208,7 @@ static int procfs_dir_next(Dir *dir)
 static ssize_t procfs_dir_readlink(Dir *dir, char *buffer)
 {
 	ino_t ino = dir->dirent.d_ino % PFI_SIZE;
+	cli();
 	lockSched();
 	Thread *th = getThreadByID(dir->dirent.d_ino / PFI_SIZE);
 	ssize_t out = -1;
@@ -220,6 +227,7 @@ static ssize_t procfs_dir_readlink(Dir *dir, char *buffer)
 		};
 	};
 	unlockSched();
+	sti();
 
 	return out;
 };
@@ -259,6 +267,9 @@ static int procfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 	pfdir->currentIndex = 0;
 	pfdir->count = 1;			// "self"
 
+	//pfdir->ents = (ProcfsRootDirent*) kmalloc(pfdir->count*sizeof(ProcfsRootDirent));
+
+	cli();
 	lockSched();
 	Thread *th = getCurrentThread();
 	Thread *ct = getCurrentThread();
@@ -272,26 +283,28 @@ static int procfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 		} while (th->pid == 0);
 	} while (th != ct);
 
-	pfdir->ents = (ProcfsRootDirent*) kmalloc(pfdir->count*sizeof(ProcfsRootDirent));
-
+	// the scheduler is locked and interrupts are off, so we cannot call kmalloc().
+	// allocate the array on our stack, then copy it onto the heap later
+	ProcfsRootDirent *ents = (ProcfsRootDirent*) kalloca(pfdir->count * sizeof(ProcfsRootDirent));
+	
 	int i = 0;
 	th = ct;
 	do
 	{
-		_pidstr(pfdir->ents[i].ent.d_name, th->pid);
-		pfdir->ents[i].ent.d_ino = th->pid * PFI_SIZE;
-		pfdir->ents[i].st.st_ino = th->pid * PFI_SIZE;
-		pfdir->ents[i].st.st_mode = 0700 | VFS_MODE_DIRECTORY;
-		pfdir->ents[i].st.st_nlink = 1;
-		pfdir->ents[i].st.st_uid = th->ruid;
-		pfdir->ents[i].st.st_gid = th->rgid;
-		pfdir->ents[i].st.st_rdev = th->pid;
-		pfdir->ents[i].st.st_size = PFI_NUM;
-		pfdir->ents[i].st.st_blksize = 1;
-		pfdir->ents[i].st.st_blocks = 1;
-		pfdir->ents[i].st.st_atime = 0;
-		pfdir->ents[i].st.st_ctime = 0;
-		pfdir->ents[i].st.st_mtime = 0;
+		_pidstr(ents[i].ent.d_name, th->pid);
+		ents[i].ent.d_ino = th->pid * PFI_SIZE;
+		ents[i].st.st_ino = th->pid * PFI_SIZE;
+		ents[i].st.st_mode = 0700 | VFS_MODE_DIRECTORY;
+		ents[i].st.st_nlink = 1;
+		ents[i].st.st_uid = th->ruid;
+		ents[i].st.st_gid = th->rgid;
+		ents[i].st.st_rdev = th->pid;
+		ents[i].st.st_size = PFI_NUM;
+		ents[i].st.st_blksize = 1;
+		ents[i].st.st_blocks = 1;
+		ents[i].st.st_atime = 0;
+		ents[i].st.st_ctime = 0;
+		ents[i].st.st_mtime = 0;
 		i++;
 
 		do
@@ -301,7 +314,12 @@ static int procfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 	} while (th != ct);
 
 	unlockSched();
+	sti();
 
+	// now we can allocate on the heap
+	pfdir->ents = (ProcfsRootDirent*) kmalloc(pfdir->count * sizeof(ProcfsRootDirent));
+	memcpy(pfdir->ents, ents, pfdir->count * sizeof(ProcfsRootDirent));
+	
 	memcpy(&pfdir->ents[i], &pfdir->ents[0], sizeof(ProcfsRootDirent));
 	strcpy(pfdir->ents[i].ent.d_name, "self");
 	pfdir->ents[i].ent.d_ino = 1;

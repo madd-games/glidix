@@ -74,10 +74,13 @@ void mutexLock(Mutex *mutex)
 		// loop until we acquire the mutex
 		while (mutex->owner != getCurrentThread())
 		{
+			cli();
 			lockSched();
-			getCurrentThread()->flags |= THREAD_WAITING;
+			//getCurrentThread()->flags |= THREAD_WAITING;
+			waitThread(getCurrentThread());
 			spinlockRelease(&mutex->lock);
 			unlockSched();
+			sti();
 			kyield();
 			spinlockAcquire(&mutex->lock);
 		};
@@ -108,9 +111,12 @@ void mutexUnlock(Mutex *mutex)
 			kfree(toFree);
 			
 			// wakey wakey
+			cli();
 			lockSched();
-			mutex->owner->flags &= ~THREAD_WAITING;
+			//mutex->owner->flags &= ~THREAD_WAITING;
+			signalThread(mutex->owner);
 			unlockSched();
+			sti();
 		}
 		else
 		{

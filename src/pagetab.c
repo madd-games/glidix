@@ -28,7 +28,11 @@
 
 #include <glidix/pagetab.h>
 
+/**
+ * The last entry of the PML4 is mapped to itself, effectively meaning that each CPU
+ * can see a different PML4 at the same address, as they all use a diffrent PML4.
+ */
 PML4 *getPML4()
 {
-	return (PML4*) 0xFFFF800000001000;
+	return (PML4*) 0xFFFFFFFFFFFFF000;
 };

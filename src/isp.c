@@ -65,7 +65,6 @@ void ispInit()
 	ispPTE->framePhysAddr = 0;
 
 	// APIC register space - also make sure it is in the default place.
-	//msrWrite(0x1B, 0xFEE00000 | (1 << 11) /*| (1 << 8)*/ );
 	pt->entries[1].present = 1;
 	pt->entries[1].framePhysAddr = 0xFEE00;
 	pt->entries[1].pcd = 1;

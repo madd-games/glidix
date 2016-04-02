@@ -643,10 +643,29 @@ ssize_t vfsWrite(File *file, const void *buffer, size_t size)
 	return file->write(file, buffer, size);
 };
 
+void vfsDup(File *file)
+{
+	__sync_fetch_and_add(&file->refcount, 1);
+};
+
 void vfsClose(File *file)
 {
-	if (file->close != NULL) file->close(file);
-	kfree(file);
+	int destroy = 1;
+	if (file->refcount != 0)
+	{
+		if (__sync_fetch_and_add(&file->refcount, -1) != 1)
+		{
+			// we decreased the refcount and it wasn't 1, so it is not
+			// zero yet, so we don't destroy
+			destroy = 0;
+		};
+	};
+	
+	if (destroy)
+	{
+		if (file->close != NULL) file->close(file);
+		kfree(file);
+	};
 };
 
 void vfsLockCreation()
