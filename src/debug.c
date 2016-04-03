@@ -60,13 +60,15 @@ void stackTrace(uint64_t rip, uint64_t rbp)
 
 void debugKernel(Regs *regs)
 {
+#if 0
 	Thread *thread = getCurrentThread();
 	if (thread != NULL)
 	{
 		fpuSave(&thread->fpuRegs);
 		memcpy(&thread->regs, regs, sizeof(Regs));
 	};
-	
+#endif
+
 	while (1)
 	{
 		kprintf_debug("RAX=0  - panic and stop\n");

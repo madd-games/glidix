@@ -29,6 +29,27 @@
 #ifndef _STDINT_H
 #define _STDINT_H
 
+#define	INT16_C(c)				c
+#define	INT32_C(c)				c
+#define	INT64_C(c)				c##L
+#define	INT8_C(c)				c
+#define	INTMAX_C(c)				c##L
+#define	UINT16_C(c)				c##U
+#define	UINT32_C(c)				c##U
+#define	UINT64_C(c)				c##UL
+#define	UINT8_C(c)				c##U
+#define	UINTMAX_C(c)				c##UL
+
+#define	UINT8_MAX				0xFFU
+#define	UINT16_MAX				0xFFFFU
+#define	UINT32_MAX				0xFFFFFFFFU
+#define	UINT64_MAX				0xFFFFFFFFFFFFFFFFUL
+
+#define	INT8_MAX				0x7F
+#define	INT16_MAX				0x7FFF
+#define	INT32_MAX				0x7FFFFFFF
+#define	INT64_MAX				0x7FFFFFFFFFFFFFFFL
+
 typedef	signed char				int8_t;
 typedef	unsigned char				uint8_t;
 typedef	signed short				int16_t;

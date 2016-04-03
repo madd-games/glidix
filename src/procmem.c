@@ -338,6 +338,21 @@ static PTe *getPage(ProcMem *pm, MemorySelector sel, uint64_t index, int flags)
 	return &pt->entries[pageIndex];
 };
 
+int isPageMapped(uint64_t addr, int writeable)
+{
+	PTe *pte = getPage(NULL, MEM_CURRENT, addr>>12, 0);
+	if (pte == NULL) return 0;
+	if (!pte->present) return 0;
+	if (!pte->user) return 0;
+	
+	if (writeable)
+	{
+		if (!pte->rw) return 0;
+	};
+	
+	return 1;
+};
+
 int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 {
 	// the first page is not allowed to be mapped
@@ -505,13 +520,13 @@ void SetProcessMemory(ProcMem *pm)
 {
 	int shouldEnable = getFlagsRegister() & (1 << 9);
 	PML4 *pml4 = getPML4();
-	ASM("cli");
+	cli();
 	pml4->entries[0].present = 1;
 	pml4->entries[0].rw = 1;
 	pml4->entries[0].user = 1;
 	pml4->entries[0].pdptPhysAddr = pm->pdptPhysFrame;
 	refreshAddrSpace();
-	if (shouldEnable) ASM("sti");
+	if (shouldEnable) sti();
 };
 
 static void DeleteProcessMemory(ProcMem *pm)
@@ -602,8 +617,8 @@ void DownrefProcessMemory(ProcMem *pm)
 
 int tryCopyOnWrite(uint64_t addr)
 {
+	// don't lock the procmem object; it's already locked
 	ProcMem *pm = getCurrentThread()->pm;
-	spinlockAcquire(&pm->lock);
 
 	uint64_t pageIndex = addr / 0x1000;
 	Segment *seg = pm->firstSegment;
@@ -636,7 +651,6 @@ int tryCopyOnWrite(uint64_t addr)
 								pte->rw = 1;
 								refreshAddrSpace();
 								spinlockRelease(&seg->fl->lock);
-								spinlockRelease(&pm->lock);
 								return 0;
 							};
 
@@ -660,7 +674,6 @@ int tryCopyOnWrite(uint64_t addr)
 
 							spinlockRelease(&seg->fl->cowList->lock);
 							spinlockRelease(&seg->fl->lock);
-							spinlockRelease(&pm->lock);
 							return 0;
 						};
 						spinlockRelease(&seg->fl->cowList->lock);
@@ -674,18 +687,19 @@ int tryCopyOnWrite(uint64_t addr)
 		seg = seg->next;
 	};
 
-	spinlockRelease(&pm->lock);
 	return -1;
 };
 
 int tryLoadOnDemand(uint64_t addr)
 {
+	// do not lock the procmem object; it's already locked
 	ProcMem *pm = getCurrentThread()->pm;
-	spinlockAcquire(&pm->lock);
 
 	uint64_t pageIndex = addr / 0x1000;
 	Segment *seg = pm->firstSegment;
 
+	char pagebuf[0x1000];
+	
 	while (seg != NULL)
 	{
 		if (seg->start <= pageIndex)
@@ -701,29 +715,30 @@ int tryLoadOnDemand(uint64_t addr)
 						panic("unloaded pages in non-disk segment");
 					};
 
-					ASM("sti");
-					// hooray, we can load on demand.
-					PTe *pte = getPage(pm, MEM_CURRENT, pageIndex, 0);
-					uint64_t newFrame = phmAllocFrame();
-					seg->fl->frames[relidx] = newFrame;
-					pte->present = 1;
-					pte->framePhysAddr = newFrame;
-					refreshAddrSpace();
-
-					void *ptr = (void*) (pageIndex * 0x1000);
+					//void *ptr = (void*) (pageIndex * 0x1000);
 					off_t offset = (seg->fl->fileOffset + (relidx * 0x1000)) & ~0xFFF;
 					size_t size = 0x1000;
 					while (((offset+size) > (seg->fl->fileOffset+seg->fl->fileSize)) && (size != 0))
 					{
 						size--;
 					};
-					memset(ptr, 0, 0x1000);
+					memset(pagebuf, 0, 0x1000);
 					File *fp = getCurrentThread()->fpexec;
 					fp->seek(fp, offset, SEEK_SET);
-					vfsRead(fp, ptr, size);
+					vfsRead(fp, pagebuf, size);
+					
+					PTe *pte = getPage(pm, MEM_CURRENT, pageIndex, 0);
+					uint64_t newFrame = phmAllocFrame();
+					ispLock();
+					ispSetFrame(newFrame);
+					memcpy(ispGetPointer(), pagebuf, 0x1000);
+					ispUnlock();
+					seg->fl->frames[relidx] = newFrame;
+					pte->framePhysAddr = newFrame;
+					pte->present = 1;
+					refreshAddrSpace();
 
 					spinlockRelease(&seg->fl->lock);
-					spinlockRelease(&pm->lock);
 					return 0;
 				};
 			};
@@ -733,7 +748,6 @@ int tryLoadOnDemand(uint64_t addr)
 		seg = seg->next;
 	};
 
-	spinlockRelease(&pm->lock);
 	return -1;
 };
 

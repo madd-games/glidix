@@ -62,7 +62,7 @@ int isPointerValid(uint64_t ptr, uint64_t size, int flags)
 		return 0;
 	};
 
-	if ((ptr+size) > 0x7FC0000000)
+	if ((ptr+size) >= 0x7FC0000000)
 	{
 		return 0;
 	};
@@ -141,8 +141,11 @@ uint64_t sys_write(int fd, const void *buf, size_t size)
 				{
 					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
-					out = fp->write(fp, buf, size);
+					void *tmpbuf = kmalloc(size);
+					memcpy(tmpbuf, buf, size);
+					out = fp->write(fp, tmpbuf, size);
 					vfsClose(fp);
+					kfree(tmpbuf);
 				};
 			};
 		};
@@ -196,8 +199,11 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 				{
 					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
-					out = fp->read(fp, buf, size);
+					void *tmpbuf = kmalloc(size);
+					out = fp->read(fp, tmpbuf, size);
 					vfsClose(fp);
+					memcpy(buf, tmpbuf, size);
+					kfree(tmpbuf);
 				};
 			};
 		};

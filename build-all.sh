@@ -51,6 +51,22 @@ chmod 6755 mipdir/usr/bin/ping
 mkmip mipdir isodir/shutils.mip
 cp mipdir/usr/bin/mip-install isodir/bin/mip-install
 
+# modtools
+rm -rf mipdir
+mkdir -p mipdir/usr/bin
+mkdir -p mipdir/usr/lib
+nasm -felf64 utils/module_start.asm -o mipdir/usr/lib/module_start.o || exit 1
+nasm -felf64 utils/module_end.asm -o mipdir/usr/lib/module_end.o || exit 1
+cp utils/module.ld mipdir/usr/lib/module.ld || exit 1
+cp -r include mipdir/usr/kernel-include
+cp utils/native-modtools/modcc mipdir/usr/bin/modcc
+cp utils/native-modtools/modld mipdir/usr/bin/modld
+cp utils/modmake mipdir/usr/bin/modmake
+chmod +x mipdir/usr/bin/modcc
+chmod +x mipdir/usr/bin/modld
+chmod +x mipdir/usr/bin/modmake
+mkmip mipdir isodir/modtools.mip
+
 # libddi and GUI
 rm -rf mipdir
 mkdir -p mipdir/usr/lib

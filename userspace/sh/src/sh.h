@@ -32,6 +32,8 @@
 #include <stdio.h>
 
 extern pid_t shellChildPid;
+extern int scriptArgCount;
+extern char **scriptArgs;
 
 /**
  * Returns -1 if the line was too long.

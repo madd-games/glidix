@@ -128,17 +128,44 @@ int execCommand(char *cmd)
 			char envname[256];
 			char *envnameput = envname;
 			scan++;
-			while (isalnum(*scan))
+			if (*scan == '@')
 			{
-				*envnameput++ = *scan++;
-			};
+				scan++;
+				int argi;
+				for (argi=1; argi<scriptArgCount; argi++)
+				{
+					strcpy(put, scriptArgs[argi]);
+					put += strlen(scriptArgs[argi]);
+					*put++ = ' ';
+				};
+			}
+			else
+			{
+				while (isalnum(*scan))
+				{
+					*envnameput++ = *scan++;
+				};
 
-			*envnameput = 0;
-			char *value = getenv(envname);
-			if (value != NULL)
-			{
-				strcpy(put, value);
-				put += strlen(value);
+				*envnameput = 0;
+			
+				int argNo;
+				if (sscanf(envname, "%d", &argNo) == 1)
+				{
+					if ((argNo >= 0) && (argNo < scriptArgCount))
+					{
+						strcpy(put, scriptArgs[argNo]);
+						put += strlen(scriptArgs[argNo]);
+					};
+				}
+				else
+				{
+					char *value = getenv(envname);
+					if (value != NULL)
+					{
+						strcpy(put, value);
+						put += strlen(value);
+					};
+				};
 			};
 		}
 		else

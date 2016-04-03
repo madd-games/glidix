@@ -255,63 +255,41 @@ static void onPageFault(Regs *regs)
 	//kprintf_debug("pf\n");
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
-
-#if 0
-	if (isSchedLocked())
-	{
-		if ((regs->errCode & 1) == 0)
-		{
-			kprintf("[non-present]");
-		};
-
-		if (regs->errCode & 2)
-		{
-			kprintf("[write]");
-		}
-		else
-		{
-			kprintf("[read]");
-		};
-
-		if (regs->errCode & 4)
-		{
-			kprintf("[user]");
-		}
-		else
-		{
-			kprintf("[kernel]");
-		};
-
-		if (regs->errCode & 8)
-		{
-			kprintf("[reserved]");
-		};
-
-		if (regs->errCode & 16)
-		{
-			kprintf("[fetch]");
-		};
-		kprintf("\nPAGE FAULT WHEN SCHEDULER LOCKED (%a)\n", faultAddr);
-		debugKernel(regs);
-		panic("stop");
-	};
-#endif
 	
 	sti();
 	if (getCurrentThread() != NULL)
 	{
-		if (regs->errCode & 2)
+		if (faultAddr < 0x7FC0000000)
 		{
-			// caused by a write
-			if (tryCopyOnWrite(faultAddr) == 0)
+			ProcMem *pm = getCurrentThread()->pm;
+			spinlockAcquire(&pm->lock);
+
+			if (isPageMapped(faultAddr, regs->errCode & 2))
 			{
+				// the page was already mapped in by another thread before we managed to
+				// get the lock.
+				spinlockRelease(&pm->lock);
+				refreshAddrSpace();
 				return;
 			};
-		};
+		
+			if (regs->errCode & 2)
+			{
+				// caused by a write
+				if (tryCopyOnWrite(faultAddr) == 0)
+				{
+					spinlockRelease(&pm->lock);
+					return;
+				};
+			};
 
-		if (tryLoadOnDemand(faultAddr) == 0)
-		{
-			return;
+			if (tryLoadOnDemand(faultAddr) == 0)
+			{
+				spinlockRelease(&pm->lock);
+				return;
+			};
+			
+			spinlockRelease(&pm->lock);
 		};
 	};
 

@@ -1,5 +1,5 @@
- * Make sure that dup() in filesystem drivers actually causes both descriptions to point to the same offset.
  * When ne2k.c returns MODINIT_CANCEL, it corrupts the heap and the "strings" block allocated by module.c gets a
    broken footer. Should look into how the module unloading happens. For now, insmod() does not unload cancelled
    modules.
  * Handle all CPU exceptions such as #GP.
+ * BSS in modules doesn't get zeroed?

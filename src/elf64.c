@@ -46,7 +46,76 @@ typedef struct
 	int			flags;
 } ProgramSegment;
 
-int sysOpenErrno();			// syscall.c
+int sysOpenErrno(int error);			// syscall.c
+
+int execScript(File *fp, const char *path, const char *pars, size_t parsz)
+{
+	char intline[1024];
+	ssize_t bufsz = vfsRead(fp, intline, 1023);
+	intline[bufsz] = 0;
+	
+	if (bufsz < 4)
+	{
+		vfsClose(fp);
+		ERRNO = ENOEXEC;
+		return -1;
+	};
+	
+	// adjust the parameters
+	char *newPars = (char*) kalloca(strlen(path)+2+bufsz+parsz);
+	size_t newParsz = 0;
+	
+	// first argument is the interpreter path itself
+	char *put = newPars;
+	const char *scan = intline + 2;
+	
+	while (isspace(*scan)) scan++;
+	while (!isspace(*scan))
+	{
+		*put++ = *scan++;
+		newParsz++;
+	};
+	
+	*put++ = 0;
+	
+	// copy over the next parameter if necessary
+	while (isspace(*scan) && (*scan != '\n')) scan++;
+	char nextPar[1024];
+	char *parput = nextPar;
+	while (!isspace(*scan))
+	{
+		*parput++ = *scan++;
+	};
+	*parput = 0;
+	
+	if (strlen(nextPar) != 0)
+	{
+		strcpy(put, nextPar);
+		put += strlen(nextPar) + 1;
+		newParsz += strlen(nextPar) + 1;
+	};
+	
+	// next parameter is the script path; do not place the terminator
+	// because that will be copied from the origin execpars
+	strcpy(put, path);
+	put += strlen(path);
+	newParsz += strlen(path);
+	
+	// copy the rest from the original
+	while (*pars != 0)
+	{
+		pars++;
+		parsz--;
+	};
+	
+	memcpy(put, pars, parsz);
+	newParsz += parsz;
+	
+	// do it
+	vfsClose(fp);
+	return elfExec(newPars, newPars, newParsz);
+};
+
 int elfExec(const char *path, const char *pars, size_t parsz)
 {
 	//getCurrentThread()->therrno = ENOEXEC;
@@ -83,12 +152,21 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		getCurrentThread()->therrno = EIO;
 		return -1;
 	};
-
-	if (fp->dup == NULL)
+	
+	char shebang[2];
+	if (vfsRead(fp, shebang, 2) < 2)
 	{
 		vfsClose(fp);
-		getCurrentThread()->therrno = EIO;
+		ERRNO = ENOEXEC;
 		return -1;
+	};
+	
+	fp->seek(fp, 0, SEEK_SET);	// seek back to start
+	
+	if (memcmp(shebang, "#!", 2) == 0)
+	{
+		// executable script
+		return execScript(fp, path, pars, parsz);
 	};
 
 	Elf64_Ehdr elfHeader;

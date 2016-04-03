@@ -31,6 +31,4 @@ bits 64
 refreshAddrSpace:
 	mov	rax,	cr3
 	mov	cr3,	rax
-	mov	rax,	cr0
-	mov	cr0,	rax
 	ret

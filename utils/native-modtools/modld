@@ -1,0 +1,3 @@
+#! /bin/sh
+# USAGE: modld <output-file> <object-files...>
+ld -r -T /usr/lib/module.ld /usr/lib/module_start.o -o $@ /usr/lib/module_end.o

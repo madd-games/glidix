@@ -209,6 +209,12 @@ void dumpProcessMemory(ProcMem *pm, uint64_t checkAddr);
 int canAccessPage(ProcMem *pm, uint64_t pageindex, int perms);
 
 /**
+ * Return 1 if the page containing the given address is mapped into userspace. If "writeable" is true, the page
+ * must also be marked writeable.
+ */
+int isPageMapped(uint64_t addr, int writeable);
+
+/**
  * Userspace.
  */
 #ifndef _SYS_MMAN_H

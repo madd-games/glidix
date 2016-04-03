@@ -39,6 +39,8 @@
 #include "sh.h"
 
 pid_t shellChildPid = 0;
+int scriptArgCount = 0;
+char **scriptArgs;
 
 void on_signal(int sig, siginfo_t *si, void *ignore)
 {
@@ -139,6 +141,8 @@ int startInteractive()
 int runScript(const char *filename, int argc, char *argv[])
 {
 	int fd = open(filename, O_RDONLY);
+	scriptArgs = argv;
+	scriptArgCount = argc;
 	if (fd == -1)
 	{
 		perror(filename);
