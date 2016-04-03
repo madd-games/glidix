@@ -311,7 +311,7 @@ int main(int argc, char *argv[])
 				int fd = open("/etc/down-action", O_RDONLY);
 				char downAction[256];
 				memset(downAction, 0, 256);
-				read(fd, downAction, 16);
+				downAction[read(fd, downAction, 16)] = 0;
 				close(fd);
 
 				int action = _GLIDIX_DOWN_HALT;
