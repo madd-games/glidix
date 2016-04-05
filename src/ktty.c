@@ -47,6 +47,7 @@ static Semaphore				semInput;
 static Semaphore				semLineBuffer;
 static volatile int				lineBufferSize;
 static struct termios				termState;
+static int					termGroup = 1;
 
 static void handleEscape(EscapeSequence *seq)
 {
@@ -66,6 +67,17 @@ static void handleEscape(EscapeSequence *seq)
 
 static ssize_t termWrite(File *file, const void *buffer, size_t size)
 {
+	if (getCurrentThread()->pgid != termGroup)
+	{
+		cli();
+		lockSched();
+		siginfo_t si;
+		si.si_signo = SIGTTOU;
+		sendSignal(getCurrentThread(), &si);
+		unlockSched();
+		sti();
+	};
+	
 	if (size > 1)
 	{
 		if (*((const char*)buffer) == '\e')
@@ -85,6 +97,17 @@ static ssize_t termWrite(File *file, const void *buffer, size_t size)
 
 static ssize_t termRead(File *fp, void *buffer, size_t size)
 {
+	if (getCurrentThread()->pgid != termGroup)
+	{
+		cli();
+		lockSched();
+		siginfo_t si;
+		si.si_signo = SIGTTIN;
+		sendSignal(getCurrentThread(), &si);
+		unlockSched();
+		sti();
+	};
+	
 	int count = semWait2(&semCount, (int) size);
 	if (count == -1)
 	{
@@ -119,6 +142,9 @@ static int termDup(File *old, File *new, size_t szfile)
 
 int termIoctl(File *fp, uint64_t cmd, void *argp)
 {
+	Thread *target;
+	Thread *scan;
+	int pgid;
 	struct termios *tc = (struct termios*) argp;
 
 	switch (cmd)
@@ -131,6 +157,45 @@ int termIoctl(File *fp, uint64_t cmd, void *argp)
 		termState.c_oflag = tc->c_oflag;
 		termState.c_cflag = tc->c_cflag;
 		termState.c_lflag = tc->c_lflag;
+		return 0;
+	case IOCTL_TTY_GETPGID:
+		*((int*)argp) = termGroup;
+		return 0;
+	case IOCTL_TTY_SETPGID:
+		if (getCurrentThread()->sid != 1)
+		{
+			ERRNO = ENOTTY;
+			return -1;
+		};
+		pgid = *((int*)argp);
+		cli();
+		lockSched();
+		scan = getCurrentThread();
+		do
+		{
+			if (scan->pgid == pgid)
+			{
+				target = scan;
+				break;
+			};
+		} while (scan != getCurrentThread());
+		if (target == NULL)
+		{
+			unlockSched();
+			sti();
+			ERRNO = EPERM;
+			return -1;
+		};
+		if (target->sid != 1)
+		{
+			unlockSched();
+			sti();
+			ERRNO = EPERM;
+			return -1;
+		};
+		unlockSched();
+		sti();
+		termGroup = pgid;
 		return 0;
 	default:
 		getCurrentThread()->therrno = EINVAL;
@@ -191,7 +256,7 @@ void termPutChar(char c)
 			while (semWaitNoblock(&semCount, 1024) > 0);
 			lineBufferSize = 0;
 		};
-		signalPid(1, SIGINT);
+		if (termGroup != 0) signalPid(-termGroup, SIGINT);
 	};
 
 	semSignal(&semLineBuffer);
@@ -204,7 +269,7 @@ void setupTerminal(FileTable *ftab)
 
 	termout->write = &termWrite;
 	termout->dup = &termDup;
-	termout->oflag = O_WRONLY;
+	termout->oflag = O_WRONLY | O_TERMINAL;
 	termout->ioctl = &termIoctl;
 	termout->refcount = 1;
 
@@ -214,7 +279,7 @@ void setupTerminal(FileTable *ftab)
 
 	File *termin = (File*) kmalloc(sizeof(File));
 	memset(termin, 0, sizeof(File));
-	termin->oflag = O_RDONLY;
+	termin->oflag = O_RDONLY | O_TERMINAL;
 	termin->read = &termRead;
 	termin->dup = &termDup;
 	termin->ioctl = &termIoctl;

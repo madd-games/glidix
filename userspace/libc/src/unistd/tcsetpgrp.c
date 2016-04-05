@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Runtime
 
 	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
@@ -26,33 +26,20 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_ramfs_h
-#define __glidix_ramfs_h
+#include <unistd.h>
+#include <termios.h>
+#include <errno.h>
 
-#include <glidix/common.h>
-#include <glidix/vfs.h>
-
-typedef struct
+int tcsetpgrp(int fd, pid_t pgid)
 {
-	mode_t				mode;
-	nlink_t				nlink;
-	uid_t				uid;
-	gid_t				gid;
-	off_t				size;
-	blksize_t			blksize;
-	blkcnt_t			blocks;
-	time_t				atime;
-	time_t				mtime;
-	time_t				ctime;
-	void*				data;
-} RamfsInode;
-
-/**
- * Userspace processes, and the kernel, pass this structure to ramfs to specify what
- * kind of filesystem to create.
- */
-typedef struct
-{
-	/**
-	 * The bottom 12 bits specify initial access mode of 
-} RamfsInfo;
+	int result = ioctl(fd, __IOCTL_TTY_SETPGID, &pgid);
+	if (result != 0)
+	{
+		if (errno == EIO)
+		{
+			errno = ENOTTY;
+		};
+	};
+	
+	return result;
+};

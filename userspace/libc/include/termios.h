@@ -38,6 +38,8 @@ extern "C" {
 
 #define	__IOCTL_TTY_GETATTR	__IOCTL_ARG(struct termios, 5, 0)
 #define	__IOCTL_TTY_SETATTR	__IOCTL_ARG(struct termios, 5, 1)
+#define	__IOCTL_TTY_GETPGID	__IOCTL_ARG(struct termios, 5, 2)
+#define	__IOCTL_TTY_SETPGID	__IOCTL_ARG(struct termios, 5, 3)
 
 // input modes
 #define	BRKINT			(1 << 0)

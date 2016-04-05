@@ -85,6 +85,10 @@ int		access(const char *path, int amode);
 int		getdtablesize(void);
 int		getopt(int argc, char* const argv[], const char* optstring);
 int		getpagesize();
+int		setpgrp();
+pid_t		getpgrp();
+pid_t		tcgetpgrp(int fd);
+int		tcsetpgrp(int fd, pid_t pgrp);
 
 /* implemented by libglidix directly */
 ssize_t		write(int fildes, const void *buf, size_t nbyte);
@@ -123,6 +127,10 @@ int		getpid();
 void		_exit(int status);
 int		getppid();
 unsigned	alarm(unsigned sec);
+pid_t		setsid();
+int		setpgid(pid_t pid, pid_t pgid);
+pid_t		getsid(pid_t pid);
+pid_t		getpgid(pid_t pid);
 
 /* libcrypt */
 char*		crypt(const char *key, const char *salt);

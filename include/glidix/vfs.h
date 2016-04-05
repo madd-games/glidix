@@ -106,6 +106,7 @@
  */
 #define	O_SOCKET			(1 << 16)
 #define	O_MSGQ				(1 << 17)
+#define	O_TERMINAL			(1 << 18)
 
 /**
  * File descriptor flags settable with fcntl(). They share space with the O_* flags because

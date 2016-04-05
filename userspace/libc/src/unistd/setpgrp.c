@@ -1,5 +1,5 @@
 /*
-	Glidix Shell Utilities
+	Glidix Runtime
 
 	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
@@ -26,54 +26,9 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 
-pid_t childPid = 0;
-
-int main(int argc, char *argv[])
+int setpgrp()
 {
-	if (geteuid() != 0)
-	{
-		fprintf(stderr, "%s: only root can do this\n", argv[0]);
-		return 1;
-	};
-
-	signal(SIGINT, SIG_IGN);
-
-	while (1)
-	{
-		tcsetpgrp(0, getpgrp());
-		write(1, "\e!", 2);			// clear screen
-		pid_t pid = fork();
-		if (pid == 0)
-		{
-			setpgrp();
-			tcsetpgrp(0, getpgrp());
-			
-			if (execl("/usr/bin/login", "login", NULL) != 0)
-			{
-				perror("execl /usr/bin/login");
-				return 1;
-			};
-		}
-		else
-		{
-			childPid = pid;
-			
-			while (1)
-			{
-				pid_t status = waitpid(pid, NULL, 0);
-				if (status != -1)
-				{
-					// not EINTR
-					break;
-				};
-			};
-		};
-	};
-	
-	return 0;
+	return setpgid(0, 0);
 };

@@ -128,7 +128,11 @@ syscallTable = {
 	106:	"_glidix_mqsend",
 	107:	"_glidix_mqrecv",
 	108:	"_glidix_shmalloc",
-	109:	"_glidix_shmap"
+	109:	"_glidix_shmap",
+	110:	"setsid",
+	111:	"setpgid",
+	112:	"getsid",
+	113:	"getpgid"
 }
 
 f = open("_libglidix.s", "wb")

@@ -150,6 +150,10 @@ void initSched()
 	firstThread.sgid = 0;
 	firstThread.rgid = 0;
 
+	// sid/pgid
+	firstThread.sid = 0;
+	firstThread.pgid = 0;
+	
 	// set the working directory to /initrd by default.
 	strcpy(firstThread.cwd, "/initrd");
 
@@ -436,6 +440,10 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->sgid = 0;
 	thread->rgid = 0;
 
+	// they are also a special session and process group
+	thread->sid = 0;
+	thread->pgid = 0;
+	
 	// start all kernel threads in "/initrd"
 	strcpy(thread->cwd, "/initrd");
 
@@ -583,6 +591,10 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->sgid = currentThread->sgid;
 	thread->rgid = currentThread->rgid;
 
+	// inherit the session and process group IDs
+	thread->sid = currentThread->sid;
+	thread->pgid = currentThread->pgid;
+	
 	// inherit the working directory
 	strcpy(thread->cwd, currentThread->cwd);
 
@@ -885,46 +897,37 @@ int signalPid(int pid, int signo)
 	lockSched();
 	Thread *thread = currentThread->next;
 
+	int result = 0;
+	ERRNO = ESRCH;
 	while (thread != currentThread)
 	{
-		if (thread->pid == pid)
+		if ((thread->pid == pid) || (thread->pgid == -pid) || (pid == -1)
+			|| ((pid == 0) && (thread->pgid == currentThread->pgid)))
 		{
-			break;
+			if (thread->flags & THREAD_TERMINATED)
+			{
+				thread = thread->next;
+				continue;
+			};
+
+			if (!canSendSignal(currentThread, thread, signo))
+			{
+				ERRNO = EPERM;
+				thread = thread->next;
+				continue;
+			};
+
+			siginfo_t si;
+			si.si_signo = signo;
+			if (signo != 0) sendSignal(thread, &si);
+			result = 0;
 		};
 		thread = thread->next;
 	};
 
-	if (thread->flags & THREAD_TERMINATED)
-	{
-		currentThread->therrno = ESRCH;
-		unlockSched();
-		sti();
-		return -1;
-	};
-
-	if (thread == currentThread)
-	{
-		currentThread->therrno = ESRCH;
-		unlockSched();
-		sti();
-		return -1;
-	};
-
-	if (!canSendSignal(currentThread, thread, signo))
-	{
-		currentThread->therrno = EPERM;
-		unlockSched();
-		sti();
-		return -1;
-	};
-
-	siginfo_t si;
-	si.si_signo = signo;
-	if (signo != 0) sendSignal(thread, &si);
-
 	unlockSched();
 	sti();
-	return 0;
+	return result;
 };
 
 void switchTaskToIndex(int index)

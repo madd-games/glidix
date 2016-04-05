@@ -38,6 +38,8 @@
 
 #define	IOCTL_TTY_GETATTR	IOCTL_ARG(struct termios, IOCTL_INT_TERM, 0)
 #define	IOCTL_TTY_SETATTR	IOCTL_ARG(struct termios, IOCTL_INT_TERM, 1)
+#define	IOCTL_TTY_GETPGID	IOCTL_ARG(struct termios, IOCTL_INT_TERM, 2)
+#define IOCTL_TTY_SETPGID	IOCTL_ARG(struct termios, IOCTL_INT_TERM, 3)
 
 // input modes
 #define	BRKINT			(1 << 0)

@@ -108,7 +108,7 @@ typedef struct _Thread
 	FPURegs				fpuRegs;				// 0
 
 	/**
-	 * OFFSET 512. The value to load into RSI upon a syscall.
+	 * The value to load into RSP upon a syscall.
 	 */
 	uint64_t			syscallStackPointer;			// 0x200
 	
@@ -179,10 +179,16 @@ typedef struct _Thread
 	gid_t				egid, sgid, rgid;
 
 	/**
+	 * Session and process group IDs.
+	 */
+	int				sid;
+	int				pgid;
+	
+	/**
 	 * This RIP is jumped to when a signal is caught and shall be a C function with the prototype:
 	 * void rootSigHandler(void *retptr, singinfo_t *siginfo);
-	 * It must never return! Instead, it shall call _glidix_sysret() to do the returning.
-	 * The retptr argument must be passed on to _glidix_sysret().
+	 * It must never return! Instead, it shall call _glidix_sigret() to do the returning.
+	 * The retptr argument must be passed on to _glidix_sigret().
 	 */
 	uint64_t			rootSigHandler;
 

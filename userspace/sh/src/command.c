@@ -284,7 +284,9 @@ int execCommand(char *cmd)
 			close(1);
 			dup2(fd, 1);
 		};
-			
+		
+		setpgrp();
+		tcsetpgrp(0, getpgrp());
 		if (execv(execpath, argv) != 0)
 		{
 			perror(argv[0]);
@@ -312,6 +314,7 @@ int execCommand(char *cmd)
 			};
 		};
 
+		tcsetpgrp(0, getpgrp());
 		shellChildPid = 0;
 		
 		if (WIFSIGNALLED(status))

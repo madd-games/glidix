@@ -425,8 +425,10 @@ static void spawnProc(void *stack)
 	vfsClose(file);
 	kprintf("%$\x02" "%d bytes%#\n", count);
 
+	getCurrentThread()->sid = 1;
+	getCurrentThread()->pgid = 1;
+	
 	kprintf("Control will be transferred to usbs now.\n");
-	//BREAKPOINT();
 	_jmp_usbs(stack);
 };
 

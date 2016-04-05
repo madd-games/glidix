@@ -226,7 +226,7 @@ void on_signal(int sig, siginfo_t *si, void *ignore)
 {
 	if (sig == SIGINT)
 	{
-		kill(2, SIGINT);
+		//kill(2, SIGINT);
 	}
 	else if (sig == SIGCHLD)
 	{

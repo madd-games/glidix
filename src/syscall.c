@@ -2434,9 +2434,30 @@ int fcntl_setfd(int fd, int flags)
 
 int sys_isatty(int fd)
 {
-	// TODO: detect of 'fd' is a terminal; for now, nothing is reported as a terminal
-	ERRNO = EINVAL;
-	return -1;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		return 0;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			return 0;
+		}
+		else
+		{
+			ERRNO = ENOTTY;
+			int result = !!(fp->oflag & O_TERMINAL);
+			spinlockRelease(&ftab->spinlock);
+			return result;
+		};
+	};
 };
 
 int sys_bindif(int fd, const char *ifname)
@@ -2954,10 +2975,169 @@ int sys_getppid()
 	return getCurrentThread()->pidParent;
 };
 
+int sys_setsid()
+{
+	cli();
+	lockSched();
+	
+	// fail with EPERM if we are a process group leader
+	if (getCurrentThread()->pid == getCurrentThread()->pgid)
+	{
+		unlockSched();
+		sti();
+		ERRNO = EPERM;
+		return -1;
+	};
+	
+	Thread *me = getCurrentThread();
+	int result = me->pid;
+	me->sid = me->pid;
+	me->pgid = me->pid;
+	
+	unlockSched();
+	sti();
+	
+	return result;
+};
+
+int sys_setpgid(int pid, int pgid)
+{
+	cli();
+	lockSched();
+	
+	Thread *target = NULL;
+	if (pid == 0)
+	{
+		target = getCurrentThread();
+	}
+	else
+	{
+		target = getThreadByID(pid);
+	};
+	
+	if (target == NULL)
+	{
+		unlockSched();
+		sti();
+		ERRNO = ESRCH;
+		return -1;
+	};
+	
+	if (target->pidParent != getCurrentThread()->pid)
+	{
+		if (target != getCurrentThread())
+		{
+			unlockSched();
+			sti();
+			ERRNO = ESRCH;
+			return -1;
+		};
+	};
+	
+	if (target->sid == target->pid)
+	{
+		unlockSched();
+		sti();
+		ERRNO = EPERM;
+		return -1;
+	};
+	
+	if (pgid == 0) pgid = target->pid;
+	
+	if (pgid != target->pid)
+	{
+		// find a prototype thread which is already part of the group we are
+		// trying to join, and make sure it's in the same session.
+		Thread *scan = getCurrentThread();
+		Thread *ex = NULL;
+		
+		do
+		{
+			if (scan->pgid == pgid)
+			{
+				ex = scan;
+				break;
+			};
+			
+			scan = scan->next;
+		} while (scan != getCurrentThread());
+		
+		if (ex == NULL)
+		{
+			// the group does not exist
+			unlockSched();
+			sti();
+			ERRNO = EPERM;
+			return -1;
+		};
+		
+		if (ex->sid != target->sid)
+		{
+			// different session; can't join
+			unlockSched();
+			sti();
+			ERRNO = EPERM;
+			return -1;
+		};
+	};
+	
+	target->pgid = pgid;
+	unlockSched();
+	sti();
+	return 0;
+};
+
+int sys_getsid(int pid)
+{
+	if (pid == 0) return getCurrentThread()->sid;
+	
+	cli();
+	lockSched();
+	Thread *target = getThreadByID(pid);
+	int result;
+	if (target == NULL)
+	{
+		ERRNO = ESRCH;
+		result = -1;
+	}
+	else
+	{
+		result = target->sid;
+	};
+	unlockSched();
+	sti();
+	
+	return result;
+};
+
+int sys_getpgid(int pid)
+{
+	if (pid == 0) return getCurrentThread()->pgid;
+	
+	int result;
+	
+	cli();
+	lockSched();
+	Thread *target = getThreadByID(pid);
+	if (target == NULL)
+	{
+		ERRNO = ESRCH;
+		result = -1;
+	}
+	else
+	{
+		result = target->pgid;
+	};
+	unlockSched();
+	sti();
+	
+	return result;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 110
+#define SYSCALL_NUMBER 114
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3069,6 +3249,10 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_mqrecv,				// 107
 	&sys_shmalloc,				// 108
 	&sys_shmap,				// 109
+	&sys_setsid,				// 110
+	&sys_setpgid,				// 111
+	&sys_getsid,				// 112
+	&sys_getpgid,				// 113
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

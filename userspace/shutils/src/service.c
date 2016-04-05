@@ -271,6 +271,7 @@ int start_service(const char *name)
 	pid_t pid = fork();
 	if (pid == 0)
 	{
+		setsid();
 		close(0);
 		close(1);
 		close(2);
@@ -306,7 +307,6 @@ int start_service(const char *name)
 		const char *par = info.param;
 		if (par[0] == 0) par = NULL;
 		execl("/usr/bin/srv-wrapper", "srv-wrapper", info.execpath, par, NULL);
-		perror("execl");
 		while (1) pause();
 	}
 	else

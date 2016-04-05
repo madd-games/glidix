@@ -44,13 +44,7 @@ char **scriptArgs;
 
 void on_signal(int sig, siginfo_t *si, void *ignore)
 {
-	if (sig == SIGINT)
-	{
-		if (shellChildPid != 0)
-		{
-			kill(shellChildPid, SIGINT);
-		};
-	};
+
 };
 
 int getline(int fd, char *buf, size_t max)
