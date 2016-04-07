@@ -36,12 +36,8 @@ STACK_SIZE equ 0x100000
 __default_mxcsr dd (1 << 15) | (1 << 12)
 
 _start:
-	mov		rsp, stack + STACK_SIZE
 	call		_init
 	ldmxcsr		[__default_mxcsr]
 	mov		rdi, main
 	call		__glidixrt_init
 	jmp $
-
-section .bss
-stack resb STACK_SIZE
