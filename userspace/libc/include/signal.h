@@ -84,6 +84,10 @@
 #define	SA_RESTART	(1 << 5)		/* ignored by Glidix currently */
 #define	SA_SIGINFO	(1 << 6)
 
+#define	SIG_BLOCK	0
+#define	SIG_UNBLOCK	1
+#define	SIG_SETMASK	2
+
 /**
  * 'int' is signal-atomic on x86_64 according to Intel spec.
  */
@@ -125,10 +129,16 @@ extern "C" {
 /* implemented by the runtime */
 int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
 void (*signal(int sig, void (*func)(int)))(int);
+int sigemptyset(sigset_t *set);
+int sigfillset(sigset_t *set);
+int sigaddset(sigset_t *set, int signo);
+int sigdelset(sigset_t *set, int signo);
+int sigismember(const sigset_t *set, int signum);
 
 /* implemented by libglidix directly */
 int raise(int sig);
 int kill(pid_t pid, int sig);
+int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
 
 #ifdef __cplusplus
 };	/* extern "C" */

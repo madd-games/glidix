@@ -50,7 +50,9 @@
 
 typedef struct
 {
-	MachineState			mstate;
+	uint64_t			trapSigRet;		// TRAP_SIGRET
+	uint64_t			sigmask;
+	MachineState			mstate;			// must be aligned on 16 byte boundary
 	siginfo_t			si;
 } PACKED SignalStackFrame;
 
@@ -67,18 +69,59 @@ void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
 	initUserRegs(&regs);
 	regs.rip = handler;
 	regs.rsp = addr;
-	regs.rdi = addr;
+	*((int*)&regs.rdi) = frame->si.si_signo;
 	regs.rsi = (uint64_t) (&uframe->si);
+	regs.rdx = 0;
 	switchContext(&regs);
+};
+
+int isDeathSig(int signo)
+{
+	switch (signo)
+	{
+	case SIGHUP:
+	case SIGINT:
+	case SIGQUIT:
+	case SIGILL:
+	case SIGABRT:
+	case SIGFPE:
+	case SIGSEGV:
+	case SIGPIPE:
+	case SIGALRM:
+	case SIGTERM:
+	case SIGUSR1:
+	case SIGUSR2:
+	case SIGSYS:
+		return 1;
+	default:
+		return 0;
+	};
 };
 
 void dispatchSignal(Thread *thread)
 {
-	if (thread->sigcnt == 0) return;
-
-	siginfo_t *siginfo = &thread->sigq[thread->sigfetch];
-	thread->sigfetch = (thread->sigfetch + 1) % SIGQ_SIZE;
-	thread->sigcnt--;
+	int i;
+	siginfo_t *siginfo = NULL;
+	for (i=0; i<64; i++)
+	{
+		uint64_t mask = (1UL << i);
+		if (thread->pendingSet & mask)
+		{
+			uint64_t sigbit = (1UL << thread->pendingSigs[i].si_signo);
+			if ((thread->sigmask & sigbit) == 0)
+			{
+				// not blocked
+				siginfo = &thread->pendingSigs[i];
+				thread->pendingSet &= ~mask;
+				break;
+			};
+		};
+	};
+	
+	if (siginfo == NULL)
+	{
+		panic("dispatchSignal called when no signals are waiting");
+	};
 
 	if (siginfo->si_signo == SIGKILL)
 	{
@@ -89,13 +132,38 @@ void dispatchSignal(Thread *thread)
 		threadExit(thread, -SIGKILL);
 		switchTask(&regs);
 	};
-
-	if (thread->rootSigHandler == 0)
-	{
-		// there is no sig handler; discard.
-		return;
-	};
 	
+	// what action do we take?
+	SigAction *action = &thread->sigdisp->actions[siginfo->si_signo];
+	uint64_t handler;
+	if (action->sa_flags & SA_SIGINFO)
+	{
+		handler = (uint64_t) action->sa_sigaction;
+	}
+	else if (action->sa_handler == SIG_IGN)
+	{
+		return;
+	}
+	else if (action->sa_handler == SIG_DFL)
+	{
+		if (isDeathSig(siginfo->si_signo))
+		{
+			Regs regs;				// doesn't matter, it will die
+			cli();
+			unlockSched();				// threadExit() calls lockSched()
+			threadExit(thread, -siginfo->si_signo);
+			switchTask(&regs);
+		}
+		else
+		{
+			return;
+		};
+	}
+	else
+	{
+		handler = (uint64_t) action->sa_handler;
+	};
+
 	// try pushing the signal stack frame. also, don't break the red zone!
 	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & (~((uint64_t)0xF));
 	SetProcessMemory(thread->pm);
@@ -118,6 +186,8 @@ void dispatchSignal(Thread *thread)
 	// user stack
 	uint64_t frameAddr = (uint64_t) thread->stack;
 	SignalStackFrame *frame = (SignalStackFrame*) frameAddr;
+	frame->trapSigRet = TRAP_SIGRET;
+	frame->sigmask = thread->sigmask;
 	memcpy(&frame->mstate.fpuRegs, &thread->fpuRegs, sizeof(FPURegs));
 	frame->mstate.rdi = thread->regs.rdi;
 	frame->mstate.rsi = thread->regs.rsi;
@@ -141,13 +211,15 @@ void dispatchSignal(Thread *thread)
 
 	thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
 	thread->regs.rdi = frameAddr;
-	thread->regs.rsi = thread->rootSigHandler;
+	thread->regs.rsi = handler;
 	thread->regs.rip = (uint64_t) &jumpToHandler;
 	
 	// switch to kernel mode
 	thread->regs.cs = 0x08;
 	thread->regs.ds = 0x10;
 	thread->regs.ss = 0;
+	
+	thread->sigmask |= action->sa_mask;
 };
 
 void sendSignal(Thread *thread, siginfo_t *siginfo)
@@ -165,17 +237,43 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 		return;
 	};
 	
-	if (thread->sigcnt == SIGQ_SIZE)
+	if (thread->sigdisp->actions[siginfo->si_signo].sa_handler == SIG_IGN)
 	{
-		// drop the signal because the queue is full.
+		// the thread does not care
+		// we don't need to dispatch the signal, but we must wake up the thread
+		// because the signal might be a notification that something must be looked
+		// at by the thread; e.g. it could be the SIGCHLD signal indicating that the
+		// thread might need to wait() for the child.
+		signalThread(thread);
 		return;
 	};
+	
+	if (thread->pendingSet == 0xFFFFFFFFFFFFFFFF)
+	{
+		// no place to put the signal in; discard
+		signalThread(thread);
+		return;
+	};
+	
+	int i;
+	for (i=0; i<64; i++)
+	{
+		uint64_t mask = (1UL << i);
+		if ((thread->pendingSet & mask) == 0)
+		{
+			thread->pendingSet |= mask;
+			break;
+		};
+	};
+	
+	if (i == 64)
+	{
+		// what the fuck? this is not possible
+		panic("this condition is not logically possible; the universe might be ending");
+	};
 
-	memcpy(&thread->sigq[thread->sigput], siginfo, sizeof(siginfo_t));
-	thread->sigput = (thread->sigput + 1) % SIGQ_SIZE;
-	thread->sigcnt++;
-
-	//thread->flags &= ~THREAD_WAITING;
+	memcpy(&thread->pendingSigs[i], siginfo, sizeof(siginfo_t));
+	
 	signalThread(thread);
 };
 
@@ -203,7 +301,55 @@ void sigret(void *ret)
 	regs.r15 = frame->mstate.r15;
 	regs.rflags = (frame->mstate.rflags & OK_USER_FLAGS) | (getFlagsRegister() & ~OK_USER_FLAGS) | (1 << 9);
 	fpuLoad(&frame->mstate.fpuRegs);
+	getCurrentThread()->sigmask = frame->sigmask;
 
 	cli();
 	switchContext(&regs);
+};
+
+SigDisp* sigdispCreate()
+{
+	SigDisp *sd = NEW(SigDisp);
+	sd->refcount = 1;
+	
+	int i;
+	for (i=0; i<SIG_NUM; i++)
+	{
+		sd->actions[i].sa_handler = SIG_DFL;
+		sd->actions[i].sa_mask = 0;
+		sd->actions[i].sa_flags = 0;
+		sd->actions[i].sa_sigaction = NULL;
+	};
+	
+	return sd;
+};
+
+void sigdispUpref(SigDisp *sd)
+{
+	__sync_fetch_and_add(&sd->refcount, 1);
+};
+
+void sigdispDownref(SigDisp *sd)
+{
+	if (__sync_fetch_and_add(&sd->refcount, -1) == 1)
+	{
+		kfree(sd);
+	};
+};
+
+SigDisp *sigdispExec(SigDisp *old)
+{
+	SigDisp *new = sigdispCreate();
+	
+	int i;
+	for (i=0; i<SIG_NUM; i++)
+	{
+		if (old->actions[i].sa_handler == SIG_IGN)
+		{
+			new->actions[i].sa_handler = SIG_IGN;
+		};
+	};
+	
+	sigdispDownref(old);
+	return new;
 };

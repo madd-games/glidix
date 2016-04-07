@@ -137,10 +137,6 @@ void initSched()
 	firstThread.pm = NULL;
 	firstThread.pid = 0;
 	firstThread.ftab = NULL;
-	firstThread.rootSigHandler = 0;
-	firstThread.sigput = 0;
-	firstThread.sigfetch = 0;
-	firstThread.sigcnt = 0;
 
 	// UID/GID stuff
 	firstThread.euid = 0;
@@ -177,6 +173,11 @@ void initSched()
 
 	// run on the BSP
 	firstThread.cpuID = 0;
+	
+	// signal stuff
+	firstThread.sigdisp = NULL;
+	firstThread.pendingSet = 0;
+	firstThread.sigmask = 0;
 	
 	// linking
 	firstThread.prev = &firstThread;
@@ -338,9 +339,9 @@ void switchTask(Regs *regs)
 		break;
 	};
 	
-	// if there are signals waiting, and not currently being handled, then handle them.
-	if (((currentThread->flags & THREAD_SIGNALLED) == 0) && (currentThread->sigcnt != 0))
-	{	
+	// if there are signals ready to dispatch, dispatch them.
+	if (haveReadySigs(currentThread))
+	{
 		// i've found that catching signals in kernel mode is a bad idea
 		if ((currentThread->regs.cs & 3) == 3)
 		{
@@ -354,6 +355,38 @@ void switchTask(Regs *regs)
 	// and so currentThread will not be suddenly released so it is safe to use it.
 	// it can only terminate when we dispatch a signal, and only this CPU can do this.
 	jumpToTask();
+};
+
+int haveReadySigs(Thread *thread)
+{
+	if (thread->sigdisp == NULL) return 0;
+	
+	int i;
+	for (i=0; i<64; i++)
+	{
+		uint64_t mask = (1UL << i);
+		if (thread->pendingSet & mask)
+		{
+			uint64_t sigbit = (1UL << thread->pendingSigs[i].si_signo);
+			if ((thread->sigmask & sigbit) == 0)
+			{
+				// not blocked
+				return 1;
+			};
+		};
+	};
+	
+	return 0;
+};
+
+int wasSignalled()
+{
+	cli();
+	lockSched();
+	int result = haveReadySigs(currentThread);
+	unlockSched();
+	sti();
+	return result;
 };
 
 static void kernelThreadExit()
@@ -427,10 +460,11 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->pid = 0;
 	thread->pidParent = 0;
 	thread->ftab = NULL;
-	thread->rootSigHandler = 0;
-	thread->sigput = 0;
-	thread->sigfetch = 0;
-	thread->sigcnt = 0;
+	thread->alarmTime = 0;
+	
+	thread->sigdisp = NULL;
+	thread->pendingSet = 0;
+	thread->sigmask = 0;
 
 	// kernel threads always run as root
 	thread->euid = 0;
@@ -544,6 +578,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	{
 		UprefProcessMemory(currentThread->pm);
 		thread->pm = currentThread->pm;
+		
+		sigdispUpref(currentThread->sigdisp);
+		thread->sigdisp = currentThread->sigdisp;
 	}
 	else
 	{
@@ -554,6 +591,12 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 		else
 		{
 			thread->pm = CreateProcessMemory();
+		};
+		
+		thread->sigdisp = sigdispCreate();
+		if (currentThread->sigdisp != NULL)
+		{
+			memcpy(thread->sigdisp->actions, currentThread->sigdisp->actions, sizeof(SigAction)*SIG_NUM);
 		};
 	};
 
@@ -610,14 +653,6 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 		currentThread->fpexec->dup(currentThread->fpexec, fpexec, sizeof(File));
 		thread->fpexec = fpexec;
 	};
-	
-	// inherit the root signal handler
-	thread->rootSigHandler = currentThread->rootSigHandler;
-
-	// empty signal queue
-	thread->sigput = 0;
-	thread->sigfetch = 0;
-	thread->sigcnt = 0;
 
 	// exec params
 	if (currentThread->pid != 0)
@@ -682,6 +717,7 @@ void threadExit(Thread *thread, int status)
 		panic("init terminated with status %d!", status);
 	};
 
+	sti();
 	ftabDownref(thread->ftab);
 	thread->ftab = NULL;
 	
@@ -799,7 +835,7 @@ int pollThread(int pid, int *stat_loc, int flags)
 		threadToKill = findThreadToKill(pid, stat_loc, flags);
 		if (threadToKill != NULL) break;
 		
-		if (getCurrentThread()->sigcnt > 0)
+		if (haveReadySigs(currentThread))
 		{
 			unlockSched();
 			sti();
@@ -821,7 +857,7 @@ int pollThread(int pid, int *stat_loc, int flags)
 	// there is a process ready to be deleted, it's already removed from the runqueue.
 	kfree(threadToKill->stack);
 	DownrefProcessMemory(threadToKill->pm);
-	//ftabDownref(threadToKill->ftab);
+	sigdispDownref(threadToKill->sigdisp);
 
 	if (threadToKill->fpexec != NULL)
 	{

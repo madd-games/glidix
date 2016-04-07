@@ -37,7 +37,6 @@
 
 char **environ;
 
-void __init_sig();
 static int __init_done = 0;
 static int __argc;
 static char **__argv;
@@ -50,7 +49,6 @@ void __do_init()
 	_glidix_seterrnoptr(&__thread_ili._errno);
 	__thread_ili._tid = &__thread_initial;
 	_heap_init();
-	__init_sig();
 
 	// parse the execPars
 	size_t parsz = _glidix_getparsz();

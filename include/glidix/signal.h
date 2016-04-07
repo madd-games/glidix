@@ -30,6 +30,7 @@
 #define __glidix_signal_h
 
 #include <glidix/common.h>
+#include <glidix/spinlock.h>
 
 #define	SIGHUP		1
 #define	SIGINT		2
@@ -100,6 +101,26 @@
  */
 #define	SIGQ_SIZE	16
 
+#define	SIG_DFL		((void (*)(int)) 1)
+#define	SIG_ERR		((void (*)(int)) 2)
+#define	SIG_HOLD	((void (*)(int)) 3)
+#define	SIG_IGN		((void (*)(int)) 4)
+
+#define	SA_NOCLDSTOP	(1 << 0)
+#define	SA_NOCLDWAIT	(1 << 1)
+#define	SA_NODEFER	(1 << 2)		/* ignored by Glidix currently */
+#define	SA_ONSTACK	(1 << 3)		/* ignored by Glidix currently */
+#define	SA_RESETHAND	(1 << 4)
+#define	SA_RESTART	(1 << 5)		/* ignored by Glidix currently */
+#define	SA_SIGINFO	(1 << 6)
+
+/**
+ * 'how' values for sigprocmask().
+ */
+#define	SIG_BLOCK	0
+#define	SIG_UNBLOCK	1
+#define	SIG_SETMASK	2
+
 union sigval
 {
 	int		sival_int;
@@ -119,10 +140,36 @@ typedef struct
 	union sigval	si_value;
 } siginfo_t;
 
+/**
+ * Must match 'struct sigaction' from libc.
+ */
+typedef struct
+{
+	void (*sa_handler)(int);
+	uint64_t sa_mask;
+	int sa_flags;
+	void (*sa_sigaction)(int, siginfo_t*, void*);
+} SigAction;
+
+/**
+ * Represents a list of signal dispositions of a process. Shared by multiple
+ * threads. The list is shared by threads when they also share a memory object.
+ */
+typedef struct
+{
+	int		refcount;
+	SigAction	actions[SIG_NUM];
+} SigDisp;
+
 extern uint64_t sizeSignalStackFrame;
 struct _Thread;
 void dispatchSignal(struct _Thread *thread);
 void sendSignal(struct _Thread *thread, siginfo_t *siginfo);
 void sigret(void *ret);
+
+SigDisp* sigdispCreate();
+void sigdispUpref(SigDisp *sd);
+void sigdispDownref(SigDisp *sd);
+SigDisp *sigdispExec(SigDisp *old);
 
 #endif

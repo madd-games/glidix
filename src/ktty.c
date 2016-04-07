@@ -76,6 +76,8 @@ static ssize_t termWrite(File *file, const void *buffer, size_t size)
 		sendSignal(getCurrentThread(), &si);
 		unlockSched();
 		sti();
+		ERRNO = ENOTTY;
+		return -1;
 	};
 	
 	if (size > 1)
@@ -106,6 +108,8 @@ static ssize_t termRead(File *fp, void *buffer, size_t size)
 		sendSignal(getCurrentThread(), &si);
 		unlockSched();
 		sti();
+		ERRNO = ENOTTY;
+		return -1;
 	};
 	
 	int count = semWait2(&semCount, (int) size);

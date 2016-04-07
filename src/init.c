@@ -516,7 +516,7 @@ void kmain2()
 	kprintf("Initializing the RTC... ");
 	initRTC();
 	kprintf("%$\x02" "Done%#\n");
-
+	
 	kprintf("Initializing the network interface... ");
 	ipreasmInit();
 	initNetIf();

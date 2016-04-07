@@ -91,6 +91,7 @@ _syscall_entry:
 	mov [r11+0x230], r14
 	mov [r11+0x238], r15
 	mov [r11+0x240], rcx			; return RIP
+	mov [r11+0x248], dword 0		; errno
 	mov r11, [r11+512]			; get syscall stack pointer
 	
 	; preserve userspace stack pointer while loading kernel stack pointer

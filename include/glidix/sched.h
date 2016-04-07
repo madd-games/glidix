@@ -126,6 +126,12 @@ typedef struct _Thread
 	uint64_t			ur15;					// 0x238
 	uint64_t			urip;					// 0x240
 
+	/**
+	 * Current error. Set to 0 by _syscall_entry(), and only stored at userspace
+	 * errno address if set to nonzero.
+	 */
+	int				therrno;				// 0x248
+
 	// --- END OF ASSEMBLY REGION --- //
 	
 	/**
@@ -183,22 +189,6 @@ typedef struct _Thread
 	 */
 	int				sid;
 	int				pgid;
-	
-	/**
-	 * This RIP is jumped to when a signal is caught and shall be a C function with the prototype:
-	 * void rootSigHandler(void *retptr, singinfo_t *siginfo);
-	 * It must never return! Instead, it shall call _glidix_sigret() to do the returning.
-	 * The retptr argument must be passed on to _glidix_sigret().
-	 */
-	uint64_t			rootSigHandler;
-
-	/**
-	 * This thread's signal queue.
-	 */
-	siginfo_t			sigq[SIGQ_SIZE];
-	int				sigput;
-	int				sigfetch;
-	int				sigcnt;
 
 	/**
 	 * Points to this thread's argv and initial environment string.
@@ -209,11 +199,6 @@ typedef struct _Thread
 	 */
 	char				*execPars;
 	size_t				szExecPars;
-
-	/**
-	 * Current error.
-	 */
-	int				therrno;
 
 	/**
 	 * Process exit status (only valid if this is a zombie process).
@@ -270,6 +255,23 @@ typedef struct _Thread
 	int				cpuID;
 	
 	/**
+	 * The thread's signal disposition list.
+	 */
+	SigDisp				*sigdisp;
+	
+	/**
+	 * This thread's pending signal list. The list is unordered.
+	 * The bits in pendingSet indicate which entries are filled in.
+	 */
+	uint64_t			pendingSet;
+	siginfo_t			pendingSigs[64];
+	
+	/**
+	 * The thread's signal mask.
+	 */
+	uint64_t			sigmask;
+	
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;
@@ -292,6 +294,8 @@ void initSchedAP();				// initialize scheduling on an AP, when the main sched is
 void switchContext(Regs *regs);
 void dumpRunqueue();
 void switchTask(Regs *regs);
+int haveReadySigs(Thread *thread);
+int wasSignalled();				// returns 1 if the current thread has signals ready
 
 void lockSched();				// only call with IF=0!
 int isSchedLocked();

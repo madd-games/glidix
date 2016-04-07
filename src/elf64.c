@@ -247,7 +247,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		}
 		else if (proghead.p_type == PT_LOAD)
 		{
-			if (proghead.p_vaddr < 0x1000)
+			if (proghead.p_vaddr < 0x400000)
 			{
 				vfsClose(fp);
 				kfree(segments);
@@ -308,8 +308,8 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		};
 	};
 
-	// set the signal handler to default.
-	getCurrentThread()->rootSigHandler = 0;
+	// signal dispositions
+	getCurrentThread()->sigdisp = sigdispExec(getCurrentThread()->sigdisp);
 
 	// thread name
 	strcpy(getCurrentThread()->name, path);
@@ -334,7 +334,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	SetProcessMemory(pm);
 	DownrefProcessMemory(oldPM);
 
-	// pass 1: allocate the frames and map them
+	// allocate the frames and map them
 	for (i=0; i<(elfHeader.e_phnum); i++)
 	{
 		if (segments[i].count > 0)
@@ -350,7 +350,15 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			pdownref(fl);
 		};
 	};
-
+	
+	// allocate a 2MB stack
+	FrameList *flStack = palloc(0x200);
+	if (AddSegment(pm, 0x200, flStack, PROT_READ | PROT_WRITE) != 0)
+	{
+		kprintf_debug("ERROR: failed to map stack for some reason\n");
+	};
+	pdownref(flStack);
+	
 	// change the fpexec
 	if (thread->fpexec != NULL)
 	{
@@ -398,7 +406,12 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	{
 		linkInterp(&regs, dynamic, pm);
 	};
-
+	
+	regs.rsp = 0x400000;
+	regs.rbp = 0;
+	refreshAddrSpace();
+	
+	memset((void*)0x200000, 0, 0x200000);
 	switchContext(&regs);
 	return 0;
 };

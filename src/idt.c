@@ -259,6 +259,23 @@ static void onPageFault(Regs *regs)
 	sti();
 	if (getCurrentThread() != NULL)
 	{
+		if (regs->rip == TRAP_SIGRET)
+		{
+			uint64_t frameAddr = regs->rsp - 8;
+			if ((frameAddr & 0xF) != 0)
+			{
+				faultAddr = frameAddr;
+			}
+			else if (isPointerValid(frameAddr, sizeSignalStackFrame, PROT_READ))
+			{
+				sigret((void*)frameAddr);
+			}
+			else
+			{
+				faultAddr = frameAddr;
+			};
+		};
+		
 		if (faultAddr < 0x7FC0000000)
 		{
 			ProcMem *pm = getCurrentThread()->pm;

@@ -2689,22 +2689,110 @@ gid_t sys_getsgid()
 	return getCurrentThread()->sgid;
 };
 
-uint64_t sys_sighandler(uint64_t handler)
+int sys_sigaction(int sig, const SigAction *act, SigAction *oact)
 {
-	getCurrentThread()->rootSigHandler = handler;
+	if ((sig < 1) || (sig >= SIG_NUM))
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if ((sig == SIGSTOP) || (sig == SIGKILL))
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	SigAction newAction;
+	SigAction oldAction;
+	
+	if (act != NULL)
+	{
+		if (!isPointerValid((uint64_t)act, sizeof(SigAction), PROT_READ))
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+		
+		memcpy(&newAction, act, sizeof(SigAction));
+	};
+	
+	if (oact != NULL)
+	{
+		if (!isPointerValid((uint64_t)oact, sizeof(SigAction), PROT_WRITE))
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+	};
+	
+	cli();
+	lockSched();
+	memcpy(&oldAction, &getCurrentThread()->sigdisp->actions[sig], sizeof(SigAction));
+	
+	if (act != NULL)
+	{
+		memcpy(&getCurrentThread()->sigdisp->actions[sig], &newAction, sizeof(SigAction));
+	};
+	
+	unlockSched();
+	sti();
+	
+	if (oact != NULL)
+	{
+		memcpy(oact, &oldAction, sizeof(SigAction));
+	};
+	
 	return 0;
 };
 
-void sys_sigret(void *ret)
+int sys_sigprocmask(int how, uint64_t *set, uint64_t *oldset)
 {
-	if (!isPointerValid((uint64_t)ret, sizeSignalStackFrame, PROT_READ))
+	uint64_t newset;
+	if (set != NULL)
 	{
-		ERRNO = EFAULT;
-	}
-	else
-	{
-		sigret(ret);
+		if (!isPointerValid((uint64_t)set, 8, PROT_READ))
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+		
+		newset = *set;
 	};
+	
+	if (oldset != NULL)
+	{
+		if (!isPointerValid((uint64_t)oldset, 8, PROT_WRITE))
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+		
+		*oldset = getCurrentThread()->sigmask;
+	};
+	
+	if (set != NULL)
+	{
+		if (how == SIG_BLOCK)
+		{
+			getCurrentThread()->sigmask |= newset;
+		}
+		else if (how == SIG_UNBLOCK)
+		{
+			getCurrentThread()->sigmask &= ~newset;
+		}
+		else if (how == SIG_SETMASK)
+		{
+			getCurrentThread()->sigmask = newset;
+		}
+		else
+		{
+			ERRNO = EINVAL;
+			return -1;
+		};
+	};
+	
+	return 0;
 };
 
 uint64_t sys_getparsz()
@@ -3152,8 +3240,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_getgid,				// 10
 	&sys_getegid,				// 11
 	&sys_getsgid,				// 12
-	&sys_sighandler,			// 13
-	&sys_sigret,				// 14
+	&sys_sigaction,				// 13
+	&sys_sigprocmask,			// 14
 	&sys_stat,				// 15
 	&sys_getparsz,				// 16
 	&sys_getpars,				// 17
@@ -3258,12 +3346,15 @@ uint64_t sysNumber = SYSCALL_NUMBER;
 
 uint64_t sysEpilog(uint64_t retval)
 {
-	if (getCurrentThread()->errnoptr != NULL)
+	if (ERRNO != 0)
 	{
-		*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
+		if (getCurrentThread()->errnoptr != NULL)
+		{
+			*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
+		};
 	};
 
-	if (getCurrentThread()->sigcnt > 0)
+	if (wasSignalled())
 	{
 		Thread *me = getCurrentThread();
 		Regs regs;

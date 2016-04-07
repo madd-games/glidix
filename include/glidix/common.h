@@ -54,6 +54,13 @@
 #define	NEW_EX(type, size)	((type*)kmalloc(sizeof(type)+(size)))
 #define	kalloca(x)		__builtin_alloca(x)
 
+/**
+ * Special traps. If a userspace process jumps to one of these, it will trigger
+ * a page fault with a faultAddr equal to the given trap, and with the "fetch" flag
+ * set. The kernel will then perform a specific job, as if a function was called.
+ */
+#define	TRAP_SIGRET			0xFFFFFFFFFFFF0000
+
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
 typedef struct {

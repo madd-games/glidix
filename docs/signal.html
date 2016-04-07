@@ -1,0 +1,47 @@
+<style type="text/css">
+body {font-family: sans-serif;}
+p, li {letter-spacing: 1px; line-height: 150%;}
+h1 {line-height: 150%; letter-spacing: 2px}
+p code {font-size: 14px;}
+</style>
+
+<title>Glidix Signals</title>
+<h1>Signals</h1>
+<p>
+Glidix implements the POSIX concept of <i>signals</i>. Signals are delivered to processes and threads to notify them of events, to request actions (e.g. termination), or to report critical errors.
+</p>
+
+<p>
+Each process has a list of <i>signal dispositions</i> - those specify how to respond to each signal. There are 3 possible dispositions: the default action (<code>SIG_DFL</code>), ignore (<code>SIG_IGN</code>) and a custom signal handler. For some signals, te default action is to ignore, for some it is to terminate. A custom signal handler is a user-defined function that is called when a signal is received. The signal dispositions are shared by all threads in a process: in <code>_glidix_clone()</code> calls, the signal dispositions are shared if memory is shared. It is impossible to change the disposition of the <code>SIGKILL</code> signal: it always unconditionally causes the immediate<sup>1</sup> termination of the thread.
+</p>
+
+<p>
+<sup>1</sup><span style="font-size: 10px;">By <i>immediate</i>, I mean immediately when it goes into usermode. Kernel code is never stopped in an unclean manner of course.</span>
+</p>
+
+<p>
+In the kernel, the header file <code>&lt;glidix/signal.h&gt;</code> contains most things you need for managing signals. The <code>siginfo_t</code> structure describes a signal, and we can send signals to threads using the following kernel code:
+</p>
+
+<pre>
+cli();
+lockSched();
+siginto_t si;
+si.si_signo = SIGTERM;	// example
+// fill in other fields if neccessary
+sendSignal(thread, &si);
+unlockSched();
+sti();
+</pre>
+
+<p>
+Each thread has its own <i>pending signal list</i>. The <i>signal mask</i> controls which signals are currently blocked. Signals are <i>dispatched</i> when the thread goes into usermode, and the signal is unblocked. A signal is dispatched as follows:
+</p>
+
+<ol>
+<li>The kernel makes a copy of the current values of all registers.</li>
+<li>128 bytes are subtracted from the stack pointer, to preserve the red zone.</li>
+<li>The preserve register values, and the <code>siginfo_t</code> describing the signal, are pushed onto the stack.</li>
+<li>A return address of <code>TRAP_SIGRET</code> (see <code>&lt;glidix/common.h&gt;</code>) is pushed onto the stack, and the registers are set up to pass the appropriate arguments to the signal handler, and a jump to the handler is performed.</li>
+<li>Once the handler returns, it will cause a jump to <code>TRAP_SIGRET</code>; that is not a valid address for userspace code, so a page fault is raised; the kernel sees that it was caused by a fetch from <code>TRAP_SIGRET</code>, and responds by reading the preserved registers from the stack and restoring them.</li>
+</ol>

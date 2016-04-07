@@ -227,7 +227,6 @@ int libOpen(const char *path, uint64_t loadAddr, libInfo *info)
 	info->dynSection = (Elf64_Dyn*) (loadAddr + hdrDynamic->p_vaddr);
 	info->loadAddr = loadAddr;
 	info->nextLoadAddr = loadAddr + hdrData->p_vaddr + hdrData->p_memsz;
-	kprintf_debug("nextLoadAddr=%p\n", info->nextLoadAddr);
 	info->textIndex = indexText;
 	info->dataIndex = indexData;
 

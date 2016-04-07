@@ -44,6 +44,7 @@
 #define	BUFSIZ				1024
 #define	FILENAME_MAX			128
 #define	FOPEN_MAX			32
+#define	PATH_MAX			256
 
 #define	TMP_MAX				10000
 

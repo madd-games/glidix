@@ -55,6 +55,7 @@ void semWait(Semaphore *sem)
 {
 	if ((getFlagsRegister() & (1 << 9)) == 0)
 	{
+		stackTraceHere();
 		panic("semWait when IF=0");
 	};
 
@@ -127,7 +128,6 @@ int semWait2(Semaphore *sem, int count)
 		return 0;
 	};
 
-	int sigcnt = getCurrentThread()->sigcnt;
 
 	while (sem->count == 0)
 	{
@@ -139,7 +139,7 @@ int semWait2(Semaphore *sem, int count)
 		spinlockRelease(&sem->lock);
 		kyield();
 		spinlockAcquire(&sem->lock);
-		if (getCurrentThread()->sigcnt > sigcnt)
+		if (wasSignalled())
 		{
 			sem->countWaiter = NULL;
 			spinlockRelease(&sem->lock);
@@ -203,7 +203,7 @@ int semWaitTimeout(Semaphore *sem, int count, uint64_t timeout)
 		unlockSched();
 		kyield();
 		spinlockAcquire(&sem->lock);
-		if (getCurrentThread()->sigcnt > 0)
+		if (wasSignalled())
 		{
 			sem->countWaiter = NULL;
 			spinlockRelease(&sem->lock);

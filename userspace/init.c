@@ -259,6 +259,7 @@ int main(int argc, char *argv[])
 
 		struct sigaction sa;
 		sa.sa_sigaction = on_signal;
+		sigemptyset(&sa.sa_mask);
 		sa.sa_flags = SA_SIGINFO;
 		if (sigaction(SIGINT, &sa, NULL) != 0)
 		{
