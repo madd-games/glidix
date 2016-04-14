@@ -42,6 +42,7 @@ void semInit2(Semaphore *sem, int count)
 {
 	spinlockRelease(&sem->lock);
 	spinlockRelease(&sem->countLock);
+	sem->lastHolder = NULL;
 	sem->waiter = NULL;
 	sem->count = count;
 	sem->first = NULL;
@@ -116,6 +117,7 @@ void semWait(Semaphore *sem)
 		signalThread(thread);
 	};
 
+	sem->lastHolder = me;
 	spinlockRelease(&sem->lock);
 };
 
@@ -361,6 +363,14 @@ void semDump(Semaphore *sem)
 {
 	uint64_t shouldSTI = getFlagsRegister() & (1 << 9);
 	ASM("cli");
+	if (sem->lastHolder == NULL)
+	{
+		kprintf_debug("LAST HOLDER: NONE\n");
+	}
+	else
+	{
+		kprintf_debug("LAST HOLDER: %s\n", sem->lastHolder->name);
+	};
 	kprintf_debug("I AM: %s\n", getCurrentThread()->name);
 	kprintf_debug("SEM ADDR: %a\n", sem);
 	kprintf_debug("AVAIALBLE: %d\n", sem->count);

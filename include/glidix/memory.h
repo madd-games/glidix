@@ -61,6 +61,7 @@ void heapDump();
 #define	HEAP_BLOCK_TAKEN		1		// shared flag
 #define	HEAP_BLOCK_HAS_LEFT		2		// header flag
 #define	HEAP_BLOCK_HAS_RIGHT		4		// footer flag
+#define	HEAP_BLOCK_MONITOR		8		// header flag (for debugging)
 
 typedef struct
 {
@@ -85,5 +86,10 @@ typedef struct
  * if the block is still valid, or a panic if not.
  */
 void checkBlockValidity(void *addr);
+
+/**
+ * Mark a block for monitoring. The kernel will print stack traces whenever it is freed.
+ */
+void monitorBlock(void *addr);
 
 #endif

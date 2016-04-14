@@ -40,6 +40,14 @@ extern "C" {
 #define	__IOCTL_TTY_SETATTR	__IOCTL_ARG(struct termios, 5, 1)
 #define	__IOCTL_TTY_GETPGID	__IOCTL_ARG(struct termios, 5, 2)
 #define	__IOCTL_TTY_SETPGID	__IOCTL_ARG(struct termios, 5, 3)
+#define	__IOCTL_TTY_GRANTPT	__IOCTL_NOARG(5, 4)
+#define	__IOCTL_TTY_UNLOCKPT	__IOCTL_NOARG(5, 5)
+#define	__IOCTL_TTY_PTSNAME	__IOCTL_ARG(__ptsname, 5, 6)
+
+typedef struct
+{
+	char __ign[256];
+} __ptsname;
 
 // input modes
 #define	BRKINT			(1 << 0)

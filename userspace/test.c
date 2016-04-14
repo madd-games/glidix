@@ -10,28 +10,7 @@
 
 int main()
 {
-	FILE *fp = fopen("/media/cdrom/test.txt", "rb");
-	if (fp == NULL)
-	{
-		perror("open test.txt");
-		return 1;
-	};
-	
-	unsigned long x = 5;
-	int count = fscanf(fp, "%lu", &x);
-	int c = fgetc(fp);
-	
-	printf("USING FILE READ:\n");
-	printf("COUNT = %d\n", count);
-	printf("X = %lu\n", x);
-	printf("C = %c\n", c);
-	
-	fclose(fp);
-	
-	printf("USING STRING READ:\n");
-	x = 4;
-	count = sscanf("2016abc", "%lu", &x);
-	printf("COUNT = %d\n", count);
-	printf("X = %lu\n", x);
+	int fd = open("/dev/ptmx", O_RDONLY | O_NOCTTY);
+	close(fd);
 	return 0;
 };

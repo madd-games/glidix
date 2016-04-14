@@ -45,6 +45,7 @@ static int nextPid;
 extern uint64_t getFlagsRegister();
 void kmain2();
 uint32_t quantumTicks;			// initialised by init.c, how many APIC timer ticks to do per process.
+extern PER_CPU TSS* localTSSPtr;
 
 typedef struct
 {
@@ -222,8 +223,8 @@ extern void reloadTR();
 static void jumpToTask()
 {
 	// switch kernel stack
-	ASM("cli");
-	_tss.rsp0 = ((uint64_t) currentThread->stack + currentThread->stackSize) & (uint64_t)~0xF;
+	cli();
+	localTSSPtr->rsp0 = ((uint64_t) currentThread->stack + currentThread->stackSize) & (uint64_t)~0xF;
 	currentThread->syscallStackPointer = ((uint64_t) currentThread->stack + currentThread->stackSize) & (uint64_t)~0xF;
 
 	// reload the TSS
@@ -231,7 +232,6 @@ static void jumpToTask()
 
 	// switch address space
 	if (currentThread->pm != NULL) SetProcessMemory(currentThread->pm);
-	ASM("cli");
 
 	// make sure IF is set
 	currentThread->regs.rflags |= (1 << 9);
@@ -299,17 +299,8 @@ int canSched(Thread *thread)
 	return 1;
 };
 
-void switchTask(Regs *regs)
+void switchTaskUnlocked(Regs *regs)
 {
-	cli();
-	if (currentThread == NULL)
-	{
-		apic->timerInitCount = quantumTicks;
-		return;
-	};
-	
-	spinlockAcquire(&schedLock);
-
 	Thread *threadPrev = currentThread;
 	
 	// remember the context of this thread.
@@ -319,20 +310,26 @@ void switchTask(Regs *regs)
 	// get the next thread
 	while (1)
 	{
+		int numSeenFirst = 0;
 		do
 		{
 			currentThread = currentThread->next;
-		} while ((!canSched(currentThread)) && (currentThread != threadPrev));
+			if (currentThread == &firstThread) numSeenFirst++;
+		} while ((!canSched(currentThread)) && (numSeenFirst < 2));
 
-		if (currentThread == threadPrev)
+		if (numSeenFirst >= 2)
 		{
-			if (!canSched(currentThread))
+			if (!canSched(threadPrev))
 			{
 				// got nothing to do
 				spinlockRelease(&schedLock);
 				cooloff();
 				spinlockAcquire(&schedLock);
 				continue;
+			}
+			else
+			{
+				currentThread = threadPrev;
 			};
 		};
 		
@@ -355,6 +352,19 @@ void switchTask(Regs *regs)
 	// and so currentThread will not be suddenly released so it is safe to use it.
 	// it can only terminate when we dispatch a signal, and only this CPU can do this.
 	jumpToTask();
+};
+
+void switchTask(Regs *regs)
+{
+	cli();
+	if (currentThread == NULL)
+	{
+		apic->timerInitCount = quantumTicks;
+		return;
+	};
+	
+	spinlockAcquire(&schedLock);
+	switchTaskUnlocked(regs);
 };
 
 int haveReadySigs(Thread *thread)
@@ -400,13 +410,13 @@ static void kernelThreadExit()
 	// we need to do all of this with interrupts disabled. we remove ourselves from the runqueue,
 	// but do not free the stack nor the thread description; this will be done by ReleaseKernelThread()
 	ASM("cli");
+	Regs regs;
 	lockSched();
 	currentThread->prev->next = currentThread->next;
 	currentThread->next->prev = currentThread->prev;
 	currentThread->flags |= THREAD_TERMINATED;
 	downrefCPU(currentThread->cpuID);
-	unlockSched();
-	kyield();
+	switchTaskUnlocked(&regs);
 };
 
 void ReleaseKernelThread(Thread *thread)
@@ -763,8 +773,8 @@ void threadExit(Thread *thread, int status)
 	siginfo.si_uid = thread->ruid;
 	sendSignal(parent, &siginfo);
 	downrefCPU(thread->cpuID);
-	unlockSched();
-	sti();
+	Regs regs;
+	switchTaskUnlocked(&regs);
 };
 
 static Thread *findThreadToKill(int pid, int *stat_loc, int flags)

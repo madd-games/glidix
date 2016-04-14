@@ -98,9 +98,15 @@ int			rand();
 int			rand_r(unsigned *seed);
 void			srand(unsigned seed);
 int			unsetenv(const char *name);
+int			posix_openpt(int flags);
+int			getpt();
+int			grantpt(int fd);
+int			unlockpt(int fd);
+char*			ptsname(int fd);
+int			ptsname_r(int fd, char *buffer, size_t buflen);
 
 /* implemented by libglidix directly */
-char*	realpath(const char*, char*);
+char*			realpath(const char*, char*);
 
 #ifdef __cplusplus
 }

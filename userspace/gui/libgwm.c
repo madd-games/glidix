@@ -33,6 +33,7 @@
 #include <pthread.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <signal.h>
 #include "gui.h"
 
 static int guiPid;
@@ -138,7 +139,7 @@ static void* listenThreadFunc(void *ignore)
 				if (firstEvent == NULL)
 				{
 					buf->prev = buf->next = NULL;
-					firstEvent = lastEvent = NULL;
+					firstEvent = lastEvent = buf;
 				}
 				else
 				{
@@ -163,6 +164,7 @@ int gwmInit()
 	{
 		return -1;
 	};
+	fclose(fp);
 	
 	nextWindowID = 1;
 	nextSeq = 1;
@@ -177,7 +179,13 @@ int gwmInit()
 	return 0;
 };
 
-void _heap_dump();
+void gwmQuit()
+{
+	pthread_kill(listenThread, SIGKILL);
+	close(eventCounterFD);
+	close(queueFD);
+};
+
 GWMWindow* gwmCreateWindow(
 	GWMWindow* parent,
 	const char *caption,
@@ -234,6 +242,21 @@ DDISurface* gwmGetWindowCanvas(GWMWindow *win)
 	return win->canvas;
 };
 
+void gwmDestroyWindow(GWMWindow *win)
+{
+	munmap((void*)win->shmemAddr, win->shmemSize);
+	GWMCommand cmd;
+	cmd.destroyWindow.cmd = GWM_CMD_DESTROY_WINDOW;
+	cmd.destroyWindow.id = win->id;
+	
+	if (_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand)) != 0)
+	{
+		perror("_glidix_mqsend");
+	};
+	
+	free(win);
+};
+
 void gwmPostDirty()
 {
 	GWMCommand cmd;
@@ -251,4 +274,45 @@ void gwmWaitEvent(GWMEvent *ev)
 	firstEvent = firstEvent->next;
 	if (firstEvent != NULL) firstEvent->prev = NULL;
 	pthread_spin_unlock(&eventLock);
+};
+
+void gwmClearWindow(GWMWindow *win)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.clearWindow.cmd = GWM_CMD_CLEAR_WINDOW;
+	cmd.clearWindow.id = win->id;
+	cmd.clearWindow.seq = seq;
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+};
+
+void gwmPostUpdate(GWMWindow *win)
+{
+	EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
+	buf->payload.type = GWM_EVENT_UPDATE;
+	buf->payload.win = 0;
+	if (win != NULL)
+	{
+		buf->payload.win = win->id;
+	};
+	
+	pthread_spin_lock(&eventLock);
+	if (firstEvent == NULL)
+	{
+		buf->prev = buf->next = NULL;
+		firstEvent = lastEvent = buf;
+	}
+	else
+	{
+		buf->prev = lastEvent;
+		buf->next = NULL;
+		lastEvent->next = buf;
+		lastEvent = buf;
+	};
+	pthread_spin_unlock(&eventLock);
+	int one = 1;
+	ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
 };

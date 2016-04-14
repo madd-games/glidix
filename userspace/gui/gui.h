@@ -34,6 +34,14 @@
 
 #define	GWM_WINDOW_HIDDEN			(1 << 0)
 #define	GWM_WINDOW_NODECORATE			(1 << 1)
+#define	GWM_WINDOW_MKFOCUSED			(1 << 2)
+
+/**
+ * Those must match up with the Glidix humin interface (<glidix/humin.h>).
+ */
+#define	GWM_SC_MOUSE_LEFT			0x100
+#define	GWM_SC_MOUSE_MIDDLE			0x101
+#define	GWM_SC_MOUSE_RIGHT			0x102
 
 /**
  * Window parameter structure, as passed by clients to the window manager.
@@ -50,13 +58,28 @@ typedef struct
 } GWMWindowParams;
 
 /**
+ * Flags for @keymod.
+ */
+#define	GWM_KM_CTRL				(1 << 0)
+#define	GWM_KM_SHIFT				(1 << 1)
+
+/**
  * Event structure.
  */
 #define	GWM_EVENT_CLOSE				0
+#define	GWM_EVENT_DOWN				1
+#define	GWM_EVENT_UP				2
+#define	GWM_EVENT_UPDATE			3
 typedef struct
 {
 	int					type;
-	uint64_t				win;		// window IDGWM
+	uint64_t				win;		// window ID
+	int					x;		// mouse position relative to window
+	int					y;
+	int					scancode;	// hardware-specific key scancode
+	int					keycode;	// hardware-independent key code
+	int					keymod;		// bitwise-OR of active modifiers (GWM_KM_*)
+	uint64_t				keychar;	// actual Unicode character entered by key, or zero
 } GWMEvent;
 
 /**
@@ -64,6 +87,8 @@ typedef struct
  */
 #define	GWM_CMD_CREATE_WINDOW			0
 #define	GWM_CMD_POST_DIRTY			1
+#define	GWM_CMD_DESTROY_WINDOW			2
+#define	GWM_CMD_CLEAR_WINDOW			3
 typedef union
 {
 	int					cmd;
@@ -77,6 +102,19 @@ typedef union
 		uint64_t			seq;	// sequence number for responses
 		int				painterPid;
 	} createWindow;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_DESTROY_WINDOW
+		uint64_t			id;
+	} destroyWindow;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_CLEAR_WINDOW
+		uint64_t			id;
+		uint64_t			seq;
+	} clearWindow;
 } GWMCommand;
 
 /**
@@ -84,6 +122,7 @@ typedef union
  */
 #define GWM_MSG_CREATE_WINDOW_RESP		0
 #define	GWM_MSG_EVENT				1
+#define	GWM_MSG_CLEAR_WINDOW_RESP		2
 typedef union
 {
 	struct
@@ -110,6 +149,12 @@ typedef union
 		uint64_t			seq;	// always zero for events
 		GWMEvent			payload;
 	} event;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_CLEAR_WINDOW_RESP
+		uint64_t			seq;
+	} clearWindowResp;
 } GWMMessage;
 
 /**
@@ -130,6 +175,11 @@ typedef struct
 int gwmInit();
 
 /**
+ * Quit the GWM library, with proper cleanup.
+ */
+void gwmQuit();
+
+/**
  * Creates a new window. On success, returns a window handle; on error, returns NULL.
  */
 GWMWindow* gwmCreateWindow(
@@ -145,6 +195,11 @@ GWMWindow* gwmCreateWindow(
 DDISurface* gwmGetWindowCanvas(GWMWindow *win);
 
 /**
+ * Destroy a window.
+ */
+void gwmDestroyWindow(GWMWindow *win);
+
+/**
  * Tell the window manager that the screen needs re-drawing.
  */
 void gwmPostDirty();
@@ -153,5 +208,15 @@ void gwmPostDirty();
  * Wait until an event is received and store it in the event structure.
  */
 void gwmWaitEvent(GWMEvent *ev);
+
+/**
+ * Clear a window.
+ */
+void gwmClearWindow(GWMWindow *win);
+
+/**
+ * Post an update event. The window is allowed to be NULL.
+ */
+void gwmPostUpdate(GWMWindow *win);
 
 #endif

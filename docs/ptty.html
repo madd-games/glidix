@@ -1,0 +1,29 @@
+<style type="text/css">
+body {font-family: sans-serif;}
+p, li {letter-spacing: 1px; line-height: 150%;}
+h1 {line-height: 150%; letter-spacing: 2px}
+code {font-size: 14px;}
+</style>
+
+<title>Glidix Pseudoterminals</title>
+<h1>Pseudoterminals</h1>
+<p>
+A <i>pseudoterminal</i> (or <i>ptty</i>) is a bidirectional, asymmetrical communication mechanism, with a <i>master</i> side and a <i>slave</i> side. The slave side acts as a normal terminal, can be the controlling terminal of a session, with a foreground process group etc. The master side can be used to manipulate the slave. Whatever the slave writes to the terminal will be read out by the master. Whatever the master writes will be read out by the slave (and, if echoing is on, also read out by the master itself). Full terminal emulation is provided; so for example writing the <code>CC_VINTR</code> to the master side will send <code>SIGINT</code> to the foreground process of the slave terminal.
+</p>
+
+<p>
+Pseudoterminals are used by terminal emulators (such as the GUI terminal emulator), as well as remote terminal programs such as SSH.
+</p>
+
+<h2>Creating a Pseudoterminal</h2>
+<p>
+To create a ptty, one must open the special file <code>/dev/ptmx</code>. This returns a file descriptor corresponding to the master side of a new ptty, and creates a file in the form <code>/dev/pts<i>X</i></code> (where <i>X</i> is a previously unused number), which can be used to open the slave side of the terminal. The <code>ptsname()</code> (or <code>ptsname_r()</code>) function may be called on the master side to determine the path to the slave terminal. This works by sending a special <code>ioctl()</code> request to the master. You must call <code>grantpt()</code> on the master side to set the owner of the terminal to the real UID and GID, and then <code>unlockpt()</code> to enable the slave to be opened.
+</p>
+
+<p>
+A child process should then call <code>setsid()</code> to disconnect itself from the current terminal and start a new session, and then open the slave terminal as specified by <code>ptsname()</code>. Finally, it should close the standard streams (FDs 0, 1 and 2), and <code>dup2()</code> the slave terminal into them. The slave now became the controlling terminal of the session, and the new process is the foreground process group leader; an <code>exec()</code> may now be performed to start a program in the brand new terminal.
+</p>
+
+<p>
+The <code>isatty()</code> function reports the slave descriptor as a terminal, but not the master descriptor.
+</p>

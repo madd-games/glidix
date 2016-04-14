@@ -38,5 +38,6 @@ FileSystem *getDevfs();
 
 Device	AddDevice(const char *name, void *data, int (*open)(void *data, File *fp, size_t szFile), int flags);
 void	DeleteDevice(Device dev);
+void	SetDeviceCreds(Device dev, uid_t uid, gid_t gid);
 
 #endif

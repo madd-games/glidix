@@ -123,6 +123,7 @@ void dispatchSignal(Thread *thread)
 		panic("dispatchSignal called when no signals are waiting");
 	};
 
+	//kprintf_debug("Dispatching signal %d to pid %d\n", siginfo->si_signo, thread->pid);
 	if (siginfo->si_signo == SIGKILL)
 	{
 		// not allowed to override SIGKILL

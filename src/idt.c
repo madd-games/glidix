@@ -352,18 +352,7 @@ static void onPageFault(Regs *regs)
 		};
 
 		kprintf("\nVirtual address: %a\n", faultAddr);
-#if 0
-		uint32_t wait = 0xFFFFFFFF;
-		while (wait--);
-		kprintf("Peek at RIP: ");
-		uint8_t *peek = (uint8_t*) regs->rip;
-		size_t sz = 16;
-		while (sz--)
-		{
-			printbyte(*peek++);
-		};
-		kprintf("\n");
-#endif
+		stackTraceHere();
 		debugKernel(regs);
 	}
 	else

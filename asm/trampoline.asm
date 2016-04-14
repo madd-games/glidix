@@ -116,3 +116,14 @@ trampoline64:
 	call rax
 	
 trampoline_end:
+
+[global loadLocalGDT]
+[extern localGDT]
+loadLocalGDT:
+	sub rsp, 10
+	mov [rsp], word 63	; the limit
+	mov rax, qword localGDT
+	mov [rsp+2], rax	; base
+	lgdt [rsp]
+	add rsp, 10
+	ret

@@ -257,6 +257,7 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
+			sleep(5);
 			fprintf(stderr, "Sorry, please try again.\n");
 		};
 	};

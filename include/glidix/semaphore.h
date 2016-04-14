@@ -48,6 +48,10 @@ typedef struct _SemWaitThread
 
 typedef struct
 {
+	// for debugging only; DO NOT READ OUTSIDE OF semDump()
+	// last thread to have acquired the semaphore.
+	Thread *lastHolder;
+	
 	Spinlock lock;
 	Thread *waiter;
 	volatile int count;

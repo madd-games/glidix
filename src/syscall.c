@@ -359,7 +359,7 @@ int sys_open(const char *path, int oflag, mode_t mode)
 		if (fp->seek != NULL) fp->seek(fp, 0, SEEK_END);
 	};
 
-	fp->oflag = oflag;
+	fp->oflag |= oflag;
 	fp->refcount = 1;
 	
 	ftab->entries[i] = fp;

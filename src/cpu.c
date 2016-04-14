@@ -43,11 +43,16 @@
 
 /**
  * Uncomment this to enable SMP.
- * Currently there is a bug where 2 CPUs somehow end up on the same stack.
+ * Currently there is a bug where the page fault handler causes a page fault
+ * while attempting to get the procmem spinlock.
  */
 //#define	ENABLE_SMP
 
 static PER_CPU CPU *currentCPU;
+PER_CPU char localGDT[64];
+PER_CPU char localTSS[192];
+PER_CPU TSS *localTSSPtr;
+PER_CPU char* localGDTPtr;
 
 extern char _per_cpu_start;
 extern char _per_cpu_end;
@@ -113,6 +118,7 @@ extern char trampoline_end;
 extern char GDT64;
 extern char GDTPointer;
 extern char idtPtr;
+extern void loadLocalGDT();	// trampoline.asm
 
 CPU cpuList[16];
 int numCPU = 1;
@@ -353,6 +359,17 @@ void sendHintToEveryCPU()
 	};
 };
 
+typedef struct
+{
+	uint16_t		limitLow;
+	uint16_t		baseLow;
+	uint8_t			baseMiddle;
+	uint8_t			access;
+	uint8_t			limitHigh;
+	uint8_t			baseMiddleHigh;
+	uint32_t		baseHigh;
+} PACKED GDT_TSS_Segment;
+
 /**
  * This function is called when the AP trampoline has jumped to long mode and we are
  * ready to start up the CPU.
@@ -373,6 +390,23 @@ void apEntry()
 	
 	// initialise per-CPU variables and other per-CPU stuff
 	initPerCPU();
+	
+	// make a copy of the GDT and TSS so that we can have a separate kernel stack
+	memcpy(localGDT, &GDT64, 64);
+	GDT_TSS_Segment *segTSS = (GDT_TSS_Segment*) &localGDT[0x30];
+	segTSS->limitLow = 191;
+	segTSS->limitHigh = 0;
+	
+	uint64_t tssAddr = (uint64_t) localTSS;
+	segTSS->baseLow = tssAddr & 0xFFFF;
+	segTSS->baseMiddle = (tssAddr >> 16) & 0xFF;
+	segTSS->baseMiddleHigh = (tssAddr >> 24) & 0xFF;
+	segTSS->baseHigh = (tssAddr >> 32) & 0xFFFFFFFF;
+	segTSS->access = 0xE9;
+	loadLocalGDT();
+	
+	localTSSPtr = (TSS*) localTSS;
+	localGDTPtr = localGDT;
 	
 	// find the current CPU and set currentCPU to it
 	uint8_t apicID = apic->id >> 24;

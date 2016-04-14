@@ -32,12 +32,11 @@ extern _fini
 extern __glidixrt_init
 extern main
 
-STACK_SIZE equ 0x100000
 __default_mxcsr dd (1 << 15) | (1 << 12)
 
 _start:
-	call		_init
 	ldmxcsr		[__default_mxcsr]
+	call		_init
 	mov		rdi, main
 	call		__glidixrt_init
 	jmp $

@@ -32,11 +32,10 @@
 #include <string.h>
 #include <libddi.h>
 #include "gui.h"
+#include <unistd.h>
 
-//void __i_am_debug();
 int main()
 {
-	//__i_am_debug();
 	printf("Waiting for GUI...\n");
 	FILE *fp = NULL;
 	
@@ -55,16 +54,14 @@ int main()
 		fclose(fp);
 		break;
 	};
-	
+#if 0
 	gwmInit();
-	printf("About to call gwmCreateWindow\n");
 	GWMWindow *wnd = gwmCreateWindow(NULL, "Hello world meme", 10, 10, 200, 200, 0);
+	
 	if (wnd == NULL) fprintf(stderr, "Error\n");
 	else
 	{
-		printf("gwmCreatewindow was OK, i draw a meme\n");
 		DDISurface *surface = gwmGetWindowCanvas(wnd);
-		ddiDrawText(surface, 6, 6, "Nothing happened yet.", NULL, NULL);
 		gwmPostDirty();
 
 		while (1)
@@ -74,13 +71,52 @@ int main()
 			
 			if (ev.type == GWM_EVENT_CLOSE)
 			{
-				ddiDrawText(surface, 6, 14, "You clicked close.", NULL, NULL);
+				break;
+			}
+			else if ((ev.type == GWM_EVENT_DOWN) && (ev.scancode == GWM_SC_MOUSE_LEFT))
+			{
+				DDIColor color = {0, 0, 0, 0xFF};
+				ddiFillRect(surface, ev.x, ev.y, 5, 5, &color);
+				gwmPostDirty();
+			}
+			else if ((ev.type == GWM_EVENT_DOWN) && (ev.scancode == GWM_SC_MOUSE_MIDDLE))
+			{
+				DDIColor color = {0xFF, 0, 0, 0xFF};
+				ddiFillRect(surface, ev.x, ev.y, 5, 5, &color);
+				gwmPostDirty();
+			}
+			else if ((ev.type == GWM_EVENT_DOWN) && (ev.scancode == GWM_SC_MOUSE_RIGHT))
+			{
+				DDIColor color = {0, 0xFF, 0, 0xFF};
+				ddiFillRect(surface, ev.x, ev.y, 5, 5, &color);
+				gwmPostDirty();
+			}
+			else if ((ev.type == GWM_EVENT_UP) && (ev.scancode == GWM_SC_MOUSE_LEFT))
+			{
+				DDIColor color = {0, 0, 0xFF, 0xFF};
+				ddiFillRect(surface, ev.x, ev.y, 5, 5, &color);
+				gwmPostDirty();
+			}
+			else if ((ev.type == GWM_EVENT_DOWN) && (ev.keycode < 0x80))
+			{
+				gwmClearWindow(wnd);
+				char buffer[512];
+				sprintf(buffer, "You pressed %c", ev.keycode);
+				ddiDrawText(surface, 2, 2, buffer, NULL, NULL);
 				gwmPostDirty();
 			};
 		};
 	};
 	
-	while (1) pause();
+	gwmQuit();
+#endif
+
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+		execl("/usr/bin/terminal", "terminal", NULL);
+		return 1;
+	};
 	
 	return 0;
 };

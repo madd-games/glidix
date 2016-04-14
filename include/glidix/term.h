@@ -40,6 +40,9 @@
 #define	IOCTL_TTY_SETATTR	IOCTL_ARG(struct termios, IOCTL_INT_TERM, 1)
 #define	IOCTL_TTY_GETPGID	IOCTL_ARG(struct termios, IOCTL_INT_TERM, 2)
 #define IOCTL_TTY_SETPGID	IOCTL_ARG(struct termios, IOCTL_INT_TERM, 3)
+#define	IOCTL_TTY_GRANTPT	IOCTL_NOARG(IOCTL_INT_TERM, 4)
+#define	IOCTL_TTY_UNLOCKPT	IOCTL_NOARG(IOCTL_INT_TERM, 5)
+#define	IOCTL_TTY_PTSNAME	IOCTL_ARG(PTSName, IOCTL_INT_TERM, 6)
 
 // input modes
 #define	BRKINT			(1 << 0)
@@ -123,5 +126,10 @@ struct termios
 	tcflag_t		c_lflag;
 	cc_t			c_cc[NCCS];
 };
+
+typedef struct
+{
+	char			name[256];
+} PTSName;
 
 #endif

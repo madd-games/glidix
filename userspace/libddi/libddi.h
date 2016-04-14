@@ -40,6 +40,7 @@
  * Types of expandable bitmaps.
  */
 #define	DDI_BITMAP_8x8				0
+#define	DDI_BITMAP_8x16				1
 
 /**
  * Describes the pixel format of a surface.

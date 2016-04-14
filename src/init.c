@@ -59,6 +59,7 @@
 #include <glidix/dma.h>
 #include <glidix/shmem.h>
 #include <glidix/cpu.h>
+#include <glidix/ptty.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -247,7 +248,13 @@ char *strstr(const char *in, const char *str)
     } while (strncmp(in, str, len) != 0);
 
     return (char *) (in - 1);
-}
+};
+
+extern char GDTPointer[10];
+extern TSS _tss;
+extern PER_CPU TSS* localTSSPtr;
+extern char GDT64;
+extern PER_CPU char* localGDTPtr;
 
 void kmain(MultibootInfo *info)
 {
@@ -315,7 +322,10 @@ void kmain(MultibootInfo *info)
 	kprintf("Initializing per-CPU variable area... ");
 	initPerCPU();
 	DONE();
-
+	
+	localTSSPtr = &_tss;
+	localGDTPtr = &GDT64;
+	
 	kprintf("Initializing memory allocation phase 2... ");
 	initMemoryPhase2();
 	kprintf("%$\x02" "Done%#\n");
@@ -524,6 +534,10 @@ void kmain2()
 	
 	kprintf("Initializing the shared memory API... ");
 	shmemInit();
+	DONE();
+
+	kprintf("Initializing the ptty interface... ");
+	pttyInit();
 	DONE();
 	
 	kprintf("Starting the spawn process... ");

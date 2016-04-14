@@ -38,7 +38,7 @@ typedef struct _DeviceFile
 	char		name[16];
 	void		*data;
 	int		(*open)(void *data, File *file, size_t szFile);
-	mode_t		mode;
+	struct stat	st;
 	
 	struct _DeviceFile *prev;
 	struct _DeviceFile *next;
@@ -80,8 +80,9 @@ static int next(Dir *dir)
 	strcpy(dir->dirent.d_name, dev->name);
 	dir->dirent.d_ino++;
 	dir->stat.st_ino++;
-	dir->stat.st_mode = dev->mode;
-
+	dir->stat.st_mode = dev->st.st_mode;
+	dir->stat.st_uid = dev->st.st_uid;
+	dir->stat.st_gid = dev->st.st_gid;
 	return 0;
 };
 
@@ -145,12 +146,24 @@ Device AddDevice(const char *name, void *data, int (*open)(void*, File*, size_t)
 	strcpy(dev->name, name);
 	dev->data = data;
 	dev->open = open;
-	dev->mode = (mode_t) (flags & 0xFFFF);
-	if (flags == 0) dev->mode = 0644 | VFS_MODE_CHARDEV;
+	dev->st.st_mode = (mode_t) (flags & 0xFFFF);
+	if (flags == 0) dev->st.st_mode = 0644 | VFS_MODE_CHARDEV;
 	dev->prev = NULL;
 	dev->next = NULL;
 
-	spinlockAcquire(&devfsLock);
+	dev->st.st_dev = 0;
+	dev->st.st_ino = 0;
+	dev->st.st_nlink = 1;
+	dev->st.st_uid = 0;
+	dev->st.st_gid = 0;
+	dev->st.st_rdev = 0;
+	dev->st.st_size = 0;
+	dev->st.st_blocks = 0;
+	dev->st.st_blksize = 0;
+	dev->st.st_mtime = 0;
+	dev->st.st_atime = 0;
+	dev->st.st_ctime = 0;
+
 	DeviceFile *last = &nullDevice;
 	while (last->next != NULL) last = last->next;
 	last->next = dev;
@@ -170,4 +183,13 @@ void DeleteDevice(Device ptr)
 	spinlockRelease(&devfsLock);
 
 	kfree(dev);
+};
+
+void SetDeviceCreds(Device ptr, uid_t uid, gid_t gid)
+{
+	spinlockAcquire(&devfsLock);
+	DeviceFile *dev = (DeviceFile*) ptr;
+	dev->st.st_uid = uid;
+	dev->st.st_gid = gid;
+	spinlockRelease(&devfsLock);
 };

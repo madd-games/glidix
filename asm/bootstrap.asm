@@ -207,7 +207,7 @@ GDT64:                               ; Global Descriptor Table (64-bit).
 	db 11111000b                 ; Access.
 	db 00100000b                 ; Granularity.
 	db 0                         ; Base (high).
-	; The TSS
+	; The TSS (entry 6)
 	.TSS: equ $ - GDT64
 	.TSS_limitLow: dw 0
 	.TSS_baseLow: dw 0
@@ -312,9 +312,13 @@ _bootstrap64_upper:
 	hlt
 
 [global _tss_reload_access]
+[extern localGDTPtr]
 _tss_reload_access:
 	mov al,		11101001b
-	mov rdi,	qword GDT64.TSS_Access
+	;mov rdi,	qword GDT64.TSS_Access
+	mov rdi,	qword localGDTPtr
+	mov rdi,	[rdi]
+	add rdi,	0x35
 	stosb
 	ret
 

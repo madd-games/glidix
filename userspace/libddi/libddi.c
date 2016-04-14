@@ -753,9 +753,16 @@ static void ddiExpandBitmapRow(char *put, uint8_t row, const void *fill, int bpp
 
 void ddiExpandBitmap(DDISurface *surface, unsigned int x, unsigned int y, int type, const void *bitmap_, DDIColor *color)
 {
-	if (type != DDI_BITMAP_8x8)
+	int charHeight;
+	switch (type)
 	{
-		// no other types supported
+	case DDI_BITMAP_8x8:
+		charHeight = 8;
+		break;
+	case DDI_BITMAP_8x16:
+		charHeight = 16;
+		break;
+	default:
 		return;
 	};
 	
@@ -780,7 +787,7 @@ void ddiExpandBitmap(DDISurface *surface, unsigned int x, unsigned int y, int ty
 	char *put = surface->data + offset;
 	
 	int by;
-	for (by=0; by<8; by++)
+	for (by=0; by<charHeight; by++)
 	{
 		ddiExpandBitmapRow(put, bitmap[by], &pixel, surface->format.bpp, pixelSize);
 		put += scanlineSize;

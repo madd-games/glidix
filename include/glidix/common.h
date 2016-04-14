@@ -117,6 +117,12 @@ typedef struct
 	uint32_t		modEnd;
 } PACKED MultibootModule;
 
+typedef struct
+{
+	uint32_t ignore;
+	uint64_t rsp0;
+} PACKED TSS;
+
 #ifndef _SYS_TYPES_H
 typedef	uint64_t			dev_t;
 typedef	uint64_t			ino_t;

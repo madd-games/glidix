@@ -400,7 +400,7 @@ void _kfree(void *block, const char *who, int line)
 
 	if ((head->flags & HEAP_BLOCK_TAKEN) == 0)
 	{
-		heapDump();
+		//heapDump();
 		stackTraceHere();
 		panic("%s:%d: invalid pointer passed to kfree(): %a: already free", who, line, addr);
 	};
@@ -447,6 +447,13 @@ void _kfree(void *block, const char *who, int line)
 		};
 	};
 
+	// monitoring
+	if (head->flags & HEAP_BLOCK_MONITOR)
+	{
+		kprintf("kfree() called on a monitored block (%a)\n", block);
+		stackTraceHere();
+	};
+	
 	// mark this block as free
 	head->flags &= ~HEAP_BLOCK_TAKEN;
 
@@ -564,4 +571,30 @@ void checkBlockValidity(void *addr_)
 	};
 	
 	kprintf("[DEBUG] Block %a OK\n", addr);
+};
+
+void monitorBlock(void *addr_)
+{
+	uint64_t addr = (uint64_t) addr_;
+
+	spinlockAcquire(&heapLock);
+	HeapHeader *head = (HeapHeader*) (addr - sizeof(HeapHeader));
+	if (head->magic != HEAP_HEADER_MAGIC)
+	{
+		panic("Block at %a broken: invalid header magic!", addr);
+	};
+	
+	HeapFooter *foot = heapFooterFromHeader(head);
+	if (foot->magic != HEAP_FOOTER_MAGIC)
+	{
+		panic("Block at %a broken: invalid footer magic!", addr);
+	};
+	
+	if (head->size != foot->size)
+	{
+		panic("Block at %a broken: header claims size is %d, footer claims %d", addr, (int)head->size, (int)foot->size);
+	};
+
+	head->flags |= HEAP_BLOCK_MONITOR;	
+	spinlockRelease(&heapLock);
 };

@@ -105,5 +105,6 @@ File* thsync(int type, int par)
 	
 	fp->oflag = O_CLOEXEC;
 	fp->close = thsync_close;
+	fp->refcount = 1;
 	return fp;
 };

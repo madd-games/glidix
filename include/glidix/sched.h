@@ -278,17 +278,6 @@ typedef struct _Thread
 	struct _Thread			*next;
 } Thread;
 
-/**
- * We need this to switch kernel stacks.
- */
-typedef struct
-{
-	uint32_t ignore;
-	uint64_t rsp0;
-} PACKED TSS;
-
-extern TSS _tss;
-
 void initSched();
 void initSchedAP();				// initialize scheduling on an AP, when the main sched is already inited
 void switchContext(Regs *regs);
