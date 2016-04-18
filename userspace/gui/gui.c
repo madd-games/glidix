@@ -182,6 +182,12 @@ Window *movingWindow = NULL;
 int movingOffX;
 int movingOffY;
 
+/**
+ * The window that the mouse is currently inside of. This is used to issues enter/motion/leave
+ * events.
+ */
+Window *hoveringWindow = NULL;
+
 pthread_spinlock_t redrawSignal;
 
 /**
@@ -214,11 +220,12 @@ void PaintWindows(Window *win, DDISurface *target)
 		if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
 		{
 			DDISurface *display = ddiCreateSurface(&target->format, win->params.width, win->params.height,
-				win->clientArea->data, 0);
+				(char*)win->clientArea->data, 0);
 			PaintWindows(win->children, display);
 			
 			if (win->parent == NULL)
 			{
+				//printf("Rendering top-level\n");
 				if ((win->params.flags & GWM_WINDOW_NODECORATE) == 0)
 				{
 					DDIColor *color = &winUnfocColor;
@@ -264,28 +271,31 @@ void PaintWindows(Window *win, DDISurface *target)
 			}
 			else
 			{
+				//printf("Rendering child at (%u, %u): %ux%u.\n", win->params.x, win->params.y, win->params.width, win->params.height);
 				ddiBlit(display, 0, 0, target,
 					win->params.x, win->params.y, win->params.width, win->params.height);
 			};
+			
+			ddiDeleteSurface(display);
 		};
 	};
 };
 
-Window *GetWindowByIDFromList(Window *win, uint64_t id)
+Window *GetWindowByIDFromList(Window *win, uint64_t id, int pid, int fd)
 {
 	for (; win!=NULL; win=win->next)
 	{
-		if (win->id == id) return win;
-		Window *child = GetWindowByIDFromList(win->children, id);
+		if ((win->id == id) && (win->pid == pid) && (win->fd == fd)) return win;
+		Window *child = GetWindowByIDFromList(win->children, id, pid, fd);
 		if (child != NULL) return child;
 	};
 	
 	return NULL;
 };
 
-Window *GetWindowByID(uint64_t id)
+Window *GetWindowByID(uint64_t id, int pid, int fd)
 {
-	return GetWindowByIDFromList(desktopWindows, id);
+	return GetWindowByIDFromList(desktopWindows, id, pid, fd);
 };
 
 void DeleteWindow(Window *win);
@@ -302,6 +312,7 @@ void DeleteWindow(Window *win)
 {
 	if (focusedWindow == win) focusedWindow = NULL;
 	if (movingWindow == win) movingWindow = NULL;
+	if (hoveringWindow == win) hoveringWindow = NULL;
 	
 	DeleteWindowList(win->children);
 	
@@ -354,9 +365,9 @@ void DeleteWindowsOf(int pid, int fd)
 	};
 };
 
-void DeleteWindowByID(uint64_t id)
+void DeleteWindowByID(uint64_t id, int pid, int fd)
 {
-	Window *win = GetWindowByID(id);
+	Window *win = GetWindowByID(id, pid, fd);
 	if (win != NULL) DeleteWindow(win);
 };
 
@@ -370,13 +381,8 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	Window *parent = NULL;
 	if (parentID != 0)
 	{
-		parent = GetWindowByID(parentID);
+		parent = GetWindowByID(parentID, pid, fd);
 		if (parent == NULL)
-		{
-			return NULL;
-		};
-		
-		if ((parent->pid != pid) && (parent->fd != fd))
 		{
 			return NULL;
 		};
@@ -505,7 +511,7 @@ Window* FindWindowFromListAt(Window *win, int x, int y)
 		int offX, offY;
 		GetClientOffset(win, &offX, &offY);
 		
-		if ((x >= win->params.x) && (x < endX) && (y >= win->params.y) && (y < endY))
+		if ((x >= (int)win->params.x) && (x < endX) && (y >= (int)win->params.y) && (y < endY))
 		{
 			Window *child = FindWindowFromListAt(win->children, x-win->params.x-offX, y-win->params.y-offY);
 			if (child == NULL) result = win;
@@ -587,9 +593,13 @@ void onMouseLeft()
 		
 			if (offY < GUI_CAPTION_HEIGHT)
 			{
-				movingWindow = focusedWindow;
-				movingOffX = offX;
-				movingOffY = offY;
+				if ((focusedWindow->params.flags & GWM_WINDOW_NODECORATE) == 0)
+				{
+					movingWindow = focusedWindow;
+					while (movingWindow->parent != NULL) movingWindow = movingWindow->parent;
+					movingOffX = offX;
+					movingOffY = offY;
+				};
 			};
 		};
 	};
@@ -704,7 +714,8 @@ void onInputEvent(int ev, int scancode)
 		{
 			event.type = GWM_EVENT_UP;
 		};
-	
+		
+		event.win = focusedWindow->id;
 		event.scancode = scancode;
 		
 		pthread_spin_lock(&mouseLock);
@@ -739,6 +750,38 @@ void onMouseMoved()
 		movingWindow->params.x = newX;
 		movingWindow->params.y = newY;
 	};
+	
+	Window *win = FindWindowAt(x, y);
+	if (win != hoveringWindow)
+	{
+		if (hoveringWindow != NULL)
+		{
+			GWMEvent ev;
+			ev.type = GWM_EVENT_LEAVE;
+			ev.win = hoveringWindow->id;
+			PostWindowEvent(hoveringWindow, &ev);
+		};
+		
+		if (win != NULL)
+		{
+			GWMEvent ev;
+			ev.type = GWM_EVENT_ENTER;
+			ev.win = win->id;
+			AbsoluteToRelativeCoords(win, x, y, &ev.x, &ev.y);
+			PostWindowEvent(win, &ev);
+		};
+		
+		hoveringWindow = win;
+	}
+	else if (hoveringWindow != NULL)
+	{
+		GWMEvent ev;
+		ev.type = GWM_EVENT_MOTION;
+		ev.win = hoveringWindow->id;
+		AbsoluteToRelativeCoords(hoveringWindow, x, y, &ev.x, &ev.y);
+		PostWindowEvent(win, &ev);
+	};
+	
 	pthread_spin_unlock(&windowLock);
 };
 
@@ -901,7 +944,7 @@ void *msgThreadFunc(void *ignore)
 			else if (cmd->cmd == GWM_CMD_DESTROY_WINDOW)
 			{
 				pthread_spin_lock(&windowLock);
-				DeleteWindowByID(cmd->destroyWindow.id);
+				DeleteWindowByID(cmd->destroyWindow.id, info.pid, info.fd);
 				pthread_spin_unlock(&windowLock);
 				pthread_spin_unlock(&redrawSignal);
 				pthread_kill(redrawThread, SIGCONT);
@@ -909,7 +952,7 @@ void *msgThreadFunc(void *ignore)
 			else if (cmd->cmd == GWM_CMD_CLEAR_WINDOW)
 			{
 				pthread_spin_lock(&windowLock);
-				Window *win = GetWindowByID(cmd->clearWindow.id);
+				Window *win = GetWindowByID(cmd->clearWindow.id, info.pid, info.fd);
 				if (win != NULL)
 				{
 					ddiFillRect(win->clientArea, 0, 0, win->params.width, win->params.height, &winBackColor);
@@ -1019,8 +1062,6 @@ int main()
 
 	mouseX = mode.width / 2 - 8;
 	mouseY = mode.height / 2 - 8;
-	mouseX = 105;
-	mouseY = 15;
 	
 	// system images
 	defWinIcon = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/defwinicon.png", NULL);

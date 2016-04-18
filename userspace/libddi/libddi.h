@@ -30,6 +30,7 @@
 #define DDI_H_
 
 #include <stdint.h>
+#include <stdlib.h>
 
 /**
  * Surface flags.

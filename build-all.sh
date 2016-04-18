@@ -29,7 +29,6 @@ x86_64-glidix-gcc init.c -o ../initrd/init || exit 1
 mkdir -p ../isodir/bin
 x86_64-glidix-gcc gxpart.c -o ../isodir/bin/gxpart -I ../include || exit 1
 x86_64-glidix-gcc mkgxfs.c -o ../isodir/bin/mkgxfs -I ../include || exit 1
-x86_64-glidix-gcc test.c -o ../isodir/bin/test || exit 1
 x86_64-glidix-gcc ldmods.c -o ../isodir/ldmods || exit 1
 cd ..
 sudo make install-dev || exit 1
@@ -82,8 +81,11 @@ cd ../..
 
 cd userspace/gui
 #x86_64-glidix-gcc lgitest.c -o ../isodir/bin/lgitest -I ../include -lddi || exit 1
-x86_64-glidix-gcc gui.c -o ../../mipdir/usr/bin/gui -I ../../include -lddi || exit 1
-x86_64-glidix-gcc -fPIC -shared libgwm.c -o ../../mipdir/usr/lib/libgwm.so -lddi || exit 1
+sudo cp gui.h /glidix/usr/include/libgwm.h || exit 1
+x86_64-glidix-gcc gui.c -o ../../mipdir/usr/bin/gui -I ../../include -lddi -Wall -Werror || exit 1
+cd libgwm
+x86_64-glidix-gcc -fPIC -shared libgwm.c button.c msgbox.c -o ../../../mipdir/usr/lib/libgwm.so -lddi || exit 1
+cd ..
 sudo cp ../../mipdir/usr/lib/libgwm.so /glidix/usr/lib/libgwm.so || exit 1
 x86_64-glidix-gcc gui-init.c -o ../../mipdir/usr/libexec/gui-init -lddi -lgwm || exit 1
 x86_64-glidix-gcc terminal.c font.c -o ../../mipdir/usr/bin/terminal -lddi -lgwm || exit 1
@@ -167,6 +169,8 @@ cd modules/mod_vionet
 modmake --sysroot=/glidix --host=x86_64-glidix --modname=vionet || exit 1
 cp out/vionet.gkm ../../initrd/initmod/vionet.gkm || exit 1
 cd ../..
+
+x86_64-glidix-gcc userspace/test.c -o isodir/bin/test -lgwm -lddi || exit 1
 
 rm -f out/vmglidix.tar
 make || exit 1

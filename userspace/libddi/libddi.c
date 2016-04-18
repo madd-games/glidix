@@ -721,10 +721,10 @@ void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, i
 			int i;
 			for (i=0; i<src->format.bpp; i++)
 			{
-				if (i != alphaIndex)
-				{
+				//if (i != alphaIndex)
+				//{
 					put[i] = (uint8_t) (((uint16_t)put[i] * (255-srcAlpha) + (uint16_t)scan[i] * srcAlpha) >> 8);
-				};
+				//};
 			};
 			
 			scan += pixelSize;

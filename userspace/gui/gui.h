@@ -35,6 +35,12 @@
 #define	GWM_WINDOW_HIDDEN			(1 << 0)
 #define	GWM_WINDOW_NODECORATE			(1 << 1)
 #define	GWM_WINDOW_MKFOCUSED			(1 << 2)
+#define	GWM_WINDOW_NOTASKBAR			(1 << 3)
+
+/**
+ * Button flags.
+ */
+#define	GWM_BUTTON_DISABLED			(1 << 0)
 
 /**
  * Those must match up with the Glidix humin interface (<glidix/humin.h>).
@@ -42,6 +48,23 @@
 #define	GWM_SC_MOUSE_LEFT			0x100
 #define	GWM_SC_MOUSE_MIDDLE			0x101
 #define	GWM_SC_MOUSE_RIGHT			0x102
+
+/**
+ * Message box icon types.
+ */
+#define	GWM_MBICON_NONE				0x0
+#define	GWM_MBICON_INFO				0x1
+#define	GWM_MBICON_QUEST			0x2
+#define	GWM_MBICON_WARN				0x3
+#define	GWM_MBICON_ERROR			0x4
+
+/**
+ * Message box button sets.
+ */
+#define	GWM_MBUT_OK				0x00
+#define	GWM_MBUT_YESNO				0x10
+#define	GWM_MBUT_OKCANCEL			0x20
+#define	GWM_MBUT_YESNOCANCEL			0x30
 
 /**
  * Window parameter structure, as passed by clients to the window manager.
@@ -70,6 +93,9 @@ typedef struct
 #define	GWM_EVENT_DOWN				1
 #define	GWM_EVENT_UP				2
 #define	GWM_EVENT_UPDATE			3
+#define	GWM_EVENT_ENTER				4
+#define	GWM_EVENT_MOTION			5
+#define	GWM_EVENT_LEAVE				6
 typedef struct
 {
 	int					type;
@@ -157,15 +183,37 @@ typedef union
 	} clearWindowResp;
 } GWMMessage;
 
+struct GWMWindow_;
+
+/**
+ * Event handler function type.
+ * Return 0 when the applications should continue running; return -1 if the loop shall
+ * terminate.
+ */
+typedef int (*GWMEventHandler)(GWMEvent *ev, struct GWMWindow_ *win);
+
+/**
+ * Those structures form lists of event handlers.
+ */
+typedef struct GWMHandlerInfo_
+{
+	struct GWMWindow_			*win;
+	GWMEventHandler				callback;
+	struct GWMHandlerInfo_			*prev;
+	struct GWMHandlerInfo_			*next;
+} GWMHandlerInfo;
+
 /**
  * Describes a window on the application side.
  */
-typedef struct
+typedef struct GWMWindow_
 {
 	uint64_t				id;
 	uint64_t				shmemAddr;
 	uint64_t				shmemSize;
 	DDISurface*				canvas;
+	GWMHandlerInfo				*handlerInfo;
+	void					*data;
 } GWMWindow;
 
 /**
@@ -218,5 +266,43 @@ void gwmClearWindow(GWMWindow *win);
  * Post an update event. The window is allowed to be NULL.
  */
 void gwmPostUpdate(GWMWindow *win);
+
+/**
+ * Set an event handler for the given window, that will be called from gwmMainLoop().
+ */
+void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler);
+
+/**
+ * Call this function if your event handler receives an event it does not respond to,
+ * or to simply trigger the default handler.
+ */
+int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win);
+
+/**
+ * Starts the main loop. Returns after an event handler requests an exit by returning -1.
+ * You must use this when using the widget toolkit.
+ */
+void gwmMainLoop();
+
+/**
+ * Creates a new button in the specified window.
+ */
+GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
+
+/**
+ * Destroys a button.
+ */
+void gwmDestroyButton(GWMWindow *button);
+
+/**
+ * Set the callback function for a button. Return value is the same as for event handlers.
+ */
+typedef int (*GWMButtonCallback)(void *param);
+void gwmSetButtonCallback(GWMWindow *button, GWMButtonCallback callback, void *param);
+
+/**
+ * Display a message box.
+ */
+int gwmMessageBox(GWMWindow *parent, const char *caption, const char *text, int flags);
 
 #endif

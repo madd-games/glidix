@@ -34,6 +34,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <signal.h>
 #include "gui.h"
 
 typedef struct
@@ -50,6 +51,7 @@ uint8_t currentAttr = 0x07;
 pthread_spinlock_t consoleLock;
 pthread_t ctrlThread;
 extern const char font[16*256];
+int running = 1;
 
 int fdMaster;
 
@@ -108,7 +110,6 @@ void writeConsole(const char *buf, size_t sz)
 	while (sz--)
 	{
 		char c = *buf++;
-		if (cursorY == 25) scroll();
 
 		if (c == '\b')
 		{
@@ -144,6 +145,8 @@ void writeConsole(const char *buf, size_t sz)
 				cursorX = 0;
 				cursorY++;
 			};
+
+			if (cursorY == 25) scroll();
 		};
 	};
 };
@@ -173,6 +176,35 @@ void renderConsole(DDISurface *surface)
 void *ctrlThreadFunc(void *ignore)
 {
 	(void)ignore;
+
+	pid_t pid = fork();
+	if (pid == -1)
+	{
+		perror("fork");
+		close(fdMaster);
+		gwmQuit();
+		exit(1);
+	}
+	else if (pid == 0)
+	{
+		setsid();
+		int fd = open(ptsname(fdMaster), O_RDWR);
+		if (fd == -1)
+		{
+			exit(1);
+		};
+		
+		close(0);
+		close(1);
+		close(2);
+		
+		dup2(fd, 0);
+		dup2(fd, 1);
+		dup2(fd, 2);
+		
+		execl("/bin/sh", "sh", NULL);
+		exit(1);
+	};
 	
 	while (1)
 	{
@@ -185,11 +217,21 @@ void *ctrlThreadFunc(void *ignore)
 			pthread_spin_unlock(&consoleLock);
 			gwmPostUpdate(NULL);
 		};
+		
+		if (!running)
+		{
+			gwmPostUpdate(NULL);
+		};
 	};
 	
 	while (1) pause();
 	
 	return NULL;
+};
+
+void onSigChld(int sig)
+{
+	running = 0;
 };
 
 int main()
@@ -213,35 +255,7 @@ int main()
 	grantpt(fdMaster);
 	unlockpt(fdMaster);
 	
-	pid_t pid = fork();
-	if (pid == -1)
-	{
-		perror("fork");
-		close(fdMaster);
-		gwmQuit();
-		return 1;
-	}
-	else if (pid == 0)
-	{
-		setsid();
-		int fd = open(ptsname(fdMaster), O_RDWR);
-		if (fd == -1)
-		{
-			return 1;
-		};
-		
-		close(0);
-		close(1);
-		close(2);
-		
-		dup2(fd, 0);
-		dup2(fd, 1);
-		dup2(fd, 2);
-		
-		execl("/bin/sh", "sh", NULL);
-		return 1;
-	};
-	
+	signal(SIGCHLD, onSigChld);
 	pthread_create(&ctrlThread, NULL, ctrlThreadFunc, NULL);
 	
 	while (1)
@@ -259,6 +273,8 @@ int main()
 			renderConsole(surface);
 			pthread_spin_unlock(&consoleLock);
 			gwmPostDirty();
+			
+			if (!running) break;
 		}
 		else if (ev.type == GWM_EVENT_DOWN)
 		{
