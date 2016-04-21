@@ -68,6 +68,8 @@ static EventBuffer *firstEvent;
 static EventBuffer *lastEvent;
 static GWMHandlerInfo *firstHandler = NULL;
 
+DDIColor gwmColorSelection = {0, 0xAA, 0, 0xFF};
+
 static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 {
 	GWMWaiter *waiter = (GWMWaiter*) malloc(sizeof(GWMWaiter));
@@ -336,6 +338,7 @@ void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler)
 	info->callback = handler;
 	info->prev = NULL;
 	info->next = firstHandler;
+	if (firstHandler != NULL) firstHandler->prev = info;
 	firstHandler = info;
 	win->handlerInfo = info;
 };
@@ -369,4 +372,35 @@ void gwmMainLoop()
 			};
 		};
 	};
+};
+
+void gwmScreenSize(int *width, int *height)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.screenSize.cmd = GWM_CMD_SCREEN_SIZE;
+	cmd.screenSize.seq = seq;
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	if (width != NULL) *width = resp.screenSizeResp.width;
+	if (height != NULL) *height = resp.screenSizeResp.height;
+};
+
+int gwmSetWindowFlags(GWMWindow *win, int flags)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.setFlags.cmd = GWM_CMD_SET_FLAGS;
+	cmd.setFlags.seq = seq;
+	cmd.setFlags.win = win->id;
+	cmd.setFlags.flags = flags;
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	return resp.setFlagsResp.status;
 };

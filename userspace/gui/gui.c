@@ -46,7 +46,7 @@
 #define	GUI_CAPTION_HEIGHT				20
 
 // US keyboard layout
-static unsigned char keymap[128] =
+static int keymap[128] =
 {
 		0,	0, '1', '2', '3', '4', '5', '6', '7', '8',	/* 9 */
 	'9', '0', '-', '=', '\b',	/* Backspace */
@@ -68,15 +68,15 @@ static unsigned char keymap[128] =
 		0,	/* 69 - Num lock*/
 		0,	/* Scroll Lock */
 		0,	/* Home key */
-		0,	/* Up Arrow */
+		GWM_KC_UP,	/* Up Arrow */
 		0,	/* Page Up */
 	'-',
-		0,	/* Left Arrow */
+		GWM_KC_LEFT,	/* Left Arrow */
 		0,
-		0,	/* Right Arrow */
+		GWM_KC_RIGHT,	/* Right Arrow */
 	'+',
 		0,	/* 79 - End key*/
-		0,	/* Down Arrow */
+		GWM_KC_DOWN,	/* Down Arrow */
 		0,	/* Page Down */
 		0,	/* Insert Key */
 		0,	/* Delete Key */
@@ -87,7 +87,7 @@ static unsigned char keymap[128] =
 };
 
 // when shift is pressed
-static unsigned char keymapShift[128] =
+static int keymapShift[128] =
 {
 		0,	0, '!', '@', '#', '$', '%', '^', '&', '*',	/* 9 */
 	'(', ')', '_', '+', '\b',	/* Backspace */
@@ -248,19 +248,22 @@ void PaintWindows(Window *win, DDISurface *target)
 						btnIndex = -1;
 					};
 					
-					int i;
-					for (i=0; i<3; i++)
+					if ((win->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
 					{
-						int yi = 0;
-						if (i == btnIndex)
+						int i;
+						for (i=0; i<3; i++)
 						{
-							yi = 1;
-							if (mouseLeftDown)
+							int yi = 0;
+							if (i == btnIndex)
 							{
-								yi = 2;
+								yi = 1;
+								if (mouseLeftDown)
+								{
+									yi = 2;
+								};
 							};
+							ddiBlit(winButtons, 16*i, 16*yi, target, win->params.x+(win->params.width-48)+16*i, win->params.y+GUI_WINDOW_BORDER, 16, 16);
 						};
-						ddiBlit(winButtons, 16*i, 16*yi, target, win->params.x+(win->params.width-48)+16*i, win->params.y+GUI_WINDOW_BORDER, 16, 16);
 					};
 					
 					ddiOverlay(display, 0, 0, target,
@@ -549,6 +552,15 @@ void AbsoluteToRelativeCoords(Window *win, int inX, int inY, int *outX, int *out
 	};
 };
 
+void PostWindowEvent(Window *win, GWMEvent *event)
+{
+	GWMMessage msg;
+	msg.event.type = GWM_MSG_EVENT;
+	msg.event.seq = 0;
+	memcpy(&msg.event.payload, event, sizeof(GWMEvent));
+	_glidix_mqsend(guiQueue, win->pid, win->fd, &msg, sizeof(GWMMessage));
+};
+
 void onMouseLeft()
 {
 	mouseLeftDown = 1;
@@ -559,7 +571,27 @@ void onMouseLeft()
 	pthread_spin_unlock(&mouseLock);
 	
 	pthread_spin_lock(&windowLock);
+	Window *oldFocus = focusedWindow;
 	focusedWindow = FindWindowAt(x, y);
+	
+	if (oldFocus != focusedWindow)
+	{
+		if (oldFocus != NULL)
+		{
+			GWMEvent ev;
+			ev.type = GWM_EVENT_FOCUS_OUT;
+			ev.win = oldFocus->id;
+			PostWindowEvent(oldFocus, &ev);
+		};
+		
+		if (focusedWindow != NULL)
+		{
+			GWMEvent ev;
+			ev.type = GWM_EVENT_FOCUS_IN;
+			ev.win = focusedWindow->id;
+			PostWindowEvent(focusedWindow, &ev);
+		};
+	};
 	
 	if (focusedWindow != NULL)
 	{
@@ -607,15 +639,6 @@ void onMouseLeft()
 	pthread_spin_unlock(&windowLock);
 };
 
-void PostWindowEvent(Window *win, GWMEvent *event)
-{
-	GWMMessage msg;
-	msg.event.type = GWM_MSG_EVENT;
-	msg.event.seq = 0;
-	memcpy(&msg.event.payload, event, sizeof(GWMEvent));
-	_glidix_mqsend(guiQueue, win->pid, win->fd, &msg, sizeof(GWMMessage));
-};
-
 void onMouseLeftRelease()
 {
 	mouseLeftDown = 0;
@@ -633,7 +656,7 @@ void onMouseLeftRelease()
 	{
 		if (win->parent == NULL)
 		{
-			if ((win->params.flags & GWM_WINDOW_NODECORATE) == 0)
+			if ((win->params.flags & (GWM_WINDOW_NODECORATE | GWM_WINDOW_NOSYSMENU)) == 0)
 			{
 				int btnIndex = ((x - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/16;
 				if ((y < (int)win->params.y+GUI_WINDOW_BORDER) || (y > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
@@ -677,7 +700,7 @@ void DecodeScancode(GWMEvent *ev)
 	
 	if (ev->scancode < 0x80)
 	{
-		unsigned char key = keymap[ev->scancode];
+		int key = keymap[ev->scancode];
 		if (currentKeyMods & GWM_KM_SHIFT) key = keymapShift[ev->scancode];
 		if (key == 0x80)
 		{
@@ -691,9 +714,9 @@ void DecodeScancode(GWMEvent *ev)
 				currentKeyMods &= ~GWM_KM_SHIFT;
 			};
 		}
-		else if ((key != 0) && ((currentKeyMods & GWM_KM_CTRL) == 0))
+		else if ((key != 0) && ((currentKeyMods & GWM_KM_CTRL) == 0) && (key < 0x80))
 		{
-			ev->keychar = (int) key;
+			ev->keychar = key;
 		};
 	};
 	
@@ -963,6 +986,44 @@ void *msgThreadFunc(void *ignore)
 				msg.clearWindowResp.seq = cmd->clearWindow.seq;
 				pthread_spin_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+			}
+			else if (cmd->cmd == GWM_CMD_SCREEN_SIZE)
+			{
+				GWMMessage msg;
+				msg.screenSizeResp.type = GWM_MSG_SCREEN_SIZE_RESP;
+				msg.screenSizeResp.seq = cmd->screenSize.seq;
+				msg.screenSizeResp.width = screen->width;
+				msg.screenSizeResp.height = screen->height;
+				pthread_spin_unlock(&windowLock);
+				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+			}
+			else if (cmd->cmd == GWM_CMD_SET_FLAGS)
+			{
+				pthread_spin_lock(&windowLock);
+				Window *win = GetWindowByID(cmd->setFlags.win, info.pid, info.fd);
+				
+				GWMMessage msg;
+				msg.setFlagsResp.type = GWM_MSG_SET_FLAGS_RESP;
+				msg.setFlagsResp.seq = cmd->setFlags.seq;
+				
+				if (win != NULL)
+				{
+					win->params.flags = cmd->setFlags.flags;
+					if (win->params.flags & GWM_WINDOW_MKFOCUSED)
+					{
+						focusedWindow = win;
+					};
+					msg.setFlagsResp.status = 0;
+				}
+				else
+				{
+					msg.setFlagsResp.status = -1;
+				};
+				
+				pthread_spin_unlock(&windowLock);
+				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+				pthread_spin_unlock(&redrawSignal);
+				pthread_kill(redrawThread, SIGCONT);
 			};
 		}
 		else if (info.type == _GLIDIX_MQ_HANGUP)
@@ -970,6 +1031,7 @@ void *msgThreadFunc(void *ignore)
 			pthread_spin_lock(&windowLock);
 			DeleteWindowsOf(info.pid, info.fd);
 			pthread_spin_unlock(&windowLock);
+			pthread_spin_unlock(&redrawSignal);
 			pthread_kill(redrawThread, SIGCONT);
 		};
 	};

@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <libgwm.h>
 
+GWMWindow *txt1;
+
 int myEventHandler(GWMEvent *ev, GWMWindow *win)
 {
 	switch (ev->type)
@@ -14,7 +16,10 @@ int myEventHandler(GWMEvent *ev, GWMWindow *win)
 
 int myButtonCallback(void *ignore)
 {
-	int result = gwmMessageBox(NULL, "Caption", "This is a meme.", GWM_MBICON_ERROR | GWM_MBUT_YESNO);
+	size_t sz = gwmGetTextFieldSize(txt1);
+	char buffer[sz+1];
+	gwmReadTextField(txt1, buffer, 0, sz);
+	int result = gwmMessageBox(NULL, "Caption", buffer, GWM_MBICON_ERROR | GWM_MBUT_YESNO);
 	printf("Result: %d\n", result);
 	return 0;
 };
@@ -27,6 +32,10 @@ int main()
 		return 1;
 	};
 
+	int width, height;
+	gwmScreenSize(&width, &height);
+	printf("Screen size: %dx%d\n", width, height);
+	
 	GWMWindow *win = gwmCreateWindow(NULL, "Hello world", 10, 10, 200, 200, GWM_WINDOW_MKFOCUSED);
 	if (win == NULL)
 	{
@@ -37,6 +46,8 @@ int main()
 	GWMWindow *btn1 = gwmCreateButton(win, "Normal", 5, 5, 80, 0);
 	gwmSetButtonCallback(btn1, myButtonCallback, NULL);
 	GWMWindow *btn2 = gwmCreateButton(win, "Disabled", 5, 40, 80, GWM_BUTTON_DISABLED);
+	
+	txt1 = gwmCreateTextField(win, "Memes", 5, 90, 180, 0);
 	
 	gwmSetEventHandler(win, myEventHandler);
 	gwmMainLoop();

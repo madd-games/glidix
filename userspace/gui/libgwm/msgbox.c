@@ -76,7 +76,11 @@ int gwmMessageBox(GWMWindow *parent, const char *caption, const char *text, int 
 		width = minWidth;
 	};
 	
-	GWMWindow *dialog = gwmCreateWindow(NULL, caption, 100, 100, width, 66, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOTASKBAR);
+	int screenWidth, screenHeight;
+	gwmScreenSize(&screenWidth, &screenHeight);
+	
+	GWMWindow *dialog = gwmCreateWindow(NULL, caption, screenWidth/2-width/2, screenHeight/2-33,
+						width, 66, GWM_WINDOW_HIDDEN);
 	if (dialog == NULL)
 	{
 		return -1;
@@ -112,7 +116,7 @@ int gwmMessageBox(GWMWindow *parent, const char *caption, const char *text, int 
 		gwmSetButtonCallback(buttons[i], gwmOnMsgButton, NULL);
 	};
 	
-	gwmPostDirty();
+	gwmSetWindowFlags(dialog, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU);
 	
 	while (1)
 	{

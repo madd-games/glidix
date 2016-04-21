@@ -36,6 +36,13 @@
 #define	GWM_WINDOW_NODECORATE			(1 << 1)
 #define	GWM_WINDOW_MKFOCUSED			(1 << 2)
 #define	GWM_WINDOW_NOTASKBAR			(1 << 3)
+#define	GWM_WINDOW_NOSYSMENU			(1 << 4)
+
+/**
+ * Colors.
+ */
+#define	GWM_COLOR_SELECTION			&gwmColorSelection
+extern DDIColor gwmColorSelection;
 
 /**
  * Button flags.
@@ -67,6 +74,16 @@
 #define	GWM_MBUT_YESNOCANCEL			0x30
 
 /**
+ * Key codes.
+ */
+#define	GWM_KC_LEFT				0x100
+#define	GWM_KC_RIGHT				0x101
+#define	GWM_KC_UP				0x102
+#define	GWM_KC_DOWN				0x103
+#define	GWM_KC_CTRL				0x104
+#define	GWM_KC_SHIFT				0x105
+
+/**
  * Window parameter structure, as passed by clients to the window manager.
  */
 typedef struct
@@ -96,6 +113,8 @@ typedef struct
 #define	GWM_EVENT_ENTER				4
 #define	GWM_EVENT_MOTION			5
 #define	GWM_EVENT_LEAVE				6
+#define	GWM_EVENT_FOCUS_IN			7
+#define	GWM_EVENT_FOCUS_OUT			8
 typedef struct
 {
 	int					type;
@@ -115,6 +134,8 @@ typedef struct
 #define	GWM_CMD_POST_DIRTY			1
 #define	GWM_CMD_DESTROY_WINDOW			2
 #define	GWM_CMD_CLEAR_WINDOW			3
+#define	GWM_CMD_SCREEN_SIZE			4
+#define	GWM_CMD_SET_FLAGS			5
 typedef union
 {
 	int					cmd;
@@ -141,6 +162,20 @@ typedef union
 		uint64_t			id;
 		uint64_t			seq;
 	} clearWindow;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_SCREEN_SIZE
+		uint64_t			seq;
+	} screenSize;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_SET_FLAGS
+		int				flags;
+		uint64_t			seq;
+		uint64_t			win;
+	} setFlags;
 } GWMCommand;
 
 /**
@@ -149,6 +184,8 @@ typedef union
 #define GWM_MSG_CREATE_WINDOW_RESP		0
 #define	GWM_MSG_EVENT				1
 #define	GWM_MSG_CLEAR_WINDOW_RESP		2
+#define	GWM_MSG_SCREEN_SIZE_RESP		3
+#define	GWM_MSG_SET_FLAGS_RESP			4
 typedef union
 {
 	struct
@@ -181,6 +218,21 @@ typedef union
 		int				type;	// GWM_MSG_CLEAR_WINDOW_RESP
 		uint64_t			seq;
 	} clearWindowResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_SCREEN_SIZE_RESP
+		uint64_t			seq;
+		int				width;
+		int				height;
+	} screenSizeResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_SET_FLAGS_RESP
+		uint64_t			seq;
+		int				status;
+	} setFlagsResp;
 } GWMMessage;
 
 struct GWMWindow_;
@@ -304,5 +356,39 @@ void gwmSetButtonCallback(GWMWindow *button, GWMButtonCallback callback, void *p
  * Display a message box.
  */
 int gwmMessageBox(GWMWindow *parent, const char *caption, const char *text, int flags);
+
+/**
+ * Get the width and height of the screen.
+ */
+void gwmScreenSize(int *width, int *height);
+
+/**
+ * Set window flags. This can also be used to make a window focused.
+ */
+int gwmSetWindowFlags(GWMWindow *win, int flags);
+
+/**
+ * Creates a new text field in the specified window.
+ */
+GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
+
+/**
+ * Destroys a text field.
+ */
+void gwmDestroyTextField(GWMWindow *txt);
+
+/**
+ * Gets the current number of characters in a text field. You may use it to get the full text by
+ * calling gwmReadTextField().
+ */
+size_t gwmGetTextFieldSize(GWMWindow *field);
+
+/**
+ * Reads from the specified position, up to and excluding the specified end position, into the
+ * specified buffer. Returns the number of characters that were actually read.
+ * Note that this also adds a terminator to the end of the string! So the size of the buffer
+ * must be 1 larger than the number of charaters to store.
+ */
+size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t endPos);
 
 #endif
