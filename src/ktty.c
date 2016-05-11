@@ -67,7 +67,7 @@ static void handleEscape(EscapeSequence *seq)
 
 static ssize_t termWrite(File *file, const void *buffer, size_t size)
 {
-	if (getCurrentThread()->pgid != termGroup)
+	if (getCurrentThread()->creds->pgid != termGroup)
 	{
 		cli();
 		lockSched();
@@ -99,7 +99,7 @@ static ssize_t termWrite(File *file, const void *buffer, size_t size)
 
 static ssize_t termRead(File *fp, void *buffer, size_t size)
 {
-	if (getCurrentThread()->pgid != termGroup)
+	if (getCurrentThread()->creds->pgid != termGroup)
 	{
 		cli();
 		lockSched();
@@ -166,7 +166,7 @@ int termIoctl(File *fp, uint64_t cmd, void *argp)
 		*((int*)argp) = termGroup;
 		return 0;
 	case IOCTL_TTY_SETPGID:
-		if (getCurrentThread()->sid != 1)
+		if (getCurrentThread()->creds->sid != 1)
 		{
 			ERRNO = ENOTTY;
 			return -1;
@@ -177,7 +177,7 @@ int termIoctl(File *fp, uint64_t cmd, void *argp)
 		scan = getCurrentThread();
 		do
 		{
-			if (scan->pgid == pgid)
+			if (scan->creds->pgid == pgid)
 			{
 				target = scan;
 				break;
@@ -190,7 +190,7 @@ int termIoctl(File *fp, uint64_t cmd, void *argp)
 			ERRNO = EPERM;
 			return -1;
 		};
-		if (target->sid != 1)
+		if (target->creds->sid != 1)
 		{
 			unlockSched();
 			sti();

@@ -63,6 +63,7 @@ void initPerCPU()
 	PML4 *pml4 = getPML4();
 	pml4->entries[261].present = 1;
 	pml4->entries[261].pdptPhysAddr = phmAllocZeroFrame();
+	pml4->entries[261].rw = 1;
 	refreshAddrSpace();
 	
 	uint64_t firstPage = (uint64_t) &_per_cpu_start / 0x1000;
@@ -81,6 +82,7 @@ void initPerCPU()
 		{
 			pdpt->entries[pdIndex].present = 1;
 			pdpt->entries[pdIndex].pdPhysAddr = phmAllocZeroFrame();
+			pdpt->entries[pdIndex].rw = 1;
 			refreshAddrSpace();
 		};
 		
@@ -88,7 +90,8 @@ void initPerCPU()
 		if (!pd->entries[ptIndex].present)
 		{
 			pd->entries[ptIndex].present = 1;
-			pd->entries[pdIndex].ptPhysAddr = phmAllocZeroFrame();
+			pd->entries[ptIndex].ptPhysAddr = phmAllocZeroFrame();
+			pd->entries[ptIndex].rw = 1;
 			refreshAddrSpace();
 		};
 		
@@ -97,6 +100,7 @@ void initPerCPU()
 		{
 			pt->entries[pageIndex].present = 1;
 			pt->entries[pageIndex].framePhysAddr = phmAllocZeroFrame();
+			pt->entries[pageIndex].rw = 1;
 			refreshAddrSpace();
 		};
 	};

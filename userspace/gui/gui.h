@@ -50,6 +50,12 @@ extern DDIColor gwmColorSelection;
 #define	GWM_BUTTON_DISABLED			(1 << 0)
 
 /**
+ * Text field flags.
+ */
+#define	GWM_TXT_DISABLED			(1 << 1)
+#define	GWM_TXT_MASKED				(1 << 2)
+
+/**
  * Those must match up with the Glidix humin interface (<glidix/humin.h>).
  */
 #define	GWM_SC_MOUSE_LEFT			0x100
@@ -82,6 +88,13 @@ extern DDIColor gwmColorSelection;
 #define	GWM_KC_DOWN				0x103
 #define	GWM_KC_CTRL				0x104
 #define	GWM_KC_SHIFT				0x105
+
+/**
+ * Cursor types.
+ */
+#define	GWM_CURSOR_NORMAL			0
+#define	GWM_CURSOR_TEXT				1
+#define	GWM_CURSOR_COUNT			2
 
 /**
  * Window parameter structure, as passed by clients to the window manager.
@@ -136,6 +149,7 @@ typedef struct
 #define	GWM_CMD_CLEAR_WINDOW			3
 #define	GWM_CMD_SCREEN_SIZE			4
 #define	GWM_CMD_SET_FLAGS			5
+#define	GWM_CMD_SET_CURSOR			6
 typedef union
 {
 	int					cmd;
@@ -176,6 +190,14 @@ typedef union
 		uint64_t			seq;
 		uint64_t			win;
 	} setFlags;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_SET_CURSOR
+		int				cursor;
+		uint64_t			seq;
+		uint64_t			win;
+	} setCursor;
 } GWMCommand;
 
 /**
@@ -186,6 +208,7 @@ typedef union
 #define	GWM_MSG_CLEAR_WINDOW_RESP		2
 #define	GWM_MSG_SCREEN_SIZE_RESP		3
 #define	GWM_MSG_SET_FLAGS_RESP			4
+#define	GWM_MSG_SET_CURSOR_RESP			5
 typedef union
 {
 	struct
@@ -233,6 +256,13 @@ typedef union
 		uint64_t			seq;
 		int				status;
 	} setFlagsResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_SET_CURSOR_RESP
+		uint64_t			seq;
+		int				status;
+	} setCursorResp;
 } GWMMessage;
 
 struct GWMWindow_;
@@ -390,5 +420,11 @@ size_t gwmGetTextFieldSize(GWMWindow *field);
  * must be 1 larger than the number of charaters to store.
  */
 size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t endPos);
+
+/**
+ * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
+ * Returns 0 on success, -1 on error.
+ */
+int gwmSetWindowCursor(GWMWindow *win, int cursor);
 
 #endif

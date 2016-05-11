@@ -132,10 +132,11 @@ void expandHeap()
 	};
 
 	uint64_t frame = phmAllocFrame();
+	ispLock();
 	ispSetFrame(frame);
 	PT *pt = (PT*) ispGetPointer();
 	memset(pt, 0, sizeof(PT));
-
+	
 	int i;
 	for (i=0; i<512; i++)
 	{
@@ -144,6 +145,8 @@ void expandHeap()
 		pt->entries[i].framePhysAddr = phmAllocFrame();
 	};
 
+	ispUnlock();
+	
 	pdHeap->entries[nextHeapTable].present = 1;
 	pdHeap->entries[nextHeapTable].rw = 1;
 	pdHeap->entries[nextHeapTable].ptPhysAddr = frame;

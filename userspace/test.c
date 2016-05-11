@@ -2,6 +2,8 @@
 #include <libgwm.h>
 
 GWMWindow *txt1;
+GWMWindow *txt2;
+GWMWindow *txt3;
 
 int myEventHandler(GWMEvent *ev, GWMWindow *win)
 {
@@ -16,9 +18,9 @@ int myEventHandler(GWMEvent *ev, GWMWindow *win)
 
 int myButtonCallback(void *ignore)
 {
-	size_t sz = gwmGetTextFieldSize(txt1);
+	size_t sz = gwmGetTextFieldSize(txt2);
 	char buffer[sz+1];
-	gwmReadTextField(txt1, buffer, 0, sz);
+	gwmReadTextField(txt2, buffer, 0, sz);
 	int result = gwmMessageBox(NULL, "Caption", buffer, GWM_MBICON_ERROR | GWM_MBUT_YESNO);
 	printf("Result: %d\n", result);
 	return 0;
@@ -48,6 +50,8 @@ int main()
 	GWMWindow *btn2 = gwmCreateButton(win, "Disabled", 5, 40, 80, GWM_BUTTON_DISABLED);
 	
 	txt1 = gwmCreateTextField(win, "Memes", 5, 90, 180, 0);
+	txt2 = gwmCreateTextField(win, "", 5, 120, 180, GWM_TXT_MASKED);
+	txt3 = gwmCreateTextField(win, "Some shit", 5, 150, 180, GWM_TXT_DISABLED);
 	
 	gwmSetEventHandler(win, myEventHandler);
 	gwmMainLoop();

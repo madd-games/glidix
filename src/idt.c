@@ -257,6 +257,7 @@ static void onPageFault(Regs *regs)
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 	
 	sti();
+#if 0
 	if (getCurrentThread() != NULL)
 	{
 		if (regs->rip == TRAP_SIGRET)
@@ -309,15 +310,16 @@ static void onPageFault(Regs *regs)
 			spinlockRelease(&pm->lock);
 		};
 	};
+#endif
 
-	if ((getCurrentThread() == NULL) || (regs->cs == 8))
-	//if (1)
+	//if ((getCurrentThread() == NULL) || (regs->cs == 8))
+	if (1)
 	{
 		ASM("cli");
 		kernelDead = 1;
 		//heapDump();
 		kdumpregs(regs);
-		kprintf("A page fault occured (rip=%a, cpu=%d)\n", regs->rip, getCurrentCPU()->id);
+		kprintf("A page fault occured (rip=%a, cpu=%d)\n", regs->rip, /*getCurrentCPU()->id*/0);
 		if ((regs->errCode & 1) == 0)
 		{
 			kprintf("[non-present]");
@@ -352,8 +354,9 @@ static void onPageFault(Regs *regs)
 		};
 
 		kprintf("\nVirtual address: %a\n", faultAddr);
-		stackTraceHere();
-		debugKernel(regs);
+		//stackTraceHere();
+		//debugKernel(regs);
+		while (1);
 	}
 	else
 	{
@@ -371,7 +374,7 @@ static void onPageFault(Regs *regs)
 		};
 		siginfo.si_addr = (void*) faultAddr;
 
-		ASM("cli");
+		cli();
 		sendSignal(thread, &siginfo);
 		switchTask(regs);
 	};

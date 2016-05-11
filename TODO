@@ -3,3 +3,4 @@
    modules.
  * Handle all CPU exceptions such as #GP.
  * BSS in modules doesn't get zeroed?
+ * set the WP bit!!!! Otherwise the kernel overwrites temporarily-shared copy-on-write pages.

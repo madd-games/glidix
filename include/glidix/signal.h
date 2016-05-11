@@ -163,8 +163,8 @@ typedef struct
 
 extern uint64_t sizeSignalStackFrame;
 struct _Thread;
-void dispatchSignal(struct _Thread *thread);
-void sendSignal(struct _Thread *thread, siginfo_t *siginfo);
+void dispatchSignal();
+int sendSignal(struct _Thread *thread, siginfo_t *siginfo);	// returns 0 on success, -1 if ignored.
 void sigret(void *ret);
 
 SigDisp* sigdispCreate();

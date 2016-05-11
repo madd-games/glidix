@@ -118,7 +118,7 @@ File* CreateSocket(int domain, int type, int proto)
 	Socket *sock;	
 	if (type == SOCK_RAW)
 	{
-		if (getCurrentThread()->euid != 0)
+		if (getCurrentThread()->creds->euid != 0)
 		{
 			getCurrentThread()->therrno = EACCES;
 			return NULL;

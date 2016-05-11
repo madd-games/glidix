@@ -165,7 +165,7 @@ static void procfs_dir_info(Dir *dir)
 	{
 		cli();
 		lockSched();
-		Thread *th = getThreadByID(dir->dirent.d_ino / PFI_SIZE);
+		Thread *th = getThreadByPID(dir->dirent.d_ino / PFI_SIZE);
 		if (th != NULL) dir->stat.st_size = th->szExecPars;
 		unlockSched();
 		sti();
@@ -174,7 +174,7 @@ static void procfs_dir_info(Dir *dir)
 	{
 		cli();
 		lockSched();
-		Thread *th = getThreadByID(dir->dirent.d_ino / PFI_SIZE);
+		Thread *th = getThreadByPID(dir->dirent.d_ino / PFI_SIZE);
 		if (th != NULL) dir->stat.st_size = strlen(th->execPars);
 		unlockSched();
 		sti();
@@ -183,7 +183,7 @@ static void procfs_dir_info(Dir *dir)
 	{
 		cli();
 		lockSched();
-		Thread *th = getThreadByID(dir->dirent.d_ino / PFI_SIZE);
+		Thread *th = getThreadByPID(dir->dirent.d_ino / PFI_SIZE);
 		if (th != NULL) dir->stat.st_size = strlen(th->cwd);
 		unlockSched();
 		sti();
@@ -210,7 +210,7 @@ static ssize_t procfs_dir_readlink(Dir *dir, char *buffer)
 	ino_t ino = dir->dirent.d_ino % PFI_SIZE;
 	cli();
 	lockSched();
-	Thread *th = getThreadByID(dir->dirent.d_ino / PFI_SIZE);
+	Thread *th = getThreadByPID(dir->dirent.d_ino / PFI_SIZE);
 	ssize_t out = -1;
 	if (th != NULL)
 	{
@@ -237,7 +237,7 @@ static int procfs_root_opendir(Dir *me, Dir *dir, size_t szdir)
 	pid_t pid = me->dirent.d_ino / PFI_SIZE;
 	if (me->dirent.d_ino == 1)
 	{
-		pid = getCurrentThread()->pid;
+		pid = getCurrentThread()->creds->pid;
 	};
 
 	dir->dirent.d_ino = pid * PFI_SIZE + PFI_STATUS;
@@ -280,7 +280,7 @@ static int procfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 		do
 		{
 			th = th->next;
-		} while (th->pid == 0);
+		} while (th->creds == NULL);
 	} while (th != ct);
 
 	// the scheduler is locked and interrupts are off, so we cannot call kmalloc().
@@ -291,26 +291,26 @@ static int procfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 	th = ct;
 	do
 	{
-		_pidstr(ents[i].ent.d_name, th->pid);
-		ents[i].ent.d_ino = th->pid * PFI_SIZE;
-		ents[i].st.st_ino = th->pid * PFI_SIZE;
-		ents[i].st.st_mode = 0700 | VFS_MODE_DIRECTORY;
-		ents[i].st.st_nlink = 1;
-		ents[i].st.st_uid = th->ruid;
-		ents[i].st.st_gid = th->rgid;
-		ents[i].st.st_rdev = th->pid;
-		ents[i].st.st_size = PFI_NUM;
-		ents[i].st.st_blksize = 1;
-		ents[i].st.st_blocks = 1;
-		ents[i].st.st_atime = 0;
-		ents[i].st.st_ctime = 0;
-		ents[i].st.st_mtime = 0;
-		i++;
-
-		do
+		if (th->creds != NULL)
 		{
-			th = th->next;
-		} while (th->pid == 0);
+			_pidstr(ents[i].ent.d_name, th->creds->pid);
+			ents[i].ent.d_ino = th->creds->pid * PFI_SIZE;
+			ents[i].st.st_ino = th->creds->pid * PFI_SIZE;
+			ents[i].st.st_mode = 0700 | VFS_MODE_DIRECTORY;
+			ents[i].st.st_nlink = 1;
+			ents[i].st.st_uid = th->creds->ruid;
+			ents[i].st.st_gid = th->creds->rgid;
+			ents[i].st.st_rdev = th->creds->pid;
+			ents[i].st.st_size = PFI_NUM;
+			ents[i].st.st_blksize = 1;
+			ents[i].st.st_blocks = 1;
+			ents[i].st.st_atime = 0;
+			ents[i].st.st_ctime = 0;
+			ents[i].st.st_mtime = 0;
+			i++;
+		};
+		
+		th = th->next;
 	} while (th != ct);
 
 	unlockSched();

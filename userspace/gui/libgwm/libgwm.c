@@ -404,3 +404,19 @@ int gwmSetWindowFlags(GWMWindow *win, int flags)
 	
 	return resp.setFlagsResp.status;
 };
+
+int gwmSetWindowCursor(GWMWindow *win, int cursor)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.setCursor.cmd = GWM_CMD_SET_CURSOR;
+	cmd.setCursor.seq = seq;
+	cmd.setCursor.win = win->id;
+	cmd.setCursor.cursor = cursor;
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	return resp.setCursorResp.status;
+};

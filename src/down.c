@@ -59,7 +59,7 @@ void reboot()
 int systemDown(int action)
 {
 	Thread *ct = getCurrentThread();
-	if (ct->pid != 1)
+	if (ct->creds->pid != 1)
 	{
 		ct->therrno = EPERM;
 		return -1;
@@ -83,7 +83,7 @@ int systemDown(int action)
 	Thread *thread = ct->next;
 	while (thread != ct)
 	{
-		if (thread->pid > 1) sendSignal(thread, &termsig);
+		if (thread->creds->pid > 1) sendSignal(thread, &termsig);
 		thread = thread->next;
 	};
 
@@ -101,7 +101,7 @@ int systemDown(int action)
 		thread = ct->next;
 		while (thread != ct)
 		{
-			if (thread->pid > 1)
+			if (thread->creds->pid > 1)
 			{
 				if ((thread->flags & THREAD_TERMINATED) == 0) allStopped = 0;
 			};
@@ -123,7 +123,7 @@ int systemDown(int action)
 	thread = ct->next;
 	while (thread != ct)
 	{
-		if (thread->pid > 1) thread->flags |= THREAD_TERMINATED;
+		if (thread->creds->pid > 1) thread->flags |= THREAD_TERMINATED;
 		thread = thread->next;
 	};
 
@@ -134,15 +134,10 @@ int systemDown(int action)
 	thread = ct->next;
 	while (thread != ct)
 	{
-		if (thread->pid != 0)
+		if (thread->creds->pid != 0)
 		{
 			DownrefProcessMemory(thread->pm);
 			if (thread->ftab != NULL) ftabDownref(thread->ftab);
-
-			if (thread->fpexec != NULL)
-			{
-				if (thread->fpexec->close != NULL) thread->fpexec->close(thread->fpexec);
-			};
 		};
 
 		thread = thread->next;
@@ -151,7 +146,6 @@ int systemDown(int action)
 	kprintf("Cleaning up the init process...\n");
 	DownrefProcessMemory(ct->pm);
 	ftabDownref(ct->ftab);
-	if (ct->fpexec->close != NULL) ct->fpexec->close(ct->fpexec);
 
 	kprintf("Unmounting remaining filesystems...\n");
 	unmountAll();

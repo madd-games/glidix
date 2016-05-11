@@ -147,10 +147,10 @@ int sys_mqserver()
 	queue->first = NULL;
 	queue->last = NULL;
 	
-	queue->pid = getCurrentThread()->pid;
+	queue->pid = getCurrentThread()->creds->pid;
 	queue->fd = i;
-	queue->uid = getCurrentThread()->euid;
-	queue->gid = getCurrentThread()->egid;
+	queue->uid = getCurrentThread()->creds->euid;
+	queue->gid = getCurrentThread()->creds->egid;
 	queue->remotePid = 0;
 	
 	fp->fsdata = queue;
@@ -181,10 +181,10 @@ static MessageQueue *findQueue(int pid, int fd)
 	do
 	{
 		thread = thread->next;
-		if (thread->pid == pid) break;
+		if (thread->creds->pid == pid) break;
 	} while (thread != getCurrentThread());
 	
-	if (thread->pid != pid)
+	if (thread->creds->pid != pid)
 	{
 		unlockSched();
 		sti();
@@ -217,7 +217,7 @@ static MessageQueue *findQueue(int pid, int fd)
 
 int sys_mqclient(int pid, int fd)
 {
-	if (pid == getCurrentThread()->pid)
+	if (pid == getCurrentThread()->creds->pid)
 	{
 		ERRNO = EINVAL;
 		return -1;
@@ -263,10 +263,10 @@ int sys_mqclient(int pid, int fd)
 	
 	BufferedMessage *msg = NEW(BufferedMessage);
 	msg->info.type = MQ_CONNECT;
-	msg->info.pid = getCurrentThread()->pid;
+	msg->info.pid = getCurrentThread()->creds->pid;
 	msg->info.fd = i;
-	msg->info.uid = getCurrentThread()->euid;
-	msg->info.gid = getCurrentThread()->egid;
+	msg->info.uid = getCurrentThread()->creds->euid;
+	msg->info.gid = getCurrentThread()->creds->egid;
 	msg->next = NULL;
 	msg->size = 0;
 	if (server->first == NULL)
@@ -291,10 +291,10 @@ int sys_mqclient(int pid, int fd)
 	queue->first = NULL;
 	queue->last = NULL;
 	
-	queue->pid = getCurrentThread()->pid;
+	queue->pid = getCurrentThread()->creds->pid;
 	queue->fd = i;
-	queue->uid = getCurrentThread()->euid;
-	queue->gid = getCurrentThread()->egid;
+	queue->uid = getCurrentThread()->creds->euid;
+	queue->gid = getCurrentThread()->creds->egid;
 	queue->remotePid = pid;
 	queue->remoteFD = fd;
 	

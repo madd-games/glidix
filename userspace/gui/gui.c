@@ -131,7 +131,6 @@ DDIPixelFormat screenFormat;
 DDISurface *desktopBackground;
 DDISurface *screen;
 DDISurface *frontBuffer;
-DDISurface *mouseCursor;
 DDISurface *defWinIcon;
 DDISurface *winButtons;
 
@@ -163,10 +162,23 @@ typedef struct Window_
 	uint64_t				shmemID;
 	uint64_t				shmemAddr;
 	uint64_t				shmemSize;
+	int					cursor;
 } Window;
 
 pthread_spinlock_t windowLock;
 Window* desktopWindows = NULL;
+
+typedef struct
+{
+	DDISurface*				image;
+	int					hotX, hotY;
+	const char*				src;
+} Cursor;
+
+static Cursor cursors[GWM_CURSOR_COUNT] = {
+	{NULL, 0, 0, "/usr/share/images/cursor.png"},
+	{NULL, 7, 7, "/usr/share/images/txtcursor.png"}
+};
 
 /**
  * The currently focused window. All its ancestors are considered focused too.
@@ -225,7 +237,6 @@ void PaintWindows(Window *win, DDISurface *target)
 			
 			if (win->parent == NULL)
 			{
-				//printf("Rendering top-level\n");
 				if ((win->params.flags & GWM_WINDOW_NODECORATE) == 0)
 				{
 					DDIColor *color = &winUnfocColor;
@@ -270,11 +281,15 @@ void PaintWindows(Window *win, DDISurface *target)
 						win->params.x+GUI_WINDOW_BORDER,
 						win->params.y+GUI_WINDOW_BORDER+GUI_CAPTION_HEIGHT,
 						win->params.width, win->params.height);
+				}
+				else
+				{
+					ddiBlit(display, 0, 0, target,
+						win->params.x, win->params.y, win->params.width, win->params.height);
 				};
 			}
 			else
 			{
-				//printf("Rendering child at (%u, %u): %ux%u.\n", win->params.x, win->params.y, win->params.width, win->params.height);
 				ddiBlit(display, 0, 0, target,
 					win->params.x, win->params.y, win->params.width, win->params.height);
 			};
@@ -396,6 +411,7 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	win->next = NULL;
 	win->children = NULL;
 	win->parent = parent;
+	win->cursor = GWM_CURSOR_NORMAL;
 	memcpy(&win->params, pars, sizeof(GWMWindowParams));
 	
 	uint64_t memoryNeeded = ddiGetFormatDataSize(&screen->format, pars->width, pars->height);
@@ -462,7 +478,12 @@ void PaintDesktop()
 	pthread_spin_unlock(&windowLock);
 	
 	pthread_spin_lock(&mouseLock);
-	ddiBlit(mouseCursor, 0, 0, screen, mouseX, mouseY, 16, 16);
+	int cursorIndex = 0;
+	if (hoveringWindow != NULL)
+	{
+		cursorIndex = hoveringWindow->cursor;
+	};
+	ddiBlit(cursors[cursorIndex].image, 0, 0, screen, mouseX-cursors[cursorIndex].hotX, mouseY-cursors[cursorIndex].hotY, 16, 16);
 	pthread_spin_unlock(&mouseLock);
 	
 	ddiOverlay(screen, 0, 0, frontBuffer, 0, 0, screenWidth, screenHeight);
@@ -505,20 +526,23 @@ Window* FindWindowFromListAt(Window *win, int x, int y)
 	Window *result = NULL;
 	for (; win!=NULL; win=win->next)
 	{
-		int width, height;
-		GetWindowSize(win, &width, &height);
-		
-		int endX = win->params.x + width;
-		int endY = win->params.y + height;
-		
-		int offX, offY;
-		GetClientOffset(win, &offX, &offY);
-		
-		if ((x >= (int)win->params.x) && (x < endX) && (y >= (int)win->params.y) && (y < endY))
+		if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
 		{
-			Window *child = FindWindowFromListAt(win->children, x-win->params.x-offX, y-win->params.y-offY);
-			if (child == NULL) result = win;
-			else result = child;
+			int width, height;
+			GetWindowSize(win, &width, &height);
+		
+			int endX = win->params.x + width;
+			int endY = win->params.y + height;
+		
+			int offX, offY;
+			GetClientOffset(win, &offX, &offY);
+		
+			if ((x >= (int)win->params.x) && (x < endX) && (y >= (int)win->params.y) && (y < endY))
+			{
+				Window *child = FindWindowFromListAt(win->children, x-win->params.x-offX, y-win->params.y-offY);
+				if (child == NULL) result = win;
+				else result = child;
+			};
 		};
 	};
 	
@@ -1024,6 +1048,30 @@ void *msgThreadFunc(void *ignore)
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 				pthread_spin_unlock(&redrawSignal);
 				pthread_kill(redrawThread, SIGCONT);
+			}
+			else if (cmd->cmd == GWM_CMD_SET_CURSOR)
+			{
+				pthread_spin_lock(&windowLock);
+				Window *win = GetWindowByID(cmd->setCursor.win, info.pid, info.fd);
+				
+				GWMMessage msg;
+				msg.setCursorResp.type = GWM_MSG_SET_CURSOR_RESP;
+				msg.setCursorResp.seq = cmd->setCursor.seq;
+				
+				if ((win != NULL) && (cmd->setCursor.cursor >= 0) && (cmd->setCursor.cursor < GWM_CURSOR_COUNT))
+				{
+					win->cursor = cmd->setCursor.cursor;
+					msg.setCursorResp.status = 0;
+				}
+				else
+				{
+					msg.setCursorResp.status = -1;
+				};
+				
+				pthread_spin_unlock(&windowLock);
+				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+				pthread_spin_unlock(&redrawSignal);
+				pthread_kill(redrawThread, SIGCONT);
 			};
 		}
 		else if (info.type == _GLIDIX_MQ_HANGUP)
@@ -1114,14 +1162,18 @@ int main()
 	
 	// initialize mouse cursor
 	DDIColor mouseColor = {0xEE, 0xEE, 0xEE, 0xFF};
-	
-	mouseCursor = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/cursor.png", NULL);
-	if (mouseCursor == NULL)
-	{
-		mouseCursor = ddiCreateSurface(&screenFormat, 16, 16, NULL, 0);
-		ddiFillRect(mouseCursor, 0, 0, 16, 16, &mouseColor);
-	};
 
+	int i;
+	for (i=0; i<GWM_CURSOR_COUNT; i++)
+	{
+		cursors[i].image = ddiLoadAndConvertPNG(&screenFormat, cursors[i].src, NULL);
+		if (cursors[i].image == NULL)
+		{
+			cursors[i].image = ddiCreateSurface(&screenFormat, 16, 16, NULL, 0);
+			ddiFillRect(cursors[i].image, 0, 0, 16, 16, &mouseColor);
+		};
+	};
+	
 	mouseX = mode.width / 2 - 8;
 	mouseY = mode.height / 2 - 8;
 	

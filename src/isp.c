@@ -36,23 +36,23 @@
 
 static PTe *ispPTE;
 static Spinlock ispSpinlock;
+static PAGE_ALIGN PT ispPT;
+static PAGE_ALIGN PD ispPD;
+static PAGE_ALIGN PDPT ispPDPT;
 
 void ispInit()
 {
 	// TODO: xd (execute disable, not the stupid face), we'll look at that shit in a bit.
-
-	// note that for now, kxmalloc() returns physical addresses with the virtual base
-	// added.
 	PML4 *pml4 = getPML4();
-	PDPT *pdpt = kxmalloc(sizeof(PDPT), MEM_PAGEALIGN);
+	PDPT *pdpt = &ispPDPT;
 	memset(pdpt, 0, sizeof(PDPT));
-	PD *pd = kxmalloc(sizeof(PD), MEM_PAGEALIGN);
+	PD *pd = &ispPD;
 	memset(pd, 0, sizeof(PD));
 	pdpt->entries[0].present = 1;
 	pdpt->entries[0].rw = 1;
 	pdpt->entries[0].pdPhysAddr = (((uint64_t)pd-0xFFFF800000000000) >> 12);
 
-	PT *pt = kxmalloc(sizeof(PT), MEM_PAGEALIGN);
+	PT *pt = &ispPT;
 	memset(pt, 0, sizeof(PT));
 	pd->entries[0].present = 1;
 	pd->entries[0].rw = 1;
@@ -68,16 +68,19 @@ void ispInit()
 	pt->entries[1].present = 1;
 	pt->entries[1].framePhysAddr = 0xFEE00;
 	pt->entries[1].pcd = 1;
+	pt->entries[1].rw = 1;
 
 	// IOAPIC register space
 	pt->entries[2].present = 1;
 	pt->entries[2].framePhysAddr = 0xFEC00;
 	pt->entries[2].pcd = 1;
+	pt->entries[2].rw = 1;
 
 	// set it in the PML4 (so it maps from 0xFFFF808000000000 up).
 	pml4->entries[257].present = 1;
 	pml4->entries[257].pdptPhysAddr = (((uint64_t)pdpt-0xFFFF800000000000) >> 12);
-
+	pml4->entries[257].rw = 1;
+	
 	// refresh the address space
 	refreshAddrSpace();
 

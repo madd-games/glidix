@@ -52,18 +52,12 @@ typedef struct
 } PACKED MachineState;
 
 #define	DEFAULT_STACK_SIZE		0x200000
-#define	CLONE_SHARE_MEMORY		(1 << 0)
-#define	CLONE_SHARE_FTAB		(1 << 1)
+#define	CLONE_THREAD			(1 << 0)
 
 /**
  * If this flag is set, then the thread is waiting for a signal to be received.
  */
 #define	THREAD_WAITING			(1 << 0)
-
-/**
- * If this flag is set, the thread is currently handling a signal.
- */
-#define	THREAD_SIGNALLED		(1 << 1)
 
 /**
  * If this flag is set, then the thread has terminated and is a zombie process,
@@ -72,9 +66,10 @@ typedef struct
 #define	THREAD_TERMINATED		(1 << 2)
 
 /**
- * If this flag is set, then the thread is in the middle of an interruptable system call.
+ * If this flag is set, the thread is detached and shall not produce a scheduler notification
+ * when it dies.
  */
-#define	THREAD_INT_SYSCALL		(1 << 3)
+#define	THREAD_DETACHED			(1 << 3)
 
 /**
  * If this flag is set, then the thread is a "rebel" and cannot be controlled by its parent.
@@ -94,6 +89,109 @@ typedef struct
 #define	WDETACH				(1 << 1)
 #define	WUNTRACED			(1 << 2)
 #define	WCONTINUED			(1 << 3)
+
+/**
+ * Scheduler notification. This data structure is stored in a doubly-linked list
+ * and is used to leave information that may be obtained using wait(), waitpid(),
+ * pthread_join(), etc.
+ *
+ * For SHN_PROCESS_DEAD, the "source" is the pid of the child process that died, and
+ * "dest" is its parent pid. The parent may collect the status from the "info" union
+ * using wait() or waitpid(). All threads of the parent process are woken up when the
+ * event is posted in case they are performing a blocking wait()/waitpid().
+ *
+ * For SHN_THREAD_DEAD, the "source" is the thid of the thread that died, and "dest"
+ * is the pid. Any other thread in the process may call pthread_join() to collect the
+ * return value from the "info" union. All other threads are woken up in case one is
+ * performing a blocking pthread_join().
+ *
+ * In any case, "dest" is the pid of the process which is supposed to receive the
+ * notification. When the process with that pid dies, all notifications directed to
+ * it are deleted.
+ */
+#define	SHN_PROCESS_DEAD		0
+#define	SHN_THREAD_DEAD			1
+typedef struct SchedNotif_
+{
+	int				type;
+	int				dest;
+	int				source;
+	
+	union
+	{
+		int			status;
+		uint64_t		retval;
+	} info;
+	
+	struct SchedNotif_*		prev;
+	struct SchedNotif_*		next;
+} SchedNotif;
+
+/**
+ * Thread credentials. This object is shared by all threads that constitue a "process".
+ * When a new thread is created within the same process, they use the same credentials
+ * object.
+ * When fork() is called to create a new process, the initial thread has a COPY of the
+ * calling thread's credentials object, but it is now a new object and changes made by
+ * the 2 processes are independent of each other (furthermore, the pid is changed for
+ * the new process).
+ * Kernel threads do not have credentials.
+ */
+typedef struct
+{
+	/**
+	 * Reference count.
+	 */
+	int				refcount;
+	
+	/**
+	 * Process ID.
+	 */
+	int				pid;
+	
+	/**
+	 * Parent process ID.
+	 */
+	int				ppid;
+
+	/**
+	 * UID/GID stuff.
+	 */
+	uid_t				euid, suid, ruid;
+	gid_t				egid, sgid, rgid;
+
+	/**
+	 * Session and process group IDs.
+	 */
+	int				sid;
+	int				pgid;
+
+	/**
+	 * File mode creation mask as set by umask().
+	 */
+	mode_t				umask;
+
+	/**
+	 * Supplementary group IDs (max 16) and the number that is actually set.
+	 */
+	gid_t				groups[16];
+	int				numGroups;
+	
+	/**
+	 * Exit status to be sent to the parent of the process when all the threads
+	 * have terminated. This is set to zero initially; this way, if all threads
+	 * terminate by calling _glidix_thexit(), it will be as if the entire process
+	 * exited with exit() with a status of 0. Otherwise, if a thread calls exit(),
+	 * all threads get terminated and this is set to the status specified in the
+	 * exit() call.
+	 */
+	int				status;
+} Creds;
+
+Creds*	credsNew();
+Creds*	credsDup(Creds *creds);
+void	credsUpref(Creds *creds);
+void	credsDownref(Creds *creds);
 
 /**
  * WARNING: The first few fields of this structure must not be reordered as they are accessed by
@@ -163,33 +261,10 @@ typedef struct _Thread
 	ProcMem				*pm;
 
 	/**
-	 * The pid is 0 for all kernel threads. New pids are assigned by _glidix_clone() and fork().
-	 */
-	int				pid;
-
-	/**
-	 * The parent's pid. This value must be ignored for kernel threads (which have pid 0). If
-	 * a process dies, its children's parent pid shall be set to 1.
-	 */
-	int				pidParent;
-
-	/**
 	 * The file table used by this process.
 	 */
 	FileTable			*ftab;
-
-	/**
-	 * UID/GID stuff.
-	 */
-	uid_t				euid, suid, ruid;
-	gid_t				egid, sgid, rgid;
-
-	/**
-	 * Session and process group IDs.
-	 */
-	int				sid;
-	int				pgid;
-
+	
 	/**
 	 * Points to this thread's argv and initial environment string.
 	 * The format of this string is as follows:
@@ -206,20 +281,9 @@ typedef struct _Thread
 	int				status;
 
 	/**
-	 * Registers to restore if the current system call is interrupted by a signal;
-	 * This is only valid if the THREAD_INT_SYSCALL flag is said.
-	 */
-	Regs				intSyscallRegs;
-
-	/**
 	 * The current working directory. Does not end with a slash unless it's the root directory.
 	 */
 	char				cwd[256];
-
-	/**
-	 * File description of the executable file, or NULL.
-	 */
-	File				*fpexec;
 
 	/**
 	 * Pointer to where the errno shall be stored after syscalls complete.
@@ -231,17 +295,6 @@ typedef struct _Thread
 	 * This is used by stuff like sleep(). Given in milliseconds.
 	 */
 	uint64_t			wakeTime;
-
-	/**
-	 * File mode creation mask as set by umask().
-	 */
-	mode_t				umask;
-
-	/**
-	 * Supplementary group IDs (max 16) and the number that is actually set.
-	 */
-	gid_t				groups[16];
-	int				numGroups;
 	
 	/**
 	 * The time at which to send the SIGALRM signal; 0 means the signal shall not be sent.
@@ -267,6 +320,16 @@ typedef struct _Thread
 	siginfo_t			pendingSigs[64];
 	
 	/**
+	 * The thread's credentials. NULL for kernel threads.
+	 */
+	Creds*				creds;
+	
+	/**
+	 * The thread ID, globally unique.
+	 */
+	int				thid;
+	
+	/**
 	 * The thread's signal mask.
 	 */
 	uint64_t			sigmask;
@@ -279,6 +342,7 @@ typedef struct _Thread
 } Thread;
 
 void initSched();
+void initSched2();
 void initSchedAP();				// initialize scheduling on an AP, when the main sched is already inited
 void switchContext(Regs *regs);
 void dumpRunqueue();
@@ -344,16 +408,23 @@ int threadClone(Regs *regs, int flags, MachineState *state);
 /**
  * Exit the thread.
  */
-void threadExit(Thread *thread, int status);
+void threadExitEx(uint64_t retval);
+void threadExit();
 
 /**
- * Poll a thread.
+ * Exit the entire process.
  */
-int pollThread(int pid, int *stat_loc, int flags);
+void processExit(int status);
+
+/**
+ * Wait for a process to terminate.
+ */
+int processWait(int pid, int *stat_loc, int flags);
 
 /**
  * Send a signal to a specific pid.
  */
+int signalPidEx(int pid, siginfo_t *si);
 int signalPid(int pid, int signal);
 
 /**
@@ -363,9 +434,23 @@ int signalPid(int pid, int signal);
 void switchTaskToIndex(int index);
 
 /**
- * Return a thread by pid. The scheduler must be locked when calling this function. Kernel threads (pid=0) cannot be retrieved.
+ * Return a thread by pid of thid. The scheduler must be locked when calling this function. Requesting a thread by
+ * pid will return an unspecified thread from the given process.
  * Return NULL if not found.
  */
-Thread *getThreadByID(int pid);
+Thread *getThreadByPID(int pid);
+Thread *getThreadByTHID(int thid);
+
+/**
+ * Wake up all threads in a process
+ */
+void wakeProcess(int pid);
+
+/**
+ * Kill all threads of the current process except the calling thread, by sending the SIGKILL signal, discard all inbound
+ * scheduler notifications, and wait for total cleanup of the threads, making the calling thread the sole thread in the
+ * process.
+ */
+void killOtherThreads();
 
 #endif

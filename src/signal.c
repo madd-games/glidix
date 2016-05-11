@@ -98,8 +98,10 @@ int isDeathSig(int signo)
 	};
 };
 
-void dispatchSignal(Thread *thread)
+void dispatchSignal()
 {
+	Thread *thread = getCurrentThread();
+	
 	int i;
 	siginfo_t *siginfo = NULL;
 	for (i=0; i<64; i++)
@@ -130,7 +132,7 @@ void dispatchSignal(Thread *thread)
 		Regs regs;				// doesn't matter, it will die
 		cli();
 		unlockSched();				// threadExit() calls lockSched()
-		threadExit(thread, -SIGKILL);
+		threadExit(-SIGKILL);
 		switchTask(&regs);
 	};
 	
@@ -152,7 +154,7 @@ void dispatchSignal(Thread *thread)
 			Regs regs;				// doesn't matter, it will die
 			cli();
 			unlockSched();				// threadExit() calls lockSched()
-			threadExit(thread, -siginfo->si_signo);
+			threadExit(-siginfo->si_signo);
 			switchTask(&regs);
 		}
 		else
@@ -173,7 +175,7 @@ void dispatchSignal(Thread *thread)
 		// signal stack broken, kill the process with SIGABRT.
 		Regs regs;
 		unlockSched();
-		threadExit(thread, -SIGABRT);
+		threadExit(-SIGABRT);
 		switchTask(&regs);
 	};
 	
@@ -223,19 +225,20 @@ void dispatchSignal(Thread *thread)
 	thread->sigmask |= action->sa_mask;
 };
 
-void sendSignal(Thread *thread, siginfo_t *siginfo)
+int sendSignal(Thread *thread, siginfo_t *siginfo)
 {
 	if (thread->flags & THREAD_TERMINATED)
 	{
-		return;
+		return -1;
 	};
 
 	if (siginfo->si_signo == SIGCONT)
 	{
 		// wake up the thread but do not dispatch any signal
-		//thread->flags &= ~THREAD_WAITING;
+		// also we return -1 so that signalPid() wakes up all
+		// threads in the process.
 		signalThread(thread);
-		return;
+		return -1;
 	};
 	
 	if (thread->sigdisp->actions[siginfo->si_signo].sa_handler == SIG_IGN)
@@ -246,14 +249,14 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 		// at by the thread; e.g. it could be the SIGCHLD signal indicating that the
 		// thread might need to wait() for the child.
 		signalThread(thread);
-		return;
+		return -1;
 	};
 	
 	if (thread->pendingSet == 0xFFFFFFFFFFFFFFFF)
 	{
 		// no place to put the signal in; discard
 		signalThread(thread);
-		return;
+		return -1;
 	};
 	
 	int i;
@@ -276,6 +279,7 @@ void sendSignal(Thread *thread, siginfo_t *siginfo)
 	memcpy(&thread->pendingSigs[i], siginfo, sizeof(siginfo_t));
 	
 	signalThread(thread);
+	return 0;
 };
 
 void sigret(void *ret)

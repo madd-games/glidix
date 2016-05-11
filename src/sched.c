@@ -47,6 +47,12 @@ void kmain2();
 uint32_t quantumTicks;			// initialised by init.c, how many APIC timer ticks to do per process.
 extern PER_CPU TSS* localTSSPtr;
 
+static Spinlock expireLock;
+static Thread *threadSysMan;
+
+static Spinlock notifLock;
+static SchedNotif *firstNotif;
+
 typedef struct
 {
 	char symbol;
@@ -55,7 +61,6 @@ typedef struct
 
 static ThreadFlagInfo threadFlags[] = {
 	{'W', THREAD_WAITING},
-	{'S', THREAD_SIGNALLED},
 	{'T', THREAD_TERMINATED},
 	{'R', THREAD_REBEL},
 	{0, 0}
@@ -88,7 +93,15 @@ void dumpRunqueue()
 		memset(name, ' ', 32);
 		name[32] = 0;
 		memcpy(name, th->name, strlen(th->name));
-		kprintf("%d\t%d\t%d\t%d\t%s", i++, th->pid, th->pidParent, th->cpuID, name);
+		int pid = 0, ppid = 0, euid = 0, egid = 0;
+		if (th->creds != NULL)
+		{
+			pid = th->creds->pid;
+			ppid = th->creds->ppid;
+			euid = th->creds->euid;
+			egid = th->creds->egid;
+		};
+		kprintf("%d\t%d\t%d\t%d\t%s", i++, pid, ppid, th->cpuID, name);
 		printThreadFlags(th->flags);
 		if (th->regs.cs == 8)
 		{
@@ -98,9 +111,124 @@ void dumpRunqueue()
 		{
 			kprintf("%$\x04" "K%#");
 		};
-		kprintf("\t%d\t%d\n", th->euid, th->egid);
+		kprintf("\t%d\t%d\n", euid, egid);
 		th = th->next;
 	} while (th != &firstThread);
+};
+
+Creds *credsNew()
+{
+	Creds *creds = NEW(Creds);
+	creds->refcount = 1;
+	creds->pid = 1;
+	creds->ppid = 1;
+	creds->euid = creds->suid = creds->ruid = 0;
+	creds->egid = creds->sgid = creds->rgid = 0;
+	creds->sid = 0;
+	creds->pgid = 0;
+	creds->umask = 0;
+	creds->numGroups = 0;
+	creds->status = 0;
+	return creds;
+};
+
+Creds *credsDup(Creds *old)
+{
+	Creds *new = NEW(Creds);
+	memcpy(new, old, sizeof(Creds));
+	new->refcount = 1;
+	return new;
+};
+
+void credsUpref(Creds *creds)
+{
+	__sync_fetch_and_add(&creds->refcount, 1);
+};
+
+void credsDownref(Creds *creds)
+{
+	if (__sync_fetch_and_add(&creds->refcount, -1) == 1)
+	{
+		spinlockAcquire(&notifLock);
+		
+		// orphanate all children of this process
+		cli();
+		lockSched();
+		
+		// if the parent died between the time our last thread was removed from
+		// the runqueue and the removal of the credentials object, we changed our
+		// parent to "init" (pid 1) now.
+		int parentPid = 1;
+		Thread *thread = currentThread;
+		do
+		{
+			if (thread->creds != NULL)
+			{
+				if (thread->creds->ppid == creds->pid)
+				{
+					thread->creds->ppid = 1;
+				};
+				
+				if (thread->creds->pid == creds->ppid)
+				{
+					// our parent lives!
+					parentPid = creds->ppid;
+				};
+			};
+			
+			thread = thread->next;
+		} while (thread != currentThread);
+		
+		unlockSched();
+		sti();
+		
+		// delete all notifications directed at us
+		SchedNotif *notif = firstNotif;
+		while (notif != NULL)
+		{
+			if (notif->dest == creds->pid)
+			{
+				if (notif == firstNotif) firstNotif = notif->next;
+				if (notif->prev != NULL) notif->prev->next = notif->next;
+				if (notif->next != NULL) notif->next->prev = notif->prev;
+				SchedNotif *next = notif->next;
+				kfree(notif);
+				notif = next;
+			}
+			else
+			{
+				notif = notif->next;
+			};
+		};
+		
+		// before releasing the spinlock, place a notification of our own termination
+		notif = NEW(SchedNotif);
+		notif->type = SHN_PROCESS_DEAD;
+		notif->dest = parentPid;
+		notif->source = creds->pid;
+		
+		// send the SIGCHLD signal to the parent
+		siginfo_t siginfo;
+		siginfo.si_signo = SIGCHLD;
+		if (creds->status >= 0)
+		{
+			siginfo.si_code = CLD_EXITED;
+		}
+		else
+		{
+			siginfo.si_code = CLD_KILLED;
+		};
+		siginfo.si_pid = creds->pid;
+		siginfo.si_status = creds->status;
+		siginfo.si_uid = creds->ruid;
+		signalPidEx(parentPid, &siginfo);
+		
+		// wake the parent
+		wakeProcess(parentPid);
+		
+		spinlockRelease(&notifLock);
+		kfree(creds);
+	};
 };
 
 static void startupThread()
@@ -115,7 +243,9 @@ void initSched()
 {
 	nextPid = 1;
 	spinlockRelease(&schedLock);
-
+	spinlockRelease(&notifLock);
+	firstNotif = NULL;
+	
 	// create a new stack for this initial process
 	firstThread.stack = kmalloc(DEFAULT_STACK_SIZE);
 	firstThread.stackSize = DEFAULT_STACK_SIZE;
@@ -136,38 +266,20 @@ void initSched()
 	strcpy(firstThread.name, "Startup thread");
 	firstThread.flags = 0;
 	firstThread.pm = NULL;
-	firstThread.pid = 0;
 	firstThread.ftab = NULL;
 
-	// UID/GID stuff
-	firstThread.euid = 0;
-	firstThread.suid = 0;
-	firstThread.ruid = 0;
-	firstThread.egid = 0;
-	firstThread.sgid = 0;
-	firstThread.rgid = 0;
+	// no credentials for kernel threads
+	firstThread.creds = NULL;
+	firstThread.thid = 0;
 
-	// sid/pgid
-	firstThread.sid = 0;
-	firstThread.pgid = 0;
-	
 	// set the working directory to /initrd by default.
 	strcpy(firstThread.cwd, "/initrd");
-
-	// no executable
-	firstThread.fpexec = NULL;
 
 	// no error ptr
 	firstThread.errnoptr = NULL;
 
 	// no wakeing
 	firstThread.wakeTime = 0;
-
-	// no umask
-	firstThread.umask = 0;
-
-	// no supplementary groups
-	firstThread.numGroups = 0;
 	
 	// do not send alarms
 	firstThread.alarmTime = 0;
@@ -188,6 +300,92 @@ void initSched()
 	currentThread = &firstThread;
 	apic->timerInitCount = quantumTicks;
 	switchContext(&firstThread.regs);
+};
+
+static Spinlock sysManReadySignal;
+static Spinlock sysManLock;
+static int numThreadsToClean;
+static void sysManFunc(void *ignore)
+{
+	(void)ignore;
+	
+	// SYSTEM MANAGER THREAD
+	// This thread, when signalled, scans the thread queue for terminated
+	// threads, removes them from the queue, and performs cleanup operations.
+	// it is necessary because, for example, when a thread exits, it must free
+	// the stack that it runs on.
+	
+	numThreadsToClean = 0;
+	spinlockRelease(&sysManLock);
+	while (1)
+	{
+		spinlockAcquire(&sysManLock);
+		while (numThreadsToClean > 0)
+		{
+			numThreadsToClean--;
+			
+			Thread *threadFound = NULL;
+			cli();
+			lockSched();
+			threadFound = currentThread;
+			do
+			{
+				if (threadFound->flags & THREAD_TERMINATED)
+				{
+					if (threadFound->creds != NULL)
+					{
+						break;
+					};
+				};
+			} while (threadFound != currentThread);
+			
+			if (threadFound != currentThread)
+			{
+				threadFound->prev->next = threadFound->next;
+				threadFound->next->prev = threadFound->prev;
+			};
+			
+			unlockSched();
+			sti();
+			
+			if (threadFound != currentThread)
+			{
+				// removed from runqueue, now do cleanup
+				kfree(threadFound->stack);
+				if (threadFound->pm != NULL) DownrefProcessMemory(threadFound->pm);
+				if (threadFound->ftab != NULL) ftabDownref(threadFound->ftab);
+				if (threadFound->execPars != NULL) kfree(threadFound->execPars);
+				if (threadFound->sigdisp != NULL) sigdispDownref(threadFound->sigdisp);
+				if (threadFound->creds != NULL) credsDownref(threadFound->creds);
+				kfree(threadFound);
+			};
+		};
+		
+		cli();
+		lockSched();
+		waitThread(currentThread);
+		spinlockRelease(&sysManLock);
+		spinlockRelease(&sysManReadySignal);
+		unlockSched();
+		kyield();
+	};
+};
+
+void initSched2()
+{
+	spinlockRelease(&expireLock);
+	
+	spinlockRelease(&sysManReadySignal);
+	spinlockAcquire(&sysManReadySignal);
+
+	KernelThreadParams pars;
+	memset(&pars, 0, sizeof(KernelThreadParams));
+	pars.stackSize = DEFAULT_STACK_SIZE;
+	pars.name = "System Manager Thread";
+	threadSysMan = CreateKernelThread(sysManFunc, &pars, NULL);
+	
+	// wait for the system manager to release the lock, indicating that it is ready
+	spinlockAcquire(&sysManReadySignal);
 };
 
 void initSchedAP()
@@ -467,8 +665,8 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	strcpy(thread->name, name);
 	thread->flags = threadFlags;
 	thread->pm = NULL;
-	thread->pid = 0;
-	thread->pidParent = 0;
+	thread->creds = NULL;
+	thread->thid = 0;
 	thread->ftab = NULL;
 	thread->alarmTime = 0;
 	
@@ -476,32 +674,14 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->pendingSet = 0;
 	thread->sigmask = 0;
 
-	// kernel threads always run as root
-	thread->euid = 0;
-	thread->suid = 0;
-	thread->ruid = 0;
-	thread->egid = 0;
-	thread->sgid = 0;
-	thread->rgid = 0;
-
-	// they are also a special session and process group
-	thread->sid = 0;
-	thread->pgid = 0;
-	
 	// start all kernel threads in "/initrd"
 	strcpy(thread->cwd, "/initrd");
-
-	// no executable attached
-	thread->fpexec = NULL;
 
 	// no errnoptr
 	thread->errnoptr = NULL;
 
 	// do not wake
 	thread->wakeTime = 0;
-
-	// no umask
-	thread->umask = 0;
 
 	// this will simulate a call from kernelThreadExit() to "entry()"
 	// this is so that when entry() returns, the thread can safely exit.
@@ -513,7 +693,7 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	
 	// link into the runqueue
 	cli();
-	spinlockAcquire(&schedLock);
+	lockSched();
 	currentThread->next->prev = thread;
 	thread->next = currentThread->next;
 	thread->prev = currentThread;
@@ -521,7 +701,7 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	// there is no need to update currentThread->prev, it will only be broken for the init
 	// thread, which never exits, and therefore its prev will never need to be valid.
 	signalThread(thread);
-	spinlockRelease(&schedLock);
+	unlockSched();
 	sti();
 	
 	return thread;
@@ -584,7 +764,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->flags = 0;
 
 	// process memory
-	if (flags & CLONE_SHARE_MEMORY)
+	if (flags & CLONE_THREAD)
 	{
 		UprefProcessMemory(currentThread->pm);
 		thread->pm = currentThread->pm;
@@ -609,17 +789,53 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 			memcpy(thread->sigdisp->actions, currentThread->sigdisp->actions, sizeof(SigAction)*SIG_NUM);
 		};
 	};
+	
+	// credentials
+	if (flags & CLONE_THREAD)
+	{
+		if (currentThread->creds != NULL)
+		{
+			credsUpref(currentThread->creds);
+			thread->creds = currentThread->creds;
+		}
+		else
+		{
+			thread->creds = credsNew();
+		};
+	}
+	else
+	{
+		if (currentThread->creds != NULL)
+		{
+			thread->creds = credsDup(currentThread->creds);
+		}
+		else
+		{
+			thread->creds = credsNew();
+		};
+	};
 
-	// assign pid
+	// assign pid/thid
 	spinlockAcquire(&schedLock);
-	thread->pid = nextPid++;
+	if ((flags & CLONE_THREAD) == 0)
+	{
+		thread->creds->pid = nextPid++;
+	};
+	thread->thid = nextPid++;
 	spinlockRelease(&schedLock);
 
 	// remember parent pid
-	thread->pidParent = currentThread->pid;
+	if (currentThread->creds != NULL)
+	{
+		thread->creds->ppid = currentThread->creds->pid;
+	}
+	else
+	{
+		thread->creds->ppid = 1;
+	};
 
 	// file table
-	if (flags & CLONE_SHARE_FTAB)
+	if (flags & CLONE_THREAD)
 	{
 		ftabUpref(currentThread->ftab);
 		thread->ftab = currentThread->ftab;
@@ -635,37 +851,12 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 			thread->ftab = ftabCreate();
 		};
 	};
-
-	// inherit UIDs/GIDs from the parent
-	thread->euid = currentThread->euid;
-	thread->suid = currentThread->suid;
-	thread->ruid = currentThread->ruid;
-	thread->egid = currentThread->egid;
-	thread->sgid = currentThread->sgid;
-	thread->rgid = currentThread->rgid;
-
-	// inherit the session and process group IDs
-	thread->sid = currentThread->sid;
-	thread->pgid = currentThread->pgid;
 	
 	// inherit the working directory
 	strcpy(thread->cwd, currentThread->cwd);
 
-	// duplicate the executable description.
-	if (currentThread->fpexec == NULL)
-	{
-		thread->fpexec = NULL;
-	}
-	else
-	{
-		File *fpexec = (File*) kmalloc(sizeof(File));
-		memset(fpexec, 0, sizeof(File));
-		currentThread->fpexec->dup(currentThread->fpexec, fpexec, sizeof(File));
-		thread->fpexec = fpexec;
-	};
-
 	// exec params
-	if (currentThread->pid != 0)
+	if (currentThread->execPars != NULL)
 	{
 		thread->execPars = (char*) kmalloc(currentThread->szExecPars);
 		memcpy(thread->execPars, currentThread->execPars, currentThread->szExecPars);
@@ -679,10 +870,6 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 
 	thread->therrno = 0;
 	thread->wakeTime = 0;
-	thread->umask = 0;
-
-	memcpy(thread->groups, currentThread->groups, sizeof(gid_t)*16);
-	thread->numGroups = currentThread->numGroups;
 	
 	// alarms shall be cancelled in the new process/thread
 	thread->alarmTime = 0;
@@ -692,7 +879,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	
 	// if the address space is shared, the errnoptr is now invalid;
 	// otherwise, it can just stay where it is.
-	if (flags & CLONE_SHARE_MEMORY)
+	if (flags & CLONE_THREAD)
 	{
 		thread->errnoptr = NULL;
 	}
@@ -712,9 +899,69 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	spinlockRelease(&schedLock);
 	sti();
 
-	return thread->pid;
+	if (flags & CLONE_THREAD)
+	{
+		return thread->thid;
+	}
+	else
+	{
+		return thread->creds->pid;
+	};
 };
 
+void threadExitEx(uint64_t retval)
+{
+	if (currentThread->creds == NULL)
+	{
+		panic("a kernel thread called threadExitEx()");
+	};
+	
+	if ((currentThread->flags & THREAD_DETACHED) == 0)
+	{
+		// this thread is not detached (i.e. it's joinable), so we make
+		// a scheduler notification
+		SchedNotif *notif = NEW(SchedNotif);
+		notif->type = SHN_THREAD_DEAD;
+		notif->dest = currentThread->creds->pid;
+		notif->source = currentThread->thid;
+		notif->info.retval = retval;
+		notif->prev = NULL;
+		
+		spinlockAcquire(&notifLock);
+		notif->next = firstNotif;
+		if (firstNotif != NULL) firstNotif->prev = notif;
+		firstNotif = notif;
+		spinlockRelease(&notifLock);
+		
+		// wake the other threads
+		wakeProcess(currentThread->creds->pid);
+	};
+		
+	spinlockAcquire(&sysManLock);
+	cli();
+	lockSched();
+	currentThread->flags |= THREAD_TERMINATED;
+	numThreadsToClean++;
+	spinlockRelease(&sysManLock);
+	signalThread(threadSysMan);
+	downrefCPU(currentThread->cpuID);
+	Regs regs;
+	switchTaskUnlocked(&regs);
+};
+
+void processExit(int status)
+{
+	killOtherThreads();
+	currentThread->creds->status = status;
+	threadExit();
+};
+
+void threadExit()
+{
+	threadExitEx(0);
+};
+
+#if 0
 void threadExit(Thread *thread, int status)
 {
 	if (thread->pid == 0)
@@ -813,7 +1060,56 @@ static Thread *findThreadToKill(int pid, int *stat_loc, int flags)
 
 	return threadToKill;
 };
+#endif
 
+int processWait(int pid, int *stat_loc, int flags)
+{
+	if (pid == currentThread->creds->pid)
+	{
+		ERRNO = ECHILD;
+		return -1;
+	};
+	
+	while (1)
+	{
+		spinlockAcquire(&notifLock);
+		SchedNotif *notif = firstNotif;
+		while (notif != NULL)
+		{
+			if ((notif->dest == currentThread->creds->pid) && (notif->source == pid) && (notif->type == SHN_PROCESS_DEAD))
+			{
+				*stat_loc = notif->info.status;
+				if (notif == firstNotif) firstNotif = notif->next;
+				if (notif->next != NULL) notif->next->prev = notif->prev;
+				if (notif->prev != NULL) notif->prev->next = notif->next;
+				kfree(notif);
+				spinlockRelease(&notifLock);
+				return 0;
+			}
+			else
+			{
+				notif = notif->next;
+			};
+		};
+		
+		if (flags & WNOHANG)
+		{
+			ERRNO = ECHILD;
+			spinlockRelease(&notifLock);
+			return -1;
+		};
+		
+		cli();
+		lockSched();
+		waitThread(currentThread);
+		spinlockRelease(&notifLock);
+		unlockSched();
+		kyield();
+		spinlockAcquire(&notifLock);
+	};
+};
+
+#if 0
 int pollThread(int pid, int *stat_loc, int flags)
 {
 	if (kernelStatus != KERNEL_RUNNING)
@@ -881,6 +1177,7 @@ int pollThread(int pid, int *stat_loc, int flags)
 	
 	return ret;
 };
+#endif
 
 static int canSendSignal(Thread *src, Thread *dst, int signo)
 {
@@ -903,27 +1200,33 @@ static int canSendSignal(Thread *src, Thread *dst, int signo)
 		return 0;
 	};
 
-	if (dst->pid == 0)
+	if (dst->creds == NULL)
+	{
+		return 0;
+	};
+	
+	if (src->creds == NULL)
+	{
+		// kernel threads can signal whoever they want
+		return 1;
+	};
+
+	if ((dst->creds->pid == 1) && ((signo == SIGKILL) || (signo == SIGSTOP)))
 	{
 		return 0;
 	};
 
-	if ((dst->pid == 1) && ((signo == SIGKILL) || (signo == SIGSTOP)))
-	{
-		return 0;
-	};
-
-	if ((src->euid == 0) || (src->ruid == 0))
+	if ((src->creds->euid == 0) || (src->creds->ruid == 0))
 	{
 		return 1;
 	};
 
-	if ((src->ruid == dst->euid) || (src->ruid == dst->ruid))
+	if ((src->creds->ruid == dst->creds->euid) || (src->creds->ruid == dst->creds->ruid))
 	{
 		return 1;
 	};
 
-	if ((dst->pidParent == src->pid) && (((dst->flags & THREAD_REBEL) == 0) || (signo == SIGINT)))
+	if ((dst->creds->ppid == src->creds->pid) && (((dst->flags & THREAD_REBEL) == 0) || (signo == SIGINT)))
 	{
 		return 1;
 	};
@@ -931,6 +1234,110 @@ static int canSendSignal(Thread *src, Thread *dst, int signo)
 	return 0;
 };
 
+int signalPidEx(int pid, siginfo_t *si)
+{
+	// keep track of which pids we've already successfully delivered signals to
+	// in this call.
+	int pidsDelivered[100];
+	int pidDelivIndex = 0;
+	
+	cli();
+	lockSched();
+	
+	int result = -1;
+	ERRNO = ESRCH;
+
+	int mypgid = 0;
+	if (currentThread->creds != NULL)
+	{
+		mypgid = currentThread->creds->pgid;
+	};
+
+	Thread *thread = currentThread;
+	do
+	{
+		if (thread->creds != NULL)
+		{
+			if ((thread->creds->pid == pid) || (thread->creds->pgid == -pid) || (pid == -1)
+				|| ((pid == 0) && (thread->creds->pgid == mypgid)))
+			{
+				int i;
+				int found = 0;
+				for (i=0; i<pidDelivIndex; i++)
+				{
+					if (pidsDelivered[i] == thread->creds->pid)
+					{
+						found = 1;
+						break;
+					};
+				};
+			
+				if (!found)
+				{
+					if (!canSendSignal(currentThread, thread, si->si_signo))
+					{
+						ERRNO = EPERM;
+						thread = thread->next;
+						continue;
+					};
+			
+					if (si != NULL)
+					{
+						if (sendSignal(thread, si) == 0)
+						{
+							if (pidDelivIndex == 100)
+							{
+								ERRNO = ENOMEM;
+								break;
+							};
+							pidsDelivered[pidDelivIndex++] = thread->creds->pid;
+						};
+					};
+				
+					result = 0;
+				};
+			
+				thread = thread->next;
+			};
+		};
+	} while (thread != currentThread);
+	
+	unlockSched();
+	sti();
+	
+	if (result != 0)
+	{
+		// if the target pid is a zombie, we still report the sending to be successful
+		spinlockAcquire(&notifLock);
+		SchedNotif *notif;
+		for (notif=firstNotif; notif!=NULL; notif=notif->next)
+		{
+			if ((notif->type == SHN_PROCESS_DEAD) && (notif->source == pid))
+			{
+				result = 0;
+				break;
+			};
+		};
+		spinlockRelease(&notifLock);
+	};
+	
+	return result;
+};
+
+int signalPid(int pid, int sig)
+{
+	if (sig == 0)
+	{
+		return signalPidEx(pid, NULL);
+	};
+	
+	siginfo_t si;
+	memset(&si, 0, sizeof(siginfo_t));
+	si.si_signo = sig;
+	return signalPidEx(pid, &si);
+};
+
+#if 0
 int signalPid(int pid, int signo)
 {
 	if (pid == currentThread->pid)
@@ -975,6 +1382,7 @@ int signalPid(int pid, int signo)
 	sti();
 	return result;
 };
+#endif
 
 void switchTaskToIndex(int index)
 {
@@ -985,18 +1393,32 @@ void switchTaskToIndex(int index)
 	};
 };
 
-Thread *getThreadByID(int pid)
+Thread *getThreadByTHID(int thid)
 {
-	if (pid == 0) return NULL;
-
 	Thread *th = currentThread;
-	while (th->pid != pid)
+	while (th->thid != thid)
 	{
 		th = th->next;
 		if (th == currentThread) return NULL;
 	};
 
 	return th;
+};
+
+Thread *getThreadByPID(int pid)
+{
+	Thread *th = currentThread;
+	do
+	{
+		if (th->creds != NULL)
+		{
+			if (th->creds->pid == pid) return th;
+		};
+		
+		th = th->next;
+	} while (th != currentThread);
+
+	return NULL;
 };
 
 void _preempt(); /* common.asm */
@@ -1022,4 +1444,82 @@ void initUserRegs(Regs *regs)
 	regs->cs = 0x1B;
 	regs->ss = 0x23;
 	regs->rflags = getFlagsRegister() | (1 << 9);
+};
+
+void wakeProcess(int pid)
+{
+	cli();
+	lockSched();
+	
+	Thread *thread = currentThread;
+	do
+	{
+		if (thread->creds != NULL)
+		{
+			if (thread->creds->pid == pid)
+			{
+				signalThread(thread);
+			};
+		};
+		thread = thread->next;
+	} while (thread != currentThread);
+	
+	unlockSched();
+	sti();
+};
+
+void killOtherThreads()
+{
+	siginfo_t si;
+	si.si_signo = SIGKILL;
+	
+	cli();
+	lockSched();
+	
+	Thread *thread = currentThread;
+	do
+	{
+		if (thread->creds != NULL)
+		{
+			if (thread->creds->pid == currentThread->creds->pid)
+			{
+				if (thread != currentThread)
+				{
+					sendSignal(thread, &si);
+				};
+			};
+		};
+		thread = thread->next;
+	} while (thread != currentThread);
+	
+	unlockSched();
+	sti();
+	
+	// wait for the termination
+	while (currentThread->creds->refcount != 1)
+	{
+		__sync_synchronize();
+		kyield();
+	};
+	
+	// remove scheduler notifications directed at us
+	spinlockAcquire(&notifLock);
+	SchedNotif *notif = firstNotif;
+	while (notif != NULL)
+	{
+		if (notif->dest == currentThread->creds->pid)
+		{
+			if (notif == firstNotif) firstNotif = notif->next;
+			if (notif->prev != NULL) notif->prev->next = notif->next;
+			if (notif->next != NULL) notif->next->prev = notif->prev;
+			SchedNotif *next = notif->next;
+			kfree(notif);
+			notif = next;
+		}
+		else
+		{
+			notif = notif->next;
+		};
+	};
+	spinlockRelease(&notifLock);
 };

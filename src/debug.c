@@ -105,12 +105,12 @@ void debugKernel(Regs *regs)
 			break;
 		case 5:
 			kprintf("CPU: %d\n", getCurrentCPU()->id);
-			kprintf("PID: %d, '%s'\n", getCurrentThread()->pid, getCurrentThread()->name);
+			kprintf("PID: %d, '%s'\n", getCurrentThread()->creds->pid, getCurrentThread()->name);
 			kprintf("WAKE: %d, TICKS: %d\n", (int) getCurrentThread()->wakeTime, getUptime());
 			kdumpregs(&getCurrentThread()->regs);
 			break;
 		case 6:
-			kprintf("PID: %d, '%s'\n", getCurrentThread()->pid, getCurrentThread()->name);
+			kprintf("PID: %d, '%s'\n", getCurrentThread()->creds->pid, getCurrentThread()->name);
 			if (getCurrentThread()->pm == NULL)
 			{
 				kprintf("This thread has no memory\n");

@@ -154,9 +154,6 @@ typedef struct
 extern "C" {
 #endif
 
-#define	_GLIDIX_CLONE_SHARE_MEMORY			(1 << 0)
-#define	_GLIDIX_CLONE_SHARE_FTAB			(1 << 1)
-
 #define	_GLIDIX_INSMOD_VERBOSE				(1 << 0)
 
 #define	_GLIDIX_RMMOD_VERBOSE				(1 << 0)
@@ -195,8 +192,6 @@ size_t		_glidix_getparsz();
 void		_glidix_getpars(char *buffer, size_t size);
 int		_glidix_geterrno();
 void		_glidix_seterrno(int _errno);
-pid_t		_glidix_clone(int flags, const _glidix_mstate *state);
-pid_t		_glidix_pollpid(pid_t pid, int *stat_loc, int flags);
 int		_glidix_insmod(const char *modname, const char *path, const char *opt, int flags);
 int		_glidix_ioctl(int fd, unsigned long cmd, void *argp);
 int		_glidix_fdopendir(const char *dirname);

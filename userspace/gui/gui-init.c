@@ -54,62 +54,6 @@ int main()
 		fclose(fp);
 		break;
 	};
-#if 0
-	gwmInit();
-	GWMWindow *wnd = gwmCreateWindow(NULL, "Hello world meme", 10, 10, 200, 200, 0);
-	
-	if (wnd == NULL) fprintf(stderr, "Error\n");
-	else
-	{
-		DDISurface *surface = gwmGetWindowCanvas(wnd);
-		gwmPostDirty();
-
-		while (1)
-		{
-			GWMEvent ev;
-			gwmWaitEvent(&ev);
-			
-			if (ev.type == GWM_EVENT_CLOSE)
-			{
-				break;
-			}
-			else if ((ev.type == GWM_EVENT_DOWN) && (ev.scancode == GWM_SC_MOUSE_LEFT))
-			{
-				DDIColor color = {0, 0, 0, 0xFF};
-				ddiFillRect(surface, ev.x, ev.y, 5, 5, &color);
-				gwmPostDirty();
-			}
-			else if ((ev.type == GWM_EVENT_DOWN) && (ev.scancode == GWM_SC_MOUSE_MIDDLE))
-			{
-				DDIColor color = {0xFF, 0, 0, 0xFF};
-				ddiFillRect(surface, ev.x, ev.y, 5, 5, &color);
-				gwmPostDirty();
-			}
-			else if ((ev.type == GWM_EVENT_DOWN) && (ev.scancode == GWM_SC_MOUSE_RIGHT))
-			{
-				DDIColor color = {0, 0xFF, 0, 0xFF};
-				ddiFillRect(surface, ev.x, ev.y, 5, 5, &color);
-				gwmPostDirty();
-			}
-			else if ((ev.type == GWM_EVENT_UP) && (ev.scancode == GWM_SC_MOUSE_LEFT))
-			{
-				DDIColor color = {0, 0, 0xFF, 0xFF};
-				ddiFillRect(surface, ev.x, ev.y, 5, 5, &color);
-				gwmPostDirty();
-			}
-			else if ((ev.type == GWM_EVENT_DOWN) && (ev.keycode < 0x80))
-			{
-				gwmClearWindow(wnd);
-				char buffer[512];
-				sprintf(buffer, "You pressed %c", ev.keycode);
-				ddiDrawText(surface, 2, 2, buffer, NULL, NULL);
-				gwmPostDirty();
-			};
-		};
-	};
-	
-	gwmQuit();
-#endif
 
 	pid_t pid = fork();
 	if (pid == 0)

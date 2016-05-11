@@ -128,6 +128,7 @@ _start:
 	; enable paging.
 	mov eax, cr0                 ; Set the A-register to control register 0.
 	or eax, 1 << 31              ; Set the PG-bit, which is the 32nd bit (bit 31).
+	or eax, 1 << 16              ; Set WP (write-protect)
 	mov cr0, eax                 ; Set control register 0 to the A-register.
 
 	; go to 64-bit long mode.

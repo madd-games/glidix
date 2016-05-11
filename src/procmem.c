@@ -34,12 +34,15 @@
 #include <glidix/string.h>
 #include <glidix/errno.h>
 #include <glidix/sched.h>
+#include <glidix/vfs.h>
 
 static Spinlock mapLock;
 
-FrameList *palloc_later(int count, off_t fileOffset, size_t fileSize)
+FrameList *palloc_later(File *fp, int count, off_t fileOffset, size_t fileSize)
 {
 	FrameList *fl = (FrameList*) kmalloc(sizeof(FrameList));
+	fl->fp = fp;
+	if (fp != NULL) vfsDup(fp);
 	fl->refcount = 1;
 	fl->count = count;
 	fl->frames = (uint64_t*) kmalloc(8*count);
@@ -56,6 +59,7 @@ FrameList *palloc_later(int count, off_t fileOffset, size_t fileSize)
 FrameList *palloc(int count)
 {
 	FrameList *fl = (FrameList*) kmalloc(sizeof(FrameList));
+	fl->fp = NULL;
 	fl->refcount = 1;
 	fl->count = count;
 	fl->frames = (uint64_t*) kmalloc(8*count);
@@ -78,6 +82,7 @@ FrameList *palloc(int count)
 FrameList *pmap(uint64_t start, int count)
 {
 	FrameList *fl = (FrameList*) kmalloc(sizeof(FrameList));
+	fl->fp = NULL;
 	fl->refcount = 1;
 	fl->count = count;
 	fl->frames = (uint64_t*) kmalloc(8*count);
@@ -153,6 +158,11 @@ void pdownref(FrameList *fl)
 		if (fl->on_destroy != NULL)
 		{
 			fl->on_destroy(fl->on_destroy_arg);
+		};
+		
+		if (fl->fp != NULL)
+		{
+			vfsClose(fl->fp);
 		};
 		
 		kfree(fl->frames);
@@ -710,12 +720,6 @@ int tryLoadOnDemand(uint64_t addr)
 			{
 				if (seg->fl->frames[relidx] == 0)
 				{
-					if (seg->fl->fileOffset == -1)
-					{
-						panic("unloaded pages in non-disk segment");
-					};
-
-					//void *ptr = (void*) (pageIndex * 0x1000);
 					off_t offset = (seg->fl->fileOffset + (relidx * 0x1000)) & ~0xFFF;
 					size_t size = 0x1000;
 					while (((offset+size) > (seg->fl->fileOffset+seg->fl->fileSize)) && (size != 0))
@@ -723,9 +727,12 @@ int tryLoadOnDemand(uint64_t addr)
 						size--;
 					};
 					memset(pagebuf, 0, 0x1000);
-					File *fp = getCurrentThread()->fpexec;
-					fp->seek(fp, offset, SEEK_SET);
-					vfsRead(fp, pagebuf, size);
+					File *fp = seg->fl->fp;
+					if (fp != NULL)
+					{
+						fp->seek(fp, offset, SEEK_SET);
+						vfsRead(fp, pagebuf, size);
+					};
 					
 					PTe *pte = getPage(pm, MEM_CURRENT, pageIndex, 0);
 					uint64_t newFrame = phmAllocFrame();

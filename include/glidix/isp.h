@@ -40,6 +40,7 @@
 void ispInit();
 void *ispGetPointer();
 void ispSetFrame(uint64_t frame);
+void ispZero();				// zero out the ISP
 void ispLock();
 void ispUnlock();
 

@@ -84,7 +84,7 @@ int sys_mount(const char *fsname, const char *image, const char *mountpoint, int
 	};
 	
 	Thread *ct = getCurrentThread();
-	if (ct->euid != 0)
+	if (ct->creds->euid != 0)
 	{
 		ct->therrno = EPERM;
 		return -1;

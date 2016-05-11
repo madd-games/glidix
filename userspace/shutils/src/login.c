@@ -161,6 +161,7 @@ int main(int argc, char *argv[])
 		struct passwd *pwd = getpwnam(username);
 		if (pwd == NULL)
 		{
+			sleep(5);
 			fprintf(stderr, "Sorry, please try again.\n");
 			continue;
 		};

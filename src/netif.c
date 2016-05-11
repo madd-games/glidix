@@ -1067,7 +1067,7 @@ int route_add(int family, int pos, gen_route *route)
 		return -1;
 	};
 	
-	if (getCurrentThread()->euid != 0)
+	if (getCurrentThread()->creds->euid != 0)
 	{
 		getCurrentThread()->therrno = EACCES;
 		return -1;
@@ -1148,7 +1148,7 @@ int route_clear(int family, const char *ifname)
 		return -1;
 	};
 	
-	if (getCurrentThread()->euid != 0)
+	if (getCurrentThread()->creds->euid != 0)
 	{
 		getCurrentThread()->therrno = EACCES;
 		return -1;
@@ -1491,7 +1491,7 @@ int isLocalAddr(const struct sockaddr *addr)
 
 int netconf_addr(int family, const char *ifname, const void *buffer, size_t size)
 {
-	if (getCurrentThread()->euid != 0)
+	if (getCurrentThread()->creds->euid != 0)
 	{
 		ERRNO = EPERM;
 		return -1;

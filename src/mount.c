@@ -158,7 +158,7 @@ int mount(const char *prefix, FileSystem *fs, int flags)
 
 int unmount(const char *prefix)
 {
-	if (getCurrentThread()->euid != 0)
+	if (getCurrentThread()->creds->euid != 0)
 	{
 		getCurrentThread()->therrno = EPERM;
 		return -1;

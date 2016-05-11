@@ -42,7 +42,7 @@ syscallTable = {
 	20:	"_glidix_seterrno",
 	21:	"mprotect",
 	22:	"lseek",
-	23:	"_glidix_clone",
+	23:	"fork",
 	24:	"pause",
 	25:	"waitpid",
 	26:	"kill",

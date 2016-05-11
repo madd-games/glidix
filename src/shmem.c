@@ -109,7 +109,7 @@ uint64_t sys_shmalloc(uint64_t addr, uint64_t size, int assocPid, int protAssoc,
 	SharedMemory *shmem = NEW(SharedMemory);
 	shmem->prev = NULL;
 	shmem->next = NULL;
-	shmem->pidOwner = getCurrentThread()->pid;
+	shmem->pidOwner = getCurrentThread()->creds->pid;
 	shmem->pidAssoc = assocPid;
 	shmem->protAssoc = protAssoc;
 	shmem->protWorld = protWorld;
@@ -197,7 +197,7 @@ int sys_shmap(uint64_t addr, uint64_t size, uint64_t id, int prot)
 	};
 	
 	int maxProt;
-	if (getCurrentThread()->pid == shmem->pidAssoc)
+	if (getCurrentThread()->creds->pid == shmem->pidAssoc)
 	{
 		maxProt = shmem->protAssoc;
 	}

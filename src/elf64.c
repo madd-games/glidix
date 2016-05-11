@@ -144,6 +144,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		vfsUnlockCreation();
 		return sysOpenErrno(error);
 	};
+	fp->refcount = 1;
 	vfsUnlockCreation();
 
 	if (fp->seek == NULL)
@@ -339,7 +340,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	{
 		if (segments[i].count > 0)
 		{
-			FrameList *fl = palloc_later(segments[i].count, segments[i].fileOffset, segments[i].fileSize);
+			FrameList *fl = palloc_later(fp, segments[i].count, segments[i].fileOffset, segments[i].fileSize);
 			if (AddSegment(pm, segments[i].index, fl, segments[i].flags) != 0)
 			{
 				getCurrentThread()->therrno = ENOEXEC;
@@ -358,14 +359,6 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		kprintf_debug("ERROR: failed to map stack for some reason\n");
 	};
 	pdownref(flStack);
-	
-	// change the fpexec
-	if (thread->fpexec != NULL)
-	{
-		if (thread->fpexec->close != NULL) thread->fpexec->close(thread->fpexec);
-		kfree(thread->fpexec);
-	};
-	thread->fpexec = fp;
 
 	// make sure we jump to the entry upon return
 	regs.rip = elfHeader.e_entry;
@@ -373,6 +366,9 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	// the errnoptr is now invalid
 	thread->errnoptr = NULL;
 
+	// kill all threads in the same process and wait for them to fully detach
+	killOtherThreads();
+	
 	// close all files marked with O_CLOEXEC (on glidix a.k.a. FD_CLOEXEC)
 	spinlockAcquire(&getCurrentThread()->ftab->spinlock);
 	for (i=0; i<MAX_OPEN_FILES; i++)
@@ -392,13 +388,13 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	// suid/sgid stuff
 	if (st.st_mode & VFS_MODE_SETUID)
 	{
-		thread->euid = st.st_uid;
+		thread->creds->euid = st.st_uid;
 		thread->flags |= THREAD_REBEL;
 	};
 
 	if (st.st_mode & VFS_MODE_SETGID)
 	{
-		thread->egid = st.st_gid;
+		thread->creds->egid = st.st_gid;
 		thread->flags |= THREAD_REBEL;
 	};
 

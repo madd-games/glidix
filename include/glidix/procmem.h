@@ -38,7 +38,6 @@
 #include <stddef.h>
 #include <glidix/common.h>
 #include <glidix/spinlock.h>
-//#include <glidix/cowcache.h>
 
 #define	PROT_READ			(1 << 0)
 #define	PROT_WRITE			(1 << 1)
@@ -93,6 +92,7 @@ typedef struct
 	int refcount;
 	int count;
 	uint64_t *frames;
+	struct _File *fp;		// NULL for anonymous
 	off_t fileOffset;
 	size_t fileSize;
 	Spinlock lock;
@@ -166,7 +166,7 @@ typedef struct
 	Spinlock lock;
 } ProcMem;
 
-FrameList *palloc_later(int count, off_t fileOffset, size_t fileSize);
+FrameList *palloc_later(struct _File *fp, int count, off_t fileOffset, size_t fileSize);
 FrameList *palloc(int count);
 FrameList *pmap(uint64_t start, int count);
 int pupref(FrameList *fl);			// returns the new refcount

@@ -126,7 +126,7 @@ static int udpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 	port = __builtin_bswap16(port);
 	if (port < 1024)
 	{
-		if (getCurrentThread()->euid != 0)
+		if (getCurrentThread()->creds->euid != 0)
 		{
 			// only root can bind to ports below 1024
 			ERRNO = EACCES;

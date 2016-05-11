@@ -100,18 +100,22 @@ void dumpFS(FileSystem *fs)
 int vfsCanCurrentThread(struct stat *st, mode_t mask)
 {
 	Thread *thread = getCurrentThread();
-
+	if (thread->creds == NULL)
+	{
+		return 1;
+	};
+	
 	// the root special case (he can do literally anything).
-	if (thread->euid == 0)
+	if (thread->creds->euid == 0)
 	{
 		return 1;
 	};
 
-	if (thread->euid == st->st_uid)
+	if (thread->creds->euid == st->st_uid)
 	{
 		return ((st->st_mode >> 6) & mask) != 0;
 	}
-	else if (thread->egid == st->st_gid)
+	else if (thread->creds->egid == st->st_gid)
 	{
 		return ((st->st_mode >> 3) & mask) != 0;
 	}
@@ -361,7 +365,8 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 						if (vfsCanCurrentThread(&st_parent, 2))
 						{
 							if (dir->mkreg(dir, token, (flags >> 3) & 0x0FFF,
-									getCurrentThread()->euid, getCurrentThread()->egid) == 0)
+								getCurrentThread()->creds->euid,
+								getCurrentThread()->creds->egid) == 0)
 							{
 								
 								dir->stat.st_dev = spath.fs->dev;
@@ -472,7 +477,8 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 							if (vfsCanCurrentThread(&st_parent, 2))
 							{
 								if (subdir->mkreg(subdir, token, (flags >> 3) & 0x0FFF,
-										getCurrentThread()->euid, getCurrentThread()->egid) == 0)
+										getCurrentThread()->creds->euid,
+										getCurrentThread()->creds->egid) == 0)
 								{
 									subdir->stat.st_dev = spath.fs->dev;
 									return subdir;

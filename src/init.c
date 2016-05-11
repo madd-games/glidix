@@ -271,6 +271,7 @@ void kmain(MultibootInfo *info)
 	PML4 *pml4 = (PML4*) 0xFFFF800000001000;
 	pml4->entries[511].present = 1;
 	pml4->entries[511].pdptPhysAddr = 1;	// 0x1000
+	pml4->entries[511].rw = 1;
 	refreshAddrSpace();
 	
 	kprintf_debug(" *** TO TRAP THE KERNEL *** \n");
@@ -435,8 +436,8 @@ static void spawnProc(void *stack)
 	vfsClose(file);
 	kprintf("%$\x02" "%d bytes%#\n", count);
 
-	getCurrentThread()->sid = 1;
-	getCurrentThread()->pgid = 1;
+	getCurrentThread()->creds->sid = 1;
+	getCurrentThread()->creds->pgid = 1;
 	
 	kprintf("Control will be transferred to usbs now.\n");
 	_jmp_usbs(stack);
@@ -446,12 +447,14 @@ extern uint64_t getFlagsRegister();
 
 static UINT32 onPowerButton(void *ignore)
 {
+#if 0
 	(void)ignore;
 	Thread *thread = getCurrentThread();
-	while (thread->pid != 1)
+	while (thread->creds->pid != 1)
 	{
 		thread = thread->next;
 	};
+#endif
 	
 	siginfo_t info;
 	info.si_signo = SIGHUP;
@@ -463,7 +466,7 @@ static UINT32 onPowerButton(void *ignore)
 	info.si_status = 0;
 	info.si_band = 0;
 	info.si_value.sival_int = 0;
-	sendSignal(thread, &info);
+	signalPidEx(1, &info);
 	return 0;
 };
 
@@ -483,6 +486,8 @@ void kmain2()
 	// AcpiOsInitialize() which maps more stuff into the PML4
 	initMultiProc();
 
+	initSched2();
+	
 	kprintf("Initializing SDI... ");
 	sdInit();
 	kprintf("%$\x02" "Done%#\n");

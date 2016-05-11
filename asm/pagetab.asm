@@ -32,3 +32,11 @@ refreshAddrSpace:
 	mov	rax,	cr3
 	mov	cr3,	rax
 	ret
+	
+[global ispZero]
+ispZero:
+	xor	rax,	rax
+	mov	rdi,	0xFFFF808000000000
+	mov	rcx,	512			; 512 qwords per page (4KB)
+	rep stosq
+	ret

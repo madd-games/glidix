@@ -40,6 +40,7 @@ typedef struct
 	size_t			textSize;
 	off_t			cursorPos;
 	int			focused;
+	int			flags;
 	
 	/**
 	 * Selection range.
@@ -62,25 +63,31 @@ void gwmRedrawTextField(GWMWindow *field)
 	static DDIColor normalBorderColor = {0, 0, 0, 0xFF};
 	static DDIColor focusBorderColor = {0, 0xAA, 0, 0xFF};
 	DDIColor *color = &normalBorderColor;
-	if (data->focused)
+	if ((data->focused) && ((data->flags & GWM_TXT_DISABLED) == 0))
 	{
 		color = &focusBorderColor;
 	};
 
-	static DDIColor background = {0xFF, 0xFF, 0xFF, 0xFF};
-	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, color);
-	ddiFillRect(canvas, 1, 1, canvas->width-2, canvas->height-2, &background);
+	static DDIColor normalBackground = {0xFF, 0xFF, 0xFF, 0xFF};
+	static DDIColor disabledBackground = {0x77, 0x77, 0x77, 0xFF};
+	DDIColor *background = &normalBackground;
+	if (data->flags & GWM_TXT_DISABLED)
+	{
+		background = &disabledBackground;
+	};
 	
-	char buf[2];
-	buf[1] = 0;
+	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, color);
+	ddiFillRect(canvas, 1, 1, canvas->width-2, canvas->height-2, background);
+	
+	char buf[2] = "*";
 	
 	off_t i;
 	for (i=0; i<data->textSize; i++)
 	{
-		buf[0] = data->text[i];
+		if ((data->flags & GWM_TXT_MASKED) == 0) buf[0] = data->text[i];
 		if ((i >= data->selectStart) && (i < data->selectEnd))
 		{
-			ddiFillRect(canvas, 3+8*i, TEXTFIELD_HEIGHT/2-4, 8, 8, GWM_COLOR_SELECTION);
+			ddiFillRect(canvas, 3+8*i, TEXTFIELD_HEIGHT/2-6, 8, 12, GWM_COLOR_SELECTION);
 		};
 		ddiDrawText(canvas, 3+8*i, TEXTFIELD_HEIGHT/2-4, buf, NULL, NULL);
 	};
@@ -151,6 +158,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
 	off_t newCursorPos;
+	int disabled = data->flags & GWM_TXT_DISABLED;
 	char buf[2];
 	switch (ev->type)
 	{
@@ -195,11 +203,11 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 		else if (ev->keycode == '\n')
 		{
 		}
-		else if (ev->keycode == '\b')
+		else if ((ev->keycode == '\b') && (!disabled))
 		{
 			gwmTextFieldBackspace(field);
 		}
-		else if (ev->keychar != 0)
+		else if ((ev->keychar != 0) && (!disabled))
 		{
 			sprintf(buf, "%c", ev->keychar);
 			gwmTextFieldInsert(field, buf);
@@ -253,12 +261,16 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->textSize = strlen(text);
 	data->cursorPos = 0;
 	data->focused = 0;
+	data->flags = flags;
 	
 	data->selectStart = data->selectEnd = 0;
 	data->clickPos = -1;
-	
-	gwmRedrawTextField(field);
+
 	gwmSetEventHandler(field, gwmTextFieldHandler);
+	gwmRedrawTextField(field);
+	gwmSetWindowCursor(field, GWM_CURSOR_TEXT);
+	
+	return field;
 };
 
 void gwmDestroyTextField(GWMWindow *field)
@@ -282,12 +294,13 @@ size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t en
 	size_t count = 0;
 	for (pos=startPos; pos<endPos; pos++)
 	{
-		if ((pos < 0) || (pos > data->textSize))
+		if ((pos < 0) || (pos >= (off_t)data->textSize))
 		{
 			break;
 		};
 		
 		*buffer++ = data->text[pos];
+		count++;
 	};
 	
 	*buffer = 0;

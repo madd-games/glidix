@@ -111,7 +111,7 @@ static int pts_ioctl(File *fp, uint64_t cmd, void *argp)
 		semSignal(&ptty->sem);
 		return 0;
 	case IOCTL_TTY_SETPGID:
-		if (getCurrentThread()->sid != ptty->sid)
+		if (getCurrentThread()->creds->sid != ptty->sid)
 		{
 			ERRNO = ENOTTY;
 			return -1;
@@ -122,7 +122,7 @@ static int pts_ioctl(File *fp, uint64_t cmd, void *argp)
 		scan = getCurrentThread();
 		do
 		{
-			if (scan->pgid == pgid)
+			if (scan->creds->pgid == pgid)
 			{
 				target = scan;
 				break;
@@ -136,7 +136,7 @@ static int pts_ioctl(File *fp, uint64_t cmd, void *argp)
 			semSignal(&ptty->sem);
 			return -1;
 		};
-		if (target->sid != ptty->sid)
+		if (target->creds->sid != ptty->sid)
 		{
 			unlockSched();
 			sti();
@@ -188,7 +188,7 @@ static int pts_open(void *data, File *fp, size_t szFile)
 	PseudoTerm *ptty = devinfo->handle;
 	
 	semWait(&ptty->sem);
-	if ((ptty->sid != 0) && (ptty->sid != getCurrentThread()->sid))
+	if ((ptty->sid != 0) && (ptty->sid != getCurrentThread()->creds->sid))
 	{
 		semSignal(&ptty->sem);
 		return VFS_BUSY;
@@ -197,8 +197,8 @@ static int pts_open(void *data, File *fp, size_t szFile)
 	__sync_fetch_and_add(&ptty->refcount, 1);
 	if (ptty->sid == 0)
 	{
-		ptty->sid = getCurrentThread()->sid;
-		ptty->pgid = getCurrentThread()->pgid;
+		ptty->sid = getCurrentThread()->creds->sid;
+		ptty->pgid = getCurrentThread()->creds->pgid;
 	};
 	semSignal(&ptty->sem);
 	
@@ -362,7 +362,7 @@ static int ptm_ioctl(File *fp, uint64_t cmd, void *argp)
 	switch (cmd)
 	{
 	case IOCTL_TTY_GRANTPT:
-		SetDeviceCreds(ptty->devSlave, getCurrentThread()->ruid, getCurrentThread()->rgid);
+		SetDeviceCreds(ptty->devSlave, getCurrentThread()->creds->ruid, getCurrentThread()->creds->rgid);
 		return 0;
 	case IOCTL_TTY_UNLOCKPT:
 		// i see no point
@@ -428,7 +428,8 @@ static int ptmx_open(void *ignore, File *fp, size_t szFile)
 
 void pttyInit()
 {
-	if (AddDevice("ptmx", NULL, ptmx_open, 0666) == NULL)
+	Device ptmx = AddDevice("ptmx", NULL, ptmx_open, 0666);
+	if (ptmx == NULL)
 	{
 		FAILED();
 		panic("failed to create /dev/ptmx");

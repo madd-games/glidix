@@ -337,9 +337,11 @@ ACPI_STATUS AcpiOsInitialize()
 {
 	memset(&pdptAcpi, 0, sizeof(PDPT));
 	pdptAcpi.entries[511].present = 1;
+	pdptAcpi.entries[511].rw = 1;
 	pdptAcpi.entries[511].pdPhysAddr = ((uint64_t)&pdptAcpi - 0xFFFF800000000000) >> 12;
 	PML4 *pml4 = getPML4();
 	pml4->entries[262].present = 1;
+	pml4->entries[262].rw = 1;
 	pml4->entries[262].pdptPhysAddr = ((uint64_t)&pdptAcpi - 0xFFFF800000000000) >> 12;
 	refreshAddrSpace();
 	spinlockRelease(&acpiMemoryLock);
@@ -456,7 +458,6 @@ static PTe *acgetPage(uint64_t index)
 		pdpt->entries[dirIndex].present = 1;
 		uint64_t frame = phmAllocFrame();
 		pdpt->entries[dirIndex].pdPhysAddr = frame;
-		pdpt->entries[dirIndex].user = 1;
 		pdpt->entries[dirIndex].rw = 1;
 		refreshAddrSpace();
 		makeDir = 1;
@@ -469,7 +470,6 @@ static PTe *acgetPage(uint64_t index)
 		pd->entries[tableIndex].present = 1;
 		uint64_t frame = phmAllocFrame();
 		pd->entries[tableIndex].ptPhysAddr = frame;
-		pd->entries[tableIndex].user = 1;
 		pd->entries[tableIndex].rw = 1;
 		refreshAddrSpace();
 		makeTable = 1;

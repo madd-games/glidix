@@ -91,7 +91,7 @@ int isStringValid(uint64_t ptr)
 
 void sys_exit(int status)
 {
-	threadExit(getCurrentThread(), status);
+	processExit(status);
 	kyield();
 };
 
@@ -251,7 +251,7 @@ int sys_open(const char *path, int oflag, mode_t mode)
 	};
 	
 	mode &= 0x0FFF;
-	mode &= ~(getCurrentThread()->umask);
+	mode &= ~(getCurrentThread()->creds->umask);
 
 	if ((oflag & O_ALL) != oflag)
 	{
@@ -274,8 +274,8 @@ int sys_open(const char *path, int oflag, mode_t mode)
 		else
 		{
 			// we're creating a new file, fake a stat.
-			st.st_uid = getCurrentThread()->euid;
-			st.st_gid = getCurrentThread()->egid;
+			st.st_uid = getCurrentThread()->creds->euid;
+			st.st_gid = getCurrentThread()->creds->egid;
 			st.st_mode = 0777;				// because mode shall not affect the open (see POSIX open() )
 		};
 	}
@@ -627,7 +627,7 @@ int sys_chmod(const char *path, mode_t mode)
 		return -1;
 	};
 
-	if ((getCurrentThread()->euid != 0) && (getCurrentThread()->euid != dir->stat.st_uid))
+	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != dir->stat.st_uid))
 	{
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
@@ -689,7 +689,7 @@ int sys_fchmod(int fd, mode_t mode)
 		return -1;
 	};
 
-	if ((getCurrentThread()->euid != 0) && (getCurrentThread()->euid != st.st_uid))
+	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != st.st_uid))
 	{
 		getCurrentThread()->therrno = EPERM;
 		vfsClose(fp);
@@ -740,11 +740,11 @@ static int sys_fsync(int fd)
 static int canChangeOwner(struct stat *st, uid_t uid, gid_t gid)
 {
 	Thread *ct = getCurrentThread();
-	if (ct->euid == 0) return 1;
+	if (ct->creds->euid == 0) return 1;
 
-	if ((ct->euid == uid) && (uid == st->st_uid))
+	if ((ct->creds->euid == uid) && (uid == st->st_uid))
 	{
-		return (ct->egid == gid) || (ct->sgid == gid) || (ct->rgid == gid);
+		return (ct->creds->egid == gid) || (ct->creds->sgid == gid) || (ct->creds->rgid == gid);
 	};
 
 	return 0;
@@ -879,7 +879,7 @@ int sys_mkdir(const char *path, mode_t mode)
 	};
 	
 	mode &= 0xFFF;
-	mode &= ~(getCurrentThread()->umask);
+	mode &= ~(getCurrentThread()->creds->umask);
 
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
@@ -962,7 +962,7 @@ int sys_mkdir(const char *path, mode_t mode)
 		};
 	};
 
-	int status = dir->mkdir(dir, newdir, mode & 0x0FFF, getCurrentThread()->euid, getCurrentThread()->egid);
+	int status = dir->mkdir(dir, newdir, mode & 0x0FFF, getCurrentThread()->creds->euid, getCurrentThread()->creds->egid);
 
 	if (dir->close != NULL) dir->close(dir);
 	kfree(dir);
@@ -1089,7 +1089,7 @@ int sys_unlink(const char *path)
 
 	if ((st.st_mode & VFS_MODE_STICKY))
 	{
-		uid_t uid = getCurrentThread()->euid;
+		uid_t uid = getCurrentThread()->creds->euid;
 		if ((st.st_uid != uid) && (dir->stat.st_uid != uid))
 		{
 			if (dir->close != NULL) dir->close(dir);
@@ -1240,7 +1240,7 @@ int sys_insmod(const char *modname, const char *path, const char *opt, int flags
 		};
 	};
 	
-	if (getCurrentThread()->euid != 0)
+	if (getCurrentThread()->creds->euid != 0)
 	{
 		// only root can load modules.
 		getCurrentThread()->therrno = EPERM;
@@ -1421,70 +1421,70 @@ uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t 
 int setuid(uid_t uid)
 {
 	Thread *me = getCurrentThread();
-	if ((me->euid != 0) && (uid != me->euid) && (uid != me->ruid))
+	if ((me->creds->euid != 0) && (uid != me->creds->euid) && (uid != me->creds->ruid))
 	{
 		me->therrno = EPERM;
 		return -1;
 	};
 
-	if (me->euid == 0)
+	if (me->creds->euid == 0)
 	{
-		me->ruid = uid;
-		me->suid = uid;
+		me->creds->ruid = uid;
+		me->creds->suid = uid;
 	};
 
-	me->euid = uid;
+	me->creds->euid = uid;
 	return 0;
 };
 
 int setgid(gid_t gid)
 {
 	Thread *me = getCurrentThread();
-	if ((me->egid != 0) && (gid != me->egid) && (gid != me->rgid))
+	if ((me->creds->egid != 0) && (gid != me->creds->egid) && (gid != me->creds->rgid))
 	{
 		me->therrno = EPERM;
 		return -1;
 	};
 
-	if (me->egid == 0)
+	if (me->creds->egid == 0)
 	{
-		me->rgid = gid;
-		me->sgid = gid;
+		me->creds->rgid = gid;
+		me->creds->sgid = gid;
 	};
 
-	me->egid = gid;
+	me->creds->egid = gid;
 	return 0;
 };
 
 int setreuid(uid_t ruid, uid_t euid)
 {
 	Thread *me = getCurrentThread();
-	uid_t ruidPrev = me->ruid;
+	uid_t ruidPrev = me->creds->ruid;
 	if (ruid != (uid_t)-1)
 	{
-		if (me->euid != 0)
+		if (me->creds->euid != 0)
 		{
 			me->therrno = EPERM;
 			return -1;
 		};
 
-		me->ruid = ruid;
+		me->creds->ruid = ruid;
 	};
 
 	if (euid != (uid_t)-1)
 	{
 		if (euid != ruidPrev)
 		{
-			if (me->euid != 0)
+			if (me->creds->euid != 0)
 			{
 				me->therrno = EPERM;
 				return -1;
 			};
 
-			me->suid = euid;
+			me->creds->suid = euid;
 		};
 
-		me->euid = euid;
+		me->creds->euid = euid;
 	};
 
 	return 0;
@@ -1493,32 +1493,32 @@ int setreuid(uid_t ruid, uid_t euid)
 int setregid(gid_t rgid, gid_t egid)
 {
 	Thread *me = getCurrentThread();
-	gid_t rgidPrev = me->rgid;
+	gid_t rgidPrev = me->creds->rgid;
 	if (rgid != (gid_t)-1)
 	{
-		if (me->egid != 0)
+		if (me->creds->egid != 0)
 		{
 			me->therrno = EPERM;
 			return -1;
 		};
 
-		me->rgid = rgid;
+		me->creds->rgid = rgid;
 	};
 
 	if (egid != (gid_t)-1)
 	{
 		if (egid != rgidPrev)
 		{
-			if (me->egid != 0)
+			if (me->creds->egid != 0)
 			{
 				me->therrno = EPERM;
 				return -1;
 			};
 
-			me->sgid = egid;
+			me->creds->sgid = egid;
 		};
 
-		me->egid = egid;
+		me->creds->egid = egid;
 	};
 
 	return 0;
@@ -1527,32 +1527,32 @@ int setregid(gid_t rgid, gid_t egid)
 int seteuid(uid_t euid)
 {
 	Thread *me = getCurrentThread();
-	if (me->euid != 0)
+	if (me->creds->euid != 0)
 	{
-		if ((euid != me->euid) && (euid != me->ruid) && (euid != me->suid))
+		if ((euid != me->creds->euid) && (euid != me->creds->ruid) && (euid != me->creds->suid))
 		{
 			me->therrno = EPERM;
 			return -1;
 		};
 	};
 
-	me->euid = euid;
+	me->creds->euid = euid;
 	return 0;
 };
 
 int setegid(gid_t egid)
 {
 	Thread *me = getCurrentThread();
-	if (me->egid != 0)
+	if (me->creds->egid != 0)
 	{
-		if ((egid != me->egid) && (egid != me->rgid) && (egid != me->sgid))
+		if ((egid != me->creds->egid) && (egid != me->creds->rgid) && (egid != me->creds->sgid))
 		{
 			me->therrno = EPERM;
 			return -1;
 		};
 	};
 
-	me->egid = egid;
+	me->creds->egid = egid;
 	return 0;
 };
 
@@ -1565,7 +1565,7 @@ int sys_rmmod(const char *modname, int flags)
 	};
 	
 	// only root can remove modules!
-	if (getCurrentThread()->euid != 0)
+	if (getCurrentThread()->creds->euid != 0)
 	{
 		getCurrentThread()->therrno = EPERM;
 		return -1;
@@ -1940,7 +1940,7 @@ int sys_utime(const char *path, time_t atime, time_t mtime)
 	}
 	else
 	{
-		if (dirp->stat.st_uid != getCurrentThread()->euid)
+		if (dirp->stat.st_uid != getCurrentThread()->creds->euid)
 		{
 			getCurrentThread()->therrno = EACCES;
 			return -1;
@@ -1964,8 +1964,8 @@ int sys_utime(const char *path, time_t atime, time_t mtime)
 
 mode_t sys_umask(mode_t cmask)
 {
-	mode_t old = getCurrentThread()->umask;
-	getCurrentThread()->umask = (cmask & 0777);
+	mode_t old = getCurrentThread()->creds->umask;
+	getCurrentThread()->creds->umask = (cmask & 0777);
 	return old;
 };
 
@@ -2656,37 +2656,37 @@ int sys_exec(const char *path, const char *pars, uint64_t parsz)
 
 int sys_getpid()
 {
-	return getCurrentThread()->pid;
+	return getCurrentThread()->creds->pid;
 };
 
 uid_t sys_getuid()
 {
-	return getCurrentThread()->ruid;
+	return getCurrentThread()->creds->ruid;
 };
 
 uid_t sys_geteuid()
 {
-	return getCurrentThread()->euid;
+	return getCurrentThread()->creds->euid;
 };
 
 uid_t sys_getsuid()
 {
-	return getCurrentThread()->suid;
+	return getCurrentThread()->creds->suid;
 };
 
 gid_t sys_getgid()
 {
-	return getCurrentThread()->rgid;
+	return getCurrentThread()->creds->rgid;
 };
 
 gid_t sys_getegid()
 {
-	return getCurrentThread()->egid;
+	return getCurrentThread()->creds->egid;
 };
 
 gid_t sys_getsgid()
 {
-	return getCurrentThread()->sgid;
+	return getCurrentThread()->creds->sgid;
 };
 
 int sys_sigaction(int sig, const SigAction *act, SigAction *oact)
@@ -2823,17 +2823,8 @@ void sys_seterrno(int num)
 	ERRNO = num;
 };
 
-int sys_clone(int flags, MachineState *state)
-{
-	if (state != NULL)
-	{
-		if (!isPointerValid((uint64_t)state, sizeof(MachineState), PROT_READ))
-		{
-			ERRNO = EFAULT;
-			return -1;
-		};
-	};
-	
+int sys_fork()
+{	
 	Thread *me = getCurrentThread();
 	Regs regs;
 	initUserRegs(&regs);
@@ -2846,7 +2837,7 @@ int sys_clone(int flags, MachineState *state)
 	regs.r15 = me->ur15;
 	regs.rip = me->urip;
 	regs.rflags = getFlagsRegister();
-	return threadClone(&regs, flags, state);
+	return threadClone(&regs, 0, NULL);
 };
 
 int sys_waitpid(int pid, int *stat_loc, int flags)
@@ -2860,11 +2851,11 @@ int sys_waitpid(int pid, int *stat_loc, int flags)
 		};
 	};
 	
-	// DO NOT pass the status location directly to pollThread(), because it locks scheduling
+	// DO NOT pass the status location directly to processWait(), because it locks scheduling
 	// and writing to stat_loc might cause a page fault (which results in load-on-demand and
 	// a possible kyield() etc)
 	int statret;
-	int ret = pollThread(pid, &statret, flags);
+	int ret = processWait(pid, &statret, flags);
 	if (stat_loc != NULL) *stat_loc = statret;
 	return ret;
 };
@@ -2995,15 +2986,15 @@ int sys_getgroups(int count, gid_t *buffer)
 		ERRNO = EFAULT;
 		return -1;
 	};
-	if (count <= getCurrentThread()->numGroups)
+	if (count <= getCurrentThread()->creds->numGroups)
 	{
-		memcpy(buffer, getCurrentThread()->groups, sizeof(gid_t)*count);
+		memcpy(buffer, getCurrentThread()->creds->groups, sizeof(gid_t)*count);
 	}
 	else
 	{
-		memcpy(buffer, getCurrentThread()->groups, sizeof(gid_t)*getCurrentThread()->numGroups);
+		memcpy(buffer, getCurrentThread()->creds->groups, sizeof(gid_t)*getCurrentThread()->creds->numGroups);
 	};
-	return getCurrentThread()->numGroups;
+	return getCurrentThread()->creds->numGroups;
 };
 
 int sys_setgroups(int count, const gid_t *groups)
@@ -3013,7 +3004,7 @@ int sys_setgroups(int count, const gid_t *groups)
 		ERRNO = EFAULT;
 		return -1;
 	};
-	if (getCurrentThread()->egid != 0)
+	if (getCurrentThread()->creds->egid != 0)
 	{
 		ERRNO = EPERM;
 		return -1;
@@ -3023,8 +3014,8 @@ int sys_setgroups(int count, const gid_t *groups)
 		ERRNO = EINVAL;
 		return -1;
 	};
-	memcpy(getCurrentThread()->groups, groups, sizeof(gid_t)*count);
-	getCurrentThread()->numGroups = count;
+	memcpy(getCurrentThread()->creds->groups, groups, sizeof(gid_t)*count);
+	getCurrentThread()->creds->numGroups = count;
 	return 0;
 };
 
@@ -3060,7 +3051,7 @@ int sys_munmap(uint64_t addr, uint64_t size)
 
 int sys_getppid()
 {
-	return getCurrentThread()->pidParent;
+	return getCurrentThread()->creds->ppid;
 };
 
 int sys_setsid()
@@ -3069,7 +3060,7 @@ int sys_setsid()
 	lockSched();
 	
 	// fail with EPERM if we are a process group leader
-	if (getCurrentThread()->pid == getCurrentThread()->pgid)
+	if (getCurrentThread()->creds->pid == getCurrentThread()->creds->pgid)
 	{
 		unlockSched();
 		sti();
@@ -3078,9 +3069,9 @@ int sys_setsid()
 	};
 	
 	Thread *me = getCurrentThread();
-	int result = me->pid;
-	me->sid = me->pid;
-	me->pgid = me->pid;
+	int result = me->creds->pid;
+	me->creds->sid = me->creds->pid;
+	me->creds->pgid = me->creds->pid;
 	
 	unlockSched();
 	sti();
@@ -3100,7 +3091,7 @@ int sys_setpgid(int pid, int pgid)
 	}
 	else
 	{
-		target = getThreadByID(pid);
+		target = getThreadByPID(pid);
 	};
 	
 	if (target == NULL)
@@ -3111,7 +3102,7 @@ int sys_setpgid(int pid, int pgid)
 		return -1;
 	};
 	
-	if (target->pidParent != getCurrentThread()->pid)
+	if (target->creds->ppid != getCurrentThread()->creds->pid)
 	{
 		if (target != getCurrentThread())
 		{
@@ -3122,7 +3113,7 @@ int sys_setpgid(int pid, int pgid)
 		};
 	};
 	
-	if (target->sid == target->pid)
+	if (target->creds->sid == target->creds->pid)
 	{
 		unlockSched();
 		sti();
@@ -3130,9 +3121,9 @@ int sys_setpgid(int pid, int pgid)
 		return -1;
 	};
 	
-	if (pgid == 0) pgid = target->pid;
+	if (pgid == 0) pgid = target->creds->pid;
 	
-	if (pgid != target->pid)
+	if (pgid != target->creds->pid)
 	{
 		// find a prototype thread which is already part of the group we are
 		// trying to join, and make sure it's in the same session.
@@ -3141,7 +3132,7 @@ int sys_setpgid(int pid, int pgid)
 		
 		do
 		{
-			if (scan->pgid == pgid)
+			if (scan->creds->pgid == pgid)
 			{
 				ex = scan;
 				break;
@@ -3159,7 +3150,7 @@ int sys_setpgid(int pid, int pgid)
 			return -1;
 		};
 		
-		if (ex->sid != target->sid)
+		if (ex->creds->sid != target->creds->sid)
 		{
 			// different session; can't join
 			unlockSched();
@@ -3169,7 +3160,7 @@ int sys_setpgid(int pid, int pgid)
 		};
 	};
 	
-	target->pgid = pgid;
+	target->creds->pgid = pgid;
 	unlockSched();
 	sti();
 	return 0;
@@ -3177,11 +3168,11 @@ int sys_setpgid(int pid, int pgid)
 
 int sys_getsid(int pid)
 {
-	if (pid == 0) return getCurrentThread()->sid;
+	if (pid == 0) return getCurrentThread()->creds->sid;
 	
 	cli();
 	lockSched();
-	Thread *target = getThreadByID(pid);
+	Thread *target = getThreadByPID(pid);
 	int result;
 	if (target == NULL)
 	{
@@ -3190,7 +3181,7 @@ int sys_getsid(int pid)
 	}
 	else
 	{
-		result = target->sid;
+		result = target->creds->sid;
 	};
 	unlockSched();
 	sti();
@@ -3200,13 +3191,13 @@ int sys_getsid(int pid)
 
 int sys_getpgid(int pid)
 {
-	if (pid == 0) return getCurrentThread()->pgid;
+	if (pid == 0) return getCurrentThread()->creds->pgid;
 	
 	int result;
 	
 	cli();
 	lockSched();
-	Thread *target = getThreadByID(pid);
+	Thread *target = getThreadByPID(pid);
 	if (target == NULL)
 	{
 		ERRNO = ESRCH;
@@ -3214,7 +3205,7 @@ int sys_getpgid(int pid)
 	}
 	else
 	{
-		result = target->pgid;
+		result = target->creds->pgid;
 	};
 	unlockSched();
 	sti();
@@ -3250,7 +3241,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_seterrno,				// 20
 	&mprotect,				// 21
 	&sys_lseek,				// 22
-	&sys_clone,				// 23
+	&sys_fork,				// 23
 	&sys_pause,				// 24
 	&sys_waitpid,				// 25
 	&signalPid,				// 26
