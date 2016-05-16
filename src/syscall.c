@@ -52,6 +52,7 @@
 #include <glidix/thsync.h>
 #include <glidix/message.h>
 #include <glidix/shmem.h>
+#include <glidix/catch.h>
 
 int isPointerValid(uint64_t ptr, uint64_t size, int flags)
 {
@@ -87,6 +88,64 @@ int isStringValid(uint64_t ptr)
 {
 	// TODO
 	return 1;
+};
+
+int memcpy_u2k(void *dst_, const void *src_, size_t size)
+{
+	// user to kernel: src is in userspace
+	uint64_t start = (uint64_t) src_;
+	uint64_t end = (uint64_t) src_ + size;
+	
+	if (start < 0x1000)
+	{
+		return -1;
+	};
+	
+	if (end >= 0x7FC0000000)
+	{
+		return -1;
+	};
+	
+	int ex = catch();
+	if (ex == 0)
+	{
+		memcpy(dst_, src_, size);
+		uncatch();
+		return 0;
+	}
+	else
+	{
+		return -1;
+	};
+};
+
+int memcpy_k2u(void *dst_, const void *src_, size_t size)
+{
+	// kernel to user: dst is in userspace
+	uint64_t start = (uint64_t) dst_;
+	uint64_t end = (uint64_t) dst_ + size;
+	
+	if (start < 0x1000)
+	{
+		return -1;
+	};
+	
+	if (end >= 0x7FC0000000)
+	{
+		return -1;
+	};
+	
+	int ex = catch();
+	if (ex == 0)
+	{
+		memcpy(dst_, src_, size);
+		uncatch();
+		return 0;
+	}
+	else
+	{
+		return -1;
+	};
 };
 
 void sys_exit(int status)
@@ -154,6 +213,65 @@ uint64_t sys_write(int fd, const void *buf, size_t size)
 	return *((uint64_t*)&out);
 };
 
+uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
+{
+	if (!isPointerValid((uint64_t)buf, (uint64_t)size, PROT_READ))
+	{
+		ERRNO = EFAULT;
+		ssize_t err = -1;
+		return *((uint64_t*)&err);
+	};
+	
+	ssize_t out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			if (fp->pwrite == NULL)
+			{
+				spinlockRelease(&ftab->spinlock);
+				getCurrentThread()->therrno = EROFS;
+				out = -1;
+			}
+			else
+			{
+				if ((fp->oflag & O_WRONLY) == 0)
+				{
+					spinlockRelease(&ftab->spinlock);
+					getCurrentThread()->therrno = EPERM;
+					out = -1;
+				}
+				else
+				{
+					vfsDup(fp);
+					spinlockRelease(&ftab->spinlock);
+					void *tmpbuf = kmalloc(size);
+					memcpy(tmpbuf, buf, size);
+					out = fp->pwrite(fp, tmpbuf, size, offset);
+					vfsClose(fp);
+					kfree(tmpbuf);
+				};
+			};
+		};
+	};
+
+	return *((uint64_t*)&out);
+};
+
 ssize_t sys_read(int fd, void *buf, size_t size)
 {
 	if (!isPointerValid((uint64_t)buf, (uint64_t)size, PROT_WRITE))
@@ -201,6 +319,64 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 					spinlockRelease(&ftab->spinlock);
 					void *tmpbuf = kmalloc(size);
 					out = fp->read(fp, tmpbuf, size);
+					vfsClose(fp);
+					memcpy(buf, tmpbuf, size);
+					kfree(tmpbuf);
+				};
+			};
+		};
+	};
+
+	return out;
+};
+
+ssize_t sys_pread(int fd, void *buf, size_t size, off_t offset)
+{
+	if (!isPointerValid((uint64_t)buf, (uint64_t)size, PROT_WRITE))
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	ssize_t out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		getCurrentThread()->therrno = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EBADF;
+			out = -1;
+		}
+		else
+		{
+			if (fp->pread == NULL)
+			{
+				spinlockRelease(&ftab->spinlock);
+				getCurrentThread()->therrno = EIO;
+				out = -1;
+			}
+			else
+			{
+				if ((fp->oflag & O_RDONLY) == 0)
+				{
+					spinlockRelease(&ftab->spinlock);
+					getCurrentThread()->therrno = EPERM;
+					out = -1;
+				}
+				else
+				{
+					vfsDup(fp);
+					spinlockRelease(&ftab->spinlock);
+					void *tmpbuf = kmalloc(size);
+					out = fp->pread(fp, tmpbuf, size, offset);
 					vfsClose(fp);
 					memcpy(buf, tmpbuf, size);
 					kfree(tmpbuf);
@@ -1301,121 +1477,173 @@ char *sys_getcwd(char *buf, size_t size)
 	return buf;
 };
 
-/**
- * Userspace mmap() should wrap around this. Returns the address of the END of the mapped region,
- * and 'addr' must be a valid address where the specified region can fit without segment collisions.
- */
 uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset)
 {
 	int allProt = PROT_READ | PROT_WRITE | PROT_EXEC;
-	int allFlags = MAP_PRIVATE | MAP_SHARED;
+	int allFlags = MAP_PRIVATE | MAP_SHARED | MAP_ANON | MAP_FIXED;
 
+	if ((offset & 0xFFF) != 0)
+	{
+		ERRNO = EINVAL;
+		return MAP_FAILED;
+	};
+	
 	if (prot == 0)
 	{
 		getCurrentThread()->therrno = EINVAL;
-		return 0;
+		return MAP_FAILED;
 	};
 
 	if ((prot & allProt) != prot)
 	{
 		getCurrentThread()->therrno = EINVAL;
-		return 0;
+		return MAP_FAILED;
 	};
-
+	
 	if ((flags & allFlags) != flags)
 	{
 		getCurrentThread()->therrno = EINVAL;
-		return 0;
+		return MAP_FAILED;
 	};
 
 	if ((flags & (MAP_PRIVATE | MAP_SHARED)) == 0)
 	{
 		getCurrentThread()->therrno = EINVAL;
-		return 0;
+		return MAP_FAILED;
 	};
 
 	if ((flags & MAP_PRIVATE) && (flags & MAP_SHARED))
 	{
 		getCurrentThread()->therrno = EINVAL;
-		return 0;
+		return MAP_FAILED;
 	};
 
 	if (len == 0)
 	{
 		getCurrentThread()->therrno = EINVAL;
-		return 0;
+		return MAP_FAILED;
 	};
 
-	addr &= ~0xFFF;
-	if ((addr < 0x1000) || ((addr+len) > 0x7FC0000000))
+	if ((flags & MAP_FIXED) == 0)
 	{
-		getCurrentThread()->therrno = EINVAL;
-		return 0;
+		addr = 0;
+	}
+	else if ((addr < 0x1000) || ((addr+len) > 0x7FC0000000))
+	{
+		ERRNO = EINVAL;
+		return MAP_FAILED;
+	}
+	else if ((addr & 0xFFF) != 0)
+	{
+		// not page-aligned
+		ERRNO = EINVAL;
+		return MAP_FAILED;
 	};
 
-	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	if (flags & MAP_ANON)
+	{
+		if (fd != -1)
+		{
+			ERRNO = EINVAL;
+			return MAP_FAILED;
+		};
+	}
+	else if ((fd < 0) || (fd >= MAX_OPEN_FILES))
 	{
 		getCurrentThread()->therrno = EBADF;
-		return 0;
+		return MAP_FAILED;
 	};
 
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	File *fp = ftab->entries[fd];
-	if (fp->mmap == NULL)
+	if (flags & MAP_ANON)
 	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = ENODEV;
-		return 0;
-	};
-
-	int neededPerms = 0;
-	if (prot & PROT_READ)
-	{
-		neededPerms |= O_RDONLY;
-	};
-
-	if (prot & PROT_WRITE)
-	{
-		// PROT_WRITE implies PROT_READ.
-		neededPerms |= O_RDWR;
-	};
-
-	if (prot & PROT_EXEC)
-	{
-		// PROT_EXEC implies PROT_READ
-		neededPerms |= O_RDONLY;
-	};
-
-	if ((fp->oflag & neededPerms) != neededPerms)
-	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EACCES;
-		return 0;
-	};
-
-	vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
-	FrameList *fl = fp->mmap(fp, len, prot, flags, offset);
-	vfsClose(fp);
-	if (fl == NULL)
-	{
-		getCurrentThread()->therrno = ENODEV;
-		return 0;
-	};
-
-	if (AddSegment(getCurrentThread()->pm, addr/0x1000, fl, prot) != 0)
-	{
+		if (flags & MAP_SHARED)
+		{
+			ERRNO = EINVAL;
+			return MAP_FAILED;
+		};
+		
+		int pageCount = (int) ((len + 0xFFF) & (~0xFFF)) >> 12; 
+		FrameList *fl = palloc_later(NULL, pageCount, -1, 0);
+		
+		uint64_t outAddr;
+		if (AddSegmentEx(getCurrentThread()->pm, addr/0x1000, fl, prot, &outAddr) != 0)
+		{
+			pdownref(fl);
+			ERRNO = EINVAL;
+			return MAP_FAILED;
+		};
+		
 		pdownref(fl);
-		getCurrentThread()->therrno = EINVAL;
-		return 0;
+		
+		return outAddr;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+
+		File *fp = ftab->entries[fd];
+		if ((fp->oflag & O_RDONLY) == 0)
+		{
+			spinlockRelease(&ftab->spinlock);
+			getCurrentThread()->therrno = EACCES;
+			return MAP_FAILED;
+		};
+		
+		if (fp->mmap != NULL)
+		{
+			vfsDup(fp);
+			spinlockRelease(&ftab->spinlock);
+			FrameList *fl = fp->mmap(fp, len, prot, flags, offset);
+			vfsClose(fp);
+			if (fl == NULL)
+			{
+				getCurrentThread()->therrno = ENODEV;
+				return MAP_FAILED;
+			};
+
+			uint64_t outAddr;
+			if (AddSegmentEx(getCurrentThread()->pm, addr/0x1000, fl, prot, &outAddr) != 0)
+			{
+				pdownref(fl);
+				getCurrentThread()->therrno = EINVAL;
+				return MAP_FAILED;
+			};
+
+			pdownref(fl);
+
+			return outAddr;
+		}
+		else
+		{
+			vfsDup(fp);
+			spinlockRelease(&ftab->spinlock);
+			
+			if (flags & MAP_SHARED)
+			{
+				// TODO: not supported!
+				vfsClose(fp);
+				ERRNO = EINVAL;
+				return MAP_FAILED;
+			};
+			
+			int pageCount = (int) ((len + 0xFFF) & (~0xFFF)) >> 12; 
+			FrameList *fl = palloc_later(fp, pageCount, offset, len);
+			vfsClose(fp);	// already dupped by palloc_later
+			
+			uint64_t outAddr;
+			if (AddSegmentEx(getCurrentThread()->pm, addr/0x1000, fl, prot, &outAddr) != 0)
+			{
+				pdownref(fl);
+				ERRNO = EINVAL;
+				return MAP_FAILED;
+			};
+			
+			pdownref(fl);
+			
+			return outAddr;
+		};
 	};
-
-	uint64_t out = addr + 0x1000 * fl->count;
-	pdownref(fl);
-
-	return out;
 };
 
 int setuid(uid_t uid)
@@ -2897,6 +3125,7 @@ int* sys_geterrnoptr()
 	return getCurrentThread()->errnoptr;
 };
 
+#if 0
 int sys_libopen(const char *path, uint64_t loadAddr, libInfo *info)
 {
 	if (!isPointerValid((uint64_t)info, sizeof(libInfo), PROT_WRITE))
@@ -2916,6 +3145,7 @@ void sys_libclose(libInfo *info)
 	};
 	libClose(info);
 };
+#endif
 
 int sys_unmount(const char *path)
 {
@@ -3213,6 +3443,12 @@ int sys_getpgid(int pid)
 	return result;
 };
 
+int sys_diag(void *uptr)
+{
+	char buffer[30];
+	return memcpy_u2k(buffer, uptr, 30);
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
@@ -3248,7 +3484,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_insmod,				// 27
 	&sys_ioctl,				// 28
 	&sys_fdopendir,				// 29
-	NULL,					// 30 (_glidix_diag())
+	&sys_diag,				// 30 (_glidix_diag())
 	&sys_mount,				// 31
 	&sys_yield,				// 32
 	&time,					// 33
@@ -3270,8 +3506,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_seterrnoptr,			// 49
 	&sys_geterrnoptr,			// 50
 	&getNanotime,				// 51
-	&sys_libopen,				// 52
-	&sys_libclose,				// 53
+	&sys_pread,				// 52
+	&sys_pwrite,				// 53
 	&sys_mmap,				// 54
 	&setuid,				// 55
 	&setgid,				// 56

@@ -230,6 +230,13 @@ typedef struct _Thread
 	 */
 	int				therrno;				// 0x248
 
+	/**
+	 * The 8 registers: RBX, RSP, RBP, R12, R13, R14, R15, RIP, preserved for
+	 * exception catching.
+	 * If RIP != 0, then we are catching exceptions.
+	 */
+	uint64_t			catchRegs[8];				// 0x250
+	
 	// --- END OF ASSEMBLY REGION --- //
 	
 	/**

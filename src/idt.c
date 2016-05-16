@@ -39,6 +39,7 @@
 #include <glidix/time.h>
 #include <glidix/pci.h>
 #include <glidix/cpu.h>
+#include <glidix/catch.h>
 
 IDTEntry idt[256];
 IDTPointer idtPtr;
@@ -257,7 +258,6 @@ static void onPageFault(Regs *regs)
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 	
 	sti();
-#if 0
 	if (getCurrentThread() != NULL)
 	{
 		if (regs->rip == TRAP_SIGRET)
@@ -310,11 +310,12 @@ static void onPageFault(Regs *regs)
 			spinlockRelease(&pm->lock);
 		};
 	};
-#endif
 
-	//if ((getCurrentThread() == NULL) || (regs->cs == 8))
-	if (1)
+	if ((getCurrentThread() == NULL) || (regs->cs == 8))
+	//if (1)
 	{
+		throw(EX_PAGE_FAULT);
+		
 		ASM("cli");
 		kernelDead = 1;
 		//heapDump();
@@ -354,9 +355,8 @@ static void onPageFault(Regs *regs)
 		};
 
 		kprintf("\nVirtual address: %a\n", faultAddr);
-		//stackTraceHere();
-		//debugKernel(regs);
-		while (1);
+		stackTraceHere();
+		debugKernel(regs);
 	}
 	else
 	{

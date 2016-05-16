@@ -131,6 +131,8 @@ pid_t		setsid();
 int		setpgid(pid_t pid, pid_t pgid);
 pid_t		getsid(pid_t pid);
 pid_t		getpgid(pid_t pid);
+ssize_t		pread(int fd, void *buf, size_t count, off_t offset);
+ssize_t		pwrite(int fd, const void *buf, size_t count, off_t offset);
 
 /* libcrypt */
 char*		crypt(const char *key, const char *salt);

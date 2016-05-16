@@ -55,7 +55,10 @@
 
 #define	MAP_PRIVATE			(1 << 0)
 #define	MAP_SHARED			(1 << 1)
+#define	MAP_ANON			(1 << 2)
+#define	MAP_FIXED			(1 << 3)
 
+#define	MAP_FAILED			((uint64_t)-1)
 typedef enum
 {
 	MEM_CURRENT = 0,
@@ -179,6 +182,7 @@ FrameList *pdup(FrameList *old);
 
 ProcMem *CreateProcessMemory();
 int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags);
+int AddSegmentEx(ProcMem *pm, uint64_t start, FrameList *frames, int flags, uint64_t *realAddr);
 int DeleteSegment(ProcMem *pm, uint64_t start);
 void SetProcessMemory(ProcMem *pm);
 ProcMem* DuplicateProcessMemory(ProcMem *pm);

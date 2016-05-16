@@ -35,4 +35,10 @@ void syscallDispatch(Regs *regs, uint16_t num);
 int isPointerValid(uint64_t ptr, uint64_t size, int flags);
 int isStringValid(uint64_t ptr);
 
+/**
+ * Copy data from userspace to kernel space or vice versa. Returns 0 on success, -1 on error.
+ */
+int memcpy_u2k(void *dst, const void *src, size_t size);
+int memcpy_k2u(void *dst, const void *src, size_t size);
+
 #endif

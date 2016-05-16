@@ -48,16 +48,6 @@ typedef struct
 
 typedef struct
 {
-	uint64_t			dynSize;
-	void*				dynSection;
-	uint64_t			loadAddr;
-	uint64_t			nextLoadAddr;
-	uint64_t			textIndex;
-	uint64_t			dataIndex;
-} _glidix_libinfo;
-
-typedef struct
-{
 	char				ifname[16];
 	struct in_addr			dest;
 	struct in_addr			mask;
@@ -201,9 +191,6 @@ void		_glidix_yield();
 time_t		_glidix_time();
 void		_glidix_seterrnoptr(int *ptr);
 int*		_glidix_geterrnoptr();
-int		_glidix_libopen(const char *path, uint64_t loadAddr, _glidix_libinfo *info);
-void		_glidix_libclose(_glidix_libinfo *info);
-uint64_t	_glidix_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset);
 int		_glidix_rmmod(const char *modname, int flags);
 int		_glidix_unmount(const char *prefix);
 int		_glidix_down(int action);

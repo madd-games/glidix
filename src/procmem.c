@@ -106,6 +106,7 @@ int pupref(FrameList *fl)
 {
 	spinlockAcquire(&fl->lock);
 	int ret = ++fl->refcount;
+	if (fl->fp != NULL) vfsDup(fl->fp);
 	spinlockRelease(&fl->lock);
 	return ret;
 };
@@ -184,6 +185,8 @@ FrameList *pdup(FrameList *old)
 	
 	FrameList *fl = (FrameList*) kmalloc(sizeof(FrameList));
 	fl->refcount = 1;
+	fl->fp = old->fp;
+	if (fl->fp != NULL) vfsDup(fl->fp);
 	fl->count = old->count;
 	fl->flags = old->flags;
 	fl->frames = (uint64_t*) kmalloc(8*old->count);
@@ -266,6 +269,7 @@ ProcMem *CreateProcessMemory()
 	memset(pdpt, 0, sizeof(PDPT));
 	pdpt->entries[511].present = 1;
 	pdpt->entries[511].pdPhysAddr = pm->pdptPhysFrame;
+	pdpt->entries[511].rw = 1;
 	ispUnlock();
 
 	spinlockRelease(&pm->lock);
@@ -365,8 +369,12 @@ int isPageMapped(uint64_t addr, int writeable)
 
 int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 {
-	// the first page is not allowed to be mapped
-	if (start == 0) return MEM_SEGMENT_COLLISION;
+	uint64_t ignore;
+	return AddSegmentEx(pm, start, frames, flags, &ignore);
+};
+
+int AddSegmentEx(ProcMem *pm, uint64_t start, FrameList *frames, int flags, uint64_t *realAddr)
+{
 	if (start >= 0x7FC0000) return MEM_SEGMENT_COLLISION;
 
 	spinlockAcquire(&pm->lock);
@@ -374,10 +382,33 @@ int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 
 	// ensure that this segment wouldn't clash with another segment
 	Segment *scan = pm->firstSegment;
-	Segment *lastSegment = NULL;
+	//Segment *lastSegment = NULL;
 	uint64_t count = (uint64_t) frames->count;
+	uint64_t endPage = start + count - 1;
 	while (scan != NULL)
 	{
+		// if we're allocating instead of using a fixed location
+		if (start == 0)
+		{
+			if (scan->next == NULL)
+			{
+				start = scan->start + scan->fl->count;
+				break;
+			}
+			else
+			{
+				uint64_t wouldStart = scan->start + scan->fl->count;
+				if ((wouldStart + count) < scan->next->start)
+				{
+					start = wouldStart;
+					break;
+				};
+			};
+			
+			scan = scan->next;
+			continue;
+		};
+		
 		if ((start >= scan->start) && (start < (scan->start+scan->fl->count)))
 		{
 			spinlockRelease(&frames->lock);
@@ -390,24 +421,52 @@ int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 			spinlockRelease(&pm->lock);
 			return MEM_SEGMENT_COLLISION;
 		};
-		lastSegment = scan;
+		
+		int beforeNext = 1;
+		if (scan->next != NULL)
+		{
+			beforeNext = (endPage < scan->next->start);
+		};
+		
+		if ((start >= (scan->start+scan->fl->count)) && (beforeNext))
+		{
+			// we place ourselves after this segment to maintain sorted segments
+			break;
+		};
+		
+		if (endPage < scan->start)
+		{
+			// insert it before all segments
+			scan = NULL;
+			break;
+		};
+		
+		//lastSegment = scan;
 		scan = scan->next;
 	};
+	
+	// if there are no segments yet, start mapping at 0x1000
+	if (start == 0)
+	{
+		start = 1;
+	};
+	
+	*realAddr = (start << 12);
 
 	// create the segment
 	Segment *segment = (Segment*) kmalloc(sizeof(Segment));
 	segment->start = start;
 	segment->fl = frames;
 	segment->flags = flags;
-	segment->next = NULL;
-
-	if (lastSegment == NULL)
+	if (scan == NULL)
 	{
+		segment->next = pm->firstSegment;
 		pm->firstSegment = segment;
 	}
 	else
 	{
-		lastSegment->next = segment;
+		segment->next = scan->next;
+		scan->next = segment;
 	};
 
 	Thread *ct = getCurrentThread();
@@ -423,6 +482,7 @@ int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags)
 		PML4 *pml4 = getPML4();
 		pml4->entries[1].present = 1;
 		pml4->entries[1].pdptPhysAddr = pm->pdptPhysFrame;
+		pml4->entries[1].rw = 1;
 		refreshAddrSpace();
 	};
 
@@ -771,7 +831,7 @@ void dumpProcessMemory(ProcMem *pm, uint64_t checkAddr)
 	{
 		uint64_t base = seg->start * 0x1000;
 		uint64_t size = seg->fl->count * 0x1000;
-		uint64_t end = base + size;
+		uint64_t end = base + size - 1;
 
 		int displaySize = (int) size;
 		int sizeIndex = 0;

@@ -300,8 +300,8 @@ static int gxdir_symlink(Dir *dir, const char *name, const char *path)
 	newInode.inoCTime = now;
 	newInode.inoATime = now;
 	newInode.inoMTime = now;
-	newInode.inoOwner = (uint16_t) getCurrentThread()->euid;
-	newInode.inoGroup = (uint16_t) getCurrentThread()->egid;
+	newInode.inoOwner = (uint16_t) getCurrentThread()->creds->euid;
+	newInode.inoGroup = (uint16_t) getCurrentThread()->creds->egid;
 	//memset(&newInode.inoFrags, 0, sizeof(gxfsFragment)*16);
 	strcpy((char*) &newInode.inoFrags, path);
 	GXWriteInodeHeader(&gxNewInode, &newInode);

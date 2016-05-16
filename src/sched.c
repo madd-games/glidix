@@ -206,6 +206,14 @@ void credsDownref(Creds *creds)
 		notif->type = SHN_PROCESS_DEAD;
 		notif->dest = parentPid;
 		notif->source = creds->pid;
+		notif->info.status = creds->status;
+		
+		notif->prev = NULL;
+		notif->next = firstNotif;
+		if (firstNotif != NULL) firstNotif->prev = notif;
+		firstNotif = notif;
+
+		spinlockRelease(&notifLock);
 		
 		// send the SIGCHLD signal to the parent
 		siginfo_t siginfo;
@@ -226,7 +234,6 @@ void credsDownref(Creds *creds)
 		// wake the parent
 		wakeProcess(parentPid);
 		
-		spinlockRelease(&notifLock);
 		kfree(creds);
 	};
 };
@@ -250,6 +257,7 @@ void initSched()
 	firstThread.stack = kmalloc(DEFAULT_STACK_SIZE);
 	firstThread.stackSize = DEFAULT_STACK_SIZE;
 	fpuSave(&firstThread.fpuRegs);
+	firstThread.catchRegs[7] = 0;
 	
 	// the value of registers do not matter except RSP and RIP,
 	// also the startup function should never return.
@@ -337,6 +345,8 @@ static void sysManFunc(void *ignore)
 						break;
 					};
 				};
+				
+				threadFound = threadFound->next;
 			} while (threadFound != currentThread);
 			
 			if (threadFound != currentThread)
@@ -358,6 +368,7 @@ static void sysManFunc(void *ignore)
 				if (threadFound->sigdisp != NULL) sigdispDownref(threadFound->sigdisp);
 				if (threadFound->creds != NULL) credsDownref(threadFound->creds);
 				kfree(threadFound);
+
 			};
 		};
 		
@@ -540,7 +551,7 @@ void switchTaskUnlocked(Regs *regs)
 		// i've found that catching signals in kernel mode is a bad idea
 		if ((currentThread->regs.cs & 3) == 3)
 		{
-			dispatchSignal(currentThread);
+			dispatchSignal();
 		};
 	};
 
@@ -651,6 +662,7 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 
 	// allocate and fill in the thread structure
 	Thread *thread = (Thread*) kmalloc(sizeof(Thread));
+	thread->catchRegs[7] = 0;
 	thread->stack = kmalloc(stackSize);
 	thread->stackSize = stackSize;
 
@@ -730,6 +742,7 @@ void signalThread(Thread *thread)
 int threadClone(Regs *regs, int flags, MachineState *state)
 {
 	Thread *thread = (Thread*) kmalloc(sizeof(Thread));
+	thread->catchRegs[7] = 0;
 	fpuSave(&thread->fpuRegs);
 	memcpy(&thread->regs, regs, sizeof(Regs));
 
@@ -1076,7 +1089,7 @@ int processWait(int pid, int *stat_loc, int flags)
 		SchedNotif *notif = firstNotif;
 		while (notif != NULL)
 		{
-			if ((notif->dest == currentThread->creds->pid) && (notif->source == pid) && (notif->type == SHN_PROCESS_DEAD))
+			if ((notif->dest == currentThread->creds->pid) && ((notif->source == pid) || (pid == -1)) && (notif->type == SHN_PROCESS_DEAD))
 			{
 				*stat_loc = notif->info.status;
 				if (notif == firstNotif) firstNotif = notif->next;
@@ -1105,7 +1118,6 @@ int processWait(int pid, int *stat_loc, int flags)
 		spinlockRelease(&notifLock);
 		unlockSched();
 		kyield();
-		spinlockAcquire(&notifLock);
 	};
 };
 
@@ -1296,10 +1308,10 @@ int signalPidEx(int pid, siginfo_t *si)
 				
 					result = 0;
 				};
-			
-				thread = thread->next;
 			};
 		};
+		
+		thread = thread->next;
 	} while (thread != currentThread);
 	
 	unlockSched();

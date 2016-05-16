@@ -88,9 +88,11 @@ void dmaInit()
 	memset(&dmaPDPT, 0, sizeof(PDPT));
 	dmaPDPT.entries[511].present = 1;
 	dmaPDPT.entries[511].pdPhysAddr = ((uint64_t)&dmaPDPT - 0xFFFF800000000000) >> 12;
+	dmaPDPT.entries[511].rw = 1;
 	PML4 *pml4 = getPML4();
 	pml4->entries[263].present = 1;
 	pml4->entries[263].pdptPhysAddr = ((uint64_t)&dmaPDPT - 0xFFFF800000000000) >> 12;
+	pml4->entries[263].rw = 1;
 	refreshAddrSpace();
 };
 

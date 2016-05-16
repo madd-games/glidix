@@ -46,11 +46,19 @@ static uint64_t heapTop;
 
 void _heap_init()
 {
+#if 0
 	if (mprotect((void*)_HEAP_BASE_ADDR, _HEAP_PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_ALLOC) != 0)
 	{
 		abort();
 	};
+#endif
 
+	if (mmap((void*)_HEAP_BASE_ADDR, _HEAP_PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0) == MAP_FAILED)
+	{
+		abort();
+	};
+	
 	// create the initial heap block
 	__heap_header *head = (__heap_header*) _HEAP_BASE_ADDR;
 	__heap_footer *foot = (__heap_footer*) (_HEAP_BASE_ADDR + _HEAP_PAGE_SIZE - sizeof(__heap_footer));
@@ -307,12 +315,21 @@ void _heap_dump()
 
 void _heap_expand()
 {
+#if 0
 	if (mprotect((void*)heapTop, _HEAP_PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_ALLOC) != 0)
 	{
 		fprintf(stderr, "libc: failed to mprotect() a heap page at %p\n", (void*)heapTop);
 		abort();
 	};
+#endif
 
+	if (mmap((void*)heapTop, _HEAP_PAGE_SIZE, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0) == MAP_FAILED)
+	{
+		fprintf(stderr, "libc: failed to mmap() a heap page at %p\n", (void*)heapTop);
+		abort();
+	};
+	
 	// get the last block
 	__heap_footer *lastFoot = (__heap_footer*) (heapTop - sizeof(__heap_footer));
 	__heap_header *lastHead = _heap_get_header(lastFoot);

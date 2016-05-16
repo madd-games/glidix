@@ -244,6 +244,13 @@ typedef struct _File
 	 * causing it to delete. For example, it could be returned by palloc().
 	 */
 	FrameList* (*mmap)(struct _File *file, size_t len, int prot, int flags, off_t offset);
+	
+	/**
+	 * Reading/writing at arbitrary offsets, thread-safe calls for random-access files. Most importantly,
+	 * this is used by memory-mapped files.
+	 */
+	ssize_t (*pread)(struct _File *file, void *buf, size_t count, off_t offset);
+	ssize_t (*pwrite)(struct _File *file, const void *buffer, size_t count, off_t offset);
 } File;
 
 /**

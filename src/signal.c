@@ -131,8 +131,8 @@ void dispatchSignal()
 		// not allowed to override SIGKILL
 		Regs regs;				// doesn't matter, it will die
 		cli();
-		unlockSched();				// threadExit() calls lockSched()
-		threadExit(-SIGKILL);
+		unlockSched();				// processExit() calls lockSched()
+		processExit(-SIGKILL);
 		switchTask(&regs);
 	};
 	
@@ -153,8 +153,8 @@ void dispatchSignal()
 		{
 			Regs regs;				// doesn't matter, it will die
 			cli();
-			unlockSched();				// threadExit() calls lockSched()
-			threadExit(-siginfo->si_signo);
+			unlockSched();				// processExit() calls lockSched()
+			processExit(-siginfo->si_signo);
 			switchTask(&regs);
 		}
 		else
@@ -175,7 +175,7 @@ void dispatchSignal()
 		// signal stack broken, kill the process with SIGABRT.
 		Regs regs;
 		unlockSched();
-		threadExit(-SIGABRT);
+		processExit(-SIGABRT);
 		switchTask(&regs);
 	};
 	

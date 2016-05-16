@@ -33,6 +33,9 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #define	DEFAULT_LIBRARY_PATH			"/initrd/lib:/lib:/usr/lib"
 #define	LIBC_BASE				0x100000000
@@ -54,7 +57,7 @@ typedef struct _Library
 	unsigned int				symbolCount;
 	int					mode;
 	int					refcount;
-	_glidix_libinfo				info;
+	__libinfo				info;
 	int					numDeps;
 	struct _Library**			deps;
 	struct _Library*			prev;
@@ -65,6 +68,197 @@ static Library *globalResolutionTable = NULL;
 static char libdlError[256];
 static Library __libc_handle;
 static Library __main_handle;
+
+void __unmap_segments(int count, __libinfo_segment *segs)
+{
+	int i;
+	for (i=0; i<count; i++)
+	{
+		munmap(segs[i].addr, segs[i].len);
+	};
+};
+
+int __libopen(const char *pathname, uint64_t loadAddr, __libinfo *info)
+{
+	loadAddr = (loadAddr + 0xFFF) & (~0xFFF);
+	
+	int fd = open(pathname, O_RDONLY);
+	if (fd == -1)
+	{
+		return -1;
+	};
+	
+	Elf64_Ehdr elfHeader;
+	if (read(fd, &elfHeader, sizeof(Elf64_Ehdr)) < sizeof(Elf64_Ehdr))
+	{
+		close(fd);
+		return -1;
+	};
+	
+	if (memcmp(elfHeader.e_ident, "\x7f" "ELF", 4) != 0)
+	{
+		close(fd);
+		return -1;
+	};
+
+	if (elfHeader.e_ident[EI_CLASS] != ELFCLASS64)
+	{
+		close(fd);
+		return -1;
+	};
+
+	if (elfHeader.e_ident[EI_DATA] != ELFDATA2LSB)
+	{
+		close(fd);
+		return -1;
+	};
+
+	if (elfHeader.e_ident[EI_VERSION] != 1)
+	{
+		close(fd);
+		return -1;
+	};
+
+	if (elfHeader.e_type != ET_DYN)
+	{
+		close(fd);
+		return -1;
+	};
+
+	if (elfHeader.e_phentsize != sizeof(Elf64_Phdr))
+	{
+		close(fd);
+		return -1;
+	};
+
+	if (elfHeader.e_phentsize % sizeof(Elf64_Phdr))
+	{
+		close(fd);
+		return -1;
+	};
+	
+	unsigned int numProgHeads = elfHeader.e_phnum;
+	size_t sizeProgHeads = elfHeader.e_phentsize * numProgHeads;
+	Elf64_Phdr *progHeads = (Elf64_Phdr*) malloc(sizeProgHeads);
+
+	lseek(fd, elfHeader.e_phoff, SEEK_SET);
+	if (read(fd, progHeads, sizeProgHeads) < sizeProgHeads)
+	{
+		free(progHeads);
+		close(fd);
+		return -1;
+	};
+	
+	int segIndex = 0;
+	uint64_t topAddr = loadAddr;
+	void *dynamicSection = NULL;
+	
+	unsigned int i;
+	for (i=0; i<numProgHeads; i++)
+	{
+		Elf64_Phdr *hdr = &progHeads[i];
+		if ((hdr->p_type == PT_NULL) || (hdr->p_type == PT_INTERP) || (hdr->p_type == PT_NOTE))
+		{
+			continue;
+		};
+		
+		if (hdr->p_type == PT_LOAD)
+		{
+			if (segIndex == __DLFCN_MAX_SEGMENTS)
+			{
+				__unmap_segments(segIndex, info->segments);
+				close(fd);
+				return -1;
+			};
+			
+			uint64_t memorySize = (hdr->p_vaddr & 0xFFF) + hdr->p_memsz;
+			uint64_t fileSize = (hdr->p_vaddr & 0xFFF) + hdr->p_filesz;
+			
+			uint64_t loadAt = loadAddr + (hdr->p_vaddr & ~0xFFF);
+			off_t fileOffset = hdr->p_offset & ~0xFFF;
+			
+			int prot = 0;
+			if (hdr->p_flags & PF_W)
+			{
+				prot |= PROT_WRITE;
+			};
+			
+			if (hdr->p_flags & PF_R)
+			{
+				prot |= PROT_READ;
+			};
+			
+			if (hdr->p_flags & PF_X)
+			{
+				prot |= PROT_EXEC;
+			};
+			
+			if (mmap((void*)loadAt, fileSize, prot, MAP_PRIVATE | MAP_FIXED, fd, fileOffset) == MAP_FAILED)
+			{
+				asm volatile("xchg %bx, %bx");
+				__unmap_segments(segIndex, info->segments);
+				close(fd);
+				return -1;
+			};
+			
+			// see if we need to map anonymous pages
+			uint64_t filePages = ((fileSize + 0xFFF) & (~0xFFF)) >> 12;
+			uint64_t memoryPages = ((memorySize + 0xFFF) & (~0xFFF)) >> 12;
+			if (memoryPages > filePages)
+			{
+				uint64_t anonAt = loadAt + (filePages << 12);
+				uint64_t anonSize = (memoryPages - filePages) << 12;
+				
+				if (mmap((void*)anonAt, anonSize, prot, MAP_PRIVATE | MAP_FIXED | MAP_ANON, -1, 0) == MAP_FAILED)
+				{
+					munmap((void*)loadAt, fileSize);
+					__unmap_segments(segIndex, info->segments);
+					close(fd);
+					return -1;
+				};
+			};
+			
+			info->segments[segIndex].addr = (void*) loadAt;
+			info->segments[segIndex].len = memorySize;
+			segIndex++;
+			
+			uint64_t end = loadAt + (memoryPages << 12);
+			if (end > topAddr) topAddr = end;
+		}
+		else if (hdr->p_type == PT_DYNAMIC)
+		{
+			dynamicSection = (void*) (loadAddr + hdr->p_vaddr);
+			info->dynSize = hdr->p_memsz;
+		}
+		else
+		{
+			__unmap_segments(segIndex, info->segments);
+			close(fd);
+			return -1;
+		};
+	};
+	
+	close(fd);
+	free(progHeads);
+	
+	if (dynamicSection == NULL)
+	{
+		__unmap_segments(segIndex, info->segments);
+		return -1;
+	};
+	
+	info->dynSection = dynamicSection;
+	info->loadAddr = loadAddr;
+	info->nextLoadAddr = topAddr;
+	info->numSegments = segIndex;
+	
+	return 0;
+};
+
+void __libclose(__libinfo *info)
+{
+	__unmap_segments(info->numSegments, info->segments);
+};
 
 uint64_t __alloc_pages(size_t len)
 {
@@ -222,7 +416,7 @@ static int relocate(Library *lib, Elf64_Rela *table, size_t num)
 };
 
 Library* __libopen_withpaths(const char *soname, const char *rpath, const char *runpath, int mode);
-static int __lib_process(Library *lib, _glidix_libinfo info)
+static int __lib_process(Library *lib, __libinfo info)
 {
 	Elf64_Dyn *dyn = (Elf64_Dyn*) info.dynSection;
 	lib->loadAddr = info.loadAddr;
@@ -353,12 +547,12 @@ static int __lib_process(Library *lib, _glidix_libinfo info)
 
 Library* __libopen_found(const char *path, const char *soname, int mode)
 {
-	_glidix_libinfo info;
-	int status = _glidix_libopen(path, nextLoadAddr, &info);
+	__libinfo info;
+	int status = __libopen(path, nextLoadAddr, &info);
 
 	if (status == -1)
 	{
-		strcpy(libdlError, "_glidix_libopen failed");
+		sprintf(libdlError, "failed to load dynamic library %s", path);
 		return NULL;
 	};
 
@@ -370,13 +564,13 @@ Library* __libopen_found(const char *path, const char *soname, int mode)
 	
 	if (__lib_process(lib, info) != 0)
 	{
-		_glidix_libclose(&info);
+		__libclose(&info);
 		free(lib);
 		return NULL;
 	};
 
 	lib->refcount = 1;
-	memcpy(&lib->info, &info, sizeof(_glidix_libinfo));
+	memcpy(&lib->info, &info, sizeof(__libinfo));
 	return lib;
 };
 
@@ -434,7 +628,7 @@ int __dlclose(Library *lib)
 
 	if (lib->refcount == 0)
 	{
-		_glidix_libclose(&lib->info);
+		__libclose(&lib->info);
 		if (lib->prev != NULL) lib->prev->next = lib->next;
 		if (lib->next != NULL) lib->next->prev = lib->prev;
 
