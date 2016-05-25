@@ -58,7 +58,6 @@ static PTe *dmaGetPage(uint64_t index)
 		pdpt->entries[dirIndex].present = 1;
 		uint64_t frame = phmAllocFrame();
 		pdpt->entries[dirIndex].pdPhysAddr = frame;
-		pdpt->entries[dirIndex].user = 1;
 		pdpt->entries[dirIndex].rw = 1;
 		refreshAddrSpace();
 		makeDir = 1;
@@ -71,7 +70,6 @@ static PTe *dmaGetPage(uint64_t index)
 		pd->entries[tableIndex].present = 1;
 		uint64_t frame = phmAllocFrame();
 		pd->entries[tableIndex].ptPhysAddr = frame;
-		pd->entries[tableIndex].user = 1;
 		pd->entries[tableIndex].rw = 1;
 		refreshAddrSpace();
 		makeTable = 1;
@@ -121,6 +119,7 @@ static uint64_t dmaAllocPages(uint64_t physStart, uint64_t count)
 				PTe *pte = dmaGetPage(i+j);
 				pte->present = 1;
 				pte->framePhysAddr = physStart+j;
+				pte->rw = 1;
 			};
 			
 			refreshAddrSpace();

@@ -493,6 +493,7 @@ void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS phaddr, ACPI_SIZE len)
 		PTe *pte = acgetPage(nextFreePage++);
 		pte->present = 1;
 		pte->framePhysAddr = frame;
+		pte->rw = 1;
 	};
 	
 	refreshAddrSpace();

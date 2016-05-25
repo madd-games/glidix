@@ -147,7 +147,8 @@ void credsUpref(Creds *creds)
 
 void credsDownref(Creds *creds)
 {
-	if (__sync_fetch_and_add(&creds->refcount, -1) == 1)
+	int oldCount = __sync_fetch_and_add(&creds->refcount, -1);
+	if (oldCount == 1)
 	{
 		spinlockAcquire(&notifLock);
 		
@@ -837,14 +838,17 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->thid = nextPid++;
 	spinlockRelease(&schedLock);
 
-	// remember parent pid
-	if (currentThread->creds != NULL)
+	// remember parent pid if this is a new process
+	if ((flags & CLONE_THREAD) == 0)
 	{
-		thread->creds->ppid = currentThread->creds->pid;
-	}
-	else
-	{
-		thread->creds->ppid = 1;
+		if (currentThread->creds != NULL)
+		{
+			thread->creds->ppid = currentThread->creds->pid;
+		}
+		else
+		{
+			thread->creds->ppid = 1;
+		};
 	};
 
 	// file table

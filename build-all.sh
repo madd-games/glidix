@@ -177,10 +177,10 @@ rm -f out/vmglidix.tar
 make || exit 1
 
 cd out
-autodrop glidix.iso
+#autodrop glidix.iso
 cd ..
-autodrop isodir/libc.mip -R GlidixPkg
-autodrop isodir/libc-dev.mip -R GlidixPkg
-autodrop isodir/shutils.mip -R GlidixPkg
-autodrop isodir/sh.mip -R GlidixPkg
-autodrop isodir/libc-dev.mip -R GlidixPkg
+#autodrop isodir/libc.mip -R GlidixPkg
+#autodrop isodir/libc-dev.mip -R GlidixPkg
+#autodrop isodir/shutils.mip -R GlidixPkg
+#autodrop isodir/sh.mip -R GlidixPkg
+#autodrop isodir/libc-dev.mip -R GlidixPkg
