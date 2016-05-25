@@ -118,7 +118,6 @@ int execScript(File *fp, const char *path, const char *pars, size_t parsz)
 
 int elfExec(const char *path, const char *pars, size_t parsz)
 {
-	//getCurrentThread()->therrno = ENOEXEC;
 	Regs regs;
 	initUserRegs(&regs);
 	
@@ -353,7 +352,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	};
 	
 	// allocate a 2MB stack
-	FrameList *flStack = palloc(0x200);
+	FrameList *flStack = palloc_later(NULL, 0x200, -1, 0);
 	if (AddSegment(pm, 0x200, flStack, PROT_READ | PROT_WRITE) != 0)
 	{
 		kprintf_debug("ERROR: failed to map stack for some reason\n");

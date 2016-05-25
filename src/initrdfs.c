@@ -242,6 +242,19 @@ static ssize_t read(File *file, void *buffer, size_t size)
 	return size;
 };
 
+static ssize_t pread(File *file, void *buffer, size_t size, off_t off)
+{
+	TarFile *tf = (TarFile*) file->fsdata;
+	if (((size_t)off + size) > tf->size)
+	{
+		size = tf->size - (size_t) off;
+	};
+
+	memcpy(buffer, &tf->data[off], size);
+
+	return size;
+};
+
 static int fstat(File *file, struct stat *st)
 {
 	TarFile *tf = (TarFile*) file->fsdata;
@@ -276,6 +289,7 @@ static int openfile(Dir *me, File *file, size_t szfile)
 	tf->pos = 0;
 
 	file->read = read;
+	file->pread = pread;
 	file->close = fileClose;
 	file->seek = seek;
 	file->dup = dup;

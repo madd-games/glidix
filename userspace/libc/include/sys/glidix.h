@@ -40,10 +40,11 @@
 typedef struct
 {
 	char fpu[512];
+	uint64_t rflags;
+	uint64_t rip;
 	uint64_t rdi, rsi, rbp, rbx, rdx, rcx, rax;
 	uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
-	uint64_t rip, rsp;
-	uint64_t rflags;
+	uint64_t rsp;
 } __attribute__ ((packed)) _glidix_mstate;
 
 typedef struct
@@ -176,8 +177,6 @@ int		_glidix_exec(const char *path, const char *pars, size_t parsz);
 int		_glidix_open(const char *path, int flags, mode_t mode);
 uid_t		_glidix_getsuid();
 gid_t		_glidix_getsgid();
-void		_glidix_sighandler(void *handler);
-void		_glidix_sigret(void *ret);
 size_t		_glidix_getparsz();
 void		_glidix_getpars(char *buffer, size_t size);
 int		_glidix_geterrno();

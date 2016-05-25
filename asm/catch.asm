@@ -58,13 +58,6 @@ catch:
 	
 	xor	rax,			rax
 	ret
-
-panic_on_throw:
-	mov	rdi,			str_filename
-	mov	rsi,			0
-	mov	rdx,			str_funcname
-	mov	rcx,			str_panic
-	call	_panic
 	
 throw:
 	; see if we're even catching exceptions
@@ -73,7 +66,7 @@ throw:
 	add	rax,			0x250
 	mov	rcx,			[rax+56]
 	test	rcx,			rcx
-	jz	panic_on_throw
+	jz	throw_unhandled
 	
 	; restore all registers
 	mov	rbx,			[rax+0]
@@ -89,6 +82,9 @@ throw:
 	; and jump back to the return RIP.
 	mov	rax,			rdi
 	jmp	r10
+
+throw_unhandled:
+	ret
 
 uncatch:
 	mov	rax,			currentThread

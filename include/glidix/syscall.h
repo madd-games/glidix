@@ -31,14 +31,20 @@
 
 #include <glidix/common.h>
 
-void syscallDispatch(Regs *regs, uint16_t num);
-int isPointerValid(uint64_t ptr, uint64_t size, int flags);
-int isStringValid(uint64_t ptr);
+/**
+ * Use this size for kernel string buffers. That is, this is the maximum number of bytes in a
+ * string passed from userspace to kernel.
+ */
+#define	USER_STRING_MAX					1024
 
 /**
  * Copy data from userspace to kernel space or vice versa. Returns 0 on success, -1 on error.
+ * strcpy_u2k() is necessary because the kernel, in some cases, does not know how many bytes
+ * must be copied from userspace; but in the case of copying from kernel to userspace, the
+ * kernel knows how many bytes to copy and so it can just call memcpy_k2u().
  */
 int memcpy_u2k(void *dst, const void *src, size_t size);
 int memcpy_k2u(void *dst, const void *src, size_t size);
+int strcpy_u2k(char *dst, const char *src);
 
 #endif

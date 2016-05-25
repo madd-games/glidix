@@ -132,7 +132,13 @@ syscallTable = {
 	110:	"setsid",
 	111:	"setpgid",
 	112:	"getsid",
-	113:	"getpgid"
+	113:	"getpgid",
+	114:	"pthread_exit",
+	115:	"pthread_create",
+	116:	"pthread_self",
+	117:	"pthread_join",
+	118:	"pthread_detach",
+	119:	"pthread_kill"
 }
 
 f = open("_libglidix.s", "wb")

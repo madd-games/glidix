@@ -206,14 +206,10 @@ static File *openPipe(Pipe *pipe, int mode)
 	return fp;
 };
 
-int sys_pipe(int *pipefd)
+int sys_pipe(int *upipefd)
 {
-	if (!isPointerValid((uint64_t)pipefd, sizeof(int)*2, PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
+	int pipefd[2];
+
 	int rfd=-1, wfd=-1;
 
 	FileTable *ftab = getCurrentThread()->ftab;
@@ -257,5 +253,12 @@ int sys_pipe(int *pipefd)
 	pipefd[1] = wfd;
 
 	spinlockRelease(&ftab->spinlock);
+	
+	if (memcpy_k2u(upipefd, pipefd, sizeof(int)*2) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	return 0;
 };

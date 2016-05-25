@@ -62,11 +62,36 @@ typedef	uint64_t			socklen_t;
 typedef	uint16_t			sa_family_t;
 typedef uint16_t			in_port_t;
 typedef uint32_t			in_addr_t;
-typedef void*				pthread_t;		/* actually points to a struct defined in pthread.h */
 typedef	uint8_t				pthread_spinlock_t;
+typedef	int				pthread_t;
 
 typedef struct
 {
+	/**
+	 * This is currently ignored by the kernel.
+	 */
+	int	scope;
+	
+	/**
+	 * Detach state.
+	 */
+	int	detachstate;
+	
+	/**
+	 * Scheduler inheritance mode; actually ignored.
+	 */
+	int	inheritsched;
+	
+	/**
+	 * Stack position and size.
+	 */
+	void*	stack;
+	size_t	stacksize;
+	
+	/**
+	 * Make sure we are padded to at least 256 bytes.
+	 */
+	char	pad[256];
 } pthread_attr_t;
 
 #endif

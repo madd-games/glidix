@@ -5,7 +5,7 @@ build/src__command.o build/src__command.d : src/command.c /glidix/usr/include/sy
  /glidix/usr/include/netinet/in.h /glidix/usr/include/sys/socket.h \
  /glidix/usr/include/stdlib.h /glidix/usr/include/stdio.h \
  /glidix/usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h \
- /glidix/usr/include/string.h /glidix/usr/include/unistd.h \
- /glidix/usr/include/ctype.h /glidix/usr/include/signal.h \
- /glidix/usr/include/fcntl.h /glidix/usr/include/errno.h src/command.h \
- src/sh.h
+ /glidix/usr/include/pthread.h /glidix/usr/include/string.h \
+ /glidix/usr/include/unistd.h /glidix/usr/include/ctype.h \
+ /glidix/usr/include/signal.h /glidix/usr/include/fcntl.h \
+ /glidix/usr/include/errno.h src/command.h src/sh.h

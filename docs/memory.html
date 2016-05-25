@@ -35,6 +35,7 @@ The rest of the address space is reserved.
 <li><code>0xFFFF808000000000-0xFFFF808000000FFF</code> is the Interprocess Streaming Page (ISP), it's used by parts of kernel code to make a temporary mapping of some physical frame.</li>
 <li><code>0xFFFF808000001000-0xFFFF808000001FFF</code> contains the APIC registers (see <code>apic.h</code>).</li>
 <li><code>0xFFFF808000002000-0xFFFF808000002FFF</code> contains the IOAPIC registers.</li>
+<li><code>0xFFFF808000003000-0xFFFF808000003FFF</code> is the User Support Page, containing some read-only userspace-executable code, used for various purposes (see <code>usup.asm</code>).</li>
 </ul>
 
 <h2>Low Memory</h2>

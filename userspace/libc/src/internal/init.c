@@ -40,14 +40,11 @@ char **environ;
 static int __init_done = 0;
 static int __argc;
 static char **__argv;
-static __pthread __thread_initial;
-static __thread_local_info __thread_ili;
+static int __errno_init;
 
 void __do_init()
 {
-	__thread_initial._pid = getpid();
-	_glidix_seterrnoptr(&__thread_ili._errno);
-	__thread_ili._tid = &__thread_initial;
+	_glidix_seterrnoptr(&__errno_init);
 	_heap_init();
 
 	// parse the execPars

@@ -137,20 +137,7 @@ static void setGate(int index, void *isr)
 
 void initIDT()
 {
-	// remap the IRQs
-#if 0
-	outb(0x20, 0x11);
-	outb(0xA0, 0x11);
-	outb(0x21, 0x20);
-	outb(0xA1, 0x28);
-	outb(0x21, 0x04);
-	outb(0xA1, 0x02);
-	outb(0x21, 0x01);
-	outb(0xA1, 0x01);
-	outb(0x21, 0x0);
-	outb(0xA1, 0x0);
-#endif
-
+	// dsiable the legacy PIC
 	outb(0xA1, 0xFF);
 	outb(0x21, 0xFF);
 
@@ -253,7 +240,6 @@ static void printbyte(uint8_t byte)
 
 static void onPageFault(Regs *regs)
 {
-	//kprintf_debug("pf\n");
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 	
@@ -262,14 +248,15 @@ static void onPageFault(Regs *regs)
 	{
 		if (regs->rip == TRAP_SIGRET)
 		{
+			char buffer[1024];
 			uint64_t frameAddr = regs->rsp - 8;
 			if ((frameAddr & 0xF) != 0)
 			{
 				faultAddr = frameAddr;
 			}
-			else if (isPointerValid(frameAddr, sizeSignalStackFrame, PROT_READ))
+			else if (memcpy_u2k(buffer, (void*)frameAddr, sizeSignalStackFrame) == 0)
 			{
-				sigret((void*)frameAddr);
+				sigret(buffer);
 			}
 			else
 			{
@@ -301,10 +288,29 @@ static void onPageFault(Regs *regs)
 				};
 			};
 
-			if (tryLoadOnDemand(faultAddr) == 0)
+			int status = tryLoadOnDemand(faultAddr);
+			if (status == MEM_OK)
 			{
 				spinlockRelease(&pm->lock);
 				return;
+			}
+			else if (status == MEM_FAILED)
+			{
+				// ignore
+			}
+			else
+			{
+				// bus error
+				spinlockRelease(&pm->lock);
+				Thread *thread = getCurrentThread();
+
+				siginfo_t siginfo;
+				siginfo.si_signo = SIGBUS;
+				siginfo.si_code = BUS_OBJERR;
+
+				cli();
+				sendSignal(thread, &siginfo);
+				switchTask(regs);
 			};
 			
 			spinlockRelease(&pm->lock);
@@ -421,7 +427,7 @@ void sendCPUErrorSignal(Regs *regs, int signal, int code, void *addr)
 	siginfo.si_code = code;
 	siginfo.si_addr = addr;
 
-	ASM("cli");
+	cli();
 	sendSignal(thread, &siginfo);
 	switchTask(regs);
 };
@@ -435,13 +441,6 @@ void onInvalidOpcode(Regs *regs)
 
 void isrHandler(Regs *regs)
 {
-#if 0
-	if (kernelDead)
-	{
-		panic("interrupt %d after kernel died.", regs->intNo);
-	};
-#endif
-
 	// ignore spurious IRQs
 	if (regs->intNo == IRQ7)
 	{

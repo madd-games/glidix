@@ -66,7 +66,8 @@
 #define	SIGWAITING	32
 #define	SIGLWP		33
 #define	SIGAIO		34
-#define	SIG_NUM		35
+#define	SIGTHKILL	35
+#define	SIG_NUM		36
 
 /**
  * si_code for SIGSEGV
@@ -95,6 +96,13 @@
 #define	FPE_FLTRES	5
 #define	FPE_FLTINV	6
 #define	FPE_FLTSUB	7
+
+/**
+ * si_code for SIGBUS
+ */
+#define	BUS_ADRALN	0
+#define	BUS_ADRERR	1
+#define	BUS_OBJERR	2
 
 /**
  * Max number of signals that can be sent at once to a process.

@@ -88,6 +88,29 @@
 #define	SIG_UNBLOCK	1
 #define	SIG_SETMASK	2
 
+#define	SEGV_MAPERR	1
+#define	SEGV_ACCERR	2
+
+#define	CLD_EXITED	0
+#define	CLD_KILLED	1
+#define	CLD_DUMPED	2		/* never returned by glidix */
+#define	CLD_TRAPPED	3
+#define	CLD_STOPPED	4
+#define	CLD_CONTINUED	5
+
+#define	FPE_INTDIV	0
+#define	FPE_INTOVF	1
+#define	FPE_FLTDIV	2
+#define	FPE_FLTOVF	3
+#define	FPE_FLTUND	4
+#define	FPE_FLTRES	5
+#define	FPE_FLTINV	6
+#define	FPE_FLTSUB	7
+
+#define	BUS_ADRALN	0
+#define	BUS_ADRERR	1
+#define	BUS_OBJERR	2
+
 /**
  * 'int' is signal-atomic on x86_64 according to Intel spec.
  */

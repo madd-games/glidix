@@ -367,13 +367,7 @@ void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig
 };
 
 ssize_t sys_pcistat(int id, PCIDevice *buffer, size_t bufsize)
-{
-	if (!isPointerValid((uint64_t)buffer, bufsize, PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
+{	
 	spinlockAcquire(&pciLock);
 	PCIDevice *dev;
 	
@@ -386,7 +380,12 @@ ssize_t sys_pcistat(int id, PCIDevice *buffer, size_t bufsize)
 				bufsize = sizeof(PCIDevice);
 			};
 			
-			memcpy(buffer, dev, bufsize);
+			if (memcpy_k2u(buffer, dev, bufsize) != 0)
+			{
+				spinlockRelease(&pciLock);
+				ERRNO = EFAULT;
+				return -1;
+			};
 			spinlockRelease(&pciLock);
 			return (ssize_t) bufsize;
 		};

@@ -10,6 +10,8 @@ SECTIONS
 		*(.text)
 		*(.rodata)
 		. = ALIGN(4096);
+		*(.usup_text)
+		. = ALIGN(4096);
 	}
 
 	.data (phys + (data - code)) : AT(phys + (data - code))

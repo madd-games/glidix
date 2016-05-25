@@ -103,7 +103,8 @@ _syscall_entry:
 	; preserve user stack pointer and return address on the kernel stack
 	push rcx			; return RIP
 	push r11			; user RSP
-
+	push r9				; preserve R9 for resettable system calls (see usup.asm)
+	
 	; move the fourth argument back into RCX
 	mov rcx, r10
 	
@@ -128,7 +129,8 @@ _syscall_entry:
 	mov rdi, rax
 	call sysEpilog
 	
-	; restore user stack pointer into R10, return RIP into RCX, and we can do a sysret.
+	; restore R9, restore user stack pointer into R10, return RIP into RCX, and we can do a sysret.
+	pop r9
 	pop r10
 	pop rcx
 	

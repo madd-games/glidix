@@ -65,9 +65,10 @@ static void closedir(File *fp)
 	kfree(dir);
 };
 
-int sys_fdopendir(const char *dirname)
+int sys_fdopendir(const char *udirname)
 {
-	if (!isStringValid((uint64_t)dirname))
+	char dirname[USER_STRING_MAX];
+	if (strcpy_u2k(dirname, udirname) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;

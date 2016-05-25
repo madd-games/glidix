@@ -258,7 +258,7 @@ extern PER_CPU char* localGDTPtr;
 
 void kmain(MultibootInfo *info)
 {
-	ASM("cli");
+	cli();
 	kernelStatus = KERNEL_RUNNING;
 	initConsole();
 	kprintf("Successfully booted into 64-bit mode\n");
@@ -446,16 +446,7 @@ static void spawnProc(void *stack)
 extern uint64_t getFlagsRegister();
 
 static UINT32 onPowerButton(void *ignore)
-{
-#if 0
-	(void)ignore;
-	Thread *thread = getCurrentThread();
-	while (thread->creds->pid != 1)
-	{
-		thread = thread->next;
-	};
-#endif
-	
+{	
 	siginfo_t info;
 	info.si_signo = SIGHUP;
 	info.si_code = 0;

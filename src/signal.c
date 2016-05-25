@@ -52,26 +52,57 @@ typedef struct
 {
 	uint64_t			trapSigRet;		// TRAP_SIGRET
 	uint64_t			sigmask;
-	MachineState			mstate;			// must be aligned on 16 byte boundary
 	siginfo_t			si;
+	MachineState			mstate;			// must be aligned on 16 byte boundary
 } PACKED SignalStackFrame;
 
 uint64_t sizeSignalStackFrame = sizeof(SignalStackFrame);
 
+extern char usup_sigret;
+extern char usup_start;
+
 void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
 {
-	uint64_t addr = (frame->mstate.rsp - sizeof(SignalStackFrame) - 128) & ~((uint64_t)0xF);
-	memcpy((void*)addr, frame, sizeof(SignalStackFrame));
+	// push GPRs onto the stack first; here alignment does not matter but relation to original
+	// RSP does.
+	uint64_t addrGPR = frame->mstate.rsp - (sizeof(MachineState) - 512) - 128;
+	if (memcpy_k2u((void*)addrGPR, &frame->mstate.rflags, sizeof(MachineState)-512) != 0)
+	{
+		processExit(-SIGABRT);
+	};
 	
-	SignalStackFrame *uframe = (SignalStackFrame*) addr;
+	// push the siginfo_t
+	uint64_t addrInfo = addrGPR - sizeof(siginfo_t);
+	if (memcpy_k2u((void*)addrInfo, &frame->si, sizeof(siginfo_t)) != 0)
+	{
+		processExit(-SIGABRT);
+	};
+	
+	// now push the FPU registers; this must be 16-byte aligned.
+	uint64_t addrFPU = (addrInfo - 512) & ~0xF;
+	if (memcpy_k2u((void*)addrFPU, &frame->mstate, 512) != 0)
+	{
+		processExit(-SIGABRT);
+	};
+	
+	// push the return address
+	uint64_t addrRet = addrFPU - 8;
+	uint64_t sigretRIP = (uint64_t)(&usup_sigret) - (uint64_t)(&usup_start) + 0xFFFF808000003000UL;
+	if (memcpy_k2u((void*)addrRet, &sigretRIP, 8) != 0)
+	{
+		processExit(-SIGABRT);
+	};
 	
 	Regs regs;
 	initUserRegs(&regs);
 	regs.rip = handler;
-	regs.rsp = addr;
+	regs.rsp = addrRet;
 	*((int*)&regs.rdi) = frame->si.si_signo;
-	regs.rsi = (uint64_t) (&uframe->si);
+	regs.rsi = addrInfo;
 	regs.rdx = 0;
+	regs.rbx = addrFPU;
+	regs.r12 = addrGPR;
+	regs.r13 = frame->sigmask;
 	switchContext(&regs);
 };
 
@@ -125,7 +156,12 @@ void dispatchSignal()
 		panic("dispatchSignal called when no signals are waiting");
 	};
 
-	//kprintf_debug("Dispatching signal %d to pid %d\n", siginfo->si_signo, thread->pid);
+	if (siginfo->si_signo == SIGTHKILL)
+	{
+		unlockSched();
+		threadExit();
+	};
+	
 	if (siginfo->si_signo == SIGKILL)
 	{
 		// not allowed to override SIGKILL
@@ -168,16 +204,7 @@ void dispatchSignal()
 	};
 
 	// try pushing the signal stack frame. also, don't break the red zone!
-	uint64_t addr = (thread->regs.rsp - sizeof(SignalStackFrame) - 128) & (~((uint64_t)0xF));
 	SetProcessMemory(thread->pm);
-	if (!isPointerValid(addr, sizeof(SignalStackFrame), PROT_READ | PROT_WRITE))
-	{
-		// signal stack broken, kill the process with SIGABRT.
-		Regs regs;
-		unlockSched();
-		processExit(-SIGABRT);
-		switchTask(&regs);
-	};
 	
 	// basically, the scheduler which calls us is not reentant, so we cannot copy
 	// the frame directly onto the user stack as that may cause a page fault (which
@@ -189,7 +216,8 @@ void dispatchSignal()
 	// user stack
 	uint64_t frameAddr = (uint64_t) thread->stack;
 	SignalStackFrame *frame = (SignalStackFrame*) frameAddr;
-	frame->trapSigRet = TRAP_SIGRET;
+	//frame->trapSigRet = TRAP_SIGRET;
+	frame->trapSigRet = (uint64_t)(&usup_sigret) - (uint64_t)(&usup_start) + 0xFFFF808000003000UL;
 	frame->sigmask = thread->sigmask;
 	memcpy(&frame->mstate.fpuRegs, &thread->fpuRegs, sizeof(FPURegs));
 	frame->mstate.rdi = thread->regs.rdi;
@@ -307,8 +335,6 @@ void sigret(void *ret)
 	regs.rflags = (frame->mstate.rflags & OK_USER_FLAGS) | (getFlagsRegister() & ~OK_USER_FLAGS) | (1 << 9);
 	fpuLoad(&frame->mstate.fpuRegs);
 	getCurrentThread()->sigmask = frame->sigmask;
-
-	cli();
 	switchContext(&regs);
 };
 

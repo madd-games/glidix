@@ -43,7 +43,6 @@
 #include <glidix/fsdriver.h>
 #include <glidix/time.h>
 #include <glidix/pipe.h>
-#include <glidix/shared.h>
 #include <glidix/down.h>
 #include <glidix/netif.h>
 #include <glidix/socket.h>
@@ -53,42 +52,6 @@
 #include <glidix/message.h>
 #include <glidix/shmem.h>
 #include <glidix/catch.h>
-
-int isPointerValid(uint64_t ptr, uint64_t size, int flags)
-{
-	if (size == 0) return 1;
-
-	if (ptr < 0x1000)
-	{
-		return 0;
-	};
-
-	if ((ptr+size) >= 0x7FC0000000)
-	{
-		return 0;
-	};
-
-	uint64_t start = ptr / 0x1000;
-	uint64_t count = size / 0x1000;
-	if (size % 0x1000) count++;
-	
-	uint64_t i;
-	for (i=start; i<start+count; i++)
-	{
-		if (!canAccessPage(getCurrentThread()->pm, i, flags))
-		{
-			return 0;
-		};
-	};
-	
-	return 1;
-};
-
-int isStringValid(uint64_t ptr)
-{
-	// TODO
-	return 1;
-};
 
 int memcpy_u2k(void *dst_, const void *src_, size_t size)
 {
@@ -148,21 +111,39 @@ int memcpy_k2u(void *dst_, const void *src_, size_t size)
 	};
 };
 
+int strcpy_u2k(char *dst, const char *src)
+{
+	// src is in userspace
+	uint64_t addr = (uint64_t) src;
+	
+	size_t count = 0;
+	while (1)
+	{
+		if (addr >= 0x7FC0000000)
+		{
+			return -1;
+		};
+		
+		if (count == (USER_STRING_MAX-1))
+		{
+			return -1;
+		};
+		
+		char c = *((char*)addr);
+		addr++;
+		*dst++ = c;
+		if (c == 0) return 0;
+	};
+};
+
 void sys_exit(int status)
 {
 	processExit(status);
 	kyield();
 };
 
-uint64_t sys_write(int fd, const void *buf, size_t size)
-{
-	if (!isPointerValid((uint64_t)buf, (uint64_t)size, PROT_READ))
-	{
-		ERRNO = EFAULT;
-		ssize_t err = -1;
-		return *((uint64_t*)&err);
-	};
-	
+ssize_t sys_write(int fd, const void *buf, size_t size)
+{	
 	ssize_t out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -201,27 +182,29 @@ uint64_t sys_write(int fd, const void *buf, size_t size)
 					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
 					void *tmpbuf = kmalloc(size);
-					memcpy(tmpbuf, buf, size);
-					out = fp->write(fp, tmpbuf, size);
-					vfsClose(fp);
-					kfree(tmpbuf);
+					if (memcpy_u2k(tmpbuf, buf, size) != 0)
+					{
+						vfsClose(fp);
+						kfree(tmpbuf);
+						ERRNO = EFAULT;
+						out = -1;
+					}
+					else
+					{
+						out = fp->write(fp, tmpbuf, size);
+						vfsClose(fp);
+						kfree(tmpbuf);
+					};
 				};
 			};
 		};
 	};
 
-	return *((uint64_t*)&out);
+	return out;
 };
 
 uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
-{
-	if (!isPointerValid((uint64_t)buf, (uint64_t)size, PROT_READ))
-	{
-		ERRNO = EFAULT;
-		ssize_t err = -1;
-		return *((uint64_t*)&err);
-	};
-	
+{	
 	ssize_t out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -260,10 +243,19 @@ uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
 					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
 					void *tmpbuf = kmalloc(size);
-					memcpy(tmpbuf, buf, size);
-					out = fp->pwrite(fp, tmpbuf, size, offset);
-					vfsClose(fp);
-					kfree(tmpbuf);
+					if (memcpy_u2k(tmpbuf, buf, size) != 0)
+					{
+						vfsClose(fp);
+						kfree(tmpbuf);
+						ERRNO = EFAULT;
+						return -1;
+					}
+					else
+					{
+						out = fp->pwrite(fp, tmpbuf, size, offset);
+						vfsClose(fp);
+						kfree(tmpbuf);
+					};
 				};
 			};
 		};
@@ -273,13 +265,7 @@ uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
 };
 
 ssize_t sys_read(int fd, void *buf, size_t size)
-{
-	if (!isPointerValid((uint64_t)buf, (uint64_t)size, PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
+{	
 	ssize_t out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -320,7 +306,11 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 					void *tmpbuf = kmalloc(size);
 					out = fp->read(fp, tmpbuf, size);
 					vfsClose(fp);
-					memcpy(buf, tmpbuf, size);
+					if (memcpy_k2u(buf, tmpbuf, size) != 0)
+					{
+						ERRNO = EFAULT;
+						out = -1;
+					};
 					kfree(tmpbuf);
 				};
 			};
@@ -332,12 +322,6 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 
 ssize_t sys_pread(int fd, void *buf, size_t size, off_t offset)
 {
-	if (!isPointerValid((uint64_t)buf, (uint64_t)size, PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
 	ssize_t out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -378,7 +362,11 @@ ssize_t sys_pread(int fd, void *buf, size_t size, off_t offset)
 					void *tmpbuf = kmalloc(size);
 					out = fp->pread(fp, tmpbuf, size, offset);
 					vfsClose(fp);
-					memcpy(buf, tmpbuf, size);
+					if (memcpy_k2u(buf, tmpbuf, size) != 0)
+					{
+						ERRNO = EFAULT;
+						out = -1;
+					};
 					kfree(tmpbuf);
 				};
 			};
@@ -418,9 +406,10 @@ int sysOpenErrno(int vfsError)
 	return -1;
 };
 
-int sys_open(const char *path, int oflag, mode_t mode)
+int sys_open(const char *upath, int oflag, mode_t mode)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -569,12 +558,6 @@ int sys_close(int fd)
 
 int sys_ioctl(int fd, uint64_t cmd, void *argp)
 {
-	if (!isPointerValid((uint64_t)argp, (cmd >> 32) & 0xFFFF, PROT_READ | PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
 		getCurrentThread()->therrno = EBADF;
@@ -601,7 +584,20 @@ int sys_ioctl(int fd, uint64_t cmd, void *argp)
 
 	vfsDup(fp);
 	spinlockRelease(&ftab->spinlock);
-	int ret = fp->ioctl(fp, cmd, argp);
+	
+	size_t argsize = (cmd >> 32) & 0xFFFF;
+	void *argbuf = kmalloc(argsize);
+	if (memcpy_u2k(argbuf, argp, argsize) != 0)
+	{
+		kfree(argbuf);
+		vfsClose(fp);
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	int ret = fp->ioctl(fp, cmd, argbuf);
+	memcpy_k2u(argp, argbuf, argsize);		// ignore error
+	kfree(argbuf);
 	vfsClose(fp);
 	return ret;
 };
@@ -672,24 +668,26 @@ int sys_raise(int sig)
 	return 0;
 };
 
-int sys_stat(const char *path, struct stat *buf)
+int sys_stat(const char *upath, struct stat *buf)
 {
-	if (!isStringValid((uint64_t)path))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
-	if (!isPointerValid((uint64_t)buf, sizeof(struct stat), PROT_WRITE))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 
-	int status = vfsStat(path, buf);
+	struct stat kbuf;
+	int status = vfsStat(path, &kbuf);
 	if (status == 0)
 	{
-		return status;
+		if (memcpy_k2u(buf, &kbuf, sizeof(struct stat)) != 0)
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+		
+		return 0;
 	}
 	else
 	{
@@ -697,24 +695,26 @@ int sys_stat(const char *path, struct stat *buf)
 	};
 };
 
-int sys_lstat(const char *path, struct stat *buf)
+int sys_lstat(const char *upath, struct stat *buf)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
-	
-	if (!isPointerValid((uint64_t)buf, sizeof(struct stat), PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
-	int status = vfsLinkStat(path, buf);
+
+	struct stat kbuf;
+	int status = vfsLinkStat(path, &kbuf);
 	if (status == 0)
 	{
-		return status;
+		if (memcpy_k2u(buf, &kbuf, sizeof(struct stat)) != 0)
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+		
+		return 0;
 	}
 	else
 	{
@@ -724,10 +724,9 @@ int sys_lstat(const char *path, struct stat *buf)
 
 int sys_pause()
 {
-	ASM("cli");
+	cli();
 	lockSched();
 	getCurrentThread()->therrno = EINTR;
-	//getCurrentThread()->flags |= THREAD_WAITING;
 	waitThread(getCurrentThread());
 	unlockSched();
 	kyield();
@@ -736,12 +735,8 @@ int sys_pause()
 
 int sys_fstat(int fd, struct stat *buf)
 {
-	if (!isPointerValid((uint64_t)buf, sizeof(struct stat), PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
+	struct stat kbuf;
+		
 	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
 	{
 		getCurrentThread()->therrno = EBADF;
@@ -768,20 +763,27 @@ int sys_fstat(int fd, struct stat *buf)
 
 	vfsDup(fp);
 	spinlockRelease(&ftab->spinlock);
-	int status = fp->fstat(fp, buf);
+	int status = fp->fstat(fp, &kbuf);
 	vfsClose(fp);
 	
 	if (status == -1)
 	{
 		getCurrentThread()->therrno = EIO;
 	};
+	
+	if (memcpy_k2u(buf, &kbuf, sizeof(struct stat)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
 
 	return status;
 };
 
-int sys_chmod(const char *path, mode_t mode)
+int sys_chmod(const char *upath, mode_t mode)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -926,9 +928,10 @@ static int canChangeOwner(struct stat *st, uid_t uid, gid_t gid)
 	return 0;
 };
 
-int sys_chown(const char *path, uid_t uid, gid_t gid)
+int sys_chown(const char *upath, uid_t uid, gid_t gid)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -1046,9 +1049,10 @@ int sys_fchown(int fd, uid_t uid, gid_t gid)
 	return 0;
 };
 
-int sys_mkdir(const char *path, mode_t mode)
+int sys_mkdir(const char *upath, mode_t mode)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -1193,9 +1197,10 @@ int sys_ftruncate(int fd, off_t length)
 	return 0;
 };
 
-int sys_unlink(const char *path)
+int sys_unlink(const char *upath)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -1393,27 +1398,38 @@ int sys_dup2(int oldfd, int newfd)
 	return newfd;
 };
 
-int sys_insmod(const char *modname, const char *path, const char *opt, int flags)
+int sys_insmod(const char *umodname, const char *upath, const char *uopt, int flags)
 {
-	if (!isStringValid((uint64_t)modname))
+	char modname[USER_STRING_MAX];
+	char path[USER_STRING_MAX];
+	char bufopt[USER_STRING_MAX];
+	char *opt;
+	
+	if (strcpy_u2k(modname, umodname) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (!isStringValid((uint64_t)path))
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (opt != NULL)
+	if (uopt != NULL)
 	{
-		if (!isStringValid((uint64_t)opt))
+		if (strcpy_u2k(bufopt, uopt) != 0)
 		{
 			ERRNO = EFAULT;
 			return -1;
 		};
+		
+		opt = bufopt;
+	}
+	else
+	{
+		opt = NULL;
 	};
 	
 	if (getCurrentThread()->creds->euid != 0)
@@ -1426,9 +1442,10 @@ int sys_insmod(const char *modname, const char *path, const char *opt, int flags
 	return insmod(modname, path, opt, flags);
 };
 
-int sys_chdir(const char *path)
+int sys_chdir(const char *upath)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -1466,14 +1483,12 @@ int sys_chdir(const char *path)
 
 char *sys_getcwd(char *buf, size_t size)
 {
-	if (!isPointerValid((uint64_t)buf, size, PROT_WRITE))
+	if (size > 256) size = 256;
+	if (memcpy_k2u(buf, getCurrentThread()->cwd, size) != 0)
 	{
 		ERRNO = EFAULT;
 		return NULL;
 	};
-	
-	if (size > 256) size = 256;
-	memcpy(buf, getCurrentThread()->cwd, size);
 	return buf;
 };
 
@@ -1784,9 +1799,10 @@ int setegid(gid_t egid)
 	return 0;
 };
 
-int sys_rmmod(const char *modname, int flags)
+int sys_rmmod(const char *umodname, int flags)
 {
-	if (!isStringValid((uint64_t)modname))
+	char modname[USER_STRING_MAX];
+	if (strcpy_u2k(modname, umodname) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -1802,15 +1818,17 @@ int sys_rmmod(const char *modname, int flags)
 	return rmmod(modname, flags);
 };
 
-int sys_link(const char *oldname, const char *newname)
+int sys_link(const char *uoldname, const char *unewname)
 {
-	if (!isStringValid((uint64_t)oldname))
+	char oldname[USER_STRING_MAX];
+	if (strcpy_u2k(oldname, uoldname) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (!isStringValid((uint64_t)newname))
+	char newname[USER_STRING_MAX];
+	if (strcpy_u2k(newname, unewname) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -1944,15 +1962,17 @@ int sys_link(const char *oldname, const char *newname)
 	return status;
 };
 
-int sys_symlink(const char *target, const char *path)
+int sys_symlink(const char *utarget, const char *upath)
 {
-	if (!isStringValid((uint64_t)target))
+	char target[USER_STRING_MAX];
+	if (strcpy_u2k(target, utarget) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -2059,15 +2079,10 @@ int sys_symlink(const char *target, const char *path)
 	return status;
 };
 
-ssize_t sys_readlink(const char *path, char *buf, size_t bufsize)
+ssize_t sys_readlink(const char *upath, char *buf, size_t bufsize)
 {
-	if (!isStringValid((uint64_t)path))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
-	if (!isPointerValid((uint64_t)buf, bufsize, PROT_WRITE))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -2110,7 +2125,12 @@ ssize_t sys_readlink(const char *path, char *buf, size_t bufsize)
 		return -1;
 	};
 
-	memcpy(buf, tmpbuf, bufsize);
+	if (memcpy_k2u(buf, tmpbuf, bufsize) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
 	return out;
 };
 
@@ -2139,9 +2159,10 @@ unsigned sys_sleep(unsigned seconds)
 	};
 };
 
-int sys_utime(const char *path, time_t atime, time_t mtime)
+int sys_utime(const char *upath, time_t atime, time_t mtime)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -2231,9 +2252,12 @@ int sys_socket(int domain, int type, int proto)
 	return i;
 };
 
-int sys_bind(int fd, const struct sockaddr *addr, size_t addrlen)
+int sys_bind(int fd, const struct sockaddr *uaddr, size_t addrlen)
 {
-	if (!isPointerValid((uint64_t)addr, addrlen, PROT_READ))
+	struct sockaddr addr;
+	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
+	
+	if (memcpy_u2k(&addr, uaddr, addrlen) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -2260,7 +2284,7 @@ int sys_bind(int fd, const struct sockaddr *addr, size_t addrlen)
 		{
 			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
-			out = BindSocket(fp, addr, addrlen);
+			out = BindSocket(fp, &addr, addrlen);
 			vfsClose(fp);
 		};
 	};
@@ -2268,15 +2292,20 @@ int sys_bind(int fd, const struct sockaddr *addr, size_t addrlen)
 	return out;
 };
 
-ssize_t sys_sendto(int fd, const void *message, size_t len, int flags, const struct sockaddr *addr, size_t addrlen)
+ssize_t sys_sendto(int fd, const void *umessage, size_t len, int flags, const struct sockaddr *uaddr, size_t addrlen)
 {
-	if (!isPointerValid((uint64_t)message, len, PROT_READ))
+	void *message = kmalloc(len);
+	if (memcpy_u2k(message, umessage, len) != 0)
 	{
+		kfree(message);
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (!isPointerValid((uint64_t)addr, addrlen, PROT_READ))
+	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
+	
+	struct sockaddr addr;
+	if (memcpy_u2k(&addr, uaddr, addrlen) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -2303,35 +2332,43 @@ ssize_t sys_sendto(int fd, const void *message, size_t len, int flags, const str
 		{
 			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
-			out = SendtoSocket(fp, message, len, flags, addr, addrlen);
+			out = SendtoSocket(fp, message, len, flags, &addr, addrlen);
 			vfsClose(fp);
 		};
 	};
 
+	kfree(message);
 	return out;
 };
 
-ssize_t sys_recvfrom(int fd, void *message, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)
+ssize_t sys_recvfrom(int fd, void *umessage, size_t len, int flags, struct sockaddr *uaddr, size_t *uaddrlen)
 {
-	if (!isPointerValid((uint64_t)message, len, PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
+	void *message = kmalloc(len);
+	struct sockaddr kaddr;
+	struct sockaddr *addr = NULL;
+	size_t kaddrlen;
+	size_t *addrlen = NULL;
 	
-	if ((addr != NULL) || (addrlen != NULL))
+	if (uaddr != NULL)
 	{
-		if (!isPointerValid((uint64_t)addrlen, 8, PROT_READ | PROT_WRITE))
+		if (memcpy_u2k(&kaddr, uaddr, sizeof(struct sockaddr)) != 0)
 		{
 			ERRNO = EFAULT;
 			return -1;
 		};
 		
-		if (!isPointerValid((uint64_t)addr, *addrlen, PROT_READ | PROT_WRITE))
+		addr = &kaddr;
+	};
+	
+	if (uaddrlen != NULL)
+	{
+		if (memcpy_u2k(&kaddrlen, uaddrlen, sizeof(size_t)) != 0)
 		{
 			ERRNO = EFAULT;
 			return -1;
 		};
+		
+		addrlen = &kaddrlen;
 	};
 	
 	ssize_t out;
@@ -2360,22 +2397,31 @@ ssize_t sys_recvfrom(int fd, void *message, size_t len, int flags, struct sockad
 		};
 	};
 
+	if (umessage != NULL) memcpy_k2u(umessage, message, len);
+	if (uaddr != NULL)
+	{
+		if (addrlen != NULL)
+		{
+			memcpy_k2u(uaddr, addr, *addrlen);
+		};
+	};
+	if (uaddrlen != NULL) memcpy_k2u(uaddrlen, addrlen, sizeof(size_t));
+	
 	return out;
 };
 
-int sys_getsockname(int fd, struct sockaddr *addr, size_t *addrlenptr)
+int sys_getsockname(int fd, struct sockaddr *uaddr, size_t *uaddrlenptr)
 {
-	if (!isPointerValid((uint64_t)addrlenptr, 8, PROT_READ | PROT_WRITE))
+	struct sockaddr addr;
+	size_t addrlen;
+	
+	if (memcpy_u2k(&addrlen, uaddrlenptr, sizeof(size_t)) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (!isPointerValid((uint64_t)addr, *addrlenptr, PROT_READ | PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
+	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
 	
 	int out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
@@ -2398,11 +2444,13 @@ int sys_getsockname(int fd, struct sockaddr *addr, size_t *addrlenptr)
 		{
 			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
-			out = SocketGetsockname(fp, addr, addrlenptr);
+			out = SocketGetsockname(fp, &addr, &addrlen);
 			vfsClose(fp);
 		};
 	};
 
+	memcpy_k2u(uaddr, &addr, addrlen);
+	memcpy_k2u(uaddrlenptr, &addrlen, sizeof(size_t));
 	return out;
 };
 
@@ -2443,9 +2491,11 @@ int sys_shutdown(int fd, int how)
 	return out;
 };
 
-int sys_connect(int fd, struct sockaddr *addr, size_t addrlen)
+int sys_connect(int fd, struct sockaddr *uaddr, size_t addrlen)
 {
-	if (!isPointerValid((uint64_t)addr, addrlen, PROT_READ))
+	struct sockaddr kaddr;
+	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
+	if (memcpy_u2k(&kaddr, uaddr, addrlen) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -2472,7 +2522,7 @@ int sys_connect(int fd, struct sockaddr *addr, size_t addrlen)
 		{
 			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
-			out = ConnectSocket(fp, addr, addrlen);
+			out = ConnectSocket(fp, &kaddr, addrlen);
 			vfsClose(fp);
 		};
 	};
@@ -2480,19 +2530,19 @@ int sys_connect(int fd, struct sockaddr *addr, size_t addrlen)
 	return out;
 };
 
-int sys_getpeername(int fd, struct sockaddr *addr, size_t *addrlenptr)
+int sys_getpeername(int fd, struct sockaddr *uaddr, size_t *uaddrlenptr)
 {
-	if (!isPointerValid((uint64_t)addrlenptr, 8, PROT_READ | PROT_WRITE))
+	struct sockaddr addr;
+	size_t addrlen;
+	
+	if (memcpy_u2k(&addrlen, uaddrlenptr, sizeof(size_t)) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (!isPointerValid((uint64_t)addr, *addrlenptr, PROT_READ | PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-	};
-	
+	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
+		
 	int out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -2514,11 +2564,14 @@ int sys_getpeername(int fd, struct sockaddr *addr, size_t *addrlenptr)
 		{
 			vfsDup(fp);
 			spinlockRelease(&ftab->spinlock);
-			out = SocketGetpeername(fp, addr, addrlenptr);
+			out = SocketGetpeername(fp, &addr, &addrlen);
 			vfsClose(fp);
 		};
 	};
 
+	memcpy_k2u(uaddr, &addr, addrlen);
+	memcpy_k2u(uaddrlenptr, &addrlen, sizeof(size_t));
+	
 	return out;
 };
 
@@ -2584,19 +2637,21 @@ uint64_t sys_getsockopt(int fd, int proto, int option)
 	return out;
 };
 
-int sys_uname(struct utsname *buf)
+int sys_uname(struct utsname *ubuf)
 {
-	if (!isPointerValid((uint64_t)buf, sizeof(struct utsname), PROT_WRITE))
+	struct utsname buf;
+	strcpy(buf.sysname, UNAME_SYSNAME);
+	strcpy(buf.nodename, UNAME_NODENAME);
+	strcpy(buf.release, UNAME_RELEASE);
+	strcpy(buf.version, UNAME_VERSION);
+	strcpy(buf.machine, UNAME_MACHINE);
+	
+	if (memcpy_k2u(ubuf, &buf, sizeof(struct utsname)) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	strcpy(buf->sysname, UNAME_SYSNAME);
-	strcpy(buf->nodename, UNAME_NODENAME);
-	strcpy(buf->release, UNAME_RELEASE);
-	strcpy(buf->version, UNAME_VERSION);
-	strcpy(buf->machine, UNAME_MACHINE);
 	return 0;
 };
 
@@ -2688,9 +2743,10 @@ int sys_isatty(int fd)
 	};
 };
 
-int sys_bindif(int fd, const char *ifname)
+int sys_bindif(int fd, const char *uifname)
 {
-	if (!isStringValid((uint64_t)ifname))
+	char ifname[USER_STRING_MAX];
+	if (strcpy_u2k(ifname, uifname) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -2758,46 +2814,58 @@ int sys_thsync(int type, int par)
 	return i;
 };
 
-int sys_condwait(uint8_t *cond, uint8_t *lock)
+int sys_condwait(volatile uint8_t *cond, volatile uint8_t *lock)
 {
-	if (!isPointerValid((uint64_t)cond, 1, PROT_READ | PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	if (!isPointerValid((uint64_t)lock, 1, PROT_READ | PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-
-	*cond = *cond;
-	*lock = *lock;
-	
 	// this system call allows userspace to implement blocking locks.
 	// it atomically does the following:
 	// 1) store "1" in *cond, while reading out its old value.
 	// 2) if the old value was 0, store 0 in *lock and return 0.
 	// 3) otherwise, store 0 in *lock, and block, waiting for a signal.
 	// 4) once unblocked, return -1 and set errno to EINTR.
+	
 	cli();
 	lockSched();
 	
-	if (atomic_swap8(cond, 1) == 0)
+	uint64_t condAddr = (uint64_t) cond;
+	uint64_t lockAddr = (uint64_t) lock;
+	if (condAddr >= 0x7FC0000000)
 	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (lockAddr >= 0x7FC0000000)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (catch() == 0)
+	{
+		if (atomic_swap8((uint8_t*)cond, 1) == 0)
+		{
+			*lock = 0;
+			unlockSched();
+			sti();
+		
+			return 0;
+		};
+	
 		*lock = 0;
+		uncatch();
+		waitThread(getCurrentThread());
+		unlockSched();
+		kyield();
+	}
+	else
+	{
 		unlockSched();
 		sti();
 		
-		return 0;
+		ERRNO = EFAULT;
+		return -1;
 	};
-	
-	*lock = 0;
-	//getCurrentThread()->flags |= THREAD_WAITING;
-	waitThread(getCurrentThread());
-	unlockSched();
-	kyield();
-	
+
 	ERRNO = EINTR;
 	return -1;
 };
@@ -2865,15 +2933,23 @@ unsigned sys_alarm(unsigned sec)
 	return (unsigned) ((old - currentTime) / NANO_PER_SEC);
 };
 
-int sys_exec(const char *path, const char *pars, uint64_t parsz)
+int sys_exec(const char *upath, const char *upars, uint64_t parsz)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (!isPointerValid((uint64_t)pars, parsz, PROT_READ))
+	char pars[4096];
+	if (parsz > 4096)
+	{
+		ERRNO = EOVERFLOW;
+		return -1;
+	};
+	
+	if (memcpy_u2k(pars, upars, parsz) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -2917,8 +2993,18 @@ gid_t sys_getsgid()
 	return getCurrentThread()->creds->sgid;
 };
 
-int sys_sigaction(int sig, const SigAction *act, SigAction *oact)
+int sys_sigaction(int sig, const SigAction *uact, SigAction *uoact)
 {
+	SigAction act;
+	if (uact != NULL)
+	{
+		if (memcpy_u2k(&act, uact, sizeof(SigAction)) != 0)
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+	};
+	
 	if ((sig < 1) || (sig >= SIG_NUM))
 	{
 		ERRNO = EINVAL;
@@ -2931,44 +3017,27 @@ int sys_sigaction(int sig, const SigAction *act, SigAction *oact)
 		return -1;
 	};
 	
-	SigAction newAction;
-	SigAction oldAction;
-	
-	if (act != NULL)
-	{
-		if (!isPointerValid((uint64_t)act, sizeof(SigAction), PROT_READ))
-		{
-			ERRNO = EFAULT;
-			return -1;
-		};
-		
-		memcpy(&newAction, act, sizeof(SigAction));
-	};
-	
-	if (oact != NULL)
-	{
-		if (!isPointerValid((uint64_t)oact, sizeof(SigAction), PROT_WRITE))
-		{
-			ERRNO = EFAULT;
-			return -1;
-		};
-	};
+	SigAction oact;
 	
 	cli();
 	lockSched();
-	memcpy(&oldAction, &getCurrentThread()->sigdisp->actions[sig], sizeof(SigAction));
+	memcpy(&oact, &getCurrentThread()->sigdisp->actions[sig], sizeof(SigAction));
 	
-	if (act != NULL)
+	if (uact != NULL)
 	{
-		memcpy(&getCurrentThread()->sigdisp->actions[sig], &newAction, sizeof(SigAction));
+		memcpy(&getCurrentThread()->sigdisp->actions[sig], &act, sizeof(SigAction));
 	};
 	
 	unlockSched();
 	sti();
 	
-	if (oact != NULL)
+	if (uoact != NULL)
 	{
-		memcpy(oact, &oldAction, sizeof(SigAction));
+		if (memcpy_k2u(uoact, &oact, sizeof(SigAction)) != 0)
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
 	};
 	
 	return 0;
@@ -2979,24 +3048,20 @@ int sys_sigprocmask(int how, uint64_t *set, uint64_t *oldset)
 	uint64_t newset;
 	if (set != NULL)
 	{
-		if (!isPointerValid((uint64_t)set, 8, PROT_READ))
+		if (memcpy_u2k(&newset, set, sizeof(uint64_t)) != 0)
 		{
 			ERRNO = EFAULT;
 			return -1;
 		};
-		
-		newset = *set;
 	};
 	
 	if (oldset != NULL)
-	{
-		if (!isPointerValid((uint64_t)oldset, 8, PROT_WRITE))
+	{	
+		if (memcpy_k2u(oldset, &getCurrentThread()->sigmask, sizeof(uint64_t)) != 0)
 		{
 			ERRNO = EFAULT;
 			return -1;
 		};
-		
-		*oldset = getCurrentThread()->sigmask;
 	};
 	
 	if (set != NULL)
@@ -3030,15 +3095,11 @@ uint64_t sys_getparsz()
 
 void sys_getpars(void *buffer, size_t size)
 {
-	if (!isPointerValid((uint64_t)buffer, size, PROT_WRITE))
-	{
-		return;
-	};
 	if (size > getCurrentThread()->szExecPars)
 	{
 		size = getCurrentThread()->szExecPars;
 	};
-	memcpy(buffer, getCurrentThread()->execPars, size);
+	memcpy_k2u(buffer, getCurrentThread()->execPars, size);
 };
 
 int sys_geterrno()
@@ -3069,22 +3130,10 @@ int sys_fork()
 };
 
 int sys_waitpid(int pid, int *stat_loc, int flags)
-{
-	if (stat_loc != NULL)
-	{
-		if (!isPointerValid((uint64_t)stat_loc, sizeof(int), PROT_WRITE))
-		{
-			ERRNO = EFAULT;
-			return -1;
-		};
-	};
-	
-	// DO NOT pass the status location directly to processWait(), because it locks scheduling
-	// and writing to stat_loc might cause a page fault (which results in load-on-demand and
-	// a possible kyield() etc)
+{	
 	int statret;
 	int ret = processWait(pid, &statret, flags);
-	if (stat_loc != NULL) *stat_loc = statret;
+	if (stat_loc != NULL) memcpy_k2u(stat_loc, &statret, sizeof(int));
 	return ret;
 };
 
@@ -3093,30 +3142,27 @@ void sys_yield()
 	kyield();
 };
 
-char* sys_realpath(const char *path, char *buffer)
+char* sys_realpath(const char *upath, char *ubuffer)
 {
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return NULL;
 	};
 	
-	if (!isPointerValid((uint64_t)buffer, 256, PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return NULL;
-	};
+	char buffer[256];
 	
 	ERRNO = ENAMETOOLONG;
-	return realpath(path, buffer);
+	char *result = realpath(path, buffer);
+	if (result == NULL) return NULL;
+	
+	memcpy_k2u(ubuffer, buffer, 256);
+	return ubuffer;
 };
 
 void sys_seterrnoptr(int *ptr)
 {
-	if (!isPointerValid((uint64_t)ptr, sizeof(int), PROT_READ | PROT_WRITE))
-	{
-		return;
-	};
 	getCurrentThread()->errnoptr = ptr;
 };
 
@@ -3125,31 +3171,10 @@ int* sys_geterrnoptr()
 	return getCurrentThread()->errnoptr;
 };
 
-#if 0
-int sys_libopen(const char *path, uint64_t loadAddr, libInfo *info)
+int sys_unmount(const char *upath)
 {
-	if (!isPointerValid((uint64_t)info, sizeof(libInfo), PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	return libOpen(path, loadAddr, info);
-};
-
-void sys_libclose(libInfo *info)
-{
-	if (!isPointerValid((uint64_t)info, sizeof(libInfo), PROT_READ | PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return;
-	};
-	libClose(info);
-};
-#endif
-
-int sys_unmount(const char *path)
-{
-	if (!isStringValid((uint64_t)path))
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -3171,69 +3196,78 @@ ssize_t sys_recv(int socket, void *buffer, size_t length, int flags)
 
 int sys_route_add(int a, int b, gen_route *c)
 {
-	if (!isPointerValid((uint64_t)c, sizeof(gen_route), PROT_WRITE))
+	gen_route route;
+	if (memcpy_u2k(&route, c, sizeof(gen_route)) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
-	return route_add(a, b, c);
+	
+	return route_add(a, b, &route);
 };
 
-ssize_t sys_netconf_stat(const char *a, NetStat *b, size_t c)
+ssize_t sys_netconf_stat(const char *ua, NetStat *b, size_t c)
 {
-	if (!isPointerValid((uint64_t)b, c, PROT_WRITE))
+	char a[USER_STRING_MAX];
+	if (strcpy_u2k(a, ua) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
-	return netconf_stat(a, b, c);
+	NetStat res;
+	if (c > sizeof(NetStat)) c = sizeof(NetStat);
+	ssize_t result = netconf_stat(a, &res, c);
+	memcpy_k2u(b, &res, c);
+	return result;
 };
 
-ssize_t sys_netconf_getaddrs(const char *a, int b, void *c, size_t d)
+ssize_t sys_netconf_getaddrs(const char *ua, int b, void *c, size_t d)
 {
-	if (!isPointerValid((uint64_t)c, d, PROT_WRITE))
+	char a[USER_STRING_MAX];
+	if (strcpy_u2k(a, ua) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
-	return netconf_getaddrs(a, b, c, d);
+	void *buf = kmalloc(d);
+	ssize_t result = netconf_getaddrs(a, b, buf, d);
+	memcpy_k2u(c, buf, d);
+	kfree(buf);
+	return result;
 };
 
 ssize_t sys_netconf_statidx(unsigned int a, NetStat *b, size_t c)
 {
-	if (!isPointerValid((uint64_t)b, c, PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	return netconf_statidx(a, b, c);
+	NetStat res;
+	if (c > sizeof(NetStat)) c = sizeof(NetStat);
+	ssize_t result = netconf_statidx(a, &res, c);
+	memcpy_k2u(b, &res, c);
+	return result;
 };
 
 int sys_getgroups(int count, gid_t *buffer)
 {
-	if (!isPointerValid((uint64_t)buffer, sizeof(gid_t)*count, PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
 	if (count <= getCurrentThread()->creds->numGroups)
 	{
-		memcpy(buffer, getCurrentThread()->creds->groups, sizeof(gid_t)*count);
+		if (memcpy_k2u(buffer, getCurrentThread()->creds->groups, sizeof(gid_t)*count) != 0)
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
 	}
 	else
 	{
-		memcpy(buffer, getCurrentThread()->creds->groups, sizeof(gid_t)*getCurrentThread()->creds->numGroups);
+		if (memcpy_k2u(buffer, getCurrentThread()->creds->groups, sizeof(gid_t)*getCurrentThread()->creds->numGroups) != 0)
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
 	};
 	return getCurrentThread()->creds->numGroups;
 };
 
 int sys_setgroups(int count, const gid_t *groups)
 {
-	if (!isPointerValid((uint64_t)groups, sizeof(gid_t)*count, PROT_READ))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
 	if (getCurrentThread()->creds->egid != 0)
 	{
 		ERRNO = EPERM;
@@ -3244,29 +3278,41 @@ int sys_setgroups(int count, const gid_t *groups)
 		ERRNO = EINVAL;
 		return -1;
 	};
-	memcpy(getCurrentThread()->creds->groups, groups, sizeof(gid_t)*count);
+	if (memcpy_u2k(getCurrentThread()->creds->groups, groups, sizeof(gid_t)*count) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
 	getCurrentThread()->creds->numGroups = count;
 	return 0;
 };
 
-int sys_netconf_addr(int a, const char *b, void *c, uint64_t d)
+int sys_netconf_addr(int a, const char *ub, void *c, uint64_t d)
 {
-	if (!isPointerValid((uint64_t)c, d, PROT_READ))
+	char b[USER_STRING_MAX];
+	if (strcpy_u2k(b, ub) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
-	if (!isStringValid((uint64_t)b))
+	
+	void *buf = kmalloc(d);
+	if (memcpy_u2k(buf, c, d) != 0)
 	{
+		kfree(buf);
 		ERRNO = EFAULT;
 		return -1;
 	};
-	return netconf_addr(a, b, c, d);
+	
+	int result = netconf_addr(a, b, buf, d);
+	kfree(buf);
+	return result;
 };
 
-int sys_route_clear(int a, const char *b)
+int sys_route_clear(int a, const char *ub)
 {
-	if (!isStringValid((uint64_t)b))
+	char b[USER_STRING_MAX];
+	if (strcpy_u2k(b, ub) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -3449,10 +3495,173 @@ int sys_diag(void *uptr)
 	return memcpy_u2k(buffer, uptr, 30);
 };
 
+void sys_pthread_exit(uint64_t retval)
+{
+	threadExitEx(retval);
+};
+
+extern char usup_start;
+extern char usup_thread_entry;
+
+int sys_pthread_create(int *thidOut, const ThreadAttr *uattr, uint64_t entry, uint64_t arg)
+{
+	ThreadAttr attr;
+	if (uattr == NULL)
+	{
+		attr.scope = 0;
+		attr.detachstate = 0;
+		attr.inheritsched = 0;
+		attr.stack = NULL;
+		attr.stacksize = 0x200000;			// 2MB
+	}
+	else
+	{
+		if (memcpy_u2k(&attr, uattr, 256) != 0)
+		{
+			return EFAULT;
+		};
+	};
+	
+	if (attr.scope != 0)
+	{
+		return EINVAL;
+	};
+	
+	if ((attr.detachstate != 0) && (attr.detachstate != 1))
+	{
+		return EINVAL;
+	};
+	
+	if (attr.inheritsched != 0)
+	{
+		return EINVAL;
+	};
+	
+	if (attr.stacksize < 0x1000)
+	{
+		return EINVAL;
+	};
+	
+	// set up registers such that usup_thread_entry() in the user support page is
+	// entered, passing approripate information to it.
+	Regs regs;
+	initUserRegs(&regs);
+	regs.rip = (uint64_t)(&usup_thread_entry) - (uint64_t)(&usup_start) + 0xFFFF808000003000UL;
+	regs.rbx = 0;
+	regs.r12 = 0;
+	regs.r14 = entry;
+	regs.r15 = arg;
+	regs.rbp = 0;
+	
+	if (attr.stack == NULL)
+	{
+		int stackPages = (attr.stacksize + 0xFFF) >> 12;
+		FrameList *fl = palloc_later(NULL, stackPages, -1, 0);
+		if (AddSegmentEx(getCurrentThread()->pm, 0, fl, PROT_READ | PROT_WRITE, &regs.rbx) != 0)
+		{
+			pdownref(fl);
+			return EAGAIN;
+		};
+		
+		pdownref(fl);
+		regs.r12 = stackPages << 12;
+		regs.rsp = regs.rbx + regs.r12;
+	}
+	else
+	{
+		regs.rsp = (uint64_t) attr.stack + attr.stacksize;
+	};
+	
+	// create the thread
+	int cloneFlags = CLONE_THREAD;
+	if (attr.detachstate == 1)		// detached
+	{
+		cloneFlags |= CLONE_DETACHED;
+	};
+	
+	int thid = threadClone(&regs, cloneFlags, NULL);
+	
+	if (memcpy_k2u(thidOut, &thid, sizeof(int)) != 0)
+	{
+		// at this point the program state is undefined since it lost control
+		// of the thread it just spawned
+		return EFAULT;
+	};
+	
+	return 0;
+};
+
+int sys_pthread_self()
+{
+	return getCurrentThread()->thid;
+};
+
+extern char usup_syscall_reset;
+
+int sys_pthread_join(int thid, uint64_t *retval)
+{
+	uint64_t kretval;
+	int result = joinThread(thid, &kretval);
+	
+	if (result == 0)
+	{
+		if (memcpy_k2u(retval, &kretval, 8) != 0)
+		{
+			return EFAULT;
+		};
+		
+		return 0;
+	}
+	else if (result == -1)
+	{
+		return EDEADLK;
+	}
+	else if (result == -2)
+	{
+		Thread *me = getCurrentThread();
+		Regs regs;
+		initUserRegs(&regs);
+		
+		// preserved registers must be there
+		regs.rbx = me->urbx;
+		regs.rbp = me->urbp;
+		regs.rsp = me->ursp;
+		regs.r12 = me->ur12;
+		regs.r13 = me->ur13;
+		regs.r14 = me->ur14;
+		regs.r15 = me->ur15;
+		regs.r9 = me->urip;			// usup_syscall_reset() wants return RIP in R9
+		regs.rflags = getFlagsRegister();
+		regs.rdi = 0;
+		
+		// make sure we retry using the same argumets
+		*((int*)&regs.rdi) = thid;
+		regs.rsi = (uint64_t) retval;		// the retval POINTER
+		regs.rip = (uint64_t)(&usup_syscall_reset) - (uint64_t)(&usup_start) + 0xFFFF808000003000UL;
+		
+		// and make sure we call pthread_join()
+		regs.rax = 117;
+		
+		switchTask(&regs);
+	};
+	
+	return EDEADLK;		// shouldn't get here
+};
+
+int sys_pthread_detach(int thid)
+{
+	return detachThread(thid);
+};
+
+int sys_pthread_kill(int thid, int sig)
+{
+	return signalThid(thid, sig);
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 114
+#define SYSCALL_NUMBER 120
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3484,7 +3693,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_insmod,				// 27
 	&sys_ioctl,				// 28
 	&sys_fdopendir,				// 29
-	&sys_diag,				// 30 (_glidix_diag())
+	NULL,					// 30 (_glidix_diag())
 	&sys_mount,				// 31
 	&sys_yield,				// 32
 	&time,					// 33
@@ -3568,6 +3777,12 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_setpgid,				// 111
 	&sys_getsid,				// 112
 	&sys_getpgid,				// 113
+	&sys_pthread_exit,			// 114
+	&sys_pthread_create,			// 115
+	&sys_pthread_self,			// 116
+	&sys_pthread_join,			// 117
+	&sys_pthread_detach,			// 118
+	&sys_pthread_kill,			// 119
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 
@@ -3577,7 +3792,11 @@ uint64_t sysEpilog(uint64_t retval)
 	{
 		if (getCurrentThread()->errnoptr != NULL)
 		{
-			*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
+			if (catch() == 0)
+			{
+				*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
+				uncatch();
+			};
 		};
 	};
 

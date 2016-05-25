@@ -49,9 +49,9 @@ enum
 int catch();
 
 /**
- * Throw an exception.
+ * Throw an exception. Returns if no handler was defined; and in this case you could panic or something.
  */
-int throw(int ex);
+void throw(int ex);
 
 /**
  * Stop cathing exceptions.

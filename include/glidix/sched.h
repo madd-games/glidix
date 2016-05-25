@@ -45,14 +45,16 @@
 typedef struct
 {
 	FPURegs		fpuRegs;
+	uint64_t	rflags;
+	uint64_t	rip;
 	uint64_t	rdi, rsi, rbp, rbx, rdx, rcx, rax;
 	uint64_t	r8, r9, r10, r11, r12, r13, r14, r15;
-	uint64_t	rip, rsp;
-	uint64_t	rflags;
-} PACKED MachineState;
+	uint64_t	rsp;
+} MachineState;
 
 #define	DEFAULT_STACK_SIZE		0x200000
 #define	CLONE_THREAD			(1 << 0)
+#define	CLONE_DETACHED			(1 << 1)
 
 /**
  * If this flag is set, then the thread is waiting for a signal to be received.
@@ -348,6 +350,35 @@ typedef struct _Thread
 	struct _Thread			*next;
 } Thread;
 
+typedef struct
+{
+	/**
+	 * This is currently ignored by the kernel.
+	 */
+	int	scope;
+	
+	/**
+	 * Detach state.
+	 */
+	int	detachstate;
+	
+	/**
+	 * Scheduler inheritance mode; actually ignored.
+	 */
+	int	inheritsched;
+	
+	/**
+	 * Stack position and size.
+	 */
+	void*	stack;
+	size_t	stacksize;
+	
+	/**
+	 * Make sure we are padded to at least 256 bytes.
+	 */
+	char	pad[256];
+} ThreadAttr;
+
 void initSched();
 void initSched2();
 void initSchedAP();				// initialize scheduling on an AP, when the main sched is already inited
@@ -409,6 +440,14 @@ void signalThread(Thread *thread);
 /**
  * This function is used to create new user threads and processes, it can be used to implement
  * pthread_create() as well as fork(), by passing the appropriate options.
+ *
+ * regs = the thread's initial registers
+ * flags = 
+ *	CLONE_THREAD -		create a thread within the same process; otherwise a new process with
+ *				an initial thread.
+ *	CLONE_DETACHED -	create a detached thread.
+ * state = use this when you need to set FPU registers basically. throwback to when this was a system
+ *         call.
  */
 int threadClone(Regs *regs, int flags, MachineState *state);
 
@@ -459,5 +498,21 @@ void wakeProcess(int pid);
  * process.
  */
 void killOtherThreads();
+
+/**
+ * Join a thread. Returns 0 on success, -1 on failure (EDEADLK), or -2 if it was interrupted by a signal,
+ * in which case the reset procedure must occur.
+ */
+int joinThread(int thid, uint64_t *retval);
+
+/**
+ * Detach a thread. If the already died while joinable, its return status is also removed from the notification list.
+ */
+int detachThread(int thid);
+
+/**
+ * Send a signal to a thread in the current process. All signals may be sent (unlike signalPid()).
+ */
+int signalThid(int thid, int sig);
 
 #endif

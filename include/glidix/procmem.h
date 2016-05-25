@@ -49,6 +49,13 @@
 #define	MEM_SEGMENT_COLLISION		-1
 #define	MEM_SEGMENT_INVALID		-2
 
+/**
+ * Return values from tryLoadOnDemand() and tryCopyOnWrite().
+ */
+#define	MEM_OK				0			// no error
+#define	MEM_FAILED			1			// the operation is not applicable
+#define	MEM_BUS_ERROR			2			// please raise SIGBUS
+
 #define	MEM_MAKE			(1 << 0)
 
 #define	FL_SHARED			(1 << 0)
@@ -196,7 +203,7 @@ void DownrefProcessMemory(ProcMem *pm);
 int tryCopyOnWrite(uint64_t addr);
 
 /**
- * Try loading-on-demand some data. Returns 0 if it happened, -1 otherwise.
+ * Try loading-on-demand some data. Returns MEM_OK, MEM_FAILED or MEM_BUS_ERROR.
  */
 int tryLoadOnDemand(uint64_t addr);
 

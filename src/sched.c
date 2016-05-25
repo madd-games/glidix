@@ -868,6 +868,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	// inherit the working directory
 	strcpy(thread->cwd, currentThread->cwd);
 
+	// inherit signal mask
+	thread->sigmask = currentThread->sigmask;
+	
 	// exec params
 	if (currentThread->execPars != NULL)
 	{
@@ -900,6 +903,12 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	{
 		thread->errnoptr = currentThread->errnoptr;
 	};
+	
+	// detach if necessary
+	if (flags & CLONE_DETACHED)
+	{
+		thread->flags |= THREAD_DETACHED;
+	};
 
 	// link into the runqueue
 	cli();
@@ -928,7 +937,8 @@ void threadExitEx(uint64_t retval)
 	{
 		panic("a kernel thread called threadExitEx()");
 	};
-	
+
+	spinlockAcquire(&notifLock);
 	if ((currentThread->flags & THREAD_DETACHED) == 0)
 	{
 		// this thread is not detached (i.e. it's joinable), so we make
@@ -940,7 +950,6 @@ void threadExitEx(uint64_t retval)
 		notif->info.retval = retval;
 		notif->prev = NULL;
 		
-		spinlockAcquire(&notifLock);
 		notif->next = firstNotif;
 		if (firstNotif != NULL) firstNotif->prev = notif;
 		firstNotif = notif;
@@ -948,6 +957,10 @@ void threadExitEx(uint64_t retval)
 		
 		// wake the other threads
 		wakeProcess(currentThread->creds->pid);
+	}
+	else
+	{
+		spinlockRelease(&notifLock);
 	};
 		
 	spinlockAcquire(&sysManLock);
@@ -974,107 +987,6 @@ void threadExit()
 	threadExitEx(0);
 };
 
-#if 0
-void threadExit(Thread *thread, int status)
-{
-	if (thread->pid == 0)
-	{
-		panic("a kernel thread tried to threadExit()");
-	};
-
-	if (thread->pid == 1)
-	{
-		panic("init terminated with status %d!", status);
-	};
-
-	sti();
-	ftabDownref(thread->ftab);
-	thread->ftab = NULL;
-	
-	// don't break the CPU runqueue
-	cli();
-	lockSched();
-
-	// init will adopt all orphans
-	Thread *scan = thread;
-	do
-	{
-		if (scan->pidParent == thread->pid)
-		{
-			scan->pidParent = 1;
-		};
-		scan = scan->next;
-	} while (scan != thread);
-
-	// terminate us
-	thread->status = status;
-	thread->flags |= THREAD_TERMINATED;
-	
-	// find the parent
-	Thread *parent = thread;
-	do
-	{
-		parent = parent->next;
-	} while (parent->pid != thread->pidParent);
-
-	// tell the parent that its child has died
-	siginfo_t siginfo;
-	siginfo.si_signo = SIGCHLD;
-	if (status >= 0)
-	{
-		siginfo.si_code = CLD_EXITED;
-	}
-	else
-	{
-		siginfo.si_code = CLD_KILLED;
-	};
-	siginfo.si_pid = thread->pid;
-	siginfo.si_status = status;
-	siginfo.si_uid = thread->ruid;
-	sendSignal(parent, &siginfo);
-	downrefCPU(thread->cpuID);
-	Regs regs;
-	switchTaskUnlocked(&regs);
-};
-
-static Thread *findThreadToKill(int pid, int *stat_loc, int flags)
-{
-	Thread *threadToKill = NULL;
-	Thread *thread = currentThread->next;
-	while (thread != currentThread)
-	{
-		if (thread->pidParent == currentThread->pid)
-		{
-			if ((thread->pid == pid) || (pid == -1))
-			{
-				if (thread->flags & THREAD_TERMINATED)
-				{
-					threadToKill = thread;
-					if (stat_loc != NULL) *stat_loc = thread->status;
-
-					// unlink from the runqueue
-					thread->prev->next = thread->next;
-					thread->next->prev = thread->prev;
-
-					break;
-				}
-				else if (flags & WDETACH)
-				{
-					// we can detach
-					thread->pidParent = 1;
-					unlockSched();
-					sti();
-					return NULL;
-				};
-			};
-		};
-		thread = thread->next;
-	};
-
-	return threadToKill;
-};
-#endif
-
 int processWait(int pid, int *stat_loc, int flags)
 {
 	if (pid == currentThread->creds->pid)
@@ -1095,9 +1007,10 @@ int processWait(int pid, int *stat_loc, int flags)
 				if (notif == firstNotif) firstNotif = notif->next;
 				if (notif->next != NULL) notif->next->prev = notif->prev;
 				if (notif->prev != NULL) notif->prev->next = notif->next;
+				int outpid = notif->source;
 				kfree(notif);
 				spinlockRelease(&notifLock);
-				return 0;
+				return outpid;
 			}
 			else
 			{
@@ -1118,78 +1031,14 @@ int processWait(int pid, int *stat_loc, int flags)
 		spinlockRelease(&notifLock);
 		unlockSched();
 		kyield();
-	};
-};
-
-#if 0
-int pollThread(int pid, int *stat_loc, int flags)
-{
-	if (kernelStatus != KERNEL_RUNNING)
-	{
-		currentThread->therrno = EPERM;
-		return -1;
-	};
-
-	// a thread cannot wait for itself.
-	if (pid == currentThread->pid)
-	{
-		ERRNO = ECHILD;
-		return -1;
-	};
-
-	cli();
-	lockSched();
-	Thread *threadToKill = findThreadToKill(pid, stat_loc, flags);
-
-	// when WNOHANG is clear
-	while ((threadToKill == NULL) && ((flags & WNOHANG) == 0))
-	{
-		//getCurrentThread()->flags |= THREAD_WAITING;
-		waitThread(getCurrentThread());
-		unlockSched();
-		kyield();
-		cli();
-		lockSched();
-		threadToKill = findThreadToKill(pid, stat_loc, flags);
-		if (threadToKill != NULL) break;
 		
-		if (haveReadySigs(currentThread))
+		if (wasSignalled())
 		{
-			unlockSched();
-			sti();
 			ERRNO = EINTR;
 			return -1;
 		};
 	};
-
-	unlockSched();
-	sti();
-
-	// when WNOHANG is set
-	if (threadToKill == NULL)
-	{
-		currentThread->therrno = ECHILD;
-		return -1;
-	};
-
-	// there is a process ready to be deleted, it's already removed from the runqueue.
-	kfree(threadToKill->stack);
-	DownrefProcessMemory(threadToKill->pm);
-	sigdispDownref(threadToKill->sigdisp);
-
-	if (threadToKill->fpexec != NULL)
-	{
-		if (threadToKill->fpexec->close != NULL) threadToKill->fpexec->close(threadToKill->fpexec);
-		kfree(threadToKill->fpexec);
-	};
-
-	if (threadToKill->execPars != NULL) kfree(threadToKill->execPars);
-	int ret = threadToKill->pid;
-	kfree(threadToKill);
-	
-	return ret;
 };
-#endif
 
 static int canSendSignal(Thread *src, Thread *dst, int signo)
 {
@@ -1349,53 +1198,6 @@ int signalPid(int pid, int sig)
 	return signalPidEx(pid, &si);
 };
 
-#if 0
-int signalPid(int pid, int signo)
-{
-	if (pid == currentThread->pid)
-	{
-		currentThread->therrno = EINVAL;
-		return -1;
-	};
-
-	cli();
-	lockSched();
-	Thread *thread = currentThread->next;
-
-	int result = 0;
-	ERRNO = ESRCH;
-	while (thread != currentThread)
-	{
-		if ((thread->pid == pid) || (thread->pgid == -pid) || (pid == -1)
-			|| ((pid == 0) && (thread->pgid == currentThread->pgid)))
-		{
-			if (thread->flags & THREAD_TERMINATED)
-			{
-				thread = thread->next;
-				continue;
-			};
-
-			if (!canSendSignal(currentThread, thread, signo))
-			{
-				ERRNO = EPERM;
-				thread = thread->next;
-				continue;
-			};
-
-			siginfo_t si;
-			si.si_signo = signo;
-			if (signo != 0) sendSignal(thread, &si);
-			result = 0;
-		};
-		thread = thread->next;
-	};
-
-	unlockSched();
-	sti();
-	return result;
-};
-#endif
-
 void switchTaskToIndex(int index)
 {
 	currentThread = &firstThread;
@@ -1483,7 +1285,7 @@ void wakeProcess(int pid)
 void killOtherThreads()
 {
 	siginfo_t si;
-	si.si_signo = SIGKILL;
+	si.si_signo = SIGTHKILL;
 	
 	cli();
 	lockSched();
@@ -1534,4 +1336,169 @@ void killOtherThreads()
 		};
 	};
 	spinlockRelease(&notifLock);
+};
+
+int joinThread(int thid, uint64_t *retval)
+{
+	if (thid == getCurrentThread()->thid)
+	{
+		return -1;
+	};
+	
+	while (1)
+	{
+		spinlockAcquire(&notifLock);
+		SchedNotif *notif = firstNotif;
+		while (notif != NULL)
+		{
+			if (notif->dest == currentThread->creds->pid)
+			{
+				if ((notif->type == SHN_THREAD_DEAD) && (notif->source == thid))
+				{
+					*retval = notif->info.retval;
+					if (notif->prev != NULL) notif->prev->next = notif->next;
+					if (notif->next != NULL) notif->next->prev = notif->prev;
+					if (firstNotif == notif) firstNotif = notif->next;
+					kfree(notif);
+					spinlockRelease(&notifLock);
+					return 0;
+				};
+				notif = notif->next;
+			}
+			else
+			{
+				notif = notif->next;
+			};
+		};
+	
+		// no found
+		cli();
+		lockSched();
+		waitThread(currentThread);
+		spinlockRelease(&notifLock);
+		unlockSched();
+		kyield();
+		
+		if (wasSignalled())
+		{
+			return -2;
+		};
+	};
+};
+
+int detachThread(int thid)
+{
+	spinlockAcquire(&notifLock);
+	cli();
+	lockSched();
+	
+	Thread *thread = currentThread;
+	do
+	{
+		if (thread->thid == thid)
+		{
+			if (thread->creds != NULL)
+			{
+				if (thread->creds->pid == currentThread->creds->pid)
+				{
+					// found the thread to detach
+					if (thread->flags & THREAD_DETACHED)
+					{
+						// already detached
+						unlockSched();
+						sti();
+						spinlockRelease(&notifLock);
+						return EINVAL;
+					};
+					
+					thread->flags |= THREAD_DETACHED;
+
+					// remove all notifications about it
+					SchedNotif *notif = firstNotif;
+					SchedNotif *notifToDelete = NULL;
+					while (notif != NULL)
+					{
+						if (notif->dest == currentThread->creds->pid)
+						{
+							if ((notif->type == SHN_THREAD_DEAD) && (notif->source == thid))
+							{
+								if (notif->prev != NULL) notif->prev->next = notif->next;
+								if (notif->next != NULL) notif->next->prev = notif->prev;
+								if (firstNotif == notif) firstNotif = notif->next;
+								notifToDelete = notif;
+								spinlockRelease(&notifLock);
+								return 0;
+							};
+							notif = notif->next;
+						}
+						else
+						{
+							notif = notif->next;
+						};
+					};
+					
+					// success
+					unlockSched();
+					sti();
+					spinlockRelease(&notifLock);
+					
+					if (notifToDelete != NULL) kfree(notifToDelete);
+					return 0;
+				};
+			};
+			
+			// we know the thread exists but is either a kernel thread or belongs to another
+			// process!
+			break;
+		};
+		thread = thread->next;
+	} while (thread != currentThread);
+	
+	unlockSched();
+	sti();
+	spinlockRelease(&notifLock);
+	
+	// not found
+	return ESRCH;
+};
+
+int signalThid(int thid, int sig)
+{
+	if ((sig < 0) || (sig >= SIG_NUM))
+	{
+		return EINVAL;
+	};
+	
+	siginfo_t si;
+	memset(&si, 0, sizeof(siginfo_t));
+	si.si_signo = sig;
+	cli();
+	lockSched();
+	
+	Thread *thread = currentThread;
+	do
+	{
+		if (thread->thid == thid)
+		{
+			if (thread->creds != NULL)
+			{
+				if (thread->creds->pid == currentThread->creds->pid)
+				{
+					sendSignal(thread, &si);
+					unlockSched();
+					sti();
+					return 0;
+				};
+			};
+			
+			// we know the thread exists but is either a kernel thread or belongs to another
+			// process!
+			break;
+		};
+		thread = thread->next;
+	} while (thread != currentThread);
+	
+	unlockSched();
+	sti();
+	return ESRCH;
 };

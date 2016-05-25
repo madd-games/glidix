@@ -309,13 +309,7 @@ int sys_mqclient(int pid, int fd)
 };
 
 int sys_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgsize)
-{
-	if (!isPointerValid((uint64_t)msg, msgsize, PROT_READ))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
+{	
 	if ((fd < 0) || (fd > MAX_OPEN_FILES))
 	{
 		ERRNO = EBADF;
@@ -377,7 +371,7 @@ int sys_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgs
 	buf->info.gid = queue->gid;
 	buf->next = NULL;
 	buf->size = msgsize;
-	memcpy(buf->data, msg, msgsize);
+	memcpy_u2k(buf->data, msg, msgsize);
 	
 	if (dest->first == NULL)
 	{
@@ -398,19 +392,7 @@ int sys_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgs
 };
 
 ssize_t sys_mqrecv(int fd, MessageInfo *info, void *buffer, size_t bufsize)
-{
-	if (!isPointerValid((uint64_t)info, sizeof(MessageInfo), PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
-	if (!isPointerValid((uint64_t)buffer, bufsize, PROT_WRITE))
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
+{	
 	if ((fd < 0) || (fd > MAX_OPEN_FILES))
 	{
 		ERRNO = EBADF;
@@ -449,9 +431,9 @@ ssize_t sys_mqrecv(int fd, MessageInfo *info, void *buffer, size_t bufsize)
 	queue->first = msg->next;
 	semSignal(&queue->sem);
 	
-	memcpy(info, &msg->info, sizeof(MessageInfo));
+	memcpy_k2u(info, &msg->info, sizeof(MessageInfo));
 	if (bufsize > msg->size) bufsize = msg->size;
-	memcpy(buffer, msg->data, bufsize);
+	memcpy_k2u(buffer, msg->data, bufsize);
 	kfree(msg);
 	vfsClose(fp);
 	

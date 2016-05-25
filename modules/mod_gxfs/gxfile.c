@@ -41,11 +41,36 @@ ssize_t gxfile_read(File *fp, void *buffer, size_t size)
 	return ret;
 };
 
+ssize_t gxfile_pread(File *fp, void *buffer, size_t size, off_t off)
+{
+	GXFile *gxfile = (GXFile*) fp->fsdata;
+	semWait(&gxfile->gxfs->sem);
+	off_t oldPos = gxfile->gxino.pos;
+	gxfile->gxino.pos = off;
+	ssize_t ret = GXReadInode(&gxfile->gxino, buffer, size);
+	gxfile->gxino.pos = oldPos;
+	semSignal(&gxfile->gxfs->sem);
+	return ret;
+};
+
 ssize_t gxfile_write(File *fp, const void *buffer, size_t size)
 {
 	GXFile *gxfile = (GXFile*) fp->fsdata;
 	semWait(&gxfile->gxfs->sem);
 	ssize_t ret = GXWriteInode(&gxfile->gxino, buffer, size);
+	gxfile->dirty = 1;
+	semSignal(&gxfile->gxfs->sem);
+	return ret;
+};
+
+ssize_t gxfile_pwrite(File *fp, const void *buffer, size_t size, off_t off)
+{
+	GXFile *gxfile = (GXFile*) fp->fsdata;
+	semWait(&gxfile->gxfs->sem);
+	off_t oldPos = gxfile->gxino.pos;
+	gxfile->gxino.pos = off;
+	ssize_t ret = GXWriteInode(&gxfile->gxino, buffer, size);
+	gxfile->gxino.pos = oldPos;
 	gxfile->dirty = 1;
 	semSignal(&gxfile->gxfs->sem);
 	return ret;
@@ -219,6 +244,8 @@ int GXOpenFile(GXFileSystem *gxfs, File *fp, ino_t ino)
 
 	fp->read = gxfile_read;
 	fp->write = gxfile_write;
+	fp->pread = gxfile_pread;
+	fp->pwrite = gxfile_pwrite;
 	fp->close = gxfile_close;
 	fp->seek = gxfile_seek;
 	fp->dup = gxfile_dup;

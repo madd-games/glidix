@@ -171,7 +171,7 @@ modmake --sysroot=/glidix --host=x86_64-glidix --modname=vionet || exit 1
 cp out/vionet.gkm ../../initrd/initmod/vionet.gkm || exit 1
 cd ../..
 
-#x86_64-glidix-gcc userspace/test.c -o isodir/bin/test -lgwm -lddi || exit 1
+x86_64-glidix-gcc userspace/test.c -o isodir/bin/test || exit 1
 
 rm -f out/vmglidix.tar
 make || exit 1

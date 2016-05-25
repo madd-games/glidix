@@ -63,21 +63,25 @@ void registerFSDriver(FSDriver *drv)
 	semSignal(&semFS);
 };
 
-int sys_mount(const char *fsname, const char *image, const char *mountpoint, int flags)
+int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, int flags)
 {
-	if (!isStringValid((uint64_t)fsname))
+	char fsname[USER_STRING_MAX];
+	char image[USER_STRING_MAX];
+	char mountpoint[USER_STRING_MAX];
+	
+	if (strcpy_u2k(fsname, ufsname) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (!isStringValid((uint64_t)image))
+	if (strcpy_u2k(image, uimage) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (!isStringValid((uint64_t)mountpoint))
+	if (strcpy_u2k(mountpoint, umountpoint) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;

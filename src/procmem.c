@@ -790,8 +790,21 @@ int tryLoadOnDemand(uint64_t addr)
 					File *fp = seg->fl->fp;
 					if (fp != NULL)
 					{
-						fp->seek(fp, offset, SEEK_SET);
-						vfsRead(fp, pagebuf, size);
+						//fp->seek(fp, offset, SEEK_SET);
+						//vfsRead(fp, pagebuf, size);
+						if (fp->pread == NULL)
+						{
+							spinlockRelease(&seg->fl->lock);
+							return MEM_BUS_ERROR;
+						}
+						else
+						{
+							if (fp->pread(fp, pagebuf, size, offset) != size)
+							{
+								spinlockRelease(&seg->fl->lock);
+								return MEM_BUS_ERROR;
+							};
+						};
 					};
 					
 					PTe *pte = getPage(pm, MEM_CURRENT, pageIndex, 0);
@@ -806,7 +819,7 @@ int tryLoadOnDemand(uint64_t addr)
 					refreshAddrSpace();
 
 					spinlockRelease(&seg->fl->lock);
-					return 0;
+					return MEM_OK;
 				};
 			};
 			spinlockRelease(&seg->fl->lock);
@@ -815,7 +828,7 @@ int tryLoadOnDemand(uint64_t addr)
 		seg = seg->next;
 	};
 
-	return -1;
+	return MEM_FAILED;
 };
 
 void dumpProcessMemory(ProcMem *pm, uint64_t checkAddr)

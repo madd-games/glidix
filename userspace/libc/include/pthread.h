@@ -35,62 +35,44 @@
 extern "C" {
 #endif
 
-/**
- * This data structure is pointed to by pthread_t, which expands to void*
- * in this pthreads implementation.
- */
-typedef struct
-{	
-	/**
-	 * The thread's pid.
-	 */
-	int					_pid;
-	
-	/**
-	 * The thread's stack; this must be free()d after the thread exits.
-	 */
-	void*					_stack;
-	
-	/**
-	 * The start routine and its argument.
-	 */
-	void*					(*_start)(void*);
-	void*					_start_param;
-	
-	/**
-	 * The return value from the start routine.
-	 */
-	void*					_ret;
-	
-	/**
-	 * Thread sets this to 1 when it is OK for the creator to continue.
-	 */
-	int					_cont_ok;
-} __pthread;
+#define	PTHREAD_SCOPE_SYSTEM				0
+#define	PTHREAD_SCOPE_PROCESS				1
 
-/**
- * Thread-local information. This is created on a new thread's stack, to store errno
- * and the thread ID. pthread_self() uses the fact that errno is the first field in order
- * to find the pointer to this structure using _glidix_geterrnoptr(). It is not safe to
- * use the _tid field for anything other than a return value from pthread_self(), since the
- * stack is released when a thread exits.
- */
-typedef struct
-{
-	int					_errno;
-	pthread_t				_tid;
-} __thread_local_info;
+#define	PTHREAD_CREATE_JOINABLE				0
+#define	PTHREAD_CREATE_DETACHED				1
 
+#define	PTHREAD_INHERIT_SCHED				0
+#define	PTHREAD_EXPLICIT_SCHED				1
+
+#define	PTHREAD_STACK_MIN				0x1000
+
+/* implemented by libglidix directly */
 int		pthread_create(pthread_t *thread, const pthread_attr_t *attr, void*(*start_routine)(void*), void *arg);
 pthread_t	pthread_self();
 int		pthread_join(pthread_t thread, void **retval);
 int		pthread_detach(pthread_t thread);
 int		pthread_kill(pthread_t thread, int sig);
+
+/* implemented by the runtime */
 int		pthread_spin_init(pthread_spinlock_t *sl);
 int		pthread_spin_destroy(pthread_spinlock_t *sl);
 int		pthread_spin_lock(pthread_spinlock_t *lock);
 int		pthread_spin_trylock(pthread_spinlock_t *lock);
 int		pthread_spin_unlock(pthread_spinlock_t *lock);
+int		pthread_attr_init(pthread_attr_t *attr);
+int		pthread_attr_destroy(pthread_attr_t *attr);
+int		pthread_attr_setscope(pthread_attr_t *attr, int scope);
+int		pthread_attr_getscope(const pthread_attr_t *attr, int *scope);
+int		pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate);
+int		pthread_attr_getdetachstate(const pthread_attr_t *attr, int *detachstate);
+int		pthread_attr_setinheritsched(pthread_attr_t *attr, int inheritsched);
+int		pthread_attr_getinheritsched(const pthread_attr_t *attr, int *inheritsched);
+int		pthread_attr_setstackaddr(pthread_attr_t *attr, void *stackaddr);
+int		pthread_attr_getstackaddr(const pthread_attr_t *attr, void **stackaddr);
+int		pthread_attr_setstack(pthread_attr_t *attr, void *stackaddr, size_t stacksize);
+int		pthread_attr_getstack(const pthread_attr_t *attr, void **stackaddr, size_t *stacksize);
+int		pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize);
+int		pthread_attr_getstacksize(const pthread_attr_t *attr, size_t *stacksize);
 
 #ifdef __cplusplus
 };	/* extern "C" */

@@ -1,61 +1,43 @@
 #include <stdio.h>
-#include <libgwm.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <signal.h>
 
-GWMWindow *txt1;
-GWMWindow *txt2;
-GWMWindow *txt3;
+#define	THREAD_NUM		3
 
-int myEventHandler(GWMEvent *ev, GWMWindow *win)
+void* testfunc(void *arg)
 {
-	switch (ev->type)
-	{
-	case GWM_EVENT_CLOSE:
-		return -1;
-	default:
-		return gwmDefaultHandler(ev, win);
-	};
+	printf("i am thread i=%d, id=%d\n", (int) (uint64_t) arg, pthread_self());
+	return (void*) (uint64_t) pthread_self();
 };
-
-int myButtonCallback(void *ignore)
-{
-	size_t sz = gwmGetTextFieldSize(txt2);
-	char buffer[sz+1];
-	gwmReadTextField(txt2, buffer, 0, sz);
-	int result = gwmMessageBox(NULL, "Caption", buffer, GWM_MBICON_ERROR | GWM_MBUT_YESNO);
-	printf("Result: %d\n", result);
-	return 0;
-};
-
+	
 int main()
 {
-	if (gwmInit() != 0)
+	pthread_t threads[THREAD_NUM];
+	int i;
+	
+	for (i=0; i<THREAD_NUM; i++)
 	{
-		fprintf(stderr, "Failed to initialize GWM!\n");
-		return 1;
+		pthread_create(&threads[i], NULL, testfunc, (void*) (uint64_t) i);
 	};
-
-	int width, height;
-	gwmScreenSize(&width, &height);
-	printf("Screen size: %dx%d\n", width, height);
 	
-	GWMWindow *win = gwmCreateWindow(NULL, "Hello world", 10, 10, 200, 200, GWM_WINDOW_MKFOCUSED);
-	if (win == NULL)
+	for (i=0; i<THREAD_NUM; i++)
 	{
-		fprintf(stderr, "Failed to create window!\n");
-		return 1;
+		void *result;
+		int errnum = pthread_join(threads[i], &result);
+		if (errnum != 0)
+		{
+			fprintf(stderr, "pthread_join failed: %s\n", strerror(errno));
+			return 1;
+		};
+		
+		printf("Thread %d returned %d\n", threads[i], (int) (uint64_t) result);
 	};
-
-	GWMWindow *btn1 = gwmCreateButton(win, "Normal", 5, 5, 80, 0);
-	gwmSetButtonCallback(btn1, myButtonCallback, NULL);
-	GWMWindow *btn2 = gwmCreateButton(win, "Disabled", 5, 40, 80, GWM_BUTTON_DISABLED);
 	
-	txt1 = gwmCreateTextField(win, "Memes", 5, 90, 180, 0);
-	txt2 = gwmCreateTextField(win, "", 5, 120, 180, GWM_TXT_MASKED);
-	txt3 = gwmCreateTextField(win, "Some shit", 5, 150, 180, GWM_TXT_DISABLED);
+	printf("bye bye\n");
 	
-	gwmSetEventHandler(win, myEventHandler);
-	gwmMainLoop();
-
-	gwmQuit();
 	return 0;
 };
+

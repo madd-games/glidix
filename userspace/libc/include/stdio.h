@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <pthread.h>
 
 #define SEEK_SET 0
 #define	SEEK_END 1
