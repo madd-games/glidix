@@ -131,6 +131,7 @@ int isDeathSig(int signo)
 
 void dispatchSignal()
 {
+	//kprintf("start of signal dispatch\n");
 	Thread *thread = getCurrentThread();
 	
 	int i;
@@ -158,18 +159,22 @@ void dispatchSignal()
 
 	if (siginfo->si_signo == SIGTHKILL)
 	{
-		unlockSched();
-		threadExit();
+		// now allowed to override SIGTHKILL
+		switchToKernelSpace(&thread->regs);
+		thread->regs.rip = (uint64_t) &threadExit;
+		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
+		return;
 	};
 	
 	if (siginfo->si_signo == SIGKILL)
 	{
 		// not allowed to override SIGKILL
-		Regs regs;				// doesn't matter, it will die
-		cli();
-		unlockSched();				// processExit() calls lockSched()
-		processExit(-SIGKILL);
-		switchTask(&regs);
+		switchToKernelSpace(&thread->regs);
+		thread->regs.rip = (uint64_t) &processExit;
+		thread->regs.rdi = 0;
+		*((int*)&thread->regs.rdi) = -SIGKILL;
+		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
+		return;
 	};
 	
 	// what action do we take?
@@ -181,20 +186,22 @@ void dispatchSignal()
 	}
 	else if (action->sa_handler == SIG_IGN)
 	{
+		//kprintf("end of signal dispatch (ignored)\n");
 		return;
 	}
 	else if (action->sa_handler == SIG_DFL)
 	{
 		if (isDeathSig(siginfo->si_signo))
 		{
-			Regs regs;				// doesn't matter, it will die
-			cli();
-			unlockSched();				// processExit() calls lockSched()
-			processExit(-siginfo->si_signo);
-			switchTask(&regs);
+			switchToKernelSpace(&thread->regs);
+			thread->regs.rip = (uint64_t) &processExit;
+			thread->regs.rdi = 0;
+			*((int*)&thread->regs.rdi) = -siginfo->si_signo;
+			thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
 		}
 		else
 		{
+			//kprintf("end of signal dispatch (default action)\n");
 			return;
 		};
 	}
@@ -202,7 +209,7 @@ void dispatchSignal()
 	{
 		handler = (uint64_t) action->sa_handler;
 	};
-
+	
 	// try pushing the signal stack frame. also, don't break the red zone!
 	SetProcessMemory(thread->pm);
 	
@@ -216,7 +223,6 @@ void dispatchSignal()
 	// user stack
 	uint64_t frameAddr = (uint64_t) thread->stack;
 	SignalStackFrame *frame = (SignalStackFrame*) frameAddr;
-	//frame->trapSigRet = TRAP_SIGRET;
 	frame->trapSigRet = (uint64_t)(&usup_sigret) - (uint64_t)(&usup_start) + 0xFFFF808000003000UL;
 	frame->sigmask = thread->sigmask;
 	memcpy(&frame->mstate.fpuRegs, &thread->fpuRegs, sizeof(FPURegs));
@@ -251,10 +257,17 @@ void dispatchSignal()
 	thread->regs.ss = 0;
 	
 	thread->sigmask |= action->sa_mask;
+	//kprintf("end of signal dispatch\n");
 };
 
 int sendSignal(Thread *thread, siginfo_t *siginfo)
 {
+	if (siginfo->si_signo >= SIG_NUM)
+	{
+		stackTraceHere();
+		panic("invalid signal number passed to sendSignal(): %d", siginfo->si_signo);
+	};
+	
 	if (thread->flags & THREAD_TERMINATED)
 	{
 		return -1;

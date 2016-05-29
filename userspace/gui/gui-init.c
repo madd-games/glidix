@@ -58,7 +58,8 @@ int main()
 	pid_t pid = fork();
 	if (pid == 0)
 	{
-		execl("/usr/bin/terminal", "terminal", NULL);
+		//execl("/usr/bin/terminal", "terminal", NULL);
+		execl("/usr/bin/gui-login", "gui-login", NULL);
 		return 1;
 	};
 	

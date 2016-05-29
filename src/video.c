@@ -39,6 +39,8 @@ typedef struct
 	LGIDeviceInterface*			intf;
 } DisplayData;
 
+static LGIDeviceInterface *activeDisplay = NULL;
+
 static int lgi_ioctl(File *fp, uint64_t cmd, void *argp)
 {
 	//LGIDeviceInterface *intf = (LGIDeviceInterface*) fp->fsdata;
@@ -55,6 +57,8 @@ static int lgi_ioctl(File *fp, uint64_t cmd, void *argp)
 		ct->therrno = EIO;
 		return intf->getModeInfo(intf, (LGIDisplayMode*) argp);
 	case IOCTL_VIDEO_SETMODE:
+		switchConsoleToSoftwareBuffer();
+		activeDisplay = intf;
 		intf->setMode(intf, (LGIDisplayMode*) argp);
 		return 0;
 	default:
@@ -66,6 +70,7 @@ static int lgi_ioctl(File *fp, uint64_t cmd, void *argp)
 static void lgi_close(File *fp)
 {
 	DisplayData *data = (DisplayData*) fp->fsdata;
+	if (data->intf == activeDisplay) activeDisplay = NULL;
 	kfree(data);
 };
 
@@ -105,4 +110,15 @@ int lgiKAddDevice(const char *name, LGIDeviceInterface *intf)
 	};
 
 	return 0;
+};
+
+void lgiRenderConsole(const unsigned char *buffer)
+{
+	if (activeDisplay != NULL)
+	{
+		if (activeDisplay->renderConsole != NULL)
+		{
+			activeDisplay->renderConsole(activeDisplay, buffer);
+		};
+	};
 };

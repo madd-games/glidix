@@ -203,7 +203,12 @@ void unmapPhysMemory(void *laddr, uint64_t len);
  * Defined in sched.c. Initializes a register structure for userspace.
  */
 void initUserRegs(Regs *regs);
- 
+
+/**
+ * Defined in sched.c. Changes a register structure to make it kernel-space.
+ */
+void switchToKernelSpace(Regs *regs);
+
 /**
  * Defined in common.asm. Call this to let the CPU cool off. This preserve RFLAGS (along with the IF),
  * then enables interrupts and halts. Returns with the old value of the interrupt flag.

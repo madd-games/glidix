@@ -82,14 +82,14 @@ cd ../..
 cd userspace/gui
 #x86_64-glidix-gcc lgitest.c -o ../isodir/bin/lgitest -I ../include -lddi || exit 1
 sudo cp gui.h /glidix/usr/include/libgwm.h || exit 1
-#x86_64-glidix-gcc gui.c -o ../../mipdir/usr/bin/gui -I ../../include -lddi -Wall -Werror || exit 1
+x86_64-glidix-gcc gui.c -o ../../mipdir/usr/bin/gui -I ../../include -lddi -Wall -Werror || exit 1
 cd libgwm
-#x86_64-glidix-gcc -fPIC -shared libgwm.c button.c msgbox.c textfield.c -o ../../../mipdir/usr/lib/libgwm.so -lddi || exit 1
+x86_64-glidix-gcc -fPIC -shared libgwm.c button.c msgbox.c textfield.c -o ../../../mipdir/usr/lib/libgwm.so -lddi || exit 1
 cd ..
-#sudo cp ../../mipdir/usr/lib/libgwm.so /glidix/usr/lib/libgwm.so || exit 1
-#x86_64-glidix-gcc gui-init.c -o ../../mipdir/usr/libexec/gui-init -lddi -lgwm || exit 1
-#x86_64-glidix-gcc terminal.c font.c -o ../../mipdir/usr/bin/terminal -lddi -lgwm || exit 1
-#x86_64-glidix-gcc gui-login.c -o ../../mipdir/usr/bin/gui-login -lddi -lgwm -lcrypt || exit 1
+sudo cp ../../mipdir/usr/lib/libgwm.so /glidix/usr/lib/libgwm.so || exit 1
+x86_64-glidix-gcc gui-init.c -o ../../mipdir/usr/libexec/gui-init -lddi -lgwm || exit 1
+x86_64-glidix-gcc terminal.c font.c -o ../../mipdir/usr/bin/terminal -lddi -lgwm || exit 1
+x86_64-glidix-gcc gui-login.c -o ../../mipdir/usr/bin/gui-login -lddi -lgwm -lcrypt || exit 1
 cd ../..
 cp -r userspace/images mipdir/usr/share/images || exit 1
 mkmip mipdir isodir/gui.mip

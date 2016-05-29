@@ -322,11 +322,11 @@ static void onPageFault(Regs *regs)
 	{
 		throw(EX_PAGE_FAULT);
 		
-		ASM("cli");
+		cli();
 		kernelDead = 1;
 		//heapDump();
 		kdumpregs(regs);
-		kprintf("A page fault occured (rip=%a, cpu=%d)\n", regs->rip, /*getCurrentCPU()->id*/0);
+		kprintf("A page fault occured (rip=%a, thread='%s')\n", regs->rip, getCurrentThread()->name);
 		if ((regs->errCode & 1) == 0)
 		{
 			kprintf("[non-present]");

@@ -60,12 +60,19 @@
 
 #define	FL_SHARED			(1 << 0)
 
-#define	MAP_PRIVATE			(1 << 0)
-#define	MAP_SHARED			(1 << 1)
-#define	MAP_ANON			(1 << 2)
-#define	MAP_FIXED			(1 << 3)
+/**
+ * Only define those if they weren't yet defined, since we might have been included by
+ * a userspace application with <sys/mman.h> already included.
+ */
+#ifndef MAP_FAILED
+#	define	MAP_PRIVATE			(1 << 0)
+#	define	MAP_SHARED			(1 << 1)
+#	define	MAP_ANON			(1 << 2)
+#	define	MAP_FIXED			(1 << 3)
 
-#define	MAP_FAILED			((uint64_t)-1)
+#	define	MAP_FAILED			((uint64_t)-1)
+#endif
+
 typedef enum
 {
 	MEM_CURRENT = 0,

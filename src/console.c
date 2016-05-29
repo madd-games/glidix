@@ -31,30 +31,30 @@
 #include <glidix/spinlock.h>
 #include <glidix/string.h>
 #include <stdint.h>
-
-#define	VRAM_BASE 0xFFFF8000000B8000
+#include <glidix/video.h>
 
 static struct
 {
 	uint64_t curX, curY;
 	uint64_t curColor;
 	uint8_t putcon;
+	unsigned char *buffer;
+	int usingSoftware;
 } consoleState;
 
 static Spinlock consoleLock;
 
 void initConsole()
 {
-	//consoleState.curX = 0;
-	//consoleState.curY = 0;
-	//consoleState.curColor = 0x07;
-	//consoleState.putcon = 1;
 	spinlockRelease(&consoleLock);
+	consoleState.buffer = (unsigned char*) 0xFFFF8000000B8000;
+	consoleState.usingSoftware = 0;
 	clearScreen();
 };
 
 static void updateVGACursor()
 {
+	if (consoleState.usingSoftware) return;
 	uint64_t pos = consoleState.curY * 80 + consoleState.curX;
 	outb(0x3D4, 0x0F);
 	outb(0x3D5, pos & 0xFF);
@@ -70,7 +70,7 @@ void clearScreen()
 	consoleState.curColor = 0x07;
 	consoleState.putcon = 1;
 	
-	uint8_t *videoram = (uint8_t*) VRAM_BASE;
+	uint8_t *videoram = consoleState.buffer;
 	uint64_t i;
 	
 	for (i=0; i<80*25; i++)
@@ -101,7 +101,7 @@ void setConsoleColor(uint8_t col)
 
 static void scroll()
 {
-	uint8_t *vidmem = (uint8_t*) VRAM_BASE;
+	uint8_t *vidmem = consoleState.buffer;
 
 	uint64_t i;
 	for (i=0; i<2*80*24; i++)
@@ -145,7 +145,7 @@ static void kputch(char c)
 			consoleState.curX = 80;
 		};
 		consoleState.curX--;
-		uint8_t *vidmem = (uint8_t*) (VRAM_BASE + 2 * (consoleState.curY * 80 + consoleState.curX));
+		uint8_t *vidmem = &consoleState.buffer[2 * (consoleState.curY * 80 + consoleState.curX)];
 		*vidmem++ = 0;
 		*vidmem++ = consoleState.curColor;
 	}
@@ -161,7 +161,7 @@ static void kputch(char c)
 	}
 	else
 	{
-		uint8_t *vidmem = (uint8_t*) (VRAM_BASE + 2 * (consoleState.curY * 80 + consoleState.curX));
+		uint8_t *vidmem = &consoleState.buffer[2 * (consoleState.curY * 80 + consoleState.curX)];
 		*vidmem++ = c;
 		*vidmem++ = consoleState.curColor;
 		consoleState.curX++;
@@ -170,7 +170,6 @@ static void kputch(char c)
 		{
 			consoleState.curX = 0;
 			consoleState.curY++;
-			//if (consoleState.curY == 25) scroll();
 		};
 	};
 };
@@ -427,5 +426,25 @@ void kdumpregs(Regs *regs)
 
 void unlockConsole()
 {
+	spinlockRelease(&consoleLock);
+};
+
+static unsigned char softwareConsoleBuffer[80*25*2];
+void switchConsoleToSoftwareBuffer()
+{
+	spinlockAcquire(&consoleLock);
+	consoleState.usingSoftware = 1;
+	memcpy(softwareConsoleBuffer, consoleState.buffer, 80*25*2);
+	consoleState.buffer = softwareConsoleBuffer;
+	spinlockRelease(&consoleLock);
+};
+
+void renderConsoleToScreen()
+{
+	spinlockAcquire(&consoleLock);
+	if (consoleState.usingSoftware)
+	{
+		lgiRenderConsole(softwareConsoleBuffer);
+	}
 	spinlockRelease(&consoleLock);
 };

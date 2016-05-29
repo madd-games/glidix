@@ -181,7 +181,10 @@ static MessageQueue *findQueue(int pid, int fd)
 	do
 	{
 		thread = thread->next;
-		if (thread->creds->pid == pid) break;
+		if (thread->creds != NULL)
+		{
+			if (thread->creds->pid == pid) break;
+		};
 	} while (thread != getCurrentThread());
 	
 	if (thread->creds->pid != pid)

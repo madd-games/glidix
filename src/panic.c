@@ -43,6 +43,9 @@ void _panic(const char *filename, int lineno, const char *funcname, const char *
 	kprintf("Kernel panic: ");
 	kvprintf(fmt, ap);
 	
+	// if we are in graphics mode, render the console
+	renderConsoleToScreen();
+	
 	while (1)
 	{
 		ASM ("cli; hlt");

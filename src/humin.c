@@ -73,7 +73,7 @@ static unsigned char keymap[128] =
 		0,	/* Insert Key */
 		0,	/* Delete Key */
 		0,	 0,	 0,
-		0,	/* F11 Key */
+		CC_PANIC,	/* F11 Key */
 		0,	/* F12 Key */
 		0,	/* All other keys are undefined */
 };
@@ -245,6 +245,19 @@ static int shift = 0;
 void huminPostEvent(HuminDevice *hudev, HuminEvent *ev)
 {
 	semWait(&hudev->sem);
+	
+	// handle forced panic key
+	if (ev->type == HUMIN_EV_BUTTON_DOWN)
+	{
+		if ((ev->button.scancode > 0) && (ev->button.scancode < 128))
+		{
+			if (keymap[ev->button.scancode] == CC_PANIC)
+			{
+				panic("user forced panic (F11)");
+			};
+		};
+	};
+	
 	if (!hudev->inUse)
 	{
 		semSignal(&hudev->sem);
@@ -269,6 +282,7 @@ void huminPostEvent(HuminDevice *hudev, HuminEvent *ev)
 
 				if (ev->type == HUMIN_EV_BUTTON_DOWN)
 				{
+					
 					if (ctrl)
 					{
 						if (key == 'c')

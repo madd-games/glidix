@@ -875,6 +875,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	// inherit signal mask
 	thread->sigmask = currentThread->sigmask;
 	
+	// clear pending signals
+	thread->pendingSet = 0;
+	
 	// exec params
 	if (currentThread->execPars != NULL)
 	{
@@ -1261,6 +1264,14 @@ void initUserRegs(Regs *regs)
 	regs->ds = 0x23;
 	regs->cs = 0x1B;
 	regs->ss = 0x23;
+	regs->rflags = getFlagsRegister() | (1 << 9);
+};
+
+void switchToKernelSpace(Regs *regs)
+{
+	regs->cs = 0x08;
+	regs->ds = 0x10;
+	regs->ss = 0x00;
 	regs->rflags = getFlagsRegister() | (1 << 9);
 };
 

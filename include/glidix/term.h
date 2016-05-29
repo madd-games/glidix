@@ -95,7 +95,8 @@ enum
 	CC_ARROW_UP = 0x8B,
 	CC_ARROW_DOWN = 0x8C,
 	CC_ARROW_LEFT = 0x8D,
-	CC_ARROW_RIGHT = 0x8E
+	CC_ARROW_RIGHT = 0x8E,
+	CC_PANIC = 0x8F,		// "force panic" key (F11 currently)
 };
 
 enum

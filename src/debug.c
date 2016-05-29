@@ -53,7 +53,7 @@ void stackTrace(uint64_t rip, uint64_t rbp)
 		uint64_t *lastFrame = (uint64_t*) rbp;
 		rbp = lastFrame[0];
 		rip = lastFrame[1];
-		if (rip == 0) break;
+		if (rbp == 0) break;
 	};
 	kprintf("END.\n");
 };

@@ -405,8 +405,8 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	regs.rsp = 0x400000;
 	regs.rbp = 0;
 	refreshAddrSpace();
-	
-	memset((void*)0x200000, 0, 0x200000);
+
+	//kprintf("about to switch context in exec()\n");
 	switchContext(&regs);
 	return 0;
 };

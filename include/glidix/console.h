@@ -44,6 +44,8 @@ void unlockConsole();
 void clearScreen();
 void setConsoleColor(uint8_t col);
 void setCursorPos(uint8_t x, uint8_t y);
+void switchConsoleToSoftwareBuffer();
+void renderConsoleToScreen();
 
 #define	DONE()						kprintf("%$\x02" "Done%#\n")
 #define	FAILED()					kprintf("%$\x04" "Failed%#\n")
