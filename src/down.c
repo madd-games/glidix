@@ -83,7 +83,10 @@ int systemDown(int action)
 	Thread *thread = ct->next;
 	while (thread != ct)
 	{
-		if (thread->creds->pid > 1) sendSignal(thread, &termsig);
+		if (thread->creds != NULL)
+		{
+			if (thread->creds->pid > 1) sendSignal(thread, &termsig);
+		};
 		thread = thread->next;
 	};
 
@@ -101,9 +104,12 @@ int systemDown(int action)
 		thread = ct->next;
 		while (thread != ct)
 		{
-			if (thread->creds->pid > 1)
+			if (thread->creds != NULL)
 			{
-				if ((thread->flags & THREAD_TERMINATED) == 0) allStopped = 0;
+				if (thread->creds->pid > 1)
+				{
+					if ((thread->flags & THREAD_TERMINATED) == 0) allStopped = 0;
+				};
 			};
 
 			thread = thread->next;
@@ -123,7 +129,10 @@ int systemDown(int action)
 	thread = ct->next;
 	while (thread != ct)
 	{
-		if (thread->creds->pid > 1) thread->flags |= THREAD_TERMINATED;
+		if (thread->creds != NULL)
+		{
+			if (thread->creds->pid > 1) thread->flags |= THREAD_TERMINATED;
+		};
 		thread = thread->next;
 	};
 
@@ -134,10 +143,13 @@ int systemDown(int action)
 	thread = ct->next;
 	while (thread != ct)
 	{
-		if (thread->creds->pid != 0)
+		if (thread->creds != NULL)
 		{
-			DownrefProcessMemory(thread->pm);
-			if (thread->ftab != NULL) ftabDownref(thread->ftab);
+			if (thread->creds->pid != 0)
+			{
+				DownrefProcessMemory(thread->pm);
+				if (thread->ftab != NULL) ftabDownref(thread->ftab);
+			};
 		};
 
 		thread = thread->next;
