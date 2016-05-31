@@ -46,6 +46,18 @@ extern "C" {
 
 #define	PTHREAD_STACK_MIN				0x1000
 
+#define	PTHREAD_MUTEX_NORMAL				0
+#define	PTHREAD_MUTEX_ERRORCHECK			1
+#define	PTHREAD_MUTEX_RECURSIVE				2
+#define	PTHREAD_MUTEX_DEFAULT				PTHREAD_MUTEX_NORMAL
+
+typedef struct
+{
+	int						type;
+	int						protocol;
+	int						prioceiling;
+} pthread_mutexattr_t;
+
 /* implemented by libglidix directly */
 int		pthread_create(pthread_t *thread, const pthread_attr_t *attr, void*(*start_routine)(void*), void *arg);
 pthread_t	pthread_self();
@@ -73,6 +85,7 @@ int		pthread_attr_setstack(pthread_attr_t *attr, void *stackaddr, size_t stacksi
 int		pthread_attr_getstack(const pthread_attr_t *attr, void **stackaddr, size_t *stacksize);
 int		pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize);
 int		pthread_attr_getstacksize(const pthread_attr_t *attr, size_t *stacksize);
+int		pthread_mutexattr_init(pthread_mutexattr_t *attr);
 
 #ifdef __cplusplus
 };	/* extern "C" */

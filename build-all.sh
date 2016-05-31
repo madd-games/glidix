@@ -75,7 +75,7 @@ mkdir -p mipdir/usr/libexec
 
 cd userspace/libddi
 sudo cp libddi.h /glidix/usr/include/libddi.h || exit 1
-x86_64-glidix-gcc -fPIC -shared libddi.c -o ../../mipdir/usr/lib/libddi.so -lpng -lz -lm || exit 1
+x86_64-glidix-gcc -I/glidix/usr/include/freetype2 -fPIC -shared libddi.c -o ../../mipdir/usr/lib/libddi.so -lfreetype -lpng -lz -lm || exit 1
 sudo cp ../../mipdir/usr/lib/libddi.so /glidix/usr/lib/libddi.so || exit 1
 cd ../..
 
@@ -92,6 +92,7 @@ x86_64-glidix-gcc terminal.c font.c -o ../../mipdir/usr/bin/terminal -lddi -lgwm
 x86_64-glidix-gcc gui-login.c -o ../../mipdir/usr/bin/gui-login -lddi -lgwm -lcrypt || exit 1
 cd ../..
 cp -r userspace/images mipdir/usr/share/images || exit 1
+cp -r userspace/fonts mipdir/usr/share/fonts || exit 1
 mkmip mipdir isodir/gui.mip
 #exit
 
@@ -171,7 +172,7 @@ modmake --sysroot=/glidix --host=x86_64-glidix --modname=vionet || exit 1
 cp out/vionet.gkm ../../initrd/initmod/vionet.gkm || exit 1
 cd ../..
 
-x86_64-glidix-gcc userspace/test.c -o isodir/bin/test || exit 1
+x86_64-glidix-gcc -I/glidix/usr/include/freetype2 userspace/test.c -o isodir/bin/test -lz -lfreetype -lddi -lgwm || exit 1
 
 rm -f out/vmglidix.tar
 make || exit 1

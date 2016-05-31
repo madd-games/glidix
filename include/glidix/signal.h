@@ -129,6 +129,11 @@
 #define	SIG_UNBLOCK	1
 #define	SIG_SETMASK	2
 
+/**
+ * Flags for sendSignalEx().
+ */
+#define	SS_NONBLOCKED	(1 << 0)		/* only send if not blocked */
+
 union sigval
 {
 	int		sival_int;
@@ -173,6 +178,7 @@ extern uint64_t sizeSignalStackFrame;
 struct _Thread;
 void dispatchSignal();
 int sendSignal(struct _Thread *thread, siginfo_t *siginfo);	// returns 0 on success, -1 if ignored.
+int sendSignalEx(struct _Thread *thread, siginfo_t *siginfo, int flags);
 void sigret(void *ret);
 
 SigDisp* sigdispCreate();

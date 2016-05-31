@@ -35,6 +35,7 @@
 #include <sys/ioctl.h>
 #include <signal.h>
 #include <libgwm.h>
+#include <errno.h>
 
 static int guiPid;
 static int guiFD;
@@ -102,12 +103,23 @@ static void* listenThreadFunc(void *ignore)
 	queueFD = _glidix_mqclient(guiPid, guiFD);
 	char msgbuf[65536];
 	
+	// block all signals. we don't want signal handlers to be invoked in the GWM
+	// listening thread, because if the application is buggy it might create undebuggable
+	// chaos.
+	sigset_t sigset;
+	sigfillset(&sigset);
+	pthread_sigmask(SIG_BLOCK, &sigset, NULL);
+	
 	initFinished = 1;
 	while (1)
 	{
 		_glidix_msginfo info;
 		ssize_t size = _glidix_mqrecv(queueFD, &info, msgbuf, 65536);
-		if (size == -1) continue;
+		if (size == -1)
+		{
+			if (errno == EINTR) continue;
+			else break;
+		};
 
 		if (info.type == _GLIDIX_MQ_INCOMING)
 		{
@@ -159,6 +171,8 @@ static void* listenThreadFunc(void *ignore)
 			};
 		};
 	};
+	
+	return NULL;
 };
 
 int gwmInit()
@@ -186,7 +200,6 @@ int gwmInit()
 
 void gwmQuit()
 {
-	pthread_kill(listenThread, SIGKILL);
 	close(eventCounterFD);
 	close(queueFD);
 };

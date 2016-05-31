@@ -61,6 +61,23 @@ usup_thread_entry:
 	mov	rdi,	r15
 	call	r14
 	
+	; before we release the stack, we must block all signals for this thread, else the
+	; kernel will abort the entire process if a signal with a userspace handler is dispatched
+	; between the time we unmap and the time we exit. signals with default handlers that
+	; we cannot block (SIGKILL, SIGTHKILL, etc) do not execute on the user stack so we do not
+	; need to worry.
+	; put the mask in the red zone
+	xor	rax,	rax
+	not	rax
+	mov	[rsp-8], rax
+	
+	; now set the mask
+	mov	rdi,	2	; SIG_SETMASK
+	lea	rsi,	[rsp-8]	; pointer to mask
+	mov	rdx,	0	; NULL pointer (do not retrieve old mask)
+	mov	rax,	14	; sigprocmask() (multithread-safe under glidix)
+	syscall
+	
 	; the kernel passes the pointer to the start of the stack in RBX,
 	; and the size in R12; those registers should be preserved by the
 	; thread. we must unmap the stack here

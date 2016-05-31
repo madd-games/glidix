@@ -167,7 +167,12 @@ static char ddiDefaultFont[128][8] = {
 	{ 0x18, 0x18, 0x18, 0x00, 0x18, 0x18, 0x18, 0x00},   // U+007C (|)
 	{ 0x07, 0x0C, 0x0C, 0x38, 0x0C, 0x0C, 0x07, 0x00},   // U+007D (})
 	{ 0x6E, 0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+007E (~)
-	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}	// U+007F
+	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}    // U+007F
+};
+
+struct DDIPen_
+{
+	
 };
 
 size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned int height)
@@ -816,4 +821,42 @@ void ddiDrawText(DDISurface *surface, unsigned int x, unsigned int y, const char
 			x += 8;
 		};
 	};
+};
+
+long ddiReadUTF8(const char **strptr)
+{
+	if (**strptr == 0)
+	{
+		return 0;
+	};
+	
+	if ((**strptr & 0x80) == 0)
+	{
+		long ret = (long) (uint8_t) **strptr;
+		(*strptr)++;
+		return ret;
+	};
+	
+	long result = 0;
+	uint8_t c = (uint8_t) **strptr;
+	(*strptr)++;
+	int len = 0;
+		
+	while (c & 0x80)
+	{
+		c <<= 1;
+		len++;
+	};
+		
+	result = (long) (c >> len);
+	
+	while (--len)
+	{
+		c = **strptr;
+		(*strptr)++;
+		result <<= 6;
+		result |= (c & 0x3F);	
+	};
+	
+	return result;
 };

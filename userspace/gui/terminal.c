@@ -145,9 +145,9 @@ void writeConsole(const char *buf, size_t sz)
 				cursorX = 0;
 				cursorY++;
 			};
-
-			if (cursorY == 25) scroll();
 		};
+	
+		if (cursorY == 25) scroll();
 	};
 };
 

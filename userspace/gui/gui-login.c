@@ -145,7 +145,6 @@ int findPassword(const char *username)
 
 int logInCallback(void *ignore)
 {
-	printf("this got called\n");
 	gwmReadTextField(txtUsername, username, 0, 127);
 	gwmReadTextField(txtPassword, password, 0, 127);
 	
@@ -184,15 +183,14 @@ int logInCallback(void *ignore)
 			};
 		};
 
-		printf("right before the fork\n");
 		if (fork() == 0)
 		{
 			// set up the environment
 			setenv("HOME", pwd->pw_dir, 1);
 			setenv("SHELL", pwd->pw_shell, 1);
 			setenv("USERNAME", pwd->pw_name, 1);
+			chdir(pwd->pw_dir);
 			
-			printf("did i manage to get here?\n");
 			if (_glidix_setgroups(numGroups, groups) != 0)
 			{
 				perror("_glidix_setgroups");
@@ -211,7 +209,6 @@ int logInCallback(void *ignore)
 				exit(1);
 			};
 
-			printf("before the exec()\n");
 			execl("/usr/bin/terminal", "terminal", NULL);
 			exit(1);
 		};

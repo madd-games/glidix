@@ -106,7 +106,7 @@ void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
 	switchContext(&regs);
 };
 
-int isDeathSig(int signo)
+static int isDeathSig(int signo)
 {
 	switch (signo)
 	{
@@ -129,9 +129,21 @@ int isDeathSig(int signo)
 	};
 };
 
+static int isUnblockable(int signo)
+{
+	switch (signo)
+	{
+	case SIGKILL:
+	case SIGTHKILL:
+	case SIGSTOP:
+		return 1;
+	default:
+		return 0;
+	};
+};
+
 void dispatchSignal()
 {
-	//kprintf("start of signal dispatch\n");
 	Thread *thread = getCurrentThread();
 	
 	int i;
@@ -142,7 +154,7 @@ void dispatchSignal()
 		if (thread->pendingSet & mask)
 		{
 			uint64_t sigbit = (1UL << thread->pendingSigs[i].si_signo);
-			if ((thread->sigmask & sigbit) == 0)
+			if (((thread->sigmask & sigbit) == 0) || isUnblockable(thread->pendingSigs[i].si_signo))
 			{
 				// not blocked
 				siginfo = &thread->pendingSigs[i];
@@ -159,7 +171,7 @@ void dispatchSignal()
 
 	if (siginfo->si_signo == SIGTHKILL)
 	{
-		// now allowed to override SIGTHKILL
+		// not allowed to override SIGTHKILL
 		switchToKernelSpace(&thread->regs);
 		thread->regs.rip = (uint64_t) &threadExit;
 		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
@@ -172,7 +184,7 @@ void dispatchSignal()
 		switchToKernelSpace(&thread->regs);
 		thread->regs.rip = (uint64_t) &processExit;
 		thread->regs.rdi = 0;
-		*((int*)&thread->regs.rdi) = -SIGKILL;
+		*((int64_t*)&thread->regs.rdi) = -SIGKILL;
 		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
 		return;
 	};
@@ -186,7 +198,6 @@ void dispatchSignal()
 	}
 	else if (action->sa_handler == SIG_IGN)
 	{
-		//kprintf("end of signal dispatch (ignored)\n");
 		return;
 	}
 	else if (action->sa_handler == SIG_DFL)
@@ -196,14 +207,11 @@ void dispatchSignal()
 			switchToKernelSpace(&thread->regs);
 			thread->regs.rip = (uint64_t) &processExit;
 			thread->regs.rdi = 0;
-			*((int*)&thread->regs.rdi) = -siginfo->si_signo;
+			*((int64_t*)&thread->regs.rdi) = -siginfo->si_signo;
 			thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
-		}
-		else
-		{
-			//kprintf("end of signal dispatch (default action)\n");
-			return;
 		};
+		
+		return;
 	}
 	else
 	{
@@ -257,10 +265,9 @@ void dispatchSignal()
 	thread->regs.ss = 0;
 	
 	thread->sigmask |= action->sa_mask;
-	//kprintf("end of signal dispatch\n");
 };
 
-int sendSignal(Thread *thread, siginfo_t *siginfo)
+int sendSignalEx(Thread *thread, siginfo_t *siginfo, int flags)
 {
 	if (siginfo->si_signo >= SIG_NUM)
 	{
@@ -282,15 +289,30 @@ int sendSignal(Thread *thread, siginfo_t *siginfo)
 		return -1;
 	};
 	
-	if (thread->sigdisp->actions[siginfo->si_signo].sa_handler == SIG_IGN)
+	// only allow the signal to be ignored if it's not SIGKILL, SIGTHKILL or SIGSTOP
+	if ((siginfo->si_signo != SIGKILL) && (siginfo->si_signo != SIGTHKILL) && (siginfo->si_signo != SIGSTOP))
 	{
-		// the thread does not care
-		// we don't need to dispatch the signal, but we must wake up the thread
-		// because the signal might be a notification that something must be looked
-		// at by the thread; e.g. it could be the SIGCHLD signal indicating that the
-		// thread might need to wait() for the child.
-		signalThread(thread);
-		return -1;
+		if (thread->sigdisp->actions[siginfo->si_signo].sa_handler == SIG_IGN)
+		{
+			// the thread does not care
+			// we don't need to dispatch the signal, but we must wake up the thread
+			// because the signal might be a notification that something must be looked
+			// at by the thread; e.g. it could be the SIGCHLD signal indicating that the
+			// thread might need to wait() for the child.
+			signalThread(thread);
+			return -1;
+		};
+		
+		if (flags & SS_NONBLOCKED)
+		{
+			// drop the signal if it's blocked
+			uint64_t sigbit = (1UL << siginfo->si_signo);
+			if ((thread->sigmask & sigbit) != 0)
+			{
+				// blocked
+				return -1;
+			};
+		};
 	};
 	
 	if (thread->pendingSet == 0xFFFFFFFFFFFFFFFF)
@@ -321,6 +343,11 @@ int sendSignal(Thread *thread, siginfo_t *siginfo)
 	
 	signalThread(thread);
 	return 0;
+};
+
+int sendSignal(Thread *thread, siginfo_t *siginfo)
+{
+	return sendSignalEx(thread, siginfo, 0);
 };
 
 void sigret(void *ret)

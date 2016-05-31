@@ -162,6 +162,7 @@ int sigismember(const sigset_t *set, int signum);
 int raise(int sig);
 int kill(pid_t pid, int sig);
 int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+#define	pthread_sigmask sigprocmask
 
 #ifdef __cplusplus
 };	/* extern "C" */

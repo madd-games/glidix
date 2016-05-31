@@ -577,6 +577,19 @@ void switchTask(Regs *regs)
 	switchTaskUnlocked(regs);
 };
 
+static int isUnblockableSig(int signo)
+{
+	switch (signo)
+	{
+	case SIGKILL:
+	case SIGTHKILL:
+	case SIGSTOP:
+		return 1;
+	default:
+		return 0;
+	};
+};
+
 int haveReadySigs(Thread *thread)
 {
 	if (thread->sigdisp == NULL) return 0;
@@ -588,7 +601,7 @@ int haveReadySigs(Thread *thread)
 		if (thread->pendingSet & mask)
 		{
 			uint64_t sigbit = (1UL << thread->pendingSigs[i].si_signo);
-			if ((thread->sigmask & sigbit) == 0)
+			if (((thread->sigmask & sigbit) == 0) || isUnblockableSig(thread->pendingSigs[i].si_signo))
 			{
 				// not blocked
 				return 1;
@@ -1151,7 +1164,7 @@ int signalPidEx(int pid, siginfo_t *si)
 			
 					if (si != NULL)
 					{
-						if (sendSignal(thread, si) == 0)
+						if (sendSignalEx(thread, si, SS_NONBLOCKED) == 0)
 						{
 							if (pidDelivIndex == 100)
 							{

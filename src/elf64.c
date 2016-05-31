@@ -406,7 +406,9 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	regs.rbp = 0;
 	refreshAddrSpace();
 
-	//kprintf("about to switch context in exec()\n");
+	// do not block any signals in a new executable by default
+	getCurrentThread()->sigmask = 0;
+	
 	switchContext(&regs);
 	return 0;
 };
