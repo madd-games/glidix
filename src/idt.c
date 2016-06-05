@@ -243,6 +243,10 @@ static void onPageFault(Regs *regs)
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 	
+	// do this BEFORE enabling interrupts; just read sys_store_and_sleep() for a reason
+	// why
+	throw(EX_PAGE_FAULT);
+	
 	sti();
 	if (getCurrentThread() != NULL)
 	{
@@ -319,9 +323,7 @@ static void onPageFault(Regs *regs)
 
 	if ((getCurrentThread() == NULL) || (regs->cs == 8))
 	//if (1)
-	{
-		throw(EX_PAGE_FAULT);
-		
+	{	
 		cli();
 		kernelDead = 1;
 		//heapDump();
@@ -388,6 +390,8 @@ static void onPageFault(Regs *regs)
 
 static void onGPF(Regs *regs)
 {
+	throw(EX_GPF);
+	
 	if (1)
 	{
 		ASM("cli");

@@ -245,6 +245,12 @@ static ssize_t read(File *file, void *buffer, size_t size)
 static ssize_t pread(File *file, void *buffer, size_t size, off_t off)
 {
 	TarFile *tf = (TarFile*) file->fsdata;
+	
+	if ((size_t)off > tf->size)
+	{
+		return 0;
+	};
+	
 	if (((size_t)off + size) > tf->size)
 	{
 		size = tf->size - (size_t) off;

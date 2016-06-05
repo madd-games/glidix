@@ -38,13 +38,14 @@ enum
 {
 	EX_NONE,			// nothing happened
 	EX_PAGE_FAULT,			// page fault
+	EX_GPF,				// general protection fault+
 };
 
 /**
  * Catch exceptions. Returns 0 initially, and in this case you can perform your protected block
  * and then call uncatch(). If an exception was caught between the catch() invocation that returned
  * zero and the corresponding uncatch() call, execution is rewinded back to the catch() call, which
- * now returns an exception number.
+ * now returns an exception number. If an exception is returned, you do not need to call uncatch().
  */
 int catch();
 

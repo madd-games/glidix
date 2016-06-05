@@ -146,6 +146,7 @@ int main()
 	};
 	
 	canvas = gwmGetWindowCanvas(win);
+#if 0
 	DDIColor testcolor = {0, 0, 0, 255};
 	ddiFillRect(canvas, 0, 10, 8, 3, &testcolor);
 	
@@ -163,7 +164,7 @@ int main()
 		return 1;
 	};
 	
-	error = FT_Set_Char_Size(face, 0, 20*64, 0, 0);
+	error = FT_Set_Char_Size(face, 0, 12*64, 0, 0);
 	if (error != 0)
 	{
 		printf("Failed to set size\n");
@@ -175,6 +176,7 @@ int main()
 	drawChar('l');
 	drawChar('l');
 	drawChar('o');
+	drawChar('\'');
 
 #if 0
 	FT_Done_Face(face);
@@ -205,7 +207,31 @@ int main()
 	int width, height, offX, offY;
 	calculateSegmentSize("Hello, world!", &width, &height, &offX, &offY);
 	printf("The string is %dx%d, offset (%d, %d)\n", width, height, offX, offY);
+#endif
 
+	const char *error;
+	DDIPen *pen = ddiCreatePen(canvas, 2, 2, 496, 496, 0, 0, &error);
+	if (pen == NULL)
+	{
+		fprintf(stderr, "ddiCreatePen: %s\n", error);
+		return 1;
+	};
+	
+	printf("pen created successfully.\n");
+
+	DDIColor background = {0, 0, 255, 255};
+	DDIColor foreground = {255, 255, 255, 255};
+	ddiSetPenBackground(pen, &background);
+	ddiSetPenColor(pen, &foreground);
+	ddiWritePen(pen, "Hello ");
+	ddiSetPenFont(pen, "DejaVu Sans", 50, DDI_STYLE_ITALIC, NULL);
+	ddiWritePen(pen, "world");
+	ddiExecutePen(pen);
+	
+	printf("pen executed\n");
+	ddiDeletePen(pen);
+	
+	printf("posting dirty\n");
 	gwmPostDirty();
 	
 	gwmSetEventHandler(win, myEventHandler);

@@ -36,6 +36,7 @@
 #include <glidix/time.h>
 #include <glidix/cpu.h>
 #include <glidix/memory.h>
+#include <glidix/catch.h>
 
 void enterDebugContext(Regs *regs);			// sched.asm
 
@@ -43,17 +44,26 @@ void stackTrace(uint64_t rip, uint64_t rbp)
 {
 	kprintf("Stack trace:\n");
 	kprintf("RIP                RBP                Module:Symbol+Offset\n");
-	while (1)
+	
+	if (catch() == 0)
 	{
-		//Symbol *symbol = findSymbolForAddr(rip);
-		SymbolInfo info;
-		findDebugSymbolInModules(rip, &info);
-		kprintf("%a %a %s:%s+%d\n", rip, rbp, info.modname, info.symname, info.offset);
-		if (rbp == 0) break;
-		uint64_t *lastFrame = (uint64_t*) rbp;
-		rbp = lastFrame[0];
-		rip = lastFrame[1];
-		if (rbp == 0) break;
+		while (1)
+		{
+			//Symbol *symbol = findSymbolForAddr(rip);
+			SymbolInfo info;
+			findDebugSymbolInModules(rip, &info);
+			kprintf("%a %a %s:%s+%d\n", rip, rbp, info.modname, info.symname, info.offset);
+			if (rbp == 0) break;
+			uint64_t *lastFrame = (uint64_t*) rbp;
+			rbp = lastFrame[0];
+			rip = lastFrame[1];
+			if (rbp == 0) break;
+		};
+		uncatch();
+	}
+	else
+	{
+		kprintf("EXCEPTION DURING TRACE\n");
 	};
 	kprintf("END.\n");
 };

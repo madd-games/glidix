@@ -31,6 +31,7 @@
 #include <glidix/memory.h>
 #include <glidix/semaphore.h>
 #include <glidix/string.h>
+#include <glidix/console.h>
 
 #include "isofs.h"
 #include "isofile.h"
@@ -128,6 +129,12 @@ static ssize_t isofile_pread(File *fp, void *buffer, size_t size, off_t off)
 	File *fsimg = file->isofs->fp;
 	fsimg->seek(fsimg, file->start + off, SEEK_SET);
 
+	if (off > file->size)
+	{
+		semSignal(&file->isofs->sem);
+		return 0;
+	};
+	
 	if ((off+size) > file->size)
 	{
 		size = file->size - off;

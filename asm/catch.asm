@@ -77,6 +77,8 @@ throw:
 	mov	r14,			[rax+40]
 	mov	r15,			[rax+48]
 	mov	r10,			[rax+56]		; return RIP in R10
+	xor	rcx,			rcx
+	mov	[rax+56],		rcx			; uncatch
 	
 	; now the stack is back at the catch() caller, so put the exception in RAX,
 	; and jump back to the return RIP.

@@ -136,7 +136,7 @@ DDISurface *winButtons;
 
 unsigned int screenWidth, screenHeight;
 int mouseX, mouseY;
-pthread_spinlock_t mouseLock;
+pthread_mutex_t mouseLock;
 
 pthread_t inputThread;
 pthread_t redrawThread;
@@ -165,7 +165,7 @@ typedef struct Window_
 	int					cursor;
 } Window;
 
-pthread_spinlock_t windowLock;
+pthread_mutex_t windowLock;
 Window* desktopWindows = NULL;
 
 typedef struct
@@ -178,6 +178,14 @@ typedef struct
 static Cursor cursors[GWM_CURSOR_COUNT] = {
 	{NULL, 0, 0, "/usr/share/images/cursor.png"},
 	{NULL, 7, 7, "/usr/share/images/txtcursor.png"}
+};
+
+// TEMPORARY CANCER
+int _glidix_condwait(uint8_t *cond, uint8_t *lock)
+{
+	// just busy-wait on the spinlock
+	pthread_spin_lock((pthread_spinlock_t*)cond);
+	return 0;
 };
 
 /**
@@ -250,9 +258,18 @@ void PaintWindows(Window *win, DDISurface *target)
 						win->params.height+2*GUI_WINDOW_BORDER+GUI_CAPTION_HEIGHT,
 						color);
 					ddiBlit(win->icon, 0, 0, target, win->params.x+2, win->params.y+2, 16, 16);
+
 					ddiDrawText(target, win->params.x+20, win->params.y+6, win->params.caption,
 						&winCaptionColor, NULL);
-					
+
+#if 0
+					DDIPen *pen = ddiCreatePen(target, win->params.x+20, win->params.y+6, win->params.width -68, GUI_CAPTION_HEIGHT, 0, 0, NULL);
+					ddiSetPenColor(pen, &winCaptionColor);
+					ddiWritePen(pen, win->params.caption);
+					ddiExecutePen(pen);
+					ddiDeletePen(pen);
+#endif
+
 					int btnIndex = ((mouseX - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/16;
 					if ((mouseY < (int)win->params.y+GUI_WINDOW_BORDER) || (mouseY > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
 					{
@@ -473,18 +490,18 @@ void PaintDesktop()
 {
 	ddiOverlay(desktopBackground, 0, 0, screen, 0, 0, screenWidth, screenHeight);
 	
-	pthread_spin_lock(&windowLock);
+	pthread_mutex_lock(&windowLock);
 	PaintWindows(desktopWindows, screen);
-	pthread_spin_unlock(&windowLock);
+	pthread_mutex_unlock(&windowLock);
 	
-	pthread_spin_lock(&mouseLock);
+	pthread_mutex_lock(&mouseLock);
 	int cursorIndex = 0;
 	if (hoveringWindow != NULL)
 	{
 		cursorIndex = hoveringWindow->cursor;
 	};
 	ddiBlit(cursors[cursorIndex].image, 0, 0, screen, mouseX-cursors[cursorIndex].hotX, mouseY-cursors[cursorIndex].hotY, 16, 16);
-	pthread_spin_unlock(&mouseLock);
+	pthread_mutex_unlock(&mouseLock);
 	
 	ddiOverlay(screen, 0, 0, frontBuffer, 0, 0, screenWidth, screenHeight);
 };
@@ -589,12 +606,12 @@ void onMouseLeft()
 {
 	mouseLeftDown = 1;
 	int x, y;
-	pthread_spin_lock(&mouseLock);
+	pthread_mutex_lock(&mouseLock);
 	x = mouseX;
 	y = mouseY;
-	pthread_spin_unlock(&mouseLock);
+	pthread_mutex_unlock(&mouseLock);
 	
-	pthread_spin_lock(&windowLock);
+	pthread_mutex_lock(&windowLock);
 	Window *oldFocus = focusedWindow;
 	focusedWindow = FindWindowAt(x, y);
 	
@@ -660,19 +677,19 @@ void onMouseLeft()
 		};
 	};
 	
-	pthread_spin_unlock(&windowLock);
+	pthread_mutex_unlock(&windowLock);
 };
 
 void onMouseLeftRelease()
 {
 	mouseLeftDown = 0;
 	
-	pthread_spin_lock(&mouseLock);
+	pthread_mutex_lock(&mouseLock);
 	int x = mouseX;
 	int y = mouseY;
-	pthread_spin_unlock(&mouseLock);
+	pthread_mutex_unlock(&mouseLock);
 	
-	pthread_spin_lock(&windowLock);
+	pthread_mutex_lock(&windowLock);
 	movingWindow = NULL;	
 	Window *win = FindWindowAt(x, y);
 	
@@ -700,7 +717,7 @@ void onMouseLeftRelease()
 		};
 	};
 	
-	pthread_spin_unlock(&windowLock);
+	pthread_mutex_unlock(&windowLock);
 };
 
 static int currentKeyMods = 0;
@@ -749,7 +766,7 @@ void DecodeScancode(GWMEvent *ev)
 
 void onInputEvent(int ev, int scancode)
 {
-	pthread_spin_lock(&windowLock);
+	pthread_mutex_lock(&windowLock);
 	if (focusedWindow != NULL)
 	{
 		GWMEvent event;
@@ -765,28 +782,28 @@ void onInputEvent(int ev, int scancode)
 		event.win = focusedWindow->id;
 		event.scancode = scancode;
 		
-		pthread_spin_lock(&mouseLock);
+		pthread_mutex_lock(&mouseLock);
 		int mx = mouseX;
 		int my = mouseY;
-		pthread_spin_unlock(&mouseLock);
+		pthread_mutex_unlock(&mouseLock);
 		
 		AbsoluteToRelativeCoords(focusedWindow, mx, my, &event.x, &event.y);
 		DecodeScancode(&event);
 		PostWindowEvent(focusedWindow, &event);
 	};
 	
-	pthread_spin_unlock(&windowLock);
+	pthread_mutex_unlock(&windowLock);
 };
 
 void onMouseMoved()
 {
 	int x, y;
-	pthread_spin_lock(&mouseLock);
+	pthread_mutex_lock(&mouseLock);
 	x = mouseX;
 	y = mouseY;
-	pthread_spin_unlock(&mouseLock);
+	pthread_mutex_unlock(&mouseLock);
 	
-	pthread_spin_lock(&windowLock);
+	pthread_mutex_lock(&windowLock);
 	if (movingWindow != NULL)
 	{
 		int newX = x - movingOffX;
@@ -829,7 +846,7 @@ void onMouseMoved()
 		PostWindowEvent(win, &ev);
 	};
 	
-	pthread_spin_unlock(&windowLock);
+	pthread_mutex_unlock(&windowLock);
 };
 
 void ClipMouse()
@@ -861,21 +878,21 @@ void *inputThreadFunc(void *ignore)
 		
 		if (ev.type == HUMIN_EV_MOTION_RELATIVE)
 		{
-			pthread_spin_lock(&mouseLock);
+			pthread_mutex_lock(&mouseLock);
 			mouseX += ev.motion.x;
 			mouseY += ev.motion.y;
 			ClipMouse();
-			pthread_spin_unlock(&mouseLock);
+			pthread_mutex_unlock(&mouseLock);
 			onMouseMoved();
 			screenDirty = 1;
 		}
 		else if (ev.type == HUMIN_EV_MOTION_ABSOLUTE)
 		{
-			pthread_spin_lock(&mouseLock);
+			pthread_mutex_lock(&mouseLock);
 			mouseX = ev.motion.x;
 			mouseY = ev.motion.y;
 			ClipMouse();
-			pthread_spin_unlock(&mouseLock);
+			pthread_mutex_unlock(&mouseLock);
 			onMouseMoved();
 			screenDirty = 1;
 		}
@@ -954,7 +971,7 @@ void *msgThreadFunc(void *ignore)
 			GWMCommand *cmd = (GWMCommand*) msgbuf;
 			if (cmd->cmd == GWM_CMD_CREATE_WINDOW)
 			{
-				pthread_spin_lock(&windowLock);
+				pthread_mutex_lock(&windowLock);
 				Window * win = CreateWindow(cmd->createWindow.parent,
 						&cmd->createWindow.pars, cmd->createWindow.id,
 						info.pid, info.fd, cmd->createWindow.painterPid);
@@ -978,7 +995,7 @@ void *msgThreadFunc(void *ignore)
 						focusedWindow = win;
 					};
 				};
-				pthread_spin_unlock(&windowLock);
+				pthread_mutex_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 				pthread_spin_unlock(&redrawSignal);
 				pthread_kill(redrawThread, SIGCONT);
@@ -990,15 +1007,15 @@ void *msgThreadFunc(void *ignore)
 			}
 			else if (cmd->cmd == GWM_CMD_DESTROY_WINDOW)
 			{
-				pthread_spin_lock(&windowLock);
+				pthread_mutex_lock(&windowLock);
 				DeleteWindowByID(cmd->destroyWindow.id, info.pid, info.fd);
-				pthread_spin_unlock(&windowLock);
+				pthread_mutex_unlock(&windowLock);
 				pthread_spin_unlock(&redrawSignal);
 				pthread_kill(redrawThread, SIGCONT);
 			}
 			else if (cmd->cmd == GWM_CMD_CLEAR_WINDOW)
 			{
-				pthread_spin_lock(&windowLock);
+				pthread_mutex_lock(&windowLock);
 				Window *win = GetWindowByID(cmd->clearWindow.id, info.pid, info.fd);
 				if (win != NULL)
 				{
@@ -1008,7 +1025,7 @@ void *msgThreadFunc(void *ignore)
 				GWMMessage msg;
 				msg.clearWindowResp.type = GWM_MSG_CLEAR_WINDOW_RESP;
 				msg.clearWindowResp.seq = cmd->clearWindow.seq;
-				pthread_spin_unlock(&windowLock);
+				pthread_mutex_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 			}
 			else if (cmd->cmd == GWM_CMD_SCREEN_SIZE)
@@ -1018,12 +1035,11 @@ void *msgThreadFunc(void *ignore)
 				msg.screenSizeResp.seq = cmd->screenSize.seq;
 				msg.screenSizeResp.width = screen->width;
 				msg.screenSizeResp.height = screen->height;
-				pthread_spin_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 			}
 			else if (cmd->cmd == GWM_CMD_SET_FLAGS)
 			{
-				pthread_spin_lock(&windowLock);
+				pthread_mutex_lock(&windowLock);
 				Window *win = GetWindowByID(cmd->setFlags.win, info.pid, info.fd);
 				
 				GWMMessage msg;
@@ -1044,14 +1060,14 @@ void *msgThreadFunc(void *ignore)
 					msg.setFlagsResp.status = -1;
 				};
 				
-				pthread_spin_unlock(&windowLock);
+				pthread_mutex_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 				pthread_spin_unlock(&redrawSignal);
 				pthread_kill(redrawThread, SIGCONT);
 			}
 			else if (cmd->cmd == GWM_CMD_SET_CURSOR)
 			{
-				pthread_spin_lock(&windowLock);
+				pthread_mutex_lock(&windowLock);
 				Window *win = GetWindowByID(cmd->setCursor.win, info.pid, info.fd);
 				
 				GWMMessage msg;
@@ -1068,7 +1084,7 @@ void *msgThreadFunc(void *ignore)
 					msg.setCursorResp.status = -1;
 				};
 				
-				pthread_spin_unlock(&windowLock);
+				pthread_mutex_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 				pthread_spin_unlock(&redrawSignal);
 				pthread_kill(redrawThread, SIGCONT);
@@ -1076,9 +1092,9 @@ void *msgThreadFunc(void *ignore)
 		}
 		else if (info.type == _GLIDIX_MQ_HANGUP)
 		{
-			pthread_spin_lock(&windowLock);
+			pthread_mutex_lock(&windowLock);
 			DeleteWindowsOf(info.pid, info.fd);
-			pthread_spin_unlock(&windowLock);
+			pthread_mutex_unlock(&windowLock);
 			pthread_spin_unlock(&redrawSignal);
 			pthread_kill(redrawThread, SIGCONT);
 		};
@@ -1087,6 +1103,9 @@ void *msgThreadFunc(void *ignore)
 
 int main()
 {
+	pthread_mutex_init(&windowLock, NULL);
+	pthread_mutex_init(&mouseLock, NULL);
+	
 	int fd = open("/dev/bga", O_RDWR);
 	if (fd == -1)
 	{
@@ -1193,7 +1212,6 @@ int main()
 	};
 
 	unlink("/usr/share/gui.pid");
-	pthread_spin_init(&mouseLock);
 	if (pthread_create(&inputThread, NULL, inputThreadFunc, NULL) != 0)
 	{
 		fprintf(stderr, "failed to create input thread!\n");

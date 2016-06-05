@@ -44,6 +44,21 @@
 #define	DDI_BITMAP_8x16				1
 
 /**
+ * Text alignments.
+ */
+#define	DDI_ALIGN_LEFT				0
+#define	DDI_ALIGN_CENTER			1
+#define	DDI_ALIGN_RIGHT				2
+
+/**
+ * Font styles.
+ */
+#define	DDI_STYLE_REGULAR			0
+#define	DDI_STYLE_BOLD				(1 << 0)
+#define	DDI_STYLE_ITALIC			(1 << 1)
+#define	DDI_STYLE_UNDERLINE			(1 << 2)
+
+/**
  * Describes the pixel format of a surface.
  */
 typedef struct
@@ -189,5 +204,62 @@ void ddiDrawText(DDISurface *surface, unsigned int x, unsigned int y, const char
  * and the pointer is updated to point to the next character.
  */
 long ddiReadUTF8(const char **strptr);
+
+/**
+ * Create a new pen object with the specified target surface, bounding box and scroll position.
+ */
+DDIPen* ddiCreatePen(DDISurface *surface, int x, int y, int width, int height, int scrollX, int scrollY, const char **error);
+
+/**
+ * Delete a pen object.
+ */
+void ddiDeletePen(DDIPen *pen);
+
+/**
+ * Set whether the text written by a pen should be wrapped.
+ */
+void ddiSetPenWrap(DDIPen *pen, int wrap);
+
+/**
+ * Set the alignment of text written by a pen. Possible values are DDI_ALIGN_LEFT, DDI_ALIGN_CENTER, or DDI_ALIGN_RIGHT.
+ * The default value is DDI_ALIGN_LEFT.
+ */
+void ddiSetPenAlignment(DDIPen *pen, int alignment);
+
+/**
+ * Set the letter spacing and line height of the pen object. The letter spacing is given in pixels, while the line height
+ * is given as a percentage. 0 and 100 are the defaults, respectively.
+ */
+void ddiSetPenSpacing(DDIPen *pen, int letterSpacing, int lineHeight);
+
+/**
+ * Write some text using the given pen, at the end of the current text. Note that no text is actually rendered to screen
+ * until you call ddiExecutePen(). The currently-set font and other parameters are used for this text segment. Note that
+ * line height and alignment apply to whole lines; the value of those attributes for the line is decided once the end of
+ * it is reached.
+ */
+void ddiWritePen(DDIPen *pen, const char *text);
+
+/**
+ * Execute a pen. This draws all the text to the target surface.
+ */
+void ddiExecutePen(DDIPen *pen);
+
+/**
+ * Set a pen's background color.
+ */
+void ddiSetPenBackground(DDIPen *pen, DDIColor *bg);
+
+/**
+ * Set a pen's foreground color.
+ */
+void ddiSetPenColor(DDIPen *pen, DDIColor *fg);
+
+/**
+ * Set the font for a pen object to the specifies face, size and style. The style is DDI_STYLE_REGULAR, or a
+ * bitwise-OR of one or more of DDI_STYLE_BOLD, DDI_STYLE_ITALIC and DDI_STYLE_UNDERLINE.
+ * Returns 0 on success, or -1 on error, in which case it sets 'error' to point to an error message.
+ */
+int ddiSetPenFont(DDIPen *pen, const char *family, int size, int style, const char **error);
 
 #endif

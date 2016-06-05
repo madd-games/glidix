@@ -122,7 +122,7 @@ syscallTable = {
 	100:	"_glidix_thsync",
 	101:	"getppid",
 	102:	"alarm",
-	103:	"_glidix_condwait",
+	103:	"_glidix_store_and_sleep",
 	104:	"_glidix_mqserver",
 	105:	"_glidix_mqclient",
 	106:	"_glidix_mqsend",

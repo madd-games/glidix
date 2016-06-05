@@ -279,7 +279,8 @@ static void diskfile_setblock(DiskFile *data, uint64_t block, int shouldRead)
 static ssize_t diskfile_read(File *fp, void *buffer, size_t size)
 {
 	DiskFile *data = (DiskFile*) fp->fsdata;
-
+	//kprintf_debug("FP: %p, DATA: %p, BUFFER: %p, SIZE: %p, BUF: %p\n", fp, data, buffer, size, data->buf);
+	
 	ssize_t outsize = 0;
 	uint8_t *put = (uint8_t*) buffer;
 	while (size--)

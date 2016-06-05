@@ -66,8 +66,9 @@
 #define	SIGWAITING	32
 #define	SIGLWP		33
 #define	SIGAIO		34
-#define	SIGTHKILL	35
-#define	SIG_NUM		36
+#define	SIGTHKILL	35		/* kill a single thread */
+#define	SIGTHWAKE	36		/* wake a thread without dispatching a signal */
+#define	SIG_NUM		37
 
 /**
  * si_code for SIGSEGV

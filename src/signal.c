@@ -282,11 +282,23 @@ int sendSignalEx(Thread *thread, siginfo_t *siginfo, int flags)
 
 	if (siginfo->si_signo == SIGCONT)
 	{
+		// XXX: what is even going on here? why is it waking up an entire process?
+		//      is there any reason for this to be specially handled? if so, we must
+		//      get rid of that reason and ensure that this signal is treated normally
+		//      (except it wakes up from a SIGSTOP).
+		
 		// wake up the thread but do not dispatch any signal
 		// also we return -1 so that signalPid() wakes up all
 		// threads in the process.
 		signalThread(thread);
 		return -1;
+	};
+	
+	if (siginfo->si_signo == SIGTHWAKE)
+	{
+		// wake up the thread but do not dispatch any signal
+		signalThread(thread);
+		return 0;
 	};
 	
 	// only allow the signal to be ignored if it's not SIGKILL, SIGTHKILL or SIGSTOP

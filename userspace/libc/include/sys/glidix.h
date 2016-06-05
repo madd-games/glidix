@@ -210,7 +210,7 @@ uint32_t	_glidix_unique();
 int		_glidix_bindif(int fd, const char *ifname);
 int		_glidix_route_clear(int family, const char *ifname);
 int		_glidix_thsync(int type, int par);
-int		_glidix_condwait(uint8_t *cond, uint8_t *lock);
+int		_glidix_store_and_sleep(void *ptr, char val);
 int		_glidix_mqserver();
 int		_glidix_mqclient(int pid, int fd);
 int		_glidix_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgsize);

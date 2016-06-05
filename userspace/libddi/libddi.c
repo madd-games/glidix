@@ -30,6 +30,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <png.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 #include "libddi.h"
 
@@ -170,9 +172,81 @@ static char ddiDefaultFont[128][8] = {
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}    // U+007F
 };
 
+typedef struct PenSegment_
+{
+	DDISurface *surface;
+	struct PenSegment_ *next;
+} PenSegment;
+
+typedef struct PenLine_
+{
+	PenSegment *firstSegment;
+	int currentWidth;
+	int maxHeight;
+	int alignment;
+	int lineHeight;				// %
+	struct PenLine_ *next;
+} PenLine;
+
 struct DDIPen_
 {
+	/**
+	 * The target surface onto which we will eventually draw.
+	 */
+	DDISurface *surface;
 	
+	/**
+	 * The bounding box onto which to draw.
+	 */
+	int x, y, width, height;
+	
+	/**
+	 * The current scroll position.
+	 */
+	int scrollX, scrollY;
+	
+	/**
+	 * FreeType library handle.
+	 */
+	FT_Library lib;
+
+	/**
+	 * Current font.
+	 */
+	FT_Face face;
+	
+	/**
+	 * Nonzero if text should be word-wrapped automatically (default = 1).
+	 */
+	int wrap;
+	
+	/**
+	 * Text alignment (default = DDI_ALIGN_LEFT).
+	 */
+	int align;
+	
+	/**
+	 * Letter spacing and line height. Letter spacing is given in pixels (default = 0), while the line height
+	 * is given as a percentage (default = 100).
+	 */
+	int letterSpacing;
+	int lineHeight;
+	
+	/**
+	 * Background and foreground colors.
+	 */
+	DDIColor background;
+	DDIColor foreground;
+	
+	/**
+	 * Current line being layed out.
+	 */
+	PenLine *currentLine;
+	
+	/**
+	 * Head of the line list.
+	 */
+	PenLine *firstLine;
 };
 
 size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned int height)
@@ -859,4 +933,422 @@ long ddiReadUTF8(const char **strptr)
 	};
 	
 	return result;
+};
+
+DDIPen* ddiCreatePen(DDISurface *surface, int x, int y, int width, int height, int scrollX, int scrollY, const char **error)
+{
+	DDIPen *pen = (DDIPen*) malloc(sizeof(DDIPen));
+	pen->surface = surface;
+	pen->x = x;
+	pen->y = y;
+	pen->width = width;
+	pen->height = height;
+	pen->wrap = 1;
+	pen->align = DDI_ALIGN_LEFT;
+	pen->letterSpacing = 0;
+	pen->lineHeight = 100;
+	
+	DDIColor foreground = {0, 0, 0, 255};
+	DDIColor background = {0, 0, 0, 0};
+	
+	memcpy(&pen->foreground, &foreground, sizeof(DDIColor));
+	memcpy(&pen->background, &background, sizeof(DDIColor));
+	
+	FT_Error fterr = FT_Init_FreeType(&pen->lib);
+	if (fterr != 0)
+	{
+		DDI_ERROR("FreeType initialization failed");
+		free(pen);
+		return NULL;
+	};
+	
+	fterr = FT_New_Face(pen->lib, "/usr/share/fonts/regular/DejaVu Sans.ttf", 0, &pen->face);
+	if (fterr != 0)
+	{
+		DDI_ERROR("Failed to load default font!");
+		FT_Done_FreeType(pen->lib);
+		free(pen);
+		return NULL;
+	};
+	
+	fterr = FT_Set_Char_Size(pen->face, 0, 12*64, 0, 0);
+	if (fterr != 0)
+	{
+		DDI_ERROR("Failed to set font size!");
+		FT_Done_FreeType(pen->lib);
+		free(pen);
+		return NULL;
+	};
+	
+	pen->currentLine = (PenLine*) malloc(sizeof(PenLine));
+	pen->currentLine->firstSegment = NULL;
+	pen->currentLine->maxHeight = 12;
+	pen->currentLine->currentWidth = 0;
+	pen->currentLine->next = NULL;
+	pen->firstLine = pen->currentLine;
+	
+	return pen;
+};
+
+void ddiDeletePen(DDIPen *pen)
+{
+	PenLine *line = pen->firstLine;
+	PenSegment *seg;
+	
+	while (line != NULL)
+	{
+		seg = line->firstSegment;
+		while (seg != NULL)
+		{
+			PenSegment *nextSeg = seg->next;
+			ddiDeleteSurface(seg->surface);
+			free(seg);
+			seg = nextSeg;
+		};
+		
+		PenLine *nextLine = line->next;
+		free(line);
+		line = nextLine;
+	};
+	
+	FT_Done_FreeType(pen->lib);
+	free(pen);
+};
+
+void ddiSetPenWrap(DDIPen *pen, int wrap)
+{
+	pen->wrap = wrap;
+};
+
+void ddiSetPenAlignment(DDIPen *pen, int alignment)
+{
+	pen->align = alignment;
+};
+
+void ddiSetPenSpacing(DDIPen *pen, int letterSpacing, int lineHeight)
+{
+	pen->letterSpacing = letterSpacing;
+	pen->lineHeight = lineHeight;
+};
+
+/**
+ * Calculate the size of the surface that will fit the text segment. If the text needs to be wrapped, 'nextEl' will point
+ * to the location at which the rendering is to be stopped, and the rest of the text is to be rendered on another line.
+ * If a newline character is in the text, the same happens. Otherwise, 'nextEl' is set to NULL.
+ * If 'nextEl' is set, the character it points to must be IGNORED.
+ */ 
+static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *height, int *offsetX, int *offsetY, const char **nextEl)
+{
+	FT_Error error;
+	int penX=0, penY=0;
+	int minX=0, maxX=0, minY=0, maxY=0;
+	
+	const char *lastWordEnd = NULL;
+	int lastWordWidth = 0;
+	int lastWordHeight = 0;
+	int lastWordOffX = 0;
+	int lastWordOffY = 0;
+	
+	while (1)
+	{
+		const char *chptr = text;
+		long point = ddiReadUTF8(&text);
+		if (point == 0)
+		{
+			break;
+		};
+
+		if (point == ' ')
+		{
+			lastWordEnd = chptr;
+			lastWordWidth = maxX - minX;
+			lastWordHeight = maxY - minY;
+			lastWordOffX = 0;
+			lastWordOffY = 0;
+			
+			if (minX < 0) lastWordOffX = -minX;
+			if (minY < 0) lastWordOffY = -minY;
+		};
+		
+		if (point == '\n')
+		{
+			// break the line here
+			*nextEl = chptr;
+			*width = maxX - minX;
+			*height = maxY - minY;
+			*offsetX = 0;
+			*offsetY = 0;
+			
+			if (minX < 0) *offsetX = -minX;
+			if (minY < 0) *offsetY = -minY;
+			return 0;
+		};
+		
+		FT_UInt glyph = FT_Get_Char_Index(pen->face, point);
+		error = FT_Load_Glyph(pen->face, glyph, FT_LOAD_DEFAULT);
+		if (error != 0)
+		{
+			return -1;
+		};
+	
+		error = FT_Render_Glyph(pen->face->glyph, FT_RENDER_MODE_NORMAL);
+		if (error != 0)
+		{
+			return -1;
+		};
+		
+		FT_Bitmap *bitmap = &pen->face->glyph->bitmap;
+		
+		int left = penX + pen->face->glyph->bitmap_left;
+		int top = penY - pen->face->glyph->bitmap_top;
+		if (left < minX) minX = left;
+		if (top < minY) minY = top;
+		
+		int right = left + bitmap->width;
+		int bottom = top + bitmap->rows;
+		if (right > maxX) maxX = right;
+		if (bottom > maxY) maxY = bottom;
+		
+		if ((pen->currentLine->currentWidth + (maxX-minX)) > pen->width)
+		{
+			// we must wrap around at the last word that fit in
+			// TODO: mfw nothing was written yet
+			*nextEl = lastWordEnd;
+			*width = lastWordWidth;
+			*height = lastWordHeight;
+			*offsetX = lastWordOffX;
+			*offsetY = lastWordOffY;
+			return 0;
+		};
+		
+		penX += (pen->face->glyph->advance.x >> 6) + pen->letterSpacing;
+		penY += pen->face->glyph->advance.y >> 6;
+	};
+	
+	if (minX < 0)
+	{
+		*offsetX = -minX;
+	}
+	else
+	{
+		*offsetX = 0;
+	};
+	
+	if (minY < 0)
+	{
+		*offsetY = -minY;
+	}
+	else
+	{
+		*offsetY = 0;
+	};
+	
+	*width = maxX - minX;
+	*height = maxY - minY;
+	*nextEl = NULL;
+	
+	return 0;
+};
+
+void ddiWritePen(DDIPen *pen, const char *text)
+{
+	const char *nextEl;
+	int offsetX, offsetY, width, height;
+	
+	while (1)
+	{
+		if (calculateSegmentSize(pen, text, &width, &height, &offsetX, &offsetY, &nextEl) != 0)
+		{
+			break;
+		};
+		
+		// create a segment object for this
+		size_t textSize;
+		if (nextEl == NULL)
+		{
+			textSize = strlen(text);
+		}
+		else
+		{
+			textSize = nextEl - text;
+		};
+		
+		const char *textEnd = &text[textSize];
+		
+		DDISurface *surface = ddiCreateSurface(&pen->surface->format, width, height, NULL, 0);
+		DDIColor fillColor;
+		memcpy(&fillColor, &pen->foreground, sizeof(DDIColor));
+		fillColor.alpha = 0;
+		ddiFillRect(surface, 0, 0, width, height, &fillColor);
+		
+		if (height > pen->currentLine->maxHeight)
+		{
+			pen->currentLine->maxHeight = height;
+		};
+		
+		int penX = 0, penY = 0;
+		while (text != textEnd)
+		{
+			long point = ddiReadUTF8(&text);
+			
+			FT_UInt glyph = FT_Get_Char_Index(pen->face, point);
+			FT_Error error = FT_Load_Glyph(pen->face, glyph, FT_LOAD_DEFAULT);
+			if (error != 0) break;
+			error = FT_Render_Glyph(pen->face->glyph, FT_RENDER_MODE_NORMAL);
+			if (error != 0) break;
+			
+			FT_Bitmap *bitmap = &pen->face->glyph->bitmap;
+			
+			int x, y;
+			for (x=0; x<bitmap->width; x++)
+			{
+				for (y=0; y<bitmap->rows; y++)
+				{
+					fillColor.alpha = bitmap->buffer[y * bitmap->pitch + x];
+					ddiFillRect(surface, penX+offsetX+x+pen->face->glyph->bitmap_left, penY+offsetY+y-pen->face->glyph->bitmap_top, 1, 1, &fillColor);
+				};
+			};
+			
+			penX += (pen->face->glyph->advance.x >> 6) + pen->letterSpacing;
+			penY += pen->face->glyph->advance.y >> 6;
+		};
+		
+		pen->currentLine->currentWidth += width;
+		
+		DDISurface *finalSurface = ddiCreateSurface(&surface->format, width, height, NULL, 0);
+		ddiFillRect(finalSurface, 0, 0, width, height, &pen->background);
+		ddiBlit(surface, 0, 0, finalSurface, 0, 0, width, height);
+		ddiDeleteSurface(surface);
+		
+		PenSegment *seg = (PenSegment*) malloc(sizeof(PenSegment));
+		seg->surface = finalSurface;
+		seg->next = NULL;
+		
+		// add the segment to the end of the list for the current line
+		if (pen->currentLine->firstSegment == NULL)
+		{
+			pen->currentLine->firstSegment = seg;
+		}
+		else
+		{
+			PenSegment *last = pen->currentLine->firstSegment;
+			while (last->next != NULL) last = last->next;
+			last->next = seg;
+		};
+		
+		pen->currentLine->alignment = pen->align;
+		pen->currentLine->lineHeight = pen->lineHeight;
+		
+		if (nextEl == NULL)
+		{
+			// we are done
+			break;
+		}
+		else
+		{
+			text = nextEl+1;
+			PenLine *line = (PenLine*) malloc(sizeof(PenLine));
+			line->firstSegment = NULL;
+			line->maxHeight = 12;
+			line->currentWidth = 0;
+			line->next = NULL;
+			pen->currentLine->next = line;
+			pen->currentLine = line;
+		};
+	};
+};
+
+void ddiExecutePen(DDIPen *pen)
+{
+	PenLine *line;
+	PenSegment *seg;
+	
+	int drawY = pen->y;
+	for (line=pen->firstLine; line!=NULL; line=line->next)
+	{
+		int drawX;
+		if (line->alignment == DDI_ALIGN_LEFT)
+		{
+			drawX = pen->x;
+		}
+		else if (line->alignment == DDI_ALIGN_CENTER)
+		{
+			drawX = pen->x + (pen->width / 2) - (line->currentWidth / 2);
+		}
+		else
+		{
+			drawX = pen->x + pen->width - line->currentWidth;
+		};
+		
+		for (seg=line->firstSegment; seg!=NULL; seg=seg->next)
+		{
+			int plotY = drawY + line->maxHeight - seg->surface->height;
+			ddiBlit(seg->surface, 0, 0, pen->surface, drawX, plotY, seg->surface->width, seg->surface->height);
+			drawX += seg->surface->width;
+		};
+		
+		drawY += line->maxHeight * line->lineHeight / 100;
+	};
+};
+
+void ddiSetPenBackground(DDIPen *pen, DDIColor *bg)
+{
+	memcpy(&pen->background, bg, sizeof(DDIColor));
+};
+
+void ddiSetPenColor(DDIPen *pen, DDIColor *fg)
+{
+	memcpy(&pen->foreground, fg, sizeof(DDIColor));
+};
+
+int ddiSetPenFont(DDIPen *pen, const char *family, int size, int style, const char **error)
+{
+	if (strlen(family) > 64)
+	{
+		DDI_ERROR("Font name too long");
+		return -1;
+	};
+	
+	char fontfile[256];
+	int type = style & (DDI_STYLE_BOLD | DDI_STYLE_ITALIC);
+	
+	if (type == 0)
+	{
+		// regular
+		sprintf(fontfile, "/usr/share/fonts/regular/%s.tff", family);
+	}
+	else if (type == DDI_STYLE_BOLD)
+	{
+		sprintf(fontfile, "/usr/share/fonts/bold/%s Bold.ttf", family);
+	}
+	else if (type == DDI_STYLE_ITALIC)
+	{
+		sprintf(fontfile, "/usr/share/fonts/italic/%s Italic.ttf", family);
+	}
+	else
+	{
+		// bold italic
+		sprintf(fontfile, "/usr/share/fonts/bi/%s BoldItalic.ttf", family);
+	};
+	
+	// dispose of the old font.
+	FT_Done_Face(pen->face);
+	
+	// load the new font
+	FT_Error fterr = FT_New_Face(pen->lib, fontfile, 0, &pen->face);
+	if (fterr != 0)
+	{
+		DDI_ERROR("Failed to load the font");
+		return -1;
+	};
+	
+	fterr = FT_Set_Char_Size(pen->face, 0, size*64, 0, 0);
+	if (fterr != 0)
+	{
+		DDI_ERROR("Failed to set font size");
+		FT_Done_Face(pen->face);
+		return -1;
+	};
+	
+	return 0;
 };

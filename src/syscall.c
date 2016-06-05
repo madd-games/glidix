@@ -2814,60 +2814,34 @@ int sys_thsync(int type, int par)
 	return i;
 };
 
-int sys_condwait(volatile uint8_t *cond, volatile uint8_t *lock)
+int sys_store_and_sleep(uint8_t *ptr, uint8_t value)
 {
-	// this system call allows userspace to implement blocking locks.
-	// it atomically does the following:
-	// 1) store "1" in *cond, while reading out its old value.
-	// 2) if the old value was 0, store 0 in *lock and return 0.
-	// 3) otherwise, store 0 in *lock, and block, waiting for a signal.
-	// 4) once unblocked, return -1 and set errno to EINTR.
+	uint64_t ptrAddr = (uint64_t) ptr;
+	if (ptrAddr >= 0x7FC0000000)
+	{
+		return EFAULT;
+	};
 	
 	cli();
 	lockSched();
 	
-	uint64_t condAddr = (uint64_t) cond;
-	uint64_t lockAddr = (uint64_t) lock;
-	if (condAddr >= 0x7FC0000000)
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
-	if (lockAddr >= 0x7FC0000000)
-	{
-		ERRNO = EFAULT;
-		return -1;
-	};
-	
 	if (catch() == 0)
 	{
-		if (atomic_swap8((uint8_t*)cond, 1) == 0)
-		{
-			*lock = 0;
-			unlockSched();
-			sti();
-		
-			return 0;
-		};
-	
-		*lock = 0;
-		uncatch();
-		waitThread(getCurrentThread());
-		unlockSched();
-		kyield();
+		*ptr = value;
+		__sync_synchronize();
 	}
 	else
 	{
 		unlockSched();
 		sti();
-		
-		ERRNO = EFAULT;
-		return -1;
+		return EFAULT;
 	};
-
-	ERRNO = EINTR;
-	return -1;
+	
+	waitThread(getCurrentThread());
+	unlockSched();
+	kyield();
+	
+	return 0;
 };
 
 void signalOnBadPointer(Regs *regs, uint64_t ptr)
@@ -3766,7 +3740,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_thsync,				// 100
 	&sys_getppid,				// 101
 	&sys_alarm,				// 102
-	&sys_condwait,				// 103
+	&sys_store_and_sleep,			// 103
 	&sys_mqserver,				// 104
 	&sys_mqclient,				// 105
 	&sys_mqsend,				// 106
