@@ -33,6 +33,23 @@
 
 #define	NANO_PER_SEC			1000000000
 
+struct _Thread;
+typedef struct TimedEvent_
+{
+	/**
+	 * The nanotime at which the event shall occur.
+	 */
+	uint64_t			nanotime;
+	
+	/**
+	 * Which thread to wake up.
+	 */
+	struct _Thread*			thread;
+	
+	struct TimedEvent_*		prev;
+	struct TimedEvent_*		next;
+} TimedEvent;
+
 int getUptime();			// idt.c
 #define	getTicks getUptime
 uint64_t getNanotime();
@@ -40,6 +57,25 @@ void sleep(int ticks);
 time_t makeUnixTime(int64_t year, int64_t month, int64_t day, int64_t hour, int64_t minute, int64_t second);
 time_t time();
 void initRTC();
-void handleTodos();
+
+/**
+ * Add a timed event. Only call this when the scheduler is locked (lockSched()). The thread will be woken up when the
+ * system timer reaches "nanotime". It may be woken up before that, for other reasons. You must always call timedCancel()
+ * on the event, even if the deadline passed. The TimedEvent structure may be allocated on the stack; it shall not be
+ * initialized (this function performs initialization).
+ *
+ * Seeting nanotime to zero causes the event to be ignored.
+ */
+void timedPost(TimedEvent *ev, uint64_t nanotime);
+
+/**
+ * Remove the event from the queue if it's still there. Always call this after timedPost().
+ */
+void timedCancel(TimedEvent *ev);
+
+/**
+ * Called on each tick, with interrupts disabled.
+ */
+void onTick();
 
 #endif

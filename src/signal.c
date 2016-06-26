@@ -129,7 +129,7 @@ static int isDeathSig(int signo)
 	};
 };
 
-static int isUnblockable(int signo)
+int isUnblockableSig(int signo)
 {
 	switch (signo)
 	{
@@ -154,7 +154,7 @@ void dispatchSignal()
 		if (thread->pendingSet & mask)
 		{
 			uint64_t sigbit = (1UL << thread->pendingSigs[i].si_signo);
-			if (((thread->sigmask & sigbit) == 0) || isUnblockable(thread->pendingSigs[i].si_signo))
+			if (((thread->sigmask & sigbit) == 0) || isUnblockableSig(thread->pendingSigs[i].si_signo))
 			{
 				// not blocked
 				siginfo = &thread->pendingSigs[i];

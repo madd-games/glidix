@@ -112,53 +112,32 @@ void initPhysMem(uint64_t numPages, MultibootMemoryMap *mmap, uint64_t mmapEnd)
 	};
 };
 
-static void phmSetFrame(uint64_t frame)
-{
-	uint64_t byte = frame/8;
-	uint64_t bit = frame%8;
-	frameBitmap[byte] |= (1 << bit);
-};
-
 static void phmClearFrame(uint64_t frame)
 {
 	uint64_t byte = frame/8;
 	uint64_t bit = frame%8;
-	frameBitmap[byte] &= ~(1 << bit);
+	atomic_and8(&frameBitmap[byte], ~(1 << bit));
 };
 
-static uint8_t phmTestFrame(uint64_t frame)
+/**
+ * Returns 0 if the frame was successfully acquired.
+ */
+static int phmTryFrame(uint64_t frame)
 {
 	uint64_t byte = frame/8;
-	uint64_t bit = frame%8;
-	return frameBitmap[byte] & (1 << bit);
+	int bit = (int) (frame%8);
+	return atomic_test_and_set8(&frameBitmap[byte], bit);
 };
 
-static uint8_t phmCheckFreeFrames(uint64_t start, uint64_t count)
+static uint64_t phmAllocSingle()
 {
 	uint64_t i;
-	for (i=0; i<count; i++)
-	{
-		if (phmTestFrame(start+i))
-		{
-			return 0;
-		};
-	};
-	
-	return 1;
-};
-
-uint64_t phmAllocFrameEx(uint64_t count, int flags)
-{
-	if (count == 0) return 0;
-	
-	spinlockAcquire(&physmemLock);
-	uint64_t i;
-	uint64_t limit = (numSystemFrames-count);
+	uint64_t limit = numSystemFrames;
 	
 	// find the first group of 64 frames that isn't all used
 	uint64_t *bitmap64 = (uint64_t*) frameBitmap;
 	uint64_t startAt = 0;
-	for (i=lowestFreeFrame/64; i<(limit>>6); i++)
+	for (i=(lowestFreeFrame>>6); i<(limit>>6); i++)
 	{
 		if (bitmap64[i] != 0xFFFFFFFFFFFFFFFF)
 		{
@@ -174,19 +153,89 @@ uint64_t phmAllocFrameEx(uint64_t count, int flags)
 	
 	for (i=startAt; i<limit; i++)
 	{
-		if (phmCheckFreeFrames(i, count))
+		if (phmTryFrame(i) == 0)
 		{
-			uint64_t j;
-			for (j=0; j<count; j++)
-			{
-				phmSetFrame(i+j);
-			};
-			
-			spinlockRelease(&physmemLock);
 			return i;
 		};
 	};
 	
+	panic("out of physical memory!");
+	return 0;
+};
+
+static uint64_t phmAlloc8()
+{
+	uint64_t i;
+	uint64_t numGroups = numSystemFrames/8;
+	
+	uint8_t *bitmap8 = frameBitmap;
+	for (i=(lowestFreeFrame>>3); i<(numGroups>>3); i++)
+	{
+		if (atomic_compare_and_swap8(&bitmap8[i], 0, 0xFF) == 0)
+		{
+			// just claimed the 8 frames at this location
+			return i << 3;
+		};
+	};
+	
+	panic("out of physical memory!");
+	return 0;
+};
+
+static uint64_t phmAlloc16()
+{
+	uint64_t i;
+	uint64_t numGroups = numSystemFrames/16;
+	
+	uint16_t *bitmap16 = (uint16_t*) frameBitmap;
+	for (i=(lowestFreeFrame>>4); i<(numGroups>>4); i++)
+	{
+		if (atomic_compare_and_swap16(&bitmap16[i], 0, 0xFFFF) == 0)
+		{
+			// just claimed the 16 frames at this location
+			return i << 4;
+		};
+	};
+	
+	panic("out of physical memory!");
+	return 0;
+};
+
+static uint64_t phmAlloc32()
+{
+	uint64_t i;
+	uint64_t numGroups = numSystemFrames/32;
+	
+	uint32_t *bitmap32 = (uint32_t*) frameBitmap;
+	for (i=(lowestFreeFrame>>5); i<(numGroups>>5); i++)
+	{
+		if (atomic_compare_and_swap32(&bitmap32[i], 0, 0xFFFFFFFF) == 0)
+		{
+			// just claimed the 32 frames at this location
+			return i << 5;
+		};
+	};
+
+	panic("out of physical memory!");
+	return 0;
+};
+
+static uint64_t phmAlloc64()
+{
+	uint64_t i;
+	uint64_t numGroups = numSystemFrames/64;
+	
+	uint64_t *bitmap64 = (uint64_t*) frameBitmap;
+	for (i=(lowestFreeFrame>>6); i<(numGroups>>6); i++)
+	{
+		if (atomic_compare_and_swap64(&bitmap64[i], 0, 0xFFFFFFFFFFFFFFFF) == 0)
+		{
+			// just claimed the 64 frames at this location
+			return i << 6;
+		};
+	};
+	
+	panic("out of physical memory!");
 	return 0;
 };
 
@@ -250,7 +299,6 @@ static void loadNextMemory()
 
 uint64_t phmAllocFrame()
 {
-	//kprintf_debug("phmAllocFrame called\n");
 	uint64_t out;
 	if (frameBitmap == NULL)
 	{
@@ -270,18 +318,10 @@ uint64_t phmAllocFrame()
 	}
 	else
 	{
-		out = phmAllocFrameEx(1, 0);
+		out = phmAllocSingle();
 	};
 	
-	//kprintf_debug("phmAllocFrame returning: %a\n", out);
 	return out;
-};
-
-void phmFreeFrame(uint64_t frame)
-{
-	spinlockAcquire(&physmemLock);
-	phmClearFrame(frame);
-	spinlockRelease(&physmemLock);
 };
 
 void phmFreeFrameEx(uint64_t start, uint64_t count)
@@ -298,7 +338,50 @@ uint64_t phmAllocZeroFrame()
 	uint64_t frame = phmAllocFrame();
 	ispLock();
 	ispSetFrame(frame);
-	memset(ispGetPointer(), 0, 0x1000);
+	//memset(ispGetPointer(), 0, 0x1000);
+	ispZero();
 	ispUnlock();
 	return frame;
+};
+
+uint64_t phmAllocFrameEx(uint64_t count, int flags)
+{
+	if (count == 0) return 0;
+	if (count == 1) return phmAllocSingle();
+	
+	uint64_t actuallyAllocated;
+	uint64_t base;
+	if (count > 64)
+	{
+		panic("attempted to allocate more than 64 consecutive frames (%d)\n", (int) count);
+	}
+	else if (count > 32)
+	{
+		actuallyAllocated = 64;
+		base = phmAlloc64();
+	}
+	else if (count > 16)
+	{
+		actuallyAllocated = 32;
+		base = phmAlloc32();
+	}
+	else if (count > 8)
+	{
+		actuallyAllocated = 16;
+		base = phmAlloc16();
+	}
+	else
+	{
+		actuallyAllocated = 8;
+		base = phmAlloc8();
+	};
+	
+	// free the unneeded frames
+	phmFreeFrameEx(base + count, actuallyAllocated - count);
+	return base;
+};
+
+void phmFreeFrame(uint64_t frame)
+{
+	phmClearFrame(frame);
 };

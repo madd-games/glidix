@@ -45,7 +45,7 @@
  * Uncomment to actually enable the cache.
  * Currently appears to be really buggy, e.g. different threads see different data.
  */
-//#define	SD_CACHE_ENABLE
+#define	SD_CACHE_ENABLE
 
 /**
  * Number of pages to cache per device.

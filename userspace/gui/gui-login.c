@@ -209,7 +209,7 @@ int logInCallback(void *ignore)
 				exit(1);
 			};
 
-			execl("/usr/bin/terminal", "terminal", NULL);
+			execl("/usr/libexec/sysbar", "sysbar", NULL);
 			exit(1);
 		};
 		

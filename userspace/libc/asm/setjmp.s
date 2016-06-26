@@ -4,7 +4,6 @@
 
 .type setjmp, @function
 setjmp:
-	// NOTE: The stack is preserved in the state that enables a direct 'ret'
 	mov	%rbx,		(%rdi)
 	mov	%rsp,		8(%rdi)
 	mov	%rbp,		16(%rdi)
@@ -12,6 +11,8 @@ setjmp:
 	mov	%r13,		32(%rdi)
 	mov	%r14,		40(%rdi)
 	mov	%r15,		48(%rdi)
+	mov	(%rsp),		%rax
+	mov	%rax,		56(%rdi)
 	xor	%rax,		%rax
 	ret
 .size setjmp, .-setjmp
@@ -30,9 +31,8 @@ __longjmp_ok:
 	mov	32(%rdi),	%r13
 	mov	40(%rdi),	%r14
 	mov	48(%rdi),	%r15
+	mov	56(%rdi),	%rcx
 	mov	%rsi,		%rax
-	
-	// remember that the value of RSP was set by setjmp() such that we can now just 'ret'
-	// and we'll be back in the right place
-	ret
+	add	%rsp,		8
+	jmp	%rcx
 .size longjmp, .-longjmp

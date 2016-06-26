@@ -80,11 +80,11 @@ typedef struct _LGIDeviceInterface
 	void (*setMode)(struct _LGIDeviceInterface *intf, LGIDisplayMode *mode);
 
 	/**
-	 * Draw the software console buffer to the screen. The buffer is always 80x25, in the VGA
+	 * Draw the software console buffer to the screen. The buffer is always in the VGA
 	 * format (but color may be ignored for the rendering). This must not call any memory allocation
 	 * functions etc, as it may be called during a panic.
 	 */
-	void (*renderConsole)(struct _LGIDeviceInterface *intf, const unsigned char *buffer);
+	void (*renderConsole)(struct _LGIDeviceInterface *intf, const unsigned char *buffer, int width, int height);
 	
 	/**
 	 * Swap a framebuffer to the screen.
@@ -108,6 +108,6 @@ int lgiKAddDevice(const char *name, LGIDeviceInterface *intf);
 /**
  * Called after a panic to display the console.
  */
-void lgiRenderConsole(const unsigned char *buffer);
+void lgiRenderConsole(const unsigned char *buffer, int width, int height);
 
 #endif

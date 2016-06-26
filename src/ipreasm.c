@@ -96,16 +96,18 @@ static void ipreasmThread(void *ignore)
 		
 		if (firstFragList == NULL)
 		{
-			ASM("cli");
-			reasmHandle->wakeTime = 0;
-			//reasmHandle->flags |= THREAD_WAITING;
+			cli();
+			lockSched();
 			waitThread(reasmHandle);
+			spinlockRelease(&reasmLock);
+			unlockSched();
 			kyield();
+			
+			spinlockAcquire(&reasmLock);
 		};
 		
 		IPFragmentList *list = firstFragList;
 		int earliestDeadline = firstFragList->deadlineTicks;
-		reasmHandle->wakeTime = 0;
 		
 		while (list != NULL)
 		{
@@ -216,12 +218,34 @@ static void ipreasmThread(void *ignore)
 			};
 		};
 		
-		ASM("cli");
-		reasmHandle->wakeTime = earliestDeadline;
-		//reasmHandle->flags |= THREAD_WAITING;
-		waitThread(reasmHandle);
+		//cli();
+		//lockSched();
+		//reasmHandle->wakeTime = earliestDeadline;
+		//waitThread(reasmHandle);
+		//spinlockRelease(&reasmLock);
+		//kyield();
+		
+		TimedEvent ev;
+		cli();
+		lockSched();
 		spinlockRelease(&reasmLock);
-		kyield();
+
+		uint64_t nanoThen = (uint64_t)earliestDeadline * (uint64_t)1000000;
+		timedPost(&ev, nanoThen);
+		
+		if (getNanotime() <= nanoThen)
+		{
+			waitThread(getCurrentThread());
+			unlockSched();
+			kyield();
+			
+			cli();
+			lockSched();
+		};
+		
+		timedCancel(&ev);
+		unlockSched();
+		sti();
 	};
 };
 

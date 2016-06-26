@@ -53,6 +53,11 @@
 #include <glidix/shmem.h>
 #include <glidix/catch.h>
 
+/**
+ * Options for _glidix_kopt().
+ */
+#define	_GLIDIX_KOPT_GFXTERM		0		/* whether the graphics terminal is enabled */
+
 int memcpy_u2k(void *dst_, const void *src_, size_t size)
 {
 	// user to kernel: src is in userspace
@@ -265,7 +270,7 @@ uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
 };
 
 ssize_t sys_read(int fd, void *buf, size_t size)
-{	
+{
 	ssize_t out;
 	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
 	{
@@ -2138,14 +2143,14 @@ unsigned sys_sleep(unsigned seconds)
 {
 	if (seconds == 0) return 0;
 
-	ASM("cli");
-	uint64_t sleepStart = (uint64_t) getTicks();
-	uint64_t wakeTime = ((uint64_t) getTicks() + (uint64_t) seconds * (uint64_t) 1000);
-	getCurrentThread()->wakeTime = wakeTime;
+	//cli();
+	//uint64_t sleepStart = (uint64_t) getTicks();
+	//uint64_t wakeTime = ((uint64_t) getTicks() + (uint64_t) seconds * (uint64_t) 1000);
+	//getCurrentThread()->wakeTime = wakeTime;
 	//getCurrentThread()->flags |= THREAD_WAITING;
-	waitThread(getCurrentThread());
-	kyield();
-
+	//waitThread(getCurrentThread());
+	//kyield();
+#if 0
 	uint64_t timeDelta = (uint64_t) getTicks() - sleepStart;
 	unsigned secondsSlept = (unsigned) timeDelta / 1000;
 
@@ -2157,6 +2162,41 @@ unsigned sys_sleep(unsigned seconds)
 	{
 		return seconds-secondsSlept;
 	};
+#endif
+
+	cli();
+	lockSched();
+	
+	uint64_t sleepStart = getNanotime();
+	uint64_t wakeTime = sleepStart + seconds * NANO_PER_SEC;
+	
+	TimedEvent ev;
+	timedPost(&ev, wakeTime);
+	
+	while (getNanotime() <= wakeTime)
+	{
+		waitThread(getCurrentThread());
+		unlockSched();
+		kyield();
+		
+		cli();
+		lockSched();
+		if (wasSignalled()) break;
+	};
+	
+	
+	unlockSched();
+	sti();
+	
+	uint64_t now = getNanotime();
+	if (now > wakeTime)
+	{
+		return 0;
+	};
+	
+	uint64_t timeLeft = wakeTime - now;
+	unsigned secondsLeft = (unsigned) (timeLeft / NANO_PER_SEC) + 1;
+	return secondsLeft;
 };
 
 int sys_utime(const char *upath, time_t atime, time_t mtime)
@@ -2825,6 +2865,12 @@ int sys_store_and_sleep(uint8_t *ptr, uint8_t value)
 	cli();
 	lockSched();
 	
+	waitThread(getCurrentThread());
+	unlockSched();
+	
+	// interrupts are still disabled, so we can't be preempted before doing the store,
+	// even if another CPU has already woken us up, and since the scheduler is unlocked,
+	// we can safely access userland memory.
 	if (catch() == 0)
 	{
 		*ptr = value;
@@ -2832,15 +2878,11 @@ int sys_store_and_sleep(uint8_t *ptr, uint8_t value)
 	}
 	else
 	{
-		unlockSched();
 		sti();
 		return EFAULT;
 	};
 	
-	waitThread(getCurrentThread());
-	unlockSched();
 	kyield();
-	
 	return 0;
 };
 
@@ -3632,10 +3674,131 @@ int sys_pthread_kill(int thid, int sig)
 	return signalThid(thid, sig);
 };
 
+int sys_kopt(int option, int value)
+{
+	// only root is allowed to change kernel options
+	if (getCurrentThread()->creds->euid != 0)
+	{
+		ERRNO = EPERM;
+		return -1;
+	};
+	
+	if (option == _GLIDIX_KOPT_GFXTERM)
+	{
+		setGfxTerm(value);
+		return 0;
+	}
+	else
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+};
+
+int sys_sigwait(uint64_t set, siginfo_t *infoOut, uint64_t nanotimeout)
+{
+	uint64_t deadline = getNanotime() + nanotimeout;
+	if (nanotimeout == 0xFFFFFFFFFFFFFFFF)
+	{
+		deadline = 0;
+	};
+	
+	// never wait for certain signals
+	set &= ~((1UL << SIGKILL) | (1UL << SIGSTOP) | (1UL << SIGTHKILL) | (1UL << SIGTHWAKE));
+	
+	cli();
+	lockSched();
+	
+	TimedEvent ev;
+	timedPost(&ev, deadline);
+	
+	Thread *me = getCurrentThread();
+	
+	while (1)
+	{
+		int i;
+		for (i=0; i<64; i++)
+		{
+			if (me->pendingSet & (1UL << i))
+			{
+				uint64_t sigbit = (1UL << me->pendingSigs[i].si_signo);
+				if (set & sigbit)
+				{
+					// one of the signals we are waiting for is pending!
+					timedCancel(&ev);
+					siginfo_t si;
+					memcpy(&si, &me->pendingSigs[i].si_signo, sizeof(siginfo_t));
+					me->pendingSet &= ~(1UL << i);
+					unlockSched();
+					sti();
+					
+					if (infoOut != NULL)
+					{
+						if (memcpy_k2u(infoOut, &si, sizeof(siginfo_t)) != 0)
+						{
+							return EFAULT;
+						};
+					};
+					
+					return 0;
+				};
+				
+				if (((me->sigmask & sigbit) == 0) || isUnblockableSig(me->pendingSigs[i].si_signo))
+				{
+					// we're not waiting for it, and it's not blocked, so we were interrupted
+					timedCancel(&ev);
+					unlockSched();
+					sti();
+					
+					return EINTR;
+				};
+			};
+		};
+		
+		if ((getNanotime() >= deadline) && (deadline != 0))
+		{
+			timedCancel(&ev);
+			unlockSched();
+			sti();
+			
+			return EAGAIN;
+		};
+		
+		unlockSched();
+		kyield();
+		
+		cli();
+		lockSched();
+	};
+};
+
+/**
+ * NOTE: This is called _glidix_sigsuspend() in userspace because it takes the set
+ * as a direct argument instead of a pointer, to avoid the hassle of a user-to-kernel
+ * copy.
+ */
+int sys_sigsuspend(uint64_t mask)
+{
+	uint64_t oldmask = atomic_swap64(&getCurrentThread()->sigmask, mask);
+	
+	while (!wasSignalled())
+	{
+		cli();
+		lockSched();
+		waitThread(getCurrentThread());
+		unlockSched();
+		sti();
+	};
+	
+	getCurrentThread()->sigmask = oldmask;
+	ERRNO = EINTR;
+	return -1;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 120
+#define SYSCALL_NUMBER 122
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3757,6 +3920,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_pthread_join,			// 117
 	&sys_pthread_detach,			// 118
 	&sys_pthread_kill,			// 119
+	&sys_kopt,				// 120
+	&sys_sigwait,				// 121
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

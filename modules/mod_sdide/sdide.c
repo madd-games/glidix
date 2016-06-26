@@ -310,8 +310,6 @@ static void atapiThread(void *data)
 		}
 		else if (sdcmd->type == SD_CMD_GET_SIZE)
 		{
-			kprintf_debug("sdide: ATAPI device asked for size\n");
-
 			uint32_t channel = idev->channel;
 			uint32_t slavebit = idev->drive;
 			int k;
@@ -433,7 +431,7 @@ static void ideInit(uint32_t *bars)
 	{
 		for (j=0; j<2; j++)
 		{
-			kprintf("loop %d, %d\n", i, j);
+			//kprintf("loop %d, %d\n", i, j);
 			uint8_t err = 0, type = IDE_ATA, status;
 			ctrl->devices[count].exists = 0;
 

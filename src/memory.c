@@ -332,6 +332,11 @@ void *_kxmalloc(size_t size, int flags, const char *aid, int lineno)
 			placement &= ~0xFFF;
 			placement += 0x1000;
 		};
+	}
+	else
+	{
+		// 16-byte alignment
+		placement = (placement+1) & ~0xF;
 	};
 
 	void *ret = (void*) placement;

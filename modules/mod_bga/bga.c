@@ -473,7 +473,7 @@ static void expandBitmap(uint32_t *framebuffer, int x, int y, const char *bmp)
 	};
 };
 
-static void bga_renderConsole(LGIDeviceInterface *intf, const unsigned char *buffer)
+static void bga_renderConsole(LGIDeviceInterface *intf, const unsigned char *buffer, int width, int height)
 {
 	bgaBufferSize = (size_t)(bgaWidth * bgaHeight * 4);
 	uint32_t *framebuffer = (uint32_t*) mapPhysMemory(bgaBaseFrame*0x1000, bgaWidth * bgaHeight * 4);
@@ -481,11 +481,11 @@ static void bga_renderConsole(LGIDeviceInterface *intf, const unsigned char *buf
 	memset(framebuffer, 0, bgaWidth * bgaHeight * 4);
 	
 	int x, y;
-	for (x=0; x<80; x++)
+	for (x=0; x<width; x++)
 	{
-		for (y=0; y<25; y++)
+		for (y=0; y<height; y++)
 		{
-			unsigned int index = (unsigned int) buffer[2 * (y * 80 + x)];
+			unsigned int index = (unsigned int) buffer[2 * (y * width + x)];
 			const char *bmp = &font[index * 16];
 			expandBitmap(framebuffer, x*9, y*16, bmp);
 		};

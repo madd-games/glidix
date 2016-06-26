@@ -182,11 +182,18 @@ typedef struct
 /**
  * Open file description.
  */
+#define	GXFS_PREFETCH_MAX		0x1000
 typedef struct
 {
 	GXFileSystem*			gxfs;
 	GXInode				gxino;
 	int				dirty;
+	
+	// prefetched area
+	uint8_t				buffer[GXFS_PREFETCH_MAX];
+	size_t				bufferSize;
+	off_t				bufferOffset;
+	int				bufferDirty;
 } GXFile;
 
 ino_t GXCreateInode(GXFileSystem *gxfs, GXInode *gxino, ino_t closeTo);

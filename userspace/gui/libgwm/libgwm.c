@@ -61,10 +61,10 @@ typedef struct EventBuffer_
 	GWMEvent			payload;
 } EventBuffer;
 
-static pthread_spinlock_t waiterLock;
+static pthread_mutex_t waiterLock;
 static GWMWaiter* waiters = NULL;
 static int eventCounterFD;
-static pthread_spinlock_t eventLock;
+static pthread_mutex_t eventLock;
 static EventBuffer *firstEvent;
 static EventBuffer *lastEvent;
 static GWMHandlerInfo *firstHandler = NULL;
@@ -80,16 +80,16 @@ static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 	pthread_spin_unlock(&waiter->lock);
 	pthread_spin_lock(&waiter->lock);
 	
-	pthread_spin_lock(&waiterLock);
+	pthread_mutex_lock(&waiterLock);
 	if (_glidix_mqsend(queueFD, guiPid, guiFD, cmd, sizeof(GWMCommand)) != 0)
 	{
-		pthread_spin_unlock(&waiterLock);
+		pthread_mutex_unlock(&waiterLock);
 		perror("_glidix_mqsend");
 	};
 	waiter->next = waiters;
 	waiter->prev = NULL;
 	waiters = waiter;
-	pthread_spin_unlock(&waiterLock);
+	pthread_mutex_unlock(&waiterLock);
 	
 	// wait for response
 	pthread_spin_lock(&waiter->lock);
@@ -131,7 +131,7 @@ static void* listenThreadFunc(void *ignore)
 			GWMMessage *msg = (GWMMessage*) msgbuf;
 			if (msg->generic.seq != 0)
 			{
-				pthread_spin_lock(&waiterLock);
+				pthread_mutex_lock(&waiterLock);
 				GWMWaiter *waiter;
 				for (waiter=waiters; waiter!=NULL; waiter=waiter->next)
 				{
@@ -145,14 +145,14 @@ static void* listenThreadFunc(void *ignore)
 						break;
 					};
 				};
-				pthread_spin_unlock(&waiterLock);
+				pthread_mutex_unlock(&waiterLock);
 			}
 			else if (msg->generic.type == GWM_MSG_EVENT)
 			{
 				EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
 				memcpy(&buf->payload, &msg->event.payload, sizeof(GWMEvent));
 				
-				pthread_spin_lock(&eventLock);
+				pthread_mutex_lock(&eventLock);
 				if (firstEvent == NULL)
 				{
 					buf->prev = buf->next = NULL;
@@ -165,7 +165,7 @@ static void* listenThreadFunc(void *ignore)
 					lastEvent->next = buf;
 					lastEvent = buf;
 				};
-				pthread_spin_unlock(&eventLock);
+				pthread_mutex_unlock(&eventLock);
 				int one = 1;
 				ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
 			};
@@ -188,6 +188,9 @@ int gwmInit()
 	nextWindowID = 1;
 	nextSeq = 1;
 	eventCounterFD = _glidix_thsync(1, 0);	// semaphore, start at zero
+	
+	pthread_mutex_init(&waiterLock, NULL);
+	pthread_mutex_init(&eventLock, NULL);
 	
 	if (pthread_create(&listenThread, NULL, listenThreadFunc, NULL) != 0)
 	{
@@ -296,11 +299,11 @@ void gwmWaitEvent(GWMEvent *ev)
 	int one = 1;
 	while (ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_WAIT, &one) == -1);
 
-	pthread_spin_lock(&eventLock);
+	pthread_mutex_lock(&eventLock);
 	memcpy(ev, &firstEvent->payload, sizeof(GWMEvent));
 	firstEvent = firstEvent->next;
 	if (firstEvent != NULL) firstEvent->prev = NULL;
-	pthread_spin_unlock(&eventLock);
+	pthread_mutex_unlock(&eventLock);
 };
 
 void gwmClearWindow(GWMWindow *win)
@@ -326,7 +329,7 @@ void gwmPostUpdate(GWMWindow *win)
 		buf->payload.win = win->id;
 	};
 	
-	pthread_spin_lock(&eventLock);
+	pthread_mutex_lock(&eventLock);
 	if (firstEvent == NULL)
 	{
 		buf->prev = buf->next = NULL;
@@ -339,7 +342,7 @@ void gwmPostUpdate(GWMWindow *win)
 		lastEvent->next = buf;
 		lastEvent = buf;
 	};
-	pthread_spin_unlock(&eventLock);
+	pthread_mutex_unlock(&eventLock);
 	int one = 1;
 	ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
 };

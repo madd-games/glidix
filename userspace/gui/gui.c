@@ -40,6 +40,9 @@
 #include <sys/glidix.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
+#include <semaphore.h>
+#include <time.h>
+#include <errno.h>
 #include "gui.h"
 
 #define	GUI_WINDOW_BORDER				2
@@ -133,6 +136,7 @@ DDISurface *screen;
 DDISurface *frontBuffer;
 DDISurface *defWinIcon;
 DDISurface *winButtons;
+DDISurface *winCap;
 
 unsigned int screenWidth, screenHeight;
 int mouseX, mouseY;
@@ -143,9 +147,12 @@ pthread_t redrawThread;
 pthread_t msgThread;
 
 DDIColor winBackColor = {0xDD, 0xDD, 0xDD, 0xFF};		// window background color
-DDIColor winDecoColor = {0x00, 0xAA, 0x00, 0xFF};		// window decoration color
-DDIColor winUnfocColor = {0x55, 0x55, 0x55, 0xFF};		// unfocused window decoration color
+DDIColor winDecoColor = {0x00, 0xAA, 0x00, 0xB2};		// window decoration color
+DDIColor winUnfocColor = {0x55, 0x55, 0x55, 0xB2};		// unfocused window decoration color
 DDIColor winCaptionColor = {0xFF, 0xFF, 0xFF, 0xFF};		// window caption (text) color
+
+DDISurface *winDeco;
+DDISurface *winUnfoc;
 
 typedef struct Window_
 {
@@ -156,6 +163,8 @@ typedef struct Window_
 	GWMWindowParams				params;
 	DDISurface*				clientArea;
 	DDISurface*				icon;
+	DDISurface*				titleBar;
+	int					titleBarDirty;
 	uint64_t				id;
 	int					pid;
 	int					fd;
@@ -180,14 +189,6 @@ static Cursor cursors[GWM_CURSOR_COUNT] = {
 	{NULL, 7, 7, "/usr/share/images/txtcursor.png"}
 };
 
-// TEMPORARY CANCER
-int _glidix_condwait(uint8_t *cond, uint8_t *lock)
-{
-	// just busy-wait on the spinlock
-	pthread_spin_lock((pthread_spinlock_t*)cond);
-	return 0;
-};
-
 /**
  * The currently focused window. All its ancestors are considered focused too.
  */
@@ -208,7 +209,10 @@ int movingOffY;
  */
 Window *hoveringWindow = NULL;
 
-pthread_spinlock_t redrawSignal;
+/**
+ * The semaphore counting the number of redraws to be made.
+ */
+sem_t semRedraw;
 
 /**
  * The file descriptor representing the message queue.
@@ -247,28 +251,88 @@ void PaintWindows(Window *win, DDISurface *target)
 			{
 				if ((win->params.flags & GWM_WINDOW_NODECORATE) == 0)
 				{
+#if 0
 					DDIColor *color = &winUnfocColor;
 					if (isWindowFocused(win))
 					{
 						color = &winDecoColor;
 					};
+
+					DDISurface *temp = ddiCreateSurface(&target->format,
+						win->params.width+2*GUI_WINDOW_BORDER, win->params.height+2*GUI_WINDOW_BORDER,
+						NULL, 0);
 					
-					ddiFillRect(target, win->params.x, win->params.y,
+					ddiFillRect(temp, 0, 0,
 						win->params.width+2*GUI_WINDOW_BORDER,
-						win->params.height+2*GUI_WINDOW_BORDER+GUI_CAPTION_HEIGHT,
+						win->params.height+2*GUI_WINDOW_BORDER,
 						color);
-					ddiBlit(win->icon, 0, 0, target, win->params.x+2, win->params.y+2, 16, 16);
 
-					ddiDrawText(target, win->params.x+20, win->params.y+6, win->params.caption,
-						&winCaptionColor, NULL);
-
-#if 0
-					DDIPen *pen = ddiCreatePen(target, win->params.x+20, win->params.y+6, win->params.width -68, GUI_CAPTION_HEIGHT, 0, 0, NULL);
-					ddiSetPenColor(pen, &winCaptionColor);
-					ddiWritePen(pen, win->params.caption);
-					ddiExecutePen(pen);
-					ddiDeletePen(pen);
+					ddiBlit(temp, 0, 0, target, win->params.x, win->params.y+GUI_CAPTION_HEIGHT,
+						win->params.width+2*GUI_WINDOW_BORDER,
+						win->params.height+2*GUI_WINDOW_BORDER);
+					
+					ddiDeleteSurface(temp);
 #endif
+
+					DDISurface *borderSurface = winUnfoc;
+					if (isWindowFocused(win))
+					{
+						borderSurface = winDeco;
+					};
+					
+					ddiBlit(borderSurface, 0, 0, target, win->params.x, win->params.y+GUI_CAPTION_HEIGHT,
+						win->params.width+2*GUI_WINDOW_BORDER,
+						win->params.height+2*GUI_WINDOW_BORDER);
+
+					// the caption graphic
+					int yoff = 0;
+					if (!isWindowFocused(win))
+					{
+						yoff = GUI_CAPTION_HEIGHT;
+					};
+
+					ddiBlit(winCap, 0, yoff, target, win->params.x, win->params.y,
+						winCap->width/2, GUI_CAPTION_HEIGHT);
+					int end = win->params.width + 2*GUI_WINDOW_BORDER - winCap->width/2;
+					ddiBlit(winCap, winCap->width/2+1, yoff, target, win->params.x+end, win->params.y,
+						winCap->width/2, GUI_CAPTION_HEIGHT);
+					
+					int xoff;
+					for (xoff=winCap->width/2; xoff<end; xoff++)
+					{
+						ddiBlit(winCap, winCap->width/2, yoff, target, win->params.x+xoff, win->params.y,
+							1, GUI_CAPTION_HEIGHT);
+					};
+
+					if (win->titleBarDirty)
+					{
+						win->titleBarDirty = 0;
+						DDIColor col = {0, 0, 0, 0};
+						ddiFillRect(win->titleBar, 0, 0, win->params.width+2*GUI_WINDOW_BORDER,
+							GUI_CAPTION_HEIGHT, &col);
+						
+						const char *penError;
+						DDIPen *pen = ddiCreatePen(win->titleBar, 20, 3,
+							win->params.width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT,
+							0, 0, &penError);
+						if (pen == NULL)
+						{
+							printf("cannot create pen: %s\n", penError);
+						}
+						else
+						{
+							ddiSetPenFont(pen, "DejaVu Sans", 12, DDI_STYLE_BOLD, NULL);
+							ddiSetPenColor(pen, &winCaptionColor);
+							ddiWritePen(pen, win->params.caption);
+							ddiExecutePen(pen);
+							ddiDeletePen(pen);
+						};
+					};
+					
+					ddiBlit(win->titleBar, 0, 0, target, win->params.x, win->params.y,
+						win->params.width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT);
+
+					ddiBlit(win->icon, 0, 0, target, win->params.x+2, win->params.y+2, 16, 16);
 
 					int btnIndex = ((mouseX - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/16;
 					if ((mouseY < (int)win->params.y+GUI_WINDOW_BORDER) || (mouseY > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
@@ -382,6 +446,7 @@ void DeleteWindow(Window *win)
 	};
 	
 	ddiDeleteSurface(win->clientArea);
+	ddiDeleteSurface(win->titleBar);
 	free(win);
 };
 
@@ -450,6 +515,8 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	
 	win->clientArea = ddiCreateSurface(&screen->format, pars->width, pars->height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
 	ddiFillRect(win->clientArea, 0, 0, pars->width, pars->height, &winBackColor);
+	win->titleBar = ddiCreateSurface(&screen->format, pars->width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT, NULL, 0);
+	win->titleBarDirty = 1;
 	win->icon = defWinIcon;
 	win->id = myID;
 	win->pid = pid;
@@ -493,7 +560,7 @@ void PaintDesktop()
 	pthread_mutex_lock(&windowLock);
 	PaintWindows(desktopWindows, screen);
 	pthread_mutex_unlock(&windowLock);
-	
+
 	pthread_mutex_lock(&mouseLock);
 	int cursorIndex = 0;
 	if (hoveringWindow != NULL)
@@ -797,6 +864,7 @@ void onInputEvent(int ev, int scancode)
 
 void onMouseMoved()
 {
+	//clock_t start = clock();
 	int x, y;
 	pthread_mutex_lock(&mouseLock);
 	x = mouseX;
@@ -847,6 +915,8 @@ void onMouseMoved()
 	};
 	
 	pthread_mutex_unlock(&windowLock);
+	//clock_t end = clock();
+	//printf("mouse ticks: %d\n", (int)(end-start));
 };
 
 void ClipMouse()
@@ -878,7 +948,11 @@ void *inputThreadFunc(void *ignore)
 		
 		if (ev.type == HUMIN_EV_MOTION_RELATIVE)
 		{
-			pthread_mutex_lock(&mouseLock);
+			if (pthread_mutex_trylock(&mouseLock) != 0)
+			{
+				// too much contention
+				continue;
+			};
 			mouseX += ev.motion.x;
 			mouseY += ev.motion.y;
 			ClipMouse();
@@ -927,8 +1001,7 @@ void *inputThreadFunc(void *ignore)
 		
 		if (screenDirty)
 		{
-			pthread_spin_unlock(&redrawSignal);
-			pthread_kill(redrawThread, SIGCONT);
+			sem_post(&semRedraw);
 		};
 	};
 	
@@ -947,6 +1020,8 @@ void *msgThreadFunc(void *ignore)
 		return NULL;
 	};
 
+	printf("GUI: %d.%d\n", getpid(), guiQueue);
+	
 	FILE *fp = fopen("/usr/share/gui.pid", "wb");
 	fprintf(fp, "%d.%d", getpid(), guiQueue);
 	fclose(fp);
@@ -969,6 +1044,7 @@ void *msgThreadFunc(void *ignore)
 			};
 		
 			GWMCommand *cmd = (GWMCommand*) msgbuf;
+			
 			if (cmd->cmd == GWM_CMD_CREATE_WINDOW)
 			{
 				pthread_mutex_lock(&windowLock);
@@ -997,21 +1073,18 @@ void *msgThreadFunc(void *ignore)
 				};
 				pthread_mutex_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
-				pthread_spin_unlock(&redrawSignal);
-				pthread_kill(redrawThread, SIGCONT);
+				sem_post(&semRedraw);
 			}
 			else if (cmd->cmd == GWM_CMD_POST_DIRTY)
 			{
-				pthread_spin_unlock(&redrawSignal);
-				pthread_kill(redrawThread, SIGCONT);
+				sem_post(&semRedraw);
 			}
 			else if (cmd->cmd == GWM_CMD_DESTROY_WINDOW)
 			{
 				pthread_mutex_lock(&windowLock);
 				DeleteWindowByID(cmd->destroyWindow.id, info.pid, info.fd);
 				pthread_mutex_unlock(&windowLock);
-				pthread_spin_unlock(&redrawSignal);
-				pthread_kill(redrawThread, SIGCONT);
+				sem_post(&semRedraw);
 			}
 			else if (cmd->cmd == GWM_CMD_CLEAR_WINDOW)
 			{
@@ -1062,8 +1135,7 @@ void *msgThreadFunc(void *ignore)
 				
 				pthread_mutex_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
-				pthread_spin_unlock(&redrawSignal);
-				pthread_kill(redrawThread, SIGCONT);
+				sem_post(&semRedraw);
 			}
 			else if (cmd->cmd == GWM_CMD_SET_CURSOR)
 			{
@@ -1086,8 +1158,7 @@ void *msgThreadFunc(void *ignore)
 				
 				pthread_mutex_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
-				pthread_spin_unlock(&redrawSignal);
-				pthread_kill(redrawThread, SIGCONT);
+				sem_post(&semRedraw);
 			};
 		}
 		else if (info.type == _GLIDIX_MQ_HANGUP)
@@ -1095,21 +1166,87 @@ void *msgThreadFunc(void *ignore)
 			pthread_mutex_lock(&windowLock);
 			DeleteWindowsOf(info.pid, info.fd);
 			pthread_mutex_unlock(&windowLock);
-			pthread_spin_unlock(&redrawSignal);
-			pthread_kill(redrawThread, SIGCONT);
+			sem_post(&semRedraw);
 		};
 	};
 };
 
-int main()
+int strStartsWith(const char *str, const char *prefix)
 {
+	if (strlen(str) < strlen(prefix))
+	{
+		return 0;
+	};
+	
+	return memcmp(str, prefix, strlen(prefix)) == 0;
+};
+
+int main(int argc, char *argv[])
+{
+	const char *displayDevice = NULL;
+	int modeSelected = -1;
+	
+	int i;
+	for (i=1; i<argc; i++)
+	{
+		if (strStartsWith(argv[i], "--display="))
+		{
+			if (strlen(argv[i]) < 11)
+			{
+				fprintf(stderr, "The --display option expects a parameter\n");
+				return 1;
+			};
+			
+			displayDevice = &argv[i][10];
+		}
+		else if (strStartsWith(argv[i], "--mode="))
+		{
+			if (sscanf(&argv[i][7], "%d", &modeSelected) != 1)
+			{
+				fprintf(stderr, "The --mode option expects a number\n");
+				return 1;
+			};
+			
+			if (modeSelected < 0)
+			{
+				fprintf(stderr, "The --mode option expects a positive number\n");
+				return 1;
+			};
+		}
+		else if (strcmp(argv[i], "--usage") == 0)
+		{
+			fprintf(stderr, "USAGE:\t%s --display=<filename> --mode=<mode-number>\n", argv[0]);
+			fprintf(stderr, "\tStarts the window manager on the specified display\n");
+			fprintf(stderr, "\tdevice and in the given video mode.\n");
+			return 1;
+		}
+		else
+		{
+			fprintf(stderr, "Unknown command-line parameter: %s\n", argv[i]);
+			return 1;
+		};
+	};
+	
+	if (geteuid() != 0)
+	{
+		fprintf(stderr, "You need to be root to start the window manager\n");
+		return 1;
+	};
+	
+	if (displayDevice == NULL)
+	{
+		fprintf(stderr, "Please specify a display device using the --display option\n");
+		return 1;
+	};
+	
 	pthread_mutex_init(&windowLock, NULL);
 	pthread_mutex_init(&mouseLock, NULL);
+	sem_init(&semRedraw, 0, 0);
 	
-	int fd = open("/dev/bga", O_RDWR);
+	int fd = open(displayDevice, O_RDWR);
 	if (fd == -1)
 	{
-		perror("failed to open /dev/bga");
+		fprintf(stderr, "Cannot open display device '%s': %s\n", displayDevice, strerror(errno));
 		return 1;
 	};
 
@@ -1123,18 +1260,11 @@ int main()
 		return 1;
 	};
 
-	printf("this device supports %d display modes\n", dstat.numModes);
-	printf("#\tRes\n");
-	for (mode.index=0; mode.index<dstat.numModes; mode.index++)
+	if (modeSelected == -1)
 	{
-		ioctl(fd, IOCTL_VIDEO_MODSTAT, &mode);
-		printf("%d\t%dx%d\n", (int)mode.index, (int)mode.width, (int)mode.height);
+		modeSelected = dstat.numModes - 1;
 	};
-
-	printf("Select video mode: ");
-	fflush(stdout);
-	int modeSelected;
-	fscanf(stdin, "%d", &modeSelected);
+	
 	mode.index = modeSelected;
 	ioctl(fd, IOCTL_VIDEO_MODSTAT, &mode);
 
@@ -1152,6 +1282,8 @@ int main()
 		return 1;
 	};
 
+	_glidix_kopt(_GLIDIX_KOPT_GFXTERM, 0);
+	
 	screenFormat.bpp = 4;
 	screenFormat.redMask = 0xFF0000;
 	screenFormat.greenMask = 0x00FF00;
@@ -1169,7 +1301,7 @@ int main()
 	DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};
 	ddiDrawText(frontBuffer, 5, 5, "GUI loading, please wait...", &white, NULL);
 
-	DDIColor backgroundColor = {0x20, 0x20, 0xF0, 0xFF};
+	DDIColor backgroundColor = {0, 0, 0xDD, 0xFF};
 	const char *errmsg;
 	desktopBackground = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/wallpaper.png", &errmsg);
 	if (desktopBackground == NULL)
@@ -1182,7 +1314,6 @@ int main()
 	// initialize mouse cursor
 	DDIColor mouseColor = {0xEE, 0xEE, 0xEE, 0xFF};
 
-	int i;
 	for (i=0; i<GWM_CURSOR_COUNT; i++)
 	{
 		cursors[i].image = ddiLoadAndConvertPNG(&screenFormat, cursors[i].src, NULL);
@@ -1211,6 +1342,19 @@ int main()
 		ddiFillRect(winButtons, 0, 0, 48, 64, &mouseColor);
 	};
 
+	winCap = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/wincap.png", NULL);
+	if (winCap == NULL)
+	{
+		winCap = ddiCreateSurface(&screenFormat, 3, GUI_CAPTION_HEIGHT, NULL, 0);
+		ddiFillRect(winButtons, 0, 0, 3, GUI_CAPTION_HEIGHT, &winDecoColor);
+	};
+	
+	// for window borders
+	winDeco = ddiCreateSurface(&screenFormat, screenWidth, screenHeight, NULL, 0);
+	ddiFillRect(winDeco, 0, 0, screenWidth, screenHeight, &winDecoColor);
+	winUnfoc = ddiCreateSurface(&screenFormat, screenWidth, screenHeight, NULL, 0);
+	ddiFillRect(winUnfoc, 0, 0, screenWidth, screenHeight, &winUnfocColor);
+	
 	unlink("/usr/share/gui.pid");
 	if (pthread_create(&inputThread, NULL, inputThreadFunc, NULL) != 0)
 	{
@@ -1244,11 +1388,22 @@ int main()
 	};
 
 	redrawThread = pthread_self();
-	uint8_t ignoreByte;
 	while (1)
 	{
+		//clock_t start = clock();
 		PaintDesktop();
-		while (_glidix_condwait(&redrawSignal, &ignoreByte) != 0);
+		//clock_t end = clock();
+		
+		//printf("render ticks: %d\n", (int)(end-start));
+		while (sem_wait(&semRedraw) != 0);
+		
+		// ignore multiple simultaneous redraw requests
+		int val;
+		sem_getvalue(&semRedraw, &val);
+		while ((val--) > 0)
+		{
+			sem_wait(&semRedraw);
+		};
 	};
 	
 	return 0;

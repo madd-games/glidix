@@ -323,5 +323,6 @@ _tss_reload_access:
 	stosb
 	ret
 
+section .rodata
 [global _bootstrap_stack]
 _bootstrap_stack resq 0x4000

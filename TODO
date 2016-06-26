@@ -3,3 +3,4 @@
    modules.
  * Handle all CPU exceptions such as #GP.
  * BSS in modules doesn't get zeroed?
+ * Thread-temporary mappings (MAP_THREAD); and make sure that thread stacks are allocated using this method.

@@ -74,16 +74,26 @@ void sleep(int ticks)
 	else
 	{
 		int then = getUptime() + ticks;
-		while (getUptime() < then)
+		uint64_t nanoThen = (uint64_t)then * (uint64_t)1000000;
+
+		cli();
+		lockSched();
+		TimedEvent ev;
+		timedPost(&ev, nanoThen);
+		
+		while (getNanotime() <= nanoThen)
 		{
-			cli();
-			lockSched();
-			getCurrentThread()->wakeTime = then;
-			//getCurrentThread()->flags |= THREAD_WAITING;
 			waitThread(getCurrentThread());
 			unlockSched();
 			kyield();
+			
+			cli();
+			lockSched();
 		};
+		
+		timedCancel(&ev);
+		unlockSched();
+		sti();
 	};
 };
 
@@ -186,12 +196,86 @@ void initRTC()
 	CreateKernelThread(rtcThread, &rtcPars, NULL);
 };
 
-void handleTodos()
-{
-};
-
 uint64_t getNanotime()
 {
 	uint64_t out = (uint64_t) getUptime();
 	return out * (uint64_t)1000000;		// 10^6 nanoseconds in a milliseond because 10^9 in a second
+};
+
+static TimedEvent *timedEvents = NULL;
+void timedPost(TimedEvent *ev, uint64_t nanotime)
+{
+	ev->nanotime = nanotime;
+	ev->thread = getCurrentThread();
+	
+	if (nanotime == 0)
+	{
+		ev->prev = ev->next = NULL;
+		return;
+	};
+	
+	if (timedEvents == NULL)
+	{
+		ev->prev = ev->next = NULL;
+		timedEvents = ev;
+	}
+	else
+	{
+		if (nanotime <= timedEvents->nanotime)
+		{
+			ev->prev = timedEvents;
+			ev->next = timedEvents->next;
+			timedEvents = ev;
+			return;
+		};
+		
+		TimedEvent *scan = timedEvents;
+		while (1)
+		{
+			if (scan->next == NULL)
+			{
+				ev->prev = scan;
+				ev->next = NULL;
+				scan->next = ev;
+			}
+			else
+			{
+				if ((scan->nanotime >= nanotime) && (scan->next->nanotime <= nanotime))
+				{
+					ev->next = scan->next;
+					ev->prev = scan;
+					scan->next->prev = ev;
+					scan->next = ev;
+					return;
+				};
+			};
+		};
+	};
+};
+
+void timedCancel(TimedEvent *ev)
+{
+	if (timedEvents == ev) timedEvents = ev->next;
+	if (ev->prev != NULL) ev->prev->next = ev->next;
+	if (ev->next != NULL) ev->next->prev = ev->prev;
+};
+
+void onTick()
+{
+	lockSched();
+	
+	while (1)
+	{
+		if (timedEvents == NULL) break;
+		if (getNanotime() <= timedEvents->nanotime) break;
+		
+		TimedEvent *ev = timedEvents;
+		Thread *thread = ev->thread;
+		timedEvents = ev->next;
+		if (timedEvents != NULL) timedEvents->prev = NULL;
+		ev->prev = ev->next = NULL;
+		signalThread(thread);
+	};
+	
+	unlockSched();
 };

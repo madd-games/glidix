@@ -40,6 +40,8 @@ static struct
 	uint8_t putcon;
 	unsigned char *buffer;
 	int usingSoftware;
+	int width, height;
+	int gfxterm;
 } consoleState;
 
 static Spinlock consoleLock;
@@ -49,13 +51,21 @@ void initConsole()
 	spinlockRelease(&consoleLock);
 	consoleState.buffer = (unsigned char*) 0xFFFF8000000B8000;
 	consoleState.usingSoftware = 0;
+	consoleState.width = 80;
+	consoleState.height = 25;
+	consoleState.gfxterm = 0;
 	clearScreen();
 };
 
 static void updateVGACursor()
 {
+	if (consoleState.gfxterm)
+	{
+		lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
+	};
+	
 	if (consoleState.usingSoftware) return;
-	uint64_t pos = consoleState.curY * 80 + consoleState.curX;
+	uint64_t pos = consoleState.curY * consoleState.width + consoleState.curX;
 	outb(0x3D4, 0x0F);
 	outb(0x3D5, pos & 0xFF);
 	outb(0x3D4, 0x0E);
@@ -73,7 +83,7 @@ void clearScreen()
 	uint8_t *videoram = consoleState.buffer;
 	uint64_t i;
 	
-	for (i=0; i<80*25; i++)
+	for (i=0; i<consoleState.width*consoleState.height; i++)
 	{
 		videoram[2*i+0] = 0;
 		videoram[2*i+1] = 0x07;
@@ -104,12 +114,12 @@ static void scroll()
 	uint8_t *vidmem = consoleState.buffer;
 
 	uint64_t i;
-	for (i=0; i<2*80*24; i++)
+	for (i=0; i<2*consoleState.width*(consoleState.height-1); i++)
 	{
-		vidmem[i] = vidmem[i+160];
+		vidmem[i] = vidmem[i+consoleState.width*2];
 	};
 
-	for (i=80*24; i<80*25; i++)
+	for (i=consoleState.width*(consoleState.height-1); i<consoleState.width*consoleState.height; i++)
 	{
 		vidmem[2*i+0] = 0;
 		vidmem[2*i+1] = 0x07;
@@ -124,13 +134,13 @@ static void kputch(char c)
 	outb(0xE9, c);
 	if (!consoleState.putcon) return;
 
-	if (consoleState.curY == 25) scroll();
+	if (consoleState.curY == consoleState.height) scroll();
 	
 	if (c == '\n')
 	{
 		consoleState.curX = 0;
 		consoleState.curY++;
-		if (consoleState.curY == 25) scroll();
+		if (consoleState.curY == consoleState.height) scroll();
 	}
 	else if (c == '\r')
 	{
@@ -142,31 +152,31 @@ static void kputch(char c)
 		{
 			if (consoleState.curY == 0) return;
 			consoleState.curY--;
-			consoleState.curX = 80;
+			consoleState.curX = consoleState.width;
 		};
 		consoleState.curX--;
-		uint8_t *vidmem = &consoleState.buffer[2 * (consoleState.curY * 80 + consoleState.curX)];
+		uint8_t *vidmem = &consoleState.buffer[2 * (consoleState.curY * consoleState.width + consoleState.curX)];
 		*vidmem++ = 0;
 		*vidmem++ = consoleState.curColor;
 	}
 	else if (c == '\t')
 	{
 		consoleState.curX = (consoleState.curX/8+1)*8;
-		if (consoleState.curX >= 80)
+		if (consoleState.curX >= consoleState.width)
 		{
 			consoleState.curY++;
-			consoleState.curX -= 80;
-			if (consoleState.curY == 25) scroll();
+			consoleState.curX -= consoleState.width;
+			if (consoleState.curY == consoleState.height) scroll();
 		};
 	}
 	else
 	{
-		uint8_t *vidmem = &consoleState.buffer[2 * (consoleState.curY * 80 + consoleState.curX)];
+		uint8_t *vidmem = &consoleState.buffer[2 * (consoleState.curY * consoleState.width + consoleState.curX)];
 		*vidmem++ = c;
 		*vidmem++ = consoleState.curColor;
 		consoleState.curX++;
 
-		if (consoleState.curX == 80)
+		if (consoleState.curX == consoleState.width)
 		{
 			consoleState.curX = 0;
 			consoleState.curY++;
@@ -395,8 +405,6 @@ static void printFlags(uint64_t flags)
 	int i;
 	for (i=0; i<11; i++)
 	{
-		//char c = (flags & flagList[i].mask) ? flagList[i].on : flagList[i].off;
-		//kprintf("%c", c);
 		if (flags & flagList[i].mask)
 		{
 			kprintf("%$\x02%c%#", flagList[i].on);
@@ -429,14 +437,15 @@ void unlockConsole()
 	spinlockRelease(&consoleLock);
 };
 
-static unsigned char softwareConsoleBuffer[80*25*2];
-void switchConsoleToSoftwareBuffer()
+void switchConsoleToSoftwareBuffer(unsigned char *buffer, int width, int height)
 {
 	spinlockAcquire(&consoleLock);
 	consoleState.usingSoftware = 1;
-	memcpy(softwareConsoleBuffer, consoleState.buffer, 80*25*2);
-	consoleState.buffer = softwareConsoleBuffer;
+	consoleState.buffer = buffer;
+	consoleState.width = width;
+	consoleState.height = height;
 	spinlockRelease(&consoleLock);
+	clearScreen();
 };
 
 void renderConsoleToScreen()
@@ -444,7 +453,12 @@ void renderConsoleToScreen()
 	spinlockAcquire(&consoleLock);
 	if (consoleState.usingSoftware)
 	{
-		lgiRenderConsole(softwareConsoleBuffer);
+		lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
 	}
 	spinlockRelease(&consoleLock);
+};
+
+void setGfxTerm(int value)
+{
+	consoleState.gfxterm = value;
 };

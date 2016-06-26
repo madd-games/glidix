@@ -132,6 +132,55 @@ atomic_swap64:
 	mov		rax,	rsi
 	ret
 
+[global atomic_test_and_set]
+atomic_test_and_set:
+	mov		rcx,	rsi
+	xor		rax,	rax
+	lock bts	[rdi],	rcx
+	setc		al
+	ret
+
+; atomic_compare_and_swap(ptr, oldval, newval)
+;	old = *ptr;
+;	if ((*ptr) == oldval) *ptr = newval;
+;	return old;
+[global atomic_compare_and_swap64]
+atomic_compare_and_swap64:
+	mov		rax,	rsi
+	lock cmpxchg	[rdi],	rdx
+	ret
+
+[global atomic_compare_and_swap32]
+atomic_compare_and_swap32:
+	mov		rax,	rsi
+	lock cmpxchg	[rdi],	edx
+	ret
+
+[global atomic_compare_and_swap16]
+atomic_compare_and_swap16:
+	mov		rax,	rsi
+	lock cmpxchg	[rdi],	dx
+	ret
+
+[global atomic_compare_and_swap8]
+atomic_compare_and_swap8:
+	mov		rax,	rsi
+	lock cmpxchg	[rdi],	dl
+	ret
+
+[global atomic_and8]
+atomic_and8:
+	mov		rax,	rsi
+	lock and	[rdi],	al
+	ret
+
+[global atomic_test_and_set8]
+atomic_test_and_set8:
+	xor		rax,	rax
+	lock bts	[rdi],	rsi
+	setc		al
+	ret
+
 [global _preempt]
 _preempt:
 	; allocate a Regs structure on the stack.

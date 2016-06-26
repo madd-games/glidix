@@ -216,6 +216,7 @@ int load_config(const char *filename)
 	if (fork() == 0)
 	{
 		execv(confExec[0], confExec);
+		perror("execv");
 		exit(1);
 	};
 	

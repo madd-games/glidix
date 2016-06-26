@@ -103,6 +103,7 @@ int sem_post(sem_t *sem)
 	{
 		pthread_t thread = sem->firstWaiter->thread;
 		sem->firstWaiter->complete = 1;
+		sem->firstWaiter = sem->firstWaiter->next;
 		__sync_synchronize();
 		pthread_spin_unlock(&sem->spinlock);
 		
@@ -113,6 +114,14 @@ int sem_post(sem_t *sem)
 		sem->value++;
 	};
 	
+	pthread_spin_unlock(&sem->spinlock);
+	return 0;
+};
+
+int sem_getvalue(sem_t *sem, int *valptr)
+{
+	pthread_spin_lock(&sem->spinlock);
+	*valptr = (int) sem->value;
 	pthread_spin_unlock(&sem->spinlock);
 	return 0;
 };

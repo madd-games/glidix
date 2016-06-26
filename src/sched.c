@@ -288,7 +288,7 @@ void initSched()
 	firstThread.errnoptr = NULL;
 
 	// no wakeing
-	firstThread.wakeTime = 0;
+	//firstThread.wakeTime = 0;
 	
 	// do not send alarms
 	firstThread.alarmTime = 0;
@@ -454,6 +454,12 @@ static void jumpToTask()
 
 void lockSched()
 {
+	if (getFlagsRegister() & (1 << 9))
+	{
+		stackTraceHere();
+		panic("lockSched() called with interrupts enabled");
+	};
+	
 	spinlockAcquire(&schedLock);
 };
 
@@ -475,6 +481,7 @@ int canSched(Thread *thread)
 		if (thread->cpuID != getCurrentCPU()->id) return 0;
 	};
 
+#if 0
 	if (thread->wakeTime != 0)
 	{
 		uint64_t currentTime = (uint64_t) getTicks();
@@ -484,6 +491,7 @@ int canSched(Thread *thread)
 			thread->flags &= ~THREAD_WAITING;
 		};
 	};
+#endif
 
 	if (thread->alarmTime != 0)
 	{
@@ -575,19 +583,6 @@ void switchTask(Regs *regs)
 	
 	spinlockAcquire(&schedLock);
 	switchTaskUnlocked(regs);
-};
-
-static int isUnblockableSig(int signo)
-{
-	switch (signo)
-	{
-	case SIGKILL:
-	case SIGTHKILL:
-	case SIGSTOP:
-		return 1;
-	default:
-		return 0;
-	};
 };
 
 int haveReadySigs(Thread *thread)
@@ -707,7 +702,7 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->errnoptr = NULL;
 
 	// do not wake
-	thread->wakeTime = 0;
+	//thread->wakeTime = 0;
 
 	// this will simulate a call from kernelThreadExit() to "entry()"
 	// this is so that when entry() returns, the thread can safely exit.
@@ -905,7 +900,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	};
 
 	thread->therrno = 0;
-	thread->wakeTime = 0;
+	//thread->wakeTime = 0;
 	
 	// alarms shall be cancelled in the new process/thread
 	thread->alarmTime = 0;

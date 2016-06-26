@@ -30,6 +30,8 @@ bits 64
 [global _intCounter]
 _intCounter dq 0
 
+[global irq_ditch]
+
 [global loadIDT]
 [extern idtPtr]
 loadIDT:
@@ -99,6 +101,7 @@ isrCommon:
 	push			rbp
 	mov			rbp, rsp
 	
+	cld						; clear direction flag as it's undefined
 	call	 		isrHandler
 	mov			rsp, rbx		; restore the real stack
 
@@ -208,4 +211,8 @@ IRQ	13,	45
 IRQ	14,	46
 IRQ	15,	47
 
-
+irq_ditch:
+	; this is set as the interrupt handler for IRQs that shall be ditched; i.e. PIC interrupts.
+	; we're not going to bother to send an EOI to it because we don't want it to continue sending
+	; interrupts anyway.
+	iretq

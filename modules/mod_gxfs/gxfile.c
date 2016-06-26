@@ -55,6 +55,8 @@ ssize_t gxfile_pread(File *fp, void *buffer, size_t size, off_t off)
 
 ssize_t gxfile_write(File *fp, const void *buffer, size_t size)
 {
+	if (size == 0) return 0;
+	
 	GXFile *gxfile = (GXFile*) fp->fsdata;
 	semWait(&gxfile->gxfs->sem);
 	ssize_t ret = GXWriteInode(&gxfile->gxino, buffer, size);
@@ -65,6 +67,8 @@ ssize_t gxfile_write(File *fp, const void *buffer, size_t size)
 
 ssize_t gxfile_pwrite(File *fp, const void *buffer, size_t size, off_t off)
 {
+	if (size == 0) return 0;
+	
 	GXFile *gxfile = (GXFile*) fp->fsdata;
 	semWait(&gxfile->gxfs->sem);
 	off_t oldPos = gxfile->gxino.pos;
@@ -76,13 +80,155 @@ ssize_t gxfile_pwrite(File *fp, const void *buffer, size_t size, off_t off)
 	return ret;
 };
 
+#if 0
+/**
+ * Load the prefetch buffer with data containing the specified position.
+ */
+static void gxfile_prefetch(GXFile *gxfile, off_t offset)
+{
+	offset &= ~(GXFS_PREFETCH_MAX-1);
+	if ((offset == gxfile->bufferOffset) && (gxfile->bufferSize == GXFS_PREFETCH_MAX))
+	{
+		// already prefetched as much as possible
+		return;
+	};
+	
+	off_t originalPos = gxfile->gxino.pos;
+	if (gxfile->bufferDirty)
+	{
+		gxfile->gxino.pos = gxfile->bufferOffset;
+		GXWriteInode(&gxfile->gxino, gxfile->buffer, gxfile->bufferSize);
+	};
+	
+	memset(gxfile->buffer, 0, GXFS_PREFETCH_MAX);
+	
+	gxfile->gxino.pos = offset;
+	gxfile->bufferSize = (size_t) GXReadInode(&gxfile->gxino, gxfile->buffer, GXFS_PREFETCH_MAX);
+	gxfile->bufferOffset = offset;
+	
+	gxfile->gxino.pos = originalPos;
+	gxfile->bufferDirty = 0;
+};
+
+ssize_t gxfile_read(File *fp, void *buffer, size_t size)
+{
+	GXFile *gxfile = (GXFile*) fp->fsdata;
+	semWait(&gxfile->gxfs->sem);
+	//ssize_t ret = GXReadInode(&gxfile->gxino, buffer, size);
+	
+	ssize_t ret = 0;
+	off_t pos = gxfile->gxino.pos;
+	uint8_t *put = (uint8_t*) buffer;
+	
+	while (size > 0)
+	{
+		gxfile_prefetch(gxfile, pos);
+		off_t bufferEnd = gxfile->bufferOffset + gxfile->bufferSize;
+		if ((pos >= gxfile->bufferOffset) && (pos < bufferEnd))
+		{
+			off_t offsetIntoBuffer = pos - gxfile->bufferOffset;
+			size_t readNow = gxfile->bufferSize - offsetIntoBuffer;
+			if (readNow > size)
+			{
+				readNow = size;
+			};
+			
+			memcpy(put, &gxfile->buffer[offsetIntoBuffer], readNow);
+			put += readNow;
+			size -= readNow;
+			pos += readNow;
+			ret += readNow;
+		}
+		else
+		{
+			break;
+		};
+	};
+	
+	gxfile->gxino.pos = pos;
+	
+	semSignal(&gxfile->gxfs->sem);
+	return ret;
+};
+
+ssize_t gxfile_write(File *fp, const void *buffer, size_t size)
+{
+	if (size == 0) return 0;
+	
+	GXFile *gxfile = (GXFile*) fp->fsdata;
+	semWait(&gxfile->gxfs->sem);
+	//ssize_t ret = GXWriteInode(&gxfile->gxino, buffer, size);
+	
+	ssize_t ret = 0;
+	off_t pos = gxfile->gxino.pos;
+	const uint8_t *fetch = (const uint8_t*) buffer;
+	
+	while (size > 0)
+	{
+		gxfile_prefetch(gxfile, pos);
+		
+		off_t offsetIntoBuffer = pos - gxfile->bufferOffset;
+		size_t writeNow = GXFS_PREFETCH_MAX - offsetIntoBuffer;
+		if (writeNow > size) writeNow = size;
+		
+		memcpy(&gxfile->buffer[offsetIntoBuffer], fetch, writeNow);
+		
+		size_t end = offsetIntoBuffer + writeNow;
+		if (gxfile->bufferSize < end)
+		{
+			gxfile->bufferSize = end;
+		};
+		
+		gxfile->bufferDirty = 1;
+		
+		ret += writeNow;
+		pos += writeNow;
+		size -= writeNow;
+		fetch += writeNow;
+	};
+	
+	gxfile->dirty = 1;
+	gxfile->gxino.pos = pos;
+	semSignal(&gxfile->gxfs->sem);
+	return ret;
+};
+
+ssize_t gxfile_pwrite(File *fp, const void *buffer, size_t size, off_t off)
+{
+	if (size == 0) return 0;
+	
+	GXFile *gxfile = (GXFile*) fp->fsdata;
+	semWait(&gxfile->gxfs->sem);
+	off_t oldPos = gxfile->gxino.pos;
+	gxfile->gxino.pos = off;
+	ssize_t ret = GXWriteInode(&gxfile->gxino, buffer, size);
+	gxfile->gxino.pos = oldPos;
+	gxfile->dirty = 1;
+	semSignal(&gxfile->gxfs->sem);
+	return ret;
+};
+
+ssize_t gxfile_pread(File *fp, void *buffer, size_t size, off_t off)
+{
+	GXFile *gxfile = (GXFile*) fp->fsdata;
+	semWait(&gxfile->gxfs->sem);
+	off_t oldPos = gxfile->gxino.pos;
+	gxfile->gxino.pos = off;
+	ssize_t ret = GXReadInode(&gxfile->gxino, buffer, size);
+	gxfile->gxino.pos = oldPos;
+	semSignal(&gxfile->gxfs->sem);
+	return ret;
+};
+#endif
+
 void gxfile_close(File *fp)
 {
+	fp->fsync(fp);
+	
 	GXFile *gxfile = (GXFile*) fp->fsdata;
 	semWait(&gxfile->gxfs->sem);
 	gxfile->gxfs->numOpenInodes--;
 	semSignal(&gxfile->gxfs->sem);
-	fp->fsync(fp);
 	kfree(fp->fsdata);
 };
 
@@ -190,7 +336,13 @@ void gxfile_fsync(File *fp)
 {
 	GXFile *gxfile = (GXFile*) fp->fsdata;
 	semWait(&gxfile->gxfs->sem);
-
+	
+	if (gxfile->bufferDirty)
+	{
+		gxfile->gxino.pos = gxfile->bufferOffset;
+		GXWriteInode(&gxfile->gxino, gxfile->buffer, gxfile->bufferSize);
+	};
+	
 	gxfsInode inode;
 	GXReadInodeHeader(&gxfile->gxino, &inode);
 	time_t now = time();
@@ -204,9 +356,14 @@ void gxfile_fsync(File *fp)
 
 void gxfile_truncate(File *fp, off_t length)
 {
+	gxfile_fsync(fp);
+	
 	GXFile *gxfile = (GXFile*) fp->fsdata;
 	semWait(&gxfile->gxfs->sem);
 
+	memset(gxfile->buffer, 0, GXFS_PREFETCH_MAX);
+	gxfile->bufferSize = 0;
+	
 	gxfsInode inode;
 	GXReadInodeHeader(&gxfile->gxino, &inode);
 
@@ -234,7 +391,6 @@ void gxfile_truncate(File *fp, off_t length)
 int GXOpenFile(GXFileSystem *gxfs, File *fp, ino_t ino)
 {
 	semWait(&gxfs->sem);
-	//kprintf_debug("GXOpenFile(%d)\n", ino);
 	GXFile *gxfile = (GXFile*) kmalloc(sizeof(GXFile));
 	fp->fsdata = gxfile;
 
@@ -242,6 +398,11 @@ int GXOpenFile(GXFileSystem *gxfs, File *fp, ino_t ino)
 	gxfile->dirty = 0;
 	GXOpenInode(gxfs, &gxfile->gxino, ino);
 
+	gxfile->bufferSize = 0;
+	gxfile->bufferOffset = 0;
+	gxfile->bufferDirty = 0;
+	memset(gxfile->buffer, 0, GXFS_PREFETCH_MAX);
+	
 	fp->read = gxfile_read;
 	fp->write = gxfile_write;
 	fp->pread = gxfile_pread;

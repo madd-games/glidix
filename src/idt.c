@@ -115,6 +115,7 @@ extern void isr64();
 extern void isr65();
 extern void isr112();
 extern void isr113();
+extern void irq_ditch();
 
 int kernelDead = 0;
 
@@ -137,7 +138,18 @@ static void setGate(int index, void *isr)
 
 void initIDT()
 {
-	// dsiable the legacy PIC
+	// remap PIC interrups to the 0x80-0x8F range, so that we can ignore
+	// them.
+	outb(0x20, 0x11);
+	outb(0xA0, 0x11);
+	outb(0x21, 0x80);
+	outb(0xA1, 0x88);
+	outb(0x21, 4);
+	outb(0xA1, 2);
+	outb(0x21, 1);
+	outb(0xA1, 1);
+	
+	// disable the legacy PIC
 	outb(0xA1, 0xFF);
 	outb(0x21, 0xFF);
 
@@ -211,6 +223,13 @@ void initIDT()
 	setGate(0x70, isr112);
 	setGate(0x71, isr113);
 	
+	// PIC IRQs to be ignored
+	int i;
+	for (i=0x80; i<0x90; i++)
+	{
+		setGate(i, irq_ditch);
+	};
+	
 	idtPtr.addr = (uint64_t) &idt[0];
 	idtPtr.limit = (sizeof(IDTEntry) * 256) - 1;
 	loadIDT();
@@ -242,10 +261,6 @@ static void onPageFault(Regs *regs)
 {
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
-	
-	// do this BEFORE enabling interrupts; just read sys_store_and_sleep() for a reason
-	// why
-	throw(EX_PAGE_FAULT);
 	
 	sti();
 	if (getCurrentThread() != NULL)
@@ -323,7 +338,9 @@ static void onPageFault(Regs *regs)
 
 	if ((getCurrentThread() == NULL) || (regs->cs == 8))
 	//if (1)
-	{	
+	{
+		throw(EX_PAGE_FAULT);
+		
 		cli();
 		kernelDead = 1;
 		//heapDump();
@@ -381,7 +398,12 @@ static void onPageFault(Regs *regs)
 			siginfo.si_code = SEGV_ACCERR;
 		};
 		siginfo.si_addr = (void*) faultAddr;
-
+		
+		// DEBUG
+		kprintf("SIGSEGV at %p, RIP=%p, RBP=%p, RSP=%p\n", faultAddr, regs->rip, regs->rbp, regs->rsp);
+		dumpProcessMemory(getCurrentThread()->pm, faultAddr);
+		// END DEBUG
+		
 		cli();
 		sendSignal(thread, &siginfo);
 		switchTask(regs);
@@ -462,7 +484,9 @@ void isrHandler(Regs *regs)
 	{
 	case IRQ0:
 		__sync_fetch_and_add(&uptime, 1);
-		sendHintToEveryCPU();
+		cli();
+		onTick();
+		sendHintToEveryCPU();			// TODO remove when possible
 		//kprintf("UPTIME: %d\n", uptime);
 		break;
 	case I_DIV_ZERO:

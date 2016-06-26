@@ -68,7 +68,8 @@
 #define	SIGAIO		34
 #define	SIGTHKILL	35		/* kill a single thread */
 #define	SIGTHWAKE	36		/* wake a thread without dispatching a signal */
-#define	SIG_NUM		37
+#define	SIGMXULK	37		/* mutex unlock signal */
+#define	SIG_NUM		38
 
 /**
  * si_code for SIGSEGV
@@ -180,6 +181,7 @@ struct _Thread;
 void dispatchSignal();
 int sendSignal(struct _Thread *thread, siginfo_t *siginfo);	// returns 0 on success, -1 if ignored.
 int sendSignalEx(struct _Thread *thread, siginfo_t *siginfo, int flags);
+int isUnblockableSig(int sig);
 void sigret(void *ret);
 
 SigDisp* sigdispCreate();

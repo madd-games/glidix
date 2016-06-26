@@ -384,7 +384,7 @@ void kmain(MultibootInfo *info)
 	kprintf("%$\x02" "Done%#\n");
 
 	kprintf("Initializing the APIC timer...");
-	ASM("sti");
+	sti();
 	apic->timerDivide = 3;
 	apic->timerInitCount = 0xFFFFFFFF;
 	sleep(35);
@@ -396,7 +396,6 @@ void kmain(MultibootInfo *info)
 	DONE();
 
 	kprintf("Initializing the scheduler and syscalls... ");
-	//kprintf("value of EFER: %p\n", msrRead(0xC0000080));
 	initSched();
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
 };

@@ -87,8 +87,10 @@ void semWait(Semaphore *sem)
 		{
 			ASM("cli");
 			//getCurrentThread()->flags |= THREAD_WAITING;
+			lockSched();
 			waitThread(getCurrentThread());
 			spinlockRelease(&sem->lock);
+			unlockSched();
 			kyield();
 			spinlockAcquire(&sem->lock);
 		};
@@ -114,7 +116,11 @@ void semWait(Semaphore *sem)
 		thwait->waiting = 0;			// the waiter will free this
 
 		sem->count--;
+		cli();
+		lockSched();
 		signalThread(thread);
+		unlockSched();
+		sti();
 	};
 
 	sem->lastHolder = me;
@@ -137,8 +143,10 @@ int semWait2(Semaphore *sem, int count)
 		sem->countWaiter = getCurrentThread();
 		ASM("cli");
 		//getCurrentThread()->flags |= THREAD_WAITING;
+		lockSched();
 		waitThread(getCurrentThread());
 		spinlockRelease(&sem->lock);
+		unlockSched();
 		kyield();
 		spinlockAcquire(&sem->lock);
 		if (wasSignalled())
@@ -173,10 +181,10 @@ int semWait2(Semaphore *sem, int count)
 
 int semWaitTimeout(Semaphore *sem, int count, uint64_t timeout)
 {
-	int deadline = 0;
+	uint64_t deadline = 0;
 	if (timeout != 0)
 	{
-		deadline = getUptime() + (int) (timeout/1000000);
+		deadline = getNanotime() + timeout;
 	};
 	
 	spinlockAcquire(&sem->lock);
@@ -186,40 +194,60 @@ int semWaitTimeout(Semaphore *sem, int count, uint64_t timeout)
 		return 0;
 	};
 
+	cli();
+	lockSched();
+	
+	TimedEvent ev;
+	timedPost(&ev, deadline);
 	while (sem->count == 0)
 	{
 		if (sem->terminated)
 		{
-			getCurrentThread()->wakeTime = 0;
 			sem->countWaiter = NULL;
+			unlockSched();
+			sti();
 			spinlockRelease(&sem->lock);
 			return 0;
 		};
 		
 		sem->countWaiter = getCurrentThread();
-		cli();
-		lockSched();
-		getCurrentThread()->wakeTime = deadline;
 		waitThread(getCurrentThread());
 		spinlockRelease(&sem->lock);
 		unlockSched();
 		kyield();
+		
 		spinlockAcquire(&sem->lock);
+
 		if (wasSignalled())
 		{
 			sem->countWaiter = NULL;
 			spinlockRelease(&sem->lock);
+			cli();
+			lockSched();
+			timedCancel(&ev);
+			unlockSched();
+			sti();
 			return SEM_INTERRUPT;
 		};
-		if ((getUptime() >= deadline) && (deadline != 0))
+		if ((getNanotime() >= deadline) && (deadline != 0))
 		{
 			sem->countWaiter = NULL;
 			spinlockRelease(&sem->lock);
+			cli();
+			lockSched();
+			timedCancel(&ev);
+			unlockSched();
+			sti();
 			return SEM_TIMEOUT;
 		};
+		
+		cli();
+		lockSched();
 	};
-
-	getCurrentThread()->wakeTime = 0;
+	
+	timedCancel(&ev);
+	unlockSched();
+	sti();
 	
 	spinlockRelease(&sem->lock);
 	sem->countWaiter = NULL;
@@ -297,7 +325,11 @@ static void semSignalGen(Semaphore *sem, int wait)
 	spinlockAcquire(&sem->lock);
 	if (sem->countWaiter != NULL)
 	{
+		cli();
+		lockSched();
 		signalThread(sem->countWaiter);
+		unlockSched();
+		sti();
 	};
 
 	sem->count++;
@@ -314,7 +346,12 @@ static void semSignalGen(Semaphore *sem, int wait)
 		thwait->waiting = 0;			// the waiter will free this
 
 		sem->count--;
+		
+		cli();
+		lockSched();
 		signalThread(thread);
+		unlockSched();
+		sti();
 	};
 
 	if (wait)
@@ -337,7 +374,14 @@ void semTerminate(Semaphore *sem)
 	kprintf_debug("semTerminate was called\n");
 	spinlockAcquire(&sem->lock);
 	sem->terminated = 1;
-	if (sem->countWaiter != NULL) signalThread(sem->countWaiter);
+	if (sem->countWaiter != NULL)
+	{
+		cli();
+		lockSched();
+		signalThread(sem->countWaiter);
+		unlockSched();
+		sti();
+	};
 	spinlockRelease(&sem->lock);
 };
 

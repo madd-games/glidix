@@ -75,7 +75,8 @@ mkdir -p mipdir/usr/libexec
 
 cd userspace/libddi
 sudo cp libddi.h /glidix/usr/include/libddi.h || exit 1
-x86_64-glidix-gcc -I/glidix/usr/include/freetype2 -fPIC -shared libddi.c -o ../../mipdir/usr/lib/libddi.so -lfreetype -lpng -lz -lm || exit 1
+x86_64-glidix-as -c libddi.S -o libddi-asm.o || exit 1
+x86_64-glidix-gcc -I/glidix/usr/include/freetype2 -fPIC -shared libddi.c libddi-asm.o -o ../../mipdir/usr/lib/libddi.so -lfreetype -lpng -lz -lm || exit 1
 sudo cp ../../mipdir/usr/lib/libddi.so /glidix/usr/lib/libddi.so || exit 1
 cd ../..
 
@@ -89,6 +90,7 @@ cd ..
 sudo cp ../../mipdir/usr/lib/libgwm.so /glidix/usr/lib/libgwm.so || exit 1
 x86_64-glidix-gcc gui-init.c -o ../../mipdir/usr/libexec/gui-init -lddi -lgwm || exit 1
 x86_64-glidix-gcc terminal.c font.c -o ../../mipdir/usr/bin/terminal -lddi -lgwm || exit 1
+x86_64-glidix-gcc sysbar.c -o ../../mipdir/usr/libexec/sysbar -lddi -lgwm || exit 1
 x86_64-glidix-gcc gui-login.c -o ../../mipdir/usr/bin/gui-login -lddi -lgwm -lcrypt || exit 1
 cd ../..
 cp -r userspace/images mipdir/usr/share/images || exit 1

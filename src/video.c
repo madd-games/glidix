@@ -48,6 +48,8 @@ static int lgi_ioctl(File *fp, uint64_t cmd, void *argp)
 	LGIDeviceInterface *intf = data->intf;
 	Thread *ct = getCurrentThread();
 
+	LGIDisplayMode *mode = (LGIDisplayMode*)argp;
+	int width, height;
 	switch (cmd)
 	{
 	case IOCTL_VIDEO_DEVSTAT:
@@ -57,7 +59,9 @@ static int lgi_ioctl(File *fp, uint64_t cmd, void *argp)
 		ct->therrno = EIO;
 		return intf->getModeInfo(intf, (LGIDisplayMode*) argp);
 	case IOCTL_VIDEO_SETMODE:
-		switchConsoleToSoftwareBuffer();
+		width = mode->width / 9;
+		height = mode->height / 16;
+		switchConsoleToSoftwareBuffer((unsigned char*)kmalloc(2*width*height), width, height);
 		activeDisplay = intf;
 		intf->setMode(intf, (LGIDisplayMode*) argp);
 		return 0;
@@ -70,7 +74,6 @@ static int lgi_ioctl(File *fp, uint64_t cmd, void *argp)
 static void lgi_close(File *fp)
 {
 	DisplayData *data = (DisplayData*) fp->fsdata;
-	if (data->intf == activeDisplay) activeDisplay = NULL;
 	kfree(data);
 };
 
@@ -112,13 +115,13 @@ int lgiKAddDevice(const char *name, LGIDeviceInterface *intf)
 	return 0;
 };
 
-void lgiRenderConsole(const unsigned char *buffer)
+void lgiRenderConsole(const unsigned char *buffer, int width, int height)
 {
 	if (activeDisplay != NULL)
 	{
 		if (activeDisplay->renderConsole != NULL)
 		{
-			activeDisplay->renderConsole(activeDisplay, buffer);
+			activeDisplay->renderConsole(activeDisplay, buffer, width, height);
 		};
 	};
 };

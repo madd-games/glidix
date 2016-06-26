@@ -303,7 +303,7 @@ typedef struct _Thread
 	 * The time at which to wake this process up; 0 if it should not be awaken by clock.
 	 * This is used by stuff like sleep(). Given in milliseconds.
 	 */
-	uint64_t			wakeTime;
+	//uint64_t			wakeTime;
 	
 	/**
 	 * The time at which to send the SIGALRM signal; 0 means the signal shall not be sent.

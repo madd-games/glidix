@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
+#include <time.h>
 
 void (*signal(int sig, void (*func)(int)))(int)
 {
@@ -84,4 +85,45 @@ int sigdelset(sigset_t *set, int signo)
 int sigismember(const sigset_t *set, int signum)
 {
 	return !!((*set) & (1UL << signum));
+};
+
+int sigwait(const sigset_t *set, int *sig)
+{
+	siginfo_t si;
+	int status = _glidix_sigwait(*set, &si, 0xFFFFFFFFFFFFFFFF);
+	*sig = si.si_signo;
+	return status;
+};
+
+int sigwaitinfo(const sigset_t *set, siginfo_t *info)
+{
+	siginfo_t temp;
+	int status = _glidix_sigwait(*set, &temp, 0xFFFFFFFFFFFFFFFF);
+	if (status != 0)
+	{
+		errno = status;
+		return -1;
+	};
+	
+	if (info != NULL) memcpy(info, &temp, sizeof(siginfo_t));
+	return temp.si_signo;
+};
+
+int sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout)
+{
+	siginfo_t temp;
+	int status = _glidix_sigwait(*set, &temp, (uint64_t)timeout->tv_sec * 1000000000UL + (uint64_t)timeout->tv_nsec);
+	if (status != 0)
+	{
+		errno = status;
+		return -1;
+	};
+	
+	if (info != NULL) memcpy(info, &temp, sizeof(siginfo_t));
+	return temp.si_signo;
+};
+
+int sigsuspend(const sigset_t *set)
+{
+	return _glidix_sigsuspend(*set);
 };

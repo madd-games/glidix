@@ -193,6 +193,25 @@ uint32_t atomic_swap32(uint32_t *ptr, uint32_t newval);
 uint64_t atomic_swap64(uint64_t *ptr, uint64_t newval);
 
 /**
+ * Atomic AND.
+ */
+void atomic_and8(uint8_t *ptr, uint8_t and_with);
+
+/**
+ * Atomic test-and-set.
+ */
+int atomic_test_and_set8(uint8_t *ptr, int bitpos);
+
+/**
+ * Atomically test whether the value at ptr is equal to 'oldval', and if so, set it to 'newval'.
+ * Returns the original value at 'ptr'.
+ */
+uint8_t atomic_compare_and_swap8(uint8_t *ptr, uint8_t oldval, uint8_t newval);
+uint16_t atomic_compare_and_swap16(uint16_t *ptr, uint16_t oldval, uint16_t newval);
+uint32_t atomic_compare_and_swap32(uint32_t *ptr, uint32_t oldval, uint32_t newval);
+uint64_t atomic_compare_and_swap64(uint64_t *ptr, uint64_t oldval, uint64_t newval);
+
+/**
  * Those are implemented in acpi/acglidix.c because reusing code is cool and who cares about
  * the mess amirite?
  */
@@ -210,7 +229,7 @@ void initUserRegs(Regs *regs);
 void switchToKernelSpace(Regs *regs);
 
 /**
- * Defined in common.asm. Call this to let the CPU cool off. This preserve RFLAGS (along with the IF),
+ * Defined in common.asm. Call this to let the CPU cool off. This preserves RFLAGS (along with the IF),
  * then enables interrupts and halts. Returns with the old value of the interrupt flag.
  */
 void cooloff();

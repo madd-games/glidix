@@ -173,6 +173,10 @@ extern "C" {
 #define	_GLIDIX_IOCTL_SEMA_WAIT				_GLIDIX_IOCTL_ARG(int, _GLIDIX_IOCTL_INT_THSYNC, 2)
 #define	_GLIDIX_IOCTL_SEMA_SIGNAL			_GLIDIX_IOCTL_ARG(int, _GLIDIX_IOCTL_INT_THSYNC, 3)
 
+#define	_GLIDIX_KOPT_GFXTERM				0
+
+struct __siginfo;
+
 int		_glidix_exec(const char *path, const char *pars, size_t parsz);
 int		_glidix_open(const char *path, int flags, mode_t mode);
 uid_t		_glidix_getsuid();
@@ -217,6 +221,9 @@ int		_glidix_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t
 ssize_t		_glidix_mqrecv(int fd, _glidix_msginfo *info, void *buffer, size_t bufsize);
 uint64_t	_glidix_shmalloc(uint64_t addr, uint64_t size, int assocPid, int protAssoc, int protWorld);
 int		_glidix_shmap(uint64_t addr, uint64_t size, uint64_t id, int prot);
+int		_glidix_kopt(int option, int value);
+int		_glidix_sigwait(uint64_t sigset, struct __siginfo *info, uint64_t nanotimeout);
+int		_glidix_sigsuspend(uint64_t mask);
 
 // some runtime stuff
 uint64_t	__alloc_pages(size_t len);

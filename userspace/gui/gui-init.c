@@ -36,30 +36,16 @@
 
 int main()
 {
-	printf("Waiting for GUI...\n");
-	FILE *fp = NULL;
-	
-	while (1)
-	{
-		sleep(1);
-		fp = fopen("/usr/share/gui.pid", "rb");
-		if (fp == NULL) continue;
-		int pid, fd;
-		int count = (int) fscanf(fp, "%d.%d", &pid, &fd);
-		if (count != 2)
-		{
-			fclose(fp);
-			continue;
-		};
-		fclose(fp);
-		break;
-	};
-
 	pid_t pid = fork();
 	if (pid == 0)
 	{
-		//execl("/usr/bin/terminal", "terminal", NULL);
 		execl("/usr/bin/gui-login", "gui-login", NULL);
+		perror("exec gui-login");
+		return 1;
+	}
+	else if (pid == -1)
+	{
+		perror("fork");
 		return 1;
 	};
 	

@@ -46,6 +46,7 @@ struct __jmp_buf_tag
 	uint64_t			r13;
 	uint64_t			r14;
 	uint64_t			r15;
+	uint64_t			rip;
 };
 
 typedef struct __jmp_buf_tag jmp_buf[1];

@@ -31,6 +31,7 @@
 
 #include <sys/types.h>
 #include <stddef.h>
+#include <time.h>
 
 /**
  * Signals, as used by Glidix.
@@ -69,7 +70,10 @@
 #define	SIGWAITING	32
 #define	SIGLWP		33
 #define	SIGAIO		34
-#define	__SIG_COUNT	35
+#define	SIGTHKILL	35			/* kill a single thread */
+#define	SIGTHWAKE	36			/* wake a thread without dispatching a signal */
+#define	SIGMXULK	37			/* mutex unlock signal */
+#define	__SIG_COUNT	38
 
 #define	SIG_DFL		((void (*)(int)) 1)
 #define	SIG_ERR		((void (*)(int)) 2)
@@ -122,7 +126,7 @@ union sigval
 	void*		sival_ptr;
 };
 
-typedef struct
+typedef struct __siginfo
 {
 	int		si_signo;
 	int		si_code;
@@ -157,6 +161,10 @@ int sigfillset(sigset_t *set);
 int sigaddset(sigset_t *set, int signo);
 int sigdelset(sigset_t *set, int signo);
 int sigismember(const sigset_t *set, int signum);
+int sigwait(const sigset_t *set, int *sig);
+int sigwaitinfo(const sigset_t *set, siginfo_t *info);
+int sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout);
+int sigsuspend(const sigset_t *mask);
 
 /* implemented by libglidix directly */
 int raise(int sig);

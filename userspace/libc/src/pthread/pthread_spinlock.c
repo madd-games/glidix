@@ -28,6 +28,7 @@
 
 #include <pthread.h>
 #include <errno.h>
+#include <sys/glidix.h>
 
 int pthread_spin_init(pthread_spinlock_t *sl)
 {
@@ -42,7 +43,7 @@ int pthread_spin_destroy(pthread_spinlock_t *sl)
 
 int pthread_spin_lock(pthread_spinlock_t *lock)
 {
-	while (__sync_lock_test_and_set(lock, 1) != 0);
+	while (__sync_lock_test_and_set(lock, 1) != 0) _glidix_yield();
 	return 0;
 };
 

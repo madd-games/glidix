@@ -39,13 +39,15 @@ void cvInit(CondVar *cv)
 
 int cvWait(CondVar *cv, uint64_t nanotimeout)
 {
-	int deadline = getTicks() + (int) (nanotimeout/1000000);
+	//int deadline = getTicks() + (int) (nanotimeout/1000000);
+	uint64_t deadline = getNanotime() + nanotimeout;
 	if (nanotimeout == 0)
 	{
 		deadline = 0;
 	};
 	
 	spinlockAcquire(&cv->lock);
+	int result = 0;
 	if (!cv->value)
 	{
 		CondVarWaiter *waiter = NEW(CondVarWaiter);
@@ -67,28 +69,35 @@ int cvWait(CondVar *cv, uint64_t nanotimeout)
 			last->next = waiter;
 		};
 
+		cli();
+		lockSched();
+		TimedEvent ev;
+		timedPost(&ev, deadline);
+		
 		while (!cv->value)
 		{
-			cli();
-			lockSched();
-			getCurrentThread()->wakeTime = deadline;
-			//getCurrentThread()->flags |= THREAD_WAITING;
 			waitThread(getCurrentThread());
 			spinlockRelease(&cv->lock);
 			unlockSched();
 			kyield();
 			
-			if ((getTicks() >= deadline) && (deadline > 0))
-			{
-				return -1;
-			};
-			
 			spinlockAcquire(&cv->lock);
+			cli();
+			lockSched();
+			
+			if ((getNanotime() >= deadline) && (deadline > 0))
+			{
+				result = -1;
+				break;
+			};
 		};
+		
+		unlockSched();
+		sti();
 	};
 	
 	spinlockRelease(&cv->lock);
-	return 0;
+	return result;
 };
 
 void cvSignal(CondVar *cv)

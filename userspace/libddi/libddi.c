@@ -683,6 +683,37 @@ DDISurface* ddiLoadAndConvertPNG(DDIPixelFormat *format, const char *filename, c
 	return surface;
 };
 
+#if 0
+void ddiBlendPixel(uint8_t *scan, uint8_t *put, int alphaIndex)
+{
+	int srcAlpha = (int) scan[alphaIndex];
+	int dstAlpha = (int) put[alphaIndex];
+	int outAlpha = srcAlpha + (int) dstAlpha * (255 - srcAlpha) / 255;
+
+	if (outAlpha == 0)
+	{
+		*((uint32_t*)put) = 0;
+	}
+	else
+	{
+		DDIIntVector vdst = {put[0], put[1], put[2], put[3]};
+		DDIIntVector vsrc = {scan[0], scan[1], scan[2], scan[3]};
+		DDIIntVector result = (
+			(vsrc * srcAlpha)/255
+			+ (vdst * dstAlpha * (255-srcAlpha))/(255*255)
+		)*255/outAlpha;
+		
+		put[0] = (uint8_t) result[0];
+		put[1] = (uint8_t) result[1];
+		put[2] = (uint8_t) result[2];
+		put[3] = (uint8_t) result[3];
+		put[alphaIndex] = outAlpha;
+	};
+};
+#endif
+
+void ddiBlendPixel(uint8_t *scan, uint8_t *put, int alphaIndex);
+
 void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY,
 	unsigned int width, unsigned int height)
 {
@@ -789,23 +820,71 @@ void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, i
 	
 	for (; height; height--)
 	{
-		//ddiCopy(put, scan, pixelSize * width);
 		size_t count = width;
 		uint8_t *scanStart = scan;
 		uint8_t *putStart = put;
 		
 		while (count--)
 		{
-			uint16_t srcAlpha = (uint16_t) scan[alphaIndex];
+#if 0
+			int srcAlpha = (int) scan[alphaIndex];
+			int dstAlpha = (int) put[alphaIndex];
+			int outAlpha = srcAlpha + (int) dstAlpha * (255 - srcAlpha) / 255;
+
+#if 0
 			int i;
 			for (i=0; i<src->format.bpp; i++)
 			{
-				//if (i != alphaIndex)
-				//{
-					put[i] = (uint8_t) (((uint16_t)put[i] * (255-srcAlpha) + (uint16_t)scan[i] * srcAlpha) >> 8);
-				//};
+				if (i != alphaIndex)
+				{
+					if (outAlpha == 0)
+					{
+						put[i] = 0;
+					}
+					else
+					{
+						uint32_t val = (
+							((uint32_t)scan[i] * srcAlpha)/255
+							+ ((uint32_t)put[i] * dstAlpha * (255-srcAlpha))/(255*255)
+						)*255/outAlpha;
+						put[i] = (uint8_t) val;
+					};
+				}
+				else
+				{
+					put[i] = outAlpha;
+				};
 			};
-			
+#endif
+
+			if (outAlpha == 0)
+			{
+				*((uint32_t*)put) = 0;
+			}
+			else
+			{
+				//DDIByteVector *bytesPut = (DDIByteVector*) put;
+				//DDIByteVector *bytesScan = (DDIByteVector*) scan;
+				
+				DDIIntVector vdst = {put[0], put[1], put[2], put[3]};
+				DDIIntVector vsrc = {scan[0], scan[1], scan[2], scan[3]};
+				DDIIntVector result = (
+					(vsrc * srcAlpha)/255
+					+ (vdst * dstAlpha * (255-srcAlpha))/(255*255)
+				)*255/outAlpha;
+				
+				//DDIByteVector rbytes = (DDIByteVector) result;
+				//rbytes[alphaIndex] = 0;
+				//memcpy(put, &rbytes, src->format.bpp);
+				put[0] = (uint8_t) result[0];
+				put[1] = (uint8_t) result[1];
+				put[2] = (uint8_t) result[2];
+				put[3] = (uint8_t) result[3];
+				put[alphaIndex] = outAlpha;
+			};
+#endif
+
+			ddiBlendPixel(scan, put, alphaIndex);
 			scan += pixelSize;
 			put += pixelSize;
 		};
@@ -1011,6 +1090,7 @@ void ddiDeletePen(DDIPen *pen)
 		line = nextLine;
 	};
 	
+	FT_Done_Face(pen->face);
 	FT_Done_FreeType(pen->lib);
 	free(pen);
 };
