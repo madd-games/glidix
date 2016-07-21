@@ -53,7 +53,7 @@ extern "C" {
 
 #define	PTHREAD_PRIO_NONE				0
 
-#define	PTHREAD_MUTEX_INITIALIZER			{{0}, 0, 0, 0, NULL, NULL}
+#define	PTHREAD_MUTEX_INITIALIZER			{0, 0, 0, 0, NULL, NULL}
 
 typedef struct
 {

@@ -54,17 +54,17 @@ extern "C" {
 
 typedef struct
 {
-	uint32_t magic;
 	size_t size;
 	uint8_t flags;
-} __attribute__ ((packed)) __heap_header;
+	uint32_t magic;
+} __heap_header;
 
 typedef struct
 {
-	uint32_t magic;
 	size_t size;
 	uint8_t flags;
-} __attribute__ ((packed)) __heap_footer;
+	uint32_t magic;
+} __heap_footer;
 
 void _heap_init();
 __heap_footer* _heap_get_footer(__heap_header *head);

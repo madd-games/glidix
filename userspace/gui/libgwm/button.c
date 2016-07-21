@@ -88,9 +88,16 @@ static void gwmRedrawButton(GWMWindow *button)
 	
 	ddiBlit(imgButton, 9, BUTTON_HEIGHT*whichImg, canvas, canvas->width-8, 0, 8, BUTTON_HEIGHT);
 	
-	int textWidth = 8 * strlen(data->text);
-	int startX = canvas->width / 2 - textWidth / 2;
-	ddiDrawText(canvas, startX, 11, data->text, NULL, NULL);
+	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height-11, 0, 0, NULL);
+	ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);
+	ddiWritePen(pen, data->text);
+	
+	int txtWidth, txtHeight;
+	ddiGetPenSize(pen, &txtWidth, &txtHeight);
+	ddiSetPenPosition(pen, 0, 15-(txtHeight/2));
+	ddiExecutePen(pen, canvas);
+	ddiDeletePen(pen);
+	
 	gwmPostDirty();
 };
 

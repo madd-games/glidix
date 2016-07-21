@@ -115,9 +115,18 @@
 #define	FD_CLOEXEC			O_CLOEXEC
 #define	FD_ALL				(FD_CLOEXEC)
 
+/**
+ * File locking commands.
+ */
+#define	F_LOCK				0
+#define	F_TLOCK				1
+#define	F_ULOCK				2
+#define	F_TEST				3
+
 #define	FILENAME_MAX			128
 #define	PATH_MAX			256
 #define	VFS_MAX_LINK_DEPTH		8
+#define	VFS_MAX_LOCKS_PER_FILE		32
 
 #ifndef _SYS_STAT_H
 struct stat
@@ -143,6 +152,27 @@ struct dirent
 	ino_t				d_ino;
 	char				d_name[128];
 };
+
+/**
+ * Describes a file lock.
+ */
+typedef struct FileLock_
+{
+	struct FileLock_*		prev;
+	struct FileLock_*		next;
+	
+	/**
+	 * The device number and inode of the file that this lock is on.
+	 */
+	dev_t				dev;
+	ino_t				ino;
+	
+	/**
+	 * The semaphore that must be acquired to get this lock.
+	 */
+	struct Semaphore_*		sem;
+	int				__end;
+} FileLock;
 
 /**
  * Describes an open file. All of its member functions may be NULL.
@@ -251,6 +281,12 @@ typedef struct _File
 	 */
 	ssize_t (*pread)(struct _File *file, void *buf, size_t count, off_t offset);
 	ssize_t (*pwrite)(struct _File *file, const void *buffer, size_t count, off_t offset);
+	
+	/**
+	 * Locks held by this file descriptor. Note that those are released on each vfsClose(), even if it doesn't
+	 * release the file description. This list must be handled using atomic operations.
+	 */
+	FileLock* locks[VFS_MAX_LOCKS_PER_FILE];
 } File;
 
 /**
@@ -432,5 +468,12 @@ void vfsClose(File *file);
 void vfsInit();
 void vfsLockCreation();
 void vfsUnlockCreation();
+
+/**
+ * Perform one of the lockf() operations on the specified inode on the specified device. Returns 0
+ * on success or an errno on error. If 'fp' is not NULL, associate the lock with the given file
+ * description, such that when it is closed, the lock is released.
+ */
+int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len);
 
 #endif

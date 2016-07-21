@@ -101,8 +101,8 @@ extern DDIColor gwmColorSelection;
  */
 typedef struct
 {
-	char					caption[1024];
-	char					iconName[1024];
+	char					caption[256];
+	char					iconName[256];
 	unsigned int				flags;
 	unsigned int				width;
 	unsigned int				height;
@@ -128,6 +128,7 @@ typedef struct
 #define	GWM_EVENT_LEAVE				6
 #define	GWM_EVENT_FOCUS_IN			7
 #define	GWM_EVENT_FOCUS_OUT			8
+#define	GWM_EVENT_DESKTOP_UPDATE		9
 typedef struct
 {
 	int					type;
@@ -141,6 +142,18 @@ typedef struct
 } GWMEvent;
 
 /**
+ * Global window reference - uniquely identifies a window on the screen, which may belong
+ * to any application. This is used for the "get window info" commands, by the system bar
+ * for example.
+ */
+typedef struct
+{
+	uint64_t				id;
+	int					pid;
+	int					fd;
+} GWMGlobWinRef;
+
+/**
  * Commands understood by the window manager.
  */
 #define	GWM_CMD_CREATE_WINDOW			0
@@ -150,6 +163,11 @@ typedef struct
 #define	GWM_CMD_SCREEN_SIZE			4
 #define	GWM_CMD_SET_FLAGS			5
 #define	GWM_CMD_SET_CURSOR			6
+#define	GWM_CMD_SET_ICON			7
+#define	GWM_CMD_GET_FORMAT			8
+#define	GWM_CMD_GET_WINDOW_LIST			9
+#define	GWM_CMD_GET_WINDOW_PARAMS		10
+#define	GWM_CMD_SET_LISTEN_WINDOW		11
 typedef union
 {
 	int					cmd;
@@ -198,6 +216,40 @@ typedef union
 		uint64_t			seq;
 		uint64_t			win;
 	} setCursor;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_SET_ICON
+		uint64_t			seq;
+		uint64_t			win;
+		char				data[16*16*4];
+	} setIcon;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_GET_FORMAT
+		uint64_t			seq;
+	} getFormat;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_GET_WINDOW_LIST
+		uint64_t			seq;
+	} getWindowList;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_GET_WINDOW_PARAMS
+		uint64_t			seq;
+		GWMGlobWinRef			ref;
+	} getWindowParams;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_SET_LISTEN_WINDOW
+		uint64_t			seq;
+		uint64_t			win;
+	} setListenWindow;
 } GWMCommand;
 
 /**
@@ -209,6 +261,10 @@ typedef union
 #define	GWM_MSG_SCREEN_SIZE_RESP		3
 #define	GWM_MSG_SET_FLAGS_RESP			4
 #define	GWM_MSG_SET_CURSOR_RESP			5
+#define	GWM_MSG_SET_ICON_RESP			6
+#define	GWM_MSG_GET_FORMAT_RESP			7
+#define	GWM_MSG_GET_WINDOW_LIST_RESP		8
+#define	GWM_MSG_GET_WINDOW_PARAMS_RESP		9
 typedef union
 {
 	struct
@@ -263,6 +319,37 @@ typedef union
 		uint64_t			seq;
 		int				status;
 	} setCursorResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_SET_ICON_RESP
+		uint64_t			seq;
+		int				status;
+	} setIconResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_GET_FORMAT_RESP
+		uint64_t			seq;
+		DDIPixelFormat			format;
+	} getFormatResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_GET_WINDOW_LIST_RESP
+		uint64_t			seq;
+		int				count;
+		GWMGlobWinRef			focused;
+		GWMGlobWinRef			wins[128];
+	} getWindowListResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_GET_WINDOW_PARAMS_RESP
+		uint64_t			seq;
+		int				status;
+		GWMWindowParams			params;
+	} getWindowParamsResp;
 } GWMMessage;
 
 struct GWMWindow_;
@@ -426,5 +513,41 @@ size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t en
  * Returns 0 on success, -1 on error.
  */
 int gwmSetWindowCursor(GWMWindow *win, int cursor);
+
+/**
+ * Sets the icon of a window. The specified surface must be 16x16, in screen format; otherwise,
+ * undefined behaviour occurs.
+ */
+int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon);
+
+/**
+ * Returns the default font for use with DDI.
+ */
+DDIFont *gwmGetDefaultFont();
+
+/**
+ * Get the screen format.
+ */
+void gwmGetScreenFormat(DDIPixelFormat *format);
+
+/**
+ * Gets a list of top-level windows currently open on the desktop, as well as the currently-focused
+ * window. Returns the amount of window references actually stored in the array. The array must be
+ * large enough to store at least 128 window references. The pid of the focused window will be zero
+ * if no window is focused. Either or both of the arguments may be NULL if you want to ignore the
+ * corresponding information.
+ */
+int gwmGetDesktopWindows(GWMGlobWinRef *focused, GWMGlobWinRef *winlist);
+
+/**
+ * Gets window parameters for a global reference. Returns 0 on success, -1 on error.
+ */
+int gwmGetGlobWinParams(GWMGlobWinRef *ref, GWMWindowParams *pars);
+
+/**
+ * Mark a certain window as a "listening window". This window will receive the GWM_EVENT_DESKTOP_UPDATE
+ * event when the desktop window list, or focused window, changed. Used by the sysbar for example.
+ */
+void gwmSetListenWindow(GWMWindow *win);
 
 #endif

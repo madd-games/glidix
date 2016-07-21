@@ -114,6 +114,11 @@ typedef struct
 typedef struct DDIPen_ DDIPen;
 
 /**
+ * Describes a font to be used with a pen.
+ */
+typedef struct DDIFont_ DDIFont;
+
+/**
  * Describes a color.
  */
 typedef struct
@@ -206,9 +211,14 @@ void ddiDrawText(DDISurface *surface, unsigned int x, unsigned int y, const char
 long ddiReadUTF8(const char **strptr);
 
 /**
- * Create a new pen object with the specified target surface, bounding box and scroll position.
+ * Load the specified font.
  */
-DDIPen* ddiCreatePen(DDISurface *surface, int x, int y, int width, int height, int scrollX, int scrollY, const char **error);
+DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error);
+
+/**
+ * Create a new pen object with the specified target surface format, bounding box and scroll position.
+ */
+DDIPen* ddiCreatePen(DDIPixelFormat *format, DDIFont *font, int x, int y, int width, int height, int scrollX, int scrollY, const char **error);
 
 /**
  * Delete a pen object.
@@ -216,7 +226,7 @@ DDIPen* ddiCreatePen(DDISurface *surface, int x, int y, int width, int height, i
 void ddiDeletePen(DDIPen *pen);
 
 /**
- * Set whether the text written by a pen should be wrapped.
+ * Set whether the text written by a pen should be wrapped. Default is true.
  */
 void ddiSetPenWrap(DDIPen *pen, int wrap);
 
@@ -243,7 +253,7 @@ void ddiWritePen(DDIPen *pen, const char *text);
 /**
  * Execute a pen. This draws all the text to the target surface.
  */
-void ddiExecutePen(DDIPen *pen);
+void ddiExecutePen(DDIPen *pen, DDISurface *surface);
 
 /**
  * Set a pen's background color.
@@ -256,10 +266,13 @@ void ddiSetPenBackground(DDIPen *pen, DDIColor *bg);
 void ddiSetPenColor(DDIPen *pen, DDIColor *fg);
 
 /**
- * Set the font for a pen object to the specifies face, size and style. The style is DDI_STYLE_REGULAR, or a
- * bitwise-OR of one or more of DDI_STYLE_BOLD, DDI_STYLE_ITALIC and DDI_STYLE_UNDERLINE.
- * Returns 0 on success, or -1 on error, in which case it sets 'error' to point to an error message.
+ * Get the current width and height required by the pen.
  */
-int ddiSetPenFont(DDIPen *pen, const char *family, int size, int style, const char **error);
+void ddiGetPenSize(DDIPen *pen, int *widthOut, int *heightOut);
+
+/**
+ * Reposition the pen.
+ */
+void ddiSetPenPosition(DDIPen *pen, int x, int y);
 
 #endif

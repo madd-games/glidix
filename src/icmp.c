@@ -29,6 +29,8 @@
 #include <glidix/icmp.h>
 #include <glidix/errno.h>
 #include <glidix/string.h>
+#include <glidix/socket.h>
+#include <glidix/memory.h>
 
 static int sendErrorPacket4(struct sockaddr *src, const struct sockaddr *dest, int errnum, const void *packet, size_t packetlen)
 {
@@ -98,4 +100,42 @@ int sendErrorPacket(struct sockaddr *src, const struct sockaddr *dest, int errnu
 		// TODO: IPv6
 		return 0;
 	};
+};
+
+void onICMPv4Packet(const struct sockaddr_in *src, const struct sockaddr_in *dest, const void *msg, size_t size)
+{
+	if (size < sizeof(PingPongPacket)) return;
+	
+	const PingPongPacket *ping = (const PingPongPacket*) msg;
+	if ((ping->type == 8) && (ping->code == 0))
+	{
+		// this really is a ping
+		if (ipv4_checksum(ping, size) == 0)
+		{
+			// actually valid
+			PingPongPacket *pong = (PingPongPacket*) kmalloc(size);
+			memcpy(pong, ping, size);
+			pong->type = 0;
+			pong->checksum = 0;
+			pong->checksum = ipv4_checksum(pong, size);
+			
+			struct sockaddr_in srcPong;
+			struct sockaddr_in dstPong;
+			memcpy(&srcPong, dest, sizeof(struct sockaddr_in));
+			memcpy(&dstPong, src, sizeof(struct sockaddr_in));
+			sendPacket((struct sockaddr*)&srcPong, (struct sockaddr*)&dstPong,
+				pong, size, IPPROTO_ICMP | PKT_DONTFRAG, 0, NULL);
+			kfree(pong);
+		};
+	};
+};
+
+void onICMPPacket(const struct sockaddr *src, const struct sockaddr *dest, const void *msg, size_t size)
+{
+	if (src->sa_family == AF_INET)
+	{
+		onICMPv4Packet((const struct sockaddr_in*)src, (const struct sockaddr_in*)dest, msg, size);
+	};
+	
+	// TODO: IPv6
 };

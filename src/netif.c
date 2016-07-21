@@ -1472,6 +1472,13 @@ int isLocalAddr(const struct sockaddr *addr)
 			// IPv6
 			const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
 			
+			if (inaddr->sin6_addr.s6_addr[0] == 0xFF)
+			{
+				// IPv6 multicast, we don't want to forward this by accident
+				mutexUnlock(&iflistLock);
+				return 1;
+			};
+			
 			int i;
 			for (i=0; i<netif->ipv6.numAddrs; i++)
 			{

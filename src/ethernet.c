@@ -292,6 +292,7 @@ static void onARPPacket(NetIf *netif, ARPPacket *arp)
 void onEtherFrame(NetIf *netif, const void *frame, size_t framelen, int flags)
 {
 	static uint8_t broadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+	static uint8_t multicastIPv6[2] = {0x33, 0x33};
 	
 	if (framelen < 64)
 	{
@@ -309,22 +310,27 @@ void onEtherFrame(NetIf *netif, const void *frame, size_t framelen, int flags)
 	{
 		uint32_t crc = ether_checksum(frame, framelen);
 		kprintf_debug("RECEIVED CRC: %a\n", (uint64_t)crc);
+		// TODO: is the CRC correct???
 	};
 	
 	size_t overheadSize = sizeof(EthernetHeader) + 4;
 	EthernetHeader *head = (EthernetHeader*) frame;
-	
+
+	uint16_t type = __builtin_bswap16(head->type);
 	if (memcmp(&head->dest, broadcastMac, 6) != 0)
 	{
 		// not broadcast, so make sure this frame is targetted at us
 		if (memcmp(&head->dest, &netif->ifconfig.ethernet.mac, 6) != 0)
 		{
-			// destined to someone else; drop
-			return;
+			// it might also be IPv6 multicast
+			if ((memcmp(&head->dest, multicastIPv6, 2) != 0) || (type != ETHER_TYPE_IPV6))
+			{
+				// destined to someone else; drop
+				return;
+			};
 		};
 	};
 	
-	uint16_t type = __builtin_bswap16(head->type);
 	switch (type)
 	{
 	case ETHER_TYPE_ARP:

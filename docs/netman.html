@@ -1,0 +1,69 @@
+<style type="text/css">
+body {font-family: sans-serif;}
+p, li, table {letter-spacing: 1px; line-height: 150%;}
+h1 {line-height: 150%; letter-spacing: 2px}
+p code {font-size: 14px;}
+table code {font-size: 14px;}
+</style>
+
+<title>Glidix Network Manager</title>
+<h1>Glidix Network Manager</h1>
+<p>
+The Glidix network manager is responsible for managing network connections. It is controlled by 2 commands:
+</p>
+
+<pre>
+ifup <i>interface</i>
+ifdown <i>interface</i>
+</pre>
+
+<p>
+<code>ifup</code> <i>brings up</i> a network interface, while <code>ifdown</code> <i>brings down</i> a network interface. Bringing up means making an interface (hopefully) useable, by configuring it. Bringing down an interface means deleting all configuration and stopping the daemons that maintain the interface. The configuration of each interface is described in <code>/etc/if.conf</code>.
+</p>
+
+<h2>Bringing up an interface</h2>
+<p>
+Bringing up an interface works by first ensuring that it is down, and then searching for it in <code>/etc/if.conf</code>. If it is a <i>virtual interface</i>, such as a tunnel or VPN, the interface does not exist in the kernel at this point, and it is <i>created</i> by bringing it up. If it's a physical interface that always exists in the kernel (such as an ethernet connection), and is not mentioned in <code>/etc/if.conf</code>, <code>ifup</code> will add a <i>default</i> configuration rule for both IPv4 and IPv6 (DHCP and SLAAC).
+</p>
+
+<p>
+Once the configuration is found, it runs a specific service (such as SLAAC or DHCPv6), for IPv4 and a separate one for IPv6, to maintain the interface based on the configuration.
+</p>
+
+<h2>Bringing down an interface</h2>
+<p>
+An interface is brough down by sending the <code>SIGINT</code> signal to its IPv4 and IPv6 configuration daemon. This should result in the interface losing all addresses and routes.
+</p>
+
+<h2>Format of <code>/etc/if.conf</code></h2>
+<p>
+Each interface is described as follows:
+</p>
+
+<pre>
+interface <i>name</i> <i>ipv4|ipv6</i> <i>method</i> {
+	<i>option1</i>
+	<i>option2</i>
+	...
+}
+</pre>
+
+<p>
+Or, if the options are not necessarily (all defaults):
+</p>
+
+<pre>
+interface <i>name</i> <i>ipv4|ipv6</i> <i>method</i>
+</pre>
+
+<p>
+There may be a separate rule for IPv4 and then a separate rule for IPv6, for the same interface. Example:
+</p>
+
+<pre>
+interface eth0 ipv4 dhcp {
+	name glidix-pc
+}
+
+interface eth0 ipv6 slaac
+</pre>

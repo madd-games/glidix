@@ -451,6 +451,11 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 					((char*)packet + dataOffset), info.size, info.moreFrags);
 			return;
 		};
+		
+		if (info.proto == IPPROTO_ICMP)
+		{
+			onICMPPacket(src, dest, (char*)packet + dataOffset, info.size);
+		};
 	}
 	else
 	{

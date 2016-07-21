@@ -838,6 +838,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	};
 
 	// assign pid/thid
+	cli();
 	spinlockAcquire(&schedLock);
 	if ((flags & CLONE_THREAD) == 0)
 	{
@@ -845,7 +846,8 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	};
 	thread->thid = nextPid++;
 	spinlockRelease(&schedLock);
-
+	sti();
+	
 	// remember parent pid if this is a new process
 	if ((flags & CLONE_THREAD) == 0)
 	{

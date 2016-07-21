@@ -93,7 +93,7 @@ int main()
 	int width, height;
 	gwmScreenSize(&width, &height);
 	
-	GWMWindow *win = gwmCreateWindow(NULL, "sysbar", 0, height-40, width, height,
+	GWMWindow *win = gwmCreateWindow(NULL, "sysbar", 0, height-40, width, 40,
 						GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NODECORATE);
 	
 	if (win == NULL)

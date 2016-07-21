@@ -206,10 +206,10 @@ int atomic_test_and_set8(uint8_t *ptr, int bitpos);
  * Atomically test whether the value at ptr is equal to 'oldval', and if so, set it to 'newval'.
  * Returns the original value at 'ptr'.
  */
-uint8_t atomic_compare_and_swap8(uint8_t *ptr, uint8_t oldval, uint8_t newval);
-uint16_t atomic_compare_and_swap16(uint16_t *ptr, uint16_t oldval, uint16_t newval);
-uint32_t atomic_compare_and_swap32(uint32_t *ptr, uint32_t oldval, uint32_t newval);
-uint64_t atomic_compare_and_swap64(uint64_t *ptr, uint64_t oldval, uint64_t newval);
+uint8_t atomic_compare_and_swap8(void *ptr, uint8_t oldval, uint8_t newval);
+uint16_t atomic_compare_and_swap16(void *ptr, uint16_t oldval, uint16_t newval);
+uint32_t atomic_compare_and_swap32(void *ptr, uint32_t oldval, uint32_t newval);
+uint64_t atomic_compare_and_swap64(void *ptr, uint64_t oldval, uint64_t newval);
 
 /**
  * Those are implemented in acpi/acglidix.c because reusing code is cool and who cares about

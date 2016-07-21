@@ -188,12 +188,30 @@ typedef struct PenLine_
 	struct PenLine_ *next;
 } PenLine;
 
+struct DDIFont_
+{
+	/**
+	 * FreeType library handle.
+	 */
+	FT_Library lib;
+
+	/**
+	 * Current font.
+	 */
+	FT_Face face;
+};
+
 struct DDIPen_
 {
 	/**
-	 * The target surface onto which we will eventually draw.
+	 * The format of the surface onto which we will draw (typically the screen format).
 	 */
-	DDISurface *surface;
+	DDIPixelFormat format;
+	
+	/**
+	 * The font which we are currently using.
+	 */
+	DDIFont *font;
 	
 	/**
 	 * The bounding box onto which to draw.
@@ -204,16 +222,6 @@ struct DDIPen_
 	 * The current scroll position.
 	 */
 	int scrollX, scrollY;
-	
-	/**
-	 * FreeType library handle.
-	 */
-	FT_Library lib;
-
-	/**
-	 * Current font.
-	 */
-	FT_Face face;
 	
 	/**
 	 * Nonzero if text should be word-wrapped automatically (default = 1).
@@ -337,6 +345,27 @@ static void ddiColorToPixel(uint32_t *pixeldata, DDIPixelFormat *format, DDIColo
 static void ddiCopy(void *dest, void *src, uint64_t count)
 {
 	if(!count){return;}
+	uint64_t maskDest = (uint64_t) dest & 0xFUL;
+	if (maskDest != ((uint64_t) src & 0xFUL))
+	{
+		memcpy(dest, src, count);
+		return;
+	};
+	
+	uint64_t skip = (16 - maskDest) & 15;
+	if (skip >= count)
+	{
+		memcpy(dest, src, count);
+		return;
+	}
+	else
+	{
+		memcpy(dest, src, skip);
+		dest += skip;
+		src += skip;
+		count -= skip;
+	};
+	
 	while(count >= 8){ *(uint64_t*)dest = *(uint64_t*)src; dest += 8; src += 8; count -= 8; };
 	while(count >= 4){ *(uint32_t*)dest = *(uint32_t*)src; dest += 4; src += 4; count -= 4; };
 	while(count >= 2){ *(uint16_t*)dest = *(uint16_t*)src; dest += 2; src += 2; count -= 2; };
@@ -503,6 +532,7 @@ void ddiOverlay(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX
 	for (; height; height--)
 	{
 		ddiCopy(put, scan, pixelSize * width);
+		//memcpy(put, scan, pixelSize * width);
 		scan += srcScanlineSize;
 		put += destScanlineSize;
 	};
@@ -683,37 +713,10 @@ DDISurface* ddiLoadAndConvertPNG(DDIPixelFormat *format, const char *filename, c
 	return surface;
 };
 
-#if 0
-void ddiBlendPixel(uint8_t *scan, uint8_t *put, int alphaIndex)
-{
-	int srcAlpha = (int) scan[alphaIndex];
-	int dstAlpha = (int) put[alphaIndex];
-	int outAlpha = srcAlpha + (int) dstAlpha * (255 - srcAlpha) / 255;
-
-	if (outAlpha == 0)
-	{
-		*((uint32_t*)put) = 0;
-	}
-	else
-	{
-		DDIIntVector vdst = {put[0], put[1], put[2], put[3]};
-		DDIIntVector vsrc = {scan[0], scan[1], scan[2], scan[3]};
-		DDIIntVector result = (
-			(vsrc * srcAlpha)/255
-			+ (vdst * dstAlpha * (255-srcAlpha))/(255*255)
-		)*255/outAlpha;
-		
-		put[0] = (uint8_t) result[0];
-		put[1] = (uint8_t) result[1];
-		put[2] = (uint8_t) result[2];
-		put[3] = (uint8_t) result[3];
-		put[alphaIndex] = outAlpha;
-	};
-};
-#endif
-
-void ddiBlendPixel(uint8_t *scan, uint8_t *put, int alphaIndex);
-
+/**
+ * Don't question the use of the "register" keyword here. It causes the function to be approximately
+ * 2 times faster, when compiling with GCC.
+ */
 void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY,
 	unsigned int width, unsigned int height)
 {
@@ -811,51 +814,24 @@ void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, i
 	};
 	
 	// calculate offsets
-	size_t pixelSize = src->format.bpp + src->format.pixelSpacing;
-	size_t srcScanlineSize = src->format.scanlineSpacing + pixelSize * src->width;
-	size_t destScanlineSize = dest->format.scanlineSpacing + pixelSize * dest->width;
+	register size_t pixelSize = src->format.bpp + src->format.pixelSpacing;
+	register size_t srcScanlineSize = src->format.scanlineSpacing + pixelSize * src->width;
+	register size_t destScanlineSize = dest->format.scanlineSpacing + pixelSize * dest->width;
 	
-	uint8_t *scan = (uint8_t*) src->data + pixelSize * srcX + srcScanlineSize * srcY;
-	uint8_t *put = (uint8_t*) dest->data + pixelSize * destX + destScanlineSize * destY;
+	register uint8_t *scan = (uint8_t*) src->data + pixelSize * srcX + srcScanlineSize * srcY;
+	register uint8_t *put = (uint8_t*) dest->data + pixelSize * destX + destScanlineSize * destY;
 	
 	for (; height; height--)
 	{
-		size_t count = width;
-		uint8_t *scanStart = scan;
-		uint8_t *putStart = put;
+		register size_t count = width;
+		register uint8_t *scanStart = scan;
+		register uint8_t *putStart = put;
 		
 		while (count--)
 		{
-#if 0
-			int srcAlpha = (int) scan[alphaIndex];
-			int dstAlpha = (int) put[alphaIndex];
-			int outAlpha = srcAlpha + (int) dstAlpha * (255 - srcAlpha) / 255;
-
-#if 0
-			int i;
-			for (i=0; i<src->format.bpp; i++)
-			{
-				if (i != alphaIndex)
-				{
-					if (outAlpha == 0)
-					{
-						put[i] = 0;
-					}
-					else
-					{
-						uint32_t val = (
-							((uint32_t)scan[i] * srcAlpha)/255
-							+ ((uint32_t)put[i] * dstAlpha * (255-srcAlpha))/(255*255)
-						)*255/outAlpha;
-						put[i] = (uint8_t) val;
-					};
-				}
-				else
-				{
-					put[i] = outAlpha;
-				};
-			};
-#endif
+			register int srcAlpha = (int) scan[alphaIndex];
+			register int dstAlpha = (int) put[alphaIndex];
+			register int outAlpha = srcAlpha + (int) dstAlpha * (255 - srcAlpha) / 255;
 
 			if (outAlpha == 0)
 			{
@@ -863,9 +839,6 @@ void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, i
 			}
 			else
 			{
-				//DDIByteVector *bytesPut = (DDIByteVector*) put;
-				//DDIByteVector *bytesScan = (DDIByteVector*) scan;
-				
 				DDIIntVector vdst = {put[0], put[1], put[2], put[3]};
 				DDIIntVector vsrc = {scan[0], scan[1], scan[2], scan[3]};
 				DDIIntVector result = (
@@ -873,18 +846,13 @@ void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, i
 					+ (vdst * dstAlpha * (255-srcAlpha))/(255*255)
 				)*255/outAlpha;
 				
-				//DDIByteVector rbytes = (DDIByteVector) result;
-				//rbytes[alphaIndex] = 0;
-				//memcpy(put, &rbytes, src->format.bpp);
 				put[0] = (uint8_t) result[0];
 				put[1] = (uint8_t) result[1];
 				put[2] = (uint8_t) result[2];
 				put[3] = (uint8_t) result[3];
 				put[alphaIndex] = outAlpha;
 			};
-#endif
 
-			ddiBlendPixel(scan, put, alphaIndex);
 			scan += pixelSize;
 			put += pixelSize;
 		};
@@ -1014,10 +982,79 @@ long ddiReadUTF8(const char **strptr)
 	return result;
 };
 
-DDIPen* ddiCreatePen(DDISurface *surface, int x, int y, int width, int height, int scrollX, int scrollY, const char **error)
+DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error)
+{
+	DDIFont *font = (DDIFont*) malloc(sizeof(DDIFont));
+	if (font == NULL)
+	{
+		DDI_ERROR("Out of memory");
+		return NULL;
+	};
+	
+	if (strlen(family) > 64)
+	{
+		DDI_ERROR("Font name too long");
+		free(font);
+		return NULL;
+	};
+	
+	char fontfile[256];
+	int type = style & (DDI_STYLE_BOLD | DDI_STYLE_ITALIC);
+	
+	if (type == 0)
+	{
+		// regular
+		sprintf(fontfile, "/usr/share/fonts/regular/%s.ttf", family);
+	}
+	else if (type == DDI_STYLE_BOLD)
+	{
+		sprintf(fontfile, "/usr/share/fonts/bold/%s Bold.ttf", family);
+	}
+	else if (type == DDI_STYLE_ITALIC)
+	{
+		sprintf(fontfile, "/usr/share/fonts/italic/%s Italic.ttf", family);
+	}
+	else
+	{
+		// bold italic
+		sprintf(fontfile, "/usr/share/fonts/bi/%s BoldItalic.ttf", family);
+	};
+	
+	FT_Error fterr = FT_Init_FreeType(&font->lib);
+	if (fterr != 0)
+	{
+		DDI_ERROR("FreeType initialization failed");
+		free(font);
+		return NULL;
+	};
+	
+	// load the new font
+	fterr = FT_New_Face(font->lib, fontfile, 0, &font->face);
+	if (fterr != 0)
+	{
+		DDI_ERROR("Failed to load the font");
+		free(font);
+		return NULL;
+	};
+	
+	fterr = FT_Set_Char_Size(font->face, 0, size*64, 0, 0);
+	if (fterr != 0)
+	{
+		DDI_ERROR("Failed to set font size");
+		FT_Done_Face(font->face);
+		FT_Done_FreeType(font->lib);
+		free(font);
+		return NULL;
+	};
+	
+	return font;
+};
+
+DDIPen* ddiCreatePen(DDIPixelFormat *format, DDIFont *font, int x, int y, int width, int height, int scrollX, int scrollY, const char **error)
 {
 	DDIPen *pen = (DDIPen*) malloc(sizeof(DDIPen));
-	pen->surface = surface;
+	memcpy(&pen->format, format, sizeof(DDIPixelFormat));
+	pen->font = font;
 	pen->x = x;
 	pen->y = y;
 	pen->width = width;
@@ -1032,33 +1069,7 @@ DDIPen* ddiCreatePen(DDISurface *surface, int x, int y, int width, int height, i
 	
 	memcpy(&pen->foreground, &foreground, sizeof(DDIColor));
 	memcpy(&pen->background, &background, sizeof(DDIColor));
-	
-	FT_Error fterr = FT_Init_FreeType(&pen->lib);
-	if (fterr != 0)
-	{
-		DDI_ERROR("FreeType initialization failed");
-		free(pen);
-		return NULL;
-	};
-	
-	fterr = FT_New_Face(pen->lib, "/usr/share/fonts/regular/DejaVu Sans.ttf", 0, &pen->face);
-	if (fterr != 0)
-	{
-		DDI_ERROR("Failed to load default font!");
-		FT_Done_FreeType(pen->lib);
-		free(pen);
-		return NULL;
-	};
-	
-	fterr = FT_Set_Char_Size(pen->face, 0, 12*64, 0, 0);
-	if (fterr != 0)
-	{
-		DDI_ERROR("Failed to set font size!");
-		FT_Done_FreeType(pen->lib);
-		free(pen);
-		return NULL;
-	};
-	
+
 	pen->currentLine = (PenLine*) malloc(sizeof(PenLine));
 	pen->currentLine->firstSegment = NULL;
 	pen->currentLine->maxHeight = 12;
@@ -1090,8 +1101,6 @@ void ddiDeletePen(DDIPen *pen)
 		line = nextLine;
 	};
 	
-	FT_Done_Face(pen->face);
-	FT_Done_FreeType(pen->lib);
 	free(pen);
 };
 
@@ -1164,23 +1173,23 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 			return 0;
 		};
 		
-		FT_UInt glyph = FT_Get_Char_Index(pen->face, point);
-		error = FT_Load_Glyph(pen->face, glyph, FT_LOAD_DEFAULT);
+		FT_UInt glyph = FT_Get_Char_Index(pen->font->face, point);
+		error = FT_Load_Glyph(pen->font->face, glyph, FT_LOAD_DEFAULT);
 		if (error != 0)
 		{
 			return -1;
 		};
 	
-		error = FT_Render_Glyph(pen->face->glyph, FT_RENDER_MODE_NORMAL);
+		error = FT_Render_Glyph(pen->font->face->glyph, FT_RENDER_MODE_NORMAL);
 		if (error != 0)
 		{
 			return -1;
 		};
 		
-		FT_Bitmap *bitmap = &pen->face->glyph->bitmap;
+		FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
 		
-		int left = penX + pen->face->glyph->bitmap_left;
-		int top = penY - pen->face->glyph->bitmap_top;
+		int left = penX + pen->font->face->glyph->bitmap_left;
+		int top = penY - pen->font->face->glyph->bitmap_top;
 		if (left < minX) minX = left;
 		if (top < minY) minY = top;
 		
@@ -1201,8 +1210,8 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 			return 0;
 		};
 		
-		penX += (pen->face->glyph->advance.x >> 6) + pen->letterSpacing;
-		penY += pen->face->glyph->advance.y >> 6;
+		penX += (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
+		penY += pen->font->face->glyph->advance.y >> 6;
 	};
 	
 	if (minX < 0)
@@ -1255,7 +1264,7 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		
 		const char *textEnd = &text[textSize];
 		
-		DDISurface *surface = ddiCreateSurface(&pen->surface->format, width, height, NULL, 0);
+		DDISurface *surface = ddiCreateSurface(&pen->format, width, height, NULL, 0);
 		DDIColor fillColor;
 		memcpy(&fillColor, &pen->foreground, sizeof(DDIColor));
 		fillColor.alpha = 0;
@@ -1271,13 +1280,13 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		{
 			long point = ddiReadUTF8(&text);
 			
-			FT_UInt glyph = FT_Get_Char_Index(pen->face, point);
-			FT_Error error = FT_Load_Glyph(pen->face, glyph, FT_LOAD_DEFAULT);
+			FT_UInt glyph = FT_Get_Char_Index(pen->font->face, point);
+			FT_Error error = FT_Load_Glyph(pen->font->face, glyph, FT_LOAD_DEFAULT);
 			if (error != 0) break;
-			error = FT_Render_Glyph(pen->face->glyph, FT_RENDER_MODE_NORMAL);
+			error = FT_Render_Glyph(pen->font->face->glyph, FT_RENDER_MODE_NORMAL);
 			if (error != 0) break;
 			
-			FT_Bitmap *bitmap = &pen->face->glyph->bitmap;
+			FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
 			
 			int x, y;
 			for (x=0; x<bitmap->width; x++)
@@ -1285,12 +1294,12 @@ void ddiWritePen(DDIPen *pen, const char *text)
 				for (y=0; y<bitmap->rows; y++)
 				{
 					fillColor.alpha = bitmap->buffer[y * bitmap->pitch + x];
-					ddiFillRect(surface, penX+offsetX+x+pen->face->glyph->bitmap_left, penY+offsetY+y-pen->face->glyph->bitmap_top, 1, 1, &fillColor);
+					ddiFillRect(surface, penX+offsetX+x+pen->font->face->glyph->bitmap_left, penY+offsetY+y-pen->font->face->glyph->bitmap_top, 1, 1, &fillColor);
 				};
 			};
 			
-			penX += (pen->face->glyph->advance.x >> 6) + pen->letterSpacing;
-			penY += pen->face->glyph->advance.y >> 6;
+			penX += (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
+			penY += pen->font->face->glyph->advance.y >> 6;
 		};
 		
 		pen->currentLine->currentWidth += width;
@@ -1338,7 +1347,7 @@ void ddiWritePen(DDIPen *pen, const char *text)
 	};
 };
 
-void ddiExecutePen(DDIPen *pen)
+void ddiExecutePen(DDIPen *pen, DDISurface *surface)
 {
 	PenLine *line;
 	PenSegment *seg;
@@ -1363,7 +1372,7 @@ void ddiExecutePen(DDIPen *pen)
 		for (seg=line->firstSegment; seg!=NULL; seg=seg->next)
 		{
 			int plotY = drawY + line->maxHeight - seg->surface->height;
-			ddiBlit(seg->surface, 0, 0, pen->surface, drawX, plotY, seg->surface->width, seg->surface->height);
+			ddiBlit(seg->surface, 0, 0, surface, drawX, plotY, seg->surface->width, seg->surface->height);
 			drawX += seg->surface->width;
 		};
 		
@@ -1381,54 +1390,25 @@ void ddiSetPenColor(DDIPen *pen, DDIColor *fg)
 	memcpy(&pen->foreground, fg, sizeof(DDIColor));
 };
 
-int ddiSetPenFont(DDIPen *pen, const char *family, int size, int style, const char **error)
+void ddiGetPenSize(DDIPen *pen, int *widthOut, int *heightOut)
 {
-	if (strlen(family) > 64)
+	PenLine *line;
+	PenSegment *seg;
+	
+	int height = 0;
+	int width = 0;
+	for (line=pen->firstLine; line!=NULL; line=line->next)
 	{
-		DDI_ERROR("Font name too long");
-		return -1;
+		if (line->currentWidth > width) width = line->currentWidth;
+		height += line->maxHeight * line->lineHeight / 100;
 	};
 	
-	char fontfile[256];
-	int type = style & (DDI_STYLE_BOLD | DDI_STYLE_ITALIC);
-	
-	if (type == 0)
-	{
-		// regular
-		sprintf(fontfile, "/usr/share/fonts/regular/%s.tff", family);
-	}
-	else if (type == DDI_STYLE_BOLD)
-	{
-		sprintf(fontfile, "/usr/share/fonts/bold/%s Bold.ttf", family);
-	}
-	else if (type == DDI_STYLE_ITALIC)
-	{
-		sprintf(fontfile, "/usr/share/fonts/italic/%s Italic.ttf", family);
-	}
-	else
-	{
-		// bold italic
-		sprintf(fontfile, "/usr/share/fonts/bi/%s BoldItalic.ttf", family);
-	};
-	
-	// dispose of the old font.
-	FT_Done_Face(pen->face);
-	
-	// load the new font
-	FT_Error fterr = FT_New_Face(pen->lib, fontfile, 0, &pen->face);
-	if (fterr != 0)
-	{
-		DDI_ERROR("Failed to load the font");
-		return -1;
-	};
-	
-	fterr = FT_Set_Char_Size(pen->face, 0, size*64, 0, 0);
-	if (fterr != 0)
-	{
-		DDI_ERROR("Failed to set font size");
-		FT_Done_Face(pen->face);
-		return -1;
-	};
-	
-	return 0;
+	*widthOut = width;
+	*heightOut = height;
+};
+
+void ddiSetPenPosition(DDIPen *pen, int x, int y)
+{
+	pen->x = x;
+	pen->y = y;
 };

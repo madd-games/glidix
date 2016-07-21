@@ -42,5 +42,6 @@ typedef struct
 } ErrorPacket4;
 
 int sendErrorPacket(struct sockaddr *src, const struct sockaddr *dest, int errnum, const void *packet, size_t packetlen);
+void onICMPPacket(const struct sockaddr *src, const struct sockaddr *dest, const void *msg, size_t size);
 
 #endif

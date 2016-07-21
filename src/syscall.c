@@ -2181,10 +2181,10 @@ unsigned sys_sleep(unsigned seconds)
 		
 		cli();
 		lockSched();
-		if (wasSignalled()) break;
+		if (haveReadySigs(getCurrentThread())) break;
 	};
 	
-	
+	timedCancel(&ev);
 	unlockSched();
 	sti();
 	
@@ -3312,10 +3312,19 @@ int sys_netconf_addr(int a, const char *ub, void *c, uint64_t d)
 		return -1;
 	};
 	
-	void *buf = kmalloc(d);
-	if (memcpy_u2k(buf, c, d) != 0)
+	void *buf = NULL;
+	if (c != NULL)
 	{
-		kfree(buf);
+		buf = kmalloc(d);
+		if (memcpy_u2k(buf, c, d) != 0)
+		{
+			kfree(buf);
+			ERRNO = EFAULT;
+			return -1;
+		};
+	}
+	else if (d != 0)
+	{
 		ERRNO = EFAULT;
 		return -1;
 	};
@@ -3795,10 +3804,71 @@ int sys_sigsuspend(uint64_t mask)
 	return -1;
 };
 
+int sys_lockf(int fd, int cmd, off_t len)
+{
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+	File *fp = ftab->entries[fd];
+	if (fp == NULL)
+	{
+		spinlockRelease(&ftab->spinlock);
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	vfsDup(fp);
+	spinlockRelease(&ftab->spinlock);
+	
+	if ((cmd == F_LOCK) || (cmd == F_TLOCK))
+	{
+		if ((fp->oflag & O_WRONLY) == 0)
+		{
+			// file not writeable, can't lock
+			vfsClose(fp);
+			ERRNO = EBADF;
+			return -1;
+		};
+	};
+	
+	off_t pos = 0;
+	if (fp->seek != NULL)
+	{
+		pos = fp->seek(fp, 0, SEEK_CUR);
+	};
+	
+	struct stat st;
+	if (fp->fstat == NULL)
+	{
+		vfsClose(fp);
+		ERRNO = EOPNOTSUPP;
+		return -1;
+	};
+	
+	if (fp->fstat(fp, &st) != 0)
+	{
+		vfsClose(fp);
+		ERRNO = EIO;
+		return -1;
+	};
+	
+	int error = vfsFileLock(fp, cmd, st.st_dev, st.st_ino, pos, len);
+	vfsClose(fp);
+	
+	ERRNO = error;
+	if (error != 0) return -1;
+	return 0;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 122
+#define SYSCALL_NUMBER 124
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3922,6 +3992,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_pthread_kill,			// 119
 	&sys_kopt,				// 120
 	&sys_sigwait,				// 121
+	&sys_sigsuspend,			// 122
+	&sys_lockf,				// 123
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

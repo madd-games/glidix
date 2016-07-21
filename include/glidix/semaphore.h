@@ -46,7 +46,7 @@ typedef struct _SemWaitThread
 	struct _SemWaitThread *next;
 } SemWaitThread;
 
-typedef struct
+typedef struct Semaphore_
 {
 	// for debugging only; DO NOT READ OUTSIDE OF semDump()
 	// last thread to have acquired the semaphore.

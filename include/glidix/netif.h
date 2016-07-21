@@ -381,7 +381,8 @@ typedef struct NetIf_
 
 	/**
 	 * Interface statistics. Number of successfully transmitted and received packets,
-	 * number of dropped packets and number of errors.
+	 * number of dropped packets and number of errors. Should be updated using atomic
+	 * operations.
 	 */
 	int				numTrans;
 	int				numRecv;

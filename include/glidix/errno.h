@@ -109,7 +109,7 @@
 #define ETIME                                     78
 #define ETIMEDOUT                                 80
 #define ETXTBSY                                   81
-#define EWOULDBLOCK                               82
+#define EWOULDBLOCK                               EAGAIN
 #define EXDEV                                     83
 
 /**

@@ -31,12 +31,12 @@
 #include <pthread.h>
 #include <stdio.h>
 
-extern pthread_spinlock_t __heap_lock;
+extern pthread_mutex_t __heap_lock;
 
 void* malloc(size_t len)
 {
-	pthread_spin_lock(&__heap_lock);
+	pthread_mutex_lock(&__heap_lock);
 	void *out = _heap_malloc(len);
-	pthread_spin_unlock(&__heap_lock);
+	pthread_mutex_unlock(&__heap_lock);
 	return out;
 };

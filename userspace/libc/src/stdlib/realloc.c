@@ -31,12 +31,12 @@
 #include <pthread.h>
 #include <stdio.h>
 
-extern pthread_spinlock_t __heap_lock;
+extern pthread_mutex_t __heap_lock;
 
 void* realloc(void *block, size_t newsize)
 {
-	pthread_spin_lock(&__heap_lock);
+	pthread_mutex_lock(&__heap_lock);
 	void *ret = _heap_realloc(block, newsize);
-	pthread_spin_unlock(&__heap_lock);
+	pthread_mutex_unlock(&__heap_lock);
 	return ret;
 };

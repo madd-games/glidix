@@ -34,8 +34,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
-pthread_spinlock_t __heap_lock = 0;
+pthread_mutex_t __heap_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * WARNING: Do not implement locks in this code! Instead, go to the definitions of malloc(),
@@ -96,14 +97,6 @@ void _heap_split_block(__heap_header *head, size_t newSize)
 	};
 
 	__heap_footer *foot = _heap_get_footer(head);
-	if ((uint64_t)foot > 0xF000000000000000)
-	{
-		_heap_dump();
-		fprintf(stderr, "size: %lu\n", head->size);
-		fprintf(stderr, "header at: %p\n", head);
-		fprintf(stderr, "footer at: %p\n", foot);
-		_exit(1);
-	};
 	head->size = newSize;
 
 	__heap_footer *newFoot = _heap_get_footer(head);
@@ -137,15 +130,6 @@ void* _heap_malloc(size_t len)
 	{
 		len &= ~0xF;
 		len += 0x10;
-	};
-	
-	if (len == 112)
-	{
-		if (__i_debug)
-		{
-			fprintf(stderr, "ALLOCATING 112 bytes\n");
-			*((int*)0xf000000000000000) = 5;
-		};
 	};
 	
 	__heap_header *head = (__heap_header*) _HEAP_BASE_ADDR;

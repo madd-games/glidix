@@ -92,6 +92,7 @@ int cvWait(CondVar *cv, uint64_t nanotimeout)
 			};
 		};
 		
+		timedCancel(&ev);
 		unlockSched();
 		sti();
 	};

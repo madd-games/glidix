@@ -65,6 +65,11 @@ extern "C" {
 #define	R_OK					(1 << 2)
 #define	F_OK					0
 
+#define	F_LOCK					0
+#define	F_TLOCK					1
+#define	F_ULOCK					2
+#define	F_TEST					3
+
 extern char* optarg;
 extern int optind, opterr, optopt;
 
@@ -133,6 +138,7 @@ pid_t		getsid(pid_t pid);
 pid_t		getpgid(pid_t pid);
 ssize_t		pread(int fd, void *buf, size_t count, off_t offset);
 ssize_t		pwrite(int fd, const void *buf, size_t count, off_t offset);
+int		lockf(int fd, int cmd, off_t len);
 
 /* libcrypt */
 char*		crypt(const char *key, const char *salt);

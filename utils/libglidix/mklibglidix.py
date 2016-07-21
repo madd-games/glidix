@@ -141,7 +141,8 @@ syscallTable = {
 	119:	"pthread_kill",
 	120:	"_glidix_kopt",
 	121:	"_glidix_sigwait",
-	122:	"_glidix_sigsuspend"
+	122:	"_glidix_sigsuspend",
+	123:	"lockf"
 }
 
 f = open("_libglidix.s", "wb")

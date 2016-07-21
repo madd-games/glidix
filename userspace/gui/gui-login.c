@@ -151,7 +151,7 @@ int logInCallback(void *ignore)
 	struct passwd *pwd = getpwnam(username);
 	if (pwd == NULL)
 	{
-		sleep(5);
+		//sleep(5);
 		gwmMessageBox(NULL, "Error", "Invalid username or password.", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		return 0;
 	};
@@ -256,8 +256,18 @@ int main(int argc, char *argv[])
 	ddiFillRect(canvas, 0, 0, WIN_WIDTH, WIN_HEIGHT, &background);
 	
 	DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};
-	ddiDrawText(canvas, 2, 8, "Username:", &white, NULL);
-	ddiDrawText(canvas, 2, 30, "Password:", &white, NULL);
+	
+	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, 4, 100, 20, 0, 0, NULL);
+	ddiSetPenColor(pen, &white);
+	ddiWritePen(pen, "Username:");
+	ddiExecutePen(pen, canvas);
+	ddiDeletePen(pen);
+
+	pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, 26, 100, 20, 0, 0, NULL);
+	ddiSetPenColor(pen, &white);
+	ddiWritePen(pen, "Password:");
+	ddiExecutePen(pen, canvas);
+	ddiDeletePen(pen);
 	
 	txtUsername = gwmCreateTextField(win, "", 80, 2, 150, 0);
 	txtPassword = gwmCreateTextField(win, "", 80, 24, 150, GWM_TXT_MASKED);

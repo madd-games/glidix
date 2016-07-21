@@ -136,7 +136,6 @@ int semWait2(Semaphore *sem, int count)
 		return 0;
 	};
 
-
 	while (sem->count == 0)
 	{
 		//kprintf("try again\n");

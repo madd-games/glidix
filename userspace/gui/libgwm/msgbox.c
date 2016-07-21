@@ -56,7 +56,6 @@ static int gwmOnMsgButton(void *param)
 int gwmButtonHandler(GWMEvent *ev, GWMWindow *button);
 int gwmMessageBox(GWMWindow *parent, const char *caption, const char *text, int flags)
 {
-	int width = 8 * strlen(text) + 38;
 	int iconIndex = flags & 0xF;
 	int buttonSet = (flags >> 4) & 0xF;
 	
@@ -70,17 +69,32 @@ int gwmMessageBox(GWMWindow *parent, const char *caption, const char *text, int 
 		return -1;
 	};
 	
+	DDIPixelFormat screenFormat;
+	gwmGetScreenFormat(&screenFormat);
+	
+	DDIPen *pen = ddiCreatePen(&screenFormat, gwmGetDefaultFont(), 36, 2, 200, 20, 0, 0, NULL);
+	ddiWritePen(pen, text);
+	
+	int width, height;
+	ddiGetPenSize(pen, &width, &height);
+
 	int minWidth = 2 + buttonCounts[buttonSet] * 62;
 	if (width < minWidth)
 	{
 		width = minWidth;
 	};
 	
+	if (height < 32)
+	{
+		ddiSetPenPosition(pen, 36, 18-height/2);
+		height = 32;
+	};
+	
 	int screenWidth, screenHeight;
 	gwmScreenSize(&screenWidth, &screenHeight);
 	
 	GWMWindow *dialog = gwmCreateWindow(NULL, caption, screenWidth/2-width/2, screenHeight/2-33,
-						width, 66, GWM_WINDOW_HIDDEN);
+						width + 38, height + 34, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
 	if (dialog == NULL)
 	{
 		return -1;
@@ -100,19 +114,20 @@ int gwmMessageBox(GWMWindow *parent, const char *caption, const char *text, int 
 	
 	if (iconIndex != 0)
 	{
-		ddiBlit(imgIcons, 32*(iconIndex-1), 0, canvas, 2, 2, 32, 32);
+		ddiBlit(imgIcons, 32*(iconIndex-1), 0, canvas, 2, (height/2)-14, 32, 32);
 	};
 	
-	ddiDrawText(canvas, 36, 14, text, NULL, NULL);
+	ddiExecutePen(pen, canvas);
+	ddiDeletePen(pen);
 	
 	int numButtons = buttonCounts[buttonSet];
-	int startX = (width / 2) - (numButtons * 31);
+	int startX = ((width+38) / 2) - (numButtons * 31);
 	
 	GWMWindow *buttons[3];
 	int i;
 	for (i=0; i<numButtons; i++)
 	{
-		buttons[i] = gwmCreateButton(dialog, buttonLabels[buttonSet][i], startX+62*i, 34, 60, 0);
+		buttons[i] = gwmCreateButton(dialog, buttonLabels[buttonSet][i], startX+62*i, height+2, 60, 0);
 		gwmSetButtonCallback(buttons[i], gwmOnMsgButton, NULL);
 	};
 	

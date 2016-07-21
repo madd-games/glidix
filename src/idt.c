@@ -431,18 +431,13 @@ static void onGPF(Regs *regs)
 			printbyte(*peek++);
 		};
 		kprintf("\n");
+		dumpProcessMemory(getCurrentThread()->pm, regs->rip);
 		debugKernel(regs);
 		//panic("meme");
 	};
 };
 
 void switchTask(Regs *regs);		// sched.c
-
-typedef struct
-{
-	uint16_t			ud2;		// must be 0x0B0F
-	uint16_t			num;		// syscall number
-} PACKED SyscallOpcode;
 
 void sendCPUErrorSignal(Regs *regs, int signal, int code, void *addr)
 {

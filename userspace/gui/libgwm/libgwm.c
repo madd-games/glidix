@@ -44,6 +44,7 @@ static volatile int initFinished = 0;
 static uint64_t nextWindowID;
 static uint64_t nextSeq;
 static pthread_t listenThread;
+static DDIFont *defaultFont;
 
 typedef struct GWMWaiter_
 {
@@ -198,6 +199,14 @@ int gwmInit()
 	};
 	
 	while (!initFinished) __sync_synchronize();
+	const char *errmsg;
+	defaultFont = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_REGULAR, &errmsg);
+	if (defaultFont == NULL)
+	{
+		fprintf(stderr, "failed to load default font (DejaVu Sans 12): %s\n", errmsg);
+		return -1;
+	};
+	
 	return 0;
 };
 
@@ -435,4 +444,100 @@ int gwmSetWindowCursor(GWMWindow *win, int cursor)
 	gwmPostWaiter(seq, &resp, &cmd);
 	
 	return resp.setCursorResp.status;
+};
+
+int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon)
+{
+	if ((icon->width != 16) || (icon->height != 16))
+	{
+		return -1;
+	};
+	
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.setIcon.cmd = GWM_CMD_SET_ICON;
+	cmd.setIcon.seq = seq;
+	cmd.setIcon.win = win->id;
+	memcpy(cmd.setIcon.data, icon->data, icon->format.bpp*16*16);
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	return resp.setIconResp.status;
+};
+
+DDIFont *gwmGetDefaultFont()
+{
+	return defaultFont;
+};
+
+void gwmGetScreenFormat(DDIPixelFormat *format)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.getFormat.cmd = GWM_CMD_GET_FORMAT;
+	cmd.getFormat.seq = seq;
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	memcpy(format, &resp.getFormatResp.format, sizeof(DDIPixelFormat));
+};
+
+int gwmGetDesktopWindows(GWMGlobWinRef *focused, GWMGlobWinRef *winlist)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.getWindowList.cmd = GWM_CMD_GET_WINDOW_LIST;
+	cmd.getWindowList.seq = seq;
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	if (winlist != NULL)
+	{
+		memcpy(winlist, resp.getWindowListResp.wins, sizeof(GWMGlobWinRef)*resp.getWindowListResp.count);
+	};
+	
+	if (focused != NULL)
+	{
+		memcpy(focused, &resp.getWindowListResp.focused, sizeof(GWMGlobWinRef));
+	};
+	
+	return resp.getWindowListResp.count;
+};
+
+int gwmGetGlobWinParams(GWMGlobWinRef *ref, GWMWindowParams *pars)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.getWindowParams.cmd = GWM_CMD_GET_WINDOW_PARAMS;
+	cmd.getWindowParams.seq = seq;
+	memcpy(&cmd.getWindowParams.ref, ref, sizeof(GWMGlobWinRef));
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	if (resp.getWindowParamsResp.status == 0)
+	{
+		memcpy(pars, &resp.getWindowParamsResp.params, sizeof(GWMWindowParams));
+	};
+	
+	return resp.getWindowParamsResp.status;
+};
+
+void gwmSetListenWindow(GWMWindow *win)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.setListenWindow.cmd = GWM_CMD_SET_LISTEN_WINDOW;
+	cmd.setListenWindow.seq = seq;
+	cmd.setListenWindow.win = win->id;
+	
+	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 };

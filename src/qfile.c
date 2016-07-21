@@ -73,6 +73,7 @@ File *qfileCreate(QFileEntry *head)
 	File *fp = (File*) kmalloc(sizeof(File));
 	memset(fp, 0, sizeof(File));
 	fp->oflag = O_RDONLY;
+	fp->refcount = 1;
 	fp->fsdata = head;
 	fp->read = qfileRead;
 	fp->close = qfileClose;

@@ -240,6 +240,18 @@ int main()
 	GWMWindow *wnd = gwmCreateWindow(NULL, "Terminal", 10, 10, 720, 400, GWM_WINDOW_MKFOCUSED);
 	
 	DDISurface *surface = gwmGetWindowCanvas(wnd);
+	
+	const char *error;
+	DDISurface *icon = ddiLoadAndConvertPNG(&surface->format, "/usr/share/images/terminal.png", &error);
+	if (icon == NULL)
+	{
+		printf("Failed to load terminal icon: %s\n", error);
+	}
+	else
+	{
+		gwmSetWindowIcon(wnd, icon);
+	};
+	
 	clearConsole();
 	renderConsole(surface);
 	gwmPostDirty();
