@@ -47,6 +47,7 @@ cd ../..
 chmod 6755 mipdir/usr/bin/passwd
 chmod 6755 mipdir/usr/bin/sudo
 chmod 6755 mipdir/usr/bin/ping
+chmod 6755 mipdir/usr/bin/ping6
 mkmip mipdir isodir/shutils.mip
 cp mipdir/usr/bin/mip-install isodir/bin/mip-install
 
@@ -113,6 +114,14 @@ cd userspace/libc
 sh install-dev.sh ../../mipdir
 cd ../..
 mkmip mipdir isodir/libc-dev.mip
+
+# netman
+rm -rf mipdir
+cd userspace/netman
+make || exit 1
+sh install.sh ../../mipdir || exit 1
+cd ../..
+mkmip mipdir isodir/netman.mip || exit 1
 
 # shell
 rm -rf mipdir

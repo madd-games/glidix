@@ -627,7 +627,7 @@ static void kernelThreadExit()
 
 	// we need to do all of this with interrupts disabled. we remove ourselves from the runqueue,
 	// but do not free the stack nor the thread description; this will be done by ReleaseKernelThread()
-	ASM("cli");
+	cli();
 	Regs regs;
 	lockSched();
 	currentThread->prev->next = currentThread->next;
@@ -643,6 +643,7 @@ void ReleaseKernelThread(Thread *thread)
 	while ((thread->flags & THREAD_TERMINATED) != 0)
 	{
 		__sync_synchronize();
+		kyield();
 	};
 	
 	// release the stack and thread description

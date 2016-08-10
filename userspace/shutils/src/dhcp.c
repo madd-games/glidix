@@ -58,6 +58,7 @@ typedef struct
 {
 	struct in_addr			addr;
 	struct in_addr			mask;
+	int				domain;
 } IPNetIfAddr4;
 
 typedef struct
@@ -90,6 +91,9 @@ typedef struct
 	uint8_t				opt55_len2;		// set to 2
 	uint8_t				optReqMask;		// set to 1 (request subnet mask)
 	uint8_t				optReqRoute;		// set to 3 (request router)
+	uint8_t				opt12;			// set to 12
+	uint8_t				opt12_len6;		// set to 6
+	uint8_t				optHost[6];		// "glidix"
 	uint8_t				optend;			// set ot 255 (end of options)
 } __attribute__ ((packed)) DHCPDiscover;
 
@@ -105,6 +109,13 @@ typedef struct
 	uint8_t				opt54;			// set to 54
 	uint8_t				opt54_len4;		// set to 4
 	uint8_t				server[4];		// DHCP server IP
+	uint8_t				opt55;			// set to 55
+	uint8_t				opt55_len2;		// set to 2
+	uint8_t				optReqMask;		// set to 1 (request subnet mask)
+	uint8_t				optReqRoute;		// set to 3 (request router)
+	uint8_t				opt12;			// set to 12
+	uint8_t				opt12_len6;		// set to 6
+	uint8_t				optHost[6];		// "glidix"
 	uint8_t				optend;			// set to 255
 } __attribute__ ((packed)) DHCPRequest;
 
@@ -288,6 +299,9 @@ int main(int argc, char *argv[])
 	disc.opt55_len2 = 2;
 	disc.optReqMask = 1;
 	disc.optReqRoute = 3;
+	disc.opt12 = 12;
+	disc.opt12_len6 = 6;
+	memcpy(disc.optHost, "glidix", 6);
 	disc.optend = 255;
 	
 	struct sockaddr_in daddr;
@@ -320,6 +334,7 @@ int main(int argc, char *argv[])
 	IPNetIfAddr4 addr;
 	memcpy(&addr.addr, myip, 4);
 	memcpy(&addr.mask, addrmask, 4);
+	addr.domain = _GLIDIX_DOM_GLOBAL;
 	
 	if (_glidix_netconf_addr(AF_INET, ifname, &addr, sizeof(IPNetIfAddr4)) != 0)
 	{
@@ -349,6 +364,13 @@ int main(int argc, char *argv[])
 	req.opt54 = 54;
 	req.opt54_len4 = 4;
 	memcpy(req.server, &packet->siaddr, 4);
+	req.opt55 = 55;
+	req.opt55_len2 = 2;
+	req.optReqMask = 1;
+	req.optReqRoute = 3;
+	req.opt12 = 12;
+	req.opt12_len6 = 6;
+	memcpy(req.optHost, "glidix", 6);
 	req.optend = 255;
 	
 	// send it
@@ -383,6 +405,7 @@ int main(int argc, char *argv[])
 	memcpy(&inroute->dest, &destnet, 4);
 	memcpy(&inroute->mask, addrmask, 4);
 	memset(&inroute->gateway, 0, 4);
+	inroute->domain = 0;
 	inroute->flags = 0;
 	
 	if (_glidix_route_add(AF_INET, -1, &genroute) != 0)
@@ -395,6 +418,7 @@ int main(int argc, char *argv[])
 	memset(&inroute->dest, 0, 4);
 	memset(&inroute->mask, 0, 4);
 	memcpy(&inroute->gateway, router, 4);
+	inroute->domain = 0;
 	inroute->flags = 0;
 	
 	if (_glidix_route_add(AF_INET, -1, &genroute) != 0)

@@ -1,5 +1,5 @@
 .PHONY: all
-all: out/cp out/lspci out/clear-screen out/dhcp out/resolve out/route out/sudo out/mip-install out/passwd out/mount out/gxpad out/mkdir out/sigsegv out/ping out/ls out/sleep out/date out/rmmod out/login out/color out/chgrp out/chown out/srv-wrapper out/insmod out/whoami out/whois out/env out/halt out/service out/logmgr out/stat out/pwdsetup out/rm out/umount out/kill out/crypt out/mkmip out/chmod out/touch out/cat out/gfxterm out/ln out/netconf out/eject
+all: out/cp out/lspci out/clear-screen out/dhcp out/resolve out/route out/sudo out/mip-install out/passwd out/mount out/gxpad out/mkdir out/sigsegv out/ping out/ls out/sleep out/date out/rmmod out/login out/linkslaac out/color out/chgrp out/ping6 out/chown out/srv-wrapper out/insmod out/whoami out/whois out/env out/halt out/service out/logmgr out/stat out/pwdsetup out/sniff out/rm out/umount out/kill out/crypt out/mkmip out/chmod out/touch out/cat out/gfxterm out/ln out/netconf out/eject
 out/cp: src/cp.c
 	x86_64-glidix-gcc $< -o $@ 
 out/lspci: src/lspci.c
@@ -41,10 +41,15 @@ out/rmmod: src/rmmod.c
 	x86_64-glidix-gcc $< -o $@ 
 out/login: src/login.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt
+out/linkslaac: src/linkslaac.c
+	x86_64-glidix-gcc $< -o $@ 
 out/color: src/color.c
 	x86_64-glidix-gcc $< -o $@ 
 out/chgrp: src/chgrp.c
 	x86_64-glidix-gcc $< -o $@ 
+out/ping6: src/ping6.c
+	x86_64-glidix-gcc $< -o $@ 
+	chmod 6755 $@
 out/chown: src/chown.c
 	x86_64-glidix-gcc $< -o $@ 
 out/srv-wrapper: src/srv-wrapper.c
@@ -67,6 +72,8 @@ out/stat: src/stat.c
 	x86_64-glidix-gcc $< -o $@ 
 out/pwdsetup: src/pwdsetup.c
 	x86_64-glidix-gcc $< -o $@ -lcrypt
+out/sniff: src/sniff.c
+	x86_64-glidix-gcc $< -o $@ 
 out/rm: src/rm.c
 	x86_64-glidix-gcc $< -o $@ 
 out/umount: src/umount.c

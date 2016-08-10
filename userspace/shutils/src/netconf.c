@@ -41,12 +41,14 @@ typedef struct
 {
 	struct in_addr			addr;
 	struct in_addr			mask;
+	int				domain;
 } IPNetIfAddr4;
 
 typedef struct
 {
 	struct in6_addr			addr;
 	struct in6_addr			mask;
+	int				domain;
 } IPNetIfAddr6;
 
 char *progName;
@@ -73,6 +75,38 @@ const char *linkname(int type)
 	};
 };
 
+void getdomname(char *domname, int domain)
+{
+	if (domain == _GLIDIX_DOM_GLOBAL)
+	{
+		strcpy(domname, "Global");
+	}
+	else if (domain == _GLIDIX_DOM_LINK)
+	{
+		strcpy(domname, "Link-local");
+	}
+	else if (domain == _GLIDIX_DOM_LOOPBACK)
+	{
+		strcpy(domname, "Loopback");
+	}
+	else if (domain == _GLIDIX_DOM_SITE)
+	{
+		strcpy(domname, "Site-local");
+	}
+	else if (domain == _GLIDIX_DOM_MULTICAST)
+	{
+		strcpy(domname, "Multicast");
+	}
+	else if (domain == _GLIDIX_DOM_NODEFAULT)
+	{
+		strcpy(domname, "Non-default");
+	}
+	else
+	{
+		sprintf(domname, "Domain %d", domain);
+	};
+};
+
 void printIntfInfo(const char *ifname)
 {
 	_glidix_netstat netstat;
@@ -88,10 +122,11 @@ void printIntfInfo(const char *ifname)
 	_glidix_netconf_getaddrs(ifname, AF_INET6, addrs6, sizeof(_glidix_ifaddr6) * netstat.numAddrs6);
 	
 	printf("Interface: %s\n", netstat.ifname);
-	printf("\tpackets sent: %d\n", netstat.numTrans);
-	printf("\tpackets received: %d\n", netstat.numRecv);
-	printf("\tpacket errors: %d\n", netstat.numErrors);
-	printf("\tpackets dropped: %d\n", netstat.numDropped);
+	printf("\tPackets sent: %d\n", netstat.numTrans);
+	printf("\tPackets received: %d\n", netstat.numRecv);
+	printf("\tPacket errors: %d\n", netstat.numErrors);
+	printf("\tPackets dropped: %d\n", netstat.numDropped);
+	printf("\tScope ID: %u\n", netstat.scopeID);
 	printf("\tLink: %s\n", linkname(netstat.ifconfig.type));
 	if (netstat.ifconfig.type == 1)
 	{
@@ -130,7 +165,10 @@ void printIntfInfo(const char *ifname)
 				break;
 			};
 		};
-		printf("\t\t%s/%d\n", netaddr, netsize);
+		
+		char domname[256];
+		getdomname(domname, addrs[i].domain);
+		printf("\t\t%s/%d (%s)\n", netaddr, netsize, domname);
 	};
 
 	for (i=0; i<netstat.numAddrs6; i++)
@@ -157,7 +195,10 @@ void printIntfInfo(const char *ifname)
 				break;
 			};
 		};
-		printf("\t\t%s/%d\n", netaddr, netsize);
+		
+		char domname[256];
+		getdomname(domname, addrs6[i].domain);
+		printf("\t\t%s/%d (%s)\n", netaddr, netsize, domname);
 	};
 	
 	printf("\n");
@@ -231,6 +272,7 @@ void doAddrConf(int family, const char *ifname, char **addrnames, int count)
 	};
 	
 	void *buffer = malloc(addrsize * count);
+	memset(buffer, 0, addrsize * count);
 	
 	int i;
 	for (i=0; i<count; i++)

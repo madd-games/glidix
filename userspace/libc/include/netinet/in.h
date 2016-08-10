@@ -48,6 +48,7 @@
 #define	IPPROTO_GRE			47		/* General Routing Encapsulation.  */
 #define	IPPROTO_ESP			50		/* encapsulating security payload.  */
 #define	IPPROTO_AH			51		/* authentication header.  */
+#define	IPPROTO_ICMPV6			58		/* Internet Control Message Protocol for IPv6 */
 #define	IPPROTO_MTP			92		/* Multicast Transport Protocol.  */
 #define	IPPROTO_BEETPH			94		/* IP option pseudo header for BEET.  */
 #define	IPPROTO_ENCAP			98		/* Encapsulation Header.  */

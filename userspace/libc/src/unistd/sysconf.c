@@ -44,6 +44,8 @@ long sysconf(int name)
 		return PAGESIZE;
 	case _SC_NGROUPS_MAX:
 		return NGROUPS_MAX;
+	case _SC_OPEN_MAX:
+		return OPEN_MAX;
 	default:
 		errno = EINVAL;
 		return -1;

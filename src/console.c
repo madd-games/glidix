@@ -260,6 +260,34 @@ static void put_a(uint64_t addr)
 	updateVGACursor();
 };
 
+static void put_6(uint8_t *addr)
+{
+	static const char hexdigits[16] = "0123456789abcdef";
+	int i;
+	for (i=0; i<8; i++)
+	{
+		int j;
+		for (j=0; j<2; j++)
+		{
+			char hi = hexdigits[addr[2*i+j] >> 4];
+			char lo = hexdigits[addr[2*i+j] & 0xF];
+			kputch(hi);
+			kputch(lo);
+		};
+		
+		if (i != 7) kputch(':');
+	};
+	
+	updateVGACursor();
+};
+
+static void put_b(uint8_t byte)
+{
+	static const char hexdigits[16] = "0123456789abcdef";
+	kputch(hexdigits[byte >> 4]);
+	kputch(hexdigits[byte & 0xF]);
+};
+
 void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 {
 	if (putcon) spinlockAcquire(&consoleLock);
@@ -312,6 +340,16 @@ void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 			else if (c == '#')
 			{
 				consoleState.curColor = 0x07;
+			}
+			else if (c == '6')
+			{
+				uint8_t *addr = va_arg(ap, uint8_t*);
+				put_6(addr);
+			}
+			else if (c == 'b')
+			{
+				uint8_t byte = (uint8_t) va_arg(ap, int);
+				put_b(byte);
 			};
 		};
 	};

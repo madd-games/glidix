@@ -41,6 +41,7 @@ extern "C" {
 #define	AF_UNIX				AF_LOCAL
 #define	AF_INET				2
 #define	AF_INET6			3
+#define	AF_CAPTURE			4
 
 #define	SOCK_STREAM			1
 #define	SOCK_DGRAM			2

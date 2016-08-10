@@ -26,11 +26,13 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <sys/glidix.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 /**
  * TODO: No DNS resolutions happen yet!
@@ -117,6 +119,29 @@ void __add_addr(struct addr_list *list, const struct addrinfo *hints, struct add
 	};
 };
 
+static int __parse_zone_name(const char *zonename, uint32_t *out)
+{
+	/* "0" is not a valid zone */
+	if (strcmp(zonename, "0") == 0)
+	{
+		return -1;
+	};
+	
+	if (sscanf(zonename, "%u", out) == 1)
+	{
+		return 0;
+	};
+	
+	_glidix_netstat netstat;
+	if (_glidix_netconf_stat(zonename, &netstat, sizeof(_glidix_netstat)) == -1)
+	{
+		return -1;
+	};
+	
+	*out = netstat.scopeID;
+	return 0;
+};
+
 int getaddrinfo(const char *nodename, const char *servname, const struct addrinfo *hints, struct addrinfo **out)
 {
 	int portno = 0;
@@ -200,6 +225,42 @@ int getaddrinfo(const char *nodename, const char *servname, const struct addrinf
 			__add_addr(&list, hints, &info);
 			info.ai_socktype = SOCK_DGRAM;
 			__add_addr(&list, hints, &info);
+		}
+		else if (strchr(nodename, '%') != NULL)
+		{
+			// IPv6 address with zone index
+			char *zoneptr = strchr(nodename, '%');
+			off_t pos = zoneptr - nodename;
+			
+			if (pos < INET6_ADDRSTRLEN)
+			{
+				char v6addr[INET6_ADDRSTRLEN];
+				memcpy(v6addr, nodename, (size_t)pos);
+				v6addr[pos] = 0;
+				const char *zonename = zoneptr + 1;
+				
+				if (inet_pton(AF_INET6, v6addr, addrbuf))
+				{
+					struct addrinfo info;
+					memset(&info, 0, sizeof(struct addrinfo));
+			
+					info.ai_family = AF_INET6;
+					info.ai_socktype = SOCK_STREAM;
+					info.ai_addrlen = sizeof(struct sockaddr_in6);
+					
+					struct sockaddr_in6 *inaddr = (struct sockaddr_in6*) &info.__ai_storage;
+					inaddr->sin6_family = AF_INET6;
+					memcpy(&inaddr->sin6_addr, addrbuf, 16);
+					inaddr->sin6_port = htons((unsigned short) portno);
+					
+					if (__parse_zone_name(zonename, &inaddr->sin6_scope_id) == 0)
+					{
+						__add_addr(&list, hints, &info);
+						info.ai_socktype = SOCK_DGRAM;
+						__add_addr(&list, hints, &info);
+					};
+				};
+			};
 		}
 		else
 		{

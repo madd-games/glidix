@@ -41,6 +41,7 @@
 Socket* CreateRawSocket();				/* rawsock.c */
 Socket* CreateUDPSocket();				/* udpsock.c */
 Socket* CreateTCPSocket();				/* tcpsock.c */
+Socket* CreateCaptureSocket(int type, int proto);	/* capsock.c */
 
 static Semaphore sockLock;
 static Socket sockList;
@@ -103,7 +104,7 @@ static ssize_t sock_read(File *fp, void *buffer, size_t len)
 
 File* CreateSocket(int domain, int type, int proto)
 {
-	if ((domain != AF_INET) && (domain != AF_INET6))
+	if ((domain != AF_INET) && (domain != AF_INET6) && (domain != AF_CAPTURE))
 	{
 		getCurrentThread()->therrno = EAFNOSUPPORT;
 		return NULL;
@@ -115,47 +116,61 @@ File* CreateSocket(int domain, int type, int proto)
 		return NULL;
 	};
 	
-	Socket *sock;	
-	if (type == SOCK_RAW)
+	Socket *sock;
+	if (domain == AF_CAPTURE)
 	{
 		if (getCurrentThread()->creds->euid != 0)
 		{
-			getCurrentThread()->therrno = EACCES;
+			ERRNO = EACCES;
 			return NULL;
 		};
 		
-		sock = CreateRawSocket();
-	}
-	else if (type == SOCK_DGRAM)
-	{
-		switch (proto)
-		{
-		case 0:
-		case IPPROTO_UDP:
-			sock = CreateUDPSocket();
-			break;
-		default:
-			getCurrentThread()->therrno = EPROTONOSUPPORT;
-			return NULL;
-		};
-	}
-	else if (type == SOCK_STREAM)
-	{
-		switch (proto)
-		{
-		case 0:
-		case IPPROTO_TCP:
-			sock = CreateTCPSocket();
-			break;
-		default:
-			ERRNO = EPROTONOSUPPORT;
-			return NULL;
-		};
+		sock = CreateCaptureSocket(type, proto);
+		if (sock == NULL) return NULL;
 	}
 	else
 	{
-		getCurrentThread()->therrno = EPROTONOSUPPORT;
-		return NULL;
+		if (type == SOCK_RAW)
+		{
+			if (getCurrentThread()->creds->euid != 0)
+			{
+				getCurrentThread()->therrno = EACCES;
+				return NULL;
+			};
+		
+			sock = CreateRawSocket();
+		}
+		else if (type == SOCK_DGRAM)
+		{
+			switch (proto)
+			{
+			case 0:
+			case IPPROTO_UDP:
+				sock = CreateUDPSocket();
+				break;
+			default:
+				getCurrentThread()->therrno = EPROTONOSUPPORT;
+				return NULL;
+			};
+		}
+		else if (type == SOCK_STREAM)
+		{
+			switch (proto)
+			{
+			case 0:
+			case IPPROTO_TCP:
+				sock = CreateTCPSocket();
+				break;
+			default:
+				ERRNO = EPROTONOSUPPORT;
+				return NULL;
+			};
+		}
+		else
+		{
+			getCurrentThread()->therrno = EPROTONOSUPPORT;
+			return NULL;
+		};
 	};
 	
 	sock->domain = domain;
@@ -384,10 +399,23 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 		return;
 	};
 	
+	struct sockaddr_in6 dest2;
 	if (!isLocalAddr(dest))
 	{
+		int shouldForward = 1;
+		if (dest->sa_family == AF_INET6)
+		{
+			memcpy(&dest2, dest, sizeof(struct sockaddr_in6));
+			dest2.sin6_scope_id = 0;
+			if (isLocalAddr((struct sockaddr*)&dest2))
+			{
+				dest = (struct sockaddr*) &dest2;
+				shouldForward = 0;
+			};
+		};
+		
 		// not our address, forward if enabled
-		if (optForwardPackets)
+		if (optForwardPackets && shouldForward)
 		{
 			struct sockaddr fake_src;
 			fake_src.sa_family = AF_UNSPEC;
@@ -424,7 +452,7 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 			};
 		};
 		
-		return;
+		if (shouldForward) return;
 	};
 
 	// if the packet is fragmented, pass it to the reassembler
@@ -475,6 +503,10 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 			ipreasmPass(AF_INET6, srcaddr, destaddr, proto, info.id, info.fragOff,
 					((char*)packet + dataOffset), info.size, info.moreFrags);
 			return;
+		}
+		else if (info.proto == IPPROTO_ICMPV6)
+		{
+			onICMP6Packet(src, dest, (char*)packet + dataOffset, info.size);
 		};
 	};
 

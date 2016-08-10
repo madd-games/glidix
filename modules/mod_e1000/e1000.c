@@ -97,7 +97,7 @@ typedef struct EInterface_
 	PCIDevice*			pcidev;
 	NetIf*				netif;
 	Semaphore			lock;
-	int				running;
+	volatile int			running;
 	Thread*				thread;
 	const char*			name;
 	uint64_t			mmioAddr;
@@ -241,7 +241,7 @@ static void e1000_thread(void *context)
 			ESharedArea *sha = (ESharedArea*) dmaGetPtr(&nif->dmaSharedArea);
 			int index = nif->nextRX & (NUM_RX_DESC-1);
 			
-			if (sha->rxdesc[index].status & 1)
+			while (sha->rxdesc[index].status & 1)
 			{
 				// actually received
 				int drop = 0;
@@ -270,13 +270,10 @@ static void e1000_thread(void *context)
 				
 				// return the buffer to the NIC
 				sha->rxdesc[index].status = 0;
-				nif->nextRX = (index + 1) & (NUM_RX_DESC-1);
+				nif->nextRX = (++index) & (NUM_RX_DESC-1);
 				volatile uint32_t *regRXTail = (volatile uint32_t*) (nif->mmioAddr + 0x2818);
 				*regRXTail = nif->nextRX;
-			}
-			else
-			{
-				kprintf("NICE MEME WARNING\n");
+				__sync_synchronize();
 			};
 		};
 	};
@@ -284,7 +281,7 @@ static void e1000_thread(void *context)
 
 MODULE_INIT(const char *opt)
 {
-	kprintf_debug("e1000: enumating Intel Gigabit Ethernet-compatible PCI devices\n");
+	kprintf_debug("e1000: enumerating Intel Gigabit Ethernet-compatible PCI devices\n");
 	pciEnumDevices(THIS_MODULE, e1000_enumerator, NULL);
 
 	kprintf_debug("e1000: creating network interfaces\n");
@@ -335,6 +332,7 @@ MODULE_INIT(const char *opt)
 		
 		// initialize transmit descriptors
 		ESharedArea *sha = (ESharedArea*) dmaGetPtr(&nif->dmaSharedArea);
+		memset(sha, 0, sizeof(ESharedArea));
 		for (i=0; i<NUM_TX_DESC; i++)
 		{
 			sha->txdesc[i].phaddr = 0;

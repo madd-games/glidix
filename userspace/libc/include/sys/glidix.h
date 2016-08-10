@@ -53,6 +53,7 @@ typedef struct
 	struct in_addr			dest;
 	struct in_addr			mask;
 	struct in_addr			gateway;
+	int				domain;
 	uint64_t			flags;
 } _glidix_in_route;
 
@@ -62,13 +63,14 @@ typedef struct
 	struct in6_addr			dest;
 	struct in6_addr			mask;
 	struct in6_addr			gateway;
+	int				domain;
 	uint64_t			flags;
 } _glidix_in6_route;
 
 typedef struct
 {
 	char				ifname[16];
-	char				data[3*16];
+	char				data[3*16+4];
 	uint64_t			flags;
 } _glidix_gen_route;
 
@@ -111,39 +113,64 @@ typedef struct
 	int				numAddrs4;
 	int				numAddrs6;
 	_glidix_ifconfig		ifconfig;
+	char				resv_[1024-(40+sizeof(_glidix_ifconfig))];
+	uint32_t			scopeID;
 } _glidix_netstat;
 
 typedef struct
 {
 	struct in_addr			addr;
 	struct in_addr			mask;
+	int				domain;
 } _glidix_ifaddr4;
 
 typedef struct
 {
 	struct in6_addr			addr;
 	struct in6_addr			mask;
+	int				domain;
 } _glidix_ifaddr6;
 
 typedef struct
 {
-	void*						ignore1;
-	uint8_t						bus;
-	uint8_t						slot;
-	uint8_t						func;
-	int						id;
-	uint16_t					vendor;
-	uint16_t					device;
-	uint16_t					type;
-	uint8_t						intpin;
-	void*						ignore2;
-	char						driverName[128];
-	char						deviceName[128];
+	void*				ignore1;
+	uint8_t				bus;
+	uint8_t				slot;
+	uint8_t				func;
+	int				id;
+	uint16_t			vendor;
+	uint16_t			device;
+	uint16_t			type;
+	uint8_t				intpin;
+	void*				ignore2;
+	char				driverName[128];
+	char				deviceName[128];
 } _glidix_pcidev;
+
+struct sockaddr_cap
+{
+	uint16_t			scap_family;		/* AF_CAPTURE */
+	char				scap_ifname[16];
+	int				scap_proto_flags;
+	/* without the padding, sizeof(sockaddr_cap)=24. Pad to 28 by adding 4 */
+	char				scap_pad[4];
+};
+
+struct ether_header
+{
+	uint8_t				ether_dest[6];
+	uint8_t				ether_src[6];
+	uint16_t			ether_type;
+};
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* types of interfaces */
+#define	IF_LOOPBACK			0		/* loopback interface (localhost) */
+#define	IF_ETHERNET			1		/* ethernet controller */
+#define	IF_TUNNEL			2		/* software tunnel */
 
 #define	_GLIDIX_INSMOD_VERBOSE				(1 << 0)
 
@@ -174,6 +201,13 @@ extern "C" {
 #define	_GLIDIX_IOCTL_SEMA_SIGNAL			_GLIDIX_IOCTL_ARG(int, _GLIDIX_IOCTL_INT_THSYNC, 3)
 
 #define	_GLIDIX_KOPT_GFXTERM				0
+
+#define	_GLIDIX_DOM_GLOBAL				0	/* global (internet) */
+#define	_GLIDIX_DOM_LINK				1	/* link-local (LAN only) */
+#define	_GLIDIX_DOM_LOOPBACK				2	/* loopback (host only) */
+#define	_GLIDIX_DOM_SITE				3	/* site-local (organization scope only) */
+#define	_GLIDIX_DOM_MULTICAST				4	/* multicast (used for addresses and NEVER routes) */
+#define	_GLIDIX_DOM_NODEFAULT				5	/* non-default address (never selected for any route) */
 
 struct __siginfo;
 

@@ -32,6 +32,8 @@
 #include <glidix/errno.h>
 #include <glidix/string.h>
 #include <glidix/console.h>
+#include <glidix/icmp.h>
+#include <glidix/socket.h>
 
 #define CRCPOLY2 0xEDB88320UL  /* left-right reversal */
 
@@ -51,6 +53,19 @@ uint32_t ether_checksum(const void *data, size_t n)
 	}
 	return r ^ 0xFFFFFFFFUL;
 }
+
+static void etherSendRaw(NetIf *netif, const void *frame, size_t framelen)
+{
+	// send the frame to capture sockets
+	struct sockaddr_cap caddr;
+	memset(&caddr, 0, sizeof(struct sockaddr_cap));
+	caddr.scap_family = AF_CAPTURE;
+	strcpy(caddr.scap_ifname, netif->name);
+	onTransportPacket((struct sockaddr*)&caddr, (struct sockaddr*)&caddr, sizeof(struct sockaddr_cap),
+		frame, framelen-4, IF_ETHERNET);	// without CRC
+
+	netif->ifconfig.ethernet.send(netif, frame, framelen);
+};
 
 static MacResolution *getMacResolution(NetIf *netif, int family, uint8_t *ip)
 {
@@ -121,6 +136,16 @@ static int resolveAddress(NetIf *netif, int family, uint8_t *ip, MacAddress *mac
 				return 0;
 			};
 		};
+	}
+	else if (family == AF_INET6)
+	{
+		if (ip[0] == 0xFF)
+		{
+			// IPv6 multicast; take bottom 32 bits and map onto 33:33:x:x:x:x
+			mac->addr[0] = mac->addr[1] = 0x33;
+			memcpy(&mac->addr[2], &ip[12], 4);
+			return 0;
+		};
 	};
 	
 	MacResolution *res = getMacResolution(netif, family, ip);
@@ -151,7 +176,51 @@ static int resolveAddress(NetIf *netif, int family, uint8_t *ip, MacAddress *mac
 			memset(&arp.tha, 0, 6);
 			memcpy(&arp.tpa, res->ip, 4);
 			arp.crc = ether_checksum(&arp, sizeof(ARPPacket)-4);
-			netif->ifconfig.ethernet.send(netif, &arp, sizeof(ARPPacket));
+			etherSendRaw(netif, &arp, sizeof(ARPPacket));
+		}
+		else if (family == AF_INET6)
+		{
+			// before waiting, send an NDP neighbor solicitation
+			static uint8_t solicitedNodePrefix[16] =
+				{0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xFF, 0x00, 0x00, 0x00};
+			struct sockaddr_in6 ndp_src;
+			memset(&ndp_src, 0, sizeof(struct sockaddr_in6));
+			ndp_src.sin6_family = AF_UNSPEC;
+			
+			struct sockaddr_in6 ndp_dest;
+			memset(&ndp_dest, 0, sizeof(struct sockaddr_in6));
+			ndp_dest.sin6_family = AF_INET6;
+			memcpy(&ndp_dest.sin6_addr, solicitedNodePrefix, 13);
+			memcpy(&ndp_dest.sin6_addr.s6_addr[13], &ip[13], 3);
+			ndp_dest.sin6_scope_id = netif->scopeID;
+			
+			// find out what IPv6 address we should use as the source
+			int status = sendPacket((struct sockaddr*)&ndp_src, (const struct sockaddr*)&ndp_dest,
+				NULL, 0, 0, 0, NULL);
+			if (status == 0)
+			{
+				PseudoHeaderICMPv6 *phead = (PseudoHeaderICMPv6*)
+					kalloca(sizeof(PseudoHeaderICMPv6) + sizeof(NDPNeighborSolicit));
+				memcpy(phead->src, &ndp_src.sin6_addr, 16);
+				memcpy(phead->dest, &ndp_dest.sin6_addr, 16);
+				phead->len = __builtin_bswap32((uint32_t) sizeof(NDPNeighborSolicit));
+				memset(phead->zeroes, 0, 3);
+				phead->proto = IPPROTO_ICMPV6;
+				
+				NDPNeighborSolicit *sol = (NDPNeighborSolicit*) phead->payload;
+				sol->type = 135;
+				sol->code = 0;
+				sol->checksum = 0;
+				sol->resv = 0;
+				memcpy(sol->addr, ip, 16);
+				sol->opt1 = 1;
+				sol->len1 = 1;
+				memcpy(sol->mac, &netif->ifconfig.ethernet.mac, 6);
+				sol->checksum = ipv4_checksum(phead, sizeof(PseudoHeaderICMPv6) + sizeof(NDPNeighborSolicit));
+				
+				sendPacket((struct sockaddr*)&ndp_src, (const struct sockaddr*)&ndp_dest,
+					sol, sizeof(NDPNeighborSolicit), IPPROTO_ICMPV6 | PKT_DONTROUTE, nanotimeout, NULL);
+			};
 		};
 	};
 	
@@ -199,7 +268,40 @@ static int sendPacketToEthernet4(NetIf *netif, const struct sockaddr_in *gateway
 	uint32_t *crcPtr = (uint32_t*) &etherPacket[sizeof(EthernetHeader) + sendlen];
 	*crcPtr = ether_checksum(etherPacket, sizeof(EthernetHeader) + sendlen);
 	
-	netif->ifconfig.ethernet.send(netif, etherPacket, sizeof(EthernetHeader) + sendlen + 4);
+	etherSendRaw(netif, etherPacket, sizeof(EthernetHeader) + sendlen + 4);
+	kfree(etherPacket);
+	return 0;
+};
+
+static int sendPacketToEthernet6(NetIf *netif, const struct sockaddr_in6 *gateway, const void *packet, size_t packetlen, uint64_t nanotimeout)
+{
+	MacAddress mac;
+	int status = resolveAddress(netif, AF_INET6, (uint8_t*) &gateway->sin6_addr, &mac, nanotimeout);
+	if (status != 0)
+	{
+		return status;
+	};
+
+	size_t sendlen = packetlen;
+	if (sendlen < 46)
+	{
+		sendlen = 46;
+	};
+	
+	char *etherPacket = (char*) kmalloc(sizeof(EthernetHeader) + sendlen + 6);
+	memset(etherPacket, 0, sizeof(EthernetHeader) + sendlen + 6);
+	EthernetHeader *head = (EthernetHeader*) etherPacket;
+	
+	memcpy(&head->dest, &mac, 6);
+	memcpy(&head->src, &netif->ifconfig.ethernet.mac, 6);
+	head->type = __builtin_bswap16(ETHER_TYPE_IPV6);
+	
+	memcpy(&head[1], packet, packetlen);
+	
+	uint32_t *crcPtr = (uint32_t*) &etherPacket[sizeof(EthernetHeader) + sendlen];
+	*crcPtr = ether_checksum(etherPacket, sizeof(EthernetHeader)+sendlen);
+	
+	etherSendRaw(netif, etherPacket, sizeof(EthernetHeader) + sendlen + 4);
 	kfree(etherPacket);
 	return 0;
 };
@@ -209,6 +311,10 @@ int sendPacketToEthernet(NetIf *netif, const struct sockaddr *gateway, const voi
 	if (gateway->sa_family == AF_INET)
 	{
 		return sendPacketToEthernet4(netif, (const struct sockaddr_in*) gateway, packet, packetlen, nanotimeout);
+	}
+	else if (gateway->sa_family == AF_INET6)
+	{
+		return sendPacketToEthernet6(netif, (const struct sockaddr_in6*) gateway, packet, packetlen, nanotimeout);
 	}
 	else
 	{
@@ -258,7 +364,7 @@ static void onARPPacket(NetIf *netif, ARPPacket *arp)
 		memcpy(&reply.tha, &arp->sha, 6);
 		memcpy(reply.tpa, arp->spa, 4);
 		
-		netif->ifconfig.ethernet.send(netif, &reply, sizeof(ARPPacket));
+		etherSendRaw(netif, &reply, sizeof(ARPPacket));
 	}
 	else if (op == 2)
 	{
@@ -289,6 +395,13 @@ static void onARPPacket(NetIf *netif, ARPPacket *arp)
 	};
 };
 
+void etherAddResolution(struct NetIf_ *netif, int family, const void *ip, const MacAddress *mac)
+{	
+	MacResolution *res = getMacResolution(netif, family, (uint8_t*)ip);
+	memcpy(&res->mac, mac, 6);
+	cvSignal(&res->cond);
+};
+
 void onEtherFrame(NetIf *netif, const void *frame, size_t framelen, int flags)
 {
 	static uint8_t broadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -312,6 +425,15 @@ void onEtherFrame(NetIf *netif, const void *frame, size_t framelen, int flags)
 		kprintf_debug("RECEIVED CRC: %a\n", (uint64_t)crc);
 		// TODO: is the CRC correct???
 	};
+	
+	
+	// send the frame to capture sockets
+	struct sockaddr_cap caddr;
+	memset(&caddr, 0, sizeof(struct sockaddr_cap));
+	caddr.scap_family = AF_CAPTURE;
+	strcpy(caddr.scap_ifname, netif->name);
+	onTransportPacket((struct sockaddr*)&caddr, (struct sockaddr*)&caddr, sizeof(struct sockaddr_cap),
+		frame, framelen-4, IF_ETHERNET);	// without CRC
 	
 	size_t overheadSize = sizeof(EthernetHeader) + 4;
 	EthernetHeader *head = (EthernetHeader*) frame;

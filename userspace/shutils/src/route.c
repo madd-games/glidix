@@ -36,6 +36,38 @@
 #include <errno.h>
 #include <arpa/inet.h>
 
+void getdomname(char *domname, int domain)
+{
+	if (domain == _GLIDIX_DOM_GLOBAL)
+	{
+		strcpy(domname, "Global");
+	}
+	else if (domain == _GLIDIX_DOM_LINK)
+	{
+		strcpy(domname, "Link-local");
+	}
+	else if (domain == _GLIDIX_DOM_LOOPBACK)
+	{
+		strcpy(domname, "Loopback");
+	}
+	else if (domain == _GLIDIX_DOM_SITE)
+	{
+		strcpy(domname, "Site-local");
+	}
+	else if (domain == _GLIDIX_DOM_MULTICAST)
+	{
+		strcpy(domname, "Multicast");
+	}
+	else if (domain == _GLIDIX_DOM_NODEFAULT)
+	{
+		strcpy(domname, "Non-default");
+	}
+	else
+	{
+		sprintf(domname, "Domain %d", domain);
+	};
+};
+
 void ip_to_string(struct in_addr *addr, struct in_addr *mask, char *str)
 {
 	uint8_t *fields = (uint8_t*) addr;
@@ -198,6 +230,7 @@ int mainUtil(int argc, char *argv[])
 		};
 		
 		_glidix_gen_route genroute;
+		memset(&genroute, 0, sizeof(_glidix_gen_route));
 		_glidix_in_route *inroute = (_glidix_in_route*) &genroute;
 		_glidix_in6_route *in6route = (_glidix_in6_route*) &genroute;
 		if (family == AF_INET) strcpy(inroute->ifname, ifname);
@@ -333,6 +366,7 @@ int main(int argc, char *argv[])
 		return mainUtil(argc, argv);
 	};
 	
+	char domname[256];
 	printf("Kernel IPv4 routing table:\n");
 	printf("Network            Gateway            Interface\n");
 	int fd = _glidix_routetab(AF_INET);
@@ -352,7 +386,8 @@ int main(int argc, char *argv[])
 		ip_to_string(&route.dest, &route.mask, network);
 		ip_to_string(&route.gateway, NULL, gate);
 		
-		printf("%s%s%s\n", network, gate, route.ifname);
+		getdomname(domname, route.domain);
+		printf("%s%s%s (%s)\n", network, gate, route.ifname, domname);
 	};
 	
 	close(fd);
@@ -376,7 +411,8 @@ int main(int argc, char *argv[])
 		ip6_to_string(&route6.dest, &route6.mask, network);
 		ip6_to_string(&route6.gateway, NULL, gateway);
 		
-		printf("%s%s%s\n", network, gateway, route6.ifname);
+		getdomname(domname, route6.domain);
+		printf("%s%s%s (%s)\n", network, gateway, route6.ifname, domname);
 	};
 	
 	close(fd);

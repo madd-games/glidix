@@ -324,8 +324,9 @@ void* __dlsym_global(const char *name)
 		{
 			void *sym = __dlsym(lib, name);
 			if (sym != NULL) return sym;
-			lib = lib->next;
 		};
+
+		lib = lib->next;
 	};
 	return NULL;
 };
@@ -735,7 +736,7 @@ Library* __libopen_withpaths(const char *soname, const char *rpath, const char *
 		//strcpy(libdlError, "could not find library\n");
 		return NULL;
 	};
-
+	
 	Library *lib = __libopen_found(libpath, soname, mode);
 	if (lib == NULL) return NULL;
 
@@ -822,6 +823,7 @@ void __interp_main(Elf64_Dyn *execDyn, Elf64_Sym *mySymbols, unsigned int mySymb
 
 	__main_handle.info.dynSection = execDyn;
 	__main_handle.info.loadAddr = 0;
+	__main_handle.mode = RTLD_LAZY | RTLD_GLOBAL;
 	if (__lib_process(&__main_handle, __main_handle.info) != 0)
 	{
 		fprintf(stderr, "failed to process executable: %s\n", libdlError);

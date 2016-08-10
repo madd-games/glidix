@@ -310,8 +310,10 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 					spinlockRelease(&ftab->spinlock);
 					void *tmpbuf = kmalloc(size);
 					out = fp->read(fp, tmpbuf, size);
+					size_t toCopy = (size_t) out;
+					if (out == -1) toCopy = 0;
 					vfsClose(fp);
-					if (memcpy_k2u(buf, tmpbuf, size) != 0)
+					if (memcpy_k2u(buf, tmpbuf, toCopy) != 0)
 					{
 						ERRNO = EFAULT;
 						out = -1;

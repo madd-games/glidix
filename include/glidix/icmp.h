@@ -41,7 +41,27 @@ typedef struct
 	uint8_t			payload[28];
 } ErrorPacket4;
 
+typedef struct
+{
+	uint8_t			type;
+	uint8_t			code;
+	uint16_t		checksum;
+	uint16_t		id;
+	uint16_t		seq;
+} PingPong6Packet;
+
+typedef struct
+{
+	uint8_t			src[16];
+	uint8_t			dest[16];
+	uint32_t		len;
+	uint8_t			zeroes[3];
+	uint8_t			proto;			// IPPROTO_ICMPV6
+	char			payload[];
+} PseudoHeaderICMPv6;
+
 int sendErrorPacket(struct sockaddr *src, const struct sockaddr *dest, int errnum, const void *packet, size_t packetlen);
 void onICMPPacket(const struct sockaddr *src, const struct sockaddr *dest, const void *msg, size_t size);
+void onICMP6Packet(const struct sockaddr *src, const struct sockaddr *dest, const void *msg, size_t size);
 
 #endif

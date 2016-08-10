@@ -400,8 +400,8 @@ static void onPageFault(Regs *regs)
 		siginfo.si_addr = (void*) faultAddr;
 		
 		// DEBUG
-		kprintf("SIGSEGV at %p, RIP=%p, RBP=%p, RSP=%p\n", faultAddr, regs->rip, regs->rbp, regs->rsp);
-		dumpProcessMemory(getCurrentThread()->pm, faultAddr);
+		//kprintf("SIGSEGV at %p, RIP=%p, RBP=%p, RSP=%p\n", faultAddr, regs->rip, regs->rbp, regs->rsp);
+		//dumpProcessMemory(getCurrentThread()->pm, faultAddr);
 		// END DEBUG
 		
 		cli();

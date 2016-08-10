@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
 	int i;
 	for (i=0;; i++)
 	{
-		sleep(1);			// don't hog the CPU and network too much
+		//sleep(1);			// don't hog the CPU and network too much
 		
 		struct sockaddr_in src;
 		
@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
 			if (count == -1)
 			{
 				fprintf(stderr, "%s: recvfrom: %s\n", argv[0], strerror(errno));
-				break;
+				continue;
 			};
 		
 			clock_t endtime = clock();
@@ -217,9 +217,8 @@ int main(int argc, char *argv[])
 		
 			if (checksum(&pong, sizeof(PingPongPacket)) != 0)
 			{
-				// invalid checksum
-				fprintf(stderr, "Reply from %s: invalid checksum\n", buffer);
-				break;
+				// invalid checksum; ignore
+				continue;
 			};
 		
 			if (pong.type != 0)
@@ -233,17 +232,20 @@ int main(int argc, char *argv[])
 				else if (pong.type == 3)
 				{
 					fprintf(stderr, "Reply from %s: Destination unreachable: %s\n", buffer, getUnreachMsg(pong.code));
+					break;
 				}
 				else if (pong.type == 11)
 				{
 					fprintf(stderr, "Reply from %s: Time exceeded: %s\n", buffer, getTimexMsg(pong.code));
+					break;
 				}
 				else
 				{
 					fprintf(stderr, "Reply from %s: Unknown response\n", buffer);
+					break;
 				};
 			
-				break;
+				continue;
 			};
 		
 			fprintf(stderr, "Reply from %s: id=%d, seq=%d, time=%u ns\n", buffer, pong.id, pong.seq, endtime-sendTime);

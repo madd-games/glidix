@@ -45,6 +45,13 @@
  */
 #define	ETHER_IGNORE_CRC		(1 << 0)
 
+/**
+ * Flags for NDP Router Advertisments.
+ */
+#define	NDP_NADV_ROUTER			(1 << 7)
+#define	NDP_NADV_SOLICIT		(1 << 6)
+#define	NDP_NADV_OVERRIDE		(1 << 5)
+
 struct NetIf_;
 struct sockaddr;
 
@@ -75,6 +82,34 @@ typedef struct
 	uint8_t				padding[18];		// brings the size up to 64 bytes
 	uint32_t			crc;
 } PACKED ARPPacket;
+
+typedef struct
+{
+	uint8_t				type;			// 135 - neighbor solicitation
+	uint8_t				code;			// 0
+	uint16_t			checksum;
+	uint32_t			resv;			// set to 0
+	uint8_t				addr[16];		// unicast address of target
+	
+	/* source link-layer address option */
+	uint8_t				opt1;			// set this 1
+	uint8_t				len1;			// set this to 1 (= size is 8 bytes)
+	uint8_t				mac[6];			// our MAC address
+} NDPNeighborSolicit;
+
+typedef struct
+{
+	uint8_t				type;			// 136 - neighbor advertisment
+	uint8_t				code;			// 0
+	uint16_t			checksum;
+	uint32_t			flags;
+	uint8_t				addr[16];		// my IPv6 address
+	
+	/* my MAC address option */
+	uint8_t				opt2;			// set this to 2
+	uint8_t				len1;			// set this to 1 (=size is 8 bytes)
+	uint8_t				mac[6];
+} NDPNeighborAdvert;
 
 /**
  * Describes a resolution of an IP address to a MAC address.
@@ -122,5 +157,10 @@ int sendPacketToEthernet(struct NetIf_ *netif, const struct sockaddr *gateway, c
  *	                   in the received buffer.
  */
 void onEtherFrame(struct NetIf_ *netif, const void *frame, size_t framelen, int flags);
+
+/**
+ * Add an address resolution to an Ethernet device.
+ */
+void etherAddResolution(struct NetIf_ *netif, int family, const void *ip, const MacAddress *mac);
 
 #endif

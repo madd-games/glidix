@@ -784,7 +784,7 @@ int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len)
 	}
 	else if (cmd == F_TLOCK)
 	{
-		if (semWaitNoblock(lock->sem, 1) != 0)
+		if (semWaitNoblock(lock->sem, 1) != 1)
 		{
 			return EAGAIN;
 		};

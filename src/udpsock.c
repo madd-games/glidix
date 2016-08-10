@@ -116,10 +116,15 @@ static int udpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 		const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
 		port = inaddr->sin_port;
 	}
-	else
+	else if (addr->sa_family == AF_INET6)
 	{
 		const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
 		port = inaddr->sin6_port;
+	}
+	else
+	{
+		ERRNO = EAFNOSUPPORT;
+		return -1;
 	};
 	
 	// convert port to machine order and then ensure we have permission to bind to it
@@ -215,6 +220,7 @@ static int udpsock_getpeername(Socket *sock, struct sockaddr *addr, size_t *addr
 
 static void udpsock_shutdown(Socket *sock, int how)
 {
+	// TODO: who is freeing the queue???
 	UDPSocket *udpsock = (UDPSocket*) sock;
 	udpsock->shutflags |= how;
 };
@@ -440,7 +446,7 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 	inbound->size = (size_t) __builtin_bswap16(udp->len) - 8;
 	memcpy(inbound->payload, udp->payload, inbound->size);
 	
-	semInit(&udpsock->queueLock);
+	semWait(&udpsock->queueLock);
 	if (udpsock->last == NULL)
 	{
 		udpsock->first = udpsock->last = inbound;

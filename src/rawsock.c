@@ -141,8 +141,9 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 		return -1;
 	};
 	
-	int status = sendPacket((struct sockaddr*) &rawsock->addr, addr, message, len, sock->proto | (sock->options[GSO_SNDFLAGS] & PKT_MASK),
-					sock->options[GSO_SNDTIMEO], sock->ifname);
+	int status = sendPacket((struct sockaddr*) &rawsock->addr, addr, message, len,
+		sock->proto | (sock->options[GSO_SNDFLAGS] & PKT_MASK),
+		sock->options[GSO_SNDTIMEO], sock->ifname);
 
 	if (status < 0)
 	{
@@ -156,6 +157,8 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto)
 {
+	if ((dest->sa_family != AF_INET) && (dest->sa_family != AF_INET6)) return;
+	
 	RawSocket *rawsock = (RawSocket*) sock;
 	if (rawsock->addr.sa_family != AF_UNSPEC)
 	{

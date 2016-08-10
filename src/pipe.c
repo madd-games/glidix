@@ -77,7 +77,8 @@ static ssize_t pipe_read(File *fp, void *buffer, size_t size)
 	semWait(&pipe->sem);
 
 	char *put = (char*) buffer;
-	ssize_t bytesLeft = sizeCanRead;
+	ssize_t bytesLeft = (ssize_t)size;
+	if (bytesLeft > sizeCanRead) bytesLeft = sizeCanRead;
 	while (bytesLeft--)
 	{
 		*put++ = pipe->buffer[pipe->roff];

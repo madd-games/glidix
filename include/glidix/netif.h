@@ -42,6 +42,7 @@
 #define	AF_UNIX				AF_LOCAL
 #define	AF_INET				2
 #define	AF_INET6			3
+#define	AF_CAPTURE			4
 
 /* IP protocols */
 #define	IPPROTO_IP			0		/* Dummy protocol for TCP.  */
@@ -60,6 +61,7 @@
 #define	IPPROTO_GRE			47		/* General Routing Encapsulation.  */
 #define	IPPROTO_ESP			50		/* encapsulating security payload.  */
 #define	IPPROTO_AH			51		/* authentication header.  */
+#define	IPPROTO_ICMPV6			58		/* Internet Control Message Protocol for IPv6 */
 #define	IPPROTO_MTP			92		/* Multicast Transport Protocol.  */
 #define	IPPROTO_BEETPH			94		/* IP option pseudo header for BEET.  */
 #define	IPPROTO_ENCAP			98		/* Encapsulation Header.  */
@@ -76,13 +78,21 @@
 #define	PKT_DONTFRAG			(1 << 10)
 #define	PKT_MASK			(PKT_HDRINC|PKT_DONTROUTE|PKT_DONTFRAG)
 
-/* types of connections */
+/* types of interfaces */
 #define	IF_LOOPBACK			0		/* loopback interface (localhost) */
 #define	IF_ETHERNET			1		/* ethernet controller */
 #define	IF_TUNNEL			2		/* software tunnel */
 
 /* the default hop limit */
-#define	DEFAULT_HOP_LIMIT		64
+#define	DEFAULT_HOP_LIMIT		255
+
+/* system-defined address/route domains; numbers 0-15 are reserved for the system; 16+ may be used by user */
+#define	DOM_GLOBAL			0	/* global (internet) */
+#define	DOM_LINK			1	/* link-local (LAN only) */
+#define	DOM_LOOPBACK			2	/* loopback (host only) */
+#define	DOM_SITE			3	/* site-local (organization scope only) */
+#define	DOM_MULTICAST			4	/* multicast (used for addresses and NEVER routes) */
+#define	DOM_NODEFAULT			5	/* non-default address (never selected for any route) */
 
 /**
  * Type-specific network interface options.
@@ -143,6 +153,17 @@ struct sockaddr
 {
 	uint16_t			sa_family;		/* AF_* */
 	char				sa_data[26];
+};
+
+/**
+ * AF_CAPTURE (capture sockets)
+ */
+struct sockaddr_cap
+{
+	uint16_t			scap_family;		/* AF_CAPTURE */
+	char				scap_ifname[16];
+	int				scap_proto_flags;
+	char				scap_pad[4];
 };
 
 /**
@@ -267,7 +288,7 @@ void	ipv6_info2header(PacketInfo6 *info, IPHeader6 *head);
 int	ipv6_header2info(IPHeader6 *head, PacketInfo6 *info);
 
 /**
- * Specifies a scope of IPv4 addresses available to an interface.
+ * Specifies IPv4 addresses available to an interface.
  */
 typedef struct
 {
@@ -280,6 +301,11 @@ typedef struct
 	 * The subnet mask.
 	 */
 	struct in_addr			mask;
+	
+	/**
+	 * Domain of the address.
+	 */
+	int				domain;
 } IPNetIfAddr4;
 
 /**
@@ -305,6 +331,11 @@ typedef struct
 	 * be sent to the machine which identifies with this IP addresses.
 	 */
 	struct in_addr			gateway;
+	
+	/**
+	 * Domain of the route.
+	 */
+	int				domain;
 } IPRoute4;
 
 /**
@@ -316,8 +347,6 @@ typedef struct
 	int				numAddrs;
 	IPRoute4*			routes;
 	int				numRoutes;
-	struct in_addr*			dnsServers;
-	int				numDNSServers;
 } IPConfig4;
 
 /**
@@ -327,6 +356,7 @@ typedef struct
 {
 	struct in6_addr			addr;
 	struct in6_addr			mask;
+	int				domain;
 } IPNetIfAddr6;
 
 typedef struct
@@ -334,6 +364,7 @@ typedef struct
 	struct in6_addr			dest;
 	struct in6_addr			mask;
 	struct in6_addr			gateway;
+	int				domain;
 } IPRoute6;
 
 typedef struct
@@ -342,8 +373,6 @@ typedef struct
 	int				numAddrs;
 	IPRoute6*			routes;
 	int				numRoutes;
-	struct in6_addr*		dnsServers;
-	int				numDNSServers;
 } IPConfig6;
 
 /**
@@ -389,6 +418,11 @@ typedef struct NetIf_
 	int				numDropped;
 	int				numErrors;
 	
+	/**
+	 * Scope ID for this interface. This is used for IPv6 routing.
+	 */
+	uint32_t			scopeID;
+	
 	struct NetIf_ *prev;
 	struct NetIf_ *next;
 } NetIf;
@@ -402,7 +436,16 @@ typedef struct
 	int				numErrors;
 	int				numAddrs4;
 	int				numAddrs6;
+	/* current offset: 6*4 + 16 = 24 + 16 = 40 */
+	
 	NetIfConfig			ifconfig;
+	
+	/**
+	 * Put the remaining fields at a constant offset of 1024 bytes.
+	 */
+	char				resv_[1024-(40+sizeof(NetIfConfig))];
+	
+	uint32_t			scopeID;
 } NetStat;
 
 /**
@@ -423,6 +466,7 @@ typedef struct
 	struct in_addr			dest;
 	struct in_addr			mask;
 	struct in_addr			gateway;
+	int				domain;
 	uint64_t			flags;
 } in_route;
 
@@ -432,6 +476,7 @@ typedef struct
 	struct in6_addr			dest;
 	struct in6_addr			mask;
 	struct in6_addr			gateway;
+	int				domain;
 	uint64_t			flags;
 } in6_route;
 
@@ -527,7 +572,7 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
  *		session on the interface to get addresses.
  *
  *	IF_TUNNEL
- *		The new interface is assigned then name "tnlX", where X is a number, indicating it be a software tunnel. No DHCP or
+ *		The new interface is assigned the name "tnlX", where X is a number, indicating it be a software tunnel. No DHCP or
  *		other automatic configuration methods will be tried by the system. The tunneling software must configure the tunnel
  *		in its own way.
  *
@@ -554,6 +599,12 @@ int isLocalAddr(const struct sockaddr *addr);
  * EPERM	You are not root.
  */
 int netconf_addr(int family, const char *ifname, const void *buffer, size_t size);
+
+/**
+ * Get a network interface by scope ID. Only call this when the network interface lock is acquired.
+ * Returns NULL on failure.
+ */
+NetIf *netIfByScope(uint32_t scopeID);
 
 void releaseNetIfLock();
 void acquireNetIfLock();

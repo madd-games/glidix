@@ -370,7 +370,6 @@ static void semSignalGen(Semaphore *sem, int wait)
 
 void semTerminate(Semaphore *sem)
 {
-	kprintf_debug("semTerminate was called\n");
 	spinlockAcquire(&sem->lock);
 	sem->terminated = 1;
 	if (sem->countWaiter != NULL)
