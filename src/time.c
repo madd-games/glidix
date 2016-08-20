@@ -68,13 +68,13 @@ void sleep(int ticks)
 	if (getCurrentThread() == NULL)
 	{
 		// not ready to wait!
-		int then = getUptime() + ticks;
+		uint64_t then = getUptime() + (uint64_t)ticks;
 		while (getUptime() < then);
 	}
 	else
 	{
-		int then = getUptime() + ticks;
-		uint64_t nanoThen = (uint64_t)then * (uint64_t)1000000;
+		uint64_t then = getUptime() + (uint64_t)ticks;
+		uint64_t nanoThen = then * (uint64_t)1000000;
 
 		cli();
 		lockSched();
@@ -198,8 +198,8 @@ void initRTC()
 
 uint64_t getNanotime()
 {
-	uint64_t out = (uint64_t) getUptime();
-	return out * (uint64_t)1000000;		// 10^6 nanoseconds in a milliseond because 10^9 in a second
+	uint64_t out = getUptime();
+	return out * (uint64_t)1000000;		// 10^6 nanoseconds in a millisecond because 10^9 in a second
 };
 
 static TimedEvent *timedEvents = NULL;
@@ -223,8 +223,12 @@ void timedPost(TimedEvent *ev, uint64_t nanotime)
 	{
 		if (nanotime <= timedEvents->nanotime)
 		{
-			ev->prev = timedEvents;
-			ev->next = timedEvents->next;
+			//ev->prev = timedEvents;
+			//ev->next = timedEvents->next;
+			//timedEvents = ev;
+			timedEvents->prev = ev;
+			ev->prev = NULL;
+			ev->next = timedEvents;
 			timedEvents = ev;
 			return;
 		};
@@ -237,10 +241,11 @@ void timedPost(TimedEvent *ev, uint64_t nanotime)
 				ev->prev = scan;
 				ev->next = NULL;
 				scan->next = ev;
+				return;
 			}
 			else
 			{
-				if ((scan->nanotime >= nanotime) && (scan->next->nanotime <= nanotime))
+				if ((scan->nanotime <= nanotime) && (scan->next->nanotime >= nanotime))
 				{
 					ev->next = scan->next;
 					ev->prev = scan;
@@ -248,6 +253,8 @@ void timedPost(TimedEvent *ev, uint64_t nanotime)
 					scan->next = ev;
 					return;
 				};
+				
+				scan = scan->next;
 			};
 		};
 	};

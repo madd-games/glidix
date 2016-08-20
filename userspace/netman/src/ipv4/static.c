@@ -28,6 +28,7 @@
 
 #include <sys/glidix.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <gxnetman.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,6 +52,8 @@ typedef struct
 	size_t				addrcount;
 	_glidix_gen_route*		routes;
 	size_t				routecount;
+	struct in_addr*			dns;
+	size_t				dnscount;
 } StaticConfig;
 
 int netman_static_init(NetmanIfConfig *config)
@@ -296,6 +299,26 @@ void netman_static_line(NetmanIfConfig *config, int lineno, char *line)
 			inroute->domain = domain;
 		};
 	}
+	else if (strcmp(cmd, "nameserver") == 0)
+	{
+		StaticConfig *statconf = (StaticConfig*) config->data;
+		
+		char *nameserver = strtok(NULL, SPACES);
+		if (nameserver == NULL)
+		{
+			fprintf(stderr, "static: if.conf line %d error: expected name server\n", lineno);
+			config->status = NETMAN_STATUS_ERROR;
+			return;
+		};
+		
+		statconf->dns = realloc(statconf->dns, 4*(++statconf->dnscount));
+		if (!inet_pton(AF_INET, nameserver, &statconf->dns[statconf->dnscount-1]))
+		{
+			fprintf(stderr, "static: if.conf line %d error: invalid name server address '%s'\n", lineno, nameserver);
+			config->status = NETMAN_STATUS_ERROR;
+			return;
+		};
+	}
 	else
 	{
 		fprintf(stderr, "static: if.conf line %d error: unknown command '%s'\n", lineno, cmd);
@@ -308,6 +331,30 @@ void netman_static_ifup(NetmanIfConfig *config)
 {
 	printf("[static] attempting configuration of %s\n", config->ifname);
 	StaticConfig *statconf = (StaticConfig*) config->data;
+	
+	// write the DNS servers
+	char dnspath[256];
+	sprintf(dnspath, "/etc/dns/ipv4/%s.if", config->ifname);
+	
+	FILE *fp = fopen(dnspath, "w");
+	if (fp == NULL)
+	{
+		fprintf(stderr, "[static] WARNING: failed to open %s: cannot configure DNS servers!\n", dnspath);
+	}
+	else
+	{
+		size_t i;
+		fprintf(fp, "# DNS servers from static configuration\n");
+		
+		for (i=0; i<statconf->dnscount; i++)
+		{
+			char buffer[INET_ADDRSTRLEN];
+			inet_ntop(AF_INET, &statconf->dns[i], buffer, INET_ADDRSTRLEN);
+			fprintf(fp, "%s\n", buffer);
+		};
+		
+		fclose(fp);
+	};
 	
 	// remove all routes
 	if (_glidix_route_clear(AF_INET, config->ifname) != 0)
@@ -332,6 +379,7 @@ void netman_static_ifup(NetmanIfConfig *config)
 			fprintf(stderr, "[static] failed to add route to %s: %s\n", config->ifname, strerror(errno));
 			_glidix_netconf_addr(AF_INET, config->ifname, NULL, 0);
 			_glidix_route_clear(AF_INET, config->ifname);
+			unlink(dnspath);
 			return;
 		};
 	};
@@ -343,4 +391,5 @@ void netman_static_ifup(NetmanIfConfig *config)
 	printf("[static] removing configuration\n");	
 	_glidix_netconf_addr(AF_INET, config->ifname, NULL, 0);
 	_glidix_route_clear(AF_INET, config->ifname);
+	unlink(dnspath);
 };

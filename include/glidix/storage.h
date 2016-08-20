@@ -129,6 +129,11 @@ typedef struct
 	Semaphore				sem;
 
 	/**
+	 * The semaphore that counts the number of commands issued.
+	 */
+	Semaphore				cmdCounter;
+	
+	/**
 	 * Device flags.
 	 */
 	int					flags;

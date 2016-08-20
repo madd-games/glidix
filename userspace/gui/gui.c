@@ -625,7 +625,7 @@ Window* FindWindowFromListAt(Window *win, int x, int y)
 			if ((x >= (int)win->params.x) && (x < endX) && (y >= (int)win->params.y) && (y < endY))
 			{
 				Window *child = FindWindowFromListAt(win->children, x-win->params.x-offX, y-win->params.y-offY);
-				if (child == NULL) result = win;
+				if (child == NULL) return win;
 				else result = child;
 			};
 		};

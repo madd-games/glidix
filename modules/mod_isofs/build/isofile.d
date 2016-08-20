@@ -11,6 +11,7 @@ build/isofile.o build/isofile.d : isofile.c /glidix/kernel-include/glidix/common
  /glidix/kernel-include/glidix/ftab.h \
  /glidix/kernel-include/glidix/signal.h \
  /glidix/kernel-include/glidix/fpu.h \
+ /glidix/kernel-include/glidix/errno.h \
  /glidix/kernel-include/glidix/string.h \
  /glidix/kernel-include/glidix/console.h \
  /glidix/usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h isofs.h \

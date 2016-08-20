@@ -115,7 +115,12 @@ void debugKernel(Regs *regs)
 			break;
 		case 5:
 			kprintf("CPU: %d\n", getCurrentCPU()->id);
-			kprintf("PID: %d, '%s'\n", getCurrentThread()->creds->pid, getCurrentThread()->name);
+			int pid = 0;
+			if (getCurrentThread()->creds != NULL)
+			{
+				pid = getCurrentThread()->creds->pid;
+			};
+			kprintf("PID: %d, '%s'\n", pid, getCurrentThread()->name);
 			kdumpregs(&getCurrentThread()->regs);
 			break;
 		case 6:
@@ -130,7 +135,7 @@ void debugKernel(Regs *regs)
 			break;
 		case 7:
 			kprintf(" *** SET RAX TO SEMAPHORE ADDRESS ***\n");
-			semDump((Semaphore*)getDebugInput());
+			//semDump((Semaphore*)getDebugInput());
 			break;
 		case 8:
 			getCurrentThread()->regs.rflags &= ~(1 << 9);	// cli

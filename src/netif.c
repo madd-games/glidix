@@ -79,14 +79,14 @@ uint16_t ipv4_checksum(const void* vdata,size_t length)
 
 void ipv4_info2header(PacketInfo4 *info, IPHeader4 *head)
 {
-	uint16_t flags = 0;
+	uint16_t flags = (1 << 14);				// don't fragment
 	if (info->moreFrags)
 	{
 		flags |= (1 << 13);
 	};
 	
 	head->versionIHL = 0x45;				// IPv4, 5 dwords (20 bytes) header
-	head->dscpECN = 0;					// XXX ??
+	head->dscpECN = 0;
 	head->len = __builtin_bswap16(20 + info->size);
 	head->id = info->id;
 	head->flagsFragOff = __builtin_bswap16((uint16_t) info->fragOff | flags);
@@ -177,7 +177,7 @@ int ipv6_header2info(IPHeader6 *head, PacketInfo6 *info)
 		IPFragmentHeader6 *fraghead = (IPFragmentHeader6*) &head[1];
 		info->proto = (int) fraghead->nextHeader;
 		uint16_t fragResM = __builtin_bswap16(fraghead->fragResM);
-		info->fragOff = fragResM >> 3;
+		info->fragOff = fragResM & ~7;
 		info->moreFrags = fragResM & 1;
 		info->id = fraghead->id;
 		info->dataOffset += 8;
@@ -663,6 +663,20 @@ static int sendPacketToInterface(NetIf *netif, const struct sockaddr *gateway, c
 int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *packet, size_t packetlen, int flags,
 		uint64_t nanotimeout, const char *ifname)
 {
+	uint64_t opts[GSO_COUNT];
+	memset(opts, 0, sizeof(uint64_t)*GSO_COUNT);
+	
+	int proto = flags & 0xFF;
+	
+	opts[GSO_SNDTIMEO] = nanotimeout;
+	opts[GSO_SNDFLAGS] = flags & PKT_MASK;
+	
+	return sendPacketEx(src, dest, packet, packetlen, proto, opts, ifname);
+};
+
+int sendPacketEx(struct sockaddr *src, const struct sockaddr *dest, const void *packet, size_t packetlen,
+			int proto, uint64_t *sockopts, const char *ifname)
+{
 	static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	if (ifname != NULL)
 	{
@@ -676,29 +690,36 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 	{
 		struct sockaddr_in src4;
 		struct sockaddr_in dest4;
-		src4.sin_family = AF_UNSPEC;
+		memset(&src4, 0, sizeof(struct sockaddr_in));
 		
 		if (src->sa_family != AF_UNSPEC)
 		{
 			if (!isMappedAddress46(src))
 			{
-				// destination is IPv4 but source is IPv6
-				return -EINVAL;
+				// if the source is IPv6, we just replace it with the default IPv4 address
+				if (src->sa_family != AF_INET6)
+				{
+					return -EINVAL;
+				};
+			}
+			else
+			{
+				remapAddress64((struct sockaddr_in6*) src, (struct sockaddr_in*)&src4);
 			};
-			
-			remapAddress64((struct sockaddr_in6*) src, (struct sockaddr_in*)&src4);
 		};
 		
 		remapAddress64((struct sockaddr_in6*) dest, (struct sockaddr_in*) &dest4);
 		
 		// send the packet over IPv4
-		int status = sendPacket((struct sockaddr*) &src4, (const struct sockaddr*) &dest4, packet, packetlen, flags,
-						nanotimeout, ifname);
+		int status = sendPacketEx((struct sockaddr*) &src4, (const struct sockaddr*) &dest4, packet, packetlen, proto,
+						sockopts, ifname);
 		
-		// if the IPv4 source address was just determined, map it onto an IPv6 address.
+		// IPv6 sockets that send IPv4 datagrams must become bound to "::" if they are currently unbound
 		if (src->sa_family == AF_UNSPEC)
 		{
-			remapAddress46((struct sockaddr_in*) &src4, (struct sockaddr_in6*) src);
+			struct sockaddr_in6 *insrc = (struct sockaddr_in6*) src;
+			memset(insrc, 0, sizeof(struct sockaddr_in6));
+			insrc->sin6_family = AF_INET6;
 		};
 		
 		return status;
@@ -739,24 +760,31 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 		return -EINVAL;
 	};
 	
+	struct sockaddr src_replace;
 	if (src->sa_family == AF_INET)
 	{
 		struct sockaddr_in *insrc = (struct sockaddr_in*) src;
 		const struct sockaddr_in *indst = (const struct sockaddr_in*) dest;
+		struct sockaddr_in *inreplace = (struct sockaddr_in*) &src_replace;
 		
 		if (memcmp(&insrc->sin_addr, zeroes, 4) == 0)
 		{
-			getDefaultAddr4(&insrc->sin_addr, &indst->sin_addr);
+			memcpy(&src_replace, insrc, sizeof(struct sockaddr));
+			getDefaultAddr4(&inreplace->sin_addr, &indst->sin_addr);
+			src = &src_replace;
 		};
 	}
 	else
 	{
 		struct sockaddr_in6 *insrc = (struct sockaddr_in6*) src;
 		const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
+		struct sockaddr_in6 *inreplace = (struct sockaddr_in6*) &src_replace;
 		
 		if (memcmp(&insrc->sin6_addr, zeroes, 16) == 0)
 		{
-			getDefaultAddr6(&insrc->sin6_addr, &indst->sin6_addr);
+			memcpy(&src_replace, insrc, sizeof(struct sockaddr));
+			getDefaultAddr6(&inreplace->sin6_addr, &indst->sin6_addr);
+			src = &src_replace;
 		};
 	};
 	
@@ -766,7 +794,7 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 		return 0;
 	};
 	
-	int proto = flags & 0xFF;
+	int flags = (int) sockopts[GSO_SNDFLAGS] & PKT_MASK;
 	if (proto == IPPROTO_RAW)
 	{
 		flags |= PKT_HDRINC | PKT_DONTFRAG;
@@ -775,6 +803,51 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 	if (flags & PKT_HDRINC)
 	{
 		flags |= PKT_DONTFRAG;
+	};
+	
+	uint8_t hopLimit;
+	if (dest->sa_family == AF_INET)
+	{
+		hopLimit = (uint8_t) sockopts[GSO_UNICAST_HOPS];
+		if (hopLimit == 0)
+		{
+			hopLimit = DEFAULT_UNICAST_HOPS;
+		};
+	}
+	else
+	{
+		const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
+		if (indst->sin6_addr.s6_addr[0] == 0xFF)
+		{
+			if (indst->sin6_scope_id == 0)
+			{
+				// multicasts must be scoped
+				return -EINVAL;
+			};
+			
+			hopLimit = (uint8_t) sockopts[GSO_MULTICAST_HOPS];
+			if (hopLimit == 0)
+			{
+				hopLimit = DEFAULT_MULTICAST_HOPS;
+			};
+		}
+		else
+		{
+			hopLimit = (uint8_t) sockopts[GSO_UNICAST_HOPS];
+			if (hopLimit == 0)
+			{
+				hopLimit = DEFAULT_UNICAST_HOPS;
+			};
+			
+			if ((indst->sin6_addr.s6_addr[0] == 0xFE) && (indst->sin6_addr.s6_addr[1] == 0x80))
+			{
+				// link-local unicasts must be scoped
+				if (indst->sin6_scope_id == 0)
+				{
+					return -EINVAL;
+				};
+			};
+		};
 	};
 	
 	// TODO: proper path MTU discovery!
@@ -834,7 +907,7 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 				info.size = mtu;
 				info.id = packetID;
 				info.fragOff = i * mtu;
-				info.hop = DEFAULT_HOP_LIMIT;
+				info.hop = hopLimit;
 				info.moreFrags = (i != (numFullDatagrams-1));
 				
 				if (!info.moreFrags)
@@ -861,7 +934,7 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 				info.size = mtu;
 				info.id = packetID;
 				info.fragOff = i * mtu;
-				info.hop = DEFAULT_HOP_LIMIT;
+				info.hop = hopLimit;
 				info.moreFrags = (i != (numFullDatagrams-1));
 				
 				if (!info.moreFrags)
@@ -875,7 +948,10 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 				memcpy(&encapPacket[48], ((uint8_t*)packet+(i*mtu)), info.size);
 			};
 			
-			int status = sendPacket(src, dest, encapPacket, encapSize, flags | PKT_HDRINC, nanotimeout, ifname);
+			uint64_t newopts[GSO_COUNT];
+			memcpy(newopts, sockopts, sizeof(uint64_t)*GSO_COUNT);
+			newopts[GSO_SNDFLAGS] = flags | PKT_HDRINC;
+			int status = sendPacketEx(src, dest, encapPacket, encapSize, proto, newopts, ifname);
 			kfree(encapPacket);
 			
 			if (status != 0) return status;
@@ -889,7 +965,7 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 	{
 		uint8_t *encapPacket;
 		size_t encapSize;
-		
+
 		if (dest->sa_family == AF_INET)
 		{
 			PacketInfo4 info;
@@ -901,7 +977,7 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 			info.size = packetlen;
 			info.id = getNextPacketID();
 			info.fragOff = 0;
-			info.hop = DEFAULT_HOP_LIMIT;
+			info.hop = hopLimit;
 			info.moreFrags = 0;
 			
 			encapSize = 20+info.size;
@@ -922,16 +998,19 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 			info.size = packetlen;
 			info.id = getNextPacketID();
 			info.fragOff = 0;
-			info.hop = DEFAULT_HOP_LIMIT;
+			info.hop = hopLimit;
 			info.moreFrags = 0;
-			
+
 			encapSize = 40+info.size;
 			encapPacket = (uint8_t*) kmalloc(40+info.size);
 			ipv6_info2header(&info, (IPHeader6*)encapPacket);
 			memcpy(&encapPacket[40], packet, packetlen);
 		};
-		
-		int status = sendPacket(src, dest, encapPacket, encapSize, flags | PKT_HDRINC, nanotimeout, ifname);
+
+		uint64_t newopts[GSO_COUNT];
+		memcpy(newopts, sockopts, sizeof(uint64_t)*GSO_COUNT);
+		newopts[GSO_SNDFLAGS] = (uint64_t)flags | PKT_HDRINC;
+		int status = sendPacketEx(src, dest, encapPacket, encapSize, proto, newopts, ifname);
 		kfree(encapPacket);
 		return status;
 	};
@@ -939,7 +1018,6 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 	// at this point, we have an IP packet with a complete header, which we just have to send to an interface.
 	// so we look through the routing tables, select an interface, and attempt to transmit by using address
 	// resolution.
-
 	mutexLock(&iflistLock);
 	
 	NetIf *netif;
@@ -1008,7 +1086,7 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 				if (gatewayFound)
 				{
 					int status = sendPacketToInterface(netif, (struct sockaddr*) &gateway,
-										packet, packetlen, nanotimeout);
+										packet, packetlen, sockopts[GSO_SNDTIMEO]);
 					mutexUnlock(&iflistLock);
 					return status;
 				};
@@ -1042,7 +1120,8 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 							{
 								memcpy(&gateway.sin6_addr, &route->gateway, 16);
 							};
-						
+							
+							gateway.sin6_scope_id = netif->scopeID;
 							gatewayFound = 1;
 							break;
 						};
@@ -1052,7 +1131,7 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 				if (gatewayFound)
 				{
 					int status = sendPacketToInterface(netif, (struct sockaddr*) &gateway,
-										packet, packetlen, nanotimeout);
+										packet, packetlen, sockopts[GSO_SNDTIMEO]);
 					mutexUnlock(&iflistLock);
 					return status;
 				};
@@ -1110,7 +1189,7 @@ void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest)
 void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest)
 {
 	uint64_t *addr = ((uint64_t*)dest);
-
+	
 	mutexLock(&iflistLock);
 	
 	NetIf *netif = &iflist;

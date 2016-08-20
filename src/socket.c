@@ -102,6 +102,17 @@ static ssize_t sock_read(File *fp, void *buffer, size_t len)
 	return RecvfromSocket(fp, buffer, len, 0, NULL, NULL);
 };
 
+static void sock_pollinfo(File *fp, Semaphore **sems)
+{	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (sock->pollinfo == NULL)
+	{
+		return;
+	};
+	
+	sock->pollinfo(sock, sems);
+};
+
 File* CreateSocket(int domain, int type, int proto)
 {
 	if ((domain != AF_INET) && (domain != AF_INET6) && (domain != AF_CAPTURE))
@@ -184,16 +195,19 @@ File* CreateSocket(int domain, int type, int proto)
 	semWait(&sockLock);
 	sock->prev = &sockList;
 	sock->next = sockList.next;
+	if (sock->next != NULL) sock->next->prev = sock;
 	sockList.next = sock;
 	semSignal(&sockLock);
 	
 	File *fp = (File*) kmalloc(sizeof(File));
 	memset(fp, 0, sizeof(File));
+	fp->refcount = 1;
 	fp->fsdata = sock;
 	fp->oflag = O_RDWR | O_SOCKET;
 	fp->close = sock_close;
 	fp->write = sock_write;
 	fp->read = sock_read;
+	fp->pollinfo = sock_pollinfo;
 	
 	sock->fp = fp;
 	return fp;
@@ -456,6 +470,7 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 	};
 
 	// if the packet is fragmented, pass it to the reassembler
+	size_t realSize;
 	if (src->sa_family == AF_INET)
 	{
 		PacketInfo4 info;
@@ -475,6 +490,8 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 			memcpy(srcaddr, &insrc->sin_addr, 4);
 			memcpy(destaddr, &indst->sin_addr, 4);
 			
+			if (info.size > size) return;
+			
 			ipreasmPass(AF_INET, srcaddr, destaddr, proto, info.id, info.fragOff, 
 					((char*)packet + dataOffset), info.size, info.moreFrags);
 			return;
@@ -484,6 +501,8 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 		{
 			onICMPPacket(src, dest, (char*)packet + dataOffset, info.size);
 		};
+		
+		realSize = info.size;
 	}
 	else
 	{
@@ -500,6 +519,8 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 			memcpy(srcaddr, &insrc->sin6_addr, 16);
 			memcpy(destaddr, &indst->sin6_addr, 16);
 			
+			if (info.size > size) return;
+			
 			ipreasmPass(AF_INET6, srcaddr, destaddr, proto, info.id, info.fragOff,
 					((char*)packet + dataOffset), info.size, info.moreFrags);
 			return;
@@ -508,9 +529,12 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 		{
 			onICMP6Packet(src, dest, (char*)packet + dataOffset, info.size);
 		};
+		
+		realSize = info.size;
 	};
-
-	onTransportPacket(src, dest, addrlen, (char*)packet + dataOffset, size, proto);
+	
+	if (realSize > size) return;
+	onTransportPacket(src, dest, addrlen, (char*)packet + dataOffset, realSize, proto);
 };
 
 void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen, const void *packet, size_t size, int proto)
@@ -757,4 +781,28 @@ uint64_t GetSocketOption(File *fp, int proto, int option)
 	
 	ERRNO = 0;
 	return sock->options[option];
+};
+
+int SocketMulticast(File *fp, int op, const struct in6_addr *addr, uint32_t scope)
+{
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		ERRNO = ENOTSOCK;
+		return -1;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (sock->domain != AF_INET6)
+	{
+		ERRNO = EPROTONOSUPPORT;
+		return -1;
+	};
+	
+	if (sock->mcast == NULL)
+	{
+		ERRNO = EOPNOTSUPP;
+		return -1;
+	};
+	
+	return sock->mcast(sock, op, addr, scope);
 };

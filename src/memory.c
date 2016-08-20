@@ -209,7 +209,8 @@ static HeapHeader *heapWalkRight(HeapHeader *head)
 	HeapHeader *nextHead = (HeapHeader*) addr;
 	if (nextHead->magic != HEAP_HEADER_MAGIC)
 	{
-		heapDump();
+		//heapDump();
+		stackTraceHere();
 		panic("detected heap corruption (invalid header magic at %a, stepping from %a)", nextHead, head);
 	};
 
@@ -316,7 +317,12 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 void *_kxmalloc(size_t size, int flags, const char *aid, int lineno)
 {	
 	if (size == 0) return NULL;
-
+	if (size >= 0x40000000)
+	{
+		// do not even attempt allocations of size 1GB (the heap maximum) or more
+		return NULL;
+	};
+	
 	if (readyForDynamic)
 	{
 		return kxmallocDynamic(size, flags, aid, lineno);
@@ -403,6 +409,7 @@ void _kfree(void *block, const char *who, int line)
 	if (foot->magic != HEAP_FOOTER_MAGIC)
 	{
 		heapDump();
+		stackTraceHere();
 		panic("%s:%d: heap corruption detected: the header for %a is not linked to a valid footer", who, line, addr);
 	};
 
@@ -415,7 +422,8 @@ void _kfree(void *block, const char *who, int line)
 
 	if (foot->size != head->size)
 	{
-		heapDump();
+		//heapDump();
+		stackTraceHere();
 		panic("%s:%d: heap corruption detected: the header for %a does not agree with the footer on block size", who, line, addr);
 	};
 
@@ -429,7 +437,8 @@ void _kfree(void *block, const char *who, int line)
 		if (footLeft->magic != HEAP_FOOTER_MAGIC)
 		{
 			//kprintf("ALLOCATED BY: %s\n", heapHeaderFromFooter(footLeft)->aid);
-			heapDump();
+			//heapDump();
+			stackTraceHere();
 			panic("%s:%d: heap corruption detected: block to the left of %a is marked as existing but has invalid footer magic (%a, size=%d)", who, line, addr, footLeft->magic, (int)footLeft->size);
 		};
 
@@ -510,7 +519,7 @@ void heapDump()
 	{
 		uint64_t addr = (uint64_t) &head[1];
 		HeapFooter *foot = heapFooterFromHeader(head);
-		if (/*(addr > 0xFFFF8100004DA000) && (addr < 0xFFFF8100004DB000)*/1)
+		if ((addr > 0xFFFF8100019A5000) && (addr < 0xFFFF8100019B0000))
 		{
 			kprintf("%a     ", addr);
 			const char *stat = "%$\x02" "FREE%#";

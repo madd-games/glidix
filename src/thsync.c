@@ -61,7 +61,7 @@ static int thsync_sema_ioctl(File *fp, uint64_t cmd, void *argp)
 	switch (cmd)
 	{
 	case IOCTL_SEMA_WAIT:
-		result = semWaitTimeout((Semaphore*)fp->fsdata, *((int*)argp), 0);
+		result = semWaitGen((Semaphore*)fp->fsdata, *((int*)argp), SEM_W_INTR, 0);
 		if (result > 0)
 		{
 			return result;

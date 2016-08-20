@@ -83,9 +83,6 @@
 #define	IF_ETHERNET			1		/* ethernet controller */
 #define	IF_TUNNEL			2		/* software tunnel */
 
-/* the default hop limit */
-#define	DEFAULT_HOP_LIMIT		255
-
 /* system-defined address/route domains; numbers 0-15 are reserved for the system; 16+ may be used by user */
 #define	DOM_GLOBAL			0	/* global (internet) */
 #define	DOM_LINK			1	/* link-local (LAN only) */
@@ -93,6 +90,12 @@
 #define	DOM_SITE			3	/* site-local (organization scope only) */
 #define	DOM_MULTICAST			4	/* multicast (used for addresses and NEVER routes) */
 #define	DOM_NODEFAULT			5	/* non-default address (never selected for any route) */
+
+/**
+ * Default hop limits for unicast and multicast packets.
+ */
+#define	DEFAULT_UNICAST_HOPS		64
+#define	DEFAULT_MULTICAST_HOPS		1
 
 /**
  * Type-specific network interface options.
@@ -128,13 +131,13 @@ typedef union
 		
 		/**
 		 * Send an ethernet frame through the interface. 'frame' points to the ethernet frame,
-		 * which already has an EthernetHeader at the front. 'framelen' is the length, in bytes,
+		 * which already has an EtherHeader at the front. 'framelen' is the length, in bytes,
 		 * of that frame. The destination and source MAC addresses are in the EthernetHeader.
 		 */
 		void (*send)(struct NetIf_ *netif, const void *frame, size_t framelen);
 		
 		/**
-		 * Number of currently-resolved addresses, the head of the list, and the list spinlock.
+		 * The head of the currently-resolved address list, and the list spinlock.
 		 */
 		MacResolution*		res;
 		Spinlock		resLock;
@@ -500,6 +503,12 @@ int sendPacket(struct sockaddr *src, const struct sockaddr *dest, const void *pa
 		uint64_t nanotimeout, const char *ifname);
 
 /**
+ * A better version of sendPacket() basically.
+ */
+int sendPacketEx(struct sockaddr *src, const struct sockaddr *dest, const void *packet, size_t packetlen,
+			int proto, uint64_t *sockopts, const char *ifname);
+
+/**
  * Load an IPv4 or IPv6 address which is the default source address for the interface that "dest" goes to.
  */
 void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest);
@@ -605,6 +614,10 @@ int netconf_addr(int family, const char *ifname, const void *buffer, size_t size
  * Returns NULL on failure.
  */
 NetIf *netIfByScope(uint32_t scopeID);
+
+int isMappedAddress46(const struct sockaddr *addr);
+void remapAddress64(const struct sockaddr_in6 *addr, struct sockaddr_in *result);
+void remapAddress46(const struct sockaddr_in *addr, struct sockaddr_in6 *result);
 
 void releaseNetIfLock();
 void acquireNetIfLock();

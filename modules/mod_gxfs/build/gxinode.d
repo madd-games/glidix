@@ -10,6 +10,7 @@ build/gxinode.o build/gxinode.d : gxinode.c gxfs.h /glidix/kernel-include/glidix
  /glidix/kernel-include/glidix/ftab.h \
  /glidix/kernel-include/glidix/signal.h \
  /glidix/kernel-include/glidix/fpu.h \
+ /glidix/kernel-include/glidix/errno.h \
  /glidix/kernel-include/glidix/console.h \
  /glidix/usr/lib/gcc/x86_64-glidix/4.9.0/include/stdarg.h \
  /glidix/kernel-include/glidix/time.h \

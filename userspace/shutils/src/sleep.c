@@ -29,6 +29,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <sys/time.h>
 
 int main(int argc, char *argv[])
 {
@@ -39,6 +41,15 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	sleep(atoi(argv[1]));
+	clock_t start = clock();
+	unsigned secs = atoi(argv[1]);
+	while (secs > 0)
+	{
+		secs = sleep(secs);
+	};
+	
+	clock_t end = clock();
+	clock_t seconds = (end-start) / CLOCKS_PER_SEC;
+	printf("I waited for %lu seconds\n", seconds);
 	return 0;
 };

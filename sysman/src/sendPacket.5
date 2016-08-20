@@ -1,0 +1,86 @@
+>NAME
+
+sendPacket - send an IP datagram
+
+>SYNOPSIS
+
+	#include <glidix/netif.h>
+	#include <glidix/socket.h>
+	
+	int sendPacket(struct sockaddr *'src', const struct sockaddr *'dest', const void *'packet', size_t 'packetlen', int 'flags', uint64_t 'nanotimeout', const char *'ifname');
+	
+	int sendPacketEx(struct sockaddr *'src', const struct sockaddr *'dest', const void *'packet', size_t 'packetlen', int 'proto', uint64_t *'sockopts', const char *'ifname');
+
+>DESCRIPTION
+
+These kernel functions are used to send IP datagrams over the network; it prepends IP headers (if necessary), routes the packet hence selecting an interface (if necessary), and if 'src->sa_family' is *AF_UNSPEC* (unspecified), it sets the structure pointed to by 'src' to be the default source address to use when communicating with 'dest'.
+
+For *sendPacket*(), 'flags' is a bitwise-OR of the IP protocol number to use (in the lower 8 bits) and the send flags (see descriptions of *GSO_SNDFLAGS* below). 'nanotimeout' is the send timeout in nanoseconds. *sendPacket*() calls *sendPacketEx*() internally, and all those options are also accepted by *sendPacketEx*() in another form, along with many other options. Hence, *sendPacket*() can be used for sending simple packets but *sendPacketEx*() should be used for advanced purposes such as implementing sockets. The rest of this document describes *sendPacketEx*().
+
+The 'src' field identifies the source address to specify in IP headers (if those are to be prepended by *sendPacketEx*()). Note that even if you included the IP header yourself, 'src' should still be valid so as not to cause an error to be returned. 'src' is treated in one of 4 ways:
+
+\* If 'src->sa_family' is *AF_UNSPEC* (unspecified), a default address is selected based on 'dest', and the structure pointed to by 'src' is modified to contain this default address, which may then be used for subsequent calls. Sockets typically pass the pointer to their "socket name" field as 'src', so they become bound to a defualt address upon sending, if they are not yet bound.
+
+\* If 'src->sa_family' is not *AF_UNSPEC*, it must match 'dest->sa_family'; otherwise, the *EINVAL* error is returned. Furthermore, it can only be either *AF_INET* or *AF_INET6*. See [ipv4.6] and [ipv6.6].
+
+\* If 'src' specifies the "any" address ('0.0.0.0' for IPv4 or '::' for IPv6), then the default address is selected, but 'src' is *NOT* modified. This is useful for, for example, UDP sockets, which when bound to the "any" address must still send datagrams from the default address, but remain bound to the "any" address.
+
+\* Otherwise, 'src' must specify a valid source address; and that will be the address that will be passed as the source address in the IP header.
+
+The 'dest' argument specifies the destination address of the packet. If it specifies an IPv4-mapped IPv6 address, then the following additional processing occurs:
+
+\* If 'src' has family *AF_UNSPEC*, then it is set to the IPv6 "any" address, '::'.
+\* If 'src' has family *AF_INET* then it is still an error and *EINVAL* is raised.
+\* If 'src' is valid (or became valid due to binding it to '::' above), i.e. has family *AF_INET6*, then *sendPacketEx*() is called recursively, specifying the default IPv4 address as the source, and the embedded IPv4 address as the destination, this time using *AF_INET* addressing. Hence, IPv4 can be handled transparently by the IPv6 interface.
+
+If the *PKT_DONTROUTE* flag is passed, then 'dest' must be the address of a neighbor or gateway (if an IP header is already prepended), as this isntructs the system not to perform any routing. See the *GSO_SNDLFAGS* option below.
+
+The 'packet' argument points to the first octet of the packet to be sent, and 'packetlen' specifies the size of the packet in bytes. If the *PKT_HDRINC* send flag is passed (see *GSO_SNDFLAGS* options below), then the packet must begin with a valid IP header (which means an IPv4 or IPv6 header); otherwise, *sendPacketEx*() automatically prepends a valid header before sending, specifying the correct source and destination address, hop count etc.
+
+The 'proto' field specifies the IP protocol number to place in the header. For *sendPacket*(), 'proto' is '(flags & 0xFF)'. If 'proto' is *IPPROTO_RAW*, this causes the *PKT_DONTROUTE* and *PKT_HDRINC* send flags to be set implicitly.
+
+The 'sockopts' argument points to an array of 'uint64_t' with *GSO_COUNT* elements, and represents socket options, from which send options are read.
+
+The 'ifname' argument specifies which interface to send the packet to; if routing is being performed, it is restricted to routing table entries that point to this interface. If 'ifname' points to an empty string, or *NULL*, then all interface are allowed.
+
+>>Options
+
+*GSO_*\* macros index into the 'sockopts' array. All options may be set to zero to indicate defaults. The options taken into account by *sendPacketEx*() are (currently) as follows:
+
+\* *GSO_SNDTIMEO* - send timeout in nanoseconds. This timeout is taken into account if the transmission cannot be done immediately; e.g. when ARP resolutions must take place.
+
+\* *GSO_SNDFLAGS* - send flags (see below).
+
+\* *GSO_UNICAST_HOPS* - maximum number of routers that unicast packets may pass through. If set to zero, then the value of the *DEFAULT_UNICAST_HOPS* macro is used (currently 64). The valid values are 1-255 (or 0), and any other value produces undefined behavior.
+
+\* *GSO_MULTICAST_HOPS* - maximum number of routers that multicast packets may pass through. If set to zero, then the value of the *DEFAULT_MULTICAST_HOPS* macro is used (currently 1). The valid values are 1-255 (or 0), and any other value produces undefined behavior.
+
+>>Send Flags
+
+The send flags are a bitwise-OR of zero or more of the following macros. For *sendPacket*(), the send flags are bitwise-ORd with the protocol number to produce the 'flags' field; that is, 'flags = proto | sndflags'. For *sendPacketEx*(), they are passed in the *GSO_SNDFLAGS* option (see above).
+
+\* *PKT_HDRINC* - indicates that 'packet' points to a packet which already includes the appropriate IP header. If this flag is not passed, the header is prepended by the function itself. Note that the header 'must' have a valid checksum (if using IPv4; IPv6 headers do not have checksums).
+
+\* *PKT_DONTROUTE* - if this flag is passed, routing is prevented; 'dest' must be a neighbor, otherwise the *ENETUNREACH* error is raised.
+
+\* *PKT_DONTFRAG* - if this flag is passed, it indicates that the packet must not be fragmented. It is implicit if *PKT_HDRINC* is passed. If the packet is too large to send to its destination (i.e. the known PMTU is less than the packet size, including the header) then the *E2BIG* error will be raised; otherwise, the system will use fragmentation when prepending the header and will send the packet in multiple fragments.
+
+>RETURN VALUE
+
+Both functions return 0 on success, or a negative number on error; the negative number is a negated error number, e.g. '-E2BIG'.
+
+>ERRORS
+
+The following errors may be returned as negative numbers (e.g. '-E2BIG'):
+
+\* *EINVAL* - an addressing problem occured (e.g. 'src' and/or 'dest' is invalid; or their address families do not match, or they are otherwise incompatible)
+
+\* *E2BIG* - the *PKT_DONTFRAG* send flag was passed, and the packet is too big to send without fragmentation.
+
+\* *ENETUNREACH* - no route to the destination was found in the local routing tables.
+
+\* *EHOSTUNREACH* - the next hop cannot be reached; or if the *PKT_DONTROUTE* send flag was passed (see above), 'dest' is not directly reachable.
+
+>SEE ALSO
+
+[ipv4.6], [ipv6.6], [socket.6]

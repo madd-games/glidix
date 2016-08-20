@@ -112,10 +112,10 @@ static ssize_t termRead(File *fp, void *buffer, size_t size)
 		return -1;
 	};
 	
-	int count = semWait2(&semCount, (int) size);
-	if (count == -1)
+	int count = semWaitGen(&semCount, (int) size, SEM_W_INTR, 0);
+	if (count < 0)
 	{
-		getCurrentThread()->therrno = EINTR;
+		ERRNO = -count;
 		return -1;
 	};
 
@@ -257,7 +257,7 @@ void termPutChar(char c)
 		if (termState.c_lflag & ICANON)
 		{
 			inputWrite = inputRead;
-			while (semWaitNoblock(&semCount, 1024) > 0);
+			while (semWaitGen(&semCount, 1024, SEM_W_NONBLOCK, 0) > 0);
 			lineBufferSize = 0;
 		};
 		if (termGroup != 0) signalPid(-termGroup, SIGINT);

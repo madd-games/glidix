@@ -91,6 +91,13 @@ typedef struct
 	volatile EFrameBuffer		rxbufs[NUM_RX_DESC];
 } ESharedArea;
 
+typedef struct EPacket_
+{
+	struct EPacket_*		next;
+	size_t				size;
+	uint8_t				data[];
+} EPacket;
+
 typedef struct EInterface_
 {
 	struct EInterface_*		next;
@@ -99,6 +106,7 @@ typedef struct EInterface_
 	Semaphore			lock;
 	volatile int			running;
 	Thread*				thread;
+	Thread*				qthread;
 	const char*			name;
 	uint64_t			mmioAddr;
 	DMABuffer			dmaSharedArea;
@@ -106,6 +114,10 @@ typedef struct EInterface_
 	int				nextTX;
 	int				nextWaitingTX;
 	int				nextRX;
+	Semaphore			semQueue;
+	Semaphore			semQueueCount;
+	EPacket*			qfirst;
+	EPacket*			qlast;
 } EInterface;
 
 static EInterface *interfaces = NULL;
@@ -114,6 +126,24 @@ static EInterface *lastIf = NULL;
 static EDevice knownDevices[] = {
 	{0x8086, 0x100E, "Intel PRO/1000 MT Desktop (82540EM) NIC"},
 	{0, 0, NULL}
+};
+
+static void e1000_qthread(void *context)
+{
+	EInterface *nif = (EInterface*) context;
+	while (nif->running)
+	{
+		semWait(&nif->semQueueCount);
+		if (!nif->running) break;
+		
+		semWait(&nif->semQueue);
+		EPacket *packet = nif->qfirst;
+		nif->qfirst = packet->next;
+		semSignal(&nif->semQueue);
+
+		onEtherFrame(nif->netif, packet->data, packet->size+4, ETHER_IGNORE_CRC);
+		kfree(packet);
+	};
 };
 
 static int e1000_enumerator(PCIDevice *dev, void *ignore)
@@ -244,6 +274,7 @@ static void e1000_thread(void *context)
 			while (sha->rxdesc[index].status & 1)
 			{
 				// actually received
+				index &= (NUM_RX_DESC-1);
 				int drop = 0;
 				
 				size_t len = (size_t) sha->rxdesc[index].len;				
@@ -265,7 +296,23 @@ static void e1000_thread(void *context)
 				else
 				{
 					__sync_fetch_and_add(&nif->netif->numRecv, 1);
-					onEtherFrame(nif->netif, (const void*)sha->rxbufs[index].data, len+4, ETHER_IGNORE_CRC);
+					
+					EPacket *pkt = (EPacket*) kmalloc(sizeof(EPacket) + len + 4);
+					pkt->next = NULL;
+					pkt->size = len;
+					memcpy(pkt->data, (const void*)sha->rxbufs[index].data, len);
+					semWait(&nif->semQueue);
+					if (nif->qfirst == NULL)
+					{
+						nif->qfirst = nif->qlast = pkt;
+					}
+					else
+					{
+						nif->qlast->next = pkt;
+						nif->qlast = pkt;
+					};
+					semSignal(&nif->semQueue);
+					semSignal(&nif->semQueueCount);
 				};
 				
 				// return the buffer to the NIC
@@ -279,12 +326,24 @@ static void e1000_thread(void *context)
 	};
 };
 
+static uint64_t e1000_make_filter(MacAddress *mac)
+{
+	uint64_t filter = 0x8000000000000000;
+	filter |= (uint64_t) mac->addr[0];
+	filter |= ((uint64_t) mac->addr[1] << 8);
+	filter |= ((uint64_t) mac->addr[2] << 16);
+	filter |= ((uint64_t) mac->addr[3] << 24);
+	filter |= ((uint64_t) mac->addr[4] << 32);
+	filter |= ((uint64_t) mac->addr[5] << 40);
+	return filter;
+};
+
 MODULE_INIT(const char *opt)
 {
-	kprintf_debug("e1000: enumerating Intel Gigabit Ethernet-compatible PCI devices\n");
+	kprintf("e1000: enumerating Intel Gigabit Ethernet-compatible PCI devices\n");
 	pciEnumDevices(THIS_MODULE, e1000_enumerator, NULL);
 
-	kprintf_debug("e1000: creating network interfaces\n");
+	kprintf("e1000: creating network interfaces\n");
 	EInterface *nif;
 	for (nif=interfaces; nif!=NULL; nif=nif->next)
 	{
@@ -313,6 +372,19 @@ MODULE_INIT(const char *opt)
 		{
 			regMTA[i] = 0;
 		};
+		
+		// set up MAC filtering
+		uint64_t addrFilters[16];
+		memset(&addrFilters, 0, 8*16);
+		addrFilters[0] = e1000_make_filter(&ifconfig.ethernet.mac);
+		
+		volatile uint32_t *regRA = (volatile uint32_t*) (nif->mmioAddr + 0x5400);
+		uint32_t *filtScan = (uint32_t*) addrFilters;
+		for (i=0; i<32; i++)
+		{
+			regRA[i] = filtScan[i];
+		};
+		__sync_synchronize();
 		
 		// enable interrupts, clear existing ones
 		volatile uint32_t *regICR = (volatile uint32_t*) (nif->mmioAddr + 0x00C0);
@@ -357,6 +429,11 @@ MODULE_INIT(const char *opt)
 		// initialize the counter for number of free TX buffers
 		semInit2(&nif->semTXCount, NUM_TX_DESC);
 		
+		// initialize receive queue
+		semInit(&nif->semQueue);
+		semInit2(&nif->semQueueCount, 0);
+		nif->qfirst = nif->qlast = NULL;
+		
 		// next TX descriptor is zero (the first one)
 		nif->nextTX = 0;
 		
@@ -388,7 +465,6 @@ MODULE_INIT(const char *opt)
 		volatile uint32_t *regRCTL = (volatile uint32_t*) (nif->mmioAddr + 0x0100);
 		*regRCTL = 0
 			| (1 << 1)				// enable receiver
-			| (1 << 3)				// unicast promiscous
 			| (1 << 4)				// multicast promiscous
 			| (1 << 15)				// accept broadcasts (ff:ff:ff:ff:ff:ff)
 			| (1 << 26)				// discard CRC
@@ -415,6 +491,11 @@ MODULE_INIT(const char *opt)
 		pars.name = "E1000 Interrupt Handler";
 		pars.stackSize = DEFAULT_STACK_SIZE;
 		nif->thread = CreateKernelThread(e1000_thread, &pars, nif);
+		
+		memset(&pars, 0, sizeof(KernelThreadParams));
+		pars.name = "E1000 Queue Thread";
+		pars.stackSize = DEFAULT_STACK_SIZE;
+		nif->qthread = CreateKernelThread(e1000_qthread, &pars, nif);
 	};
 
 	if (interfaces == NULL)
@@ -428,13 +509,15 @@ MODULE_INIT(const char *opt)
 
 MODULE_FINI()
 {
-	kprintf_debug("e1000: deleting interfaces\n");
+	kprintf("e1000: deleting interfaces\n");
 	EInterface *nif = interfaces;
 	while (nif != NULL)
 	{
 		nif->running = 0;
 		wcUp(&nif->pcidev->wcInt);
+		semSignal(&nif->semQueueCount);
 		ReleaseKernelThread(nif->thread);
+		ReleaseKernelThread(nif->qthread);
 		DeleteNetworkInterface(nif->netif);
 		
 		pciReleaseDevice(nif->pcidev);
@@ -446,6 +529,6 @@ MODULE_FINI()
 		nif = next;
 	};
 	
-	kprintf_debug("e1000: exiting\n");
+	kprintf("e1000: exiting\n");
 	return 0;
 };

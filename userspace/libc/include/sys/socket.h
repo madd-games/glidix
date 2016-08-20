@@ -84,6 +84,8 @@ int getsockname(int socket, struct sockaddr *address, socklen_t *address_len);
 int getpeername(int socket, struct sockaddr *address, socklen_t *address_len);
 int shutdown(int socket, int how);
 int connect(int socket, const struct sockaddr *addr, socklen_t addrlen);
+int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
+int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen);
 
 #ifdef __cplusplus
 };	/* extern "C" */

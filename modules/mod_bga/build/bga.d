@@ -14,6 +14,7 @@ build/bga.o build/bga.d : bga.c /glidix/kernel-include/glidix/module.h \
  /glidix/kernel-include/glidix/fpu.h \
  /glidix/kernel-include/glidix/storage.h \
  /glidix/kernel-include/glidix/semaphore.h \
+ /glidix/kernel-include/glidix/errno.h \
  /glidix/kernel-include/glidix/devfs.h \
  /glidix/kernel-include/glidix/ioctl.h \
  /glidix/kernel-include/glidix/string.h \

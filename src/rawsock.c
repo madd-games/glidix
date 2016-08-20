@@ -141,9 +141,8 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 		return -1;
 	};
 	
-	int status = sendPacket((struct sockaddr*) &rawsock->addr, addr, message, len,
-		sock->proto | (sock->options[GSO_SNDFLAGS] & PKT_MASK),
-		sock->options[GSO_SNDTIMEO], sock->ifname);
+	int status = sendPacketEx((struct sockaddr*) &rawsock->addr, addr, message, len,
+		sock->proto, sock->options, sock->ifname);
 
 	if (status < 0)
 	{
@@ -192,7 +191,10 @@ static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struc
 			static const uint64_t zeroAddr[] = {0, 0};
 			if (memcmp(&inaddr->sin6_addr, zeroAddr, 16) != 0)
 			{
-				if (memcmp(&inaddr->sin6_addr, &indest->sin6_addr, 16) != 0)
+				if (
+					(memcmp(&inaddr->sin6_addr, &indest->sin6_addr, 16) != 0)
+					&& (indest->sin6_addr.s6_addr[0] != 0xFF)
+				)
 				{
 					// different destination, discard
 					return;
@@ -237,32 +239,12 @@ static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struc
 static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)
 {
 	RawSocket *rawsock = (RawSocket*) sock;
-	
-	if (sock->fp->oflag & O_NONBLOCK)
+
+	int status = semWaitGen(&rawsock->packetCounter, 1, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+	if (status < 0)
 	{
-		if (semWaitNoblock(&rawsock->packetCounter, 1) == -1)
-		{
-			getCurrentThread()->therrno = EWOULDBLOCK;
-			return -1;
-		};
-	}
-	else
-	{
-		int status = semWaitTimeout(&rawsock->packetCounter, 1, sock->options[GSO_RCVTIMEO]);
-		
-		if (status < 0)
-		{
-			if (status == SEM_INTERRUPT)
-			{
-				ERRNO = EINTR;
-			}
-			else
-			{
-				ERRNO = ETIMEDOUT;
-			};
-			
-			return -1;
-		};
+		ERRNO = -status;
+		return -1;
 	};
 	
 	// packet inbound
@@ -321,6 +303,19 @@ static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	return (ssize_t) len;
 };
 
+static void rawsock_close(Socket *sock)
+{
+	RawSocket *rawsock = (RawSocket*) sock;
+	RawPacket *packet = rawsock->first;
+	
+	while (packet != NULL)
+	{
+		RawPacket *next = packet->next;
+		kfree(packet);
+		packet = next;
+	};
+};
+
 static int rawsock_getsockname(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 {
 	if ((*addrlenptr) > sizeof(struct sockaddr))
@@ -334,6 +329,13 @@ static int rawsock_getsockname(Socket *sock, struct sockaddr *addr, size_t *addr
 	return 0;
 };
 
+static void rawsock_pollinfo(Socket *sock, Semaphore **sems)
+{
+	RawSocket *rawsock = (RawSocket*) sock;
+	sems[PEI_READ] = &rawsock->packetCounter;
+	sems[PEI_WRITE] = vfsGetConstSem();
+};
+
 Socket *CreateRawSocket()
 {
 	RawSocket *rawsock = (RawSocket*) kmalloc(sizeof(RawSocket));
@@ -345,6 +347,8 @@ Socket *CreateRawSocket()
 	sock->packet = rawsock_packet;
 	sock->recvfrom = rawsock_recvfrom;
 	sock->getsockname = rawsock_getsockname;
+	sock->close = rawsock_close;
+	sock->pollinfo = rawsock_pollinfo;
 	
 	semInit(&rawsock->queueLock);
 	semInit2(&rawsock->packetCounter, 0);

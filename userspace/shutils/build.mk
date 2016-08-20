@@ -1,5 +1,5 @@
 .PHONY: all
-all: out/cp out/lspci out/clear-screen out/dhcp out/resolve out/route out/sudo out/mip-install out/passwd out/mount out/gxpad out/mkdir out/sigsegv out/ping out/ls out/sleep out/date out/rmmod out/login out/linkslaac out/color out/chgrp out/ping6 out/chown out/srv-wrapper out/insmod out/whoami out/whois out/env out/halt out/service out/logmgr out/stat out/pwdsetup out/sniff out/rm out/umount out/kill out/crypt out/mkmip out/chmod out/touch out/cat out/gfxterm out/ln out/netconf out/eject
+all: out/cp out/lspci out/clear-screen out/dhcp out/resolve out/route out/sudo out/mip-install out/passwd out/mount out/gxpad out/mkdir out/sigsegv out/ping out/ls out/sleep out/date out/rmmod out/login out/linkslaac out/color out/chgrp out/ping6 out/chown out/srv-wrapper out/insmod out/whoami out/whois out/env out/halt out/service out/logmgr out/clock out/stat out/pwdsetup out/sniff out/rm out/umount out/kill out/crypt out/mkmip out/chmod out/touch out/cat out/gfxterm out/ln out/netconf out/eject
 out/cp: src/cp.c
 	x86_64-glidix-gcc $< -o $@ 
 out/lspci: src/lspci.c
@@ -67,6 +67,8 @@ out/halt: src/halt.c
 out/service: src/service.c
 	x86_64-glidix-gcc $< -o $@ 
 out/logmgr: src/logmgr.c
+	x86_64-glidix-gcc $< -o $@ 
+out/clock: src/clock.c
 	x86_64-glidix-gcc $< -o $@ 
 out/stat: src/stat.c
 	x86_64-glidix-gcc $< -o $@ 

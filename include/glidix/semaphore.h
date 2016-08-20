@@ -35,58 +35,157 @@
 
 #include <glidix/spinlock.h>
 #include <glidix/sched.h>
+#include <glidix/errno.h>
 
-#define	SEM_INTERRUPT				-1
-#define	SEM_TIMEOUT				-2
+/**
+ * When passed as a flag to semWaitGen(), causes it to return -EINTR if a signal arrives
+ * before resources become available.
+ */
+#define	SEM_W_INTR				(1 << 0)
 
-typedef struct _SemWaitThread
+/**
+ * When passed as a flag to semWaitGen(), causes it to return -EAGAIN if no resources are
+ * available immediately.
+ *
+ * NOTE: This MUST have the same value as O_NONBLOCK in <glidix/vfs.h>
+ */
+#define	SEM_W_NONBLOCK				(1 << 8)
+
+/**
+ * This macro converts file descriptor flags (O_*) into flags appropriate for semWaitGen():
+ * That is, SEM_W_INTR, and if O_NONBLOCK is passed, SEM_W_NONBLOCK.
+ */
+#define	SEM_W_FILE(oflag)			(((oflag) & (SEM_W_NONBLOCK)) | SEM_W_INTR)
+
+/**
+ * Represents an entry in the semaphore wait queue.
+ */
+typedef struct SemWaitThread_
 {
-	Thread *thread;
-	int waiting;
-	struct _SemWaitThread *next;
+	/**
+	 * The thread that is waiting.
+	 */
+	Thread*					thread;
+	
+	/**
+	 * This is initialized to 0 by the waiting thread, and set to 1 by a thread when it
+	 * signals the semaphore.
+	 */
+	int					give;
+	
+	/**
+	 * Previous and next element in the queue; it must be double-linked since a thread
+	 * may give up waiting for resources.
+	 */
+	struct SemWaitThread_*			prev;
+	struct SemWaitThread_*			next;
 } SemWaitThread;
 
+/**
+ * The structure representing a semaphore. This may be allocated statically or using kmalloc().
+ */
 typedef struct Semaphore_
 {
-	// for debugging only; DO NOT READ OUTSIDE OF semDump()
-	// last thread to have acquired the semaphore.
-	Thread *lastHolder;
+	/**
+	 * The spinlock that protects the semaphore from multiple accesses by different CPUs.
+	 * Interrupt masking protects from concurrency on the same CPU, and makes it priority-safe.
+	 */
+	Spinlock				lock;
 	
-	Spinlock lock;
-	Thread *waiter;
-	volatile int count;
-
-	// the queue of threads waiting for this semaphore.
-	SemWaitThread *first;
-	SemWaitThread *last;
-
-	// for semWait2/semSignal2, to keep some synchronisation of locks
-	Thread *countWaiter;
-	Spinlock countLock;
+	/**
+	 * Number of resources currently available. A value of -1 means terminated and empty.
+	 */
+	int					count;
 	
-	// this is set to one by semTerminate()
-	int terminated;
+	/**
+	 * Set to 1 when the semaphore is terminated.
+	 */
+	int					terminated;
+	
+	/**
+	 * Queue of waiting threads.
+	 */
+	SemWaitThread*				first;
+	SemWaitThread*				last;
 } Semaphore;
 
+/**
+ * Initialize a semaphore. The contents of 'sem' are considered undefined before this call. It MUST NOT
+ * be called on a semaphore that is in use, or already initialized. 'count' is the initial number of
+ * resources on the semaphore; semInit() initializes this to 1, making the semaphore useable as a mutex,
+ * initially unlocked.
+ */
 void semInit(Semaphore *sem);
 void semInit2(Semaphore *sem, int count);
+
+/**
+ * Generic semaphore waiting function; used to implement all of the wait functions below. 'sem' names the
+ * semaphore to wait on. 'count' is the maximum number of resources to wait for. 'flags' describes how to
+ * wait (see the SEM_W_* macros above). 'nanotimeout' is the maximum amount of time, in nanoseconds, that
+ * we should try waiting; 0 means infinity.
+ *
+ * Returns the number of acquired resources on success (which may be zero if the semaphore was terminated
+ * with a call to semTerminate()). It returns an error number converted to negative on error; for example
+ * -EINTR. Possible errors:
+ *
+ * EINTR	The SEM_W_INTR flag was passed, and a signal arrived before any resourced became
+ *		available.
+ * ETIMEDOUT	A timeout was given and the time passed before any resources became available.
+ * EAGAIN	The SEM_W_NONBLOCK flag was passed, and no resources are currently available.
+ *
+ * When waiting on a file read semaphore, the file desciptor flags (fp->oflag) must be taken into account,
+ * and the function can be called as follows:
+ *	int count = semWaitGen(semRead, (int) readSize, SEM_W_FILE(fp->oflag), timeout);
+ * Which makes the function interruptable (SEM_W_INTR) and nonblocking if the O_NONBLOCK flag is in oflag.
+ */
+int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout);
+
+/**
+ * Simplification of the above; waits for a single resource and only returns on success. This is used when
+ * a semaphore is being used as a mutual exclusion lock.
+ *
+ * WARNING: This will cause a kernel panic if used on a semaphore that can be terminated!
+ */
 void semWait(Semaphore *sem);
-int  semWait2(Semaphore *sem, int count);
-int  semWaitNoblock(Semaphore *sem, int count);
+
+/**
+ * Return resources to a semaphore (increment it by 'count'). semSignal() increments by 1.
+ */
 void semSignal(Semaphore *sem);
 void semSignal2(Semaphore *sem, int count);
-void semSignalAndWait(Semaphore *sem);
-void semDump(Semaphore *sem);
+
+/**
+ * Terminate a semaphore. It is not valid to signal it anymore after it is terminated; and, once all resourced
+ * have been consumed, semWaitGen() will always return 0 when attempting to wait. This is used to mark "EOF" on
+ * file read semaphores; e.g. when the write end of a pipe is closed.
+ */
 void semTerminate(Semaphore *sem);
 
 /**
- * Wait for up to a specified number of resources with a timeout (given in nanoseconds). If the timeout is zero,
- * wait indefinitely. Returns a positive value, indicating the number of resources that became available, on success.
- * Returns 0 if the semaphore was terminated.
- * Otherwise returns one of the following negative values:
- *  - SEM_INTERRUPT		The operation was interrupted by the reception of a signal.
- *  - SEM_TIMEOUT		The operation has timed out.
+ * Poll a group of semaphores. 'numSems' specifies the number of semaphores in the array; 'sems' is an array of
+ * pointers to semaphores. 'bitmap' points to a bitmap of results; this function never clears any bits, only sets
+ * them if necessary. 'flags' and 'nanotimeout' are the same as for semWaitGen().
+ *
+ * This function waits for at least one semaphore in the list to become available (have a nonzero count). If
+ * SEM_W_INTR is set, and NONE of the semaphores become available before delivery of a signal, returns -EINTR.
+ * If SEM_W_NONBLOCK is set, and NONE of the semaphores are immediately available, returns 0. On success,
+ * returns the number of semaphores that became free; 0 meaning the operation timed out before any semaphores
+ * became free.
+ *
+ * For each semaphore that is free, this function sets a bit in the 'bitmap' before returning; that is, if
+ * sems[n] become free, then testing the mask (1 << (n%8)) against bitmap[n/8] will return nonzero.
+ *
+ * This function does NOT change the count of any of the semaphores; you must still call semWaitGen() or semWait()
+ * on a free semaphore to acquire it.
+ *
+ * A NULL pointer indicates a semaphore which NEVER becomes free.
+ *
+ * A terminated semaphore is NOT considered free (unless there are still some resources to read from it).
+ *
+ * Note that false positives are possible: for example, there may be a race condition where another thread acquires
+ * all resources of a semaphore after semPoll() reported the semaphore free, but before the caller of semPoll()
+ * called semWait() or semWaitGen(). To handle this case, semWaitGen() must be called with the SEM_W_NONBLOCK flag.
  */
-int semWaitTimeout(Semaphore *sem, int count, uint64_t timeout);
+int semPoll(int numSems, Semaphore **sems, uint8_t *bitmap, int flags, uint64_t nanotimeout);
 
 #endif

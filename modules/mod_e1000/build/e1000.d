@@ -22,4 +22,5 @@ build/e1000.o build/e1000.d : e1000.c /glidix/kernel-include/glidix/module.h \
  /glidix/kernel-include/glidix/memory.h \
  /glidix/kernel-include/glidix/port.h \
  /glidix/kernel-include/glidix/semaphore.h \
+ /glidix/kernel-include/glidix/errno.h \
  /glidix/kernel-include/glidix/dma.h

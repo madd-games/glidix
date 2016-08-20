@@ -134,6 +134,7 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 	if (status != 0)
 	{
 		kfree(fs);
+		ERRNO = EILSEQ;
 		return -1;
 	};
 
@@ -142,6 +143,7 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 	if (status != 0)
 	{
 		kfree(fs);
+		ERRNO = EIO;
 		return -1;
 	};
 

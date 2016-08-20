@@ -44,12 +44,12 @@ void catFile(int fd)
 			if (errno == EINTR)
 			{
 				close(fd);
-				exit(1);
 			}
 			else
 			{
 				perror("read");
 			};
+			exit(1);
 		};
 
 		if (count == 0) break;

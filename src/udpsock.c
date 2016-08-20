@@ -36,6 +36,8 @@
 #include <glidix/console.h>
 #include <glidix/common.h>
 
+#define	UDP_ALLOWED_SNDFLAGS			(PKT_DONTROUTE|PKT_DONTFRAG)
+
 /**
  * Entry in the inbound queue.
  */
@@ -47,6 +49,15 @@ typedef struct UDPInbound_
 	size_t					size;
 	char					payload[];
 } UDPInbound;
+
+/**
+ * Entry in the socket multicast group list.
+ */
+typedef struct
+{
+	struct in6_addr				addr;
+	uint32_t				scope;
+} UDPGroup;
 
 /**
  * UDP SOCKET
@@ -64,6 +75,8 @@ typedef struct
 	Semaphore				counter;
 	UDPInbound*				first;
 	UDPInbound*				last;
+	UDPGroup*				groups;
+	size_t					numGroups;
 } UDPSocket;
 
 typedef struct
@@ -129,7 +142,8 @@ static int udpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 	
 	// convert port to machine order and then ensure we have permission to bind to it
 	port = __builtin_bswap16(port);
-	if (port < 1024)
+	
+	if ((port < 1024) && (port != 0))
 	{
 		if (getCurrentThread()->creds->euid != 0)
 		{
@@ -146,10 +160,33 @@ static int udpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 		return -1;
 	};
 	
-	if (ClaimSocketAddr(addr, &udpsock->sockname) != 0)
+	if (port != 0)
 	{
-		ERRNO = EADDRINUSE;
-		return -1;
+		if (ClaimSocketAddr(addr, &udpsock->sockname) != 0)
+		{
+			ERRNO = EADDRINUSE;
+			return -1;
+		};
+	}
+	else
+	{
+		struct sockaddr chaddr;
+		memcpy(&chaddr, addr, sizeof(struct sockaddr));
+		
+		if (chaddr.sa_family == AF_INET)
+		{
+			((struct sockaddr_in*)&chaddr)->sin_port = AllocPort();
+		}
+		else
+		{
+			((struct sockaddr_in6*)&chaddr)->sin6_port = AllocPort();
+		};
+
+		if (ClaimSocketAddr(&chaddr, &udpsock->sockname) != 0)
+		{
+			ERRNO = EADDRINUSE;
+			return -1;
+		};
 	};
 	
 	return 0;
@@ -220,9 +257,74 @@ static int udpsock_getpeername(Socket *sock, struct sockaddr *addr, size_t *addr
 
 static void udpsock_shutdown(Socket *sock, int how)
 {
-	// TODO: who is freeing the queue???
 	UDPSocket *udpsock = (UDPSocket*) sock;
 	udpsock->shutflags |= how;
+};
+
+static void udpsock_close(Socket *sock)
+{
+	UDPSocket *udpsock = (UDPSocket*) sock;
+	
+	semWait(&udpsock->queueLock);
+	UDPInbound *inbound = udpsock->first;
+	while (inbound != NULL)
+	{
+		UDPInbound *next = inbound->next;
+		kfree(inbound);
+		inbound = next;
+	};
+	udpsock->first = udpsock->last = NULL;
+	
+	kfree(udpsock->groups);
+	udpsock->groups = NULL;
+	udpsock->numGroups = 0;
+	
+	semSignal(&udpsock->queueLock);
+};
+
+static uint16_t udpChecksum4(const struct sockaddr_in *src, const struct sockaddr_in *dest, const void *msg, size_t size)
+{
+	// TODO: compute checksum
+	return 0;
+};
+
+static uint16_t udpChecksum6(const struct sockaddr_in6 *insrc, const struct sockaddr_in6 *indst, const void *msg, size_t size)
+{
+	static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	
+	if (isMappedAddress46((const struct sockaddr*)indst))
+	{
+		struct sockaddr_in src4, dst4;
+		remapAddress64(insrc, &src4);
+		remapAddress64(indst, &dst4);
+		return udpChecksum4(&src4, &dst4, msg, size);
+	};
+	
+	// we have to do this because the checksum requires the source address to be known.
+	struct sockaddr_in6 copyaddr;
+	if (memcmp(&insrc->sin6_addr, zeroes, 16) == 0)
+	{
+		memcpy(&copyaddr, insrc, sizeof(struct sockaddr_in6));
+		getDefaultAddr6(&copyaddr.sin6_addr, &indst->sin6_addr);
+		insrc = &copyaddr;
+	};
+	
+	size_t packetSize = sizeof(UDPPacket) + size;
+	UDPEncap *encap = (UDPEncap*) kmalloc(sizeof(UDPEncap) + size);
+	memset(encap, 0, sizeof(UDPEncap));
+	memcpy(encap->srcaddr, &insrc->sin6_addr, 16);
+	memcpy(encap->dstaddr, &indst->sin6_addr, 16);
+	encap->udplen = __builtin_bswap16(packetSize);
+	encap->proto = IPPROTO_UDP;
+	encap->packet.srcport = insrc->sin6_port;
+	encap->packet.dstport = indst->sin6_port;
+	encap->packet.len = encap->udplen;
+	encap->packet.checksum = 0;
+	memcpy(encap->packet.payload, msg, size);
+	uint16_t checksum = ipv4_checksum(encap, sizeof(UDPEncap) + size);
+	
+	kfree(encap);
+	return checksum;
 };
 
 static ssize_t udpsock_sendto(Socket *sock, const void *message, size_t msgsize, int flags, const struct sockaddr *addr, size_t addrlen)
@@ -293,6 +395,8 @@ static ssize_t udpsock_sendto(Socket *sock, const void *message, size_t msgsize,
 		};
 	};
 	
+	sock->options[GSO_SNDFLAGS] &= UDP_ALLOWED_SNDFLAGS;
+	
 	if (sock->domain == AF_INET)
 	{
 		struct sockaddr_in *insrc = (struct sockaddr_in*) &udpsock->sockname;
@@ -305,8 +409,11 @@ static ssize_t udpsock_sendto(Socket *sock, const void *message, size_t msgsize,
 		packet->checksum = 0;
 		memcpy(packet->payload, message, msgsize);
 		
-		int status = sendPacket(&udpsock->sockname, &destaddr, packet, sizeof(UDPPacket) + msgsize,
-					IPPROTO_UDP | (sock->options[GSO_SNDFLAGS] & PKT_MASK), sock->options[GSO_SNDTIMEO], sock->ifname);
+		packet->checksum = udpChecksum4(insrc, indst, message, msgsize);
+		
+		int status = sendPacketEx(&udpsock->sockname, &destaddr, packet, sizeof(UDPPacket) + msgsize,
+					IPPROTO_UDP, sock->options, sock->ifname);
+					
 		kfree(packet);
 		
 		if (status < 0)
@@ -318,38 +425,26 @@ static ssize_t udpsock_sendto(Socket *sock, const void *message, size_t msgsize,
 	else
 	{
 		// IPv6
-		static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 		struct sockaddr_in6 *insrc = (struct sockaddr_in6*) &udpsock->sockname;
 		struct sockaddr_in6 *indst = (struct sockaddr_in6*) &destaddr;
 		
-		// we have to do this because the checksum requires the source address to be known.
-		if (memcmp(&insrc->sin6_addr, zeroes, 16) == 0)
-		{
-			getDefaultAddr6(&insrc->sin6_addr, &indst->sin6_addr);
-		};
+		UDPPacket *packet = (UDPPacket*) kmalloc(sizeof(UDPPacket) + msgsize);
+		packet->srcport = insrc->sin6_port;
+		packet->dstport = indst->sin6_port;
+		packet->len = __builtin_bswap16((uint16_t) msgsize+8);
+		packet->checksum = 0;
+		memcpy(packet->payload, message, msgsize);
 		
-		size_t packetSize = sizeof(UDPPacket) + msgsize;
-		UDPEncap *encap = (UDPEncap*) kmalloc(sizeof(UDPEncap) + msgsize);
-		memset(encap, 0, sizeof(UDPEncap));
-		memcpy(encap->srcaddr, &insrc->sin6_addr, 16);
-		memcpy(encap->dstaddr, &indst->sin6_addr, 16);
-		encap->udplen = __builtin_bswap16((uint16_t) msgsize+8);
-		encap->proto = IPPROTO_UDP;
-		encap->packet.srcport = insrc->sin6_port;
-		encap->packet.dstport = indst->sin6_port;
-		encap->packet.len = encap->udplen;
-		encap->packet.checksum = 0;
-		memcpy(encap->packet.payload, message, msgsize);
-		encap->packet.checksum = ipv4_checksum(encap, sizeof(UDPEncap) + msgsize);
+		packet->checksum = udpChecksum6(insrc, indst, message, msgsize);
 		
-		int status = sendPacket(&udpsock->sockname, &destaddr, &encap->packet, packetSize,
-					IPPROTO_UDP | (sock->options[GSO_SNDFLAGS] & PKT_MASK), sock->options[GSO_SNDTIMEO], sock->ifname);
-		kfree(encap);
+		int status = sendPacketEx(&udpsock->sockname, &destaddr, packet, sizeof(UDPPacket) + msgsize,
+					IPPROTO_UDP, sock->options, sock->ifname);
+		kfree(packet);
 		
 		if (status < 0)
 		{
 			ERRNO = -status;
-			return (ssize_t) -1;
+			return (ssize_t)-1;
 		};
 	};
 	
@@ -364,6 +459,18 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 	if (proto != IPPROTO_UDP)
 	{
 		return;
+	};
+	
+	struct sockaddr_in6 src6, dest6;
+	int havev4addr = 0;
+	if ((dest->sa_family == AF_INET) && (sock->domain == AF_INET6))
+	{
+		remapAddress46((const struct sockaddr_in*) src, &src6);
+		remapAddress46((const struct sockaddr_in*) dest, &dest6);
+		
+		src = (struct sockaddr*) &src6;
+		dest = (struct sockaddr*) &dest6;
+		havev4addr = 1;
 	};
 	
 	if (dest->sa_family != sock->domain)
@@ -404,12 +511,49 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 		struct sockaddr_in6 *sockname = (struct sockaddr_in6*) &udpsock->sockname;
 		const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
 		
-		if (memcmp(&sockname->sin6_addr, zeroes, 16) != 0)
+		if ((sockname->sin6_scope_id != 0) && (indst->sin6_scope_id != sockname->sin6_scope_id))
 		{
-			if (memcmp(&sockname->sin6_addr, &indst->sin6_addr, 16) != 0)
+			return;
+		};
+		
+		if (indst->sin6_addr.s6_addr[0] == 0xFF)
+		{
+			// check if we have joined the appropriate multicast group
+			semWait(&udpsock->queueLock);
+			size_t i;
+			int found = 0;
+			for (i=0; i<udpsock->numGroups; i++)
 			{
-				// not destined to this socket
+				UDPGroup *group = &udpsock->groups[i];
+				if (memcmp(&group->addr, indst, 16) == 0)
+				{
+					if ((group->scope == indst->sin6_scope_id) || (group->scope == 0))
+					{
+						found = 1;
+						break;
+					};
+				};
+			};
+			semSignal(&udpsock->queueLock);
+			
+			if (!found)
+			{
 				return;
+			};
+		}
+		else
+		{
+			if (memcmp(&sockname->sin6_addr, zeroes, 16) != 0)
+			{
+				if (memcmp(&sockname->sin6_addr, &indst->sin6_addr, 16) != 0)
+				{
+					// all IPv6 sockets accept IPv4 datagrams
+					if (!havev4addr)
+					{
+						// not destined to this socket
+						return;
+					};
+				};
 			};
 		};
 		
@@ -422,6 +566,7 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 	
 	// the packet is destined to us. don't bother with checksums since the data is protected by link layer
 	// protocols anyway, but make sure the size field is valid
+	// TODO: or should checksums be implemented?
 	if (__builtin_bswap16(udp->len) > size)
 	{
 		return;
@@ -464,37 +609,22 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 static ssize_t udpsock_recvfrom(Socket *sock, void *buffer, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)
 {
 	UDPSocket *udpsock = (UDPSocket*) sock;
-	
-	if (sock->fp->oflag & O_NONBLOCK)
+
+	int status = semWaitGen(&udpsock->counter, 1, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+	if (status < 0)
 	{
-		if (semWaitNoblock(&udpsock->counter, 1) == -1)
-		{
-			getCurrentThread()->therrno = EWOULDBLOCK;
-			return -1;
-		};
-	}
-	else
-	{
-		int status = semWaitTimeout(&udpsock->counter, 1, sock->options[GSO_RCVTIMEO]);
-		
-		if (status < 0)
-		{
-			if (status == SEM_INTERRUPT)
-			{
-				ERRNO = EINTR;
-			}
-			else
-			{
-				ERRNO = ETIMEDOUT;
-			};
-			
-			return -1;
-		};
+		ERRNO = -status;
+		return -1;
 	};
 	
 	// packet inbound
 	semWait(&udpsock->queueLock);
 	UDPInbound *inbound = udpsock->first;
+	if (inbound == NULL)
+	{
+		ERRNO = EPIPE;
+		return -1;
+	};
 	
 	if ((flags & MSG_PEEK) == 0)
 	{
@@ -548,6 +678,98 @@ static ssize_t udpsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	return (ssize_t) len;
 };
 
+static int udpsock_mcast(Socket *sock, int op, const struct in6_addr *addr, uint32_t scope)
+{	
+	UDPSocket *udpsock = (UDPSocket*) sock;
+	UDPGroup group;
+	memcpy(&group.addr, addr, 16);
+	group.scope = scope;
+	
+	semWait(&udpsock->queueLock);
+
+	if (udpsock->shutflags & SHUT_RD)
+	{
+		semSignal(&udpsock->queueLock);
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (op == MCAST_JOIN_GROUP)
+	{
+		// see if we're already in this group
+		size_t i;
+		for (i=0; i<udpsock->numGroups; i++)
+		{
+			if (memcmp(&udpsock->groups[i], &group, sizeof(UDPGroup)) == 0)
+			{
+				// already in this group
+				semSignal(&udpsock->queueLock);
+				return 0;
+			};
+		};
+		
+		// we must add this group to the list
+		if (udpsock->numGroups == MCAST_MAX_GROUPS)
+		{
+			// we've joined too many multicast groups
+			semSignal(&udpsock->queueLock);
+			ERRNO = E2BIG;
+			return -1;
+		};
+		
+		i = udpsock->numGroups++;
+		UDPGroup *newList = (UDPGroup*) kmalloc(sizeof(UDPGroup)*udpsock->numGroups);
+		memcpy(newList, udpsock->groups, sizeof(UDPGroup)*i);
+		memcpy(&newList[i], &group, sizeof(UDPGroup));
+		kfree(udpsock->groups);
+		udpsock->groups = newList;
+		semSignal(&udpsock->queueLock);
+		return 0;
+	}
+	else if (op == MCAST_LEAVE_GROUP)
+	{
+		// see if we're in this group at all
+		size_t i;
+		for (i=0; i<udpsock->numGroups; i++)
+		{
+			if (memcmp(&udpsock->groups[i], &group, sizeof(UDPGroup)) == 0)
+			{
+				break;
+			};
+		};
+		
+		if (i == udpsock->numGroups)
+		{
+			// we're already not in this group
+			semSignal(&udpsock->queueLock);
+			return 0;
+		};
+		
+		udpsock->numGroups--;
+		UDPGroup *newList = (UDPGroup*) kmalloc(sizeof(UDPGroup)*udpsock->numGroups);
+		memcpy(newList, udpsock->groups, sizeof(UDPGroup)*i);
+		memcpy(&newList[i], &udpsock->groups[i+1], sizeof(UDPGroup)*(udpsock->numGroups-i));
+		kfree(udpsock->groups);
+		udpsock->groups = newList;
+		
+		semSignal(&udpsock->queueLock);
+		return 0;
+	}
+	else
+	{
+		semSignal(&udpsock->queueLock);
+		ERRNO = EINVAL;
+		return -1;
+	};
+};
+
+static void udpsock_pollinfo(Socket *sock, Semaphore **sems)
+{
+	UDPSocket *udpsock = (UDPSocket*) sock;
+	sems[PEI_READ] = &udpsock->counter;
+	sems[PEI_WRITE] = vfsGetConstSem();
+};
+
 Socket *CreateUDPSocket()
 {
 	UDPSocket *udpsock = NEW(UDPSocket);
@@ -562,6 +784,9 @@ Socket *CreateUDPSocket()
 	sock->sendto = udpsock_sendto;
 	sock->packet = udpsock_packet;
 	sock->recvfrom = udpsock_recvfrom;
+	sock->mcast = udpsock_mcast;
+	sock->close = udpsock_close;
+	sock->pollinfo = udpsock_pollinfo;
 
 	semInit(&udpsock->queueLock);
 	semInit2(&udpsock->counter, 0);

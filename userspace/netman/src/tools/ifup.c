@@ -181,6 +181,9 @@ int main(int argc, char *argv[])
 	
 	// ensure that any necessary directories exist (ignore errors if they already exist)
 	mkdir("/etc", 0755);
+	mkdir("/etc/dns", 0755);
+	mkdir("/etc/dns/ipv6", 0755);
+	mkdir("/etc/dns/ipv4", 0755);
 	mkdir("/var", 0755);
 	mkdir("/var/log", 0755);
 	mkdir("/var/log/netman", 0755);
@@ -448,7 +451,7 @@ int main(int argc, char *argv[])
 	{
 		fprintf(stderr, "%s: interface configuration not found: %s\n", argv[0], argv[1]);
 		fclose(fp);
-		return 1;
+		return 2;	/* we return 2 to indicate this specific error for "ifinit" */
 	};
 	
 	// OK, start both daemons

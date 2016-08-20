@@ -32,6 +32,7 @@
 #include <glidix/common.h>
 #include <glidix/netif.h>
 #include <glidix/vfs.h>
+#include <glidix/semaphore.h>
 
 #define	SOCK_STREAM			1
 #define	SOCK_DGRAM			2
@@ -49,7 +50,14 @@
 #define	GSO_RCVTIMEO			0
 #define	GSO_SNDTIMEO			1
 #define	GSO_SNDFLAGS			2
-#define	GSO_COUNT			3
+#define	GSO_UNICAST_HOPS		3
+#define	GSO_MULTICAST_HOPS		4
+#define	GSO_COUNT			5
+
+#define	MCAST_JOIN_GROUP		0
+#define	MCAST_LEAVE_GROUP		1
+
+#define	MCAST_MAX_GROUPS		256
 
 typedef struct Socket_
 {
@@ -119,6 +127,16 @@ typedef struct Socket_
 	 * Called to handle getpeername() on this socket.
 	 */
 	int (*getpeername)(struct Socket_ *sock, struct sockaddr *addr, size_t *addrlenptr);
+	
+	/**
+	 * Called to join/leave an IPv6 multicast group. 'op' is either MCAST_JOIN_GROUP or MCAST_LEAVE_GROUP.
+	 */
+	int (*mcast)(struct Socket_ *sock, int op, const struct in6_addr *addr, uint32_t scope);
+	
+	/**
+	 * Get polling information; see vfs.h.
+	 */
+	void (*pollinfo)(struct Socket_ *sock, Semaphore **sems);
 } Socket;
 
 typedef struct
@@ -225,5 +243,10 @@ void FreePort(uint16_t port);
  */
 int SetSocketOption(File *fp, int proto, int option, uint64_t value);
 uint64_t GetSocketOption(File *fp, int proto, int option);
+
+/**
+ * Multicast configuration. 'op' is either MCAST_JOIN_GROUP or MCAST_LEAVE_GROUP.
+ */
+int SocketMulticast(File *fp, int op, const struct in6_addr *addr, uint32_t scope);
 
 #endif

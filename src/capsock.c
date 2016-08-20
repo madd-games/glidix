@@ -111,32 +111,12 @@ static void capsock_shutdown(Socket *sock, int how)
 static ssize_t capsock_recvfrom(Socket *sock, void *buffer, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)
 {
 	CapSocket *capsock = (CapSocket*) sock;
-	
-	if (sock->fp->oflag & O_NONBLOCK)
+
+	int status = semWaitGen(&capsock->counter, 1, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+	if (status < 0)
 	{
-		if (semWaitNoblock(&capsock->counter, 1) == -1)
-		{
-			getCurrentThread()->therrno = EWOULDBLOCK;
-			return -1;
-		};
-	}
-	else
-	{
-		int status = semWaitTimeout(&capsock->counter, 1, sock->options[GSO_RCVTIMEO]);
-		
-		if (status < 0)
-		{
-			if (status == SEM_INTERRUPT)
-			{
-				ERRNO = EINTR;
-			}
-			else
-			{
-				ERRNO = ETIMEDOUT;
-			};
-			
-			return -1;
-		};
+		ERRNO = -status;
+		return -1;
 	};
 	
 	// packet inbound
@@ -144,7 +124,7 @@ static ssize_t capsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	CapInbound *inbound = capsock->first;
 	if (inbound == NULL)
 	{
-		ERRNO = EINVAL;
+		ERRNO = EPIPE;
 		return -1;
 	};
 	

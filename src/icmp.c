@@ -138,6 +138,7 @@ void onICMPPacket(const struct sockaddr *src, const struct sockaddr *dest, const
 
 static void handleSolicit(const struct sockaddr_in6 *src, NDPNeighborSolicit *sol)
 {
+	static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	if (src->sin6_scope_id == 0) return;
 	
 	// we expect the "source MAC" option
@@ -162,6 +163,13 @@ static void handleSolicit(const struct sockaddr_in6 *src, NDPNeighborSolicit *so
 	struct sockaddr_in6 adv_src;
 	struct sockaddr_in6 adv_dst;
 	memcpy(&adv_dst, src, sizeof(struct sockaddr_in6));
+	if (memcmp(&adv_dst.sin6_addr, zeroes, 16) == 0)
+	{
+		adv_dst.sin6_addr.s6_addr[0] = 0xFF;
+		adv_dst.sin6_addr.s6_addr[1] = 0x02;
+		adv_dst.sin6_addr.s6_addr[15] = 1;
+	};
+	
 	memset(&adv_src, 0, sizeof(struct sockaddr_in6));
 	adv_src.sin6_family = AF_INET6;
 	memcpy(&adv_src.sin6_addr, sol->addr, 16);
@@ -204,8 +212,16 @@ static void handleSolicit(const struct sockaddr_in6 *src, NDPNeighborSolicit *so
 	memcpy(adv->mac, &myMAC, 6);
 	
 	adv->checksum = ipv4_checksum(phead, sizeof(PseudoHeaderICMPv6) + sizeof(NDPNeighborAdvert));
-	sendPacket((struct sockaddr*)&adv_src, (struct sockaddr*)&adv_dst, adv, sizeof(NDPNeighborAdvert),
-			IPPROTO_ICMPV6 | PKT_DONTROUTE, NT_SECS(1), NULL);
+	
+	uint64_t sockopts[GSO_COUNT];
+	memset(sockopts, 0, sizeof(uint64_t)*GSO_COUNT);
+	sockopts[GSO_SNDTIMEO] = NT_SECS(1);
+	sockopts[GSO_SNDFLAGS] = PKT_DONTROUTE;
+	sockopts[GSO_MULTICAST_HOPS] = 255;
+	sockopts[GSO_UNICAST_HOPS] = 255;
+	
+	sendPacketEx((struct sockaddr*)&adv_src, (struct sockaddr*)&adv_dst, adv, sizeof(NDPNeighborAdvert),
+			IPPROTO_ICMPV6, sockopts, NULL);
 };
 
 static void handleAdvert(const struct sockaddr_in6 *src, NDPNeighborAdvert *adv)

@@ -50,7 +50,7 @@ typedef struct TimedEvent_
 	struct TimedEvent_*		next;
 } TimedEvent;
 
-int getUptime();			// idt.c
+uint64_t getUptime();			// idt.c
 #define	getTicks getUptime
 uint64_t getNanotime();
 void sleep(int ticks);

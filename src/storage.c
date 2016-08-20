@@ -509,6 +509,8 @@ StorageDevice *sdCreate(SDParams *params)
 {
 	StorageDevice *sd = (StorageDevice*) kmalloc(sizeof(StorageDevice));
 	semInit(&sd->sem);
+	semInit2(&sd->cmdCounter, 0);
+	
 	sd->flags = params->flags;
 	sd->blockSize = params->blockSize;
 	sd->totalSize = params->totalSize;
@@ -531,13 +533,13 @@ StorageDevice *sdCreate(SDParams *params)
 	diskfile->limit = sd->totalSize / sd->blockSize;
 	diskfile->letter = nextDriveLetter++;
 
-	char name[4] = "sd_";
-	name[2] = diskfile->letter;
-	sd->diskfile = AddDevice(name, diskfile, diskfile_open, 0600);
-	
 	memset(sd->cache, 0xFF, sizeof(SDCachedPage)*SD_CACHE_SIZE);		// set all to SD_NOT_CACHED (all 0xFF)
 	sd->cacheIndex = 0;
 	sd->blocksPerPage = 4096 / sd->blockSize;
+
+	char name[4] = "sd_";
+	name[2] = diskfile->letter;
+	sd->diskfile = AddDevice(name, diskfile, diskfile_open, 0600);
 	
 	return sd;
 };
@@ -558,43 +560,21 @@ void sdPush(StorageDevice *dev, SDCommand *cmd)
 		last->next = cmd;
 	};
 
-	if (dev->thread != NULL)
-	{
-		signalThread(dev->thread);
-		dev->thread = NULL;
-	};
-
+	semSignal(&dev->cmdCounter);
 	semSignal(&dev->sem);
 };
 
-SDCommand* sdTryPop(StorageDevice *dev)
+SDCommand* sdPop(StorageDevice *sd)
 {
-	semWait(&dev->sem);
-	if (dev->cmdq == NULL)
-	{
-		dev->thread = getCurrentThread();
-		semSignalAndWait(&dev->sem);
-		return NULL;
-	};
-
-	SDCommand *cmd = dev->cmdq;
-	dev->cmdq = cmd->next;
-	semSignal(&dev->sem);
-
+	semWait(&sd->cmdCounter);
+	
+	semWait(&sd->sem);
+	SDCommand *cmd = sd->cmdq;
+	sd->cmdq = cmd->next;
+	semSignal(&sd->sem);
+	
 	cmd->next = NULL;
 	return cmd;
-};
-
-SDCommand* sdPop(StorageDevice *dev)
-{
-	while (1)
-	{
-		SDCommand *cmd = sdTryPop(dev);
-		if (cmd != NULL) return cmd;
-	};
-
-	// never reached, but the compiler would still moan.
-	return NULL;
 };
 
 void sdPostComplete(SDCommand *cmd)
@@ -632,15 +612,20 @@ int sdWrite(StorageDevice *dev, uint64_t block, const void *buffer)
 	if (dev->blockSize*(block+1) > dev->totalSize) return -1;
 	if (dev->flags & SD_READONLY) return -1;
 
-	//kprintf("sdWrite %p\n", block);
+	//if (block == 0) kprintf("sdWrite %p\n", block);
+	
+	Semaphore lock;
+	semInit2(&lock, 0);
+	
 	SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand) + dev->blockSize);
 	cmd->type = SD_CMD_WRITE;
 	cmd->block = &cmd[1];			// the block will be stored right after the struct.
 	cmd->index = block;
 	cmd->count = 1;
-	cmd->cmdlock = NULL;
+	cmd->cmdlock = &lock;
 	memcpy(&cmd[1], buffer, dev->blockSize);
 
 	sdPush(dev, cmd);
+	semWait(&lock);
 	return 0;
 };

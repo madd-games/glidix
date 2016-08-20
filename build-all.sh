@@ -1,4 +1,9 @@
 #! /bin/sh
+# documentation
+cd sysman
+python parse.py
+cd ..
+
 cd userspace/libc
 make || exit 1
 sudo make install || exit 1

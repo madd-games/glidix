@@ -142,7 +142,9 @@ syscallTable = {
 	120:	"_glidix_kopt",
 	121:	"_glidix_sigwait",
 	122:	"_glidix_sigsuspend",
-	123:	"lockf"
+	123:	"lockf",
+	124:	"_glidix_mcast",
+	125:	"_glidix_fpoll"
 }
 
 f = open("_libglidix.s", "wb")

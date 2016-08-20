@@ -1,0 +1,55 @@
+>NAME
+
+_glidix_fpoll - poll for events on file descriptors
+
+>SYNOPSIS
+
+	#include <sys/glidix.h>
+	#include <fcntl.h>
+	#include <poll.h>
+	
+	int _glidix_fpoll(const uint8_t *'bitmapReq', uint8_t *'bitmapRes', int 'flags', uint64_t 'nanotimeout');
+
+>DESCRIPTION
+
+This is a low-level system call, used to implement [poll.2] and [select.2]. It should not be used directly, except for some special reasons (for example in the implementations of the aforementioned functions).
+
+The 'bitmapReq' and 'bitmapRes' arguments are arrays (which may have exactly the same address), of size equal to 'sysconf(_SC_OPEN_MAX)'. Each entry in the arrays corresponds to a file descriptor.
+
+The 'bitmapReq' array shall be initialized so that for each file descriptor, it contains the value '0' if the descriptor shall be ignored, or a bitwise-OR of one of more poll flags as specified below, if the events specified by the poll flags shall be polled for on the specified file. When this function returns, the entries in the 'bitmapRes' array will reflect what happend to each file descriptor: '0' meaning nothing happend, a bitwise-OR of one or more poll flags that were specified in 'bitmapReq' if an event occured. For example, if 'bitmapReq[2]' had the value *POLLIN | POLLOUT*, and file descriptor 2 became available for reading, but not writing, 'bitmapRes[2]' will have the value *POLLIN*.
+
+The flags *POLLERR*, *POLLHUP* and *POLLNVAL* may be set in 'bitmapRes' even if they were not set in 'bitmapReq'; except if the corresponding value in 'bitmapReq' was 0; in this case, the entry in 'bitmapRes' will always contain 0.
+
+The 'flags' argument must currently have either the value '0' or *O_NONBLOCK*. If it is *O_NONBLOCK*, then the function will not block; if none of the events being polled for have occured, it will simply zero out 'bitmapRes' and return 0.
+
+The 'nanotimeout' argument specifies the maximum amount of time, in nanoseconds, that this function is allowed to block. If the value is zero, the function is allowed to block indefinitely (unless 'flags' is *O_NONBLOCK*; in this case, 'nanotimeout' is ignored and the function does not block at all).
+
+If one or more of the events have already occured, the function will set the corresponding bits in 'bitmapRes' and return immediately. Otherwise, if we are blocking, it will wait until one of the events occures, or 'nanotimeout' nanoseconds pass without anything happening (unless 'nanotimeout' is zero).
+
+If the function blocks, and a signal is caught before any of the events occur, it returns '-1' and sets 'errno' to *EINTR*. See [signal.6].
+
+The poll flags are as follows:
+
+\* *POLLIN* - the file is available for reading; [read.2] will not block (but see NOTES).
+\* *POLLOUT* - the file is available for writing; [write.2] will not block (but see NOTES).
+\* *POLLERR* - an error has occured on the file; this may be returned in 'bitmapRes' even if not set in 'bitmapReq'.
+\* *POLLHUP* - the other side of a connection represented by the file has been closed; this may be returned in 'bitmapRes' even if not set in 'bitmapReq'. This happens, ofr example, if you poll one side of a pipe and the other side gets closed; see [pipe.2].
+\* *POLLNVAL* - the file descriptor is not open, and its entry in 'bitmapReq' was not zero. This is always returned in 'bitmapReq' for invalid file descriptors when the corresponding entry in 'bitmapReq' is nonzero - even if it does not have *POLLNVAL* set.
+
+>RETURN VALUE
+
+On success, this function returns a positive integer indicating the number of events that occured; which may be zero if it is non-blocking, or it timed out. On error, it returns '-1' and sets 'errno' to an appropriate error number.
+
+>ERRORS
+
+If this function returns '-1', the 'errno' variable may be set to one of the following values:
+
+\* *EINTR* - a signal was caught before any of the events occured.
+\* *EFAULT* - one of the arrays ('bitmapReq' or 'bitmapRes') is partly, or wholly, outside of the address space of the calling process; or reading or writing permissions were denied. In this case, the program shall assume undefined state and exit as soon as possible.
+
+>NOTES
+
+In certain cases, this function may return "false positives". For example, a file may became available to read, but another thread may call [read.2] and consume all data before the caller of *_glidix_fpoll*() manages to do so. Another situation is when a file is available for writing, but the [write.2] still blocks because the caller attempted to write more data than is possible. To be safe, you should make all files non-blocking, so that if *_glidix_fpoll*() returns a false positive, the [read.2] or [write.2] operation will simply fail with *EAGAIN*.
+
+>SEE ALSO
+[fcntl.2], [read.2], [write.2], [errno.6], [signal.6]

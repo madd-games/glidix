@@ -44,7 +44,7 @@
 IDTEntry idt[256];
 IDTPointer idtPtr;
 static IRQHandler irqHandlers[16];
-static volatile int uptime;
+static volatile uint64_t uptime;
 
 extern void loadIDT();
 extern void isr0();
@@ -119,7 +119,7 @@ extern void irq_ditch();
 
 int kernelDead = 0;
 
-int getUptime()						// <glidix/time.h>
+uint64_t getUptime()						// <glidix/time.h>
 {
 	return uptime;
 };
@@ -248,6 +248,7 @@ void idtReboot()
 	while (1) ASM("cli; hlt");
 };
 
+#if 0
 static void printbyte(uint8_t byte)
 {
 	uint8_t high = (byte >> 4) & 0xF;
@@ -256,6 +257,7 @@ static void printbyte(uint8_t byte)
 	const char *hexd = "0123456789ABCDEF";
 	kprintf("%c%c ", hexd[high], hexd[low]);
 };
+#endif
 
 static void onPageFault(Regs *regs)
 {
@@ -286,53 +288,56 @@ static void onPageFault(Regs *regs)
 		if (faultAddr < 0x7FC0000000)
 		{
 			ProcMem *pm = getCurrentThread()->pm;
-			spinlockAcquire(&pm->lock);
+			if (pm != NULL)
+			{
+				spinlockAcquire(&pm->lock);
 
-			if (isPageMapped(faultAddr, regs->errCode & 2))
-			{
-				// the page was already mapped in by another thread before we managed to
-				// get the lock.
-				spinlockRelease(&pm->lock);
-				refreshAddrSpace();
-				return;
-			};
+				if (isPageMapped(faultAddr, regs->errCode & 2))
+				{
+					// the page was already mapped in by another thread before we managed to
+					// get the lock.
+					spinlockRelease(&pm->lock);
+					refreshAddrSpace();
+					return;
+				};
 		
-			if (regs->errCode & 2)
-			{
-				// caused by a write
-				if (tryCopyOnWrite(faultAddr) == 0)
+				if (regs->errCode & 2)
+				{
+					// caused by a write
+					if (tryCopyOnWrite(faultAddr) == 0)
+					{
+						spinlockRelease(&pm->lock);
+						return;
+					};
+				};
+
+				int status = tryLoadOnDemand(faultAddr);
+				if (status == MEM_OK)
 				{
 					spinlockRelease(&pm->lock);
 					return;
+				}
+				else if (status == MEM_FAILED)
+				{
+					// ignore
+				}
+				else
+				{
+					// bus error
+					spinlockRelease(&pm->lock);
+					Thread *thread = getCurrentThread();
+
+					siginfo_t siginfo;
+					siginfo.si_signo = SIGBUS;
+					siginfo.si_code = BUS_OBJERR;
+
+					cli();
+					sendSignal(thread, &siginfo);
+					switchTask(regs);
 				};
-			};
-
-			int status = tryLoadOnDemand(faultAddr);
-			if (status == MEM_OK)
-			{
-				spinlockRelease(&pm->lock);
-				return;
-			}
-			else if (status == MEM_FAILED)
-			{
-				// ignore
-			}
-			else
-			{
-				// bus error
-				spinlockRelease(&pm->lock);
-				Thread *thread = getCurrentThread();
-
-				siginfo_t siginfo;
-				siginfo.si_signo = SIGBUS;
-				siginfo.si_code = BUS_OBJERR;
-
-				cli();
-				sendSignal(thread, &siginfo);
-				switchTask(regs);
-			};
 			
-			spinlockRelease(&pm->lock);
+				spinlockRelease(&pm->lock);
+			};
 		};
 	};
 
@@ -423,15 +428,15 @@ static void onGPF(Regs *regs)
 		kdumpregs(regs);
 		kprintf("GPF (rip=%a)\n", regs->rip);
 		stackTrace(regs->rip, regs->rbp);
-		kprintf("Peek at RIP: ");
-		uint8_t *peek = (uint8_t*) regs->rip;
-		size_t sz = 16;
-		while (sz--)
-		{
-			printbyte(*peek++);
-		};
-		kprintf("\n");
-		dumpProcessMemory(getCurrentThread()->pm, regs->rip);
+		//kprintf("Peek at RIP: ");
+		//uint8_t *peek = (uint8_t*) regs->rip;
+		//size_t sz = 16;
+		//while (sz--)
+		//{
+		//	printbyte(*peek++);
+		//};
+		//kprintf("\n");
+		//dumpProcessMemory(getCurrentThread()->pm, regs->rip);
 		debugKernel(regs);
 		//panic("meme");
 	};
@@ -546,7 +551,7 @@ void isrHandler(Regs *regs)
 			if (irqHandlers[regs->intNo-IRQ0] != NULL) irqHandlers[regs->intNo-IRQ0](regs->intNo-IRQ0);
 			break;
 		};
-		heapDump();
+		//heapDump();
 		kdumpregs(regs);
 		panic("Unhandled interrupt: %d\n", regs->intNo);
 		break;

@@ -28,6 +28,7 @@
 
 #include <sys/glidix.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <gxnetman.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,6 +60,11 @@ void netman_alic_ifup(NetmanIfConfig *config)
 {
 	printf("[alic] attempting to configure using ALIC...\n");
 
+	// delete DNS servers
+	char dnspath[256];
+	sprintf(dnspath, "/etc/dns/ipv4/%s.if", config->ifname);
+	unlink(dnspath);
+	
 	// we need a socket to test if addresses are reachable
 	char zeroes[8];
 	memset(zeroes, 0, 8);

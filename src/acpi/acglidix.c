@@ -222,8 +222,6 @@ ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE sem, UINT32 units, UINT16 timeout
 	int count = (int) units;
 	if (sem == NULL)
 	{
-		kprintf("AcpiOsWaitSemaphore called with NULL");
-		while(1);
 		return AE_BAD_PARAMETER;
 	};
 	
@@ -231,32 +229,32 @@ ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE sem, UINT32 units, UINT16 timeout
 	{
 		return AE_OK;
 	};
+
+	int flags;
+	uint64_t nanoTimeout;
 	
 	if (timeout == 0)
 	{
-		int got = semWaitNoblock(sem, count);
-		if (got < count)
-		{
-			semSignal2(sem, got);
-			return AE_TIME;
-		}
-		else
-		{
-			return AE_OK;
-		};
-	};
-	
-	uint64_t nanoTimeout = (uint64_t) timeout * 1000000;
-	if (timeout == 0xFFFF)
-	{
+		flags = SEM_W_NONBLOCK;
 		nanoTimeout = 0;
+	}
+	else if (timeout == 0xFFFF)
+	{
+		flags = 0;
+		nanoTimeout = 0;
+	}
+	else
+	{
+		flags = 0;
+		nanoTimeout = (uint64_t) timeout * 1000000;
 	};
 	
 	uint64_t deadline = getNanotime() + nanoTimeout;
 	int acquiredSoFar = 0;
-	while (1)
+	
+	while (count > 0)
 	{
-		int got = semWaitTimeout(sem, count, nanoTimeout);
+		int got = semWaitGen(sem, count, flags, nanoTimeout);
 		if (got < 0)
 		{
 			semSignal2(sem, acquiredSoFar);
@@ -266,14 +264,12 @@ ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE sem, UINT32 units, UINT16 timeout
 		acquiredSoFar += got;
 		count -= got;
 		
-		if (count == 0) break;
-		
 		uint64_t now = getNanotime();
 		if (now < deadline)
 		{
 			nanoTimeout = deadline - now;
 		}
-		else
+		else if (nanoTimeout != 0)
 		{
 			semSignal2(sem, acquiredSoFar);
 			return AE_TIME;

@@ -1,0 +1,51 @@
+>NAME
+
+capture - Capture sockets
+
+>SYNOPSIS
+
+	#include <sys/glidix.h>
+	#include <sys/socket.h>
+	
+	'raw_capture_socket' = socket(AF_CAPTURE, SOCK_RAW, 'interface_type');
+	'dgram_capture_socket' = socket(AF_CAPTURE, SOCK_DGRAM, 0);
+
+>DESCRIPTION
+
+Glidix *AF_CAPTURE* sockets are used to capture network traffic on the system. A *SOCK_DGRAM* capture socket works on all network interfaces, and captures IP packets including the IPv4 or IPv6 header, but without additional protocol headers that may be used on certain types of interfaces (such as Ethernet headers). See [ipv4.6] and [ipv6.6]. A *SOCK_RAW* capture socket captures packets including physical-layer headers such as Ethernet headers (and so it can also capture things outside of IPv4 and IPv6 as well). The 'interface_type' argument then specifies what type of interface (and hence protocol) shall be captured. The possible values are:
+
+ \* *IF_LOOPBACK* and *IF_TUNNEL* - IPv4/IPv6 packets, with no additional headers, are captured, just like with *SOCK_DGRAM* sockets. One exception is that for *IF_LOOPBACK*, a packet is only shown once, while with *SOCK_DGRAM* bound the the 'lo' interface, it would show each packet twice - when it is "sent" and when it is "received".
+ 
+ \* *IF_ETHERNET* - Ethernet frames, including the Ethernet header (which includes the destination MAC address, the source MAC address, and the EtherType) are captured. The CRC is not included. The structure of an Ethernet header is declared in '<sys/glidix.h>' and has the following format:
+
+	struct ether_header
+	{
+		uint8_t				'ether_dest'[6];
+		uint8_t				'ether_src'[6];
+		uint16_t			'ether_type';
+	};
+
+Only the 'root' user (UID 0) is allowed to create capture sockets.
+
+After a capture socket is created, it must be bound (using the [bind.2] function) to allow it to begin capturing traffic. When binding such a socket, a 'struct sockaddr_cap' must be passed to [bind.2]. It is declared in '<sys/glidix.h>' as follows:
+
+	struct sockaddr_cap
+	{
+		uint16_t			'scap_family';		/* AF_CAPTURE */
+		char				'scap_ifname'[16];
+		int				'scap_proto_flags';
+	};
+
+The 'scap_family' field must be set to *AF_CAPTURE* such that it can be recognized when the structure is casted to a 'struct sockaddr' (the 'scap_family' ends up in the 'sa_family' field).
+
+The 'scap_ifname' field contains a NUL-terminated string specifying the name of a network interface to bind to. It must be a valid, existing interface name.
+
+The 'scap_proto_flags' field must currently be set to zero for the [bind.2].
+
+For future compatiblity, you must always zero out the entire 'struct sockaddr_cap' structure before use.
+
+Once a capture socket has been bound, only receive operations are supported, and each returns a captured packet. The best way to extract packets is with the [read.2] system call; each read returns a single packet. A 32KB buffer is sufficient to capture packets from any protocol.
+
+>SEE ALSO
+
+[ipv4.6], [ipv6.6], [bind.2], [read.2], [socket.2], [sniff.1]

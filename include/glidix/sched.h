@@ -344,6 +344,11 @@ typedef struct _Thread
 	uint64_t			sigmask;
 	
 	/**
+	 * Number of times the thread was woken up while it wasn't sleeping.
+	 */
+	int				wakeCounter;
+	
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;

@@ -1,5 +1,8 @@
 .PHONY: all
-all: out/bin/ifdown out/bin/ifup out/ipv4/static.so out/ipv4/dhcp.so out/ipv4/alic.so out/ipv6/slaac.so out/ipv6/static.so
+all: out/bin/ifinit out/bin/ifdown out/bin/ifup out/ipv4/static.so out/ipv4/dhcp.so out/ipv4/alic.so out/ipv6/slaac.so out/ipv6/static.so
+out/bin/ifinit: src/tools/ifinit.c
+	mkdir -p out/bin
+	x86_64-glidix-gcc $< -o $@ -Iinclude -ldl -Wl,-export-dynamic
 out/bin/ifdown: src/tools/ifdown.c
 	mkdir -p out/bin
 	x86_64-glidix-gcc $< -o $@ -Iinclude -ldl -Wl,-export-dynamic

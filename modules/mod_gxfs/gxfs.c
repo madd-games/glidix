@@ -73,7 +73,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	File *fp = vfsOpen(image, 0, &error);
 	if (fp == NULL)
 	{
-		kprintf_debug("gxfs: could not open %s\n", image);
+		kprintf("gxfs: could not open %s\n", image);
 		spinlockRelease(&gxfsMountLock);
 		return -1;
 	};
@@ -82,7 +82,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	{
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
-		kprintf_debug("gxfs: this file does not support seeking\n");
+		kprintf("gxfs: this file does not support seeking\n");
 		return -1;
 	};
 
@@ -90,7 +90,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	uint64_t offCIS;
 	if (vfsRead(fp, &offCIS, 8) != 8)
 	{
-		kprintf_debug("gxfs: offCIS cannot be read, this is not a valid GXFS image\n");
+		kprintf("gxfs: offCIS cannot be read, this is not a valid GXFS image\n");
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
 		return -1;
@@ -100,7 +100,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	fp->seek(fp, offCIS, SEEK_SET);
 	if (vfsRead(fp, &cis, 64) != 64)
 	{
-		kprintf_debug("gxfs: cannot read the whole CIS, this is not a valid GXFS image\n");
+		kprintf("gxfs: cannot read the whole CIS, this is not a valid GXFS image\n");
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
 		return -1;
@@ -108,7 +108,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 
 	if (memcmp(cis.cisMagic, "GXFS", 4) != 0)
 	{
-		kprintf_debug("gxfs: invalid CIS magic, this is not a valid GXFS image\n");
+		kprintf("gxfs: invalid CIS magic, this is not a valid GXFS image\n");
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
 		return -1;
@@ -119,7 +119,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	size_t numSections = cis.cisTotalIno / cis.cisInoPerSection;
 	if (numSections != (cis.cisTotalBlocks / cis.cisBlocksPerSection))
 	{
-		kprintf_debug("gxfs: section count inconsistent\n");
+		kprintf("gxfs: section count inconsistent\n");
 		vfsClose(fp);
 		spinlockRelease(&gxfsMountLock);
 		return -1;

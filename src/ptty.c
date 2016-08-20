@@ -159,10 +159,10 @@ static int pts_ioctl(File *fp, uint64_t cmd, void *argp)
 static ssize_t pts_read(File *fp, void *buffer, size_t size)
 {
 	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
-	int count = semWaitTimeout(&ptty->slaveCounter, (int)size, 0);
+	int count = semWaitGen(&ptty->slaveCounter, (int)size, SEM_W_FILE(fp->oflag), 0);
 	if (count < 0)
 	{
-		ERRNO = EINTR;
+		ERRNO = -count;
 		return -1;
 	};
 	
@@ -216,10 +216,10 @@ static int pts_open(void *data, File *fp, size_t szFile)
 static ssize_t ptm_read(File *fp, void *buffer, size_t size)
 {
 	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
-	int count = semWaitTimeout(&ptty->masterCounter, (int)size, 0);
+	int count = semWaitGen(&ptty->masterCounter, (int)size, SEM_W_FILE(fp->oflag), 0);
 	if (count < 0)
 	{
-		ERRNO = EINTR;
+		ERRNO = -count;
 		return -1;
 	};
 	

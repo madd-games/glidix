@@ -266,6 +266,17 @@ static uint16_t inet6_nextgroup(const char *src, const char **endptr)
 
 static int inet_pton6(const char *src, uint16_t *dst)
 {
+	// specifically accept an IPv4 address as an IPv6 address and map it to the
+	// ::ffff:0:0/96 prefix
+	uint8_t v4addr[4];
+	if (inet_pton4(src, v4addr))
+	{
+		memset(dst, 0, 10);
+		memset(&dst[5], 0xFF, 2);		// fifth group: ffff
+		memcpy(&dst[6], v4addr, 4);
+		return 1;
+	};
+	
 	// first handle the trivial case of a zero address (::)
 	if (strcmp(src, "::") == 0)
 	{

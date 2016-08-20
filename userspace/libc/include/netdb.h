@@ -54,6 +54,11 @@ extern "C" {
 #define	AI_ALL				(1 << 5)
 #define	AI_ADDRCONFIG			(1 << 6)
 
+#define	HOST_NOT_FOUND			1
+#define	NO_DATA				2
+#define	NO_RECOVERY			3
+#define	TRY_AGAIN			4
+
 struct hostent
 {
 	char*				h_name;
@@ -80,10 +85,13 @@ struct addrinfo
 	struct sockaddr_storage		__ai_storage;
 };
 
+extern int h_errno;
+
 struct hostent *gethostbyname(const char *name);
 int getaddrinfo(const char *nodename, const char *servname, const struct addrinfo *hints, struct addrinfo **out);
 void freeaddrinfo(struct addrinfo *ai);
 const char* gai_strerror(int errcode);
+#define	h_addr	h_addr_list[0]
 
 #ifdef __cplusplus
 };	/* extern "C" */

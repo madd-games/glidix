@@ -301,6 +301,8 @@ void initSched()
 	firstThread.pendingSet = 0;
 	firstThread.sigmask = 0;
 	
+	firstThread.wakeCounter = 0;
+	
 	// linking
 	firstThread.prev = &firstThread;
 	firstThread.next = &firstThread;
@@ -696,6 +698,8 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->pendingSet = 0;
 	thread->sigmask = 0;
 
+	thread->wakeCounter = 0;
+	
 	// start all kernel threads in "/initrd"
 	strcpy(thread->cwd, "/initrd");
 
@@ -722,7 +726,7 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	currentThread->next = thread;
 	// there is no need to update currentThread->prev, it will only be broken for the init
 	// thread, which never exits, and therefore its prev will never need to be valid.
-	signalThread(thread);
+	sendHintToCPU(thread->cpuID);
 	unlockSched();
 	sti();
 	
@@ -736,16 +740,30 @@ Thread *getCurrentThread()
 
 void waitThread(Thread *thread)
 {
-	thread->flags |= THREAD_WAITING;
+	if (thread->wakeCounter == 0)
+	{
+		thread->flags |= THREAD_WAITING;
+	}
+	else
+	{
+		thread->wakeCounter--;
+	};
 };
 
 void signalThread(Thread *thread)
 {
-	thread->flags &= ~THREAD_WAITING;
-	if (thread->cpuID != getCurrentCPU()->id)
+	if (thread->flags & THREAD_WAITING)
 	{
-		// interrupt the thread's host CPU in case it is in cooloff state
-		sendHintToCPU(thread->cpuID);
+		thread->flags &= ~THREAD_WAITING;
+		if (thread->cpuID != getCurrentCPU()->id)
+		{
+			// interrupt the thread's host CPU in case it is in cooloff state
+			sendHintToCPU(thread->cpuID);
+		};
+	}
+	else
+	{
+		thread->wakeCounter++;
 	};
 };
 
@@ -928,6 +946,8 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 		thread->flags |= THREAD_DETACHED;
 	};
 
+	thread->wakeCounter = 0;
+	
 	// link into the runqueue
 	cli();
 	spinlockAcquire(&schedLock);
@@ -935,7 +955,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->next = currentThread->next;
 	thread->prev = currentThread;
 	currentThread->next = thread;
-	signalThread(thread);
+	sendHintToCPU(thread->cpuID);
 	spinlockRelease(&schedLock);
 	sti();
 

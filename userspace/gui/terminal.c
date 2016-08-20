@@ -52,6 +52,9 @@ pthread_spinlock_t consoleLock;
 pthread_t ctrlThread;
 extern const char font[16*256];
 int running = 1;
+int selectStart = 0;
+int selectEnd = 0;
+int selectAnchor = -1;
 
 int fdMaster;
 
@@ -135,6 +138,15 @@ void writeConsole(const char *buf, size_t sz)
 			cursorY++;
 			cursorX = 0;
 		}
+		else if (c == '\t')
+		{
+			cursorX = (cursorX & ~7) + 8;
+			if (cursorX > 80)
+			{
+				cursorX = 0;
+				cursorY++;
+			};
+		}
 		else
 		{
 			grid[cursorY * 80 + cursorX].c = c;
@@ -157,10 +169,15 @@ void renderConsole(DDISurface *surface)
 	for (x=0; x<80; x++)
 	{
 		for (y=0; y<25; y++)
-		{
+		{	
 			ConsoleCell *cell = &grid[y * 80 + x];
-			DDIColor *background = &consoleColors[cell->attr >> 4];
-			DDIColor *foreground = &consoleColors[cell->attr & 0xF];
+			
+			uint8_t attr = cell->attr;
+			int pos = y * 80 + x;
+			if ((pos >= selectStart) && (pos < selectEnd)) attr = 0x20;
+			
+			DDIColor *background = &consoleColors[attr >> 4];
+			DDIColor *foreground = &consoleColors[attr & 0xF];
 			
 			unsigned int index = (unsigned char) cell->c;
 			const char *bmp = &font[index * 16];
@@ -234,10 +251,20 @@ void onSigChld(int sig)
 	running = 0;
 };
 
+static int getPositionFromCoords(int cx, int cy)
+{
+	int tx = cx / 9;
+	int ty = cy / 16;
+	return ty * 80 + tx;
+};
+
 int main()
 {	
 	gwmInit();
-	GWMWindow *wnd = gwmCreateWindow(NULL, "Terminal", 10, 10, 720, 400, GWM_WINDOW_MKFOCUSED);
+	GWMWindow *top = gwmCreateWindow(NULL, "Terminal", 10, 10, 720, 400, GWM_WINDOW_MKFOCUSED);
+	GWMWindow *wnd = gwmCreateWindow(top, "body", 0, 0, 720, 400, 0);
+	
+	gwmSetWindowCursor(wnd, GWM_CURSOR_TEXT);
 	
 	DDISurface *surface = gwmGetWindowCanvas(wnd);
 	
@@ -249,7 +276,7 @@ int main()
 	}
 	else
 	{
-		gwmSetWindowIcon(wnd, icon);
+		gwmSetWindowIcon(top, icon);
 	};
 	
 	clearConsole();
@@ -307,6 +334,13 @@ int main()
 					write(fdMaster, &put, 1);
 				};
 			}
+			else if (ev.scancode == GWM_SC_MOUSE_LEFT)
+			{
+				selectStart = selectEnd = selectAnchor = getPositionFromCoords(ev.x, ev.y);
+				pthread_spin_lock(&consoleLock);
+				renderConsole(surface);
+				pthread_spin_unlock(&consoleLock);
+			}
 			else
 			{
 				char c = (char) ev.keychar;
@@ -314,6 +348,35 @@ int main()
 				{
 					write(fdMaster, &c, 1);
 				};
+			};
+		}
+		else if (ev.type == GWM_EVENT_MOTION)
+		{
+			if (selectAnchor != -1)
+			{	
+				int nowAt = getPositionFromCoords(ev.x, ev.y);
+				
+				if (nowAt < selectAnchor)
+				{
+					selectStart = nowAt;
+					selectEnd = selectAnchor;
+				}
+				else
+				{
+					selectStart = selectAnchor;
+					selectEnd = nowAt;
+				};
+
+				pthread_spin_lock(&consoleLock);
+				renderConsole(surface);
+				pthread_spin_unlock(&consoleLock);
+			};
+		}
+		else if (ev.type == GWM_EVENT_UP)
+		{
+			if (ev.scancode == GWM_SC_MOUSE_LEFT)
+			{
+				selectAnchor = -1;
 			};
 		};
 	};

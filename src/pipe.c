@@ -39,35 +39,18 @@ static File *openPipe(Pipe *pipe, int mode);
 
 static ssize_t pipe_read(File *fp, void *buffer, size_t size)
 {
-	//kprintf_debug("pipe_read called (size=%d)\n", (int) size);
 	if (size == 0) return 0;
 
 	Pipe *pipe = (Pipe*) fp->fsdata;
-	
-	ssize_t sizeCanRead = 0;
-	if (fp->oflag & O_NONBLOCK)
+
+	int count = semWaitGen(&pipe->counter, (int) size, SEM_W_FILE(fp->oflag), 0);
+	if (count < 0)
 	{
-		int count = semWaitNoblock(&pipe->counter, (int) size);
-		if (count == -1)
-		{
-			ERRNO = EAGAIN;
-			return -1;
-		};
-		
-		sizeCanRead = (ssize_t) count;
-	}
-	else
-	{
-		int count = semWaitTimeout(&pipe->counter, (int) size, 0);
-		if (count < 0)
-		{
-			ERRNO = EINTR;
-			return -1;
-		};
-		
-		sizeCanRead = (ssize_t) count;
+		ERRNO = -count;
+		return -1;
 	};
 	
+	ssize_t sizeCanRead = (ssize_t) count;
 	if (sizeCanRead == 0)
 	{
 		// EOF
@@ -91,8 +74,6 @@ static ssize_t pipe_read(File *fp, void *buffer, size_t size)
 
 static ssize_t pipe_write(File *fp, const void *buffer, size_t size)
 {
-	//kprintf_debug("pipe_write called (size=%d)\n", (int) size);
-
 	Pipe *pipe = (Pipe*) fp->fsdata;
 	semWait(&pipe->sem);
 

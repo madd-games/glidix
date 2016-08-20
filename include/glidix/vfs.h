@@ -98,7 +98,6 @@
 #define	O_SYNC				(1 << 10)
 #define	O_CLOEXEC			(1 << 11)
 #define	O_ACCMODE			(O_RDWR)
-//#define	O_ALL				((1 << 12)-1)
 #define	O_ALL				(O_RDWR | O_APPEND | O_CREAT | O_EXCL | O_TRUNC | O_NOCTTY | O_NONBLOCK | O_CLOEXEC)
 
 /**
@@ -114,6 +113,27 @@
  */
 #define	FD_CLOEXEC			O_CLOEXEC
 #define	FD_ALL				(FD_CLOEXEC)
+
+/**
+ * Event indices for _glidix_poll(). Those represent bit indices (NOT masks) into the "event"
+ * bytes passed to _glidix_poll() to select which events shall be polled for on the given file.
+ * Also used by the pollinfo() File callback as indices into the array of event semaphores; see
+ * below.
+ */
+#define	PEI_READ			0
+#define	PEI_WRITE			1
+#define	PEI_ERROR			2
+#define	PEI_HANGUP			3
+#define	PEI_INVALID			4
+
+/**
+ * Like the above but converted to masks.
+ */
+#define	POLL_READ			(1 << PEI_READ)
+#define	POLL_WRITE			(1 << PEI_WRITE)
+#define	POLL_ERROR			(1 << PEI_ERROR)
+#define	POLL_HANGUP			(1 << PEI_HANGUP)
+#define	POLL_INVALID			(1 << PEI_INVALID)
 
 /**
  * File locking commands.
@@ -287,6 +307,20 @@ typedef struct _File
 	 * release the file description. This list must be handled using atomic operations.
 	 */
 	FileLock* locks[VFS_MAX_LOCKS_PER_FILE];
+	
+	/**
+	 * Get pollable event information about this file. 'sems' points to an array of pointers to 8 semaphores,
+	 * each index by an PEI_* macro. An event is said to occur when its semaphore value becomes nonzero.
+	 * For example, if the semaphore indexed by PEI_READ has a nonzero value (i.e. a semWait() on it would
+	 * not block), the file is considered ready for reading. The array is initialized by the system to hold 8
+	 * NULL pointers. A NULL pointer indicates that an event will never occur; so if the PEI_WRITE entry is
+	 * set to NULL, the file is never considered writeable. If you want a file to always be considered, for
+	 * example, readable, you must set PEI_READ (or whatever event is always "occuring") to the return value
+	 * of vfsGetConstSem() - which is a semaphore that always has value 1. If this function is not present,
+	 * then all entries in that array will remain NULL and will never occur. If present, it shall always
+	 * be successful as it should only fill in pointers to static per-file variables.
+	 */
+	void (*pollinfo)(struct _File *file, struct Semaphore_ **sems);
 } File;
 
 /**
@@ -475,5 +509,10 @@ void vfsUnlockCreation();
  * description, such that when it is closed, the lock is released.
  */
 int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len);
+
+/**
+ * Returns a pointer to a semaphore which always has value 1.
+ */
+struct Semaphore_* vfsGetConstSem();
 
 #endif

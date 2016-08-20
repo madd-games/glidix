@@ -39,12 +39,14 @@
 static Spinlock vfsSpinlockCreation;
 static FileLock *fileLocks;
 static Semaphore semFileLocks;
+static Semaphore semConst;
 
 void vfsInit()
 {
 	spinlockRelease(&vfsSpinlockCreation);
 	fileLocks = NULL;
 	semInit(&semFileLocks);
+	semInit2(&semConst, 1);
 };
 
 static void dumpDir(Dir *dir, int prefix)
@@ -761,7 +763,7 @@ int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len)
 	
 	if (cmd == F_LOCK)
 	{
-		if (semWaitTimeout(lock->sem, 1, 0) < 0)
+		if (semWaitGen(lock->sem, 1, SEM_W_INTR, 0) < 0)
 		{
 			return EINTR;
 		};
@@ -784,7 +786,7 @@ int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len)
 	}
 	else if (cmd == F_TLOCK)
 	{
-		if (semWaitNoblock(lock->sem, 1) != 1)
+		if (semWaitGen(lock->sem, 1, SEM_W_NONBLOCK, 0) != 1)
 		{
 			return EAGAIN;
 		};
@@ -807,7 +809,7 @@ int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len)
 	}
 	else if (cmd == F_TEST)
 	{
-		if (semWaitNoblock(lock->sem, 1) == 0)
+		if (semWaitGen(lock->sem, 1, SEM_W_NONBLOCK, 0) == 0)
 		{
 			semSignal(lock->sem);
 			return 0;
@@ -831,4 +833,9 @@ int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len)
 	};
 	
 	return EINVAL;
+};
+
+Semaphore *vfsGetConstSem()
+{
+	return &semConst;
 };

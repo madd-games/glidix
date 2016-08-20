@@ -29,38 +29,44 @@
 #include <netdb.h>
 #include <string.h>
 #include <stdlib.h>
+#include <netinet/in.h>
 
+static struct hostent hostentBuffer;
+static char* aliases[1] = {NULL};
+static char nodename[256];
+static struct in_addr addr;
+static struct in_addr* addrArray[2] = {&addr, NULL};
+int h_errno;
 struct hostent *gethostbyname(const char *name)
 {
-	static char *localhost_aliases[] = {
-		"glidix-unknown",
-		"localhost",
-		"127.0.0.1",
-		NULL
-	};
-
-	static struct hostent localhost = {
-		"glidix-unknown",			/* h_name */
-		localhost_aliases,			/* h_aliases */
-		0,					/* h_addrtype */
-		0,					/* h_length */
-		NULL					/* h_addr_list */
-	};
-
-	if (strcmp(name, "localhost") == 0)
+	// OBSOLETE DO NOT USE
+	// This only exists for backwards compatiblity with some old POSIX software.
+	// Only supports IPv4!
+	if (strlen(name) >= 256)
 	{
-		return &localhost;
-	}
-	else if (strcmp(name, "glidix-unknown") == 0)
-	{
-		return &localhost;
-	}
-	else if (strcmp(name, "127.0.0.1") == 0)
-	{
-		return &localhost;
-	}
-	else
-	{
+		h_errno = HOST_NOT_FOUND;
 		return NULL;
 	};
+	
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_INET;
+	
+	struct addrinfo *res;
+	if (getaddrinfo(name, NULL, &hints, &res) != 0)
+	{
+		h_errno = HOST_NOT_FOUND;
+		return NULL;
+	};
+	
+	struct sockaddr_in *inaddr = (struct sockaddr_in*) res->ai_addr;
+	strcpy(nodename, name);
+	memcpy(&addr, &inaddr->sin_addr, 4);
+	hostentBuffer.h_name = nodename;
+	hostentBuffer.h_aliases = aliases;
+	hostentBuffer.h_addrtype = AF_INET;
+	hostentBuffer.h_length = 4;
+	hostentBuffer.h_addr_list = (char**) addrArray;
+	freeaddrinfo(res);
+	return &hostentBuffer;
 };

@@ -41,390 +41,422 @@ void semInit(Semaphore *sem)
 void semInit2(Semaphore *sem, int count)
 {
 	spinlockRelease(&sem->lock);
-	spinlockRelease(&sem->countLock);
-	sem->lastHolder = NULL;
-	sem->waiter = NULL;
 	sem->count = count;
+	sem->terminated = 0;
 	sem->first = NULL;
 	sem->last = NULL;
-	sem->countWaiter = NULL;
-	sem->terminated = 0;
 };
 
-extern uint64_t getFlagsRegister();
-void semWait(Semaphore *sem)
+int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 {
-	if ((getFlagsRegister() & (1 << 9)) == 0)
+	uint64_t deadline;
+	if (nanotimeout == 0)
 	{
-		stackTraceHere();
-		panic("semWait when IF=0");
+		deadline = 0;
+	}
+	else
+	{
+		deadline = getNanotime() + nanotimeout;
 	};
-
+	
+	cli();
 	spinlockAcquire(&sem->lock);
-	Thread *me = getCurrentThread();
-
-	//if (sem->owner != NULL)
-	if ((sem->count == 0) || (sem->first != NULL))
+	
+	SemWaitThread waiter;
+	waiter.thread = getCurrentThread();
+	waiter.give = 0;
+	waiter.prev = waiter.next = NULL;
+	
+	while (sem->count == 0)
 	{
-		SemWaitThread *thwait = (SemWaitThread*) kmalloc(sizeof(SemWaitThread));
-		thwait->thread = me;
-		thwait->next = NULL;
-		thwait->waiting = 1;
+		waiter.give = 0;
+		waiter.prev = waiter.next = NULL;
 
-		if (sem->last == NULL)
+		if (flags & SEM_W_NONBLOCK)
 		{
-			sem->first = thwait;
-			sem->last = thwait;
+			spinlockRelease(&sem->lock);
+			sti();
+			return -EAGAIN;
+		};
+		
+		if (sem->first == NULL)
+		{
+			sem->first = sem->last = &waiter;
 		}
 		else
 		{
-			sem->last->next = thwait;
-			sem->last = thwait;
+			waiter.prev = sem->last;
+			sem->last->next = &waiter;
+			sem->last = &waiter;
 		};
-
-		// wait without hanging up the whole system
-		while (thwait->waiting)
+		
+		lockSched();
+		TimedEvent ev;
+		timedPost(&ev, deadline);
+		
+		while (!waiter.give)
 		{
-			ASM("cli");
-			//getCurrentThread()->flags |= THREAD_WAITING;
-			lockSched();
+			if ((getNanotime() >= deadline) && (deadline != 0))
+			{
+				timedCancel(&ev);
+				unlockSched();
+				
+				if (waiter.prev != NULL) waiter.prev->next = waiter.next;
+				if (waiter.next != NULL) waiter.next->prev = waiter.prev;
+				if (sem->first == &waiter) sem->first = waiter.next;
+				if (sem->last == &waiter) sem->last = waiter.prev;
+				
+				spinlockRelease(&sem->lock);
+				sti();
+				return -ETIMEDOUT;
+			};
+			
+			if (flags & SEM_W_INTR)
+			{
+				if (haveReadySigs(getCurrentThread()))
+				{
+					timedCancel(&ev);
+					unlockSched();
+					
+					if (waiter.prev != NULL) waiter.prev->next = waiter.next;
+					if (waiter.next != NULL) waiter.next->prev = waiter.prev;
+					if (sem->first == &waiter) sem->first = waiter.next;
+					if (sem->last == &waiter) sem->last = waiter.prev;
+					
+					spinlockRelease(&sem->lock);
+					sti();
+					return -EINTR;
+				};
+			};
+			
 			waitThread(getCurrentThread());
 			spinlockRelease(&sem->lock);
 			unlockSched();
 			kyield();
+			
+			cli();
 			spinlockAcquire(&sem->lock);
+			lockSched();
 		};
-		kfree(thwait);
+		
+		// it's our turn; and since waiter.give was set to 1, that means the thread which
+		// "gave" the semaphore to us also removed us from the queue
+		timedCancel(&ev);
+		unlockSched();
+	};
+
+	int result;
+	if (sem->count == -1)
+	{
+		// semaphore terminated
+		result = 0;
+	}
+	else if (sem->count >= count)
+	{
+		sem->count -= count;
+		result = count;
 	}
 	else
 	{
-		sem->count--;
-	};
-
-	if ((sem->count > 0) && (sem->first != NULL))
-	{
-		// make sure we signal the next thread so that it could get its share
-		// of resources.
-		SemWaitThread *thwait = sem->first;
-		if (sem->last == thwait)
-		{
-			sem->last = NULL;
-		};
-
-		Thread *thread = thwait->thread;
-		sem->first = thwait->next;
-		thwait->waiting = 0;			// the waiter will free this
-
-		sem->count--;
-		cli();
-		lockSched();
-		signalThread(thread);
-		unlockSched();
-		sti();
-	};
-
-	sem->lastHolder = me;
-	spinlockRelease(&sem->lock);
-};
-
-int semWait2(Semaphore *sem, int count)
-{
-	spinlockAcquire(&sem->lock);
-	if (sem->countWaiter != NULL)
-	{
-		spinlockRelease(&sem->lock);
-		return 0;
-	};
-
-	while (sem->count == 0)
-	{
-		//kprintf("try again\n");
-		sem->countWaiter = getCurrentThread();
-		ASM("cli");
-		//getCurrentThread()->flags |= THREAD_WAITING;
-		lockSched();
-		waitThread(getCurrentThread());
-		spinlockRelease(&sem->lock);
-		unlockSched();
-		kyield();
-		spinlockAcquire(&sem->lock);
-		if (wasSignalled())
-		{
-			sem->countWaiter = NULL;
-			spinlockRelease(&sem->lock);
-			return -1;
-		};
-		//kprintf("MAYBE? COUNT=%d\n", sem->count);
-	};
-
-	sem->countWaiter = NULL;
-	spinlockRelease(&sem->lock);
-	
-	spinlockAcquire(&sem->countLock);
-	spinlockRelease(&sem->countLock);
-
-	spinlockAcquire(&sem->lock);
-	if (sem->count < count) count = sem->count;
-	spinlockRelease(&sem->lock);
-
-	int out = 0;
-	//kprintf("wait %d\n", count);
-	while (count--)
-	{
-		semWait(sem);
-		out++;
-	};
-
-	return out;
-};
-
-int semWaitTimeout(Semaphore *sem, int count, uint64_t timeout)
-{
-	uint64_t deadline = 0;
-	if (timeout != 0)
-	{
-		deadline = getNanotime() + timeout;
+		result = sem->count;
+		sem->count = 0;
 	};
 	
-	spinlockAcquire(&sem->lock);
-	if (sem->countWaiter != NULL)
+	if (sem->count != 0)
 	{
-		spinlockRelease(&sem->lock);
-		return 0;
-	};
-
-	cli();
-	lockSched();
-	
-	TimedEvent ev;
-	timedPost(&ev, deadline);
-	while (sem->count == 0)
-	{
-		if (sem->terminated)
+		// if there is another thread waiting, notify it
+		if (sem->first != NULL)
 		{
-			sem->countWaiter = NULL;
-			unlockSched();
-			sti();
-			spinlockRelease(&sem->lock);
-			return 0;
-		};
-		
-		sem->countWaiter = getCurrentThread();
-		waitThread(getCurrentThread());
-		spinlockRelease(&sem->lock);
-		unlockSched();
-		kyield();
-		
-		spinlockAcquire(&sem->lock);
-
-		if (wasSignalled())
-		{
-			sem->countWaiter = NULL;
-			spinlockRelease(&sem->lock);
-			cli();
+			Thread *thread = sem->first->thread;
+			if (sem->first == sem->last) sem->last = NULL;
+			sem->first->give = 1;
+			sem->first = sem->first->next;
+			if (sem->first != NULL) sem->first->prev = NULL;
+			
 			lockSched();
-			timedCancel(&ev);
+			signalThread(thread);
 			unlockSched();
-			sti();
-			return SEM_INTERRUPT;
 		};
-		if ((getNanotime() >= deadline) && (deadline != 0))
-		{
-			sem->countWaiter = NULL;
-			spinlockRelease(&sem->lock);
-			cli();
-			lockSched();
-			timedCancel(&ev);
-			unlockSched();
-			sti();
-			return SEM_TIMEOUT;
-		};
-		
-		cli();
-		lockSched();
+	}
+	else if (sem->terminated)
+	{
+		sem->count = -1;
 	};
 	
-	timedCancel(&ev);
-	unlockSched();
+	spinlockRelease(&sem->lock);
 	sti();
-	
-	spinlockRelease(&sem->lock);
-	sem->countWaiter = NULL;
-	spinlockAcquire(&sem->countLock);
-	spinlockRelease(&sem->countLock);
-
-	spinlockAcquire(&sem->lock);
-	if (sem->count < count) count = sem->count;
-	spinlockRelease(&sem->lock);
-
-	int out = 0;
-	while (count--)
-	{
-		semWait(sem);
-		out++;
-	};
-
-	return out;
+	return result;
 };
 
-int semWaitNoblock(Semaphore *sem, int count)
+void semWait(Semaphore *sem)
 {
-	spinlockAcquire(&sem->lock);
-	if (sem->countWaiter != NULL)
+	int result = semWaitGen(sem, 1, 0, 0);
+	if (result != 1)
 	{
-		spinlockRelease(&sem->lock);
-		return 0;
+		stackTraceHere();
+		panic("semWaitGen() did not return 1 in semWait(); it returned %d (count=%d, terminated=%d, first=%p, last=%p)", result, sem->count, sem->terminated, sem->first, sem->last);
 	};
-
-	int status = 0;
-
-	if (sem->count == 0)
-	{
-		// no resources available, return -1 indicating EWOULDBLOCK, unless it's terminated
-		if (sem->terminated)
-		{
-			spinlockRelease(&sem->lock);
-			return 0;
-		};
-		
-		status = -1;
-	};
-
-	spinlockRelease(&sem->lock);
-	sem->countWaiter = NULL;
-	spinlockAcquire(&sem->countLock);
-	spinlockRelease(&sem->countLock);
-
-	spinlockAcquire(&sem->lock);
-	if (sem->count < count) count = sem->count;
-	spinlockRelease(&sem->lock);
-
-	if (status == -1)
-	{
-		return -1;
-	};
-
-	int out = 0;
-	while (count--)
-	{
-		semWait(sem);
-		out++;
-	};
-
-	return out;
-};
-
-static void semSignalGen(Semaphore *sem, int wait)
-{
-	if ((getFlagsRegister() & (1 << 9)) == 0)
-	{
-		panic("semSignal when IF=0");
-	};
-
-	spinlockAcquire(&sem->lock);
-	if (sem->countWaiter != NULL)
-	{
-		cli();
-		lockSched();
-		signalThread(sem->countWaiter);
-		unlockSched();
-		sti();
-	};
-
-	sem->count++;
-	if ((sem->first != NULL) && (sem->count == 1))
-	{
-		SemWaitThread *thwait = sem->first;
-		if (sem->last == thwait)
-		{
-			sem->last = NULL;
-		};
-
-		Thread *thread = thwait->thread;
-		sem->first = thwait->next;
-		thwait->waiting = 0;			// the waiter will free this
-
-		sem->count--;
-		
-		cli();
-		lockSched();
-		signalThread(thread);
-		unlockSched();
-		sti();
-	};
-
-	if (wait)
-	{
-		cli();
-		lockSched();
-		waitThread(getCurrentThread());
-		spinlockRelease(&sem->lock);
-		unlockSched();
-		kyield();
-	}
-	else
-	{
-		spinlockRelease(&sem->lock);
-	};
-};
-
-void semTerminate(Semaphore *sem)
-{
-	spinlockAcquire(&sem->lock);
-	sem->terminated = 1;
-	if (sem->countWaiter != NULL)
-	{
-		cli();
-		lockSched();
-		signalThread(sem->countWaiter);
-		unlockSched();
-		sti();
-	};
-	spinlockRelease(&sem->lock);
 };
 
 void semSignal(Semaphore *sem)
 {
-	semSignalGen(sem, 0);
-};
-
-void semSignalAndWait(Semaphore *sem)
-{
-	semSignalGen(sem, 1);
+	semSignal2(sem, 1);
 };
 
 void semSignal2(Semaphore *sem, int count)
 {
-	spinlockAcquire(&sem->countLock);
-	while (count--) semSignal(sem);
-	spinlockRelease(&sem->countLock);
+	if (count < 0)
+	{
+		stackTraceHere();
+		panic("count must be zero or more; got %d", count);
+	};
+	
+	if (count == 0) return;
+	
+	cli();
+	spinlockAcquire(&sem->lock);
+	
+	if (sem->terminated)
+	{
+		// terminated
+		spinlockRelease(&sem->lock);
+		sti();
+		return;
+	};
+	
+	sem->count += count;
+	if (sem->first != NULL)
+	{
+		Thread *thread = sem->first->thread;
+		if (sem->first == sem->last) sem->last = NULL;
+		sem->first->give = 1;
+		sem->first = sem->first->next;
+		if (sem->first != NULL) sem->first->prev = NULL;
+		
+		lockSched();
+		signalThread(thread);
+		unlockSched();
+	};
+	
+	spinlockRelease(&sem->lock);
+	sti();
 };
 
-uint64_t getFlagsRegister();
-void semDump(Semaphore *sem)
+void semTerminate(Semaphore *sem)
 {
-	uint64_t shouldSTI = getFlagsRegister() & (1 << 9);
-	ASM("cli");
-	if (sem->lastHolder == NULL)
+	cli();
+	spinlockAcquire(&sem->lock);
+	
+	if (sem->terminated)
 	{
-		kprintf_debug("LAST HOLDER: NONE\n");
+		stackTraceHere();
+		panic("attempted to terminate an already-terminated semaphore");
+	};
+	
+	sem->terminated = 1;
+	if (sem->count == 0)
+	{
+		sem->count = -1;
+		if (sem->first != NULL)
+		{
+			Thread *thread = sem->first->thread;
+			if (sem->first == sem->last) sem->last = NULL;
+			sem->first->give = 1;
+			sem->first = sem->first->next;
+			if (sem->first != NULL) sem->first->prev = NULL;
+			
+			lockSched();
+			signalThread(thread);
+			unlockSched();
+		};
+	};
+	
+	spinlockRelease(&sem->lock);
+	sti();
+};
+
+int semPoll(int numSems, Semaphore **sems, uint8_t *bitmap, int flags, uint64_t nanotimeout)
+{
+	// initialize our wait structures on our own stack.
+	int i;
+	SemWaitThread *waiters = (SemWaitThread*) kalloca(sizeof(SemWaitThread)*numSems);
+	for (i=0; i<numSems; i++)
+	{
+		waiters[i].thread = getCurrentThread();
+		waiters[i].give = 0;
+		waiters[i].prev = NULL;
+		waiters[i].next = NULL;
+	};
+	
+	// disable interrupts before working on any semaphores!
+	cli();
+	
+	// acquire all the spinlocks
+	for (i=0; i<numSems; i++)
+	{
+		if (sems[i] != NULL)
+		{
+			spinlockAcquire(&sems[i]->lock);
+		};
+	};
+	
+	// see if any semaphores are ALREADY free (and set the appropriate bitmap bits if necessary)
+	int numFreeSems = 0;
+	for (i=0; i<numSems; i++)
+	{
+		if (sems[i] != NULL)
+		{
+			if (sems[i]->count > 0)
+			{
+				bitmap[i/8] |= (1 << (i%8));
+				numFreeSems++;
+			};
+		};
+	};
+	
+	if ((numFreeSems != 0) || (flags & SEM_W_NONBLOCK))
+	{
+		// either there are free semaphores, or we don't want to block
+		// either way, release all spinlocks and return the result
+		for (i=0; i<numSems; i++)
+		{
+			if (sems[i] != NULL)
+			{
+				spinlockRelease(&sems[i]->lock);
+			};
+		};
+		
+		sti();
+		return numFreeSems;
+	};
+	
+	// none of them are currently available, and blocking is OK; add us to the end of every
+	// queue and then every time we are woken up, loop to see if any semaphores became free,
+	// or we got interrupted
+	uint64_t deadline;
+	if (nanotimeout == 0)
+	{
+		deadline = 0;
 	}
 	else
 	{
-		kprintf_debug("LAST HOLDER: %s\n", sem->lastHolder->name);
+		deadline = getNanotime() + nanotimeout;
 	};
-	kprintf_debug("I AM: %s\n", getCurrentThread()->name);
-	kprintf_debug("SEM ADDR: %a\n", sem);
-	kprintf_debug("AVAIALBLE: %d\n", sem->count);
-	kprintf_debug("QUEUE FOR SEMAPHORE:\n");
-
-	SemWaitThread *thwait = sem->first;
-	while (thwait != NULL)
+	
+	lockSched();
+	TimedEvent ev;
+	timedPost(&ev, deadline);
+	
+	for (i=0; i<numSems; i++)
 	{
-		kprintf_debug("%s\n", thwait->thread->name);
-		thwait = thwait->next;
+		if (sems[i] != NULL)
+		{
+			if (sems[i]->first == NULL)
+			{
+				sems[i]->first = sems[i]->last = &waiters[i];
+			}
+			else
+			{
+				waiters[i].prev = sems[i]->last;
+				sems[i]->last->next = &waiters[i];
+				sems[i]->last = &waiters[i];
+			};
+		};
 	};
-
-	kprintf_debug("END OF QUEUE\n");
-	if (shouldSTI) ASM("sti");
+	
+	// wait for at least one semaphore to be "given" to us
+	// we both enter and leave the loop with all spinlocks acquired
+	while (1)
+	{
+		if (numFreeSems > 0)
+		{
+			break;
+		};
+		
+		if (haveReadySigs(getCurrentThread()))
+		{
+			numFreeSems = -EINTR;
+			break;
+		};
+		
+		if ((getNanotime() >= deadline) && (deadline != 0))
+		{
+			break;
+		};
+		
+		for (i=0; i<numSems; i++)
+		{
+			if (sems[i] != NULL)
+			{
+				spinlockRelease(&sems[i]->lock);
+			};
+		};
+		
+		waitThread(getCurrentThread());
+		unlockSched();
+		kyield();
+		
+		cli();
+		lockSched();
+		
+		for (i=0; i<numSems; i++)
+		{
+			if (sems[i] != NULL)
+			{
+				spinlockAcquire(&sems[i]->lock);
+			};
+		};
+		
+		for (i=0; i<numSems; i++)
+		{
+			if (sems[i] != NULL)
+			{
+				if (waiters[i].give)
+				{
+					bitmap[i/8] |= (1 << (i%8));
+					numFreeSems++;
+				};
+			};
+		};
+	};
+	
+	timedCancel(&ev);
+	
+	// remove ourselves from all queues; and wake up any necessary threads!
+	for (i=0; i<numSems; i++)
+	{
+		if (sems[i] != NULL)
+		{
+			if (waiters[i].give)
+			{
+				// we are already removed from this queue; but wake up the next thread
+				// if necessary
+				if (sems[i]->first != NULL)
+				{
+					Thread *thread = sems[i]->first->thread;
+					sems[i]->first->give = 1;
+					if (sems[i]->first == sems[i]->last) sems[i]->last = NULL;
+					sems[i]->first = sems[i]->first->next;
+					if (sems[i]->first != NULL) sems[i]->first->prev = NULL;
+					
+					signalThread(thread);
+				};
+			}
+			else
+			{
+				if (waiters[i].prev != NULL) waiters[i].prev->next = waiters[i].next;
+				if (waiters[i].next != NULL) waiters[i].next->prev = waiters[i].prev;
+				if (sems[i]->first == &waiters[i]) sems[i]->first = waiters[i].next;
+				if (sems[i]->last == &waiters[i]) sems[i]->last = waiters[i].prev;
+			};
+			
+			// this time we can release the spinlock in the same loop; we won't be working on this
+			// semaphore any more.
+			spinlockRelease(&sems[i]->lock);
+		};
+	};
+	
+	unlockSched();
+	sti();
+	return numFreeSems;
 };

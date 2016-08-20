@@ -6,87 +6,45 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <string.h>
-
-char data[3000];
-char buffer[5000];
+#include <poll.h>
 
 int main(int argc, char *argv[])
 {
-	if (argc != 2) return 1;
-	
-	int sockfd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+	int sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (sockfd == -1)
 	{
 		perror("socket");
 		return 1;
 	};
 	
-	int i;
-	for (i=0; i<3000; i++)
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(struct sockaddr_in));
+	addr.sin_family = AF_INET;
+	
+	if (bind(sockfd, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) != 0)
 	{
-		data[i] = (char)i;
+		perror("bind");
+		close(sockfd);
+		return 1;
 	};
 	
-	if (strcmp(argv[1], "send") == 0)
-	{
-		struct sockaddr_in6 dest;
-		memset(&dest, 0, sizeof(struct sockaddr_in6));
-		dest.sin6_family = AF_INET6;
-		inet_pton(AF_INET6, "2a02:c7f:a821:2300::999", &dest.sin6_addr);
-		dest.sin6_port = htons(5050);
+	uint8_t bitmapReq[64];
+	uint8_t bitmapRes[64];
 	
-		while (1)
-		{
-			if (sendto(sockfd, data, 3000, 0, (struct sockaddr*)&dest, sizeof(struct sockaddr_in6)) == -1)
-			{
-				perror("sendto");
-			};
-		
-			sleep(1);
-		};
-	}
-	else if (strcmp(argv[1], "recv") == 0)
+	while (1)
 	{
-		struct sockaddr_in6 me;
-		memset(&me, 0, sizeof(struct sockaddr_in6));
-		me.sin6_family = AF_INET6;
-		me.sin6_port = htons(5050);
-		
-		if (bind(sockfd, (struct sockaddr*)&me, sizeof(struct sockaddr_in6)) != 0)
+		memset(bitmapReq, 0, 64);
+		bitmapReq[sockfd] = POLLIN | POLLOUT;
+		int num = _glidix_fpoll(bitmapReq, bitmapRes, 0, 0);
+		if (num == -1)
 		{
-			perror("bind");
+			perror("_glidix_fpoll");
+			close(sockfd);
 			return 1;
 		};
-		
-		struct sockaddr_in6 src;
-		while (1)
-		{
-			socklen_t addrlen = sizeof(struct sockaddr_in6);
-			ssize_t size = recvfrom(sockfd, buffer, 5000, 0, (struct sockaddr*) &src, &addrlen);
-			if (size == -1)
-			{
-				perror("recvfrom");
-				continue;
-			};
-			
-			if (size != 3000)
-			{
-				printf("Received a message that isn't 3000 bytes long\n");
-				continue;
-			};
-			
-			if (memcmp(buffer, data, 3000) == 0)
-			{
-				printf("Received the CORRECT datagram\n");
-			}
-			else
-			{
-				printf("Received the WRONG datagram\n");
-			};
-		};
-	};
 	
-	close(sockfd);
+		printf("num = %d, res = %hhu\n", num, bitmapRes[sockfd]);
+	};
 	
 	return 0;
 };

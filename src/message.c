@@ -422,7 +422,7 @@ ssize_t sys_mqrecv(int fd, MessageInfo *info, void *buffer, size_t bufsize)
 	vfsDup(fp);
 	spinlockRelease(&getCurrentThread()->ftab->spinlock);
 	
-	if (semWaitTimeout(&queue->counter, 1, 0) < 0)
+	if (semWaitGen(&queue->counter, 1, SEM_W_INTR, 0) < 0)
 	{
 		ERRNO = EINTR;
 		vfsClose(fp);

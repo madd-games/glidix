@@ -217,9 +217,16 @@ static int resolveAddress(NetIf *netif, int family, uint8_t *ip, MacAddress *mac
 				sol->len1 = 1;
 				memcpy(sol->mac, &netif->ifconfig.ethernet.mac, 6);
 				sol->checksum = ipv4_checksum(phead, sizeof(PseudoHeaderICMPv6) + sizeof(NDPNeighborSolicit));
-				
-				sendPacket((struct sockaddr*)&ndp_src, (const struct sockaddr*)&ndp_dest,
-					sol, sizeof(NDPNeighborSolicit), IPPROTO_ICMPV6 | PKT_DONTROUTE, nanotimeout, NULL);
+
+				uint64_t sockopts[GSO_COUNT];
+				memset(sockopts, 0, sizeof(uint64_t)*GSO_COUNT);
+				sockopts[GSO_SNDTIMEO] = nanotimeout;
+				sockopts[GSO_SNDFLAGS] = PKT_DONTROUTE;
+				sockopts[GSO_MULTICAST_HOPS] = 255;
+				sockopts[GSO_UNICAST_HOPS] = 255;
+
+				sendPacketEx((struct sockaddr*)&ndp_src, (const struct sockaddr*)&ndp_dest,
+					sol, sizeof(NDPNeighborSolicit), IPPROTO_ICMPV6, sockopts, NULL);
 			};
 		};
 	};

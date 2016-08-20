@@ -48,7 +48,7 @@ extern "C" {
 #define	PAGESIZE				0x1000
 #define	PAGE_SIZE				0x1000
 #define	NGROUPS_MAX				64
-#define	OPEN_MAX				32
+#define	OPEN_MAX				64
 
 #define	_PC_LINK_MAX				0
 #define	_PC_MAX_CANON				1

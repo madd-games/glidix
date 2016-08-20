@@ -64,13 +64,19 @@ int memcpy_u2k(void *dst_, const void *src_, size_t size)
 	uint64_t start = (uint64_t) src_;
 	uint64_t end = (uint64_t) src_ + size;
 	
-	if (start < 0x1000)
+	if ((start < 0x1000) || (start >= 0x7FC0000000))
 	{
 		return -1;
 	};
 	
-	if (end >= 0x7FC0000000)
+	if ((end < 0x1000) || (end >= 0x7FC0000000))
 	{
+		return -1;
+	};
+	
+	if (end < start)
+	{
+		// overflow
 		return -1;
 	};
 	
@@ -93,13 +99,19 @@ int memcpy_k2u(void *dst_, const void *src_, size_t size)
 	uint64_t start = (uint64_t) dst_;
 	uint64_t end = (uint64_t) dst_ + size;
 	
-	if (start < 0x1000)
+	if ((start < 0x1000) || (start >= 0x7FC0000000))
 	{
 		return -1;
 	};
 	
-	if (end >= 0x7FC0000000)
+	if ((end < 0x1000) || (end >= 0x7FC0000000))
 	{
+		return -1;
+	};
+	
+	if (end < start)
+	{
+		// overflow
 		return -1;
 	};
 	
@@ -187,7 +199,13 @@ ssize_t sys_write(int fd, const void *buf, size_t size)
 					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
 					void *tmpbuf = kmalloc(size);
-					if (memcpy_u2k(tmpbuf, buf, size) != 0)
+					if (tmpbuf == NULL)
+					{
+						vfsClose(fp);
+						ERRNO = ENOBUFS;
+						out = -1;
+					}
+					else if (memcpy_u2k(tmpbuf, buf, size) != 0)
 					{
 						vfsClose(fp);
 						kfree(tmpbuf);
@@ -248,6 +266,13 @@ uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
 					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
 					void *tmpbuf = kmalloc(size);
+					if (tmpbuf == NULL)
+					{
+						vfsClose(fp);
+						ERRNO = ENOBUFS;
+						return -1;
+					};
+					
 					if (memcpy_u2k(tmpbuf, buf, size) != 0)
 					{
 						vfsClose(fp);
@@ -309,6 +334,13 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
 					void *tmpbuf = kmalloc(size);
+					if (tmpbuf == NULL)
+					{
+						vfsClose(fp);
+						ERRNO = ENOBUFS;
+						return -1;
+					};
+					
 					out = fp->read(fp, tmpbuf, size);
 					size_t toCopy = (size_t) out;
 					if (out == -1) toCopy = 0;
@@ -367,6 +399,13 @@ ssize_t sys_pread(int fd, void *buf, size_t size, off_t offset)
 					vfsDup(fp);
 					spinlockRelease(&ftab->spinlock);
 					void *tmpbuf = kmalloc(size);
+					if (tmpbuf == NULL)
+					{
+						vfsClose(fp);
+						ERRNO = ENOBUFS;
+						return -1;
+					};
+					
 					out = fp->pread(fp, tmpbuf, size, offset);
 					vfsClose(fp);
 					if (memcpy_k2u(buf, tmpbuf, size) != 0)
@@ -2170,7 +2209,7 @@ unsigned sys_sleep(unsigned seconds)
 	lockSched();
 	
 	uint64_t sleepStart = getNanotime();
-	uint64_t wakeTime = sleepStart + seconds * NANO_PER_SEC;
+	uint64_t wakeTime = sleepStart + (uint64_t)seconds * NANO_PER_SEC;
 	
 	TimedEvent ev;
 	timedPost(&ev, wakeTime);
@@ -2347,6 +2386,7 @@ ssize_t sys_sendto(int fd, const void *umessage, size_t len, int flags, const st
 	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
 	
 	struct sockaddr addr;
+	memset(&addr, 0, sizeof(struct sockaddr));
 	if (memcpy_u2k(&addr, uaddr, addrlen) != 0)
 	{
 		ERRNO = EFAULT;
@@ -3867,10 +3907,154 @@ int sys_lockf(int fd, int cmd, off_t len)
 	return 0;
 };
 
+int sys_mcast(int fd, int op, uint32_t scope, uint64_t addr0, uint64_t addr1)
+{
+	struct in6_addr addr;
+	uint64_t *addrptr = (uint64_t*) &addr;
+	addrptr[0] = addr0;
+	addrptr[1] = addr1;
+	
+	if (addr.s6_addr[0] != 0xFF)
+	{
+		// not multicast
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if ((op != MCAST_JOIN_GROUP) && (op != MCAST_LEAVE_GROUP))
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	int out;
+	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	{
+		ERRNO = EBADF;
+		out = -1;
+	}
+	else
+	{
+		FileTable *ftab = getCurrentThread()->ftab;
+		spinlockAcquire(&ftab->spinlock);
+		File *fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			ERRNO = EBADF;
+			out = -1;
+		}
+		else
+		{
+			vfsDup(fp);
+			spinlockRelease(&ftab->spinlock);
+			out = SocketMulticast(fp, op, &addr, scope);
+			vfsClose(fp);
+		};
+	};
+
+	return out;
+};
+
+int sys_fpoll(const uint8_t *ubitmapReq, uint8_t *ubitmapRes, int flags, uint64_t nanotimeout)
+{
+	uint8_t bitmapReq[MAX_OPEN_FILES];
+	uint8_t bitmapRes[MAX_OPEN_FILES];
+	
+	if (memcpy_u2k(bitmapReq, ubitmapReq, MAX_OPEN_FILES) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	memset(bitmapRes, 0, MAX_OPEN_FILES);
+	
+	Semaphore *sems[MAX_OPEN_FILES*8];
+	memset(sems, 0, MAX_OPEN_FILES*8*sizeof(void*));
+	
+	File* workingFiles[MAX_OPEN_FILES];
+	memset(workingFiles, 0, MAX_OPEN_FILES*sizeof(File*));
+	
+	// get the file handles
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+	
+	int i;
+	for (i=0; i<MAX_OPEN_FILES; i++)
+	{
+		if (bitmapReq[i] != 0)
+		{
+			File *fp = ftab->entries[i];
+			if (fp == NULL)
+			{
+				sems[8*i+PEI_INVALID] = vfsGetConstSem();
+			}
+			else
+			{
+				vfsDup(fp);
+				workingFiles[i] = fp;
+			};
+		};
+	};
+	
+	spinlockRelease(&ftab->spinlock);
+	
+	// ask all files for their poll information.
+	for (i=0; i<MAX_OPEN_FILES; i++)
+	{
+		if (workingFiles[i] != NULL)
+		{
+			if (workingFiles[i]->pollinfo != NULL)
+			{
+				workingFiles[i]->pollinfo(workingFiles[i], &sems[8*i]);
+				
+				// clear the entries which we don't want to occur
+				uint8_t pollFor = bitmapReq[i] | POLL_ERROR | POLL_INVALID | POLL_HANGUP;
+				
+				int j;
+				for (j=0; j<8; j++)
+				{
+					if ((pollFor & (1 << j)) == 0)
+					{
+						sems[8*i+j] = NULL;
+					};
+				};
+			};
+		};
+	};
+	
+	// wait for something to happen
+	int numFreeSems = semPoll(8*MAX_OPEN_FILES, sems, bitmapRes, SEM_W_FILE(flags), nanotimeout);
+	
+	// remove our references to the files
+	for (i=0; i<MAX_OPEN_FILES; i++)
+	{
+		if (workingFiles[i] != NULL)
+		{
+			vfsClose(workingFiles[i]);
+		};
+	};
+	
+	// see if an error occured
+	if (numFreeSems < 0)
+	{
+		ERRNO = -numFreeSems;
+		return -1;
+	};
+	
+	if (memcpy_k2u(ubitmapRes, bitmapRes, MAX_OPEN_FILES) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	return numFreeSems;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 124
+#define SYSCALL_NUMBER 126
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3996,6 +4180,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_sigwait,				// 121
 	&sys_sigsuspend,			// 122
 	&sys_lockf,				// 123
+	&sys_mcast,				// 124
+	&sys_fpoll,				// 125
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

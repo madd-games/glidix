@@ -258,6 +258,8 @@ int		_glidix_shmap(uint64_t addr, uint64_t size, uint64_t id, int prot);
 int		_glidix_kopt(int option, int value);
 int		_glidix_sigwait(uint64_t sigset, struct __siginfo *info, uint64_t nanotimeout);
 int		_glidix_sigsuspend(uint64_t mask);
+int		_glidix_mcast(int sockfd, int op, uint32_t scope, uint64_t addr0, uint64_t addr1);
+int		_glidix_fpoll(const uint8_t *bitmapReq, uint8_t *bitmapRes, int flags, uint64_t nanotimeout);
 
 // some runtime stuff
 uint64_t	__alloc_pages(size_t len);

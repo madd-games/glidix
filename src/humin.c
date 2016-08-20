@@ -151,7 +151,7 @@ static ssize_t hudev_read(File *fp, void *buffer, size_t size)
 	if (size > sizeof(HuminEvent)) size = sizeof(HuminEvent);
 	
 	HuminDevice *hudev = (HuminDevice*) fp->fsdata;
-	if (semWaitTimeout(&hudev->evCount, 1, 0) < 0)
+	if (semWaitGen(&hudev->evCount, 1, SEM_W_INTR, 0) < 0)
 	{
 		ERRNO = EINTR;
 		return -1;

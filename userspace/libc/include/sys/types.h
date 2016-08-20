@@ -64,6 +64,10 @@ typedef uint16_t			in_port_t;
 typedef uint32_t			in_addr_t;
 typedef	uint8_t				pthread_spinlock_t;
 typedef	int				pthread_t;
+typedef	unsigned char			uchar_t;
+typedef	unsigned short			ushort_t;
+typedef	unsigned int			uint_t;
+typedef unsigned long			ulong_t;
 
 typedef struct
 {

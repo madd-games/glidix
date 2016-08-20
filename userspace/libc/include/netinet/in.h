@@ -30,6 +30,11 @@
 #define _NETINET_IN_H
 
 #include <sys/socket.h>
+#include <string.h>
+
+/* special IPv4 addresses */
+#define	INADDR_ANY			0
+#define	INADDR_BROADCAST		0xFFFFFFFF
 
 /* IP protocols */
 #define	IPPROTO_IP			0		/* Dummy protocol for TCP.  */
@@ -59,10 +64,40 @@
 #define	IPPROTO_RAW			255		/* Raw IP packets.  */
 #define	IPPROTO_MAX			256
 
+/* byte order manipulation */
 #define	ntohs				__builtin_bswap16
 #define	htons				__builtin_bswap16
 #define	ntohl				__builtin_bswap32
 #define	htonl				__builtin_bswap32
+
+/* macros to initialize "struct in6_addr" variable to special values */
+#define	IN6ADDR_ANY_INIT		{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}
+#define	IN6ADDR_LOOPBACK_INIT		{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}}
+
+/* macros to test for special IPv6 addresses */
+#define	IN6_IS_ADDR_UNSPECIFIED(a)	(memcmp((a), &in6addr_any, 16) == 0)
+#define	IN6_IS_ADDR_LOOPBACK(a)		(memcmp((a), &in6addr_loopback, 16) == 0)
+#define	IN6_IS_ADDR_MULTICAST(a)	((a)->s6_addr[0] == 0xFF)
+#define	IN6_IS_ADDR_LINKLOCAL(a)	(((a)->s6_addr[0] == 0xFE) && ((a)->s6_addr[1] == 0x80))
+#define	IN6_IS_ADDR_SITELOCAL(a)	((a)->s6_addr[0] == 0xFD)
+#define	IN6_IS_ADDR_V4MAPPED(a)		(memcmp((a), &__prefix_v4mapped, 12) == 0)
+#define	IN6_IS_ADDR_V4COMPAT(a)		(memcmp((a), &in6addr_any, 12) == 0)
+#define	IN6_IS_ADDR_MC_NODELOCAL(a)	(((a)->s6_addr[0] == 0xFF) && ((a)->s6_addr[1] == 0x01))
+#define	IN6_IS_ADDR_MC_LINKLOCAL(a)	(((a)->s6_addr[0] == 0xFF) && ((a)->s6_addr[1] == 0x02))
+#define	IN6_IS_ADDR_MC_SITELOCAL(a)	(((a)->s6_addr[0] == 0xFF) && ((a)->s6_addr[1] == 0x05))
+#define	IN6_IS_ADDR_MC_ORGLOCAL(a)	(((a)->s6_addr[0] == 0xFF) && ((a)->s6_addr[1] == 0x08))
+#define IN6_IS_ADDR_MC_GLOBAL(a)	(((a)->s6_addr[0] == 0xFF) && ((a)->s6_addr[1] == 0x0E))
+
+/* socket options for the IPPROTO_IPV6 level */
+#define	IPV6_JOIN_GROUP			0
+#define	IPV6_LEAVE_GROUP		1
+#define	IPV6_MULTICAST_HOPS		2
+#define	IPV6_UNICAST_HOPS		3
+#define	IPV6_V6ONLY			4
+
+/* synonyms with some of the above */
+#define	IPV6_ADD_MEMBERSHIP		IPV6_JOIN_GROUP
+#define	IPV6_DROP_MEMBERSHIP		IPV6_LEAVE_GROUP
 
 struct in_addr
 {
@@ -90,5 +125,16 @@ struct sockaddr_in6
 	struct in6_addr			sin6_addr;
 	uint32_t			sin6_scope_id;
 };
+
+struct ipv6_mreq
+{
+	struct in6_addr			ipv6mr_multiaddr;
+	uint32_t			ipv6mr_interface;
+};
+
+/* defined in src/netinet/in.c */
+extern const struct in6_addr in6addr_any;
+extern const struct in6_addr in6addr_loopback;
+extern const struct in6_addr __prefix_v4mapped;
 
 #endif
