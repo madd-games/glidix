@@ -1,0 +1,93 @@
+>NAME
+
+errno - system error numbers
+
+>SYNOPSIS
+
+	#include <errno.h>
+
+>DESCRIPTION
+
+The '<errno.h>' header defines a macro called 'errno' which evaluates to an lvalue of type 'int'. It can thus be viewed as a normal integer variable, except that it is thread-local: setting its value in one thread does not change its value as seen by other threads. This variable is set by library functions and system calls when they report errors. It may also be changed by a successful function.
+
+This header also defines macros representing error numbers (to which 'errno' may be set). All error numbers are nonzero and distinct from each other; except *EAGAIN* and *EWOULDBLOCK* - those have the same value under Glidix. On other operating systems, it is unspecified whether *EAGAIN* and *EWOULDBLOCK* have the same value; it may or may not be the case.
+
+\* *E2BIG* - Argument list too long.
+\* *EACCES* - Permission denied.
+\* *EADDRINUSE* - Address in use.
+\* *EADDRNOTAVAIL* - Address not available.
+\* *EAFNOSUPPORT* - Address family not supported.
+\* *EAGAIN* - Resource unavailable, try again.
+\* *EALREADY* - Connection already in progress.
+\* *EBADF* - Bad file descriptor.
+\* *EBADMSG* - Bad message.
+\* *EBUSY* - Device or resource busy.
+\* *ECANCELED* - Operation canceled.
+\* *ECHILD* - No child processes.
+\* *ECONNABORTED* - Connection aborted.
+\* *ECONNREFUSED* - Connection refused.
+\* *ECONNRESET* - Connection reset.
+\* *EDEADLK* - Resource deadlock would occur.
+\* *EDESTADDRREQ* - Destination address required.
+\* *EDOM* - Mathematics argument out of domain of function.
+\* *EDQUOT* - Reserved.
+\* *EEXIST* - File exists.
+\* *EFAULT* - Bad address.
+\* *EFBIG* - File too large.
+\* *EHOSTUNREACH* - Host is unreachable.
+\* *EIDRM* - Identifier removed.
+\* *EILSEQ* - Illegal byte sequence.
+\* *EINPROGRESS* - Operation in progress.
+\* *EINTR* - Interrupted function.
+\* *EINVAL* - Invalid argument.
+\* *EIO* - I/O error.
+\* *EISCONN* - Socket is connected.
+\* *EISDIR* - Is a directory.
+\* *ELOOP* - Too many levels of symbolic links.
+\* *EMFILE* - Too many open files.
+\* *EMLINK* - Too many links.
+\* *EMSGSIZE* - Message too large.
+\* *EMULTIHOP* - Reserved.
+\* *ENAMETOOLONG* - Filename too long.
+\* *ENETDOWN* - Network is down.
+\* *ENETRESET* - Connection aborted by network.
+\* *ENETUNREACH* - Network unreachable.
+\* *ENFILE* - Too many files open in system.
+\* *ENOBUFS* - No buffer space available.
+\* *ENODATA* - No message is available on the STREAM head read queue.
+\* *ENODEV* - Reserved.
+\* *ENOENT* - No such device.
+\* *ENOEXEC* - No such file or directory.
+\* *ENOLCK* - Executable file format error.
+\* *ENOLINK* - No locks available.
+\* *ENOMEM* - Reserved.
+\* *ENOMSG* - Not enough space.
+\* *ENOPROTOOPT* - No message of the desired type.
+\* *ENOSPC* - Protocol not available.
+\* *ENOSR* - No space left on device.
+\* *ENOSTR* - No STREAM resources.
+\* *ENOSYS* - Reserved
+\* *ENOTCONN* - Not a STREAM.
+\* *ENOTDIR* - Reserved
+\* *ENOTEMPTY* - Function not supported.
+\* *ENOTSOCK* - The socket is not connected.
+\* *ENOTSUP* - Not a directory.
+\* *ENOTTY* - Directory not empty.
+\* *ENXIO* - Not a socket.
+\* *EOPNOTSUPP* - Not supported.
+\* *EOVERFLOW* - Inappropriate I/O control operation.
+\* *EPERM* - No such device or address.
+\* *EPIPE* - Operation not supported on socket.
+\* *EPROTO* - Value too large to be stored in data type.
+\* *EPROTONOSUPPORT* - Operation not permitted.
+\* *EPROTOTYPE* - Broken pipe.
+\* *ERANGE* - Protocol error.
+\* *EROFS* - Protocol not supported.
+\* *ESPIPE* - Protocol wrong type for socket.
+\* *ESRCH* - Result too large.
+\* *ESTALE* - Read-only file system.
+\* *ETIME* - Invalid seek.
+\* *ETIMEDOUT* - No such process.
+\* *ETXTBSY* - Reserved.
+\* *EWOULDBLOCK* - Same as *EAGAIN*.
+\* *EXDEV* - Reserved

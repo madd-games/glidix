@@ -33,17 +33,13 @@ int main(int argc, char *argv[])
 	
 	while (1)
 	{
-		memset(bitmapReq, 0, 64);
-		bitmapReq[sockfd] = POLLIN | POLLOUT;
-		int num = _glidix_fpoll(bitmapReq, bitmapRes, 0, 0);
-		if (num == -1)
-		{
-			perror("_glidix_fpoll");
-			close(sockfd);
-			return 1;
-		};
+		struct pollfd pfd;
+		pfd.fd = sockfd;
+		pfd.events = POLLIN | POLLOUT;
+		
+		int num = poll(&pfd, 1, -1);
 	
-		printf("num = %d, res = %hhu\n", num, bitmapRes[sockfd]);
+		printf("num = %d, revents = %hd\n", num, pfd.revents);
 	};
 	
 	return 0;

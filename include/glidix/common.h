@@ -187,10 +187,10 @@ void debugKernel(Regs *regs);
 /**
  * Atomically store a value at a pointer, and return the old value; defined in common.asm.
  */
-uint8_t atomic_swap8(uint8_t *ptr, uint8_t newval);
-uint16_t atomic_swap16(uint16_t *ptr, uint16_t newval);
-uint32_t atomic_swap32(uint32_t *ptr, uint32_t newval);
-uint64_t atomic_swap64(uint64_t *ptr, uint64_t newval);
+uint8_t atomic_swap8(void *ptr, uint8_t newval);
+uint16_t atomic_swap16(void *ptr, uint16_t newval);
+uint32_t atomic_swap32(void *ptr, uint32_t newval);
+uint64_t atomic_swap64(void *ptr, uint64_t newval);
 
 /**
  * Atomic AND.

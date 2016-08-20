@@ -43,23 +43,12 @@ struct itimerval
 	struct timeval			it_value;
 };
 
-typedef struct
-{
-	long				fds_bits[1];
-} fd_set;
-
 enum
 {
 	ITIMER_REAL,
 	ITIMER_VIRTUAL,
 	ITIMER_PROF
 };
-
-#define	FD_CLR(fd, set) (set)->fds_bits[0] &= ~(1 << fd)
-#define	FD_ISSET(fd, set) (!!((set)->fds_bits[0] & (1 << fd)))
-#define	FD_SET(fd, set) (set)->fds_bits[0] |= (1 << fd)
-#define	FD_ZERO(set) (set)->fds_bits[0] = 0
-#define	FD_SETSIZE 32
 
 #ifdef __cplusplus
 extern "C" {
@@ -68,7 +57,6 @@ extern "C" {
 int   getitimer(int, struct itimerval *);
 int   setitimer(int, const struct itimerval *, struct itimerval *);
 int   gettimeofday(struct timeval *, void *);
-int   select(int, fd_set *, fd_set *, fd_set *, struct timeval *);
 int   utimes(const char *, const struct timeval [2]);
 
 #ifdef __cplusplus

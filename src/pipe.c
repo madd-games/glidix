@@ -124,6 +124,7 @@ static void pipe_close(File *fp)
 	{
 		pipe->sides &= ~SIDE_WRITE;
 		semTerminate(&pipe->counter);
+		semSignal(&pipe->semHangup);
 	}
 	else
 	{
@@ -163,6 +164,14 @@ static int pipe_fstat(File *fp, struct stat *st)
 	return 0;
 };
 
+static void pipe_pollinfo(File *fp, Semaphore **sems)
+{
+	Pipe *pipe = (Pipe*) fp->fsdata;
+	sems[PEI_READ] = &pipe->counter;
+	sems[PEI_WRITE] = vfsGetConstSem();
+	sems[PEI_HANGUP] = &pipe->semHangup;
+};
+
 static File *openPipe(Pipe *pipe, int mode)
 {
 	semWait(&pipe->sem);
@@ -182,6 +191,7 @@ static File *openPipe(Pipe *pipe, int mode)
 	};
 	fp->close = pipe_close;
 	fp->fstat = pipe_fstat;
+	fp->pollinfo = pipe_pollinfo;
 	fp->refcount = 1;
 
 	semSignal(&pipe->sem);
@@ -224,6 +234,7 @@ int sys_pipe(int *upipefd)
 	Pipe *pipe = (Pipe*) kmalloc(sizeof(Pipe));
 	semInit(&pipe->sem);
 	semInit2(&pipe->counter, 0);
+	semInit2(&pipe->semHangup, 0);
 	pipe->roff = 0;
 	pipe->woff = 0;
 	pipe->sides = SIDE_READ | SIDE_WRITE;

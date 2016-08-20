@@ -306,7 +306,7 @@ int semPoll(int numSems, Semaphore **sems, uint8_t *bitmap, int flags, uint64_t 
 	{
 		if (sems[i] != NULL)
 		{
-			if (sems[i]->count > 0)
+			if (sems[i]->count != 0)
 			{
 				bitmap[i/8] |= (1 << (i%8));
 				numFreeSems++;

@@ -51,6 +51,11 @@ typedef struct
 	Semaphore			counter;
 	
 	/**
+	 * This semaphore gets signalled when the pipe is terminated.
+	 */
+	Semaphore			semHangup;
+	
+	/**
 	 * Buffer and read/write pointers.
 	 */
 	char				buffer[PIPE_BUFFER_SIZE];

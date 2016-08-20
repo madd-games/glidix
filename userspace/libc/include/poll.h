@@ -39,6 +39,18 @@ extern "C" {
 #define	POLLHUP					(1 << 3)
 #define	POLLNVAL				(1 << 4)
 
+typedef unsigned int				nfds_t;
+
+struct pollfd
+{
+	int					fd;
+	short int				events;
+	short int				revents;
+};
+
+/* implemented by the runtime */
+int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+
 #ifdef __cplusplus
 };	/* extern "C" */
 #endif

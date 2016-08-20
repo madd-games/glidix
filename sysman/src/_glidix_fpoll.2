@@ -49,7 +49,7 @@ If this function returns '-1', the 'errno' variable may be set to one of the fol
 
 >NOTES
 
-In certain cases, this function may return "false positives". For example, a file may became available to read, but another thread may call [read.2] and consume all data before the caller of *_glidix_fpoll*() manages to do so. Another situation is when a file is available for writing, but the [write.2] still blocks because the caller attempted to write more data than is possible. To be safe, you should make all files non-blocking, so that if *_glidix_fpoll*() returns a false positive, the [read.2] or [write.2] operation will simply fail with *EAGAIN*.
+In certain cases, this function may return "false positives". For example, a file may become available to read, but another thread may call [read.2] and consume all data before the caller of *_glidix_fpoll*() manages to do so. Another situation is when a file is available for writing, but the [write.2] still blocks because the caller attempted to write more data than is possible. To be safe, you should make all files non-blocking, so that if *_glidix_fpoll*() returns a false positive, the [read.2] or [write.2] operation will simply fail with *EAGAIN*.
 
 >SEE ALSO
 [fcntl.2], [read.2], [write.2], [errno.6], [signal.6]

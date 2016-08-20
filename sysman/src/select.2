@@ -1,0 +1,49 @@
+>NAME
+
+select - poll for events on file descriptors
+
+>SYNOPSIS
+
+	#include <sys/select.h>
+	
+	void FD_CLR(int 'fd', fd_set *'set');
+	void FD_SET(int 'fd', fd_set *'set');
+	int FD_ISSET(int 'fd', fd_set *'set');
+	void FD_ZERO(fd_set *'set');
+	
+	int select(int 'nfds', fd_set *'readfds', fd_set *'writefds', fd_set *'exceptfds', struct timeval *'timeout');
+
+>DESCRIPTION
+
+This function is obsolete; see NOTES as to why. Use [poll.2] instead.
+
+The 'fd_set' type describes a set of file descriptors; *FD_SET*() is used to set file descriptor 'fd' in a set, *FD_CLR*() is used to clear it, *FD_ISSET*() to test if it is set (returns 0 if unset; nonzero if set), and *FD_ZERO*() can be used to zero out a whole set.
+
+The *select*() function waits until either of the file descriptors in 'readfds' become available for reading (a [read.2] on the descriptor will not block; this includes the case where EOF would be returned), or either of the file descriptors in 'writefds' become available for writing (a [write.2] will not block), or an error occurs on one of the file descriptors in 'exceptfds', or a timeout occurs.
+
+If 'timeout' is *NULL*, there is no timeout; if it is zero (the 'tv_sec' and 'tv_usec' fields are both zero), *select*() is non-blocking; and any other value specifies a timeout.
+
+When the function returns, 'readfds' contains the file descriptors which are now available for reading (a subset of the 'readfds' that was passed in), 'writefds' the descriptors available for writings, and 'exceptfds' the descriptors on which errors occured.
+
+Any or all sets may be *NULL*; which is equivalent to passing an empty set.
+
+The 'nfds' shall be the highest-numbered file descriptor in all of the 3 sets, plus 1. You can just set it to *FD_SETSIZE*; a constant defined in '<sys/select.h>'.
+
+>RETURN VALUE
+
+On success, this function returns the total number of bits it has set in the 3 sets. This may be zero if it times out before any of the events occur. On error, it returns -1 and sets 'errno' appropriately.
+
+>ERRORS
+
+If this function returns -1, 'errno' shall indicate one of the possible errors:
+
+\* *EINVAL* - 'nfds' is invalid (below 0 or more than *FD_SETSIZE*).
+\* *EINTR* - a signal was caught before any of the events occured. See [signal.6].
+
+>NOTES
+
+The sets passed to *select*() have a fixed limit of 64 descriptors (*FD_SETSIZE*). This means that if Glidix decides to make more descriptors available per process, *select*() will fail to support file descritpors above 63, failing with *EINVAL*. For this reason, [poll.2] must be used instead.
+
+>SEE ALSO
+
+[poll.2], [errno.6]

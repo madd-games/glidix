@@ -27,102 +27,92 @@
 */
 
 #include <glidix/mutex.h>
-#include <glidix/memory.h>
+#include <glidix/console.h>
+#include <glidix/string.h>
 
 void mutexInit(Mutex *mutex)
 {
-	spinlockRelease(&mutex->lock);
-	mutex->owner = NULL;
-	mutex->count = 0;
-	mutex->queueHead = NULL;
-	mutex->queueTail = NULL;
+	memset(mutex, 0, sizeof(Mutex));
 };
 
 void mutexLock(Mutex *mutex)
 {
-	spinlockAcquire(&mutex->lock);
-	
+	// if we are the owner, just increment our lock count
+	// note that no other thread would ever set 'owner' to our thread ID so this comparison
+	// is thread-safe.
 	if (mutex->owner == getCurrentThread())
 	{
-		// we already own it; recursive acquire
-		mutex->count++;
-	}
-	else if (mutex->owner == NULL)
-	{
-		// we can acquire immediately
-		mutex->owner = getCurrentThread();
-		mutex->count = 1;
-	}
-	else
-	{
-		// add us to the mutex wait queue
-		MutexWaiter *waiter = (MutexWaiter*) kmalloc(sizeof(MutexWaiter));
-		waiter->thread = getCurrentThread();
-		
-		if (mutex->queueHead == NULL)
-		{
-			mutex->queueHead = mutex->queueTail = waiter;
-			waiter->prev = waiter->next = NULL;
-		}
-		else
-		{
-			mutex->queueTail->next = waiter;
-			waiter->prev = mutex->queueTail;
-			waiter->next = NULL;
-		};
-		
-		// loop until we acquire the mutex
-		while (mutex->owner != getCurrentThread())
-		{
-			cli();
-			lockSched();
-			//getCurrentThread()->flags |= THREAD_WAITING;
-			waitThread(getCurrentThread());
-			spinlockRelease(&mutex->lock);
-			unlockSched();
-			sti();
-			kyield();
-			spinlockAcquire(&mutex->lock);
-		};
-		
-		// and report a count of 1
-		mutex->count = 1;
+		mutex->numLocks++;
+		return;
 	};
 	
-	spinlockRelease(&mutex->lock);
+	// wait until we are allowed to attempt lazy locking
+	while (1)
+	{
+		uint16_t waiters = mutex->numQueue;
+		if (waiters == MUTEX_MAX_QUEUE)
+		{
+			continue;
+		};
+		
+		if (atomic_compare_and_swap16(&mutex->numQueue, waiters, waiters+1) == waiters)
+		{
+			break;
+		};
+	};
+	
+	// get a ticket and enter the queue
+	uint16_t ticket = __sync_fetch_and_add(&mutex->cntEntry, 1) & (MUTEX_MAX_QUEUE-1);
+	mutex->queue[ticket] = getCurrentThread();
+	
+	while ((mutex->cntExit & (MUTEX_MAX_QUEUE-1)) != ticket)
+	{
+		cli();
+		lockSched();
+		waitThread(getCurrentThread());
+		unlockSched();
+		kyield();
+	};
+	
+	mutex->owner = getCurrentThread();
+	mutex->queue[ticket] = NULL;
+	mutex->numLocks = 1;
+	__sync_fetch_and_add(&mutex->numQueue, -1);
 };
 
 void mutexUnlock(Mutex *mutex)
 {
-	spinlockAcquire(&mutex->lock);
-	
 	if (mutex->owner != getCurrentThread())
 	{
-		panic("thread %s attempted to release a mutex it does not own", getCurrentThread()->name);
+		stackTraceHere();
+		panic("attempted to unlock a mutex that does not belong to the calling thread");
 	};
 	
-	if ((--mutex->count) == 0)
+	if ((--mutex->numLocks) != 0)
 	{
-		if (mutex->queueHead != NULL)
-		{
-			mutex->owner = mutex->queueHead->thread;
-			MutexWaiter *toFree = mutex->queueHead;
-			mutex->queueHead = mutex->queueHead->next;
-			kfree(toFree);
-			
-			// wakey wakey
-			cli();
-			lockSched();
-			//mutex->owner->flags &= ~THREAD_WAITING;
-			signalThread(mutex->owner);
-			unlockSched();
-			sti();
-		}
-		else
-		{
-			mutex->owner = NULL;
-		};
+		// the mutex still belongs to us
+		return;
 	};
 	
-	spinlockRelease(&mutex->lock);
+	mutex->owner = NULL;
+	
+	uint16_t nextToGo = __sync_add_and_fetch(&mutex->cntExit, 1) & (MUTEX_MAX_QUEUE-1);
+	Thread *thread = mutex->queue[nextToGo];
+	
+	if (thread != NULL)
+	{
+		// we won the race to swap NULL into the queue field with a locking thread;
+		// the locking thread will realize this and go to sleep, so we must wake it
+		// up; UNLESS it hasn't 'started' the race yet; in which case we STILL have
+		// to wake it up
+		cli();
+		lockSched();
+		thread = mutex->queue[nextToGo];
+		if (thread != NULL)
+		{
+			signalThread(thread);
+		};
+		unlockSched();
+		sti();
+	};
 };

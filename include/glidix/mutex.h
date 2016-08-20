@@ -30,41 +30,47 @@
 #define __glidix_mutex_h
 
 /**
- * A mutex can be held by 1 thread at a time and can be locked recursively,
- * unlike a semaphore. The number of calls to mutexLock() and mutexUnlock()
- * must match.
+ * Recursive mutexes.
  */
 
 #include <glidix/common.h>
 #include <glidix/sched.h>
-#include <glidix/spinlock.h>
 
-typedef struct MutexWaiter_
-{
-	Thread*				thread;
-	struct MutexWaiter_*		prev;
-	struct MutexWaiter_*		next;
-} MutexWaiter;
+/**
+ * Number of threads that are allowed to go into a mutex queue at once. Must be power of
+ * 2. When the queue is exhausted, busy-waiting will be employed so beware.
+ */
+#define	MUTEX_MAX_QUEUE					512
 
 typedef struct
 {
 	/**
-	 * Synchronizes access to the mutex.
+	 * Number of threads queing up.
 	 */
-	Spinlock			lock;
-
-	/**
-	 * Current holder of the mutex (NULL means no holder), and the number of times
-	 * they locked the mutex.
-	 */
-	Thread*				owner;
-	int				count;
+	uint16_t					numQueue;
 	
 	/**
-	 * Queue of threads waiting for the mutex.
+	 * Number of times the current owner has locked the mutex.
+	 * BELONGS TO THE OWNER.
 	 */
-	MutexWaiter*			queueHead;
-	MutexWaiter*			queueTail;
+	uint16_t					numLocks;
+	
+	/**
+	 * Entry and exit counters. 'cntExit' is written to ONLY by the unlocking
+	 * thread.
+	 */
+	uint16_t					cntEntry;
+	uint16_t					cntExit;
+	
+	/**
+	 * Current owner.
+	 */
+	Thread*						owner;
+	
+	/**
+	 * Queue of threads.
+	 */
+	Thread*						queue[MUTEX_MAX_QUEUE];
 } Mutex;
 
 void mutexInit(Mutex *mutex);

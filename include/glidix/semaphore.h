@@ -180,7 +180,7 @@ void semTerminate(Semaphore *sem);
  *
  * A NULL pointer indicates a semaphore which NEVER becomes free.
  *
- * A terminated semaphore is NOT considered free (unless there are still some resources to read from it).
+ * A terminated semaphore is considered free.
  *
  * Note that false positives are possible: for example, there may be a race condition where another thread acquires
  * all resources of a semaphore after semPoll() reported the semaphore free, but before the caller of semPoll()
