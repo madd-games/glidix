@@ -31,31 +31,44 @@
 
 #include <glidix/common.h>
 #include <glidix/semaphore.h>
-#include <glidix/spinlock.h>
 #include <glidix/devfs.h>
 #include <glidix/ioctl.h>
-
-#define	SD_FILE_NO_BUF				0xFFFFFFFFFFFFFFFF
-#define	SD_NOT_CACHED				0xFFFFFFFFFFFFFFFF
+#include <glidix/mutex.h>
+#include <glidix/sched.h>
 
 #define	IOCTL_SDI_IDENTITY			IOCTL_ARG(SDParams, IOCTL_INT_SDI, 0)
 #define	IOCTL_SDI_EJECT				IOCTL_NOARG(IOCTL_INT_SDI, 1)
 
 /**
- * Uncomment to actually enable the cache.
- * Currently appears to be really buggy, e.g. different threads see different data.
+ * Storage device flags.
  */
-#define	SD_CACHE_ENABLE
+#define	SD_READONLY				(1 << 0)
+#define	SD_HANGUP				(1 << 1)
+
+/**
+ * The value for 'openParts' which indicates the master file is open.
+ */
+#define	SD_MASTER_OPEN				0xFFFFFFFFFFFFFFFF
+
+/**
+ * Size of a single cache page.
+ */
+#define	SD_PAGE_SIZE				0x1000
 
 /**
  * Number of pages to cache per device.
  */
-#define	SD_CACHE_SIZE				64
+#define	SD_CACHE_PAGES				64
 
 /**
- * Storage device flags.
+ * Offset value indicating a cache page is unused.
  */
-#define	SD_READONLY				(1 << 0)
+#define	SD_CACHE_NONE				0xFFFFFFFFFFFFFFFF
+
+/**
+ * Maximum allowed cache page importance.
+ */
+#define	SD_IMPORTANCE_MAX			32
 
 /**
  * Command types.
@@ -67,6 +80,21 @@ enum SDCommandType
 	SD_CMD_EJECT,
 	SD_CMD_GET_SIZE,
 };
+
+/**
+ * MBR partition entry.
+ */
+typedef struct
+{
+	uint8_t					flags;
+	uint8_t					startHead;
+	uint16_t				startCylinderSector;
+	uint8_t					systemID;
+	uint8_t					endHead;
+	uint16_t				endCylinderSector;
+	uint32_t				lbaStart;
+	uint32_t				numSectors;
+} PACKED MBRPartition;
 
 typedef struct _SDCommand
 {
@@ -84,7 +112,7 @@ typedef struct _SDCommand
 	 *
 	 * For getsize commands, points to an off_t where the size is to be stored.
 	 */
-	void					*block;
+	void*					block;
 
 	/**
 	 * Index of the block on disk (0 = first block). This is like an LBA address.
@@ -110,75 +138,108 @@ typedef struct _SDCommand
 typedef struct
 {
 	/**
-	 * Index of the first sector that makes up this cached page.
-	 * SD_NOT_CACHED = no data here
+	 * Byte offset into the disk, where this cache page starts. Must be 4KB aligned.
+	 * 
 	 */
-	uint64_t				index;
+	uint64_t				offset;
 	
 	/**
-	 * Payload of the cached data.
+	 * If nonzero, this page was modified since it was read from disk
+	 * (and so must be flushed).
 	 */
-	char					data[4096];
-} SDCachedPage;
+	int					dirty;
+	
+	/**
+	 * The importance of this cache page.
+	 */
+	int					importance;
+	
+	/**
+	 * The actual data.
+	 */
+	uint8_t					data[SD_PAGE_SIZE];
+} SDCachePage;
 
 typedef struct
 {
 	/**
-	 * The semaphore which controls access to this device.
+	 * The mutex which controls access to this device.
 	 */
-	Semaphore				sem;
-
+	Mutex					lock;
+	
 	/**
-	 * The semaphore that counts the number of commands issued.
+	 * Reference counter. The storage device is deleted once this reaches zero.
+	 * Here's how this works: each file under /dev that refers to this file counts
+	 * as a reference; that is the master file as well as any partition files. The
+	 * driver which manages this device does NOT count as a reference - the reason
+	 * for this is that when the driver starts, the master file is created, and when
+	 * the driver hangs up, the master file is deleted; so the master file represents
+	 * a reference for the driver. Access this atomically (without the lock).
 	 */
-	Semaphore				cmdCounter;
+	int					refcount;
 	
 	/**
 	 * Device flags.
 	 */
 	int					flags;
-
+	
 	/**
-	 * Size of a block.
+	 * The size of a single block (in bytes) and the total size of the device (in bytes).
 	 */
 	size_t					blockSize;
-
-	/**
-	 * Total size of the drive, in bytes. If set to 0, then the storage
-	 * device contains removable media and current size is determined
-	 * dynamically with the SD_CMD_GET_SIZE command.
-	 */
 	size_t					totalSize;
-
+	
 	/**
-	 * The devfs file associated with this storage.
+	 * Device letter (a-z), needs to be freed when we hang up.
 	 */
-	Device					diskfile;
-
+	char					letter;
+	
 	/**
-	 * The kernel thread waiting for commands on this device.
+	 * Master device file (which represents the whole disk).
 	 */
-	Thread*					thread;
-
+	Device					devMaster;
+	
+	/**
+	 * Subordinate device files (sub-files) which represent partitions, and the number of them.
+	 */
+	size_t					numSubs;
+	Device*					devSubs;
+	
 	/**
 	 * Command queue.
 	 */
 	SDCommand*				cmdq;
 	
 	/**
-	 * List of cached pages recalled from this device.
+	 * The semaphore that counts the number of commands waiting to be executed.
 	 */
-	SDCachedPage				cache[SD_CACHE_SIZE];
+	Semaphore				semCommands;
 	
 	/**
-	 * Current index into the cache ring.
+	 * A bitmap of which partitions have been opened; attempting to open an already-opened partition
+	 * leads to the EBUSY error being returned. No bit is reserved for the master file; instead,
+	 * opening the master file demands that ALL bits are CLEAR, and when the master is opened, all
+	 * bits become set, and all partitions are actually deleted. Currently, up to 64 partitions are
+	 * supported.
 	 */
-	int					cacheIndex;
+	uint64_t				openParts;
 	
 	/**
-	 * Blocks per page.
+	 * The thread which flushes the drive every 10-20 seconds, and a semaphore which is signalled when
+	 * the thread should terminate.
 	 */
-	uint64_t				blocksPerPage;
+	Thread*					threadFlush;
+	Semaphore				semFlush;
+	
+	/**
+	 * This mutex protects the cache.
+	 */
+	Mutex					cacheLock;
+	
+	/**
+	 * The cache.
+	 */
+	SDCachePage				cache[SD_CACHE_PAGES];
 } StorageDevice;
 
 typedef struct
@@ -188,44 +249,27 @@ typedef struct
 	size_t					totalSize;
 } SDParams;
 
-/**
- * Represents a storage device in devfs.
- */
-typedef struct _SDFile
-{
-	StorageDevice*				sd;
-	Spinlock				masterLock;
-	Spinlock				locks[4];
-	int					index;		// partition index, -1 = whole drive
-	Device					partdevs[4];	// devfs files belonging to partiions (or NULLs).
-	struct _SDFile*				master;
-	uint64_t				offset;
-	uint64_t				limit;
-	char					letter;
-} SDFile;
-
-/**
- * fsdata when a disk file is opened.
- */
 typedef struct
 {
-	SDFile*					file;
-	uint64_t				offset;		// in blocks
-	uint64_t				limit;		// first block that CANNOT be accessed (relative to offset).
-	uint8_t*				buf;		// stored right after the struct, kfreed() in one go.
-	uint64_t				bufCurrent;	// if SD_FILE_NO_BUF, then no block has been buffered yet.
-	off_t					pos;		// for seek.
-	int					dirty;		// if 1 then the block must be flushed to disk later.
-} DiskFile;
+	StorageDevice*				sd;
+	size_t					offset;
+	size_t					size;
+	int					partIndex;		// -1 = master
+} SDDeviceFile;
+
+typedef struct
+{
+	StorageDevice*				sd;
+	size_t					offset;
+	size_t					size;
+	size_t					pos;
+	int					partIndex;
+} SDHandle;
 
 void		sdInit();
 StorageDevice*	sdCreate(SDParams *params);
-void		sdPush(StorageDevice *dev, SDCommand *cmd);
-SDCommand*	sdTryPop(StorageDevice *dev);
+void		sdHangup(StorageDevice *sd);
 SDCommand*	sdPop(StorageDevice *dev);
 void		sdPostComplete(SDCommand *cmd);
-int		sdRead(StorageDevice *dev, uint64_t block, void *buffer);
-int		sdRead2(StorageDevice *dev, uint64_t block, void *buffer, uint64_t count);
-int		sdWrite(StorageDevice *dev, uint64_t block, const void *buffer);
 
 #endif

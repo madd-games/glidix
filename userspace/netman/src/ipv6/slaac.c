@@ -491,7 +491,6 @@ void netman_slaac_ifup(NetmanIfConfig *config)
 				// prefix information
 				AdvPrefixInfo *info = (AdvPrefixInfo*) valptr;
 				
-				printf("PREFIX_LEN: %hhu, FLAGS: %hhu\n", info->preflen, info->flags);
 				// ignore it if the prefix length is not 64
 				if (info->preflen != 64)
 				{

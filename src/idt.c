@@ -349,7 +349,7 @@ static void onPageFault(Regs *regs)
 		cli();
 		kernelDead = 1;
 		//heapDump();
-		kdumpregs(regs);
+		//kdumpregs(regs);
 		kprintf("A page fault occured (rip=%a, thread='%s')\n", regs->rip, getCurrentThread()->name);
 		if ((regs->errCode & 1) == 0)
 		{

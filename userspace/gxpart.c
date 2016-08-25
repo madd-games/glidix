@@ -40,14 +40,14 @@ SDParams params;
 
 typedef struct
 {
-	uint8_t							flags;
-	uint8_t							sig1;			// 0x14
-	uint16_t						startHigh;
+	uint8_t							flags;			// 0x80 = bootable
+	uint8_t							startHead;
+	uint16_t						startSectorCylinder;
 	uint8_t							systemID;
-	uint8_t							sig2;			// 0xEB
-	uint16_t						lenHigh;
-	uint32_t						startLow;
-	uint32_t						lenLow;
+	uint8_t							endHead;
+	uint16_t						endSectorCylinder;
+	uint32_t						lbaStart;
+	uint32_t						numSectors;
 } __attribute__ ((packed)) Partition;
 
 typedef struct
@@ -76,6 +76,7 @@ void getline(char *buf)
 
 void printPartitionTable()
 {
+#if 0
 	printf("#\tBoot\tType\tStart\t\tSize\n");
 	int i;
 	for (i=0; i<4; i++)
@@ -89,6 +90,17 @@ void printPartitionTable()
 		if (start <= 9999999) printf("\t");
 		printf("\t%lu\n", len);
 	};
+#endif
+
+	printf("# Boot Type Start      Size\n");
+	int i;
+	for (i=0; i<4; i++)
+	{
+		char boot = ' ';
+		if (mbr.parts[i].flags & 0x80) boot = '*';
+		
+		printf("%d [%c]  0x%02hhX 0x%08x 0x%08x\n", i, boot, mbr.parts[i].systemID, mbr.parts[i].lbaStart, mbr.parts[i].numSectors);
+	};
 };
 
 uint64_t _toint(const char *num)
@@ -101,39 +113,13 @@ uint64_t _toint(const char *num)
 	return out;
 };
 
-void validatePartition(int i)
-{
-	Partition *part = &mbr.parts[i];
-	int valid = 1;
-	if (part->sig1 != 0x14)
-	{
-		valid = 0;
-	};
-
-	if (part->sig2 != 0xEB)
-	{
-		valid = 0;
-	};
-
-	if (!valid)
-	{
-		memset(part, 0, sizeof(Partition));
-		part->flags = 1;
-		part->sig1 = 0x14;
-		part->sig2 = 0xEB;
-	};
-};
-
 uint64_t getFirstUnusedOffset()
 {
 	uint64_t lowest = 512;
 	int i;
 	for (i=0; i<4; i++)
 	{
-		uint64_t start = (((uint64_t)mbr.parts[i].startHigh << 32) + (uint64_t)mbr.parts[i].startLow) * (uint64_t)params.blockSize;
-		uint64_t len = (((uint64_t)mbr.parts[i].lenHigh << 32) + (uint64_t)mbr.parts[i].lenLow) * (uint64_t)params.blockSize;
-
-		if ((start+len) > lowest) lowest = start + len;
+		if ((mbr.parts[i].lbaStart+mbr.parts[i].numSectors) > lowest) lowest = mbr.parts[i].lbaStart+mbr.parts[i].numSectors;
 	};
 	return lowest;
 };
@@ -144,7 +130,7 @@ uint64_t getFirstFreePartition()
 	for (i=0; i<4; i++)
 	{
 		Partition *part = &mbr.parts[i];
-		if ((part->lenLow == 0) && (part->lenHigh == 0))
+		if (part->numSectors == 0)
 		{
 			return i;
 		};
@@ -205,11 +191,14 @@ void runcmd(char *cmd)
 		uint64_t lenLBA = size / params.blockSize;
 
 		Partition *part = &mbr.parts[i];
-		part->startHigh = (startLBA >> 32) & 0xFFFF;
-		part->startLow = startLBA & 0xFFFFFFFF;
-		part->lenHigh = (lenLBA >> 32) & 0xFFFF;
-		part->lenLow = lenLBA & 0xFFFFFFFF;
-		part->systemID = 0x21;
+		part->flags = 0;
+		part->startHead = 0;
+		part->startSectorCylinder = 0;
+		part->systemID = 0x7F;
+		part->endHead = 0;
+		part->endSectorCylinder = 0;
+		part->lbaStart = startLBA;
+		part->numSectors = lenLBA;
 	}
 	else if (strcmp(cmd, "cancel") == 0)
 	{
@@ -256,12 +245,7 @@ void runcmd(char *cmd)
 		};
 
 		Partition *part = &mbr.parts[i];
-		part->startLow = 0;
-		part->startHigh = 0;
-		part->lenLow = 0;
-		part->lenHigh = 0;
-		part->systemID = 0;
-		part->flags = 1;
+		memset(part, 0, sizeof(Partition));
 	}
 	else if (strcmp(cmd, "setboot") == 0)
 	{
@@ -278,11 +262,6 @@ void runcmd(char *cmd)
 		};
 
 		Partition *part = &mbr.parts[i];
-		if ((part->lenLow == 0) && (part->lenHigh == 0))
-		{
-			fprintf(stderr, "Partition %d is empty!\n", i);
-			return;
-		};
 
 		int j;
 		for (j=0; j<4; j++)
@@ -305,12 +284,7 @@ void runcmd(char *cmd)
 			for (i=0; i<4; i++)
 			{
 				Partition *part = &mbr.parts[i];
-				part->flags = 1;
-				part->startLow = 0;
-				part->startHigh = 0;
-				part->lenLow = 0;
-				part->lenHigh = 0;
-				part->systemID = 0;
+				memset(part, 0, sizeof(Partition));
 			};
 		};
 	}
@@ -340,12 +314,6 @@ int main(int argc, char *argv[])
 
 	ioctl(device, IOCTL_SDI_IDENTITY, &params);
 	read(device, &mbr, 512);
-
-	int i;
-	for (i=0; i<4; i++)
-	{
-		validatePartition(i);
-	};
 
 	while (1)
 	{

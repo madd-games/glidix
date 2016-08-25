@@ -444,6 +444,9 @@ int sysOpenErrno(int vfsError)
 	case VFS_LINK_LOOP:
 		getCurrentThread()->therrno = ELOOP;
 		break;
+	case VFS_NO_MEMORY:
+		ERRNO = ENOMEM;
+		break;
 	default:
 		/* fallback in case there are some unhandled errors */
 		getCurrentThread()->therrno = EIO;

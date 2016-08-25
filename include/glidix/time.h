@@ -31,7 +31,7 @@
 
 #include <glidix/common.h>
 
-#define	NANO_PER_SEC			1000000000
+#define	NANO_PER_SEC			1000000000UL
 
 struct _Thread;
 typedef struct TimedEvent_

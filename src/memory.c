@@ -33,6 +33,7 @@
 #include <glidix/string.h>
 #include <glidix/physmem.h>
 #include <glidix/isp.h>
+#include <glidix/storage.h>
 #include <stdint.h>
 
 #define	HEAP_BASE_ADDR				0xFFFF810000000000
@@ -273,7 +274,7 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 	// find the first free block.
 	HeapHeader *head = /*(HeapHeader*) HEAP_BASE_ADDR*/ lowestFreeHeader;
 	while ((head->flags & HEAP_BLOCK_TAKEN) || (head->size < size))
-	{
+	{	
 		HeapHeader *nextHead = heapWalkRight(head);
 		if (nextHead == NULL)
 		{
@@ -304,6 +305,9 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 	head->aid = aid;
 	head->lineno = lineno;
 
+	HeapFooter *foot = heapFooterFromHeader(head);
+	foot->flags |= HEAP_BLOCK_TAKEN;
+	
 	if (head == lowestFreeHeader)
 	{
 		lowestFreeHeader = findFreeHeader(head);
@@ -473,7 +477,8 @@ void _kfree(void *block, const char *who, int line)
 	
 	// mark this block as free
 	head->flags &= ~HEAP_BLOCK_TAKEN;
-
+	foot->flags &= ~HEAP_BLOCK_TAKEN;
+	
 	if ((headLeft != NULL) && (footRight == NULL))
 	{
 		// only join with the left block

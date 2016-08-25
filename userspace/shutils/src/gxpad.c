@@ -349,14 +349,15 @@ int main(int argc, char *argv[])
 		char c;
 		int state = read(0, &c, 1);
 		
-		if (state == -1)
+		if (ctrlc)
 		{
-			if (ctrlc)
-			{
-				read(0, &c, 1);		// delete the Ctrl-C
-				gotoMenu();
-				renderEditor();
-			};
+			read(0, &c, 1);		// delete the Ctrl-C
+			gotoMenu();
+			renderEditor();
+		}
+		else if (state == -1)
+		{
+			// NOP
 		}
 		else
 		{

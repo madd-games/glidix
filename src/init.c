@@ -404,9 +404,9 @@ extern void _jmp_usbs(void *stack);
 static void spawnProc(void *stack)
 {
 	kprintf("%$\x02" "Done%#\n");
-
+	
 	initInterp();
-
+	
 	kprintf("Allocating memory for bootstrap... ");
 	FrameList *fl = palloc(2);
 	AddSegment(getCurrentThread()->pm, 1, fl, PROT_READ | PROT_WRITE | PROT_EXEC);

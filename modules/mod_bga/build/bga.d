@@ -17,6 +17,7 @@ build/bga.o build/bga.d : bga.c /glidix/kernel-include/glidix/module.h \
  /glidix/kernel-include/glidix/errno.h \
  /glidix/kernel-include/glidix/devfs.h \
  /glidix/kernel-include/glidix/ioctl.h \
+ /glidix/kernel-include/glidix/mutex.h \
  /glidix/kernel-include/glidix/string.h \
  /glidix/kernel-include/glidix/pci.h \
  /glidix/kernel-include/glidix/waitcnt.h \

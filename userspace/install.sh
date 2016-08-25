@@ -9,7 +9,7 @@ echo
 
 gxpart /dev/sda
 mkgxfs /dev/sda0
-gxld_ins /boot/mbr.bin /boot/stage2.bin /dev/sda
+gxld-ins /boot/mbr.bin /boot/stage2.bin /dev/sda
 mount /dev/sda0 /mnt
 mkdir /mnt/boot
 cp /boot/vmglidix /mnt/boot/vmglidix

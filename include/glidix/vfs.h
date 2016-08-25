@@ -67,6 +67,7 @@
 #define	VFS_NOT_DIR			-7		/* not a directory */
 #define	VFS_LINK_LOOP			-8		/* symbolic link depth too high */
 #define	VFS_IO_ERROR			-9		/* other, unknown problem (e.g. readlink failed) */
+#define	VFS_NO_MEMORY			-10		/* not enough memory */
 
 /**
  * Flags to parsePath()/vfsOpen().

@@ -156,7 +156,7 @@ static int gxdir_chmod(Dir *dir, mode_t mode)
 	dir->stat.st_mode = (mode_t) inode.inoMode;
 	dir->stat.st_ctime = inode.inoCTime;
 
-	if (gxdir->gxfs->fp->fsync != NULL) gxdir->gxfs->fp->fsync(gxdir->gxfs->fp);
+	//if (gxdir->gxfs->fp->fsync != NULL) gxdir->gxfs->fp->fsync(gxdir->gxfs->fp);
 
 	semSignal(&gxdir->gxfs->sem);
 	return 0;
@@ -184,7 +184,7 @@ static int gxdir_chown(Dir *dir, uid_t uid, gid_t gid)
 	dir->stat.st_mode = (mode_t) inode.inoMode;
 	dir->stat.st_ctime = inode.inoCTime;
 
-	if (gxdir->gxfs->fp->fsync != NULL) gxdir->gxfs->fp->fsync(gxdir->gxfs->fp);
+	//if (gxdir->gxfs->fp->fsync != NULL) gxdir->gxfs->fp->fsync(gxdir->gxfs->fp);
 
 	semSignal(&gxdir->gxfs->sem);
 	return 0;
@@ -195,7 +195,7 @@ static int gxdir_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	time_t now = time();
 
 	GXDir *gxdir = (GXDir*) dir->fsdata;
-	GXFileSystem *gxfs = gxdir->gxfs;
+	///GXFileSystem *gxfs = gxdir->gxfs;
 	semWait(&gxdir->gxfs->sem);
 
 	//kprintf_debug("gxfs: mkdir '%s' in inode %d\n", name, gxdir->gxino.ino);
@@ -267,7 +267,7 @@ static int gxdir_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	strcpy(dir->dirent.d_name, name);
 	dir->dirent.d_ino = newInodeNumber;
 
-	if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
+	//if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
 
 	semSignal(&gxdir->gxfs->sem);
 	return 0;
@@ -278,7 +278,7 @@ static int gxdir_symlink(Dir *dir, const char *name, const char *path)
 	time_t now = time();
 
 	GXDir *gxdir = (GXDir*) dir->fsdata;
-	GXFileSystem *gxfs = gxdir->gxfs;
+	//GXFileSystem *gxfs = gxdir->gxfs;
 	semWait(&gxdir->gxfs->sem);
 
 	//kprintf_debug("gxfs: mkdir '%s' in inode %d\n", name, gxdir->gxino.ino);
@@ -340,7 +340,7 @@ static int gxdir_symlink(Dir *dir, const char *name, const char *path)
 	strcpy(dir->dirent.d_name, name);
 	dir->dirent.d_ino = newInodeNumber;
 
-	if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
+	//if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
 
 	semSignal(&gxdir->gxfs->sem);
 	return 0;
@@ -369,7 +369,7 @@ static int gxdir_link(Dir *dir, const char *name, ino_t ino)
 	time_t now = time();
 
 	GXDir *gxdir = (GXDir*) dir->fsdata;
-	GXFileSystem *gxfs = gxdir->gxfs;
+	//GXFileSystem *gxfs = gxdir->gxfs;
 	semWait(&gxdir->gxfs->sem);
 
 	gxfsInode inode;
@@ -419,7 +419,7 @@ static int gxdir_link(Dir *dir, const char *name, ino_t ino)
 	strcpy(dir->dirent.d_name, name);
 	dir->dirent.d_ino = ino;
 
-	if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
+	//if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
 
 	semSignal(&gxdir->gxfs->sem);
 	return 0;
@@ -493,7 +493,7 @@ static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	strcpy(dir->dirent.d_name, name);
 	dir->dirent.d_ino = newInodeNumber;
 
-	if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
+	//if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
 
 	strcpy(dir->dirent.d_name, name);
 	dir->dirent.d_ino = newInodeNumber;

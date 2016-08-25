@@ -49,7 +49,7 @@
 #define	hlt()			ASM ("hlt")
 #define	sti()			ASM ("sti")
 #define	nop()			ASM ("nop")
-#define	NT_SECS(secs)		((secs)*1000000000)
+#define	NT_SECS(secs)		((secs)*1000000000UL)
 #define	NEW(type)		((type*)kmalloc(sizeof(type)))		/* only use after including <glidix/memory.h> */
 #define	NEW_EX(type, size)	((type*)kmalloc(sizeof(type)+(size)))
 #define	kalloca(x)		__builtin_alloca(x)
@@ -63,7 +63,8 @@
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
-typedef struct {
+typedef struct
+{
 	uint64_t ds;			// 0x00
 	uint64_t rdi;			// 0x08
 	uint64_t rsi;			// 0x10
@@ -201,6 +202,7 @@ void atomic_and8(uint8_t *ptr, uint8_t and_with);
  * Atomic test-and-set.
  */
 int atomic_test_and_set8(uint8_t *ptr, int bitpos);
+int atomic_test_and_set(void *ptr, int bitpos);
 
 /**
  * Atomically test whether the value at ptr is equal to 'oldval', and if so, set it to 'newval'.

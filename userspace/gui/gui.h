@@ -56,6 +56,18 @@ extern DDIColor gwmColorSelection;
 #define	GWM_TXT_MASKED				(1 << 2)
 
 /**
+ * Checkbox flags.
+ */
+#define	GWM_CB_DISABLED				(1 << 0)
+
+/**
+ * Checkbox states.
+ */
+#define	GWM_CB_OFF				0
+#define	GWM_CB_ON				1
+#define	GWM_CB_TRI				2
+
+/**
  * Those must match up with the Glidix humin interface (<glidix/humin.h>).
  */
 #define	GWM_SC_MOUSE_LEFT			0x100
@@ -549,5 +561,15 @@ int gwmGetGlobWinParams(GWMGlobWinRef *ref, GWMWindowParams *pars);
  * event when the desktop window list, or focused window, changed. Used by the sysbar for example.
  */
 void gwmSetListenWindow(GWMWindow *win);
+
+/**
+ * Creates a new checkbox in the specified window.
+ */
+GWMWindow *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int flags);
+
+/**
+ * Destroys a checkbox.
+ */
+void gwmDestroyCheckbox(GWMWindow *checkbox);
 
 #endif

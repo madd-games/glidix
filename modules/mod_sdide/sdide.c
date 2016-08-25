@@ -156,7 +156,7 @@ static void ataThread(void *data)
 		uint8_t err;
 
 		ideWriteReg(ctrl, channel, ATA_REG_CONTROL, ctrl->channels[channel].nIEN = 2);
-		if (sdcmd->index >= 0x10000000)
+		if (/*sdcmd->index >= 0x10000000*/1)
 		{
 			// LBA48
 			lbaMode = 2;
@@ -208,7 +208,7 @@ static void ataThread(void *data)
 			//kprintf_debug("sdide: read sector %d\n", sdcmd->index);
 			if ((err = idePoll(ctrl, channel, 1)))		// Yes, assignment.
 			{
-				kprintf("sdide: error %d\n", err);
+				panic("sdide: error %d\n", err);
 			}
 			else
 			{
@@ -217,10 +217,13 @@ static void ataThread(void *data)
 		}
 		else
 		{
-			//kprintf("[SDIDE] WRITE SECTOR %p, COUNT=%d\n", sdcmd->index, (int) sdcmd->count);
+			kprintf("[SDIDE] WRITE SECTOR %p, COUNT=%d\n", sdcmd->index, (int) sdcmd->count);
 			// write
-			idePoll(ctrl, channel, 0);
-			//kprintf_debug("sdide: write sector %d\n", sdcmd->index);
+			if ((err = idePoll(ctrl, channel, 1)))
+			{
+				panic("sdide: error %d\n", err);
+			};
+			kprintf("sdide: write sector %d\n", sdcmd->index);
 			outsw(bus, sdcmd->block, words);
 			if (lbaMode == 1)
 			{
@@ -230,7 +233,10 @@ static void ataThread(void *data)
 			{
 				ideWriteReg(ctrl, channel, ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH_EXT);
 			};
-			idePoll(ctrl, channel, 0);
+			if ((err = idePoll(ctrl, channel, 0)))
+			{
+				panic("sdide: error %d\n", err);
+			};
 		};
 
 		semSignal(&ideSem);

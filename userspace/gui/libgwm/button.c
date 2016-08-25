@@ -129,7 +129,10 @@ int gwmButtonHandler(GWMEvent *ev, GWMWindow *button)
 			{
 				if (data->callback != NULL)
 				{
-					retval = data->callback(data->callbackParam);
+					if ((data->flags & GWM_BUTTON_DISABLED) == 0)
+					{
+						retval = data->callback(data->callbackParam);
+					};
 				};
 				data->state = BUTTON_STATE_HOVERING;
 			}

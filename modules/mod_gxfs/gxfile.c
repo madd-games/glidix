@@ -349,7 +349,7 @@ void gxfile_fsync(File *fp)
 	inode.inoATime = now;
 	if (gxfile->dirty) inode.inoMTime = now;
 	GXWriteInodeHeader(&gxfile->gxino, &inode);
-	if (gxfile->gxfs->fp->fsync != NULL) gxfile->gxfs->fp->fsync(gxfile->gxfs->fp);
+	//if (gxfile->gxfs->fp->fsync != NULL) gxfile->gxfs->fp->fsync(gxfile->gxfs->fp);
 
 	semSignal(&gxfile->gxfs->sem);
 };

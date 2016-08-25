@@ -101,10 +101,6 @@ void mutexUnlock(Mutex *mutex)
 	
 	if (thread != NULL)
 	{
-		// we won the race to swap NULL into the queue field with a locking thread;
-		// the locking thread will realize this and go to sleep, so we must wake it
-		// up; UNLESS it hasn't 'started' the race yet; in which case we STILL have
-		// to wake it up
 		cli();
 		lockSched();
 		thread = mutex->queue[nextToGo];

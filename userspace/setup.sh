@@ -5,7 +5,7 @@
 # Also, this must be run as root.
 
 mount /dev/sdb /mnt -t isofs
-/mnt/bin/mip_inst /mnt/libc.mip /mnt/sh.mip /mnt/shutils.mip
+/mnt/bin/mip-inst /mnt/libc.mip /mnt/sh.mip /mnt/shutils.mip
 
 # Create all the directories for default mounted filesystems.
 # If they already exist then an error occurs, just ignore it.
