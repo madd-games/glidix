@@ -292,6 +292,7 @@ int main(int argc, char *argv[])
 
 	lseek(fd, itab0 + sizeof(gxfsInode), SEEK_SET);
 	gxfsInode inode;
+	memset(&inode, 0, sizeof(gxfsInode));
 	inode.inoMode = 011755;
 	inode.inoSize = /*sizeof(struct dirent);*/ 25;			// for the lost+found directory.
 	inode.inoLinks = 2;						// number of entries + 1

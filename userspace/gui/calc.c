@@ -37,6 +37,7 @@
 #include <signal.h>
 #include "gui.h"
 
+GWMWindow *win;
 DDISurface *canvas;
 
 enum
@@ -80,7 +81,7 @@ void drawScreen()
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
-	gwmPostDirty();
+	gwmPostDirty(win);
 };
 
 long numgrid[3*3+1] = {
@@ -155,7 +156,7 @@ int main()
 		return 1;
 	};
 
-	GWMWindow *win = gwmCreateWindow(NULL, "Calculator", 0, 0, 130, 154, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
+	win = gwmCreateWindow(NULL, "Calculator", 0, 0, 130, 154, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
 	if (win == NULL)
 	{
 		fprintf(stderr, "Failed to create window!\n");

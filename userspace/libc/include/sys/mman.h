@@ -45,6 +45,10 @@ extern "C" {
 #define	MAP_ANONYMOUS			(1 << 2)
 #define	MAP_FIXED			(1 << 3)
 
+#ifdef _GLIDIX_SOURCE
+#define	MAP_THREAD			(1 << 4)
+#endif
+
 #define	MAP_ANON			MAP_ANONYMOUS
 
 #define	MAP_FAILED			((void*)-1)

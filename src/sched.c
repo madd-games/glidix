@@ -303,6 +303,10 @@ void initSched()
 	
 	firstThread.wakeCounter = 0;
 	
+	// permissions
+	firstThread.oxperm = XP_ALL;
+	firstThread.dxperm = XP_ALL;
+	
 	// linking
 	firstThread.prev = &firstThread;
 	firstThread.next = &firstThread;
@@ -642,10 +646,11 @@ static void kernelThreadExit()
 void ReleaseKernelThread(Thread *thread)
 {
 	// busy-wait until the thread terminates
-	while ((thread->flags & THREAD_TERMINATED) != 0)
+	while ((thread->flags & THREAD_TERMINATED) == 0)
 	{
 		__sync_synchronize();
-		kyield();
+		// can't call kyield() because it never returns control to the calling thread without
+		// switching to a different one first because of exit stuff.
 	};
 	
 	// release the stack and thread description
@@ -699,6 +704,9 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->sigmask = 0;
 
 	thread->wakeCounter = 0;
+	
+	thread->oxperm = XP_ALL;
+	thread->dxperm = XP_ALL;
 	
 	// start all kernel threads in "/initrd"
 	strcpy(thread->cwd, "/initrd");
@@ -948,6 +956,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 
 	thread->wakeCounter = 0;
 	
+	thread->oxperm = currentThread->oxperm;
+	thread->dxperm = currentThread->dxperm;
+	
 	// link into the runqueue
 	cli();
 	spinlockAcquire(&schedLock);
@@ -976,6 +987,8 @@ void threadExitEx(uint64_t retval)
 		panic("a kernel thread called threadExitEx()");
 	};
 
+	UnloadThreadProcessMemory(currentThread->pm);
+	
 	spinlockAcquire(&notifLock);
 	if ((currentThread->flags & THREAD_DETACHED) == 0)
 	{
@@ -1547,4 +1560,22 @@ int signalThid(int thid, int sig)
 	unlockSched();
 	sti();
 	return ESRCH;
+};
+
+int havePerm(uint64_t xperm)
+{
+	if (currentThread->creds == NULL)
+	{
+		// the kernel can do anything
+		return 1;
+	};
+	
+	if (currentThread->creds->euid == 0)
+	{
+		// root can do anything right now
+		// TODO: removing the concept of superuser
+		return 1;
+	};
+	
+	return currentThread->oxperm & xperm;
 };

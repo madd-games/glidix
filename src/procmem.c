@@ -458,6 +458,15 @@ int AddSegmentEx(ProcMem *pm, uint64_t start, FrameList *frames, int flags, uint
 	segment->start = start;
 	segment->fl = frames;
 	segment->flags = flags;
+	if (flags & PROT_THREAD)
+	{
+		segment->thread = getCurrentThread();
+	}
+	else
+	{
+		segment->thread = NULL;
+	};
+	
 	if (scan == NULL)
 	{
 		segment->next = pm->firstSegment;
@@ -532,6 +541,32 @@ int AddSegmentEx(ProcMem *pm, uint64_t start, FrameList *frames, int flags, uint
 	return 0;
 };
 
+static void __DeleteSegment(ProcMem *pm, Segment *sprev, Segment *seg)
+{
+	// remove the segment from the list
+	if (sprev != NULL) sprev->next = seg->next;
+	else pm->firstSegment = NULL;
+	seg->next = NULL;				// just in case
+
+	// unmap all the pages
+	uint64_t i;
+	for (i=0; i<seg->fl->count; i++)
+	{
+		PTe *pte = getPage(NULL, MEM_CURRENT, seg->start+i, 0);
+		if (pte != NULL)
+		{
+			if (pte->present)
+			{
+				memset(pte, 0, 8);
+			};
+		};
+	};
+
+	// deallocate the segment data
+	pdownref(seg->fl);
+	kfree(seg);
+};
+
 int DeleteSegment(ProcMem *pm, uint64_t start)
 {
 	if (pm != getCurrentThread()->pm) panic("DeleteSegment can only be called on the current memory\n");
@@ -557,31 +592,35 @@ int DeleteSegment(ProcMem *pm, uint64_t start)
 		seg = seg->next;
 	};
 
-	// remove the segment from the list
-	if (sprev != NULL) sprev->next = seg->next;
-	else pm->firstSegment = NULL;
-	seg->next = NULL;				// just in case
-
-	// unmap all the pages
-	uint64_t i;
-	for (i=0; i<seg->fl->count; i++)
-	{
-		PTe *pte = getPage(NULL, MEM_CURRENT, start+i, 0);
-		if (pte != NULL)
-		{
-			if (pte->present)
-			{
-				memset(pte, 0, 8);
-			};
-		};
-	};
-
-	// deallocate the segment data
-	pdownref(seg->fl);
-	kfree(seg);
+	__DeleteSegment(pm, sprev, seg);
 
 	spinlockRelease(&pm->lock);
 	return 0;
+};
+
+void UnloadThreadProcessMemory(ProcMem *pm)
+{
+	spinlockAcquire(&pm->lock);
+	
+	Segment *seg = pm->firstSegment;
+	Segment *sprev = NULL;
+	while (seg != NULL)
+	{
+		if (seg->thread == getCurrentThread())
+		{
+			Segment *next = seg->next;
+			__DeleteSegment(pm, sprev, seg);
+			seg = next;
+			continue;
+		}
+		else
+		{
+			sprev = seg;
+			seg = seg->next;
+		};
+	};
+	
+	spinlockRelease(&pm->lock);
 };
 
 extern uint64_t getFlagsRegister();

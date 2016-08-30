@@ -98,7 +98,7 @@ static void gwmRedrawButton(GWMWindow *button)
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
-	gwmPostDirty();
+	gwmPostDirty(button);
 };
 
 int gwmButtonHandler(GWMEvent *ev, GWMWindow *button)

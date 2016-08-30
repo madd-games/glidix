@@ -50,9 +50,14 @@
 #define	sti()			ASM ("sti")
 #define	nop()			ASM ("nop")
 #define	NT_SECS(secs)		((secs)*1000000000UL)
+#define	NT_MILLI(milli)		((milli)*1000000UL)
 #define	NEW(type)		((type*)kmalloc(sizeof(type)))		/* only use after including <glidix/memory.h> */
 #define	NEW_EX(type, size)	((type*)kmalloc(sizeof(type)+(size)))
 #define	kalloca(x)		__builtin_alloca(x)
+#define	htons			__builtin_bswap16
+#define	htonl			__builtin_bswap32
+#define	ntohs			__builtin_bswap16
+#define	ntohl			__builtin_bswap32
 
 /**
  * Special traps. If a userspace process jumps to one of these, it will trigger

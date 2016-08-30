@@ -26,6 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define	_GLIDIX_SOURCE
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,6 +79,28 @@ const char *getFileType(mode_t mode)
 		return "???";
 		break;
 	};
+};
+
+const char *binary64(uint64_t x)
+{
+	static char binary[65];
+	int i;
+	
+	for (i=0; i<64; i++)
+	{
+		uint64_t mask = (1UL << (63UL-(uint64_t)i));
+		if (x & mask)
+		{
+			binary[i] = '1';
+		}
+		else
+		{
+			binary[i] = '0';
+		};
+	};
+	
+	binary[64] = 0;
+	return binary;
 };
 
 int main(int argc, char *argv[])
@@ -169,5 +192,9 @@ int main(int argc, char *argv[])
 	printf("C-time:     %s", ctime(&st.st_ctime));
 	printf("Block size: "); print_size(st.st_blksize); printf("\n");
 	printf("Blocks:     %d\n", st.st_blocks);
+	printf("I. Perms:   %s\n", binary64(st.st_ixperm));
+	printf("O. Perms:   %s\n", binary64(st.st_oxperm));
+	printf("D. Perms:   %s\n", binary64(st.st_dxperm));
+	
 	return 0;
 };

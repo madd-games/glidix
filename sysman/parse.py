@@ -5,7 +5,7 @@ stylesheet = """
 body
 {
 	font-family: monospace;
-	background-color: #FFFFDD;
+	background-color: #FFFFEE;
 	font-size: 16px;
 }
 
@@ -34,7 +34,7 @@ h2
 	color: #006600;
 }
 
-p
+p, li
 {
 	margin-left: 1cm;
 	margin-right: 1cm;
@@ -180,6 +180,8 @@ for filename in os.listdir("src"):
 				f.write("<h2>%s</h2>\n" % line[2:])
 			elif line.startswith(">"):
 				f.write("<h1>%s</h1>\n" % line[1:])
+			elif line.startswith("\\*"):
+				f.write("<ul><li>%s</li></ul>" % parseParagraph(line[2:]))
 			elif line.startswith("\t"):
 				code = ""
 				code += line[1:] + "\n"

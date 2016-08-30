@@ -33,8 +33,7 @@
 
 /**
  * A mutual exclusion lock which is fair and tries to minimize CPU use. Only performs well
- * if locked for short periods of time. It is used mainly to implement semaphores
- * (see semaphore.c).
+ * if locked for short periods of time.
  */
 typedef struct
 {

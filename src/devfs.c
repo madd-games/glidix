@@ -32,6 +32,7 @@
 #include <glidix/spinlock.h>
 #include <glidix/string.h>
 #include <glidix/vfs.h>
+#include <glidix/random.h>
 
 typedef struct _DeviceFile
 {
@@ -53,9 +54,27 @@ static ssize_t nullWrite(File *file, const void *buffer, size_t size)
 	return (ssize_t) size;
 };
 
+static ssize_t nullPWrite(File *fp, const void *buffer, size_t size, off_t offset)
+{
+	return (ssize_t) size;
+};
+
+static ssize_t nullRead(File *fp, void *buffer, size_t size)
+{
+	return 0;
+};
+
+static ssize_t nullPRead(File *fp, void *buffer, size_t size, off_t offset)
+{
+	return 0;
+};
+
 static int openNullDevice(void *data, File *file, size_t szFile)
 {
 	file->write = nullWrite;
+	file->read = nullRead;
+	file->pwrite = nullPWrite;
+	file->pread = nullPRead;
 	return 0;
 };
 
@@ -115,6 +134,87 @@ static int openroot(FileSystem *fs, Dir *dir, size_t szDir)
 	return 0;
 };
 
+static ssize_t zeroWrite(File *fp, const void *buf, size_t size)
+{
+	return (ssize_t) size;
+};
+
+static ssize_t zeroPWrite(File *fp, const void *buf, size_t size, off_t offset)
+{
+	return (ssize_t) size;
+};
+
+static ssize_t zeroRead(File *fp, void *buf, size_t size)
+{
+	memset(buf, 0, size);
+	return (ssize_t) size;
+};
+
+static ssize_t zeroPRead(File *fp, void *buf, size_t size, off_t offset)
+{
+	memset(buf, 0, size);
+	return (ssize_t) size;
+};
+
+static int openZero(void *data, File *file, size_t szFile)
+{
+	file->write = zeroWrite;
+	file->read = zeroRead;
+	file->pwrite = zeroPWrite;
+	file->pread = zeroPRead;
+	return 0;
+};
+
+static ssize_t randomWrite(File *fp, const void *buf, size_t size)
+{
+	const uint64_t *scan = (const uint64_t*) buf;
+	while (size >= 8)
+	{
+		feedRandom(*scan++);
+		size -= 8;
+	};
+	
+	return (ssize_t) size;
+};
+
+static ssize_t randomPWrite(File *fp, const void *buf, size_t size, off_t offset)
+{
+	return randomWrite(fp, buf, size);
+};
+
+static ssize_t randomRead(File *fp, void *buf, size_t size)
+{
+	uint8_t *put = (uint8_t*) buf;
+	ssize_t sizeOut = 0;
+	while (size > 0)
+	{
+		uint64_t num = getRandom();
+		
+		size_t copyNow = size;
+		if (copyNow > 8) copyNow = 8;
+		memcpy(put, &num, copyNow);
+		put += copyNow;
+		size -= copyNow;
+		sizeOut += copyNow;
+	};
+	
+	return sizeOut;
+};
+
+static ssize_t randomPRead(File *fp, void *buf, size_t size, off_t offset)
+{
+	return randomRead(fp, buf, size);
+};
+
+static int openRandom(void *data, File *file, size_t szFile)
+{
+	file->write = randomWrite;
+	file->read = randomRead;
+	file->pwrite = randomPWrite;
+	file->pread = randomPRead;
+	return 0;
+};
+
 void initDevfs()
 {
 	spinlockRelease(&devfsLock);
@@ -128,6 +228,21 @@ void initDevfs()
 	nullDevice.open = openNullDevice;
 	nullDevice.prev = NULL;
 	nullDevice.next = NULL;
+	
+	if (AddDevice("zero", NULL, openZero, 0666 | VFS_MODE_CHARDEV) == NULL)
+	{
+		panic("failed to create /dev/zero");
+	};
+	
+	if (AddDevice("urandom", NULL, openRandom, 0644 | VFS_MODE_CHARDEV) == NULL)
+	{
+		panic("failed to create /dev/urandom");
+	};
+	
+	if (AddDevice("random", NULL, openRandom, 0644 | VFS_MODE_CHARDEV) == NULL)
+	{
+		panic("failed to create /dev/random");
+	};
 };
 
 FileSystem *getDevfs()

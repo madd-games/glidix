@@ -402,6 +402,10 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		linkInterp(&regs, dynamic, pm);
 	};
 	
+	// permissions
+	getCurrentThread()->oxperm = (getCurrentThread()->oxperm & (getCurrentThread()->dxperm & st.st_ixperm)) | st.st_oxperm;
+	getCurrentThread()->dxperm = st.st_dxperm;
+	
 	regs.rsp = 0x400000;
 	regs.rbp = 0;
 	refreshAddrSpace();

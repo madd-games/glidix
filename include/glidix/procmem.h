@@ -46,6 +46,11 @@
 
 #define	PROT_ALL			((1 << 4)-1)
 
+/**
+ * PROT_* flags settable by kernel only.
+ */
+#define	PROT_THREAD			(1 << 8)
+
 #define	MEM_SEGMENT_COLLISION		-1
 #define	MEM_SEGMENT_INVALID		-2
 
@@ -69,7 +74,7 @@
 #	define	MAP_SHARED			(1 << 1)
 #	define	MAP_ANON			(1 << 2)
 #	define	MAP_FIXED			(1 << 3)
-
+#	define	MAP_THREAD			(1 << 4)
 #	define	MAP_FAILED			((uint64_t)-1)
 #endif
 
@@ -148,6 +153,12 @@ typedef struct _Segment
 	int				flags;
 
 	/**
+	 * For MAP_THREAD (PROT_THREAD in 'flags') segments, this is set to the creating thread.
+	 * Otherwise NULL.
+	 */
+	struct _Thread*			thread;
+	
+	/**
 	 * Next segment.
 	 */
 	struct _Segment			*next;
@@ -200,7 +211,7 @@ int AddSegmentEx(ProcMem *pm, uint64_t start, FrameList *frames, int flags, uint
 int DeleteSegment(ProcMem *pm, uint64_t start);
 void SetProcessMemory(ProcMem *pm);
 ProcMem* DuplicateProcessMemory(ProcMem *pm);
-
+void UnloadThreadProcessMemory(ProcMem *pm);
 void UprefProcessMemory(ProcMem *pm);
 void DownrefProcessMemory(ProcMem *pm);
 

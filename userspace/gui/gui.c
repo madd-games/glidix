@@ -166,7 +166,9 @@ typedef struct Window_
 	DDISurface*				clientArea;
 	DDISurface*				icon;
 	DDISurface*				titleBar;
+	DDISurface*				display;
 	int					titleBarDirty;
+	int					displayDirty;
 	uint64_t				id;
 	int					pid;
 	int					fd;
@@ -253,9 +255,13 @@ void PaintWindows(Window *win, DDISurface *target)
 	{
 		if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
 		{
-			DDISurface *display = ddiCreateSurface(&target->format, win->params.width, win->params.height,
-				(char*)win->clientArea->data, 0);
-			PaintWindows(win->children, display);
+			DDISurface *display = win->display;
+			if (win->displayDirty)
+			{
+				ddiOverlay(win->clientArea, 0, 0, display, 0, 0, win->params.width, win->params.height);
+				PaintWindows(win->children, display);
+				win->displayDirty = 0;
+			};
 			
 			if (win->parent == NULL)
 			{
@@ -368,8 +374,6 @@ void PaintWindows(Window *win, DDISurface *target)
 				ddiBlit(display, 0, 0, target,
 					win->params.x, win->params.y, win->params.width, win->params.height);
 			};
-			
-			ddiDeleteSurface(display);
 		};
 	};
 };
@@ -443,6 +447,7 @@ void DeleteWindow(Window *win)
 	if (win->icon != NULL) ddiDeleteSurface(win->icon);
 	ddiDeleteSurface(win->clientArea);
 	ddiDeleteSurface(win->titleBar);
+	ddiDeleteSurface(win->display);
 	free(win);
 	
 	PostDesktopUpdate();
@@ -515,6 +520,7 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	};
 	
 	win->clientArea = ddiCreateSurface(&screen->format, pars->width, pars->height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
+	win->display = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, 0);
 	ddiFillRect(win->clientArea, 0, 0, pars->width, pars->height, &winBackColor);
 	win->titleBar = ddiCreateSurface(&screen->format, pars->width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT, NULL, 0);
 	win->titleBarDirty = 1;
@@ -1021,6 +1027,26 @@ void *inputThreadFunc(void *ignore)
 	return NULL;
 };
 
+void PostWindowDirty(Window *win)
+{
+	// only bother if we don't already know
+	if (!win->displayDirty)
+	{
+		win->displayDirty = 1;
+		if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
+		{
+			if (win->parent == NULL)
+			{
+				sem_post(&semRedraw);
+			}
+			else
+			{
+				PostWindowDirty(win->parent);
+			};
+		};
+	};
+};
+
 volatile int msgReady = 0;
 void *msgThreadFunc(void *ignore)
 {
@@ -1088,7 +1114,11 @@ void *msgThreadFunc(void *ignore)
 			}
 			else if (cmd->cmd == GWM_CMD_POST_DIRTY)
 			{
-				sem_post(&semRedraw);
+				//sem_post(&semRedraw);
+				pthread_mutex_lock(&windowLock);
+				Window *win = GetWindowByID(cmd->postDirty.id, info.pid, info.fd);
+				if (win != NULL) PostWindowDirty(win);
+				pthread_mutex_unlock(&windowLock);
 			}
 			else if (cmd->cmd == GWM_CMD_DESTROY_WINDOW)
 			{
@@ -1136,6 +1166,10 @@ void *msgThreadFunc(void *ignore)
 					if (win->params.flags & GWM_WINDOW_MKFOCUSED)
 					{
 						focusedWindow = win;
+					};
+					if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
+					{
+						PostWindowDirty(win);
 					};
 					msg.setFlagsResp.status = 0;
 				}
@@ -1511,7 +1545,7 @@ int main(int argc, char *argv[])
 		PaintDesktop();
 		//clock_t end = clock();
 		
-		//printf("render ticks: %d\n", (int)(end-start));
+		//printf("render ms: %d\n", (int)((end-start)*1000/CLOCKS_PER_SEC));
 		while (sem_wait(&semRedraw) != 0);
 		
 		// ignore multiple simultaneous redraw requests

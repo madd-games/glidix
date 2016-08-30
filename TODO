@@ -3,5 +3,6 @@
    modules.
  * Handle all CPU exceptions such as #GP.
  * BSS in modules doesn't get zeroed?
- * Thread-temporary mappings (MAP_THREAD); and make sure that thread stacks are allocated using this method.
- * Usersapce heap (in libc) should unify blocks.
+ * Userspace heap (in libc) should unify blocks.
+ * During shutdown, GXFS filesystems are not unmounted safely.
+ * RAM filesystem.

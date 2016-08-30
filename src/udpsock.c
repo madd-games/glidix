@@ -275,6 +275,17 @@ static void udpsock_close(Socket *sock)
 	};
 	udpsock->first = udpsock->last = NULL;
 	
+	if (sock->domain == AF_INET)
+	{
+		const struct sockaddr_in *inaddr = (const struct sockaddr_in*) &udpsock->sockname;
+		FreePort(inaddr->sin_port);
+	}
+	else
+	{
+		const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) &udpsock->sockname;
+		FreePort(inaddr->sin6_port);
+	};
+	
 	kfree(udpsock->groups);
 	udpsock->groups = NULL;
 	udpsock->numGroups = 0;

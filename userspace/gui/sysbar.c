@@ -127,7 +127,7 @@ int main()
 	
 	ddiBlit(menuButton, 0, 0, canvas, 2, 2, 32, 32);
 
-	gwmPostDirty();
+	gwmPostDirty(win);
 	
 	gwmSetEventHandler(win, sysbarEventHandler);
 	gwmMainLoop();

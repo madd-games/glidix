@@ -99,7 +99,7 @@ void gwmRedrawTextField(GWMWindow *field)
 		ddiFillRect(canvas, cursorX, 3, 1, canvas->height-6, &black);
 	};
 	
-	gwmPostDirty();
+	gwmPostDirty(field);
 };
 
 static void gwmTextFieldDeleteSelection(GWMWindow *field)

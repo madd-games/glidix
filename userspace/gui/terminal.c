@@ -57,6 +57,7 @@ int selectEnd = 0;
 int selectAnchor = -1;
 
 int fdMaster;
+GWMWindow *termWindow;
 
 DDIColor consoleColors[16] = {
 	{0x00, 0x00, 0x00, 0xFF},		/* 0 */
@@ -147,6 +148,10 @@ void writeConsole(const char *buf, size_t sz)
 				cursorY++;
 			};
 		}
+		else if (c == '\r')
+		{
+			cursorX = 0;
+		}
 		else
 		{
 			grid[cursorY * 80 + cursorX].c = c;
@@ -188,6 +193,7 @@ void renderConsole(DDISurface *surface)
 	
 	// cursor
 	ddiFillRect(surface, cursorX*9, cursorY*16+14, 9, 2, &consoleColors[7]);
+	gwmPostDirty(termWindow);
 };
 
 void *ctrlThreadFunc(void *ignore)
@@ -263,6 +269,7 @@ int main()
 	gwmInit();
 	GWMWindow *top = gwmCreateWindow(NULL, "Terminal", 10, 10, 720, 400, GWM_WINDOW_MKFOCUSED);
 	GWMWindow *wnd = gwmCreateWindow(top, "body", 0, 0, 720, 400, 0);
+	termWindow = wnd;
 	
 	gwmSetWindowCursor(wnd, GWM_CURSOR_TEXT);
 	
@@ -281,7 +288,7 @@ int main()
 	
 	clearConsole();
 	renderConsole(surface);
-	gwmPostDirty();
+	gwmPostDirty(wnd);
 
 	fdMaster = getpt();
 	if (fdMaster == -1)
@@ -311,7 +318,7 @@ int main()
 			pthread_spin_lock(&consoleLock);
 			renderConsole(surface);
 			pthread_spin_unlock(&consoleLock);
-			gwmPostDirty();
+			gwmPostDirty(wnd);
 			
 			if (!running) break;
 		}

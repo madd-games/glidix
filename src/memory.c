@@ -34,6 +34,7 @@
 #include <glidix/physmem.h>
 #include <glidix/isp.h>
 #include <glidix/storage.h>
+#include <glidix/random.h>
 #include <stdint.h>
 
 #define	HEAP_BASE_ADDR				0xFFFF810000000000
@@ -397,6 +398,10 @@ void _kfree(void *block, const char *who, int line)
 	//ASM("cli");
 	spinlockAcquire(&heapLock);
 
+	// all blocks are at least 16 bytes in size because of the alignment magic; so we can safely
+	// feed the generator
+	feedRandom(*((uint64_t*)block));
+	
 	uint64_t addr = (uint64_t) block;
 	if (addr < (HEAP_BASE_ADDR + sizeof(HeapHeader)))
 	{

@@ -130,9 +130,9 @@ File* CreateSocket(int domain, int type, int proto)
 	Socket *sock;
 	if (domain == AF_CAPTURE)
 	{
-		if (getCurrentThread()->creds->euid != 0)
+		if (!havePerm(XP_RAWSOCK))
 		{
-			ERRNO = EACCES;
+			ERRNO = EPERM;
 			return NULL;
 		};
 		
@@ -143,9 +143,9 @@ File* CreateSocket(int domain, int type, int proto)
 	{
 		if (type == SOCK_RAW)
 		{
-			if (getCurrentThread()->creds->euid != 0)
+			if (!havePerm(XP_RAWSOCK))
 			{
-				getCurrentThread()->therrno = EACCES;
+				getCurrentThread()->therrno = EPERM;
 				return NULL;
 			};
 		
@@ -330,8 +330,7 @@ int ConnectSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
 		return -1;
 	};
 	
-	sock->connect(sock, addr, addrlen);
-	return 0;
+	return sock->connect(sock, addr, addrlen);
 };
 
 int SocketGetpeername(File *fp, struct sockaddr *addr, size_t *addrlen)

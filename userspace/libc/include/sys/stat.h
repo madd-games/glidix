@@ -85,16 +85,25 @@ struct stat
 	time_t				st_atime;
 	time_t				st_mtime;
 	time_t				st_ctime;
+#ifdef _GLIDIX_SOURCE
+	xperm_t				st_ixperm;
+	xperm_t				st_oxperm;
+	xperm_t				st_dxperm;
+#endif
 };
 
 /* implemented by libglidix directly */
-int	stat(const char *path, struct stat *buf);
-int	fstat(int fd, struct stat *buf);
-int	lstat(const char *path, struct stat *buf);
+int	_glidix_stat(const char *path, struct stat *buf, size_t size);
+int	_glidix_fstat(int fd, struct stat *buf, size_t size);
+int	_glidix_lstat(const char *path, struct stat *buf, size_t size);
 int	chmod(const char *path, mode_t mode);
 int	fchmod(int fd, mode_t mode);
 int	mkdir(const char *path, mode_t mode);
 mode_t	umask(mode_t cmask);
+
+#define	stat(a, b)	_glidix_stat((a), (b), sizeof(struct stat))
+#define	fstat(a, b)	_glidix_fstat((a), (b), sizeof(struct stat))
+#define	lstat(a, b)	_glidix_lstat((a), (b), sizeof(struct stat))
 
 #ifdef __cplusplus
 }	/* extern "C" */

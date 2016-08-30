@@ -196,6 +196,12 @@ typedef union
 	
 	struct
 	{
+		int				cmd;	// GWM_CMD_POST_DIRTY
+		uint64_t			id;
+	} postDirty;
+	
+	struct
+	{
 		int				cmd;	// GWM_CMD_DESTROY_WINDOW
 		uint64_t			id;
 	} destroyWindow;
@@ -429,9 +435,9 @@ DDISurface* gwmGetWindowCanvas(GWMWindow *win);
 void gwmDestroyWindow(GWMWindow *win);
 
 /**
- * Tell the window manager that the screen needs re-drawing.
+ * Tell the window manager that a window needs re-drawing.
  */
-void gwmPostDirty();
+void gwmPostDirty(GWMWindow *win);
 
 /**
  * Wait until an event is received and store it in the event structure.

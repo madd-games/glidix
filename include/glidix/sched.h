@@ -57,6 +57,16 @@ typedef struct
 #define	CLONE_DETACHED			(1 << 1)
 
 /**
+ * Executable permissions.
+ */
+#define	XP_RAWSOCK			(1 << 0)
+#define	XP_NETCONF			(1 << 1)
+#define	XP_MODULE			(1 << 2)
+
+#define	XP_ALL				0x7FFFFFFFFFFFFFFF
+#define	XP_NCHG				0xFFFFFFFFFFFFFFFF
+
+/**
  * If this flag is set, then the thread is waiting for a signal to be received.
  */
 #define	THREAD_WAITING			(1 << 0)
@@ -349,6 +359,12 @@ typedef struct _Thread
 	int				wakeCounter;
 	
 	/**
+	 * The own, and delegatable permissions of this thread.
+	 */
+	uint64_t			oxperm;
+	uint64_t			dxperm;
+	
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;
@@ -519,5 +535,10 @@ int detachThread(int thid);
  * Send a signal to a thread in the current process. All signals may be sent (unlike signalPid()).
  */
 int signalThid(int thid, int sig);
+
+/**
+ * Returns nonzero if the calling thread has the specified permission.
+ */
+int havePerm(uint64_t xperm);
 
 #endif

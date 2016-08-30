@@ -124,6 +124,9 @@ void semInit2(Semaphore *sem, int count);
  * wait (see the SEM_W_* macros above). 'nanotimeout' is the maximum amount of time, in nanoseconds, that
  * we should try waiting; 0 means infinity.
  *
+ * If 'count' is 0, the function returns -AGAIN. If it is -1, this function returns all available resources;
+ * or -EAGAIN if none are available.
+ *
  * Returns the number of acquired resources on success (which may be zero if the semaphore was terminated
  * with a call to semTerminate()). It returns an error number converted to negative on error; for example
  * -EINTR. Possible errors:

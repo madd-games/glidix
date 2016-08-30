@@ -296,10 +296,11 @@ void gwmDestroyWindow(GWMWindow *win)
 	free(win);
 };
 
-void gwmPostDirty()
+void gwmPostDirty(GWMWindow *win)
 {
 	GWMCommand cmd;
-	cmd.cmd = GWM_CMD_POST_DIRTY;
+	cmd.postDirty.cmd = GWM_CMD_POST_DIRTY;
+	cmd.postDirty.id = win->id;
 	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 };
 

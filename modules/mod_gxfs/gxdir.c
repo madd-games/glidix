@@ -118,6 +118,10 @@ static void gxdir_getstat(Dir *dir)
 	dir->stat.st_atime = inode.inoATime;
 	dir->stat.st_ctime = inode.inoCTime;
 	dir->stat.st_mtime = inode.inoMTime;
+	
+	dir->stat.st_ixperm = inode.inoIXPerm;
+	dir->stat.st_oxperm = inode.inoOXPerm;
+	dir->stat.st_dxperm = inode.inoDXPerm;
 
 	semSignal(&gxdir->gxfs->sem);
 };
@@ -201,6 +205,7 @@ static int gxdir_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	//kprintf_debug("gxfs: mkdir '%s' in inode %d\n", name, gxdir->gxino.ino);
 
 	gxfsInode newInode;
+	memset(&newInode, 0, sizeof(gxfsInode));
 	GXInode gxNewInode;
 	ino_t newInodeNumber = GXCreateInode(gxdir->gxfs, &gxNewInode, gxdir->gxino.ino);
 
@@ -284,6 +289,7 @@ static int gxdir_symlink(Dir *dir, const char *name, const char *path)
 	//kprintf_debug("gxfs: mkdir '%s' in inode %d\n", name, gxdir->gxino.ino);
 
 	gxfsInode newInode;
+	memset(&newInode, 0, sizeof(gxfsInode));
 	GXInode gxNewInode;
 	ino_t newInodeNumber = GXCreateInode(gxdir->gxfs, &gxNewInode, gxdir->gxino.ino);
 
@@ -436,6 +442,7 @@ static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	//kprintf_debug("gxfs: mkdir '%s' in inode %d\n", name, gxdir->gxino.ino);
 
 	gxfsInode newInode;
+	memset(&newInode, 0, sizeof(gxfsInode));
 	GXInode gxNewInode;
 	ino_t newInodeNumber = GXCreateInode(gxdir->gxfs, &gxNewInode, gxdir->gxino.ino);
 

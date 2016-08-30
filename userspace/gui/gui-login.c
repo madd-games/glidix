@@ -275,7 +275,7 @@ int main(int argc, char *argv[])
 	GWMWindow *btnLogIn = gwmCreateButton(win, "Log in", 2, 46, 50, 0);
 	gwmSetButtonCallback(btnLogIn, logInCallback, NULL);
 	
-	gwmPostDirty();
+	gwmPostDirty(win);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;

@@ -217,13 +217,13 @@ static void ataThread(void *data)
 		}
 		else
 		{
-			kprintf("[SDIDE] WRITE SECTOR %p, COUNT=%d\n", sdcmd->index, (int) sdcmd->count);
+			//kprintf("[SDIDE] WRITE SECTOR %p, COUNT=%d\n", sdcmd->index, (int) sdcmd->count);
 			// write
 			if ((err = idePoll(ctrl, channel, 1)))
 			{
 				panic("sdide: error %d\n", err);
 			};
-			kprintf("sdide: write sector %d\n", sdcmd->index);
+			//kprintf("sdide: write sector %d\n", sdcmd->index);
 			outsw(bus, sdcmd->block, words);
 			if (lbaMode == 1)
 			{

@@ -625,7 +625,10 @@ void netman_dhcp_ifup(NetmanIfConfig *config)
 	
 	// we use the router here such that if the mask is 255.255.255.255, then the route
 	// will indeed point to the router.
+	// except if the router is 0
 	uint32_t localroute = params.router & params.mask;
+	if (params.router == 0) localroute = params.myip & params.mask;
+	
 	_glidix_gen_route genroute;
 	_glidix_in_route *inroute = (_glidix_in_route*) &genroute;
 	strcpy(inroute->ifname, config->ifname);

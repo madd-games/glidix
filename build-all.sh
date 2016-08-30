@@ -142,10 +142,10 @@ cp out/ps2kbd.gkm ../../initrd/initmod/ps2kbd.gkm || exit 1
 cd ../..
 
 # mod_specdevs
-cd modules/mod_specdevs
-modmake --sysroot=/glidix --host=x86_64-glidix --modname=specdevs || exit 1
-cp out/specdevs.gkm ../../initrd/initmod/specdevs.gkm || exit 1
-cd ../..
+#cd modules/mod_specdevs
+#modmake --sysroot=/glidix --host=x86_64-glidix --modname=specdevs || exit 1
+#cp out/specdevs.gkm ../../initrd/initmod/specdevs.gkm || exit 1
+#cd ../..
 
 # mod_sdide
 cd modules/mod_sdide

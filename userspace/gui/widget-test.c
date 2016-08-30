@@ -84,6 +84,7 @@ int main()
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 
+	gwmPostDirty(win);
 	gwmSetEventHandler(win, myEventHandler);
 	gwmMainLoop();
 	gwmQuit();

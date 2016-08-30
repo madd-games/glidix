@@ -296,6 +296,9 @@ int gxfile_fstat(File *fp, struct stat *st)
 	st->st_atime = inode.inoATime;
 	st->st_ctime = inode.inoCTime;
 	st->st_mtime = inode.inoMTime;
+	st->st_ixperm = inode.inoIXPerm;
+	st->st_oxperm = inode.inoOXPerm;
+	st->st_dxperm = inode.inoDXPerm;
 
 	semSignal(&gxfile->gxfs->sem);
 	return 0;

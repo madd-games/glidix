@@ -77,7 +77,7 @@ static void gwmRedrawCheckbox(GWMWindow *checkbox)
 	};
 	
 	ddiBlit(imgCheckbox, CB_WIDTH*data->state, CB_HEIGHT*whichY, canvas, 0, 0, CB_WIDTH, CB_HEIGHT);
-	gwmPostDirty();
+	gwmPostDirty(checkbox);
 };
 
 int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox)

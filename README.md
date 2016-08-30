@@ -14,13 +14,13 @@ Glidix is an experimental UNIX-clone OS, designed to run on x86_64. It is made m
  * Storage devices: IDE and AHCI; with AHCI being limited to ATA only (no ATAPI support yet); IDE seems to break when writing.
  * Graphics: BGA. Hardware acceleration for various cards is planned.
  * Input devices: PS/2 mouse and keyboard
- * Ethernet cards: NE2000 (promiscous only), Intel 8254x (only PRO/1000 MT Desktop is listed in the driver as supported but it'd probably work for the other ones too), and broken support for VirtIO net.
+ * Ethernet cards: NE2000 (promiscous only), Intel 8254x (*PRO/1000 MT Desktop*, and *T/MT Server*), and broken support for VirtIO net.
 
 ## Features
 
  * Capable of booting from an MBR using a custom bootloader; UEFI boot planned.
  * A simple graphical interface, currently under heavy development.
- * Network stack supporting IPv4 and IPv6, ICMP to some degree, UDP, DNS and also TCP in progress. Supports autoconfiguration with DHCP, ALIC (*Automatic Local IP Configuration*, for IPv4 link-local addresses when DHCP is unavailable), and SLAAC for IPv6.
+ * Network stack supporting IPv4 and IPv6, ICMP to some degree, UDP, DNS and TCP. Supports autoconfiguration with DHCP, ALIC (*Automatic Local IP Configuration*, for IPv4 link-local addresses when DHCP is unavailable), and SLAAC for IPv6.
  * Supports the ISO 9660 filesystem, plus a custom filesystem called Glidix File System (GXFS), which can store Glidix-specific metadata such as application permissions. Support for variants of FAT is planned.
  * Implements the POSIX API using a custom C library.
  * The GNU toolchain (binutils and GCC) can run natively on Glidix (the source code must be patched to support the `x86_64-glidix` target).
@@ -32,3 +32,4 @@ Glidix is an experimental UNIX-clone OS, designed to run on x86_64. It is made m
  * Booting from UEFI, and supporting GPT.
  * Hardware-accelerated graphics.
  * More drivers and porting more applications.
+ * Audio support.

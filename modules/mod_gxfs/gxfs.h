@@ -79,7 +79,10 @@ typedef struct
 	uint16_t			inoGroup;
 	gxfsFragment			inoFrags[14];
 	uint64_t			inoExFrag;
-	char				inoPad[32];
+	uint64_t			inoIXPerm;
+	uint64_t			inoOXPerm;
+	uint64_t			inoDXPerm;
+	char				inoPad[8];
 } __attribute__ ((packed)) gxfsInode;
 
 typedef struct

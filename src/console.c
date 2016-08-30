@@ -28,7 +28,7 @@
 
 #include <glidix/console.h>
 #include <glidix/port.h>
-#include <glidix/spinlock.h>
+#include <glidix/ticket.h>
 #include <glidix/string.h>
 #include <stdint.h>
 #include <glidix/video.h>
@@ -44,11 +44,11 @@ static struct
 	int gfxterm;
 } consoleState;
 
-static Spinlock consoleLock;
+static TicketLine consoleLock;
 
 void initConsole()
 {
-	spinlockRelease(&consoleLock);
+	tlInit(&consoleLock);
 	consoleState.buffer = (unsigned char*) 0xFFFF8000000B8000;
 	consoleState.usingSoftware = 0;
 	consoleState.width = 80;
@@ -74,7 +74,7 @@ static void updateVGACursor()
 
 void clearScreen()
 {
-	spinlockAcquire(&consoleLock);
+	tlLock(&consoleLock);
 	consoleState.curX = 0;
 	consoleState.curY = 0;
 	consoleState.curColor = 0x07;
@@ -90,23 +90,23 @@ void clearScreen()
 	};
 	
 	updateVGACursor();
-	spinlockRelease(&consoleLock);
+	tlUnlock(&consoleLock);
 };
 
 void setCursorPos(uint8_t x, uint8_t y)
 {
-	spinlockAcquire(&consoleLock);
+	tlLock(&consoleLock);
 	consoleState.curX = x;
 	consoleState.curY = y;
 	updateVGACursor();
-	spinlockRelease(&consoleLock);
+	tlUnlock(&consoleLock);
 };
 
 void setConsoleColor(uint8_t col)
 {
-	spinlockAcquire(&consoleLock);
+	tlLock(&consoleLock);
 	consoleState.curColor = col;
-	spinlockRelease(&consoleLock);
+	tlUnlock(&consoleLock);
 };
 
 static void scroll()
@@ -290,7 +290,7 @@ static void put_b(uint8_t byte)
 
 void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 {
-	if (putcon) spinlockAcquire(&consoleLock);
+	if (putcon) tlLock(&consoleLock);
 	consoleState.putcon = putcon;
 
 	while (*fmt != 0)
@@ -356,7 +356,7 @@ void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 
 	updateVGACursor();
 
-	if (putcon) spinlockRelease(&consoleLock);
+	if (putcon) tlUnlock(&consoleLock);
 };
 
 void kvprintf(const char *fmt, va_list ap)
@@ -395,26 +395,26 @@ void kprintf_debug(const char *fmt, ...)
 
 void kputbuf(const char *buf, size_t size)
 {
-	spinlockAcquire(&consoleLock);
+	tlLock(&consoleLock);
 	consoleState.putcon = 1;
 	while (size--)
 	{
 		kputch(*buf++);
 	};
 	updateVGACursor();
-	spinlockRelease(&consoleLock);
+	tlUnlock(&consoleLock);
 };
 
 void kputbuf_debug(const char *buf, size_t size)
 {
-	spinlockAcquire(&consoleLock);
+	tlLock(&consoleLock);
 	consoleState.putcon = 0;
 	while (size--)
 	{
 		kputch(*buf++);
 	};
 	updateVGACursor();
-	spinlockRelease(&consoleLock);
+	tlUnlock(&consoleLock);
 };
 
 typedef struct
@@ -472,28 +472,28 @@ void kdumpregs(Regs *regs)
 
 void unlockConsole()
 {
-	spinlockRelease(&consoleLock);
+	tlUnlock(&consoleLock);
 };
 
 void switchConsoleToSoftwareBuffer(unsigned char *buffer, int width, int height)
 {
-	spinlockAcquire(&consoleLock);
+	tlLock(&consoleLock);
 	consoleState.usingSoftware = 1;
 	consoleState.buffer = buffer;
 	consoleState.width = width;
 	consoleState.height = height;
-	spinlockRelease(&consoleLock);
+	tlUnlock(&consoleLock);
 	clearScreen();
 };
 
 void renderConsoleToScreen()
 {
-	spinlockAcquire(&consoleLock);
+	tlLock(&consoleLock);
 	if (consoleState.usingSoftware)
 	{
 		lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
 	}
-	spinlockRelease(&consoleLock);
+	tlUnlock(&consoleLock);
 };
 
 void setGfxTerm(int value)

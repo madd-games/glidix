@@ -124,7 +124,9 @@ static EInterface *interfaces = NULL;
 static EInterface *lastIf = NULL;
 
 static EDevice knownDevices[] = {
+	{0x8086, 0x1004, "Intel PRO/1000 T Server (82543GC) NIC"},
 	{0x8086, 0x100E, "Intel PRO/1000 MT Desktop (82540EM) NIC"},
+	{0x8086, 0x100F, "Intel PRO/1000 MT Server (82545EM) NIC"},
 	{0, 0, NULL}
 };
 

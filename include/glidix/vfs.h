@@ -165,6 +165,9 @@ struct stat
 	time_t				st_atime;
 	time_t				st_mtime;
 	time_t				st_ctime;
+	uint64_t			st_ixperm;
+	uint64_t			st_oxperm;
+	uint64_t			st_dxperm;
 };
 #endif
 

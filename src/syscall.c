@@ -717,7 +717,7 @@ int sys_raise(int sig)
 	return 0;
 };
 
-int sys_stat(const char *upath, struct stat *buf)
+int sys_stat(const char *upath, struct stat *buf, size_t bufsz)
 {
 	char path[USER_STRING_MAX];
 	if (strcpy_u2k(path, upath) != 0)
@@ -725,12 +725,17 @@ int sys_stat(const char *upath, struct stat *buf)
 		ERRNO = EFAULT;
 		return -1;
 	};
+	
+	if (bufsz > sizeof(struct stat))
+	{
+		bufsz = sizeof(struct stat);
+	};
 
 	struct stat kbuf;
 	int status = vfsStat(path, &kbuf);
 	if (status == 0)
 	{
-		if (memcpy_k2u(buf, &kbuf, sizeof(struct stat)) != 0)
+		if (memcpy_k2u(buf, &kbuf, bufsz) != 0)
 		{
 			ERRNO = EFAULT;
 			return -1;
@@ -744,8 +749,13 @@ int sys_stat(const char *upath, struct stat *buf)
 	};
 };
 
-int sys_lstat(const char *upath, struct stat *buf)
+int sys_lstat(const char *upath, struct stat *buf, size_t bufsz)
 {
+	if (bufsz > sizeof(struct stat))
+	{
+		bufsz = sizeof(struct stat);
+	};
+	
 	char path[USER_STRING_MAX];
 	if (strcpy_u2k(path, upath) != 0)
 	{
@@ -757,7 +767,7 @@ int sys_lstat(const char *upath, struct stat *buf)
 	int status = vfsLinkStat(path, &kbuf);
 	if (status == 0)
 	{
-		if (memcpy_k2u(buf, &kbuf, sizeof(struct stat)) != 0)
+		if (memcpy_k2u(buf, &kbuf, bufsz) != 0)
 		{
 			ERRNO = EFAULT;
 			return -1;
@@ -782,10 +792,15 @@ int sys_pause()
 	return -1;
 };
 
-int sys_fstat(int fd, struct stat *buf)
+int sys_fstat(int fd, struct stat *buf, size_t bufsz)
 {
 	struct stat kbuf;
-		
+	
+	if (bufsz > sizeof(struct stat))
+	{
+		bufsz = sizeof(struct stat);
+	};
+	
 	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
 	{
 		getCurrentThread()->therrno = EBADF;
@@ -812,6 +827,7 @@ int sys_fstat(int fd, struct stat *buf)
 
 	vfsDup(fp);
 	spinlockRelease(&ftab->spinlock);
+	memset(&kbuf, 0, sizeof(struct stat));
 	int status = fp->fstat(fp, &kbuf);
 	vfsClose(fp);
 	
@@ -820,7 +836,7 @@ int sys_fstat(int fd, struct stat *buf)
 		getCurrentThread()->therrno = EIO;
 	};
 	
-	if (memcpy_k2u(buf, &kbuf, sizeof(struct stat)) != 0)
+	if (memcpy_k2u(buf, &kbuf, bufsz) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
@@ -1544,7 +1560,7 @@ char *sys_getcwd(char *buf, size_t size)
 uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset)
 {
 	int allProt = PROT_READ | PROT_WRITE | PROT_EXEC;
-	int allFlags = MAP_PRIVATE | MAP_SHARED | MAP_ANON | MAP_FIXED;
+	int allFlags = MAP_PRIVATE | MAP_SHARED | MAP_ANON | MAP_FIXED | MAP_THREAD;
 
 	if ((offset & 0xFFF) != 0)
 	{
@@ -1570,6 +1586,11 @@ uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t 
 		return MAP_FAILED;
 	};
 
+	if (flags & MAP_THREAD)
+	{
+		prot |= PROT_THREAD;
+	};
+	
 	if ((flags & (MAP_PRIVATE | MAP_SHARED)) == 0)
 	{
 		getCurrentThread()->therrno = EINVAL;
@@ -3627,7 +3648,7 @@ int sys_pthread_create(int *thidOut, const ThreadAttr *uattr, uint64_t entry, ui
 	{
 		int stackPages = (attr.stacksize + 0xFFF) >> 12;
 		FrameList *fl = palloc_later(NULL, stackPages, -1, 0);
-		if (AddSegmentEx(getCurrentThread()->pm, 0, fl, PROT_READ | PROT_WRITE, &regs.rbx) != 0)
+		if (AddSegmentEx(getCurrentThread()->pm, 0, fl, PROT_READ | PROT_WRITE | PROT_THREAD, &regs.rbx) != 0)
 		{
 			pdownref(fl);
 			return EAGAIN;

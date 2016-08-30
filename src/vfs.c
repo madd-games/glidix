@@ -555,6 +555,8 @@ Dir *parsePath(const char *path, int flags, int *error)
 
 static int vfsStatGen(const char *path, struct stat *st, int flags)
 {
+	memset(st, 0, sizeof(struct stat));
+	
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{

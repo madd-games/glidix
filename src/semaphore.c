@@ -49,6 +49,11 @@ void semInit2(Semaphore *sem, int count)
 
 int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 {
+	if (count == 0)
+	{
+		return -EAGAIN;
+	};
+	
 	uint64_t deadline;
 	if (nanotimeout == 0)
 	{
@@ -61,6 +66,20 @@ int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 	
 	cli();
 	spinlockAcquire(&sem->lock);
+	
+	if (count == -1)
+	{
+		if (sem->count == 0)
+		{
+			spinlockRelease(&sem->lock);
+			sti();
+			return -EAGAIN;
+		}
+		else
+		{
+			count = sem->count;
+		};
+	};
 	
 	SemWaitThread waiter;
 	waiter.thread = getCurrentThread();
