@@ -283,6 +283,10 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 
+		_glidix_mount("ramfs", ".tmp", "/tmp/", 0);
+		_glidix_mount("ramfs", ".run", "/run/", 0);
+		_glidix_mount("ramfs", ".run", "/var/run/", 0);
+		
 		loadmods();
 		
 		printf("init: initializing partitions...\n");

@@ -60,6 +60,7 @@
 #include <glidix/shmem.h>
 #include <glidix/cpu.h>
 #include <glidix/ptty.h>
+#include <glidix/ramfs.h>
 
 extern int _bootstrap_stack;
 extern int end;
@@ -464,7 +465,8 @@ void kmain2()
 {
 	initMount();
 	initSymtab();
-
+	ramfsInit();
+	
 	kprintf("Initializing ACPICA...\n");
 	ACPI_STATUS status = AcpiInitializeSubsystem();
 	if (ACPI_FAILURE(status))

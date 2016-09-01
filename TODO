@@ -3,6 +3,9 @@
    modules.
  * Handle all CPU exceptions such as #GP.
  * BSS in modules doesn't get zeroed?
- * Userspace heap (in libc) should unify blocks.
  * During shutdown, GXFS filesystems are not unmounted safely.
- * RAM filesystem.
+ * Proper mouse movement tracking for GUI.
+ * TCP/IP ports should be freed with a delay of 2 minutes.
+ * Executable permissions.
+ * mod_sdide fails to write.
+ * pollinfo() in all filesystem drivers.

@@ -250,7 +250,7 @@ typedef struct _File
 	 * if this description cannot be duplicated for whatever reason. If this entry is NULL,
 	 * the file description is considered impossible to duplicate.
 	 *
-	 * DEPRECATED; see refcounts below. This should not be called ever.
+	 * This is used by fork(); not by dup() or dup2().
 	 */
 	int (*dup)(struct _File *me, struct _File *file, size_t szFile);
 
@@ -353,7 +353,6 @@ typedef struct _Dir
 
 	/**
 	 * Same as openfile(), except opens a directory. It may return error codes as described above.
-	 * 'walkflags' should be inherited, if supported!
 	 */
 	int (*opendir)(struct _Dir *me, struct _Dir *dir, size_t szDir);
 
@@ -365,7 +364,7 @@ typedef struct _Dir
 	/**
 	 * Advance to the next entry in this directory. Return 0 on success, -1 on end of list.
 	 * If this is the last entry, and the filesystem is not read-only, this structure shall
-	 * remain valid so that mkdir() or mknode() can be called to add a new entry.
+	 * remain valid so that mkdir() or mkreg() can be called to add a new entry.
 	 */
 	int (*next)(struct _Dir *dir);
 

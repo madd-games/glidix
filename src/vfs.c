@@ -282,7 +282,7 @@ char *realpath(const char *relpath, char *buffer)
 
 Dir *resolvePath(const char *path, int flags, int *error, int level)
 {
-	if (level == VFS_MAX_LINK_DEPTH)
+	if (level >= VFS_MAX_LINK_DEPTH)
 	{
 		*error = VFS_LINK_LOOP;
 		return NULL;
@@ -318,8 +318,52 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 
 	Dir *dir = (Dir*) kmalloc(sizeof(Dir));
 	memset(dir, 0, sizeof(Dir));
-	if (spath.fs->openroot(spath.fs, dir, sizeof(Dir)) != 0)
+	
+	int openrootStatus = spath.fs->openroot(spath.fs, dir, sizeof(Dir));
+	if (openrootStatus == VFS_EMPTY_DIRECTORY)
 	{
+		if ((*scan == 0) && (flags & VFS_CREATE) && (token[0] != 0))
+		{
+			if (dir->mkreg != NULL)
+			{
+				uid_t euid = 0;
+				if (getCurrentThread()->creds != NULL)
+				{
+					euid = getCurrentThread()->creds->euid;
+				};
+				
+				if (euid == 0)
+				{
+					if (dir->mkreg(dir, token, (flags >> 3) & 0x0FFF,
+						getCurrentThread()->creds->euid,
+						getCurrentThread()->creds->egid) == 0)
+					{
+						
+						dir->stat.st_dev = spath.fs->dev;
+						return dir;
+					};
+				}
+				else
+				{
+					*error = VFS_PERM;
+				};
+			};
+		};
+		
+		if (flags & VFS_STOP_ON_EMPTY)
+		{
+			*error = VFS_EMPTY_DIRECTORY;
+			return dir;
+		};
+
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		*error = VFS_EMPTY_DIRECTORY;
+		return NULL;
+	}
+	else if (openrootStatus != 0)
+	{
+		*error = openrootStatus;
 		kfree(dir);
 		return NULL;
 	};

@@ -199,7 +199,6 @@ void _heap_free(void *block)
 {
 	if (block == NULL) return;
 
-	/* TODO: block unification */
 	uint64_t addr = (uint64_t) block - sizeof(__heap_header);
 	__heap_header *header = (__heap_header*) addr;
 	if (addr < _HEAP_BASE_ADDR)
@@ -217,6 +216,43 @@ void _heap_free(void *block)
 	};
 
 	header->flags &= ~_HEAP_BLOCK_USED;
+
+	__heap_header *headerLeft = header;
+	__heap_footer *footerRight = _heap_get_footer(header);
+	
+	if (header->flags & _HEAP_BLOCK_HAS_LEFT)
+	{
+		uint64_t leftFootAddr = addr - sizeof(__heap_footer);
+		__heap_footer *leftFoot = (__heap_footer*) leftFootAddr;
+		
+		uint64_t leftHeadAddr = leftFootAddr - leftFoot->size - sizeof(__heap_header);
+		__heap_header *head = (__heap_header*)leftHeadAddr;
+		
+		if ((head->flags & _HEAP_BLOCK_USED) == 0)
+		{
+			headerLeft = head;
+		};
+	};
+	
+	__heap_footer *footer = _heap_get_footer(header);
+	if (footer->flags & _HEAP_BLOCK_HAS_RIGHT)
+	{
+		uint64_t rightHeadAddr = (uint64_t)footer + sizeof(__heap_footer);
+		__heap_header *rightHead = (__heap_header*) rightHeadAddr;
+		
+		__heap_footer *foot = _heap_get_footer(rightHead);
+		if ((rightHead->flags & _HEAP_BLOCK_USED) == 0)
+		{
+			footerRight = foot;
+		};
+	};
+	
+	uint64_t addrLeft = (uint64_t) headerLeft;
+	uint64_t addrRight = (uint64_t) footerRight;
+	
+	uint64_t newSize = addrRight - addrLeft - sizeof(__heap_header);
+	headerLeft->size = newSize;
+	footerRight->size = newSize;
 };
 
 struct stack_frame
@@ -299,14 +335,6 @@ void _heap_dump()
 
 void _heap_expand()
 {
-#if 0
-	if (mprotect((void*)heapTop, _HEAP_PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_ALLOC) != 0)
-	{
-		fprintf(stderr, "libc: failed to mprotect() a heap page at %p\n", (void*)heapTop);
-		abort();
-	};
-#endif
-
 	if (mmap((void*)heapTop, _HEAP_PAGE_SIZE, PROT_READ | PROT_WRITE,
 		MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0) == MAP_FAILED)
 	{

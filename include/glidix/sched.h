@@ -62,6 +62,7 @@ typedef struct
 #define	XP_RAWSOCK			(1 << 0)
 #define	XP_NETCONF			(1 << 1)
 #define	XP_MODULE			(1 << 2)
+#define	XP_MOUNT			(1 << 3)
 
 #define	XP_ALL				0x7FFFFFFFFFFFFFFF
 #define	XP_NCHG				0xFFFFFFFFFFFFFFFF

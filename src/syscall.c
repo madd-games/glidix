@@ -1182,6 +1182,12 @@ int sys_mkdir(const char *upath, mode_t mode)
 	if (strcmp(parent, "/") != 0) strcat(parent, "/");
 
 	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
+	if (dir == NULL)
+	{
+		vfsUnlockCreation();
+		return sysOpenErrno(error);
+	};
+	
 	int endYet = (error == VFS_EMPTY_DIRECTORY);
 	if (dir->mkdir == NULL)
 	{
