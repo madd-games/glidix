@@ -29,6 +29,8 @@
 #ifndef _SYS_XPERM_H
 #define _SYS_XPERM_H
 
+#include <sys/types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,6 +40,10 @@ extern "C" {
 
 #define	XP_ALL				0x7FFFFFFFFFFFFFFF
 #define	XP_NCHG				0xFFFFFFFFFFFFFFFF
+
+/* implemented by libglidix directly */
+xperm_t _glidix_oxperm();
+xperm_t _glidix_dxperm();
 
 #ifdef __cplusplus
 }	/* extern "C" */

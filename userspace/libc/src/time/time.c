@@ -92,7 +92,7 @@ char *asctime_r(const struct tm *timeptr, char *result)
 		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 	};
 
-	sprintf(result, "%s %s%d %d:%d:%d %d\n",
+	sprintf(result, "%.3s %.3s%3d %.2d:%.2d:%.2d %d\n",
 		wday_name[timeptr->tm_wday],
 		mon_name[timeptr->tm_mon],
 		timeptr->tm_mday, timeptr->tm_hour,

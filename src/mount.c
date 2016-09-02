@@ -278,3 +278,29 @@ void unmountAll()
 		mp = mp->next;
 	};
 };
+
+size_t getFSInfo(FSInfo *list, size_t max)
+{
+	spinlockAcquire(&mountLock);
+	
+	MountPoint *mp = mountTable;
+	size_t count = 0;
+	
+	while (max--)
+	{
+		if (mp == NULL) break;
+		
+		list[count].fs_dev = mp->fs->dev;
+		strcpy(list[count].fs_image, mp->fs->imagename);
+		strcpy(list[count].fs_mntpoint, mp->prefix);
+		strcpy(list[count].fs_name, mp->fs->fsname);
+		
+		if (mp->fs->getinfo != NULL) mp->fs->getinfo(mp->fs, &list[count]);
+		
+		count++;
+		mp = mp->next;
+	};
+	
+	spinlockRelease(&mountLock);
+	return count;
+};

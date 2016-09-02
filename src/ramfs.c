@@ -36,12 +36,12 @@
 /**
  * RAM filesystem list lock.
  */
-Semaphore semRamList;
+static Semaphore semRamList;
 
 /**
  * Head of the RAM filesystem list.
  */
-Ramfs *ramList;
+static Ramfs *ramList;
 
 typedef struct
 {
@@ -157,6 +157,7 @@ static int ramdir_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	data->currentEntry = newEnt;
 	
 	data->dirInode->meta.st_size++;
+	data->dirInode->meta.st_mtime = time();
 	
 	semSignal(&data->ramfs->lock);
 	return 0;
@@ -196,6 +197,7 @@ static int ramdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	data->currentEntry = newEnt;
 	
 	data->dirInode->meta.st_size++;
+	data->dirInode->meta.st_mtime = time();
 	
 	semSignal(&data->ramfs->lock);
 	return 0;
@@ -229,6 +231,7 @@ static int ramdir_chmod(Dir *dir, mode_t mode)
 	
 	RamfsInode *inode = (RamfsInode*) data->currentEntry->dent.d_ino;
 	inode->meta.st_mode = (inode->meta.st_mode & 0xF000) | (mode & 0xFFF);
+	inode->meta.st_ctime = time();
 	semSignal(&data->ramfs->lock);
 	return 0;
 };
@@ -245,6 +248,7 @@ static int ramdir_chown(Dir *dir, uid_t uid, gid_t gid)
 	RamfsInode *inode = (RamfsInode*) data->currentEntry->dent.d_ino;
 	inode->meta.st_uid = uid;
 	inode->meta.st_gid = gid;
+	inode->meta.st_ctime = time();
 	semSignal(&data->ramfs->lock);
 	return 0;
 };
@@ -280,7 +284,8 @@ static int ramdir_unlink(Dir *dir)
 	
 	data->currentEntry->dent.d_name[0] = 0;
 	data->currentEntry->dent.d_ino = 1;
-	
+	data->dirInode->meta.st_mtime = time();
+
 	nodeDown(inode);
 	data->dirInode->meta.st_size--;
 	
@@ -323,6 +328,7 @@ static int ramdir_symlink(Dir *dir, const char *name, const char *path)
 	data->currentEntry = newEnt;
 	
 	data->dirInode->meta.st_size++;
+	data->dirInode->meta.st_mtime = time();
 	
 	semSignal(&data->ramfs->lock);
 	return 0;
@@ -361,6 +367,7 @@ static int ramdir_link(Dir *dir, const char *name, ino_t ino)
 	data->currentEntry->prev->next = newEnt;
 	data->currentEntry->prev = newEnt;
 	data->currentEntry = newEnt;
+	data->dirInode->meta.st_mtime = time();
 	
 	semSignal(&data->ramfs->lock);
 	return 0;
@@ -435,6 +442,7 @@ static int ramfile_fchmod(File *fp, mode_t mode)
 	semWait(&data->ramfs->lock);
 	
 	data->inode->meta.st_mode = (data->inode->meta.st_mode & 0xF000) | (mode & 0x0FFF);
+	data->inode->meta.st_ctime = time();
 	
 	semSignal(&data->ramfs->lock);
 	return 0;
@@ -447,6 +455,7 @@ static int ramfile_fchown(File *fp, uid_t uid, gid_t gid)
 	
 	data->inode->meta.st_uid = uid;
 	data->inode->meta.st_gid = gid;
+	data->inode->meta.st_ctime = time();
 	
 	semSignal(&data->ramfs->lock);
 	return 0;
@@ -478,6 +487,7 @@ static ssize_t ramfile_pread(File *fp, void *buffer, size_t size, off_t off)
 	if (size > maxSize) size = maxSize;
 	
 	memcpy(buffer, (char*)data->inode->data + off, size);
+	data->inode->meta.st_atime = time();
 	semSignal(&data->ramfs->lock);
 	
 	return (ssize_t) size;
@@ -499,6 +509,7 @@ static ssize_t ramfile_read(File *fp, void *buffer, size_t size)
 	
 	memcpy(buffer, (char*)data->inode->data + data->pos, size);
 	data->pos += size;
+	data->inode->meta.st_atime = time();
 	semSignal(&data->ramfs->lock);
 	
 	return (ssize_t) size;
@@ -521,6 +532,7 @@ static ssize_t ramfile_pwrite(File *fp, const void *buffer, size_t size, off_t o
 	};
 	
 	memcpy((char*)data->inode->data + off, buffer, size);
+	data->inode->meta.st_mtime = data->inode->meta.st_atime = time();
 	semSignal(&data->ramfs->lock);
 	
 	return (ssize_t) size;
@@ -544,6 +556,7 @@ static ssize_t ramfile_write(File *fp, const void *buffer, size_t size)
 	
 	memcpy((char*)data->inode->data + data->pos, buffer, size);
 	data->pos += size;
+	data->inode->meta.st_mtime = data->inode->meta.st_atime = time();
 	semSignal(&data->ramfs->lock);
 	
 	return (ssize_t) size;
@@ -574,6 +587,7 @@ static void ramfile_truncate(File *fp, off_t len)
 	kfree(data->inode->data);
 	data->inode->data = newData;
 	data->inode->meta.st_size = size;
+	data->inode->meta.st_ctime = time();
 	
 	semSignal(&data->ramfs->lock);
 };
@@ -619,6 +633,8 @@ static int ramfs_opendir(Ramfs *ramfs, RamfsInode *inode, Dir *dir, size_t szdir
 	DirData *data = NEW(DirData);
 	__sync_fetch_and_add(&inode->meta.st_nlink, 1);
 	data->dirInode = inode;
+	inode->meta.st_atime = time();
+	
 	data->currentEntry = ((RamfsDirent*)inode->data)->next;
 	while (data->currentEntry->dent.d_ino == 1) data->currentEntry = data->currentEntry->next;
 	data->ramfs = ramfs;
@@ -693,6 +709,7 @@ static int ramfsMount(const char *image, FileSystem *fs, size_t szfs)
 		ramfs->prev = NULL;
 		ramfs->next = ramList;
 		if (ramList != NULL) ramList->prev = ramfs;
+		ramList = ramfs;
 		memset(&ramfs->root, 0, sizeof(RamfsInode));
 		
 		RamfsDirent *ents = (RamfsDirent*) kmalloc(sizeof(RamfsDirent)*2);

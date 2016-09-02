@@ -138,7 +138,7 @@ void initModuleInterface()
 	moduleFileSystem = (FileSystem*) kmalloc(sizeof(FileSystem));
 	memset(moduleFileSystem, 0, sizeof(FileSystem));
 
-	moduleFileSystem->fsname = "";
+	moduleFileSystem->fsname = "modfs";
 	moduleFileSystem->openroot = modfs_openroot;
 
 	kprintf("%$\x02" "Done%#\n");

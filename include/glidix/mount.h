@@ -69,5 +69,6 @@ int unmount(const char *prefix);
 int resolveMounts(const char *path, SplitPath *out);
 void dumpMountTable();
 void unmountAll();
+size_t getFSInfo(FSInfo *list, size_t max);
 
 #endif

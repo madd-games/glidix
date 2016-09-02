@@ -58,10 +58,10 @@ int main(int argc, char *argv[])
 	};
 
 	printf("Telling init to halt the system...\n");
-	int fd = open("/etc/down-action", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+	int fd = open("/run/down-action", O_CREAT | O_WRONLY | O_TRUNC, 0644);
 	if (fd == -1)
 	{
-		perror("open /etc/down-action");
+		perror("open /run/down-action");
 	}
 	else
 	{

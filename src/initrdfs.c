@@ -30,6 +30,7 @@
 #include <glidix/string.h>
 #include <glidix/memory.h>
 #include <glidix/console.h>
+#include <glidix/semaphore.h>
 
 static FileSystem *initrdfs;
 
@@ -151,6 +152,9 @@ static int dirNext(Dir *dir)
 		dir->stat.st_blksize = 512;
 		dir->stat.st_blocks = dir->stat.st_size / 512;
 		if (dir->stat.st_size % 512) dir->stat.st_blocks++;
+		dir->stat.st_ixperm = XP_ALL;
+		dir->stat.st_oxperm = 0;
+		dir->stat.st_dxperm = XP_ALL;
 
 		size_t numSlashes = 0;
 		const char *scan = state->header->filename;
@@ -283,6 +287,12 @@ static int fstat(File *file, struct stat *st)
 	return 0;
 };
 
+static void pollinfo(File *fp, Semaphore **sems)
+{
+	sems[PEI_READ] = vfsGetConstSem();
+	sems[PEI_WRITE] = vfsGetConstSem();
+};
+
 static int openfile(Dir *me, File *file, size_t szfile)
 {
 	(void)szfile;
@@ -300,6 +310,7 @@ static int openfile(Dir *me, File *file, size_t szfile)
 	file->seek = seek;
 	file->dup = dup;
 	file->fstat = fstat;
+	file->pollinfo = pollinfo;
 
 	return 0;
 };

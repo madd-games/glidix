@@ -131,6 +131,10 @@ typedef struct
 	size_t				numSections;
 	gxfsSD*				sections;
 
+	// number of used inodes and blocks
+	size_t				usedInodes;
+	size_t				usedBlocks;
+	
 	// number of inodes that are open
 	int				numOpenInodes;
 

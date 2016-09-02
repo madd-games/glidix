@@ -446,6 +446,8 @@ typedef struct _Dir
 	int (*utime)(struct _Dir *dir, time_t atime, time_t mtime);
 } Dir;
 
+struct fsinfo;
+
 /**
  * Describes a mounted instance of a filesystem, perhaps attached to a storage device.
  */
@@ -477,7 +479,35 @@ typedef struct _FileSystem
 	 * Device ID, assigned during mount.
 	 */
 	dev_t dev;
+	
+	/**
+	 * The image with which this filesystem was mounted; assigned during mount.
+	 */
+	char imagename[256];
+	
+	/**
+	 * Get filesystem statistics. This must fill in the fs_usedino, fs_inodes, fs_usedblk, fs_blocks,
+	 * and fs_blksize members of the 'info' structure, if known.
+	 */
+	void (*getinfo)(struct _FileSystem *fs, struct fsinfo *info);
 } FileSystem;
+
+/**
+ * Filesystem information structure, for _glidix_fsinfo().
+ */
+typedef struct fsinfo
+{
+	dev_t					fs_dev;
+	char					fs_image[256];
+	char					fs_mntpoint[256];
+	char					fs_name[64];
+	size_t					fs_usedino;
+	size_t					fs_inodes;
+	size_t					fs_usedblk;
+	size_t					fs_blocks;
+	size_t					fs_blksize;
+	char					fs_pad[984];
+} FSInfo;
 
 void dumpFS(FileSystem *fs);
 int vfsCanCurrentThread(struct stat *st, mode_t mask);

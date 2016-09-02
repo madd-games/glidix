@@ -322,7 +322,22 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 	int openrootStatus = spath.fs->openroot(spath.fs, dir, sizeof(Dir));
 	if (openrootStatus == VFS_EMPTY_DIRECTORY)
 	{
-		if ((*scan == 0) && (flags & VFS_CREATE) && (token[0] != 0))
+		int noSlash = 1;
+		char *put = token;
+		
+		while ((*scan) != 0)
+		{
+			if (*scan == '/')
+			{
+				noSlash = 0;
+				break;
+			};
+			
+			*put++ = *scan++;
+		};
+		*put = 0;
+		
+		if ((noSlash) && (flags & VFS_CREATE) && (token[0] != 0))
 		{
 			if (dir->mkreg != NULL)
 			{

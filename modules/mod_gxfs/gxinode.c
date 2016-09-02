@@ -112,6 +112,8 @@ static ino_t GXCreateInodeInSection(GXFileSystem *gxfs, GXInode *gxino, uint64_t
 	{
 		if ((byte & mask) == 0)
 		{
+			gxfs->usedInodes++;
+			
 			byte |= mask;
 			gxfs->fp->seek(gxfs->fp, -1, SEEK_CUR);
 			vfsWrite(gxfs->fp, &byte, 1);
@@ -924,9 +926,6 @@ void GXUnlinkInode(GXInode *gxino)
 
 	if (inode.inoLinks == 0)
 	{
-		//gxfsFragment frags[16];
-		//gxino->gxfs->fp->seek(gxino->gxfs->fp, gxino->offset+39, SEEK_SET);
-		//vfsRead(gxino->gxfs->fp, frags, sizeof(gxfsFragment)*16);
 		gxfsFragment *frags = inode.inoFrags;
 
 		if ((inode.inoMode & 0xF000) != 0x5000)
@@ -956,5 +955,7 @@ void GXUnlinkInode(GXInode *gxino)
 		byte &= ~mask;
 		gxino->gxfs->fp->seek(gxino->gxfs->fp, -1, SEEK_CUR);
 		vfsWrite(gxino->gxfs->fp, &byte, 1);
+		
+		gxino->gxfs->usedInodes--;
 	};
 };

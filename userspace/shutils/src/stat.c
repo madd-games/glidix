@@ -83,12 +83,14 @@ const char *getFileType(mode_t mode)
 
 const char *binary64(uint64_t x)
 {
-	static char binary[65];
+	static char binary[64];
 	int i;
 	
-	for (i=0; i<64; i++)
+	for (i=0; i<63; i++)
 	{
-		uint64_t mask = (1UL << (63UL-(uint64_t)i));
+		uint64_t whichBit = 62UL - (uint64_t)i;
+		uint64_t mask = (1UL << whichBit);
+		
 		if (x & mask)
 		{
 			binary[i] = '1';
@@ -99,7 +101,7 @@ const char *binary64(uint64_t x)
 		};
 	};
 	
-	binary[64] = 0;
+	binary[63] = 0;
 	return binary;
 };
 

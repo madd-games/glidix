@@ -15,6 +15,8 @@ Executable permissions dictate which privileged operations an application is all
 
 A set of permissions is a bitwise-OR of zero or more *XP_*\* constants, each indicating a specific permission. A bit being set means the corresponding permissions is granted. Only 63 permissions are possible; the highest bit being set indicates reserved values. The constant *XP_ALL* indicates a set with all permissions granted (that is, all bits except the highest bit set). The constant *XP_NCHG* is a symbolic value indicating to [_glidix_chxperm.2] that a specific set shall not be changed for a file.
 
+A thread can find out its permissions by calling [_glidix_xperm.2].
+
 Executable files also have 3 sets of executable permissions saved as metadata on a file system. An application may use [stat.2] to read those sets, and [_glidix_chxperm.2] to change them; a user may use the [stat.1] and [chxperm.1] commands for this purpose. The sets are as follows:
 
 \* 'Inheritable permissions' - those permissions will be granted to the application upon execution (i.e. OR-ed into its own permission set) only if the application executing it already has this permission, and is also allowed to delegate it.

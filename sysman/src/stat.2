@@ -1,0 +1,80 @@
+>NAME
+
+stat - get information about inodes
+
+>SYNOPSIS
+
+	#include <sys/stat.h>
+	
+	int stat(const char *'path', struct stat *'buf');
+	int fstat(int 'fd', struct stat *'buf');
+	int lstat(const char *'path', struct stat *'buf');
+
+>DESCRIPTION
+
+Those functions are used to get information about an inode (directory, file, or other filesystem contents). The *stat*() function returns information about the inode named by 'path'; *fstat*() returns information about the file referenced by the file descriptor 'fd'. If 'path' refers to a symbolic link, then *stat*() returns information about the target of the link, while *lstat*() returns information about the link itself; otherwise, *stat*() and *lstat*() are equivalent.
+
+A successful call to one of the functions fills the 'struct stat' pointed to by 'buf' with information about the inode in question. The structure is defined in '<sys/stat.h>' and includes the following fields:
+
+	struct stat
+	{
+		dev_t				'st_dev';
+		ino_t				'st_ino';
+		mode_t				'st_mode';
+		nlink_t				'st_nlink';
+		uid_t				'st_uid';
+		gid_t				'st_gid';
+		dev_t				'st_rdev';
+		off_t				'st_size';
+		blksize_t			'st_blksize';
+		blkcnt_t			'st_blocks';
+		time_t				'st_atime';
+		time_t				'st_mtime';
+		time_t				'st_ctime';
+	#ifdef _GLIDIX_SOURCE
+		xperm_t				'st_ixperm';
+		xperm_t				'st_oxperm';
+		xperm_t				'st_dxperm';
+	#endif
+	};
+
+The 'st_dev' field contains a unique ID specifying which mounted filesystem the inode is located on, while 'st_ino' is a unique identifier for the file within the filesystem. Together, those 2 fields form a unique identifier for the inode, which is valid until shutdown.
+
+The 'st_mode' field specifies the type of inode, and the access rights. It is a 16-bit value, and the upper 4 bits are the type of inode, while the bottom 12 are the access rights. See [access_mode.6] for more information. The type can be found using the type following macros:
+
+\* *S_ISBLK(*'st_mode'*)* evaluates to true if the inode represents a block device.
+\* *S_ISCHR(*'st_mode'*)* evaluates to true if the inode represents a character device.
+\* *S_ISDIR(*'st_mode'*)* evaluates to true if the inode represents a directory.
+\* *S_ISFIFO(*'st_mode'*)* evaluates to true if the inode represents a named pipe (FIFO).
+\* *S_ISREG(*'st_mode'*)* evaluates to true if the inode represents a regular file.
+\* *S_ISLNK(*'st_mode'*)* evaluates to true if the inode represents a symbolic link.
+
+The 'st_nlink' field specifies the number of hard links to this inode, i.e. the number of entries referring to this inode. That is, it is the sum of the number of names it has in the filesystem, plus the amount of open file descriptions referring to it.
+
+The 'st_uid' and 'st_gid' field specify the user ID (UID) of the owner of the file, and group ID (GID) of the associated group, respectively.
+
+The 'st_rdev' field is always zero under Glidix.
+
+The 'st_size' specifies the size of the inode, in bytes. Only meaningful for regular files.
+
+The 'st_blksize' and 'st_blocks' fields specify the size of each block, and the number of blocks that make up the file, respectively. A block is a unit of size on a storage medium.
+
+The 'st_atime', 'st_mtime' and 'st_ctime' fields specify the last access time, last modification time, and last status change time (the last time the attributes of the inode changed), given as the number of seconds that elapsed since midnight 1 January 1970 UTC.
+
+The 'st_ixperm', 'st_oxperm' and 'st_dxperm' fields are only valid if the *_GLIDIX_SOURCE* macro was defined before including 'any' header files. They are Glidix-specific, and they contain the inheritable, own, and delegatable permission sets for the file, if it is executable. See [xperm.6].
+
+>RETURN VALUE
+
+Those functions return 0 on success; on error, they return -1 and set 'errno' to indicate the error.
+
+>ERRORS
+
+If -1 was returned, 'errno' may to set to one of the following:
+
+\* *EACCES* - search permission was denied on a component of 'path'.
+\* *EBADF* - 'fd' is not a valid file descriptor.
+\* *EIO* - problem with accessing the filesystem; or *fstat*() was called and it is not supported by the filesystem driver.
+
+>SEE ALSO
+
+[stat.1], [access_mode.6], [xperm.6], [filesystem.6]

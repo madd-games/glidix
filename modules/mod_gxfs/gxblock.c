@@ -54,6 +54,8 @@ uint64_t GXAllocBlockInSection(GXFileSystem *gxfs, uint64_t section)
 			byte |= mask;
 			gxfs->fp->seek(gxfs->fp, -1, SEEK_CUR);
 			vfsWrite(gxfs->fp, &byte, 1);
+			
+			gxfs->usedBlocks++;
 
 			//kprintf_debug("gxfs: allocated block %d\n", block);
 			uint64_t outblock = block + gxfs->cis.cisBlocksPerSection * section;
@@ -134,4 +136,6 @@ void GXFreeBlock(GXFileSystem *gxfs, uint64_t block)
 	byte &= ~mask;
 	gxfs->fp->seek(gxfs->fp, -1, SEEK_CUR);
 	vfsWrite(gxfs->fp, &byte, 1);
+	
+	gxfs->usedBlocks--;
 };

@@ -119,6 +119,10 @@ static int readDirent(ISODirScanner *isodir, Dir *dir)
 	dir->stat.st_atime = time;
 	dir->stat.st_mtime = time;
 
+	dir->stat.st_ixperm = XP_ALL;
+	dir->stat.st_oxperm = 0;
+	dir->stat.st_dxperm = XP_ALL;
+	
 	isodir->childStart = (uint64_t)head.startLBA * isodir->isofs->blockSize;
 	isodir->childEnd = isodir->childStart + (uint64_t)head.fileSize;
 

@@ -65,6 +65,46 @@ static int gxfs_unmount(FileSystem *fs)
 	return 0;
 };
 
+static void gxfs_getinfo(FileSystem *fs, FSInfo *info)
+{
+	GXFileSystem *gxfs = (GXFileSystem*) fs->fsdata;
+	semWait(&gxfs->sem);
+	
+	info->fs_usedino = gxfs->usedInodes;
+	info->fs_usedblk = gxfs->usedBlocks;
+	info->fs_inodes = gxfs->cis.cisTotalIno;
+	info->fs_blocks = gxfs->cis.cisTotalBlocks;
+	info->fs_blksize = gxfs->cis.cisBlockSize;
+	
+	semSignal(&gxfs->sem);
+};
+
+static uint64_t countBitmapUse(File *fp, uint64_t max)
+{
+	uint64_t result = 0;
+	max = (max + 7UL) & ~7UL;
+	max /= 8;
+	
+	while (max > 0)
+	{
+		uint64_t buffer = 0;
+		size_t toRead = 8;
+		if (toRead > max) toRead = max;
+		
+		vfsRead(fp, &buffer, toRead);
+		max -= toRead;
+
+		uint64_t count = 64;
+		while (count--)
+		{
+			result += (buffer & 1);
+			buffer >>= 1;
+		};
+	};
+	
+	return result;
+};
+
 static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 {
 	spinlockAcquire(&gxfsMountLock);
@@ -140,9 +180,21 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	memset(gxfs->ibuf, 0, sizeof(BufferedInode)*INODE_BUFFER_SIZE);
 
 	fs->fsdata = gxfs;
+	fs->fsname = "gxfs";
 	fs->openroot = gxfs_openroot;
 	fs->unmount = gxfs_unmount;
-
+	fs->getinfo = gxfs_getinfo;
+	
+	uint64_t i;
+	for (i=0; i<numSections; i++)
+	{
+		fp->seek(fp, gxfs->sections[i].sdOffMapIno, SEEK_SET);
+		gxfs->usedInodes += countBitmapUse(fp, cis.cisInoPerSection);
+		
+		fp->seek(fp, gxfs->sections[i].sdOffMapBlocks, SEEK_SET);
+		gxfs->usedBlocks += countBitmapUse(fp, cis.cisBlocksPerSection);
+	};
+	
 	numMountedFilesystems++;
 	spinlockRelease(&gxfsMountLock);
 	return 0;

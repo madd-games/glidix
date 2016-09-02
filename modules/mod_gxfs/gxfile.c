@@ -391,6 +391,12 @@ void gxfile_truncate(File *fp, off_t length)
 	semSignal(&gxfile->gxfs->sem);
 };
 
+static void gxfile_pollinfo(File *fp, Semaphore **sems)
+{
+	sems[PEI_READ] = vfsGetConstSem();
+	sems[PEI_WRITE] = vfsGetConstSem();
+};
+
 int GXOpenFile(GXFileSystem *gxfs, File *fp, ino_t ino)
 {
 	semWait(&gxfs->sem);
@@ -418,6 +424,7 @@ int GXOpenFile(GXFileSystem *gxfs, File *fp, ino_t ino)
 	fp->fchown = gxfile_fchown;
 	fp->fsync = gxfile_fsync;
 	fp->truncate = gxfile_truncate;
+	fp->pollinfo = gxfile_pollinfo;
 
 	gxfs->numOpenInodes++;
 	semSignal(&gxfs->sem);

@@ -36,10 +36,10 @@ mov rsi, str_execpars
 mov rdx, sz_execpars
 mov rax, 2
 syscall
-;ud2
-;dw 2
 
-jmp $
+mov rdi, rax
+mov rax, 0
+syscall
 
 str_path db '/initrd/init', 0
 str_execpars:

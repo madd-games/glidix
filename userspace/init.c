@@ -314,7 +314,7 @@ int main(int argc, char *argv[])
 					return 1;
 				};
 
-				int fd = open("/etc/down-action", O_RDONLY);
+				int fd = open("/run/down-action", O_RDONLY);
 				char downAction[256];
 				memset(downAction, 0, 256);
 				downAction[read(fd, downAction, 16)] = 0;

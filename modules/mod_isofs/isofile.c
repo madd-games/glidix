@@ -157,6 +157,12 @@ static int isofile_fstat(File *fp, struct stat *st)
 	return 0;
 };
 
+static void isofile_pollinfo(File *fp, Semaphore **sems)
+{
+	sems[PEI_READ] = vfsGetConstSem();
+	sems[PEI_WRITE] = vfsGetConstSem();
+};
+
 int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, struct stat *st)
 {
 	ISOFile *file = (ISOFile*) kmalloc(sizeof(ISOFile));
@@ -174,6 +180,7 @@ int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, s
 	fp->dup = isofile_dup;
 	fp->seek = isofile_seek;
 	fp->fstat = isofile_fstat;
+	fp->pollinfo = isofile_pollinfo;
 
 	isofs->numOpenInodes++;
 	semSignal(&isofs->sem);

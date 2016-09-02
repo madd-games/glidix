@@ -87,6 +87,18 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 		return -1;
 	};
 	
+	if (strlen(mountpoint) >= 256)
+	{
+		ERRNO = ENAMETOOLONG;
+		return -1;
+	};
+	
+	if (strlen(image) >= 256)
+	{
+		ERRNO = ENAMETOOLONG;
+		return -1;
+	};
+	
 	Thread *ct = getCurrentThread();
 	if (ct->creds->euid != 0)
 	{
@@ -138,10 +150,12 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 		return -1;
 	};
 
+	strcpy(fs->imagename, image);
 	status = mount(mountpoint, fs, flags);
 
 	if (status != 0)
 	{
+		if (fs->unmount != NULL) fs->unmount(fs);
 		kfree(fs);
 		ERRNO = EIO;
 		return -1;

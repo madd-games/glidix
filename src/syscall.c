@@ -4081,10 +4081,38 @@ int sys_fpoll(const uint8_t *ubitmapReq, uint8_t *ubitmapRes, int flags, uint64_
 	return numFreeSems;
 };
 
+uint64_t sys_oxperm()
+{
+	return getCurrentThread()->oxperm;
+};
+
+uint64_t sys_dxperm()
+{
+	return getCurrentThread()->dxperm;
+};
+
+size_t sys_fsinfo(FSInfo *ulist, size_t count)
+{
+	if (count > 256) count = 256;
+	
+	FSInfo list[256];
+	memset(list, 0, sizeof(FSInfo)*256);
+	
+	size_t result = getFSInfo(list, count);
+	
+	if (memcpy_k2u(ulist, list, sizeof(FSInfo)*256) != 0)
+	{
+		ERRNO = EFAULT;
+		return 0;
+	};
+	
+	return result;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 126
+#define SYSCALL_NUMBER 129
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -4212,6 +4240,9 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_lockf,				// 123
 	&sys_mcast,				// 124
 	&sys_fpoll,				// 125
+	&sys_oxperm,				// 126
+	&sys_dxperm,				// 127
+	&sys_fsinfo,				// 128
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

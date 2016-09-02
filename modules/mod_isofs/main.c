@@ -85,6 +85,16 @@ static int iso_unmount(FileSystem *fs)
 	return 0;
 };
 
+static void iso_getinfo(FileSystem *fs, FSInfo *info)
+{
+	ISOFileSystem *isofs = (ISOFileSystem*) fs->fsdata;
+	semWait(&isofs->sem);
+	
+	info->fs_blksize = isofs->blockSize;
+	
+	semSignal(&isofs->sem);
+};
+
 static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 {
 	spinlockAcquire(&isoMountLock);
@@ -142,6 +152,7 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 	fs->fsname = "isofs";
 	fs->openroot = iso_openroot;
 	fs->unmount = iso_unmount;
+	fs->getinfo = iso_getinfo;
 
 	isoMountCount++;
 	spinlockRelease(&isoMountLock);
