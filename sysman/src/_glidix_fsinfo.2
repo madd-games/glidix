@@ -25,7 +25,7 @@ This function stores information about mounted fileystems in the 'list', which i
 		size_t					'fs_blksize';
 	};
 
-The 'fs_dev' field is a unique identifier of the filesystem; this is the value placed in the 'st_dev' field by [stat.2] on files on this filesystem. The 'fs_image' field is the filesystem image, usually the name of the file or device that contains it (e.g. '/dev/sda0'). The 'st_mntpoint' field specifies the mountpoint, with a slash at the end (e.g. '/dev/'), and 'fs_name' is the name of the filesystem (e.g. 'gxfs').
+The 'fs_dev' field is a unique identifier of the filesystem; this is the value placed in the 'st_dev' field by [stat.2] on files on this filesystem. The 'fs_image' field is the filesystem image, usually the name of the file or device that contains it (e.g. '/dev/sda0'). The 'fs_mntpoint' field specifies the mountpoint, with a slash at the end (e.g. '/dev/'), and 'fs_name' is the name of the filesystem (e.g. 'gxfs').
 
 The 'fs_usedino' and 'fs_inodes' field specify the number of used inodes, and the total number of inodes available, respectively. If the latter is 0, it means there is no inode information available for this filesystem. Likewise, 'fs_usedblk' and 'fs_blocks' specify the number of used, and total blocks. The 'fs_blksize' field specifies the size, in bytes, of a block.
 

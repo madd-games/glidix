@@ -587,9 +587,39 @@ static int sdfile_open(void *data, File *fp, size_t szfile)
 
 static void reloadPartTable(StorageDevice *sd)
 {
-	// this function is called while the parition files don't exist (so there is no need to free sd->devSubs).
+	// delete current device files
+	mutexLock(&sd->lock);
+	size_t numRefs = 1 + sd->numSubs;
+	
+	int i;
+	for (i=0; i<sd->numSubs; i++)
+	{
+		DeleteDevice(sd->devSubs[i]);
+	};
+	
+	kfree(sd->devSubs);
+	sd->devSubs = NULL;
+	sd->numSubs = 0;
+
+	while (numRefs--)
+	{
+		sdDownref(sd);
+	};
+
+	mutexUnlock(&sd->lock);
+
+	// load the new partition table
 	MBRPartition mbrParts[4];
 	sdRead(sd, 0x1BE, mbrParts, 64);
+	
+	// make sure the boot signature is there (indicating an MBR)
+	uint16_t sig;
+	sdRead(sd, 0x1FE, &sig, 2);
+	if (sig != 0xAA55)
+	{
+		// not an MBR
+		return;
+	};
 	
 	// we preallocate an array of 4 partition descriptions, even if they won't all be used
 	mutexLock(&sd->lock);
@@ -597,7 +627,6 @@ static void reloadPartTable(StorageDevice *sd)
 	sd->numSubs = 0;
 	mutexUnlock(&sd->lock);
 	
-	int i;
 	int nextSubIndex = 0;
 	for (i=0; i<4; i++)
 	{

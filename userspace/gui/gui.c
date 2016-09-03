@@ -1059,7 +1059,7 @@ void *msgThreadFunc(void *ignore)
 		return NULL;
 	};
 	
-	FILE *fp = fopen("/usr/share/gui.pid", "wb");
+	FILE *fp = fopen("/run/gui.pid", "wb");
 	fprintf(fp, "%d.%d", getpid(), guiQueue);
 	fclose(fp);
 	msgReady = 1;
@@ -1506,7 +1506,6 @@ int main(int argc, char *argv[])
 	winUnfoc = ddiCreateSurface(&screenFormat, screenWidth, screenHeight, NULL, 0);
 	ddiFillRect(winUnfoc, 0, 0, screenWidth, screenHeight, &winUnfocColor);
 	
-	unlink("/usr/share/gui.pid");
 	if (pthread_create(&inputThread, NULL, inputThreadFunc, NULL) != 0)
 	{
 		fprintf(stderr, "failed to create input thread!\n");

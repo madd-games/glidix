@@ -8,4 +8,3 @@
  * TCP/IP ports should be freed with a delay of 2 minutes.
  * Executable permissions.
  * mod_sdide fails to write.
- * devfs shouldn't keep the lock all the way until a process clsoes the scanner

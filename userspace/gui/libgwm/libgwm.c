@@ -178,7 +178,7 @@ static void* listenThreadFunc(void *ignore)
 
 int gwmInit()
 {
-	FILE *fp = fopen("/usr/share/gui.pid", "rb");
+	FILE *fp = fopen("/run/gui.pid", "rb");
 	if (fp == NULL) return -1;
 	if (fscanf(fp, "%d.%d", &guiPid, &guiFD) != 2)
 	{

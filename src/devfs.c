@@ -40,6 +40,7 @@ typedef struct _DeviceFile
 	void		*data;
 	int		(*open)(void *data, File *file, size_t szFile);
 	struct stat	st;
+	ino_t		inode;
 	
 	struct _DeviceFile *prev;
 	struct _DeviceFile *next;
@@ -78,49 +79,76 @@ static int openNullDevice(void *data, File *file, size_t szFile)
 	return 0;
 };
 
-static int openfile(Dir *dir, File *file, size_t szFile)
+static DeviceFile* getDeviceByInode(ino_t inode)
 {
-	DeviceFile *dev = (DeviceFile*) dir->fsdata;
-	return dev->open(dev->data, file, szFile);
+	// call this with devfsLock acquired.
+	DeviceFile *dev;
+	
+	for (dev=&nullDevice; dev!=NULL; dev=dev->next)
+	{
+		if (dev->inode == inode) break;
+	};
+	
+	return dev;
 };
 
-static void close(Dir *dir)
+static int openfile(Dir *dir, File *file, size_t szFile)
 {
+	spinlockAcquire(&devfsLock);
+	DeviceFile *dev = getDeviceByInode(dir->dirent.d_ino);
+	if (dev == NULL)
+	{
+		spinlockRelease(&devfsLock);
+		return VFS_BUSY;
+	};
+	
+	int status = dev->open(dev->data, file, szFile);
 	spinlockRelease(&devfsLock);
+	return status;
 };
+
+static int loadDeviceInfo(Dir *dir, ino_t inode);
 
 static int next(Dir *dir)
 {
-	DeviceFile *dev = (DeviceFile*) dir->fsdata;
-	if (dev->next == NULL) return -1;
-	dev = dev->next;
-	dir->fsdata = dev;
-
-	strcpy(dir->dirent.d_name, dev->name);
-	dir->dirent.d_ino++;
-	dir->stat.st_ino++;
-	dir->stat.st_mode = dev->st.st_mode;
-	dir->stat.st_uid = dev->st.st_uid;
-	dir->stat.st_gid = dev->st.st_gid;
-	return 0;
+	spinlockAcquire(&devfsLock);
+	
+	DeviceFile *current = getDeviceByInode(dir->dirent.d_ino);
+	if (current == NULL)
+	{
+		spinlockRelease(&devfsLock);
+		return -1;
+	};
+	
+	DeviceFile *next = current->next;
+	if (next == NULL)
+	{
+		spinlockRelease(&devfsLock);
+		return -1;
+	};
+	
+	ino_t inode = next->inode;
+	spinlockRelease(&devfsLock);
+	
+	return loadDeviceInfo(dir, inode);
 };
 
-static int openroot(FileSystem *fs, Dir *dir, size_t szDir)
+static int loadDeviceInfo(Dir *dir, ino_t inode)
 {
-	if (spinlockTry(&devfsLock))
+	spinlockAcquire(&devfsLock);
+	dir->dirent.d_ino = inode;
+	
+	DeviceFile *dev = getDeviceByInode(inode);
+	if (dev == NULL)
 	{
-		// it's locked by someone else.
-		return VFS_BUSY;
+		spinlockRelease(&devfsLock);
+		return -1;
 	};
-	dir->fsdata = &nullDevice;
-	dir->dirent.d_ino = 0;
-	strcpy(dir->dirent.d_name, "null");
+	
+	strcpy(dir->dirent.d_name, dev->name);
 	dir->stat.st_dev = 0;
-	dir->stat.st_ino = 0;
-	dir->stat.st_mode = 0666 | VFS_MODE_CHARDEV;
+	dir->stat.st_ino = inode;
 	dir->stat.st_nlink = 1;
-	dir->stat.st_uid = 0;
-	dir->stat.st_gid = 0;
 	dir->stat.st_rdev = 0;
 	dir->stat.st_size = 0;
 	dir->stat.st_blocks = 0;
@@ -128,10 +156,19 @@ static int openroot(FileSystem *fs, Dir *dir, size_t szDir)
 	dir->stat.st_mtime = 0;
 	dir->stat.st_atime = 0;
 	dir->stat.st_ctime = 0;
+	dir->stat.st_mode = dev->st.st_mode;
+	dir->stat.st_uid = dev->st.st_uid;
+	dir->stat.st_gid = dev->st.st_gid;
+
 	dir->openfile = openfile;
-	dir->close = close;
 	dir->next = next;
+	spinlockRelease(&devfsLock);
 	return 0;
+};
+
+static int openroot(FileSystem *fs, Dir *dir, size_t szDir)
+{
+	return loadDeviceInfo(dir, 7);
 };
 
 static ssize_t zeroWrite(File *fp, const void *buf, size_t size)
@@ -228,6 +265,7 @@ void initDevfs()
 	nullDevice.open = openNullDevice;
 	nullDevice.prev = NULL;
 	nullDevice.next = NULL;
+	nullDevice.inode = 7;
 	
 	if (AddDevice("zero", NULL, openZero, 0666 | VFS_MODE_CHARDEV) == NULL)
 	{
@@ -250,6 +288,7 @@ FileSystem *getDevfs()
 	return devfs;
 };
 
+static ino_t nextDevIno = 8;
 Device AddDevice(const char *name, void *data, int (*open)(void*, File*, size_t), int flags)
 {
 	if (strlen(name) > 15)
@@ -279,6 +318,8 @@ Device AddDevice(const char *name, void *data, int (*open)(void*, File*, size_t)
 	dev->st.st_atime = 0;
 	dev->st.st_ctime = 0;
 
+	dev->inode = __sync_fetch_and_add(&nextDevIno, 1);
+	
 	DeviceFile *last = &nullDevice;
 	while (last->next != NULL) last = last->next;
 	last->next = dev;

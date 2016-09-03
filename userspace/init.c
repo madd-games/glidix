@@ -246,8 +246,30 @@ void on_signal(int sig, siginfo_t *si, void *ignore)
 
 void init_parts()
 {
-	close(open("/dev/sda", O_RDONLY));
-	close(open("/dev/sdc", O_RDONLY));
+	//close(open("/dev/sda", O_RDONLY));
+	//close(open("/dev/sdc", O_RDONLY));
+	
+	DIR *dirp = opendir("/dev");
+	if (dirp == NULL)
+	{
+		return;
+	};
+	
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		if (strlen(ent->d_name) == 3)
+		{
+			if (memcmp(ent->d_name, "sd", 2) == 0)
+			{
+				char fullname[256];
+				sprintf(fullname, "/dev/%s", ent->d_name);
+				close(open(fullname, O_RDONLY));
+			};
+		};
+	};
+	
+	closedir(dirp);
 };
 
 int main(int argc, char *argv[])
