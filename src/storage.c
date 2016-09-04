@@ -589,7 +589,7 @@ static void reloadPartTable(StorageDevice *sd)
 {
 	// delete current device files
 	mutexLock(&sd->lock);
-	size_t numRefs = 1 + sd->numSubs;
+	size_t numRefs = sd->numSubs;
 	
 	int i;
 	for (i=0; i<sd->numSubs; i++)

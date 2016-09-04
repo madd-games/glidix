@@ -4109,10 +4109,84 @@ size_t sys_fsinfo(FSInfo *ulist, size_t count)
 	return result;
 };
 
+int sys_chxperm(const char *upath, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm)
+{
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+
+	if (!havePerm(XP_CHXPERM))
+	{
+		ERRNO = EPERM;
+		return -1;
+	};
+	
+	if (ixperm != XP_NCHG)
+	{
+		if ((getCurrentThread()->dxperm & ixperm) != ixperm)
+		{
+			ERRNO = EPERM;
+			return -1;
+		};
+	};
+
+	if (oxperm != XP_NCHG)
+	{
+		if ((getCurrentThread()->dxperm & oxperm) != oxperm)
+		{
+			ERRNO = EPERM;
+			return -1;
+		};
+	};
+
+	if (dxperm != XP_NCHG)
+	{
+		if ((getCurrentThread()->dxperm & dxperm) != dxperm)
+		{
+			ERRNO = EPERM;
+			return -1;
+		};
+	};
+
+	int error;
+	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
+
+	if (dir == NULL)
+	{
+		return sysOpenErrno(error);
+	};
+	
+	if ((dir->stat.st_mode & 0xF000) != 0)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (dir->chxperm == NULL)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		ERRNO = EIO;
+		return -1;
+	};
+
+	int status = dir->chxperm(dir, ixperm, oxperm, dxperm);
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+
+	if (status != 0) ERRNO = EIO;
+	return status;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 129
+#define SYSCALL_NUMBER 130
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -4243,6 +4317,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_oxperm,				// 126
 	&sys_dxperm,				// 127
 	&sys_fsinfo,				// 128
+	&sys_chxperm,				// 129
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

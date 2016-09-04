@@ -21,8 +21,13 @@ mkdir /mnt/etc/init
 mkdir /mnt/etc/services
 mkdir /mnt/usr
 mkdir /mnt/usr/libexec
-cp /bin/sh /mnt/bin/sh
+#cp /bin/sh /mnt/bin/sh
 cp /bin/mount /mnt/bin/mount
+chxperm /mnt/bin/sh delegate.all=1 inherit.all=1
+chxperm /mnt/bin/mount inherit.mount=1
 cp /setup.sh /mnt/etc/init/startup.sh
 cp /ldmods /mnt/usr/libexec/ldmods
+mip-inst /shutils.mip --dest=/mnt
+exit
 echo "complete!"
+halt

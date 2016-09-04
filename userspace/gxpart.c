@@ -54,7 +54,7 @@ typedef struct
 {
 	uint8_t							bootloader[446];
 	Partition						parts[4];
-	uint8_t							bootsig[2];
+	uint16_t						bootsig;
 } __attribute__ ((packed)) MBR;
 
 MBR mbr;
@@ -315,6 +315,15 @@ int main(int argc, char *argv[])
 	ioctl(device, IOCTL_SDI_IDENTITY, &params);
 	read(device, &mbr, 512);
 
+	if (mbr.bootsig != 0xAA55)
+	{
+		memset(&mbr, 0, 512);
+		/* cli; hlt */
+		mbr.bootloader[0] = 0xFA;
+		mbr.bootloader[1] = 0xF4;
+		mbr.bootsig = 0xAA55;
+	};
+	
 	while (1)
 	{
 		printf("Block size: %lu\tCapacity (bytes): %lu\n", params.blockSize, params.totalSize);

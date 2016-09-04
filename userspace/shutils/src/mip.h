@@ -39,7 +39,10 @@
 typedef struct
 {
 	uint8_t			magic[3];			/* MIP */
-	uint8_t			version;			/* 1 */
+	uint8_t			version;			/* 1 or 2 */
+	
+	/* only if version >= 2 */
+	char			setupFile[256];			/* file to execute after unpacking, or empty string */
 } MIPHeader;
 
 typedef struct

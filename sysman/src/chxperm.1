@@ -1,0 +1,23 @@
+>NAME
+
+chxperm - change executable permissions of a file
+
+>SYNOPSIS
+
+	chxperm 'path' ['set'.'name'='value']...
+
+>DESCRIPTION
+
+Changes the executable permissions of the file named by 'path'. For each subsequent argument, 'set' specifies which permission set to modify ('inherit', 'own' or 'delegate'), 'name' identifies a specific permission ('all' meaning all permissions to the same value), and 'value' is either 0 (deny permission) or 1 (grant permission).
+
+This program must by granted the 'chxperm' (*XP_CHXPERM*) permission in order to function; by default this permission is inherited. Hence, you must run this with [sudo.1].
+
+>EXAMPLES
+
+Grant all permissions except loading modules as inherited, take away all own permissions, and grant the raw socket permission as delegated, without changing other delegated permissions:
+
+	chxperm /usr/bin/my-program inherit.all=1 inherit.module=0 own.all=0 delegate.rawsock=1
+
+>SEE ALSO
+
+[xperm.6], [stat.1], [sudo.1]

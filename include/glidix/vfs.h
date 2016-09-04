@@ -446,6 +446,12 @@ typedef struct _Dir
 	 * Change the access and modification times of this file. Return 0 on success, -1 on failure.
 	 */
 	int (*utime)(struct _Dir *dir, time_t atime, time_t mtime);
+	
+	/**
+	 * Change the executable permissions on this file. If an argument is XP_NCHG, it means that this field shall
+	 * not be set. Return 0 on success, -1 on I/O error.
+	 */
+	int (*chxperm)(struct _Dir *dir, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm);
 } Dir;
 
 struct fsinfo;

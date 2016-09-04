@@ -1111,7 +1111,6 @@ void* ptrThreadFunc(void *ignore)
 				pthread_mutex_lock(&mouseLock);
 				mouseX = state.posX;
 				mouseY = state.posY;
-				//ClipMouse();
 				pthread_mutex_unlock(&mouseLock);
 				onMouseMoved();
 			};

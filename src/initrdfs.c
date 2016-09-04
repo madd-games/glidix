@@ -283,6 +283,9 @@ static int fstat(File *file, struct stat *st)
 	st->st_atime = 0;
 	st->st_ctime = 0;
 	st->st_mtime = 0;
+	st->st_ixperm = XP_ALL;
+	st->st_oxperm = 0;
+	st->st_dxperm = XP_ALL;
 
 	return 0;
 };
@@ -341,6 +344,9 @@ static int openroot(FileSystem *fs, Dir *dir, size_t szdir)
 	dir->stat.st_atime = 0;
 	dir->stat.st_ctime = 0;
 	dir->stat.st_mtime = 0;
+	dir->stat.st_ixperm = XP_ALL;
+	dir->stat.st_oxperm = 0;
+	dir->stat.st_dxperm = XP_ALL;
 
 	dir->openfile = openfile;
 	dir->opendir = opendir;

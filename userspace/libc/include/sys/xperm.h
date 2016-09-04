@@ -37,6 +37,9 @@ extern "C" {
 
 #define	XP_RAWSOCK			(1 << 0)
 #define	XP_NETCONF			(1 << 1)
+#define	XP_MODULE			(1 << 2)
+#define	XP_MOUNT			(1 << 3)
+#define	XP_CHXPERM			(1 << 4)
 
 #define	XP_ALL				0x7FFFFFFFFFFFFFFF
 #define	XP_NCHG				0xFFFFFFFFFFFFFFFF
@@ -44,6 +47,7 @@ extern "C" {
 /* implemented by libglidix directly */
 xperm_t _glidix_oxperm();
 xperm_t _glidix_dxperm();
+int     _glidix_chxperm(const char *path, xperm_t ixperm, xperm_t oxperm, xperm_t dxperm);
 
 #ifdef __cplusplus
 }	/* extern "C" */

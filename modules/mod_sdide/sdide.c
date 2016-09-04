@@ -156,7 +156,7 @@ static void ataThread(void *data)
 		uint8_t err;
 
 		ideWriteReg(ctrl, channel, ATA_REG_CONTROL, ctrl->channels[channel].nIEN = 2);
-		if (/*sdcmd->index >= 0x10000000*/1)
+		if (sdcmd->index >= 0x10000000)
 		{
 			// LBA48
 			lbaMode = 2;

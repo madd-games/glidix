@@ -236,6 +236,25 @@ static int ramdir_chmod(Dir *dir, mode_t mode)
 	return 0;
 };
 
+static int ramdir_chxperm(Dir *dir, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm)
+{
+	DirData *data = (DirData*) dir->fsdata;
+	semWait(&data->ramfs->lock);
+	if (data->currentEntry->dent.d_ino == 1)
+	{
+		semSignal(&data->ramfs->lock);
+		return -1;
+	};
+	
+	RamfsInode *inode = (RamfsInode*) data->currentEntry->dent.d_ino;
+	if (ixperm != XP_NCHG) inode->meta.st_ixperm = ixperm;
+	if (oxperm != XP_NCHG) inode->meta.st_oxperm = oxperm;
+	if (dxperm != XP_NCHG) inode->meta.st_dxperm = dxperm;
+	inode->meta.st_ctime = time();
+	semSignal(&data->ramfs->lock);
+	return 0;
+};
+
 static int ramdir_chown(Dir *dir, uid_t uid, gid_t gid)
 {
 	DirData *data = (DirData*) dir->fsdata;
@@ -653,6 +672,7 @@ static int ramfs_opendir(Ramfs *ramfs, RamfsInode *inode, Dir *dir, size_t szdir
 	dir->link = ramdir_link;
 	dir->mkreg = ramdir_mkreg;
 	dir->openfile = ramdir_openfile;
+	dir->chxperm = ramdir_chxperm;
 	
 	RamfsInode *entNode = (RamfsInode*) data->currentEntry->dent.d_ino;
 	if (entNode != NULL)

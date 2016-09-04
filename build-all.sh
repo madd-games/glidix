@@ -27,6 +27,8 @@ cd shutils
 make || exit 1
 rm -rf ../../mipdir
 mkdir -p ../../mipdir/usr/bin
+mkdir -p ../../mipdir/usr/libexec
+cp shutils-setup.sh ../../mipdir/usr/libexec/shutils-setup.sh
 cp -RT out ../../mipdir/usr/bin || exit 1
 cp out/mount ../../isodir/bin/mount || exit 1
 cd ..
@@ -51,9 +53,7 @@ cd ../..
 # shutils
 chmod 6755 mipdir/usr/bin/passwd
 chmod 6755 mipdir/usr/bin/sudo
-chmod 6755 mipdir/usr/bin/ping
-chmod 6755 mipdir/usr/bin/ping6
-mkmip mipdir isodir/shutils.mip
+mkmip mipdir isodir/shutils.mip --setup=/usr/libexec/shutils-setup.sh
 cp mipdir/usr/bin/mip-install isodir/bin/mip-install
 
 # modtools

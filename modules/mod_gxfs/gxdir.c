@@ -63,8 +63,7 @@ static int gxdir_next(Dir *dir)
 	gxdir->szNext = ent->deNextSz;
 	if (ent->deNameLen > 127)
 	{
-		semSignal(&gxdir->gxfs->sem);
-		return -1;
+		panic("found a directory entry with deNameLen over 127; aborting!");
 	};
 
 	strcpy(dir->dirent.d_name, ent->deName);
@@ -158,6 +157,38 @@ static int gxdir_chmod(Dir *dir, mode_t mode)
 	GXWriteInodeHeader(&gxino, &inode);
 
 	dir->stat.st_mode = (mode_t) inode.inoMode;
+	dir->stat.st_ctime = inode.inoCTime;
+
+	//if (gxdir->gxfs->fp->fsync != NULL) gxdir->gxfs->fp->fsync(gxdir->gxfs->fp);
+
+	semSignal(&gxdir->gxfs->sem);
+	return 0;
+};
+
+static int gxdir_chxperm(Dir *dir, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm)
+{
+	time_t now = time();
+
+	GXDir *gxdir = (GXDir*) dir->fsdata;
+	semWait(&gxdir->gxfs->sem);
+
+	//kprintf_debug("gxfs: chmod on inode %d\n", dir->dirent.d_ino);
+	GXInode gxino;
+	GXOpenInode(gxdir->gxfs, &gxino, dir->dirent.d_ino);
+
+	gxfsInode inode;
+	GXReadInodeHeader(&gxino, &inode);
+
+	//inode.inoMode = (inode.inoMode & 0xF000) | (mode & 0x0FFF);
+	if (ixperm != XP_NCHG) inode.inoIXPerm = ixperm;
+	if (oxperm != XP_NCHG) inode.inoOXPerm = oxperm;
+	if (dxperm != XP_NCHG) inode.inoDXPerm = dxperm;
+	inode.inoCTime = now;
+	GXWriteInodeHeader(&gxino, &inode);
+
+	dir->stat.st_ixperm = inode.inoIXPerm;
+	dir->stat.st_oxperm = inode.inoOXPerm;
+	dir->stat.st_dxperm = inode.inoDXPerm;
 	dir->stat.st_ctime = inode.inoCTime;
 
 	//if (gxdir->gxfs->fp->fsync != NULL) gxdir->gxfs->fp->fsync(gxdir->gxfs->fp);
@@ -478,6 +509,14 @@ static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	// update the next deNextSz for the last entry (none were added since we reached the end due
 	// to the kernel's VFS locking).
 	gxdir->gxino.pos = gxdir->offCurrent + 8;
+	uint8_t oldSz;
+	GXReadInode(&gxdir->gxino, &oldSz, 1);
+	if (oldSz != 0)
+	{
+		gxfs->fp->fsync(gxfs->fp);
+		panic("gxfs: mkreg() called but oldSz == %d", (int) (uint32_t) oldSz);
+	};
+	gxdir->gxino.pos = gxdir->offCurrent + 8;
 	uint8_t newNextSz = 10 + ent->deNameLen;
 	GXWriteInode(&gxdir->gxino, &newNextSz, 1);
 
@@ -591,6 +630,7 @@ int GXOpenDir(GXFileSystem *gxfs, Dir *dir, ino_t ino)
 	dir->opendir = gxdir_opendir;
 	dir->openfile = gxdir_openfile;
 	dir->chmod = gxdir_chmod;
+	dir->chxperm = gxdir_chxperm;
 	dir->chown = gxdir_chown;
 	dir->mkdir = gxdir_mkdir;
 	dir->mkreg = gxdir_mkreg;

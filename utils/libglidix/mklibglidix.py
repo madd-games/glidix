@@ -147,7 +147,8 @@ syscallTable = {
 	125:	"_glidix_fpoll",
 	126:	"_glidix_oxperm",
 	127:	"_glidix_dxperm",
-	128:	"_glidix_fsinfo"
+	128:	"_glidix_fsinfo",
+	129:	"_glidix_chxperm"
 }
 
 f = open("_libglidix.s", "wb")

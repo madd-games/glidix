@@ -88,11 +88,24 @@ void writeDir(FILE *fp, const char *pkgname, const char *fsname)
 	closedir(dp);
 };
 
+static int startsWith(const char *str, const char *with)
+{
+	if (strlen(str) >= strlen(with))
+	{
+		if (memcmp(str, with, strlen(with)) == 0)
+		{
+			return 1;
+		};
+	};
+	
+	return 0;
+};
+
 int main(int argc, char *argv[])
 {
-	if (argc != 3)
+	if (argc < 3)
 	{
-		fprintf(stderr, "USAGE:\t%s sysroot filename\n", argv[0]);
+		fprintf(stderr, "USAGE:\t%s sysroot filename [--option=value]...\n", argv[0]);
 		fprintf(stderr, "\tCreate a MIP package using the specified\n");
 		fprintf(stderr, "\tsysroot, in the given filename.\n");
 		return 1;
@@ -104,11 +117,27 @@ int main(int argc, char *argv[])
 		perror("fopen");
 		return 1;
 	};
-
+	
 	MIPHeader header;
 	memcpy(&header.magic, "MIP", 3);
-	header.version = 1;
+	header.version = 2;
+	header.setupFile[0] = 0;
 
+	int i;
+	for (i=3; i<argc; i++)
+	{
+		if (startsWith(argv[i], "--setup="))
+		{
+			strcpy(header.setupFile, &argv[i][8]);
+		}
+		else
+		{
+			fprintf(stderr, "%s: unknown option: %s\n", argv[0], argv[i]);
+			fclose(fp);
+			return 1;
+		};
+	};
+	
 	fwrite(&header, 1, sizeof(MIPHeader), fp);
 
 	writeDir(fp, "", argv[1]);
