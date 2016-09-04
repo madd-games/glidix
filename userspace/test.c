@@ -15,30 +15,34 @@ void _heap_dump();
 
 int main(int argc, char *argv[])
 {
-	printf("1:\n");
-	_heap_dump();
+	int fd = open("/dev/ptr0", O_RDWR);
+	if (fd == -1)
+	{
+		perror("open");
+		return 1;
+	};
 	
-	void *a = malloc(1);
-	void *b = malloc(1);
-	void *c = malloc(1);
-	void *d = malloc(1);
-	void *e = malloc(1);
+	_glidix_ptrstate state;
+	state.width = 640;
+	state.height = 480;
+	state.posX = 320;
+	state.posY = 240;
 	
-	printf("2:\n");
-	_heap_dump();
+	write(fd, &state, sizeof(_glidix_ptrstate));
 	
-	free(b);
+	while (1)
+	{
+		ssize_t sz = read(fd, &state, sizeof(_glidix_ptrstate));
+		if (sz == -1)
+		{
+			perror("read");
+		}
+		else
+		{
+			printf("State: %dx%d, mouse at (%d, %d)\n", state.width, state.height, state.posX, state.posY);
+		};
+	};
 	
-	printf("3:\n");
-	_heap_dump();
-	
-	free(d);
-	printf("4:\n");
-	_heap_dump();
-	
-	free(c);
-	printf("5:\n");
-	_heap_dump();
-	
+	close(fd);
 	return 0;
 };

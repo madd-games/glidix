@@ -151,7 +151,7 @@ static ssize_t hudev_read(File *fp, void *buffer, size_t size)
 	if (size > sizeof(HuminEvent)) size = sizeof(HuminEvent);
 	
 	HuminDevice *hudev = (HuminDevice*) fp->fsdata;
-	if (semWaitGen(&hudev->evCount, 1, SEM_W_INTR, 0) < 0)
+	if (semWaitGen(&hudev->evCount, 1, SEM_W_FILE(fp->oflag), 0) < 0)
 	{
 		ERRNO = EINTR;
 		return -1;
@@ -165,6 +165,12 @@ static ssize_t hudev_read(File *fp, void *buffer, size_t size)
 	memcpy(buffer, &qel->ev, size);
 	kfree(qel);
 	return (ssize_t) size;
+};
+
+static void hudev_pollinfo(File *fp, Semaphore **sems)
+{
+	HuminDevice *hudev = (HuminDevice*) fp->fsdata;
+	sems[PEI_READ] = &hudev->evCount;
 };
 
 static int hudev_open(void *data, File *fp, size_t szfile)
@@ -189,6 +195,7 @@ static int hudev_open(void *data, File *fp, size_t szfile)
 	fp->fsdata = hudev;
 	fp->read = hudev_read;
 	fp->close = hudev_close;
+	fp->pollinfo = hudev_pollinfo;
 	return 0;
 };
 

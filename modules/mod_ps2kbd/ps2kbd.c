@@ -37,6 +37,7 @@
 #include <glidix/term.h>
 #include <glidix/string.h>
 #include <glidix/humin.h>
+#include <glidix/ptr.h>
 
 #define	MOUSE_BL			(1 << 0)
 #define	MOUSE_BR			(1 << 1)
@@ -51,6 +52,7 @@
 static IRQHandler oldHandler;
 static IRQHandler oldHandler12;
 static HuminDevice *hups;
+static PointDevice *ptrps;
 
 static volatile ATOMIC(uint8_t)	kbdbuf[64];
 static volatile ATOMIC(int)	kbdput = 0;
@@ -106,12 +108,7 @@ static void kbdThread(void *data)
 				};
 				
 				rely = -rely;
-				HuminEvent ev;
-				memset(&ev, 0, sizeof(HuminEvent));
-				ev.motion.type = HUMIN_EV_MOTION_RELATIVE;
-				ev.motion.x = relx;
-				ev.motion.y = rely;
-				huminPostEvent(hups, &ev);
+				ptrRelMotion(ptrps, relx, rely);
 			};
 			
 			// check each of the buttons
@@ -239,6 +236,7 @@ MODULE_INIT()
 	oldHandler = registerIRQHandler(1, onKeyboardIRQ);
 	oldHandler12 = registerIRQHandler(12, onMouseIRQ);
 	hups = huminCreateDevice("PS/2 Keyboard and Mouse");
+	ptrps = ptrCreate();
 	
 	// initialize the mouse
 	mouse_install();
@@ -265,5 +263,6 @@ MODULE_FINI()
 	registerIRQHandler(1, oldHandler);
 	registerIRQHandler(12, oldHandler12);
 	huminDeleteDevice(hups);
+	ptrDelete(ptrps);
 	return 0;
 };

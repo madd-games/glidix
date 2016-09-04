@@ -86,6 +86,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 	for (i=0; i<nfds; i++)
 	{
 		fds[i].revents = (short int) bitmap[fds[i].fd];
+		if (bitmap[fds[i].fd] != 0) out++;
 	};
 	
 	return out;

@@ -33,17 +33,19 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <string.h>
-#include <glidix/video.h>
 #include <libddi.h>
 #include <pthread.h>
-#include <glidix/humin.h>
 #include <sys/glidix.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
 #include <semaphore.h>
 #include <time.h>
 #include <errno.h>
+#include <poll.h>
+#include <dirent.h>
 #include "gui.h"
+#include <glidix/video.h>
+#include <glidix/humin.h>
 
 #define	GUI_WINDOW_BORDER				2
 #define	GUI_CAPTION_HEIGHT				20
@@ -143,6 +145,7 @@ int mouseX, mouseY;
 pthread_mutex_t mouseLock;
 
 pthread_t inputThread;
+pthread_t ptrThread;
 pthread_t redrawThread;
 pthread_t msgThread;
 
@@ -522,6 +525,8 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	win->clientArea = ddiCreateSurface(&screen->format, pars->width, pars->height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
 	win->display = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, 0);
 	ddiFillRect(win->clientArea, 0, 0, pars->width, pars->height, &winBackColor);
+	ddiFillRect(win->display, 0, 0, pars->width, pars->height, &winBackColor);
+	win->displayDirty = 1;
 	win->titleBar = ddiCreateSurface(&screen->format, pars->width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT, NULL, 0);
 	win->titleBarDirty = 1;
 	win->icon = NULL;
@@ -631,7 +636,7 @@ Window* FindWindowFromListAt(Window *win, int x, int y)
 			if ((x >= (int)win->params.x) && (x < endX) && (y >= (int)win->params.y) && (y < endY))
 			{
 				Window *child = FindWindowFromListAt(win->children, x-win->params.x-offX, y-win->params.y-offY);
-				if (child == NULL) return win;
+				if (child == NULL) result = win;
 				else result = child;
 			};
 		};
@@ -948,74 +953,89 @@ void ClipMouse()
 
 void *inputThreadFunc(void *ignore)
 {
-	int fd = open("/dev/humin0", O_RDWR);
-	if (fd == -1)
+	struct pollfd *fds = NULL;
+	nfds_t nfds = 0;
+	
+	DIR *dirp = opendir("/dev");
+	if (dirp == NULL)
 	{
-		fprintf(stderr, "input thread cannot open device: no input\n");
+		fprintf(stderr, "failed to scan /dev: no input\n");
 		return NULL;
 	};
+	
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		if (memcmp(ent->d_name, "humin", 5) == 0)
+		{
+			char fullpath[256];
+			sprintf(fullpath, "/dev/%s", ent->d_name);
+			
+			int fd = open(fullpath, O_RDWR);
+			if (fd == -1)
+			{
+				fprintf(stderr, "failed to open %s: ignoring input device\n", fullpath);
+				continue;
+			};
+			
+			fds = (struct pollfd*) realloc(fds, sizeof(struct pollfd)*(nfds+1));
+			fds[nfds].fd = fd;
+			fds[nfds].events = POLLIN;
+			
+			nfds++;
+			printf("opened device %s for input\n", fullpath);
+		};
+	};
+	
+	closedir(dirp);
 	
 	HuminEvent ev;
 	while (1)
 	{
 		int screenDirty = 0;
+
+		int count = poll(fds, nfds, -1);
+		if (count == 0) continue;
 		
-		if (read(fd, &ev, sizeof(HuminEvent)) < 0)
+		nfds_t i;
+		for (i=0; i<nfds; i++)
 		{
-			continue;
-		};
-		
-		if (ev.type == HUMIN_EV_MOTION_RELATIVE)
-		{
-			if (pthread_mutex_trylock(&mouseLock) != 0)
+			if (fds[i].revents & POLLIN)
 			{
-				// too much contention
-				continue;
-			};
-			mouseX += ev.motion.x;
-			mouseY += ev.motion.y;
-			ClipMouse();
-			pthread_mutex_unlock(&mouseLock);
-			onMouseMoved();
-			screenDirty = 1;
-		}
-		else if (ev.type == HUMIN_EV_MOTION_ABSOLUTE)
-		{
-			pthread_mutex_lock(&mouseLock);
-			mouseX = ev.motion.x;
-			mouseY = ev.motion.y;
-			ClipMouse();
-			pthread_mutex_unlock(&mouseLock);
-			onMouseMoved();
-			screenDirty = 1;
-		}
-		else if (ev.type == HUMIN_EV_BUTTON_DOWN)
-		{
-			if ((ev.button.scancode >= 0x100) && (ev.button.scancode < 0x200))
-			{
-				// mouse
-				if (ev.button.scancode == HUMIN_SC_MOUSE_LEFT)
+				if (read(fds[i].fd, &ev, sizeof(HuminEvent)) < 0)
 				{
-					onMouseLeft();
-					screenDirty = 1;
+					continue;
+				};
+
+				if (ev.type == HUMIN_EV_BUTTON_DOWN)
+				{
+					if ((ev.button.scancode >= 0x100) && (ev.button.scancode < 0x200))
+					{
+						// mouse
+						if (ev.button.scancode == HUMIN_SC_MOUSE_LEFT)
+						{
+							onMouseLeft();
+							screenDirty = 1;
+						};
+					};
+			
+					onInputEvent(HUMIN_EV_BUTTON_DOWN, ev.button.scancode);
+				}
+				else if (ev.type == HUMIN_EV_BUTTON_UP)
+				{
+					if ((ev.button.scancode >= 0x100) && (ev.button.scancode < 0x200))
+					{
+						// mouse
+						if (ev.button.scancode == HUMIN_SC_MOUSE_LEFT)
+						{
+							onMouseLeftRelease();
+							screenDirty = 1;
+						};
+					};
+			
+					onInputEvent(HUMIN_EV_BUTTON_UP, ev.button.scancode);
 				};
 			};
-			
-			onInputEvent(HUMIN_EV_BUTTON_DOWN, ev.button.scancode);
-		}
-		else if (ev.type == HUMIN_EV_BUTTON_UP)
-		{
-			if ((ev.button.scancode >= 0x100) && (ev.button.scancode < 0x200))
-			{
-				// mouse
-				if (ev.button.scancode == HUMIN_SC_MOUSE_LEFT)
-				{
-					onMouseLeftRelease();
-					screenDirty = 1;
-				};
-			};
-			
-			onInputEvent(HUMIN_EV_BUTTON_UP, ev.button.scancode);
 		};
 		
 		if (screenDirty)
@@ -1027,22 +1047,95 @@ void *inputThreadFunc(void *ignore)
 	return NULL;
 };
 
+void* ptrThreadFunc(void *ignore)
+{
+	struct pollfd *fds = NULL;
+	nfds_t nfds = 0;
+	
+	DIR *dirp = opendir("/dev");
+	if (dirp == NULL)
+	{
+		fprintf(stderr, "failed to scan /dev: no mouse movement\n");
+		return NULL;
+	};
+	
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		if (memcmp(ent->d_name, "ptr", 3) == 0)
+		{
+			char fullpath[256];
+			sprintf(fullpath, "/dev/%s", ent->d_name);
+			
+			int fd = open(fullpath, O_RDWR);
+			if (fd == -1)
+			{
+				fprintf(stderr, "failed to open %s: ignoring pointer device\n", fullpath);
+				continue;
+			};
+			
+			_glidix_ptrstate state;
+			state.width = screenWidth;
+			state.height = screenHeight;
+			state.posX = screenWidth/2;
+			state.posY = screenHeight/2;
+			write(fd, &state, sizeof(_glidix_ptrstate));
+			
+			fds = (struct pollfd*) realloc(fds, sizeof(struct pollfd)*(nfds+1));
+			fds[nfds].fd = fd;
+			fds[nfds].events = POLLIN;
+			
+			nfds++;
+			printf("opened device %s for mouse tracking\n", fullpath);
+		};
+	};
+	
+	closedir(dirp);
+	
+	_glidix_ptrstate state;
+	while (1)
+	{
+		int count = poll(fds, nfds, -1);
+		if (count == 0) continue;
+		
+		nfds_t i;
+		for (i=0; i<nfds; i++)
+		{
+			if (fds[i].revents & POLLIN)
+			{
+				if (read(fds[i].fd, &state, sizeof(_glidix_ptrstate)) < 0)
+				{
+					continue;
+				};
+				
+				pthread_mutex_lock(&mouseLock);
+				mouseX = state.posX;
+				mouseY = state.posY;
+				//ClipMouse();
+				pthread_mutex_unlock(&mouseLock);
+				onMouseMoved();
+			};
+		};
+		
+		sem_post(&semRedraw);
+	};
+	
+	return NULL;
+};
+
 void PostWindowDirty(Window *win)
 {
 	// only bother if we don't already know
-	if (!win->displayDirty)
+	win->displayDirty = 1;
+	if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
 	{
-		win->displayDirty = 1;
-		if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
+		if (win->parent == NULL)
 		{
-			if (win->parent == NULL)
-			{
-				sem_post(&semRedraw);
-			}
-			else
-			{
-				PostWindowDirty(win->parent);
-			};
+			sem_post(&semRedraw);
+		}
+		else
+		{
+			PostWindowDirty(win->parent);
 		};
 	};
 };
@@ -1512,6 +1605,12 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 
+	if (pthread_create(&ptrThread, NULL, ptrThreadFunc, NULL) != 0)
+	{
+		fprintf(stderr, "failed to create pointer device thread!\n");
+		return 1;
+	};
+	
 	if (pthread_create(&msgThread, NULL, msgThreadFunc, NULL) != 0)
 	{
 		fprintf(stderr, "failed to create server thread!\n");

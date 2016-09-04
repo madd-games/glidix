@@ -49,8 +49,6 @@
  */
 #define	HUMIN_EV_BUTTON_UP			1
 #define	HUMIN_EV_BUTTON_DOWN			2
-#define	HUMIN_EV_MOTION_RELATIVE		3
-#define	HUMIN_EV_MOTION_ABSOLUTE		4
 
 /**
  * Standard scancodes. Keyboards output scancodes in the range 0-255.
@@ -79,7 +77,8 @@ typedef union
 		int				type;
 		int				scancode;
 	} button;
-	
+
+#if 0	
 	/**
 	 * For HUMIN_EV_MOTION_RELATIVE and HUMIN_EV_MOTION_ABSOLUTE.
 	 */
@@ -89,6 +88,7 @@ typedef union
 		int				x;
 		int				y;
 	} motion;
+#endif
 } HuminEvent;
 
 /**

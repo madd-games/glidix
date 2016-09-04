@@ -171,11 +171,13 @@ struct stat
 };
 #endif
 
+#ifndef _DIRENT_H
 struct dirent
 {
 	ino_t				d_ino;
 	char				d_name[128];
 };
+#endif
 
 /**
  * Describes a file lock.

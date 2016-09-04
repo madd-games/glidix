@@ -289,7 +289,7 @@ int main()
 	clearConsole();
 	renderConsole(surface);
 	gwmPostDirty(wnd);
-	gwmPostDirty(top);
+	//gwmPostDirty(top);
 	
 	fdMaster = getpt();
 	if (fdMaster == -1)

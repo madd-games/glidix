@@ -163,6 +163,14 @@ struct ether_header
 	uint16_t			ether_type;
 };
 
+typedef struct
+{
+	int						width;
+	int						height;
+	int						posX;
+	int						posY;
+} _glidix_ptrstate;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
