@@ -3,6 +3,9 @@
 # ALL PATHS MUST BE RELATIVE.
 
 echo "[shutils] setting up permissions for shutils..."
-chxperm /mnt/usr/bin/sudo own.all=1 delegate.all=1
-chxperm /mnt/usr/bin/chxperm inherit.chxperm=1 own.all=0 delegate.all=1
-chxperm /mnt/usr/bin/ping own.rawsock=1
+chxperm ../bin/sudo own.all=1 delegate.all=1
+chxperm ../bin/chxperm inherit.chxperm=1 own.all=0 delegate.all=1
+chxperm ../bin/ping own.rawsock=1
+chxperm ../bin/ping6 own.rawsock=1
+chxperm ../bin/env inherit.all=1 delegate.all=1
+chxperm ../bin/mip-install inherit.all=1 delegate.all=1

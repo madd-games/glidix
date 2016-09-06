@@ -169,7 +169,7 @@ static void ipreasmThread(void *ignore)
 						memcpy(&dest.sin_addr, list->dstaddr, 4);
 						
 						onTransportPacket((struct sockaddr*)&src, (struct sockaddr*)&dest,
-									sizeof(struct sockaddr_in), buffer, packetSize, list->proto);
+									sizeof(struct sockaddr_in), buffer, packetSize, list->proto, "");
 					}
 					else
 					{
@@ -184,7 +184,7 @@ static void ipreasmThread(void *ignore)
 						memcpy(&dest.sin6_addr, list->dstaddr, 16);
 						
 						onTransportPacket((struct sockaddr*) &src, (struct sockaddr*) &dest,
-									sizeof(struct sockaddr_in6), buffer, packetSize, list->proto);
+									sizeof(struct sockaddr_in6), buffer, packetSize, list->proto, "");
 					};
 					
 					if (list == firstFragList)

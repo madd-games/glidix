@@ -53,6 +53,11 @@ typedef struct
 	 * that was initally clicked. Used to define the selection range.
 	 */
 	off_t			clickPos;
+	
+	/**
+	 * Pen used to draw the text.
+	 */
+	DDIPen*			pen;
 } GWMTextFieldData;
 
 void gwmRedrawTextField(GWMWindow *field)
@@ -60,6 +65,7 @@ void gwmRedrawTextField(GWMWindow *field)
 	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
 	DDISurface *canvas = gwmGetWindowCanvas(field);
 	
+	static DDIColor transparent = {0, 0, 0, 0};
 	static DDIColor normalBorderColor = {0, 0, 0, 0xFF};
 	static DDIColor focusBorderColor = {0, 0xAA, 0, 0xFF};
 	DDIColor *color = &normalBorderColor;
@@ -78,7 +84,8 @@ void gwmRedrawTextField(GWMWindow *field)
 	
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, color);
 	ddiFillRect(canvas, 1, 1, canvas->width-2, canvas->height-2, background);
-	
+
+#if 0
 	char buf[2] = "*";
 	
 	off_t i;
@@ -97,6 +104,43 @@ void gwmRedrawTextField(GWMWindow *field)
 	if (data->focused)
 	{
 		ddiFillRect(canvas, cursorX, 3, 1, canvas->height-6, &black);
+	};
+#endif
+
+	if (data->pen != NULL) ddiDeletePen(data->pen);
+	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 3, 3, canvas->width-3, canvas->height-3, 0, 0, NULL);
+	if (data->pen != NULL)
+	{
+		ddiSetPenWrap(data->pen, 0);
+		if (data->flags & GWM_TXT_MASKED) ddiPenSetMask(data->pen, 1);
+		if (data->focused) ddiSetPenCursor(data->pen, data->cursorPos);
+
+		char *buffer = malloc(data->textSize+1);
+		if (data->selectStart == data->selectEnd)
+		{
+			memcpy(buffer, data->text, data->textSize);
+			buffer[data->textSize] = 0;
+			ddiWritePen(data->pen, buffer);
+		}
+		else
+		{
+			memcpy(buffer, data->text, data->selectStart);
+			buffer[data->selectStart] = 0;
+			ddiWritePen(data->pen, buffer);
+			
+			memcpy(buffer, &data->text[data->selectStart], data->selectEnd-data->selectStart);
+			buffer[data->selectEnd-data->selectStart] = 0;
+			ddiSetPenBackground(data->pen, GWM_COLOR_SELECTION);
+			ddiWritePen(data->pen, buffer);
+			ddiSetPenBackground(data->pen, &transparent);
+			
+			memcpy(buffer, &data->text[data->selectEnd], data->textSize-data->selectEnd);
+			buffer[data->textSize-data->selectEnd] = 0;
+			ddiWritePen(data->pen, buffer);
+		};
+		
+		free(buffer);
+		ddiExecutePen(data->pen, canvas);
 	};
 	
 	gwmPostDirty(field);
@@ -173,7 +217,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 	case GWM_EVENT_DOWN:
 		if (ev->scancode == GWM_SC_MOUSE_LEFT)
 		{
-			newCursorPos = (ev->x - 3) / 8;
+			newCursorPos = ddiPenCoordsToPos(data->pen, ev->x, ev->y);
 			if (newCursorPos < 0) data->cursorPos = 0;
 			else if (newCursorPos > data->textSize) data->cursorPos = data->textSize;
 			else data->cursorPos = newCursorPos;
@@ -222,7 +266,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 	case GWM_EVENT_MOTION:
 		if (data->clickPos != -1)
 		{
-			newCursorPos = (ev->x - 3) / 8;
+			newCursorPos = ddiPenCoordsToPos(data->pen, ev->x, ev->y);
 			if (newCursorPos < 0) newCursorPos = 0;
 			else if (newCursorPos > data->textSize) newCursorPos = data->textSize;
 			data->cursorPos = newCursorPos;
@@ -265,7 +309,8 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	
 	data->selectStart = data->selectEnd = 0;
 	data->clickPos = -1;
-
+	data->pen = NULL;
+	
 	gwmSetEventHandler(field, gwmTextFieldHandler);
 	gwmRedrawTextField(field);
 	gwmSetWindowCursor(field, GWM_CURSOR_TEXT);

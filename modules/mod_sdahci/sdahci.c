@@ -152,9 +152,6 @@ static void ahciAtaThread(void *data)
 		cmdfis->countl = (uint8_t)(cmd->count);
 		cmdfis->counth = (uint8_t)(cmd->count>>8);
 		
-		// for writes, we copy the SD buffer into the iobuf, issue the command,
-		// and post completetion. for reads we must actually wait for the data to
-		// arrive.
 		char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);
 		if (cmd->type == SD_CMD_WRITE)
 		{
@@ -171,16 +168,13 @@ static void ahciAtaThread(void *data)
 		};
 		
 		dev->port->ci = (1 << slot);
-		
-		if (cmd->type == SD_CMD_READ)
+
+		while (dev->port->ci & (1 << slot))
 		{
-			while (dev->port->ci & (1 << slot))
-			{
-				__sync_synchronize();
-			};
-			
-			memcpy(cmd->block, hwbuf, 512*cmd->count);
+			__sync_synchronize();
 		};
+			
+		memcpy(cmd->block, hwbuf, 512*cmd->count);
 		
 		sdPostComplete(cmd);
 	};
@@ -188,6 +182,7 @@ static void ahciAtaThread(void *data)
 
 static void initCtrl(AHCIController *ctrl)
 {
+	pciSetBusMastering(ctrl->pcidev, 1);
 	ctrl->regs = mapPhysMemory((uint64_t) ctrl->pcidev->bar[5], sizeof(AHCIMemoryRegs));
 	
 	uint32_t pi = ctrl->regs->pi;

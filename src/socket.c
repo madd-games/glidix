@@ -398,7 +398,7 @@ int isValidAddr(const struct sockaddr *addr)
 };
 
 void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
-			const void *packet, size_t size, int proto, uint64_t dataOffset)
+			const void *packet, size_t size, int proto, uint64_t dataOffset, const char *ifname)
 {
 	if (!isValidAddr(dest))
 	{
@@ -533,19 +533,31 @@ void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest,
 	};
 	
 	if (realSize > size) return;
-	onTransportPacket(src, dest, addrlen, (char*)packet + dataOffset, realSize, proto);
+	onTransportPacket(src, dest, addrlen, (char*)packet + dataOffset, realSize, proto, ifname);
 };
 
-void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen, const void *packet, size_t size, int proto)
+void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen, const void *packet, size_t size, int proto, const char *ifname)
 {
 	semWait(&sockLock);
 	
 	Socket *sock = &sockList;
 	while (sock != NULL)
 	{
-		if (sock->packet != NULL)
+		int thisOneOK = 1;
+		if (sock->ifname[0] != 0)
 		{
-			sock->packet(sock, src, dest, addrlen, packet, size, proto);
+			if (strcmp(ifname, sock->ifname) != 0)
+			{
+				thisOneOK = 0;
+			};
+		};
+		
+		if (thisOneOK)
+		{
+			if (sock->packet != NULL)
+			{
+				sock->packet(sock, src, dest, addrlen, packet, size, proto);
+			};
 		};
 		
 		sock = sock->next;

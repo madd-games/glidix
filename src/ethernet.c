@@ -62,7 +62,7 @@ static void etherSendRaw(NetIf *netif, const void *frame, size_t framelen)
 	caddr.scap_family = AF_CAPTURE;
 	strcpy(caddr.scap_ifname, netif->name);
 	onTransportPacket((struct sockaddr*)&caddr, (struct sockaddr*)&caddr, sizeof(struct sockaddr_cap),
-		frame, framelen-4, IF_ETHERNET);	// without CRC
+		frame, framelen-4, IF_ETHERNET, netif->name);	// without CRC
 
 	netif->ifconfig.ethernet.send(netif, frame, framelen);
 };
@@ -440,7 +440,7 @@ void onEtherFrame(NetIf *netif, const void *frame, size_t framelen, int flags)
 	caddr.scap_family = AF_CAPTURE;
 	strcpy(caddr.scap_ifname, netif->name);
 	onTransportPacket((struct sockaddr*)&caddr, (struct sockaddr*)&caddr, sizeof(struct sockaddr_cap),
-		frame, framelen-4, IF_ETHERNET);	// without CRC
+		frame, framelen-4, IF_ETHERNET, netif->name);	// without CRC
 	
 	size_t overheadSize = sizeof(EthernetHeader) + 4;
 	EthernetHeader *head = (EthernetHeader*) frame;

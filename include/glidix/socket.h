@@ -163,12 +163,12 @@ typedef struct
  * sockets.
  */
 void passPacketToSocket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
-			const void *packet, size_t size, int proto, uint64_t dataOffset);
+			const void *packet, size_t size, int proto, uint64_t dataOffset, const char *ifname);
 
 /**
  * Called by passPacketToSocket() or the IP reassembler once we have a full transport-layer packet.
  */
-void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen, const void *packet, size_t size, int proto);
+void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen, const void *packet, size_t size, int proto, const char *ifname);
 
 /**
  * Create a socket file description. The returned description will be marked with the O_SOCKET flag, and the 'fsdata'

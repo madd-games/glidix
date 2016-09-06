@@ -54,7 +54,7 @@ static int gxdir_next(Dir *dir)
 	};
 
 	gxdir->offCurrent = gxdir->gxino.pos;
-
+		
 	char buffer[257];
 	GXReadInode(&gxdir->gxino, buffer, gxdir->szNext);
 	buffer[gxdir->szNext] = 0;
@@ -470,8 +470,6 @@ static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	GXFileSystem *gxfs = gxdir->gxfs;
 	semWait(&gxdir->gxfs->sem);
 
-	//kprintf_debug("gxfs: mkdir '%s' in inode %d\n", name, gxdir->gxino.ino);
-
 	gxfsInode newInode;
 	memset(&newInode, 0, sizeof(gxfsInode));
 	GXInode gxNewInode;
@@ -479,7 +477,6 @@ static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 
 	if (newInodeNumber == 0)
 	{
-		//kprintf_debug("gxfs: mkdir: out of inodes\n");
 		semSignal(&gxdir->gxfs->sem);
 		return -1;
 	};
@@ -506,6 +503,18 @@ static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	ent->deNameLen = strlen(name);
 	strcpy(ent->deName, name);
 
+	// update the dhCount for this directory.
+	gxdir->gxino.pos = 0;
+	gxfsDirHeader dhead;
+	GXReadInode(&gxdir->gxino, &dhead, sizeof(gxfsDirHeader));
+	if (dhead.dhCount != gxdir->count)
+	{
+		panic("mismatch between dhCount and buffered count (dhCount=%d, myCount=%d)", (int)dhead.dhCount, (int)gxdir->count);
+	};
+	dhead.dhCount++;
+	gxdir->gxino.pos = 0;
+	GXWriteInode(&gxdir->gxino, &dhead, sizeof(gxfsDirHeader));
+
 	// update the next deNextSz for the last entry (none were added since we reached the end due
 	// to the kernel's VFS locking).
 	gxdir->gxino.pos = gxdir->offCurrent + 8;
@@ -514,22 +523,15 @@ static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 	if (oldSz != 0)
 	{
 		gxfs->fp->fsync(gxfs->fp);
-		panic("gxfs: mkreg() called but oldSz == %d", (int) (uint32_t) oldSz);
+		panic("gxfs: mkreg() called but oldSz == %d; index=%d, count=%d, dhCount=%d", (int) (uint32_t) oldSz, (int)gxdir->index, (int)gxdir->count, (int)dhead.dhCount);
 	};
 	gxdir->gxino.pos = gxdir->offCurrent + 8;
 	uint8_t newNextSz = 10 + ent->deNameLen;
 	GXWriteInode(&gxdir->gxino, &newNextSz, 1);
-
-	// update the dhCount for this directory.
-	gxdir->gxino.pos = 0;
-	gxfsDirHeader dhead;
-	GXReadInode(&gxdir->gxino, &dhead, sizeof(gxfsDirHeader));
-	dhead.dhCount++;
-	gxdir->gxino.pos = 0;
-	GXWriteInode(&gxdir->gxino, &dhead, sizeof(gxfsDirHeader));
-
+	gxdir->gxino.pos = gxdir->offCurrent + 8;
+	GXReadInode(&gxdir->gxino, &oldSz, 1);
+	
 	// finally, write the new entry.
-
 	inode.inoLinks++;					// "inoCount" for dirs
 	GXWriteInodeHeader(&gxdir->gxino, &inode);
 
@@ -538,8 +540,6 @@ static int gxdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t
 
 	strcpy(dir->dirent.d_name, name);
 	dir->dirent.d_ino = newInodeNumber;
-
-	//if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
 
 	strcpy(dir->dirent.d_name, name);
 	dir->dirent.d_ino = newInodeNumber;

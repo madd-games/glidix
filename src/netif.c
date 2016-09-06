@@ -208,7 +208,7 @@ static void loopbackSend(NetIf *netif, const void *packet, size_t packetlen)
 	caddr.scap_family = AF_CAPTURE;
 	strcpy(caddr.scap_ifname, netif->name);
 	onTransportPacket((struct sockaddr*)&caddr, (struct sockaddr*)&caddr, sizeof(struct sockaddr_cap),
-		packet, packetlen, IF_LOOPBACK);
+		packet, packetlen, IF_LOOPBACK, netif->name);
 		
 	__sync_fetch_and_add(&netif->numTrans, 1);
 	lopacket *newPacket = (lopacket*) kmalloc(sizeof(lopacket) + packetlen);
@@ -359,7 +359,7 @@ void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 	caddr.scap_family = AF_CAPTURE;
 	strcpy(caddr.scap_ifname, netif->name);
 	onTransportPacket((struct sockaddr*)&caddr, (struct sockaddr*)&caddr, sizeof(struct sockaddr_cap),
-		packet, packetlen, IPPROTO_IP);
+		packet, packetlen, IPPROTO_IP, netif->name);
 
 	uint8_t ipver = ((*((const uint8_t*)packet)) >> 4) & 0xF;
 	if (ipver == 4)
@@ -399,7 +399,7 @@ void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 		memcpy(&addr_dest.sin_addr, &info.daddr, 4);
 		
 		passPacketToSocket((struct sockaddr*) &addr_src, (struct sockaddr*) &addr_dest, sizeof(struct sockaddr_in),
-					packet, packetlen, info.proto, info.dataOffset);
+					packet, packetlen, info.proto, info.dataOffset, netif->name);
 	}
 	else if (ipver == 6)
 	{
@@ -439,7 +439,7 @@ void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 		dest_addr.sin6_scope_id = netif->scopeID;
 		
 		passPacketToSocket((struct sockaddr*) &src_addr, (struct sockaddr*) &dest_addr, sizeof(struct sockaddr_in),
-					packet, packetlen, info.proto, info.dataOffset);
+					packet, packetlen, info.proto, info.dataOffset, netif->name);
 	}
 	else
 	{
@@ -644,7 +644,7 @@ static int sendPacketToInterface(NetIf *netif, const struct sockaddr *gateway, c
 	caddr.scap_family = AF_CAPTURE;
 	strcpy(caddr.scap_ifname, netif->name);
 	onTransportPacket((struct sockaddr*)&caddr, (struct sockaddr*)&caddr, sizeof(struct sockaddr_cap),
-		packet, packetlen, IPPROTO_IP);
+		packet, packetlen, IPPROTO_IP, netif->name);
 
 	// this is called when iflistLock is locked, and 'gateway' is supposedly reacheable directly.
 	// depending on the type of interface, different address-resolution methods may be used.

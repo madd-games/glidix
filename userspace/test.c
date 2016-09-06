@@ -10,39 +10,73 @@
 #include <sys/stat.h>
 #include <libddi.h>
 #include <time.h>
+#include <libgwm.h>
 
-void _heap_dump();
+DDIPen *pen = NULL;
+int cursorPos = 0;
 
-int main(int argc, char *argv[])
+void draw(GWMWindow *win)
 {
-	int fd = open("/dev/ptr0", O_RDWR);
-	if (fd == -1)
+	gwmClearWindow(win);
+	DDISurface *canvas = gwmGetWindowCanvas(win);
+	if (pen != NULL) ddiDeletePen(pen);
+	
+	const char *error;
+	pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, 2, 196, 196, 0, 0, &error);
+	if (pen == NULL)
 	{
-		perror("open");
+		fprintf(stderr, "Cannot create pen: %s\n", error);
+		exit(1);
+	};
+	
+	ddiSetPenCursor(pen, cursorPos);
+	ddiWritePen(pen, "Basically this is an extremely nice meme :) AVE MARIA");
+	ddiExecutePen(pen, canvas);
+	
+	gwmPostDirty(win);
+};
+
+int myEventHandler(GWMEvent *ev, GWMWindow *win)
+{
+	int pos;
+	switch (ev->type)
+	{
+	case GWM_EVENT_CLOSE:
+		return -1;
+	case GWM_EVENT_DOWN:
+		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		{
+			pos = ddiPenCoordsToPos(pen, ev->x, ev->y);
+			printf("Mouse click: (%d, %d) -> %d\n", ev->x, ev->y, pos);
+			if (pos != -1) cursorPos = pos;
+			draw(win);
+		};
+		return 0;
+	default:
+		return gwmDefaultHandler(ev, win);
+	};
+};
+
+int main()
+{
+	if (gwmInit() != 0)
+	{
+		fprintf(stderr, "Failed to initialize GWM!\n");
 		return 1;
 	};
-	
-	_glidix_ptrstate state;
-	state.width = 640;
-	state.height = 480;
-	state.posX = 320;
-	state.posY = 240;
-	
-	write(fd, &state, sizeof(_glidix_ptrstate));
-	
-	while (1)
+
+	GWMWindow *win = gwmCreateWindow(NULL, "Hello world", 10, 10, 200, 200, GWM_WINDOW_MKFOCUSED);
+	if (win == NULL)
 	{
-		ssize_t sz = read(fd, &state, sizeof(_glidix_ptrstate));
-		if (sz == -1)
-		{
-			perror("read");
-		}
-		else
-		{
-			printf("State: %dx%d, mouse at (%d, %d)\n", state.width, state.height, state.posX, state.posY);
-		};
+		fprintf(stderr, "Failed to create window!\n");
+		return 1;
 	};
-	
-	close(fd);
+
+	gwmSetWindowCursor(win, GWM_CURSOR_TEXT);
+	draw(win);
+
+	gwmSetEventHandler(win, myEventHandler);
+	gwmMainLoop();
+	gwmQuit();
 	return 0;
 };

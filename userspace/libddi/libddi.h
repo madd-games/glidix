@@ -275,4 +275,23 @@ void ddiGetPenSize(DDIPen *pen, int *widthOut, int *heightOut);
  */
 void ddiSetPenPosition(DDIPen *pen, int x, int y);
 
+/**
+ * Set the pen cursor position. -1 means the cursor shouldn't be drawn. Please call this before making any
+ * calls to ddiWritePen() on this pen.
+ */
+void ddiSetPenCursor(DDIPen *pen, int cursorPos);
+
+/**
+ * Given a point (x, y) on a surface that the pen was drawn on, returns the unicode-character offset into the
+ * original text, specifying the position that is located at that point. Only valid after a call to ddiExecutePen().
+ * Returns -1 if no text is at that position.
+ */
+int ddiPenCoordsToPos(DDIPen *pen, int x, int y);
+
+/**
+ * Set the masking character for a pen. 0 means no masking; 1 means default mask; everything else is a Unicode codepoint
+ * to be used as the mask.
+ */
+void ddiPenSetMask(DDIPen *pen, long mask);
+
 #endif

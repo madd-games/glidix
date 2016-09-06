@@ -224,6 +224,7 @@ char *realpath_from(const char *relpath, char *buffer, const char *fromdir)
 					*put = 0;
 					tokput = token;
 					toksz = 0;
+					if (c == 0) break;
 					continue;		// "parent directory" of root directory is root directory itself.
 				};
 
@@ -236,10 +237,22 @@ char *realpath_from(const char *relpath, char *buffer, const char *fromdir)
 					put--;
 				};
 
-				if (put != buffer) *put = 0;
+				//if (put != buffer) *put = 0;
 
-				put++;
-				*put = 0;
+				//put++;
+				//*put = 0;
+				
+				if (put == buffer)
+				{
+					put++;
+					*put = 0;
+				}
+				else
+				{
+					*put = c;
+					put++;
+				};
+				
 				szput = put - buffer;
 				if (c == 0) break;
 				else
