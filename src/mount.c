@@ -244,6 +244,30 @@ int resolveMounts(const char *path, SplitPath *out)
 	return -1;
 };
 
+int isMountPoint(const char *dirpath)
+{
+	char prefix[256];
+	strcpy(prefix, dirpath);
+	strcat(prefix, "/");
+	
+	spinlockAcquire(&mountLock);
+	MountPoint *mp = mountTable;
+	
+	while (mp != NULL)
+	{
+		if (strcmp(mp->prefix, prefix) == 0)
+		{
+			spinlockRelease(&mountLock);
+			return 1;
+		};
+		
+		mp = mp->next;
+	};
+	
+	spinlockRelease(&mountLock);
+	return 0;
+};
+
 void dumpMountTable()
 {
 	spinlockAcquire(&mountLock);

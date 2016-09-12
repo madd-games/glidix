@@ -182,6 +182,10 @@ typedef struct PenSegment_
 	
 	// where the segment was last drawn (initialized by ddiExecutePen).
 	int drawX, drawY;
+	
+	// baseline position
+	int baselineY;
+	DDIColor background;
 } PenSegment;
 
 typedef struct PenLine_
@@ -192,6 +196,7 @@ typedef struct PenLine_
 	int alignment;
 	int lineHeight;				// %
 	int drawY;
+	int baselineY;
 	struct PenLine_ *next;
 } PenLine;
 
@@ -206,6 +211,11 @@ struct DDIFont_
 	 * Current font.
 	 */
 	FT_Face face;
+	
+	/**
+	 * Font size.
+	 */
+	int size;
 };
 
 struct DDIPen_
@@ -1013,6 +1023,7 @@ DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error
 		return NULL;
 	};
 	
+	font->size = size;
 	if (strlen(family) > 64)
 	{
 		DDI_ERROR("Font name too long");
@@ -1097,8 +1108,9 @@ DDIPen* ddiCreatePen(DDIPixelFormat *format, DDIFont *font, int x, int y, int wi
 
 	pen->currentLine = (PenLine*) malloc(sizeof(PenLine));
 	pen->currentLine->firstSegment = NULL;
-	pen->currentLine->maxHeight = 12;
+	pen->currentLine->maxHeight = font->size;
 	pen->currentLine->currentWidth = 0;
+	pen->currentLine->baselineY = 0;
 	pen->currentLine->next = NULL;
 	pen->firstLine = pen->currentLine;
 	
@@ -1213,45 +1225,56 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 			return 0;
 		};
 		
-		FT_UInt glyph = FT_Get_Char_Index(pen->font->face, point);
-		error = FT_Load_Glyph(pen->font->face, glyph, FT_LOAD_DEFAULT);
-		if (error != 0)
+		if (point == '\t')
 		{
-			return -1;
-		};
+			penX = penX/DDI_TAB_LEN*DDI_TAB_LEN + DDI_TAB_LEN;
+			if (penX > maxX) maxX = penX;
+		}
+		else
+		{
+			FT_UInt glyph = FT_Get_Char_Index(pen->font->face, point);
+			error = FT_Load_Glyph(pen->font->face, glyph, FT_LOAD_DEFAULT);
+			if (error != 0)
+			{
+				return -1;
+			};
 	
-		error = FT_Render_Glyph(pen->font->face->glyph, FT_RENDER_MODE_NORMAL);
-		if (error != 0)
-		{
-			return -1;
+			error = FT_Render_Glyph(pen->font->face->glyph, FT_RENDER_MODE_NORMAL);
+			if (error != 0)
+			{
+				return -1;
+			};
+		
+			FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
+		
+			int left = penX + pen->font->face->glyph->bitmap_left;
+			int top = penY - pen->font->face->glyph->bitmap_top;
+			if (left < minX) minX = left;
+			if (top < minY) minY = top;
+
+			penX += (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
+			penY += pen->font->face->glyph->advance.y >> 6;
+
+			int right = left + (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
+			int bottom = top + bitmap->rows;
+			if (right > maxX) maxX = right;
+			if (bottom > maxY) maxY = bottom;
 		};
-		
-		FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
-		
-		int left = penX + pen->font->face->glyph->bitmap_left;
-		int top = penY - pen->font->face->glyph->bitmap_top;
-		if (left < minX) minX = left;
-		if (top < minY) minY = top;
-		
-		int right = left + bitmap->width;
-		int bottom = top + bitmap->rows;
-		if (right > maxX) maxX = right;
-		if (bottom > maxY) maxY = bottom;
 		
 		if ((pen->currentLine->currentWidth + (maxX-minX)) > pen->width)
 		{
-			// we must wrap around at the last word that fit in
-			// TODO: mfw nothing was written yet
-			*nextEl = lastWordEnd;
-			*width = lastWordWidth;
-			*height = lastWordHeight;
-			*offsetX = lastWordOffX;
-			*offsetY = lastWordOffY;
-			return 0;
+			if (pen->wrap)
+			{
+				// we must wrap around at the last word that fit in
+				// TODO: mfw nothing was written yet
+				*nextEl = lastWordEnd;
+				*width = lastWordWidth;
+				*height = lastWordHeight;
+				*offsetX = lastWordOffX;
+				*offsetY = lastWordOffY;
+				return 0;
+			};
 		};
-		
-		penX += (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
-		penY += pen->font->face->glyph->advance.y >> 6;
 	};
 	
 	if (minX < 0)
@@ -1281,6 +1304,7 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 
 void ddiWritePen(DDIPen *pen, const char *text)
 {
+	if (*text == 0) return;
 	const char *nextEl;
 	int offsetX, offsetY, width, height;
 	
@@ -1332,56 +1356,76 @@ void ddiWritePen(DDIPen *pen, const char *text)
 				point = pen->mask;
 			};
 
-			FT_UInt glyph = FT_Get_Char_Index(pen->font->face, point);
-			FT_Error error = FT_Load_Glyph(pen->font->face, glyph, FT_LOAD_DEFAULT);
-			if (error != 0) break;
-			error = FT_Render_Glyph(pen->font->face->glyph, FT_RENDER_MODE_NORMAL);
-			if (error != 0) break;
-			
-			FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
-			
-			if (pen->writePos == pen->cursorPos)
+			if (point == '\t')
 			{
-				fillColor.alpha = 255;
-				ddiFillRect(surface, penX+offsetX, 0, 1, surface->height, &fillColor);
-			};
-			
-			pen->writePos++;
-			
-			int x, y;
-			for (x=0; x<bitmap->width; x++)
+				int oldPenX = penX;
+				penX = penX/DDI_TAB_LEN*DDI_TAB_LEN + DDI_TAB_LEN;
+
+				pen->writePos++;
+				widths = (int*) realloc(widths, sizeof(int)*(numChars+1));
+				widths[numChars++] = penX - oldPenX;
+			}
+			else
 			{
-				for (y=0; y<bitmap->rows; y++)
+				FT_UInt glyph = FT_Get_Char_Index(pen->font->face, point);
+				FT_Error error = FT_Load_Glyph(pen->font->face, glyph, FT_LOAD_DEFAULT);
+				if (error != 0) break;
+				error = FT_Render_Glyph(pen->font->face->glyph, FT_RENDER_MODE_NORMAL);
+				if (error != 0) break;
+			
+				FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
+			
+				if (pen->writePos == pen->cursorPos)
 				{
-					if (bitmap->buffer[y * bitmap->pitch + x] != 0)
+					fillColor.alpha = 255;
+					ddiFillRect(surface, penX+offsetX, 0, 1, surface->height, &fillColor);
+				};
+			
+				pen->writePos++;
+			
+				int x, y;
+				for (x=0; x<bitmap->width; x++)
+				{
+					for (y=0; y<bitmap->rows; y++)
 					{
-						fillColor.alpha = bitmap->buffer[y * bitmap->pitch + x];
-						ddiFillRect(surface, penX+offsetX+x+pen->font->face->glyph->bitmap_left,
-							penY+offsetY+y-pen->font->face->glyph->bitmap_top, 1, 1, &fillColor);
+						if (bitmap->buffer[y * bitmap->pitch + x] != 0)
+						{
+							fillColor.alpha = bitmap->buffer[y * bitmap->pitch + x];
+							ddiFillRect(surface, penX+offsetX+x+pen->font->face->glyph->bitmap_left,
+								penY+offsetY+y-pen->font->face->glyph->bitmap_top, 1, 1, &fillColor);
+						};
 					};
 				};
+			
+				widths = (int*) realloc(widths, sizeof(int)*(numChars+1));
+				widths[numChars++] = (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
+			
+				penX += (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
+				penY += pen->font->face->glyph->advance.y >> 6;
 			};
-			
-			widths = (int*) realloc(widths, sizeof(int)*(numChars+1));
-			widths[numChars++] = (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
-			
-			penX += (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
-			penY += pen->font->face->glyph->advance.y >> 6;
 		};
 		
 		pen->currentLine->currentWidth += width;
 		
-		DDISurface *finalSurface = ddiCreateSurface(&surface->format, width, height, NULL, 0);
-		ddiFillRect(finalSurface, 0, 0, width, height, &pen->background);
-		ddiBlit(surface, 0, 0, finalSurface, 0, 0, width, height);
-		ddiDeleteSurface(surface);
+		//DDISurface *finalSurface = ddiCreateSurface(&surface->format, width, height, NULL, 0);
+		//fillColor.alpha = 0;
+		//ddiFillRect(finalSurface, 0, 0, width, height, &fillColor);
+		//ddiBlit(surface, 0, 0, finalSurface, 0, 0, width, height);
+		//ddiDeleteSurface(surface);
 		
 		PenSegment *seg = (PenSegment*) malloc(sizeof(PenSegment));
-		seg->surface = finalSurface;
+		seg->surface = surface;
 		seg->next = NULL;
 		seg->numChars = numChars;
 		seg->widths = widths;
 		seg->firstCharPos = firstCharPos;
+		seg->baselineY = offsetY;
+		memcpy(&seg->background, &pen->background, sizeof(DDIColor));
+		
+		if ((surface->height-offsetY) > pen->currentLine->baselineY)
+		{
+			pen->currentLine->baselineY = surface->height - offsetY;
+		};
 		
 		// add the segment to the end of the list for the current line
 		if (pen->currentLine->firstSegment == NULL)
@@ -1405,11 +1449,18 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		}
 		else
 		{
+			widths = (int*) realloc(widths, sizeof(int)*(numChars+1));
+			widths[numChars++] = 0;
+			pen->writePos++;
+			seg->widths = widths;
+			seg->numChars = numChars;
+			
 			text = nextEl+1;
 			PenLine *line = (PenLine*) malloc(sizeof(PenLine));
 			line->firstSegment = NULL;
-			line->maxHeight = 12;
+			line->maxHeight = pen->font->size;
 			line->currentWidth = 0;
+			line->baselineY = 0;
 			line->next = NULL;
 			pen->currentLine->next = line;
 			pen->currentLine = line;
@@ -1425,7 +1476,7 @@ void ddiExecutePen(DDIPen *pen, DDISurface *surface)
 	int drawY = pen->y;
 	int lastDrawY = drawY;
 	int lastDrawX = pen->x;
-	int lastHeight = 8;
+	int lastHeight = 12;
 	for (line=pen->firstLine; line!=NULL; line=line->next)
 	{
 		line->drawY = drawY;
@@ -1445,12 +1496,19 @@ void ddiExecutePen(DDIPen *pen, DDISurface *surface)
 		};
 
 		lastDrawY = drawY;
+		int baselineY = drawY + line->maxHeight - line->baselineY;
 		for (seg=line->firstSegment; seg!=NULL; seg=seg->next)
 		{
-			int plotY = drawY + line->maxHeight - seg->surface->height;
+			int plotY = baselineY - seg->baselineY;
 			lastDrawY = plotY;
 			seg->drawX = drawX;
 			seg->drawY = plotY;
+			
+			if (seg->background.alpha != 0)
+			{
+				ddiFillRect(surface, drawX, drawY, seg->surface->width, line->maxHeight, &seg->background);
+			};
+			
 			ddiBlit(seg->surface, 0, 0, surface, drawX, plotY, seg->surface->width, seg->surface->height);
 			drawX += seg->surface->width;
 			lastHeight = seg->surface->height;
@@ -1564,7 +1622,7 @@ int ddiPenCoordsToPos(DDIPen *pen, int x, int y)
 		return bestBet;
 	};
 	
-	return -1;
+	return 0;
 };
 
 void ddiPenSetMask(DDIPen *pen, long mask)

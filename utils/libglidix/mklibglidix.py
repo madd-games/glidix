@@ -148,7 +148,8 @@ syscallTable = {
 	126:	"_glidix_oxperm",
 	127:	"_glidix_dxperm",
 	128:	"_glidix_fsinfo",
-	129:	"_glidix_chxperm"
+	129:	"_glidix_chxperm",
+	130:	"_glidix_haveperm"
 }
 
 f = open("_libglidix.s", "wb")

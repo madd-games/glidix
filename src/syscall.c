@@ -4183,10 +4183,15 @@ int sys_chxperm(const char *upath, uint64_t ixperm, uint64_t oxperm, uint64_t dx
 	return status;
 };
 
+int sys_haveperm(uint64_t mask)
+{
+	return havePerm(mask);
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 130
+#define SYSCALL_NUMBER 131
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -4318,6 +4323,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_dxperm,				// 127
 	&sys_fsinfo,				// 128
 	&sys_chxperm,				// 129
+	&sys_haveperm,				// 130
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

@@ -138,6 +138,7 @@ GWMWindow *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int fla
 	
 	gwmRedrawCheckbox(checkbox);
 	gwmSetEventHandler(checkbox, gwmCheckboxHandler);
+	return checkbox;
 };
 
 void gwmDestroyCheckbox(GWMWindow *checkbox)

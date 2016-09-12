@@ -27,7 +27,6 @@
 */
 
 #include <sys/socket.h>
-#include <sys/glidix.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>

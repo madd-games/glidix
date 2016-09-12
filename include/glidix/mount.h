@@ -67,6 +67,7 @@ void initMount();
 int mount(const char *prefix, FileSystem *fs, int flags);
 int unmount(const char *prefix);
 int resolveMounts(const char *path, SplitPath *out);
+int isMountPoint(const char *dirpath);
 void dumpMountTable();
 void unmountAll();
 size_t getFSInfo(FSInfo *list, size_t max);

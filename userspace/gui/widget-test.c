@@ -37,15 +37,45 @@
 #include <signal.h>
 #include "gui.h"
 
+GWMWindow *win;
+
+void redraw()
+{
+	DDISurface *canvas = gwmGetWindowCanvas(win);
+
+	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height, 0, 0, NULL);
+	ddiWritePen(pen, "Tick me");
+	
+	int txtWidth, txtHeight;
+	ddiGetPenSize(pen, &txtWidth, &txtHeight);
+	ddiSetPenPosition(pen, 126, 17-(txtHeight/2));
+	ddiExecutePen(pen, canvas);
+	ddiDeletePen(pen);
+
+	gwmPostDirty(win);
+};
+
 int myEventHandler(GWMEvent *ev, GWMWindow *win)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
 		return -1;
+	case GWM_EVENT_RESIZE_REQUEST:
+		gwmMoveWindow(win, ev->x, ev->y);
+		gwmResizeWindow(win, ev->width, ev->height);
+		redraw();
+		return 0;
 	default:
 		return gwmDefaultHandler(ev, win);
 	};
+};
+
+int sbarCallback(void *context)
+{
+	GWMWindow *sbar = (GWMWindow*) context;
+	printf("You moved a scrollbar to: %d\n", gwmGetScrollbarOffset(sbar));
+	return 0;
 };
 
 int main()
@@ -56,7 +86,7 @@ int main()
 		return 1;
 	};
 
-	GWMWindow *win = gwmCreateWindow(NULL, "Widgets Test", 10, 10, 500, 500, GWM_WINDOW_MKFOCUSED);
+	win = gwmCreateWindow(NULL, "Widgets Test", 10, 10, 500, 500, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	if (win == NULL)
 	{
 		fprintf(stderr, "Failed to create window!\n");
@@ -65,6 +95,11 @@ int main()
 
 	gwmCreateButton(win, "Sample button", 2, 2, 100, 0);
 	gwmCreateButton(win, "Disabled button", 2, 34, 100, GWM_BUTTON_DISABLED);
+	gwmCreateTextField(win, "Type here :)", 2, 66, 100, 0);
+	gwmCreateTextField(win, "Disabled text field", 2, 88, 100, GWM_TXT_DISABLED);
+	gwmCreateTextField(win, "Masked", 2, 110, 100, GWM_TXT_MASKED);
+	gwmCreateTextField(win, "Disabled, masked", 2, 132, 100, GWM_TXT_MASKED | GWM_TXT_DISABLED);
+	
 	gwmCreateCheckbox(win, 104, 7, GWM_CB_TRI, 0);
 	
 	int i;
@@ -73,18 +108,18 @@ int main()
 		gwmCreateCheckbox(win, 104+32*i, 39, i, GWM_CB_DISABLED);
 	};
 	
-	DDISurface *canvas = gwmGetWindowCanvas(win);
-
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height, 0, 0, NULL);
-	ddiWritePen(pen, "Tick/untick me");
+	GWMWindow *sbar;
+	sbar = gwmCreateScrollbar(win, 104, 61, 100, 0, 66, 500, GWM_SCROLLBAR_HORIZ);
+	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
+	sbar = gwmCreateScrollbar(win, 104, 71, 100, 50, 66, 500, GWM_SCROLLBAR_HORIZ | GWM_SCROLLBAR_DISABLED);
+	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
 	
-	int txtWidth, txtHeight;
-	ddiGetPenSize(pen, &txtWidth, &txtHeight);
-	ddiSetPenPosition(pen, 126, 17-(txtHeight/2));
-	ddiExecutePen(pen, canvas);
-	ddiDeletePen(pen);
-
-	gwmPostDirty(win);
+	sbar = gwmCreateScrollbar(win, 206, 7, 100, 20, 100, 500, 0);
+	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
+	sbar = gwmCreateScrollbar(win, 216, 7, 100, 10, 100, 500, GWM_SCROLLBAR_DISABLED);
+	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
+	
+	redraw();
 	gwmSetEventHandler(win, myEventHandler);
 	gwmMainLoop();
 	gwmQuit();

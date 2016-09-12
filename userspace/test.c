@@ -14,24 +14,16 @@
 
 DDIPen *pen = NULL;
 int cursorPos = 0;
+GWMWindow *win;
 
 void draw(GWMWindow *win)
 {
 	gwmClearWindow(win);
 	DDISurface *canvas = gwmGetWindowCanvas(win);
-	if (pen != NULL) ddiDeletePen(pen);
 	
-	const char *error;
-	pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, 2, 196, 196, 0, 0, &error);
-	if (pen == NULL)
-	{
-		fprintf(stderr, "Cannot create pen: %s\n", error);
-		exit(1);
-	};
-	
-	ddiSetPenCursor(pen, cursorPos);
-	ddiWritePen(pen, "Basically this is an extremely nice meme :) AVE MARIA");
-	ddiExecutePen(pen, canvas);
+	int fd = open("/dev/random", O_RDONLY);
+	read(fd, canvas->data, canvas->width*canvas->height*canvas->format.bpp);
+	close(fd);
 	
 	gwmPostDirty(win);
 };
@@ -43,14 +35,9 @@ int myEventHandler(GWMEvent *ev, GWMWindow *win)
 	{
 	case GWM_EVENT_CLOSE:
 		return -1;
-	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
-		{
-			pos = ddiPenCoordsToPos(pen, ev->x, ev->y);
-			printf("Mouse click: (%d, %d) -> %d\n", ev->x, ev->y, pos);
-			if (pos != -1) cursorPos = pos;
-			draw(win);
-		};
+	case GWM_EVENT_RESIZE_REQUEST:
+		gwmMoveWindow(win, ev->x, ev->y);
+		gwmResizeWindow(win, ev->width, ev->height);
 		return 0;
 	default:
 		return gwmDefaultHandler(ev, win);
@@ -65,14 +52,13 @@ int main()
 		return 1;
 	};
 
-	GWMWindow *win = gwmCreateWindow(NULL, "Hello world", 10, 10, 200, 200, GWM_WINDOW_MKFOCUSED);
+	win = gwmCreateWindow(NULL, "Hello world", 100, 100, 200, 200, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	if (win == NULL)
 	{
 		fprintf(stderr, "Failed to create window!\n");
 		return 1;
 	};
 
-	gwmSetWindowCursor(win, GWM_CURSOR_TEXT);
 	draw(win);
 
 	gwmSetEventHandler(win, myEventHandler);

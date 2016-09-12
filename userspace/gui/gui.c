@@ -47,48 +47,48 @@
 #include <glidix/video.h>
 #include <glidix/humin.h>
 
-#define	GUI_WINDOW_BORDER				2
+#define	GUI_WINDOW_BORDER				3
 #define	GUI_CAPTION_HEIGHT				20
 
 // US keyboard layout
 static int keymap[128] =
 {
-		0,	0, '1', '2', '3', '4', '5', '6', '7', '8',	/* 9 */
+	0, 0, '1', '2', '3', '4', '5', '6', '7', '8',	/* 9 */
 	'9', '0', '-', '=', '\b',	/* Backspace */
 	'\t',			/* Tab */
 	'q', 'w', 'e', 'r',	/* 19 */
 	't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',	/* Enter key */
-		0,			/* 29	 - Control */
+	0,			/* 29	 - Control */
 	'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',	/* 39 */
- '\'', '`',	 0x80,		/* Left shift */
- '\\', 'z', 'x', 'c', 'v', 'b', 'n',			/* 49 */
+	'\'', '`',	 0x80,		/* Left shift */
+	'\\', 'z', 'x', 'c', 'v', 'b', 'n',			/* 49 */
 	'm', ',', '.', '/',	 0x80,				/* Right shift */
 	'*',
-		0,	/* Alt */
+	0,	/* Alt */
 	' ',	/* Space bar */
-		0,	/* Caps lock */
-		0,	/* 59 - F1 key ... > */
-		0,	 0,	 0,	 0,	 0,	 0,	 0,	 0,
-		0,	/* < ... F10 */
-		0,	/* 69 - Num lock*/
-		0,	/* Scroll Lock */
-		0,	/* Home key */
-		GWM_KC_UP,	/* Up Arrow */
-		0,	/* Page Up */
+	0,	/* Caps lock */
+	0,	/* 59 - F1 key ... > */
+	0,	 0,	 0,	 0,	 0,	 0,	 0,	 0,
+	0,	/* < ... F10 */
+	0,	/* 69 - Num lock*/
+	0,	/* Scroll Lock */
+	0,	/* Home key */
+	GWM_KC_UP,	/* Up Arrow */
+	0,	/* Page Up */
 	'-',
-		GWM_KC_LEFT,	/* Left Arrow */
-		0,
-		GWM_KC_RIGHT,	/* Right Arrow */
+	GWM_KC_LEFT,	/* Left Arrow */
+	0,
+	GWM_KC_RIGHT,	/* Right Arrow */
 	'+',
-		0,	/* 79 - End key*/
-		GWM_KC_DOWN,	/* Down Arrow */
-		0,	/* Page Down */
-		0,	/* Insert Key */
-		0,	/* Delete Key */
-		0,	 0,	 0,
-		0,	/* F11 Key */
-		0,	/* F12 Key */
-		0,	/* All other keys are undefined */
+	0,	/* 79 - End key*/
+	GWM_KC_DOWN,	/* Down Arrow */
+	0,	/* Page Down */
+	0,	/* Insert Key */
+	0,	/* Delete Key */
+	0,	 0,	 0,
+	0,	/* F11 Key */
+	0,	/* F12 Key */
+	0,	/* All other keys are undefined */
 };
 
 // when shift is pressed
@@ -166,12 +166,13 @@ typedef struct Window_
 	struct Window_*				children;
 	struct Window_*				parent;
 	GWMWindowParams				params;
-	DDISurface*				clientArea;
+	DDISurface*				clientArea[2];
 	DDISurface*				icon;
 	DDISurface*				titleBar;
 	DDISurface*				display;
 	int					titleBarDirty;
 	int					displayDirty;
+	int					frontBufferIndex;
 	uint64_t				id;
 	int					pid;
 	int					fd;
@@ -209,6 +210,15 @@ Window* focusedWindow = NULL;
 Window *movingWindow = NULL;
 int movingOffX;
 int movingOffY;
+
+/**
+ * The window being resized, the anchor point and the size it was at the anchor point.
+ */
+Window *resizingWindow = NULL;
+int resizingAnchorX;
+int resizingAnchorY;
+int resizingAnchorWidth;
+int resizingAnchorHeight;
 
 /**
  * The window that the mouse is currently inside of. This is used to issues enter/motion/leave
@@ -261,7 +271,7 @@ void PaintWindows(Window *win, DDISurface *target)
 			DDISurface *display = win->display;
 			if (win->displayDirty)
 			{
-				ddiOverlay(win->clientArea, 0, 0, display, 0, 0, win->params.width, win->params.height);
+				ddiOverlay(win->clientArea[win->frontBufferIndex], 0, 0, display, 0, 0, win->params.width, win->params.height);
 				PaintWindows(win->children, display);
 				win->displayDirty = 0;
 			};
@@ -317,7 +327,6 @@ void PaintWindows(Window *win, DDISurface *target)
 						}
 						else
 						{
-							//ddiSetPenFont(pen, "DejaVu Sans", 12, DDI_STYLE_BOLD, NULL);
 							ddiSetPenColor(pen, &winCaptionColor);
 							ddiWritePen(pen, win->params.caption);
 							ddiExecutePen(pen, win->titleBar);
@@ -357,6 +366,15 @@ void PaintWindows(Window *win, DDISurface *target)
 									yi = 2;
 								};
 							};
+							
+							if (i == 1)
+							{
+								if ((win->params.flags & GWM_WINDOW_RESIZEABLE) == 0)
+								{
+									yi = 3;
+								};
+							};
+							
 							ddiBlit(winButtons, 16*i, 16*yi, target, win->params.x+(win->params.width-48)+16*i, win->params.y+GUI_WINDOW_BORDER, 16, 16);
 						};
 					};
@@ -414,12 +432,15 @@ void DeleteWindow(Window *win)
 	if (movingWindow == win) movingWindow = NULL;
 	if (hoveringWindow == win) hoveringWindow = NULL;
 	if (listenWindow == win) listenWindow = NULL;
+	if (resizingWindow == win) resizingWindow = NULL;
 	
 	DeleteWindowList(win->children);
 	
 	// unlink from previous window
 	if (win->parent == NULL)
 	{
+		PostDesktopUpdate();
+
 		if (win->prev == NULL)
 		{
 			desktopWindows = win->next;
@@ -448,12 +469,51 @@ void DeleteWindow(Window *win)
 	};
 	
 	if (win->icon != NULL) ddiDeleteSurface(win->icon);
-	ddiDeleteSurface(win->clientArea);
+	munmap((void*)win->shmemAddr, win->shmemSize);
+	ddiDeleteSurface(win->clientArea[0]);
+	ddiDeleteSurface(win->clientArea[1]);
 	ddiDeleteSurface(win->titleBar);
 	ddiDeleteSurface(win->display);
 	free(win);
+};
+
+void ResizeWindow(Window *win, unsigned int width, unsigned int height)
+{
+	munmap((void*)win->shmemAddr, win->shmemSize);
+	ddiDeleteSurface(win->clientArea[0]);
+	ddiDeleteSurface(win->clientArea[1]);
+	ddiDeleteSurface(win->titleBar);
+	ddiDeleteSurface(win->display);
 	
-	PostDesktopUpdate();
+	win->params.width = width;
+	win->params.height = height;
+	
+	uint64_t offset = ddiGetFormatDataSize(&screen->format, win->params.width, win->params.height);
+	uint64_t memoryNeeded = ddiGetFormatDataSize(&screen->format, win->params.width, win->params.height)*2;
+	if (memoryNeeded & 0xFFF)
+	{
+		memoryNeeded &= ~0xFFF;
+		memoryNeeded += 0x1000;
+	};
+	
+	win->shmemAddr = __alloc_pages(memoryNeeded);
+	win->shmemSize = memoryNeeded;
+	win->shmemID = _glidix_shmalloc(win->shmemAddr, win->shmemSize, win->pid, PROT_READ|PROT_WRITE, 0);
+	if (win->shmemID == 0)
+	{
+		abort();
+	};
+	
+	win->clientArea[0] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
+	win->clientArea[1] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, (void*)(win->shmemAddr+offset), DDI_STATIC_FRAMEBUFFER);
+	win->frontBufferIndex = 0;
+	win->display = ddiCreateSurface(&screen->format, win->params.width, win->params.height, NULL, 0);
+	ddiFillRect(win->clientArea[0], 0, 0, win->params.width, win->params.height, &winBackColor);
+	ddiFillRect(win->clientArea[1], 0, 0, win->params.width, win->params.height, &winBackColor);
+	ddiFillRect(win->display, 0, 0, win->params.width, win->params.height, &winBackColor);
+	win->displayDirty = 1;
+	win->titleBar = ddiCreateSurface(&screen->format, win->params.width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT, NULL, 0);
+	win->titleBarDirty = 1;
 };
 
 void DeleteWindowsOf(int pid, int fd)
@@ -479,7 +539,6 @@ void DeleteWindowByID(uint64_t id, int pid, int fd)
 
 Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, int pid, int fd, int painterPid)
 {
-	PostDesktopUpdate();
 	pars->caption[255] = 0;
 	pars->iconName[255] = 0;
 	if (myID == 0)
@@ -505,7 +564,8 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	win->cursor = GWM_CURSOR_NORMAL;
 	memcpy(&win->params, pars, sizeof(GWMWindowParams));
 	
-	uint64_t memoryNeeded = ddiGetFormatDataSize(&screen->format, pars->width, pars->height);
+	uint64_t secondBufferOffset = ddiGetFormatDataSize(&screen->format, pars->width, pars->height);
+	uint64_t memoryNeeded = ddiGetFormatDataSize(&screen->format, pars->width, pars->height)*2;
 	if (memoryNeeded & 0xFFF)
 	{
 		memoryNeeded &= ~0xFFF;
@@ -522,9 +582,13 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 		return NULL;
 	};
 	
-	win->clientArea = ddiCreateSurface(&screen->format, pars->width, pars->height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
+	win->clientArea[0] = ddiCreateSurface(&screen->format, pars->width, pars->height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
+	win->clientArea[1] = ddiCreateSurface(&screen->format, pars->width, pars->height,
+				(void*)(win->shmemAddr + secondBufferOffset), DDI_STATIC_FRAMEBUFFER);
+	win->frontBufferIndex = 0;
 	win->display = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, 0);
-	ddiFillRect(win->clientArea, 0, 0, pars->width, pars->height, &winBackColor);
+	ddiFillRect(win->clientArea[0], 0, 0, pars->width, pars->height, &winBackColor);
+	ddiFillRect(win->clientArea[1], 0, 0, pars->width, pars->height, &winBackColor);
 	ddiFillRect(win->display, 0, 0, pars->width, pars->height, &winBackColor);
 	win->displayDirty = 1;
 	win->titleBar = ddiCreateSurface(&screen->format, pars->width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT, NULL, 0);
@@ -536,6 +600,8 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 
 	if (parent == NULL)
 	{
+		PostDesktopUpdate();
+		
 		if (desktopWindows == NULL)
 		{
 			desktopWindows = win;
@@ -683,12 +749,35 @@ void PostWindowEvent(Window *win, GWMEvent *event)
 
 void PostDesktopUpdate()
 {
-	GWMEvent ev;
-	ev.type = GWM_EVENT_DESKTOP_UPDATE;
 	if (listenWindow != NULL)
 	{
-		printf("sending update event to listen window\n");
+		GWMEvent ev;
+		ev.type = GWM_EVENT_DESKTOP_UPDATE;
+		ev.win = listenWindow->id;
 		PostWindowEvent(listenWindow, &ev);
+	};
+};
+
+void BringWindowToFront(Window *win)
+{
+	Window *toplevel = win;
+	while (toplevel->parent != NULL) toplevel = toplevel->parent;
+	
+	// bring it to front
+	if (toplevel->next != NULL)
+	{
+		if (toplevel->prev != NULL) toplevel->prev->next = toplevel->next;
+		else
+		{
+			desktopWindows = toplevel->next;
+		};
+		if (toplevel->next != NULL) toplevel->next->prev = toplevel->prev;
+	
+		Window *last = toplevel->next;
+		while (last->next != NULL) last = last->next;
+		last->next = toplevel;
+		toplevel->prev = last;
+		toplevel->next = NULL;
 	};
 };
 
@@ -759,10 +848,30 @@ void onMouseLeft()
 			{
 				if ((focusedWindow->params.flags & GWM_WINDOW_NODECORATE) == 0)
 				{
-					movingWindow = focusedWindow;
-					while (movingWindow->parent != NULL) movingWindow = movingWindow->parent;
-					movingOffX = offX;
-					movingOffY = offY;
+					if (focusedWindow->parent == NULL)
+					{
+						movingWindow = focusedWindow;
+						movingOffX = offX;
+						movingOffY = offY;
+					};
+				};
+			}
+			else if ((offY >= (focusedWindow->params.height + GUI_CAPTION_HEIGHT + GUI_WINDOW_BORDER))
+				&& ((offX < GUI_WINDOW_BORDER) || (offX >= (GUI_WINDOW_BORDER+focusedWindow->params.width))))
+			{
+				if ((focusedWindow->params.flags & GWM_WINDOW_NODECORATE) == 0)
+				{
+					if (focusedWindow->parent == NULL)
+					{
+						if (focusedWindow->params.flags & GWM_WINDOW_RESIZEABLE)
+						{
+							resizingWindow = focusedWindow;
+							resizingAnchorX = x;
+							resizingAnchorY = y;
+							resizingAnchorWidth = (int) focusedWindow->params.width;
+							resizingAnchorHeight = (int) focusedWindow->params.height;
+						};
+					};
 				};
 			};
 		};
@@ -781,7 +890,8 @@ void onMouseLeftRelease()
 	pthread_mutex_unlock(&mouseLock);
 	
 	pthread_mutex_lock(&windowLock);
-	movingWindow = NULL;	
+	movingWindow = NULL;
+	resizingWindow = NULL;
 	Window *win = FindWindowAt(x, y);
 	
 	if (win != NULL)
@@ -796,7 +906,31 @@ void onMouseLeftRelease()
 					btnIndex = -1;
 				};
 				
-				if (btnIndex == 2)
+				if (btnIndex == 0)
+				{
+					// clicked the minimize button
+					win->params.flags |= GWM_WINDOW_HIDDEN;
+					focusedWindow = NULL;
+					PostDesktopUpdate();
+					sem_post(&semRedraw);
+				}
+				else if (btnIndex == 1)
+				{
+					// maximize
+					if (win->params.flags & GWM_WINDOW_RESIZEABLE)
+					{
+						// request resize and move
+						GWMEvent event;
+						event.type = GWM_EVENT_RESIZE_REQUEST;
+						event.win = win->id;
+						event.x = 0;
+						event.y = 0;
+						event.width = screenWidth - 2*GUI_WINDOW_BORDER;
+						event.height = screenHeight - GUI_CAPTION_HEIGHT - 2*GUI_WINDOW_BORDER - 40;
+						PostWindowEvent(win, &event);
+					};
+				}
+				else if (btnIndex == 2)
 				{
 					// clicked the close button
 					GWMEvent event;
@@ -888,7 +1022,6 @@ void onInputEvent(int ev, int scancode)
 
 void onMouseMoved()
 {
-	//clock_t start = clock();
 	int x, y;
 	pthread_mutex_lock(&mouseLock);
 	x = mouseX;
@@ -905,6 +1038,34 @@ void onMouseMoved()
 		
 		movingWindow->params.x = newX;
 		movingWindow->params.y = newY;
+	};
+	
+	if (resizingWindow != NULL)
+	{
+		int deltaX = x - resizingAnchorX;
+		int deltaY = y - resizingAnchorY;
+		
+		int newWidth = resizingAnchorWidth + deltaX;
+		int newHeight = resizingAnchorHeight + deltaY;
+		
+		if (newWidth < 48)
+		{
+			newWidth = 48;
+		};
+		
+		if (newHeight < 48)
+		{
+			newHeight = 48;
+		};
+
+		GWMEvent event;
+		event.type = GWM_EVENT_RESIZE_REQUEST;
+		event.win = resizingWindow->id;
+		event.x = resizingWindow->params.x;
+		event.y = resizingWindow->params.y;
+		event.width = newWidth;
+		event.height = newHeight;
+		PostWindowEvent(resizingWindow, &event);
 	};
 	
 	Window *win = FindWindowAt(x, y);
@@ -939,8 +1100,6 @@ void onMouseMoved()
 	};
 	
 	pthread_mutex_unlock(&windowLock);
-	//clock_t end = clock();
-	//printf("mouse ticks: %d\n", (int)(end-start));
 };
 
 void ClipMouse()
@@ -1210,6 +1369,7 @@ void *msgThreadFunc(void *ignore)
 				pthread_mutex_lock(&windowLock);
 				Window *win = GetWindowByID(cmd->postDirty.id, info.pid, info.fd);
 				if (win != NULL) PostWindowDirty(win);
+				win->frontBufferIndex ^= 1;
 				pthread_mutex_unlock(&windowLock);
 			}
 			else if (cmd->cmd == GWM_CMD_DESTROY_WINDOW)
@@ -1225,7 +1385,7 @@ void *msgThreadFunc(void *ignore)
 				Window *win = GetWindowByID(cmd->clearWindow.id, info.pid, info.fd);
 				if (win != NULL)
 				{
-					ddiFillRect(win->clientArea, 0, 0, win->params.width, win->params.height, &winBackColor);
+					ddiFillRect(win->clientArea[win->frontBufferIndex^1], 0, 0, win->params.width, win->params.height, &winBackColor);
 				};
 				
 				GWMMessage msg;
@@ -1261,6 +1421,7 @@ void *msgThreadFunc(void *ignore)
 					};
 					if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
 					{
+						if (win->parent == NULL) PostDesktopUpdate();
 						PostWindowDirty(win);
 					};
 					msg.setFlagsResp.status = 0;
@@ -1389,11 +1550,88 @@ void *msgThreadFunc(void *ignore)
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 				sem_post(&semRedraw);
 			}
+			else if (cmd->cmd == GWM_CMD_TOGGLE_WINDOW)
+			{
+				pthread_mutex_lock(&windowLock);
+				Window *win = GetWindowByID(cmd->toggleWindow.ref.id, cmd->toggleWindow.ref.pid, cmd->toggleWindow.ref.fd);
+				
+				GWMMessage msg;
+				msg.toggleWindowResp.type = GWM_MSG_TOGGLE_WINDOW_RESP;
+				msg.toggleWindowResp.seq = cmd->toggleWindow.seq;
+				if (win == NULL)
+				{
+					msg.toggleWindowResp.status = -1;
+				}
+				else
+				{
+					msg.toggleWindowResp.status = 0;
+					
+					win->params.flags ^= GWM_WINDOW_HIDDEN;
+					if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
+					{
+						focusedWindow = win;
+						BringWindowToFront(win);
+					}
+					else
+					{
+						if (focusedWindow == win)
+						{
+							focusedWindow = NULL;
+						};
+					};
+					
+					PostWindowDirty(win);
+				};
+				
+				pthread_mutex_unlock(&windowLock);
+				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+			}
 			else if (cmd->cmd == GWM_CMD_SET_LISTEN_WINDOW)
 			{
 				pthread_mutex_lock(&windowLock);
 				listenWindow = GetWindowByID(cmd->setListenWindow.win, info.pid, info.fd);
 				pthread_mutex_unlock(&windowLock);
+			}
+			else if (cmd->cmd == GWM_CMD_RESIZE)
+			{
+				pthread_mutex_lock(&windowLock);
+				Window *win = GetWindowByID(cmd->resize.win, info.pid, info.fd);
+
+				GWMMessage msg;
+				msg.resizeResp.type = GWM_MSG_RESIZE_RESP;
+				msg.resizeResp.seq = cmd->resize.seq;
+				
+				if (win != NULL)
+				{
+					ResizeWindow(win, cmd->resize.width, cmd->resize.height);
+					msg.resizeResp.status = 0;
+					msg.resizeResp.shmemID = win->shmemID;
+					msg.resizeResp.shmemSize = win->shmemSize;
+					msg.resizeResp.width = win->params.width;
+					msg.resizeResp.height = win->params.height;
+				}
+				else
+				{
+					msg.resizeResp.status = -1;
+				};
+				
+				pthread_mutex_unlock(&windowLock);
+				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+				sem_post(&semRedraw);
+			}
+			else if (cmd->cmd == GWM_CMD_MOVE)
+			{
+				pthread_mutex_lock(&windowLock);
+				Window *win = GetWindowByID(cmd->move.win, info.pid, info.fd);
+				
+				if (win != NULL)
+				{
+					win->params.x = cmd->move.x;
+					win->params.y = cmd->move.y;
+				};
+				
+				pthread_mutex_unlock(&windowLock);
+				sem_post(&semRedraw);
 			};
 		}
 		else if (info.type == _GLIDIX_MQ_HANGUP)

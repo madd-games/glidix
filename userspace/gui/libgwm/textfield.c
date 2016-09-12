@@ -85,28 +85,6 @@ void gwmRedrawTextField(GWMWindow *field)
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, color);
 	ddiFillRect(canvas, 1, 1, canvas->width-2, canvas->height-2, background);
 
-#if 0
-	char buf[2] = "*";
-	
-	off_t i;
-	for (i=0; i<data->textSize; i++)
-	{
-		if ((data->flags & GWM_TXT_MASKED) == 0) buf[0] = data->text[i];
-		if ((i >= data->selectStart) && (i < data->selectEnd))
-		{
-			ddiFillRect(canvas, 3+8*i, TEXTFIELD_HEIGHT/2-6, 8, 12, GWM_COLOR_SELECTION);
-		};
-		ddiDrawText(canvas, 3+8*i, TEXTFIELD_HEIGHT/2-4, buf, NULL, NULL);
-	};
-	
-	int cursorX = 3 + data->cursorPos * 8;
-	static DDIColor black = {0, 0, 0, 0xFF};
-	if (data->focused)
-	{
-		ddiFillRect(canvas, cursorX, 3, 1, canvas->height-6, &black);
-	};
-#endif
-
 	if (data->pen != NULL) ddiDeletePen(data->pen);
 	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 3, 3, canvas->width-3, canvas->height-3, 0, 0, NULL);
 	if (data->pen != NULL)
@@ -212,6 +190,8 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 		return 0;
 	case GWM_EVENT_FOCUS_OUT:
 		data->focused = 0;
+		data->selectStart = data->selectEnd = 0;
+		data->cursorPos = -1;
 		gwmRedrawTextField(field);
 		return 0;
 	case GWM_EVENT_DOWN:

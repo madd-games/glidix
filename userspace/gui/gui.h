@@ -37,6 +37,7 @@
 #define	GWM_WINDOW_MKFOCUSED			(1 << 2)
 #define	GWM_WINDOW_NOTASKBAR			(1 << 3)
 #define	GWM_WINDOW_NOSYSMENU			(1 << 4)
+#define	GWM_WINDOW_RESIZEABLE			(1 << 5)
 
 /**
  * Colors.
@@ -66,6 +67,14 @@ extern DDIColor gwmColorSelection;
 #define	GWM_CB_OFF				0
 #define	GWM_CB_ON				1
 #define	GWM_CB_TRI				2
+
+/**
+ * Scrollbar flags. Note that GWM_SCROLLBAR_HORIZ and GWM_SCROLLBAR_VERT are to be
+ * considered mutually exclusive, and GWM_SCROLLBAR_VERT is the default.
+ */
+#define	GWM_SCROLLBAR_VERT			0
+#define	GWM_SCROLLBAR_HORIZ			(1 << 0)
+#define	GWM_SCROLLBAR_DISABLED			(1 << 1)
 
 /**
  * Those must match up with the Glidix humin interface (<glidix/humin.h>).
@@ -141,16 +150,19 @@ typedef struct
 #define	GWM_EVENT_FOCUS_IN			7
 #define	GWM_EVENT_FOCUS_OUT			8
 #define	GWM_EVENT_DESKTOP_UPDATE		9
+#define	GWM_EVENT_RESIZE_REQUEST		10
 typedef struct
 {
 	int					type;
 	uint64_t				win;		// window ID
-	int					x;		// mouse position relative to window
-	int					y;
+	int					x;		// mouse position relative to window; or window
+	int					y;		// position for GWM_EVENT_RESIZE_REQUEST
 	int					scancode;	// hardware-specific key scancode
 	int					keycode;	// hardware-independent key code
 	int					keymod;		// bitwise-OR of active modifiers (GWM_KM_*)
 	uint64_t				keychar;	// actual Unicode character entered by key, or zero
+	unsigned int 				width;		// requested window dimensions (for GWM_EVENT_RESIZE_REQUEST)
+	unsigned int				height;
 } GWMEvent;
 
 /**
@@ -180,6 +192,9 @@ typedef struct
 #define	GWM_CMD_GET_WINDOW_LIST			9
 #define	GWM_CMD_GET_WINDOW_PARAMS		10
 #define	GWM_CMD_SET_LISTEN_WINDOW		11
+#define	GWM_CMD_TOGGLE_WINDOW			12
+#define	GWM_CMD_RESIZE				13
+#define	GWM_CMD_MOVE				14
 typedef union
 {
 	int					cmd;
@@ -268,6 +283,31 @@ typedef union
 		uint64_t			seq;
 		uint64_t			win;
 	} setListenWindow;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_TOGGLE_WINDOW
+		uint64_t			seq;
+		GWMGlobWinRef			ref;
+	} toggleWindow;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_RESIZE
+		uint64_t			seq;
+		uint64_t			win;
+		unsigned int			width;
+		unsigned int			height;
+	} resize;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_MOVE
+		uint64_t			seq;
+		uint64_t			win;
+		int				x;
+		int				y;
+	} move;
 } GWMCommand;
 
 /**
@@ -283,6 +323,8 @@ typedef union
 #define	GWM_MSG_GET_FORMAT_RESP			7
 #define	GWM_MSG_GET_WINDOW_LIST_RESP		8
 #define	GWM_MSG_GET_WINDOW_PARAMS_RESP		9
+#define	GWM_MSG_TOGGLE_WINDOW_RESP		10
+#define	GWM_MSG_RESIZE_RESP			11
 typedef union
 {
 	struct
@@ -368,6 +410,24 @@ typedef union
 		int				status;
 		GWMWindowParams			params;
 	} getWindowParamsResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_TOGGLE_WINDOW_RESP
+		uint64_t			seq;
+		int				status;
+	} toggleWindowResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_RESIZE_RESP
+		uint64_t			seq;
+		int				status;
+		uint64_t			shmemID;
+		uint64_t			shmemSize;
+		unsigned int			width;
+		unsigned int			height;
+	} resizeResp;
 } GWMMessage;
 
 struct GWMWindow_;
@@ -399,6 +459,7 @@ typedef struct GWMWindow_
 	uint64_t				shmemAddr;
 	uint64_t				shmemSize;
 	DDISurface*				canvas;
+	int					currentBuffer;
 	GWMHandlerInfo				*handlerInfo;
 	void					*data;
 } GWMWindow;
@@ -563,6 +624,11 @@ int gwmGetDesktopWindows(GWMGlobWinRef *focused, GWMGlobWinRef *winlist);
 int gwmGetGlobWinParams(GWMGlobWinRef *ref, GWMWindowParams *pars);
 
 /**
+ * Toggle a window from unfocused to focused+visible, or between hidden and visible.
+ */
+void gwmToggleWindow(GWMGlobWinRef *ref);
+
+/**
  * Mark a certain window as a "listening window". This window will receive the GWM_EVENT_DESKTOP_UPDATE
  * event when the desktop window list, or focused window, changed. Used by the sysbar for example.
  */
@@ -577,5 +643,42 @@ GWMWindow *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int fla
  * Destroys a checkbox.
  */
 void gwmDestroyCheckbox(GWMWindow *checkbox);
+
+/**
+ * Create a scrollbar.
+ */
+GWMWindow *gwmCreateScrollbar(GWMWindow *parent, int x, int y, int len, int viewOffset, int viewSize, int viewTotal, int flags);
+
+/**
+ * Destroy a scrollbar.
+ */
+void gwmDestroyScrollbar(GWMWindow *sbar);
+
+/**
+ * Set the update handler for a scrollbar. The handler's return value is interpreted the same way as an event
+ * handler's return value.
+ */
+typedef int (*GWMScrollbarCallback)(void *param);
+void gwmSetScrollbarCallback(GWMWindow *sbar, GWMScrollbarCallback callback, void *param);
+
+/**
+ * Get the scrollbar's current view offset.
+ */
+int gwmGetScrollbarOffset(GWMWindow *sbar);
+
+/**
+ * Set scrollbar parameters and redraw. Note: the orientation will NOT be changed by this function.
+ */
+void gwmSetScrollbarParams(GWMWindow *sbar, int viewOffset, int viewSize, int viewTotal, int flags);
+
+/**
+ * Change the size of a window. This frees, and hence invalidates, a previous return value from gwmGetWindowCanvas()!
+ */
+void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height);
+
+/**
+ * Change the position of a window.
+ */
+void gwmMoveWindow(GWMWindow *win, int x, int y);
 
 #endif

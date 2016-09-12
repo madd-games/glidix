@@ -59,6 +59,11 @@
 #define	DDI_STYLE_UNDERLINE			(1 << 2)
 
 /**
+ * Length (in pixels) of a tab.
+ */
+#define	DDI_TAB_LEN				64
+
+/**
  * Describes the pixel format of a surface.
  */
 typedef struct

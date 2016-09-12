@@ -258,9 +258,11 @@ GWMWindow* gwmCreateWindow(
 
 		win->shmemAddr = canvasBase;
 		win->shmemSize = resp.createWindowResp.shmemSize;
+		uint64_t offset = ddiGetFormatDataSize(&resp.createWindowResp.format, resp.createWindowResp.width, resp.createWindowResp.height);
 		win->canvas = ddiCreateSurface(&resp.createWindowResp.format, resp.createWindowResp.width,
-						resp.createWindowResp.height, (char*)canvasBase, DDI_STATIC_FRAMEBUFFER);
+						resp.createWindowResp.height, (char*)(canvasBase+offset), DDI_STATIC_FRAMEBUFFER);
 		win->handlerInfo = NULL;
+		win->currentBuffer = 1;
 		return win;
 	};
 	
@@ -274,7 +276,12 @@ DDISurface* gwmGetWindowCanvas(GWMWindow *win)
 
 void gwmDestroyWindow(GWMWindow *win)
 {
-	munmap((void*)win->shmemAddr, win->shmemSize);
+	if (win->canvas != NULL)
+	{
+		munmap((void*)win->shmemAddr, win->shmemSize);
+		ddiDeleteSurface(win->canvas);
+	};
+	
 	GWMCommand cmd;
 	cmd.destroyWindow.cmd = GWM_CMD_DESTROY_WINDOW;
 	cmd.destroyWindow.id = win->id;
@@ -302,6 +309,13 @@ void gwmPostDirty(GWMWindow *win)
 	cmd.postDirty.cmd = GWM_CMD_POST_DIRTY;
 	cmd.postDirty.id = win->id;
 	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+	
+	win->currentBuffer ^= 1;
+	DDISurface *oldCanvas = win->canvas;
+	uint64_t offset = ddiGetFormatDataSize(&oldCanvas->format, oldCanvas->width, oldCanvas->height);
+	win->canvas = ddiCreateSurface(&oldCanvas->format, oldCanvas->width,
+				oldCanvas->height, (char*)(win->shmemAddr + offset*win->currentBuffer), DDI_STATIC_FRAMEBUFFER);
+	ddiDeleteSurface(oldCanvas);
 };
 
 void gwmWaitEvent(GWMEvent *ev)
@@ -531,6 +545,19 @@ int gwmGetGlobWinParams(GWMGlobWinRef *ref, GWMWindowParams *pars)
 	return resp.getWindowParamsResp.status;
 };
 
+void gwmToggleWindow(GWMGlobWinRef *ref)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.toggleWindow.cmd = GWM_CMD_TOGGLE_WINDOW;
+	cmd.toggleWindow.seq = seq;
+	memcpy(&cmd.toggleWindow.ref, ref, sizeof(GWMGlobWinRef));
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+};
+
 void gwmSetListenWindow(GWMWindow *win)
 {
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
@@ -539,6 +566,62 @@ void gwmSetListenWindow(GWMWindow *win)
 	cmd.setListenWindow.cmd = GWM_CMD_SET_LISTEN_WINDOW;
 	cmd.setListenWindow.seq = seq;
 	cmd.setListenWindow.win = win->id;
+	
+	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+};
+
+void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
+{
+	DDIPixelFormat format;
+	memcpy(&format, &win->canvas->format, sizeof(DDIPixelFormat));
+	
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.resize.cmd = GWM_CMD_RESIZE;
+	cmd.resize.seq = seq;
+	cmd.resize.win = win->id;
+	cmd.resize.width = width;
+	cmd.resize.height = height;
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	if (resp.resizeResp.status == 0)
+	{
+		munmap((void*)win->shmemAddr, win->shmemSize);
+		ddiDeleteSurface(win->canvas);
+
+		uint64_t canvasBase = __alloc_pages(resp.resizeResp.shmemSize);
+		if (_glidix_shmap(canvasBase, resp.resizeResp.shmemSize, resp.resizeResp.shmemID, PROT_READ|PROT_WRITE) != 0)
+		{
+			perror("_glidix_shmap");
+			abort();
+		};
+
+		win->shmemAddr = canvasBase;
+		win->shmemSize = resp.resizeResp.shmemSize;
+		uint64_t offset = ddiGetFormatDataSize(&format, resp.resizeResp.width, resp.resizeResp.height);
+		win->canvas = ddiCreateSurface(&format, resp.resizeResp.width,
+						resp.resizeResp.height, (char*)(canvasBase+offset), DDI_STATIC_FRAMEBUFFER);
+		win->currentBuffer = 1;
+	}
+	else
+	{
+		abort();
+	};
+};
+
+void gwmMoveWindow(GWMWindow *win, int x, int y)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.move.cmd = GWM_CMD_MOVE;
+	cmd.move.seq = seq;
+	cmd.move.win = win->id;
+	cmd.move.x = x;
+	cmd.move.y = y;
 	
 	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 };

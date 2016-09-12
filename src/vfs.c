@@ -669,6 +669,12 @@ static int vfsStatGen(const char *path, struct stat *st, int flags)
 	memcpy(st, &dir->stat, sizeof(struct stat));
 	if (dir->close != NULL) dir->close(dir);
 	kfree(dir);
+
+	if (isMountPoint(path))
+	{
+		st->st_mode = (st->st_mode & 0777) | VFS_MODE_DIRECTORY;
+	};
+	
 	return 0;
 };
 

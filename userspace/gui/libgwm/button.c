@@ -168,6 +168,7 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
 	
 	gwmRedrawButton(button);
 	gwmSetEventHandler(button, gwmButtonHandler);
+	return button;
 };
 
 void gwmDestroyButton(GWMWindow *button)
