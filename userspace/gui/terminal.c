@@ -51,7 +51,7 @@ uint8_t currentAttr = 0x07;
 pthread_spinlock_t consoleLock;
 pthread_t ctrlThread;
 extern const char font[16*256];
-int running = 1;
+volatile int running = 1;
 int selectStart = 0;
 int selectEnd = 0;
 int selectAnchor = -1;
@@ -196,10 +196,15 @@ void renderConsole(DDISurface *surface)
 	gwmPostDirty(termWindow);
 };
 
-void *ctrlThreadFunc(void *ignore)
+void *ctrlThreadFunc(void *context)
 {
-	(void)ignore;
+	char **argv = (char**) context;
 
+	// this thread accepts all signals
+	sigset_t sigset;
+	sigfillset(&sigset);
+	pthread_sigmask(SIG_UNBLOCK, &sigset, NULL);
+	
 	pid_t pid = fork();
 	if (pid == -1)
 	{
@@ -225,7 +230,16 @@ void *ctrlThreadFunc(void *ignore)
 		dup2(fd, 1);
 		dup2(fd, 2);
 		
-		execl("/bin/sh", "sh", NULL);
+		if (argv[1] == NULL)
+		{
+			execl("/bin/sh", "sh", NULL);
+		}
+		else
+		{
+			argv[0] = "/usr/bin/env";
+			execv("/usr/bin/env", argv);
+		};
+		
 		exit(1);
 	};
 	
@@ -238,16 +252,16 @@ void *ctrlThreadFunc(void *ignore)
 			pthread_spin_lock(&consoleLock);
 			writeConsole(buffer, sz);
 			pthread_spin_unlock(&consoleLock);
-			gwmPostUpdate(NULL);
+			gwmPostUpdate(termWindow);
 		};
 		
 		if (!running)
 		{
-			gwmPostUpdate(NULL);
+			gwmPostUpdate(termWindow);
+			waitpid(pid, NULL, 0);
+			break;
 		};
 	};
-	
-	while (1) pause();
 	
 	return NULL;
 };
@@ -264,7 +278,91 @@ static int getPositionFromCoords(int cx, int cy)
 	return ty * 80 + tx;
 };
 
-int main()
+int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
+{
+	DDISurface *surface = gwmGetWindowCanvas(termWindow);
+	
+	if (ev->type == GWM_EVENT_CLOSE)
+	{
+		return -1;
+	}
+	else if (ev->type == GWM_EVENT_UPDATE)
+	{
+		pthread_spin_lock(&consoleLock);
+		renderConsole(surface);
+		pthread_spin_unlock(&consoleLock);
+		
+		if (!running) return -1;
+	}
+	else if (ev->type == GWM_EVENT_DOWN)
+	{
+		if (ev->keymod & GWM_KM_CTRL)
+		{
+			char put = 0;
+			if (ev->keycode == 'c')
+			{
+				put = 0x83;	// CC_VINTR
+			}
+			else if (ev->keycode == 'k')
+			{
+				put = 0x84;	// CC_VKILL
+			};
+			
+			if (put != 0)
+			{
+				write(fdMaster, &put, 1);
+			};
+		}
+		else if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		{
+			selectStart = selectEnd = selectAnchor = getPositionFromCoords(ev->x, ev->y);
+			pthread_spin_lock(&consoleLock);
+			renderConsole(surface);
+			pthread_spin_unlock(&consoleLock);
+		}
+		else
+		{
+			char c = (char) ev->keychar;
+			if (c != 0)
+			{
+				write(fdMaster, &c, 1);
+			};
+		};
+	}
+	else if (ev->type == GWM_EVENT_MOTION)
+	{
+		if (selectAnchor != -1)
+		{	
+			int nowAt = getPositionFromCoords(ev->x, ev->y);
+			
+			if (nowAt < selectAnchor)
+			{
+				selectStart = nowAt;
+				selectEnd = selectAnchor;
+			}
+			else
+			{
+				selectStart = selectAnchor;
+				selectEnd = nowAt;
+			};
+
+			pthread_spin_lock(&consoleLock);
+			renderConsole(surface);
+			pthread_spin_unlock(&consoleLock);
+		};
+	}
+	else if (ev->type == GWM_EVENT_UP)
+	{
+		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		{
+			selectAnchor = -1;
+		};
+	};
+	
+	return 0;
+};
+
+int main(int argc, char *argv[])
 {	
 	gwmInit();
 	GWMWindow *top = gwmCreateWindow(NULL, "Terminal", 10, 10, 720, 400, GWM_WINDOW_MKFOCUSED);
@@ -287,8 +385,8 @@ int main()
 	};
 	
 	clearConsole();
+	surface = gwmGetWindowCanvas(wnd);
 	renderConsole(surface);
-	gwmPostDirty(wnd);
 	
 	fdMaster = getpt();
 	if (fdMaster == -1)
@@ -301,93 +399,17 @@ int main()
 	grantpt(fdMaster);
 	unlockpt(fdMaster);
 	
+	// this thread will not accept any signals
+	sigset_t sigset;
+	sigfillset(&sigset);
+	pthread_sigmask(SIG_BLOCK, &sigset, NULL);
+	
 	signal(SIGCHLD, onSigChld);
-	pthread_create(&ctrlThread, NULL, ctrlThreadFunc, NULL);
+	pthread_create(&ctrlThread, NULL, ctrlThreadFunc, argv);
 	
-	while (1)
-	{
-		GWMEvent ev;
-		gwmWaitEvent(&ev);
-		
-		if (ev.type == GWM_EVENT_CLOSE)
-		{
-			break;
-		}
-		else if (ev.type == GWM_EVENT_UPDATE)
-		{
-			pthread_spin_lock(&consoleLock);
-			renderConsole(surface);
-			pthread_spin_unlock(&consoleLock);
-			gwmPostDirty(wnd);
-			
-			if (!running) break;
-		}
-		else if (ev.type == GWM_EVENT_DOWN)
-		{
-			if (ev.keymod & GWM_KM_CTRL)
-			{
-				char put = 0;
-				if (ev.keycode == 'c')
-				{
-					put = 0x83;	// CC_VINTR
-				}
-				else if (ev.keycode == 'k')
-				{
-					put = 0x84;	// CC_VKILL
-				};
-				
-				if (put != 0)
-				{
-					write(fdMaster, &put, 1);
-				};
-			}
-			else if (ev.scancode == GWM_SC_MOUSE_LEFT)
-			{
-				selectStart = selectEnd = selectAnchor = getPositionFromCoords(ev.x, ev.y);
-				pthread_spin_lock(&consoleLock);
-				renderConsole(surface);
-				pthread_spin_unlock(&consoleLock);
-			}
-			else
-			{
-				char c = (char) ev.keychar;
-				if (c != 0)
-				{
-					write(fdMaster, &c, 1);
-				};
-			};
-		}
-		else if (ev.type == GWM_EVENT_MOTION)
-		{
-			if (selectAnchor != -1)
-			{	
-				int nowAt = getPositionFromCoords(ev.x, ev.y);
-				
-				if (nowAt < selectAnchor)
-				{
-					selectStart = nowAt;
-					selectEnd = selectAnchor;
-				}
-				else
-				{
-					selectStart = selectAnchor;
-					selectEnd = nowAt;
-				};
-
-				pthread_spin_lock(&consoleLock);
-				renderConsole(surface);
-				pthread_spin_unlock(&consoleLock);
-			};
-		}
-		else if (ev.type == GWM_EVENT_UP)
-		{
-			if (ev.scancode == GWM_SC_MOUSE_LEFT)
-			{
-				selectAnchor = -1;
-			};
-		};
-	};
-	
+	gwmSetEventHandler(top, terminalHandler);
+	gwmSetEventHandler(wnd, terminalHandler);
+	gwmMainLoop();
 	gwmQuit();
 	
 	return 0;

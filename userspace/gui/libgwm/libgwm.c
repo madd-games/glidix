@@ -625,3 +625,21 @@ void gwmMoveWindow(GWMWindow *win, int x, int y)
 	
 	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 };
+
+void gwmRelToAbs(GWMWindow *win, int relX, int relY, int *absX, int *absY)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.relToAbs.cmd = GWM_CMD_REL_TO_ABS;
+	cmd.relToAbs.seq = seq;
+	cmd.relToAbs.win = win->id;
+	cmd.relToAbs.relX = relX;
+	cmd.relToAbs.relY = relY;
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	if (absX != NULL) *absX = resp.relToAbsResp.absX;
+	if (absY != NULL) *absY = resp.relToAbsResp.absY;
+};

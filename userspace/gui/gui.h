@@ -46,6 +46,11 @@
 extern DDIColor gwmColorSelection;
 
 /**
+ * Unspecified window position.
+ */
+#define	GWM_POS_UNSPEC				((unsigned int)-1)
+
+/**
  * Button flags.
  */
 #define	GWM_BUTTON_DISABLED			(1 << 0)
@@ -99,6 +104,11 @@ extern DDIColor gwmColorSelection;
 #define	GWM_MBUT_YESNO				0x10
 #define	GWM_MBUT_OKCANCEL			0x20
 #define	GWM_MBUT_YESNOCANCEL			0x30
+
+/**
+ * Menu entry flags.
+ */
+#define	GWM_ME_SEPARATOR			(1 << 0)		/* draw separator below */
 
 /**
  * Key codes.
@@ -195,6 +205,7 @@ typedef struct
 #define	GWM_CMD_TOGGLE_WINDOW			12
 #define	GWM_CMD_RESIZE				13
 #define	GWM_CMD_MOVE				14
+#define	GWM_CMD_REL_TO_ABS			15
 typedef union
 {
 	int					cmd;
@@ -308,6 +319,15 @@ typedef union
 		int				x;
 		int				y;
 	} move;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_REL_TO_ABS
+		uint64_t			seq;
+		uint64_t			win;
+		int				relX;
+		int				relY;
+	} relToAbs;
 } GWMCommand;
 
 /**
@@ -325,6 +345,7 @@ typedef union
 #define	GWM_MSG_GET_WINDOW_PARAMS_RESP		9
 #define	GWM_MSG_TOGGLE_WINDOW_RESP		10
 #define	GWM_MSG_RESIZE_RESP			11
+#define	GWM_MSG_REL_TO_ABS_RESP			12
 typedef union
 {
 	struct
@@ -428,6 +449,14 @@ typedef union
 		unsigned int			width;
 		unsigned int			height;
 	} resizeResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_REL_TO_ABS_RESP
+		uint64_t			seq;
+		int				absX;
+		int				absY;
+	} relToAbsResp;
 } GWMMessage;
 
 struct GWMWindow_;
@@ -463,6 +492,46 @@ typedef struct GWMWindow_
 	GWMHandlerInfo				*handlerInfo;
 	void					*data;
 } GWMWindow;
+
+/**
+ * Menu entry callback; return -1 to terminate application, 0 to continue.
+ */
+typedef int (*GWMMenuCallback)(void *param);
+
+/**
+ * Menu close callback.
+ */
+typedef void (*GWMMenuCloseCallback)(void *param);
+
+/**
+ * Describes a menu entry.
+ */
+struct GWMMenu_;
+typedef struct
+{
+	char*					label;		// on the heap!
+	int					flags;
+	GWMMenuCallback				callback;
+	void*					param;		// callback parameter
+	struct GWMMenu_*			submenu;
+} GWMMenuEntry;
+
+/**
+ * Describes a menu. You create a menu with gwmCreateMenu(), open it using gwmOpenMenu(), close with gwmCloseMenu()
+ * (or by the user clicking away from it). You can destroy it with gwmDestroyMenu().
+ */
+typedef struct GWMMenu_
+{
+	size_t					numEntries;
+	GWMMenuEntry*				entries;
+	GWMWindow*				win;
+	DDISurface*				background;
+	DDISurface*				overlay;
+	GWMMenuCloseCallback			closeCallback;
+	void*					closeParam;
+	int					selectedSub;
+	int					focused;
+} GWMMenu;
 
 /**
  * Initialises the GWM library. This must be called before using any other functions.
@@ -680,5 +749,67 @@ void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height);
  * Change the position of a window.
  */
 void gwmMoveWindow(GWMWindow *win, int x, int y);
+
+/**
+ * Convert the coordinates (relX, relY), relative to window 'win' (which may be NULL to indicate the desktop), and return
+ * the absolute coordinates in (absX, absY).
+ */
+void gwmRelToAbs(GWMWindow *win, int relX, int relY, int *absX, int *absY);
+
+/**
+ * Creates a new menu.
+ */
+GWMMenu *gwmCreateMenu();
+
+/**
+ * Adds a new entry to a menu.
+ */
+void gwmMenuAddEntry(GWMMenu *menu, const char *label, GWMMenuCallback callback, void *param);
+
+/**
+ * Adds a separator to a menu.
+ */
+void gwmMenuAddSeparator(GWMMenu *menu);
+
+/**
+ * Adds a sub-menu to a menu.
+ */
+GWMMenu *gwmMenuAddSub(GWMMenu *menu, const char *label);
+
+/**
+ * Sets the close callback of a menu.
+ */
+void gwmMenuSetCloseCallback(GWMMenu *menu, GWMMenuCloseCallback callback, void *param);
+
+/**
+ * Opens the specified menu on top of the specified window at the specified position.
+ */
+void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int x, int y);
+
+/**
+ * Closes the specified menu.
+ */
+void gwmCloseMenu(GWMMenu *menu);
+
+/**
+ * Destroys a menu object.
+ */
+void gwmDestroyMenu(GWMMenu *menu);
+
+/**
+ * Creates a menu bar.
+ */
+GWMWindow *gwmCreateMenubar(GWMWindow *parent);
+
+/**
+ * Adjust a menu bar to its parent's new width. Call this whenever the parent is resized.
+ */
+void gwmMenubarAdjust(GWMWindow *menubar);
+
+/**
+ * Add a new menu to a menubar. The menubar takes ownership of the menu; you must now call gwmOpenMenu(), gwmCloseMenu()
+ * or gwmDestroyMenu() on it (gwmDestroyMenu() will be automatically called when you call gwmDestroyMenubar()).
+ */
+void gwmMenubarAdd(GWMWindow *menubar, const char *label, GWMMenu *menu);
 
 #endif

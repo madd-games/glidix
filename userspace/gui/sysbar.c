@@ -34,10 +34,32 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#include <dirent.h>
 
 /**
  * The system bar at the bottom of the screen.
  */
+
+enum
+{
+	CAT_ACC,
+	CAT_GAM,
+	CAT_SYS,
+	
+	CAT_NUM
+};
+
+const char *catLabels[CAT_NUM] = {
+	"Accessories",
+	"Games",
+	"System"
+};
+
+const char *catNames[CAT_NUM] = {
+	"ACC",
+	"GAM",
+	"SYS"
+};
 
 DDISurface *imgSysBar;
 DDISurface *menuButton;
@@ -50,6 +72,165 @@ int lastSelectColumn=-1;
 int pressed = 0;
 GWMGlobWinRef windows[128];
 int numWindows = 0;
+GWMMenu *menuSys;
+GWMMenu *menuCat[CAT_NUM];
+
+int catByName(const char *name)
+{
+	int i;
+	for (i=0; i<CAT_NUM; i++)
+	{
+		if (strcmp(catNames[i], name) == 0)
+		{
+			return i;
+		};
+	};
+	
+	return CAT_SYS;
+};
+
+int runApp(void *context)
+{
+	char **argv = (char**) context;
+	
+	if (fork() == 0)
+	{
+		execv(argv[0], argv);
+		exit(1);
+	};
+	
+	return 0;
+};
+
+void loadAppFile(const char *filename)
+{
+	FILE *fp = fopen(filename, "r");
+	if (fp == NULL)
+	{
+		printf("Failed to open: %s\n", filename);
+		return;
+	};
+	
+	char line[1024];
+	char *appName = NULL;
+	int appCat = CAT_SYS;
+	char **appArgs = (char**) malloc(sizeof(char*));
+	appArgs[0] = "/usr/bin/env";
+	int argc = 1;
+	
+	int ok = 1;
+	
+	while (fgets(line, 1024, fp) != NULL)
+	{
+		char *newline = strchr(line, '\n');
+		if (newline == NULL)
+		{
+			printf("File %s contains a line that is too long\n", filename);
+			ok = 0;
+			break;
+		};
+		
+		*newline = 0;
+		
+		if (line[0] == '#')
+		{
+			continue;
+		};
+		
+		char *equals = strchr(line, '=');
+		if (equals == NULL)
+		{
+			printf("Invalid line in file %s: %s\n", filename, line);
+			ok = 0;
+			break;
+		};
+		
+		char *option = line;
+		*equals = 0;
+		char *value = equals+1;
+		
+		if (strcmp(option, "Name") == 0)
+		{
+			appName = strdup(value);
+		}
+		else if (strcmp(option, "Exec") == 0)
+		{
+			char *token;
+			
+			for (token=strtok(value, " "); token!=NULL; token=strtok(NULL, " "))
+			{
+				int index = argc++;
+				appArgs = realloc(appArgs, sizeof(char*)*argc);
+				appArgs[index] = strdup(token);
+			};
+		}
+		else if (strcmp(option, "Terminal") == 0)
+		{
+			if (strcmp(value, "1") == 0)
+			{
+				appArgs[0] = "/usr/bin/terminal";
+			};
+		}
+		else if (strcmp(option, "Icon") == 0)
+		{
+			// TODO
+		}
+		else if (strcmp(option, "Category") == 0)
+		{
+			appCat = catByName(value);
+		}
+		else
+		{
+			printf("Invalid option in %s: %s\n", filename, option);
+			ok = 0;
+			break;
+		};
+	};
+
+	fclose(fp);
+	
+	if (ok)
+	{
+		appArgs = realloc(appArgs, sizeof(char*) * (argc+1));
+		appArgs[argc] = NULL;
+	
+		if (appName == NULL)
+		{
+			gwmMenuAddEntry(menuCat[appCat], "Nameless App", runApp, appArgs);
+		}
+		else
+		{
+			gwmMenuAddEntry(menuCat[appCat], appName, runApp, appArgs);
+			free(appName);
+		};
+	}
+	else
+	{
+		free(appArgs);
+		free(appName);
+	};
+};
+
+void loadApps()
+{
+	DIR *dirp = opendir("/usr/share/apps");
+	if (dirp == NULL)
+	{
+		printf("Failed to open /usr/share/apps");
+		return;
+	};
+	
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		char fullpath[256];
+		sprintf(fullpath, "/usr/share/apps/%s", ent->d_name);
+		
+		loadAppFile(fullpath);
+	};
+	
+	closedir(dirp);
+};
 
 void on_signal(int sig, siginfo_t *si, void *ignore)
 {
@@ -62,7 +243,7 @@ void on_signal(int sig, siginfo_t *si, void *ignore)
 void sysbarRedraw()
 {
 	DDISurface *canvas = gwmGetWindowCanvas(win);
-	ddiBlit(imgBackground, 0, 0, canvas, 0, 0, canvas->width, canvas->height);
+	ddiOverlay(imgBackground, 0, 0, canvas, 0, 0, canvas->width, canvas->height);
 	
 	GWMGlobWinRef focwin;
 	GWMGlobWinRef winlist[128];
@@ -71,6 +252,7 @@ void sysbarRedraw()
 	
 	int selectedColumn = (currentMouseX-40)/150;
 	int selectedRow = currentMouseY/20;
+	if (currentMouseX < 40) selectedColumn = -1;
 	
 	int i;
 	for (i=0; i<count; i++)
@@ -153,19 +335,6 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 	case GWM_EVENT_DOWN:
 		if (ev->scancode == GWM_SC_MOUSE_LEFT)
 		{
-			if (ev->x < 40)
-			{
-				if (fork() == 0)
-				{
-					execl("/usr/bin/terminal", "terminal", NULL);
-					perror("exec terminal");
-					exit(1);
-				};
-			};
-		};
-
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
-		{
 			pressed = 1;
 			sysbarRedraw();
 		};
@@ -197,10 +366,17 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 	case GWM_EVENT_UP:
 		if (ev->scancode == GWM_SC_MOUSE_LEFT)
 		{
-			pressed = 0;
-			winIndex = 2 * lastSelectColumn + lastSelectRow;
-			triggerWindow(winIndex);
-			sysbarRedraw();
+			if (ev->x < 40)
+			{
+				gwmOpenMenu(menuSys, win, 0, 0);
+			}
+			else
+			{
+				pressed = 0;
+				winIndex = 2 * lastSelectColumn + lastSelectRow;
+				triggerWindow(winIndex);
+				sysbarRedraw();
+			};
 		};
 		return 0;
 	default:
@@ -238,8 +414,20 @@ int main()
 		return 1;
 	};
 	
-	DDISurface *canvas = gwmGetWindowCanvas(win);
+	int i;
+	menuSys = gwmCreateMenu();
+	for (i=0; i<CAT_NUM; i++)
+	{
+		menuCat[i] = gwmMenuAddSub(menuSys, catLabels[i]);
+	};
 	
+	gwmMenuAddSeparator(menuSys);
+	gwmMenuAddEntry(menuSys, "Shut down...", NULL, NULL);
+	
+	loadApps();
+	
+	DDISurface *canvas = gwmGetWindowCanvas(win);
+
 	const char *error;
 	imgSysBar = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/sysbar.png", &error);
 	if (imgSysBar == NULL)
@@ -263,10 +451,9 @@ int main()
 	};
 
 	imgBackground = ddiCreateSurface(&canvas->format, width, 40, NULL, 0);
-	int i;
 	for (i=0; i<canvas->width; i++)
 	{
-		ddiBlit(imgSysBar, 0, 0, imgBackground, i, 0, 1, 40);
+		ddiOverlay(imgSysBar, 0, 0, imgBackground, i, 0, 1, 40);
 	};
 
 	sysbarRedraw();

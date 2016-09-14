@@ -539,6 +539,16 @@ void DeleteWindowByID(uint64_t id, int pid, int fd)
 
 Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, int pid, int fd, int painterPid)
 {
+	if (pars->x == GWM_POS_UNSPEC)
+	{
+		pars->x = rand() % (screenWidth - pars->width);
+	};
+	
+	if (pars->y == GWM_POS_UNSPEC)
+	{
+		pars->y = rand() % (screenHeight - pars->height);
+	};
+	
 	pars->caption[255] = 0;
 	pars->iconName[255] = 0;
 	if (myID == 0)
@@ -738,6 +748,26 @@ void AbsoluteToRelativeCoords(Window *win, int inX, int inY, int *outX, int *out
 	};
 };
 
+void RelativeToAbsoluteCoords(Window *win, int inX, int inY, int *outX, int *outY)
+{
+	if (win == NULL)
+	{
+		*outX = inX;
+		*outY = inY;
+	}
+	else
+	{
+		int offX, offY;
+		GetClientOffset(win, &offX, &offY);
+	
+		int startX, startY;
+		RelativeToAbsoluteCoords(win->parent, win->params.x, win->params.y, &startX, &startY);
+		
+		*outX = startX + offX + inX;
+		*outY = startY + offY + inY;
+	};
+};
+
 void PostWindowEvent(Window *win, GWMEvent *event)
 {
 	GWMMessage msg;
@@ -781,6 +811,31 @@ void BringWindowToFront(Window *win)
 	};
 };
 
+void MakeWindowFocused(Window *win)
+{
+	if (win == focusedWindow) return;
+	
+	PostDesktopUpdate();
+	
+	if (win != NULL)
+	{
+		GWMEvent ev;
+		ev.type = GWM_EVENT_FOCUS_IN;
+		ev.win = win->id;
+		PostWindowEvent(win, &ev);
+	};
+
+	if (focusedWindow != NULL)
+	{
+		GWMEvent ev;
+		ev.type = GWM_EVENT_FOCUS_OUT;
+		ev.win = focusedWindow->id;
+		PostWindowEvent(focusedWindow, &ev);
+	};
+	
+	focusedWindow = win;
+};
+
 void onMouseLeft()
 {
 	mouseLeftDown = 1;
@@ -797,13 +852,6 @@ void onMouseLeft()
 	if (oldFocus != focusedWindow)
 	{
 		PostDesktopUpdate();
-		if (oldFocus != NULL)
-		{
-			GWMEvent ev;
-			ev.type = GWM_EVENT_FOCUS_OUT;
-			ev.win = oldFocus->id;
-			PostWindowEvent(oldFocus, &ev);
-		};
 		
 		if (focusedWindow != NULL)
 		{
@@ -811,6 +859,14 @@ void onMouseLeft()
 			ev.type = GWM_EVENT_FOCUS_IN;
 			ev.win = focusedWindow->id;
 			PostWindowEvent(focusedWindow, &ev);
+		};
+
+		if (oldFocus != NULL)
+		{
+			GWMEvent ev;
+			ev.type = GWM_EVENT_FOCUS_OUT;
+			ev.win = oldFocus->id;
+			PostWindowEvent(oldFocus, &ev);
 		};
 	};
 	
@@ -910,7 +966,7 @@ void onMouseLeftRelease()
 				{
 					// clicked the minimize button
 					win->params.flags |= GWM_WINDOW_HIDDEN;
-					focusedWindow = NULL;
+					MakeWindowFocused(NULL);
 					PostDesktopUpdate();
 					sem_post(&semRedraw);
 				}
@@ -1356,7 +1412,7 @@ void *msgThreadFunc(void *ignore)
 					if (cmd->createWindow.pars.flags & GWM_WINDOW_MKFOCUSED)
 					{
 						movingWindow = NULL;
-						focusedWindow = win;
+						MakeWindowFocused(win);
 					};
 				};
 				pthread_mutex_unlock(&windowLock);
@@ -1417,7 +1473,7 @@ void *msgThreadFunc(void *ignore)
 					win->params.flags = cmd->setFlags.flags;
 					if (win->params.flags & GWM_WINDOW_MKFOCUSED)
 					{
-						focusedWindow = win;
+						MakeWindowFocused(win);
 					};
 					if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
 					{
@@ -1569,14 +1625,14 @@ void *msgThreadFunc(void *ignore)
 					win->params.flags ^= GWM_WINDOW_HIDDEN;
 					if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
 					{
-						focusedWindow = win;
+						MakeWindowFocused(win);
 						BringWindowToFront(win);
 					}
 					else
 					{
 						if (focusedWindow == win)
 						{
-							focusedWindow = NULL;
+							MakeWindowFocused(NULL);
 						};
 					};
 					
@@ -1632,6 +1688,22 @@ void *msgThreadFunc(void *ignore)
 				
 				pthread_mutex_unlock(&windowLock);
 				sem_post(&semRedraw);
+			}
+			else if (cmd->cmd == GWM_CMD_REL_TO_ABS)
+			{
+				pthread_mutex_lock(&windowLock);
+				
+				Window *win = GetWindowByID(cmd->relToAbs.win, info.pid, info.fd);
+				// win is allowed to be NULL!
+				
+				GWMMessage msg;
+				msg.relToAbsResp.type = GWM_MSG_REL_TO_ABS_RESP;
+				msg.relToAbsResp.seq = cmd->relToAbs.seq;
+				RelativeToAbsoluteCoords(win, cmd->relToAbs.relX, cmd->relToAbs.relY,
+					&msg.relToAbsResp.absX, &msg.relToAbsResp.absY);
+				
+				pthread_mutex_unlock(&windowLock);
+				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 			};
 		}
 		else if (info.type == _GLIDIX_MQ_HANGUP)
@@ -1656,6 +1728,8 @@ int strStartsWith(const char *str, const char *prefix)
 
 int main(int argc, char *argv[])
 {
+	srand(time(NULL));
+	
 	const char *displayDevice = NULL;
 	int modeSelected = -1;
 	

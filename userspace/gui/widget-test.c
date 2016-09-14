@@ -38,6 +38,8 @@
 #include "gui.h"
 
 GWMWindow *win;
+GWMWindow *menubar;
+GWMMenu *menu;
 
 void redraw()
 {
@@ -48,7 +50,7 @@ void redraw()
 	
 	int txtWidth, txtHeight;
 	ddiGetPenSize(pen, &txtWidth, &txtHeight);
-	ddiSetPenPosition(pen, 126, 17-(txtHeight/2));
+	ddiSetPenPosition(pen, 126, 37-(txtHeight/2));
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 
@@ -65,6 +67,7 @@ int myEventHandler(GWMEvent *ev, GWMWindow *win)
 		gwmMoveWindow(win, ev->x, ev->y);
 		gwmResizeWindow(win, ev->width, ev->height);
 		redraw();
+		gwmMenubarAdjust(menubar);
 		return 0;
 	default:
 		return gwmDefaultHandler(ev, win);
@@ -78,6 +81,18 @@ int sbarCallback(void *context)
 	return 0;
 };
 
+int menuCallback(void *context)
+{
+	printf("You selected: %s\n", (const char*) context);
+	return 0;
+};
+
+int menuExit(void *context)
+{
+	printf("You clicked the exit option!\n");
+	return -1;
+};
+
 int main()
 {
 	if (gwmInit() != 0)
@@ -86,41 +101,60 @@ int main()
 		return 1;
 	};
 
-	win = gwmCreateWindow(NULL, "Widgets Test", 10, 10, 500, 500, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
+	win = gwmCreateWindow(NULL, "Widgets Test", 10, 10, 500, 500, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
 	if (win == NULL)
 	{
 		fprintf(stderr, "Failed to create window!\n");
 		return 1;
 	};
 
-	gwmCreateButton(win, "Sample button", 2, 2, 100, 0);
-	gwmCreateButton(win, "Disabled button", 2, 34, 100, GWM_BUTTON_DISABLED);
-	gwmCreateTextField(win, "Type here :)", 2, 66, 100, 0);
-	gwmCreateTextField(win, "Disabled text field", 2, 88, 100, GWM_TXT_DISABLED);
-	gwmCreateTextField(win, "Masked", 2, 110, 100, GWM_TXT_MASKED);
-	gwmCreateTextField(win, "Disabled, masked", 2, 132, 100, GWM_TXT_MASKED | GWM_TXT_DISABLED);
+	menubar = gwmCreateMenubar(win);
+
+	GWMMenu *menuTest = gwmCreateMenu();
+	gwmMenuAddEntry(menuTest, "Entry 1", menuCallback, (void*) "Entry 1");
+	gwmMenuAddEntry(menuTest, "Entry 2", menuCallback, (void*) "Entry 2");
+	gwmMenuAddSeparator(menuTest);
+	GWMMenu *menuSub = gwmMenuAddSub(menuTest, "My Submenu");
+	gwmMenuAddSub(menuTest, "Empty Submenu");
+	gwmMenuAddEntry(menuTest, "Exit", menuExit, NULL);
 	
-	gwmCreateCheckbox(win, 104, 7, GWM_CB_TRI, 0);
+	gwmMenuAddEntry(menuSub, "Submenu Item", menuCallback, (void*) "Submenu Item");
+	
+	GWMMenu *menuEmpty = gwmCreateMenu();
+	gwmMenubarAdd(menubar, "Test", menuTest);
+	gwmMenubarAdd(menubar, "Empty", menuEmpty);
+	gwmMenubarAdjust(menubar);
+	
+	gwmCreateButton(win, "Sample button", 2, 22, 100, 0);
+	gwmCreateButton(win, "Disabled button", 2, 54, 100, GWM_BUTTON_DISABLED);
+	gwmCreateTextField(win, "Type here :)", 2, 86, 100, 0);
+	gwmCreateTextField(win, "Disabled text field", 2, 108, 100, GWM_TXT_DISABLED);
+	gwmCreateTextField(win, "Masked", 2, 130, 100, GWM_TXT_MASKED);
+	gwmCreateTextField(win, "Disabled, masked", 2, 152, 100, GWM_TXT_MASKED | GWM_TXT_DISABLED);
+	
+	gwmCreateCheckbox(win, 104, 27, GWM_CB_TRI, 0);
 	
 	int i;
 	for (i=0; i<3; i++)
 	{
-		gwmCreateCheckbox(win, 104+32*i, 39, i, GWM_CB_DISABLED);
+		gwmCreateCheckbox(win, 104+32*i, 59, i, GWM_CB_DISABLED);
 	};
 	
 	GWMWindow *sbar;
-	sbar = gwmCreateScrollbar(win, 104, 61, 100, 0, 66, 500, GWM_SCROLLBAR_HORIZ);
+	sbar = gwmCreateScrollbar(win, 104, 81, 100, 0, 66, 500, GWM_SCROLLBAR_HORIZ);
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
-	sbar = gwmCreateScrollbar(win, 104, 71, 100, 50, 66, 500, GWM_SCROLLBAR_HORIZ | GWM_SCROLLBAR_DISABLED);
-	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
-	
-	sbar = gwmCreateScrollbar(win, 206, 7, 100, 20, 100, 500, 0);
-	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
-	sbar = gwmCreateScrollbar(win, 216, 7, 100, 10, 100, 500, GWM_SCROLLBAR_DISABLED);
+	sbar = gwmCreateScrollbar(win, 104, 91, 100, 50, 66, 500, GWM_SCROLLBAR_HORIZ | GWM_SCROLLBAR_DISABLED);
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
 	
+	sbar = gwmCreateScrollbar(win, 206, 27, 100, 20, 100, 500, 0);
+	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
+	sbar = gwmCreateScrollbar(win, 216, 27, 100, 10, 100, 500, GWM_SCROLLBAR_DISABLED);
+	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
+
 	redraw();
+	
 	gwmSetEventHandler(win, myEventHandler);
+	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;

@@ -38,7 +38,6 @@
 #include "gui.h"
 
 GWMWindow *win;
-DDISurface *canvas;
 
 enum
 {
@@ -66,6 +65,8 @@ int myEventHandler(GWMEvent *ev, GWMWindow *win)
 
 void drawScreen()
 {
+	DDISurface *canvas = gwmGetWindowCanvas(win);
+	
 	DDIColor borderColor = {0, 0, 0, 0xFF};
 	DDIColor fillColor = {0xFF, 0xFF, 0xFF, 0xFF};
 	
@@ -163,9 +164,9 @@ int main()
 		return 1;
 	};
 	
-	canvas = gwmGetWindowCanvas(win);
 	drawScreen();
 	
+	DDISurface *canvas = gwmGetWindowCanvas(win);
 	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/calc.png", NULL);
 	if (icon != NULL)
 	{

@@ -56,6 +56,7 @@ static void ptty_downref(PseudoTerm *ptty)
 static void ptm_close(File *fp)
 {
 	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
+	signalPid(-ptty->pgid, SIGHUP);
 	DeleteDevice(ptty->devSlave);
 	ptty_downref(ptty);
 };

@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	if ((_glidix_oxperm() & XP_CHXPERM) == 0)
+	if (!_glidix_haveperm(XP_CHXPERM))
 	{
 		fprintf(stderr, "%s: i was not granted the 'chxperm' permission!\n", argv[0]);
 		return 1;
