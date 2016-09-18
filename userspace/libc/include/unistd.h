@@ -49,6 +49,7 @@ extern "C" {
 #define	PAGE_SIZE				0x1000
 #define	NGROUPS_MAX				64
 #define	OPEN_MAX				64
+#define	PATH_MAX				256
 
 #define	_PC_LINK_MAX				0
 #define	_PC_MAX_CANON				1

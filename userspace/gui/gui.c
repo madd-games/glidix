@@ -58,11 +58,11 @@ static int keymap[128] =
 	'\t',			/* Tab */
 	'q', 'w', 'e', 'r',	/* 19 */
 	't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',	/* Enter key */
-	0,			/* 29	 - Control */
+	GWM_KC_CTRL,			/* 29	 - Control */
 	'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',	/* 39 */
-	'\'', '`',	 0x80,		/* Left shift */
+	'\'', '`',	 GWM_KC_SHIFT,		/* Left shift */
 	'\\', 'z', 'x', 'c', 'v', 'b', 'n',			/* 49 */
-	'm', ',', '.', '/',	 0x80,				/* Right shift */
+	'm', ',', '.', '/',	 GWM_KC_SHIFT,				/* Right shift */
 	'*',
 	0,	/* Alt */
 	' ',	/* Space bar */
@@ -99,11 +99,11 @@ static int keymapShift[128] =
 	'\t',			/* Tab */
 	'Q', 'W', 'E', 'R',	/* 19 */
 	'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',	/* Enter key */
-		0,			/* 29	 - Control */
+		GWM_KC_CTRL,			/* 29	 - Control */
 	'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':',	/* 39 */
- '\"', '`',	 0x80,		/* Left shift */
+ '\"', '`',	 GWM_KC_SHIFT,		/* Left shift */
  '\\', 'Z', 'X', 'C', 'V', 'B', 'N',			/* 49 */
-	'M', '<', '>', '?',	 0x80,				/* Right shift */
+	'M', '<', '>', '?',	 GWM_KC_SHIFT,				/* Right shift */
 	'*',
 		0,	/* Alt */
 	' ',	/* Space bar */
@@ -1007,24 +1007,25 @@ void DecodeScancode(GWMEvent *ev)
 	if (ev->scancode < 0x80) ev->keycode = keymap[ev->scancode];
 	else ev->keycode = 0;
 	ev->keychar = 0;
-	if (ev->scancode == 0x1D)
-	{
-		// ctrl
-		if (ev->type == GWM_EVENT_DOWN)
-		{
-			currentKeyMods |= GWM_KM_CTRL;
-		}
-		else
-		{
-			currentKeyMods &= ~GWM_KM_CTRL;
-		};
-	};
-	
+
 	if (ev->scancode < 0x80)
 	{
 		int key = keymap[ev->scancode];
 		if (currentKeyMods & GWM_KM_SHIFT) key = keymapShift[ev->scancode];
-		if (key == 0x80)
+
+		if (key == GWM_KC_CTRL)
+		{
+			// ctrl
+			if (ev->type == GWM_EVENT_DOWN)
+			{
+				currentKeyMods |= GWM_KM_CTRL;
+			}
+			else
+			{
+				currentKeyMods &= ~GWM_KM_CTRL;
+			};
+		}
+		else if (key == GWM_KC_SHIFT)
 		{
 			// shift
 			if (ev->type == GWM_EVENT_DOWN)
@@ -1780,6 +1781,9 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
+	// make sure the clipboard directory actually exists
+	mkdir("/run/clipboard", 0777);
+	
 	if (displayDevice == NULL)
 	{
 		fprintf(stderr, "Please specify a display device using the --display option\n");
@@ -1853,8 +1857,8 @@ int main(int argc, char *argv[])
 	frontBuffer = ddiCreateSurface(&screenFormat, mode.width, mode.height, videoram, DDI_STATIC_FRAMEBUFFER);
 	screen = ddiCreateSurface(&screenFormat, mode.width, mode.height, NULL, 0);
 	
-	DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};
-	ddiDrawText(frontBuffer, 5, 5, "GUI loading, please wait...", &white, NULL);
+	//DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};
+	//ddiDrawText(frontBuffer, 5, 5, "GUI loading, please wait...", &white, NULL);
 
 	DDIColor backgroundColor = {0, 0, 0xDD, 0xFF};
 	const char *errmsg;

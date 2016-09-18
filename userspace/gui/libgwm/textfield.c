@@ -58,6 +58,11 @@ typedef struct
 	 * Pen used to draw the text.
 	 */
 	DDIPen*			pen;
+	
+	/**
+	 * The right-click menu.
+	 */
+	GWMMenu*		menu;
 } GWMTextFieldData;
 
 void gwmRedrawTextField(GWMWindow *field)
@@ -176,12 +181,114 @@ void gwmTextFieldInsert(GWMWindow *field, const char *str)
 	gwmRedrawTextField(field);
 };
 
+void gwmTextFieldSelectWord(GWMWindow *field)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	if (data->textSize == 0) return;
+	
+	data->selectStart = data->cursorPos;
+	data->selectEnd = data->cursorPos;
+	
+	int charClass;
+	if (data->cursorPos == data->textSize)
+	{
+		charClass = gwmClassifyChar(data->text[data->cursorPos-1]);
+		data->selectEnd--;
+		data->selectStart--;
+	}
+	else
+	{
+		charClass = gwmClassifyChar(data->text[data->cursorPos]);
+	};
+	
+	while (data->selectStart != 0)
+	{
+		if (gwmClassifyChar(data->text[data->selectStart-1]) != charClass)
+		{
+			break;
+		};
+		
+		data->selectStart--;
+	};
+	
+	while (data->selectEnd != (data->textSize-1))
+	{
+		if (gwmClassifyChar(data->text[data->selectEnd+1]) != charClass)
+		{
+			break;
+		};
+		
+		data->selectEnd++;
+	};
+	
+	data->selectEnd++;
+	data->cursorPos = data->selectEnd;
+};
+
+int txtPaste(void *context)
+{
+	GWMWindow *field = (GWMWindow*) context;
+	size_t size;
+	char *text = gwmClipboardGetText(&size);
+	if (text != NULL)
+	{
+		gwmTextFieldInsert(field, text);
+		free(text);
+	};
+
+	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
+	return 0;
+};
+
+int txtCut(void *context)
+{
+	GWMWindow *field = (GWMWindow*) context;
+	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	
+	if (data->selectStart != data->selectEnd)
+	{
+		gwmClipboardPutText(&data->text[data->selectStart], data->selectEnd - data->selectStart);
+	};
+	
+	gwmTextFieldDeleteSelection(field);
+	gwmRedrawTextField(field);
+	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
+	return 0;
+};
+
+int txtCopy(void *context)
+{
+	GWMWindow *field = (GWMWindow*) context;
+	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	
+	if (data->selectStart != data->selectEnd)
+	{
+		gwmClipboardPutText(&data->text[data->selectStart], data->selectEnd - data->selectStart);
+	};
+
+	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
+	return 0;
+};
+
+int txtSelectAll(void *context)
+{
+	GWMWindow *field = (GWMWindow*) context;
+	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	data->selectStart = 0;
+	data->selectEnd = data->textSize;
+	data->cursorPos = data->textSize;
+	gwmRedrawTextField(field);
+	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
+	return 0;
+};
+
 int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
 	off_t newCursorPos;
 	int disabled = data->flags & GWM_TXT_DISABLED;
 	char buf[2];
+	
 	switch (ev->type)
 	{
 	case GWM_EVENT_FOCUS_IN:
@@ -190,8 +297,10 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 		return 0;
 	case GWM_EVENT_FOCUS_OUT:
 		data->focused = 0;
-		data->selectStart = data->selectEnd = 0;
-		data->cursorPos = -1;
+		gwmRedrawTextField(field);
+		return 0;
+	case GWM_EVENT_DOUBLECLICK:
+		gwmTextFieldSelectWord(field);
 		gwmRedrawTextField(field);
 		return 0;
 	case GWM_EVENT_DOWN:
@@ -224,6 +333,25 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 				gwmRedrawTextField(field);
 			};
 		}
+		else if (ev->keymod & GWM_KM_CTRL)
+		{
+			if (ev->keycode == 'c')
+			{
+				txtCopy(field);
+			}
+			else if (ev->keycode == 'x')
+			{
+				txtCut(field);
+			}
+			else if (ev->keycode == 'v')
+			{
+				txtPaste(field);
+			}
+			else if (ev->keycode == 'a')
+			{
+				txtSelectAll(field);
+			};
+		}
 		else if (ev->keycode == '\n')
 		{
 		}
@@ -241,6 +369,10 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 		if (ev->scancode == GWM_SC_MOUSE_LEFT)
 		{
 			data->clickPos = -1;
+		}
+		else if (ev->scancode == GWM_SC_MOUSE_RIGHT)
+		{
+			gwmOpenMenu(data->menu, field, ev->x, ev->y);
 		};
 		return 0;
 	case GWM_EVENT_MOTION:
@@ -275,7 +407,7 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 		width = TEXTFIELD_MIN_WIDTH;
 	};
 	
-	GWMWindow *field = (GWMWindow*) gwmCreateWindow(parent, "GWMTextField", x, y, width, TEXTFIELD_HEIGHT, 0);
+	GWMWindow *field = gwmCreateWindow(parent, "GWMTextField", x, y, width, TEXTFIELD_HEIGHT, 0);
 	if (field == NULL) return NULL;
 	
 	GWMTextFieldData *data = (GWMTextFieldData*) malloc(sizeof(GWMTextFieldData));
@@ -291,6 +423,13 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->clickPos = -1;
 	data->pen = NULL;
 	
+	data->menu = gwmCreateMenu();
+	gwmMenuAddEntry(data->menu, "Cut", txtCut, field);
+	gwmMenuAddEntry(data->menu, "Copy", txtCopy, field);
+	gwmMenuAddEntry(data->menu, "Paste", txtPaste, field);
+	gwmMenuAddSeparator(data->menu);
+	gwmMenuAddEntry(data->menu, "Select All", txtSelectAll, field);
+	
 	gwmSetEventHandler(field, gwmTextFieldHandler);
 	gwmRedrawTextField(field);
 	gwmSetWindowCursor(field, GWM_CURSOR_TEXT);
@@ -303,6 +442,7 @@ void gwmDestroyTextField(GWMWindow *field)
 	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
 	free(data->text);
 	free(data);
+	gwmDestroyMenu(data->menu);
 	gwmDestroyWindow(field);
 };
 

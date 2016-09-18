@@ -135,8 +135,6 @@ int vfsCanCurrentThread(struct stat *st, mode_t mask)
 
 char *realpath_from(const char *relpath, char *buffer, const char *fromdir)
 {
-	//Thread *ct = getCurrentThread();
-
 	if (*relpath == 0)
 	{
 		*buffer = 0;
@@ -167,6 +165,13 @@ char *realpath_from(const char *relpath, char *buffer, const char *fromdir)
 	{
 		*put++ = *scan++;			// put the slash there.
 		szput++;
+		
+		while (*scan == '/') scan++;
+		if (*scan == 0)
+		{
+			*put = 0;
+			return buffer;
+		};
 	};
 
 	char token[128];

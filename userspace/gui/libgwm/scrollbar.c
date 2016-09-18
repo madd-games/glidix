@@ -67,9 +67,19 @@ static void gwmRedrawScrollbar(GWMWindow *sbar)
 		static DDIColor sliderColorHover = {0xBF, 0xBF, 0xBF, 0xFF};
 		static DDIColor sliderColorPressed = {0x40, 0x40, 0x40, 0xFF};
 		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &backgroundColor);
-	
-		int sliderLen = data->viewSize * data->len / data->viewTotal + 1;
-		int sliderOffset = data->viewOffset * data->len / data->viewTotal;
+
+		int sliderLen, sliderOffset;
+		
+		if (data->viewTotal == 0)
+		{
+			sliderLen = data->len;
+			sliderOffset = 0;
+		}
+		else
+		{
+			sliderLen = data->viewSize * data->len / data->viewTotal + 1;
+			sliderOffset = data->viewOffset * data->len / data->viewTotal;
+		};
 	
 		DDIColor *sliderColor = &sliderColorNormal;
 		if (data->flags & GWM_SCROLLBAR_HORIZ)
@@ -107,8 +117,12 @@ int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar)
 {
 	GWMScrollbarData *data = (GWMScrollbarData*) sbar->data;
 	int delta;
-	int sliderLen = data->viewSize * data->len / data->viewTotal + 1;
-	int sliderOffset = data->viewOffset * data->len / data->viewTotal;
+	int sliderLen, sliderOffset;
+	if (data->viewTotal != 0)
+	{
+		sliderLen = data->viewSize * data->len / data->viewTotal + 1;
+		sliderOffset = data->viewOffset * data->len / data->viewTotal;
+	};
 	int newOffset;
 	int status = 0;
 	
@@ -127,7 +141,7 @@ int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar)
 		{
 			data->mouseX = ev->x;
 			data->mouseY = ev->y;
-			if (data->pressed)
+			if ((data->pressed) && (data->viewTotal != 0))
 			{
 				if (data->flags & GWM_SCROLLBAR_HORIZ)
 				{
@@ -162,28 +176,31 @@ int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar)
 	case GWM_EVENT_DOWN:
 		if ((data->flags & GWM_SCROLLBAR_DISABLED) == 0)
 		{
-			if (ev->scancode == GWM_SC_MOUSE_LEFT)
+			if (data->viewTotal != 0)
 			{
-				if (data->flags & GWM_SCROLLBAR_HORIZ)
+				if (ev->scancode == GWM_SC_MOUSE_LEFT)
 				{
-					if ((data->mouseX >= sliderOffset) && (data->mouseX < sliderOffset+sliderLen))
+					if (data->flags & GWM_SCROLLBAR_HORIZ)
 					{
-						data->anchorX = ev->x;
-						data->anchorY = ev->y;
-						data->pressed = 1;
-					};
-				}
-				else
-				{
-					if ((data->mouseY >= sliderOffset) && (data->mouseY < sliderOffset+sliderLen))
+						if ((data->mouseX >= sliderOffset) && (data->mouseX < sliderOffset+sliderLen))
+						{
+							data->anchorX = ev->x;
+							data->anchorY = ev->y;
+							data->pressed = 1;
+						};
+					}
+					else
 					{
-						data->anchorX = ev->x;
-						data->anchorY = ev->y;
-						data->pressed = 1;
+						if ((data->mouseY >= sliderOffset) && (data->mouseY < sliderOffset+sliderLen))
+						{
+							data->anchorX = ev->x;
+							data->anchorY = ev->y;
+							data->pressed = 1;
+						};
 					};
-				};
 			
-				gwmRedrawScrollbar(sbar);
+					gwmRedrawScrollbar(sbar);
+				};
 			};
 		};
 		return 0;

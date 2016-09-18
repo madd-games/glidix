@@ -97,6 +97,14 @@ void gwmMenuAddSeparator(GWMMenu *menu)
 	};
 };
 
+void gwmMenuSetIcon(GWMMenu *menu, DDISurface *icon)
+{
+	if (menu->numEntries > 0)
+	{
+		menu->entries[menu->numEntries-1].icon = icon;
+	};
+};
+
 static void redrawMenu(GWMMenu *menu, int selectPos)
 {
 	DDISurface *canvas = gwmGetWindowCanvas(menu->win);
@@ -245,7 +253,12 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 					8, 8);
 		};
 		
-		DDIPen *pen = ddiCreatePen(&menu->overlay->format, gwmGetDefaultFont(), 2, MENU_ENTRY_HEIGHT*i+2,
+		if (menu->entries[i].icon != NULL)
+		{
+			ddiBlit(menu->entries[i].icon, 0, 0, menu->overlay, 2, MENU_ENTRY_HEIGHT*i+2, 16, 16);
+		};
+		
+		DDIPen *pen = ddiCreatePen(&menu->overlay->format, gwmGetDefaultFont(), 20, MENU_ENTRY_HEIGHT*i+2,
 						MENU_WIDTH-4, MENU_ENTRY_HEIGHT-4, 0, 0, NULL);
 		if (pen != NULL)
 		{
@@ -290,6 +303,7 @@ void gwmDestroyMenu(GWMMenu *menu)
 	size_t i;
 	for (i=0; i<menu->numEntries; i++)
 	{
+		if (menu->entries[i].submenu != NULL) gwmDestroyMenu(menu->entries[i].submenu);
 		free(menu->entries[i].label);
 	};
 	

@@ -199,16 +199,6 @@ DDISurface* ddiLoadAndConvertPNG(DDIPixelFormat *format, const char *filename, c
 void ddiExpandBitmap(DDISurface *surface, unsigned int x, unsigned int y, int type, const void *bitmap, DDIColor *color);
 
 /**
- * Render text to a surface at the specified position. The font must currently be NULL; in future versions, it
- * will be possible to specify what font to use and NULL will mean the default system font. If the color is NULL,
- * then the default color (currently black) is used.
- *
- * DEPRECATED
- * It only supports a fixed-size bitmap font unlike the Pen interface.
- */
-void ddiDrawText(DDISurface *surface, unsigned int x, unsigned int y, const char *text, DDIColor *color, void *font);
-
-/**
  * Read a unicode codepoint from a UTF-8 string. 'strptr' refers to a UTF-8 string pointer to read from. If it points
  * to the end of a string, 0 is returned and the pointer is not updated. Otherwise, the codepoint number is returned,
  * and the pointer is updated to point to the next character.
@@ -298,5 +288,10 @@ int ddiPenCoordsToPos(DDIPen *pen, int x, int y);
  * to be used as the mask.
  */
 void ddiPenSetMask(DDIPen *pen, long mask);
+
+/**
+ * Renders text to a new surface, as small as possible, and returns that new surface.
+ */
+DDISurface* ddiRenderText(DDIPixelFormat *format, DDIFont *font, const char *text, const char **error);
 
 #endif

@@ -90,7 +90,7 @@ cd userspace/gui
 sudo cp gui.h /glidix/usr/include/libgwm.h || exit 1
 x86_64-glidix-gcc gui.c -o ../../mipdir/usr/bin/gui -I ../../include -lddi -Wall -Werror || exit 1
 cd libgwm
-x86_64-glidix-gcc -fPIC -shared libgwm.c button.c msgbox.c checkbox.c textfield.c scrollbar.c menu.c menubar.c -o ../../../mipdir/usr/lib/libgwm.so -lddi || exit 1
+x86_64-glidix-gcc -fPIC -shared libgwm.c button.c msgbox.c checkbox.c textfield.c scrollbar.c menu.c menubar.c notebook.c clipboard.c fstree.c treeview.c -o ../../../mipdir/usr/lib/libgwm.so -lddi || exit 1
 cd ..
 sudo cp ../../mipdir/usr/lib/libgwm.so /glidix/usr/lib/libgwm.so || exit 1
 x86_64-glidix-gcc gui-init.c -o ../../mipdir/usr/libexec/gui-init -lddi -lgwm || exit 1
@@ -101,6 +101,7 @@ x86_64-glidix-gcc snake.c -o ../../mipdir/usr/bin/snake -lddi -lgwm || exit 1
 x86_64-glidix-gcc desktop-info.c -o ../../mipdir/usr/bin/desktop-info -lgwm || exit 1
 x86_64-glidix-gcc sysbar.c -o ../../mipdir/usr/libexec/sysbar -lddi -lgwm || exit 1
 x86_64-glidix-gcc gui-login.c -o ../../mipdir/usr/bin/gui-login -lddi -lgwm -lcrypt || exit 1
+x86_64-glidix-gcc sysinfo/sysinfo.c sysinfo/pci.c -o ../../mipdir/usr/bin/sysinfo -lddi -lgwm -lcrypt || exit 1
 cd ../..
 cp -r userspace/images mipdir/usr/share/images || exit 1
 cp -r userspace/apps mipdir/usr/share/apps || exit 1

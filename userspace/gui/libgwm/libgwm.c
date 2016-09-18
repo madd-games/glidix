@@ -263,6 +263,7 @@ GWMWindow* gwmCreateWindow(
 						resp.createWindowResp.height, (char*)(canvasBase+offset), DDI_STATIC_FRAMEBUFFER);
 		win->handlerInfo = NULL;
 		win->currentBuffer = 1;
+		win->lastClickTime = 0;
 		return win;
 	};
 	
@@ -297,7 +298,15 @@ void gwmDestroyWindow(GWMWindow *win)
 		if (info->prev != NULL) info->prev->next = info->next;
 		if (info->next != NULL) info->next->prev = info->prev;
 		if (firstHandler == info) firstHandler = info->next;
-		free(info);
+		
+		if (info->state == 0)
+		{
+			free(info);
+		}
+		else
+		{
+			info->state = 2;
+		};
 	};
 	
 	free(win);
@@ -378,6 +387,7 @@ void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler)
 	info->callback = handler;
 	info->prev = NULL;
 	info->next = firstHandler;
+	info->state = 0;
 	if (firstHandler != NULL) firstHandler->prev = info;
 	firstHandler = info;
 	win->handlerInfo = info;
@@ -385,7 +395,13 @@ void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler)
 
 int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win)
 {
-	return 0;
+	switch (ev->type)
+	{
+	case GWM_EVENT_CLOSE:
+		return -1;
+	default:
+		return 0;
+	};
 };
 
 void gwmMainLoop()
@@ -401,12 +417,45 @@ void gwmMainLoop()
 		{
 			if (ev.win == info->win->id)
 			{
+				info->state = 1;
 				if (info->callback(&ev, info->win) != 0)
 				{
 					return;
 				}
 				else
 				{
+					if (info->state == 1)
+					{
+						if ((ev.type == GWM_EVENT_UP) && (ev.scancode == GWM_SC_MOUSE_LEFT))
+						{
+							clock_t now = clock();
+							if (info->win->lastClickTime != 0)
+							{
+								if ((now-info->win->lastClickTime) <= GWM_DOUBLECLICK_TIMEOUT)
+								{
+									if ((info->win->lastClickX == ev.x)
+										&& (info->win->lastClickY == ev.y))
+									{
+										ev.type = GWM_EVENT_DOUBLECLICK;
+										if (info->callback(&ev, info->win) != 0)
+										{
+											return;
+										};
+									};
+								};
+							};
+						
+							info->win->lastClickX = ev.x;
+							info->win->lastClickY = ev.y;
+							info->win->lastClickTime = now;
+						};
+					
+						info->state = 0;
+					}
+					else
+					{
+						free(info);
+					};
 					break;
 				};
 			};
@@ -642,4 +691,14 @@ void gwmRelToAbs(GWMWindow *win, int relX, int relY, int *absX, int *absY)
 	
 	if (absX != NULL) *absX = resp.relToAbsResp.absX;
 	if (absY != NULL) *absY = resp.relToAbsResp.absY;
+};
+
+int gwmClassifyChar(char c)
+{
+	if ((c == ' ') || (c == '\t') || (c == '\n'))
+	{
+		return 0;
+	};
+	
+	return 1;
 };

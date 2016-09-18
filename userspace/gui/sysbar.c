@@ -74,6 +74,8 @@ GWMGlobWinRef windows[128];
 int numWindows = 0;
 GWMMenu *menuSys;
 GWMMenu *menuCat[CAT_NUM];
+DDISurface *imgFolder;
+DDISurface *imgApp;
 
 int catByName(const char *name)
 {
@@ -117,6 +119,7 @@ void loadAppFile(const char *filename)
 	char **appArgs = (char**) malloc(sizeof(char*));
 	appArgs[0] = "/usr/bin/env";
 	int argc = 1;
+	DDISurface *appIcon = NULL;
 	
 	int ok = 1;
 	
@@ -173,7 +176,10 @@ void loadAppFile(const char *filename)
 		}
 		else if (strcmp(option, "Icon") == 0)
 		{
-			// TODO
+			if (appIcon == NULL)
+			{
+				appIcon = ddiLoadAndConvertPNG(&imgFolder->format, value, NULL);
+			};
 		}
 		else if (strcmp(option, "Category") == 0)
 		{
@@ -189,6 +195,11 @@ void loadAppFile(const char *filename)
 
 	fclose(fp);
 	
+	if (appIcon == NULL)
+	{
+		appIcon = imgApp;
+	};
+	
 	if (ok)
 	{
 		appArgs = realloc(appArgs, sizeof(char*) * (argc+1));
@@ -203,6 +214,8 @@ void loadAppFile(const char *filename)
 			gwmMenuAddEntry(menuCat[appCat], appName, runApp, appArgs);
 			free(appName);
 		};
+		
+		gwmMenuSetIcon(menuCat[appCat], appIcon);
 	}
 	else
 	{
@@ -223,10 +236,13 @@ void loadApps()
 	struct dirent *ent;
 	while ((ent = readdir(dirp)) != NULL)
 	{
-		char fullpath[256];
-		sprintf(fullpath, "/usr/share/apps/%s", ent->d_name);
+		if (ent->d_name[0] != '.')
+		{
+			char fullpath[256];
+			sprintf(fullpath, "/usr/share/apps/%s", ent->d_name);
 		
-		loadAppFile(fullpath);
+			loadAppFile(fullpath);
+		};
 	};
 	
 	closedir(dirp);
@@ -413,20 +429,23 @@ int main()
 		fprintf(stderr, "Failed to create window!\n");
 		return 1;
 	};
+
+	DDISurface *canvas = gwmGetWindowCanvas(win);
+	imgFolder = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/fileman.png", NULL);
+	imgApp = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/appicon.png", NULL);
 	
 	int i;
 	menuSys = gwmCreateMenu();
 	for (i=0; i<CAT_NUM; i++)
 	{
 		menuCat[i] = gwmMenuAddSub(menuSys, catLabels[i]);
+		gwmMenuSetIcon(menuSys, imgFolder);
 	};
 	
 	gwmMenuAddSeparator(menuSys);
 	gwmMenuAddEntry(menuSys, "Shut down...", NULL, NULL);
 	
 	loadApps();
-	
-	DDISurface *canvas = gwmGetWindowCanvas(win);
 
 	const char *error;
 	imgSysBar = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/sysbar.png", &error);

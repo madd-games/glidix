@@ -61,16 +61,18 @@ int snakeLen;
 int gameOver;
 Coords *snakePos = NULL;		/* array of positions */
 Coords vector;
+Coords nextVector;
 
 GWMWindow *win;
 DDIFont *fntGameOver;
 DDISurface *imgGameOver;
 
+volatile int stepWait = 300;
 void* timerThread(void *ignore)
 {
 	while (1)
 	{
-		poll(NULL, 0, 500);
+		poll(NULL, 0, stepWait);
 		gwmPostUpdate(win);
 	};
 	
@@ -101,6 +103,8 @@ void resetGame()
 	vector.x = 0;
 	vector.y = 0;
 	
+	nextVector.x = 0;
+	nextVector.y = 0;
 	gameOver = 0;
 };
 
@@ -123,6 +127,18 @@ void move()
 	if (gameOver)
 	{
 		return;
+	};
+	
+	if ((nextVector.x != 0) || (nextVector.y != 0))
+	{
+		if ((vector.x * nextVector.x + vector.y * nextVector.y) == 0)
+		{
+			vector.x = nextVector.x;
+			vector.y = nextVector.y;
+		};
+		
+		nextVector.x = 0;
+		nextVector.y = 0;
 	};
 	
 	if ((vector.x == 0) && (vector.y == 0))
@@ -215,33 +231,36 @@ int snakeHandler(GWMEvent *ev, GWMWindow *win)
 		switch (ev->keycode)
 		{
 		case GWM_KC_LEFT:
-			if (vector.x == 0)
-			{
-				vector.x = -1;
-				vector.y = 0;
-			};
+			nextVector.x = -1;
+			nextVector.y = 0;
 			break;
 		case GWM_KC_RIGHT:
-			if (vector.x == 0)
-			{
-				vector.x = 1;
-				vector.y = 0;
-			};
+			nextVector.x = 1;
+			nextVector.y = 0;
 			break;
 		case GWM_KC_UP:
-			if (vector.y == 0)
-			{
-				vector.x = 0;
-				vector.y = -1;
-			};
+			nextVector.x = 0;
+			nextVector.y = -1;
 			break;
 		case GWM_KC_DOWN:
-			if (vector.y == 0)
-			{
-				vector.x = 0;
-				vector.y = 1;
-			};
+			nextVector.x = 0;
+			nextVector.y = 1;
 			break;
+		case ' ':
+			nextVector.x = 0;
+			nextVector.y = 0;
+			vector.x = 0;
+			vector.y = 0;
+			break;
+		case GWM_KC_CTRL:
+			stepWait = 100;
+			break;
+		};
+		return 0;
+	case GWM_EVENT_UP:
+		if (ev->keycode == GWM_KC_CTRL)
+		{
+			stepWait = 300;
 		};
 		return 0;
 	case GWM_EVENT_CLOSE:
@@ -308,6 +327,11 @@ int main()
 	setupMenus();
 	
 	DDISurface *canvas = gwmGetWindowCanvas(win);
+	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/snake.png", NULL);
+	if (icon != NULL)
+	{
+		gwmSetWindowIcon(win, icon);
+	};
 	
 	DDIPen *pen = ddiCreatePen(&canvas->format, fntGameOver, 0, 0,
 			CELL_WIDTH*MAZE_WIDTH, CELL_HEIGHT*MAZE_HEIGHT, 0, 0, NULL);

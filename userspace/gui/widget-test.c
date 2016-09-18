@@ -40,6 +40,7 @@
 GWMWindow *win;
 GWMWindow *menubar;
 GWMMenu *menu;
+DDIFont *fntExample;
 
 void redraw()
 {
@@ -68,6 +69,9 @@ int myEventHandler(GWMEvent *ev, GWMWindow *win)
 		gwmResizeWindow(win, ev->width, ev->height);
 		redraw();
 		gwmMenubarAdjust(menubar);
+		return 0;
+	case GWM_EVENT_DOUBLECLICK:
+		printf("Double-click!\n");
 		return 0;
 	default:
 		return gwmDefaultHandler(ev, win);
@@ -101,7 +105,7 @@ int main()
 		return 1;
 	};
 
-	win = gwmCreateWindow(NULL, "Widgets Test", 10, 10, 500, 500, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
+	win = gwmCreateWindow(NULL, "Widgets Demo", 10, 10, 500, 500, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
 	if (win == NULL)
 	{
 		fprintf(stderr, "Failed to create window!\n");
@@ -151,6 +155,28 @@ int main()
 	sbar = gwmCreateScrollbar(win, 216, 27, 100, 10, 100, 500, GWM_SCROLLBAR_DISABLED);
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
 
+	GWMWindow *notebook = gwmCreateNotebook(win, 2, 174, 300, 200, 0);
+	GWMWindow *tab1 = gwmNotebookAdd(notebook, "Tab 1");
+	GWMWindow *tab2 = gwmNotebookAdd(notebook, "Filesystem");
+	GWMWindow *tab3 = gwmNotebookAdd(notebook, "Yet another tab");
+	gwmNotebookSetTab(notebook, 0);
+	
+	int pageWidth, pageHeight;
+	gwmNotebookGetDisplaySize(notebook, &pageWidth, &pageHeight);
+	
+	DDISurface *canvas = gwmGetWindowCanvas(tab1);
+	fntExample = ddiLoadFont("DejaVu Sans", 15, DDI_STYLE_ITALIC, NULL);
+	
+	DDIPen *pen = ddiCreatePen(&canvas->format, fntExample, 2, 2, pageWidth-4, pageHeight-4, 0, 0, NULL);
+	ddiWritePen(pen, "This is some text on the first page.");
+	ddiExecutePen(pen, canvas);
+	ddiDeletePen(pen);
+	
+	GWMWindow *treeview = gwmCreateTreeView(tab2, 2, 2, 250, 150, GWM_TREE_FILESYSTEM, GWM_FS_ROOT, 0);
+	//GWMWindow *sbarTree = gwmCreateScrollbar(tab2, 252, 2, 150, 0, 0, 10, GWM_SCROLLBAR_VERT);
+	//gwmTreeViewAttachScrollbar(treeview, sbarTree);
+	
+	gwmPostDirty(tab1);
 	redraw();
 	
 	gwmSetEventHandler(win, myEventHandler);

@@ -31,6 +31,7 @@
 
 #include <stdint.h>
 #include <libddi.h>
+#include <unistd.h>
 
 #define	GWM_WINDOW_HIDDEN			(1 << 0)
 #define	GWM_WINDOW_NODECORATE			(1 << 1)
@@ -49,6 +50,11 @@ extern DDIColor gwmColorSelection;
  * Unspecified window position.
  */
 #define	GWM_POS_UNSPEC				((unsigned int)-1)
+
+/**
+ * Maximum timespan between 2 clicks that allows it to be considered a "double-click".
+ */
+#define	GWM_DOUBLECLICK_TIMEOUT			(1*CLOCKS_PER_SEC)
 
 /**
  * Button flags.
@@ -161,6 +167,7 @@ typedef struct
 #define	GWM_EVENT_FOCUS_OUT			8
 #define	GWM_EVENT_DESKTOP_UPDATE		9
 #define	GWM_EVENT_RESIZE_REQUEST		10
+#define	GWM_EVENT_DOUBLECLICK			11
 typedef struct
 {
 	int					type;
@@ -477,6 +484,13 @@ typedef struct GWMHandlerInfo_
 	GWMEventHandler				callback;
 	struct GWMHandlerInfo_			*prev;
 	struct GWMHandlerInfo_			*next;
+	
+	/**
+	 * 0 = handler not being executed
+	 * 1 = handler being executed
+	 * 2 = handler being executed and window was deleted.
+	 */
+	int					state;
 } GWMHandlerInfo;
 
 /**
@@ -491,6 +505,11 @@ typedef struct GWMWindow_
 	int					currentBuffer;
 	GWMHandlerInfo				*handlerInfo;
 	void					*data;
+	
+	// location and time of last left click; used to detect double-clicks.
+	int					lastClickX;
+	int					lastClickY;
+	clock_t					lastClickTime;
 } GWMWindow;
 
 /**
@@ -514,6 +533,7 @@ typedef struct
 	GWMMenuCallback				callback;
 	void*					param;		// callback parameter
 	struct GWMMenu_*			submenu;
+	DDISurface*				icon;		// or NULL for no icon
 } GWMMenuEntry;
 
 /**
@@ -532,6 +552,119 @@ typedef struct GWMMenu_
 	int					selectedSub;
 	int					focused;
 } GWMMenu;
+
+/**
+ * Tree node flags.
+ */
+#define	GWM_NODE_HASCHLD			(1 << 0)			/* has children */
+
+/**
+ * Tree node information.
+ */
+typedef struct
+{
+	/**
+	 * Pointer to a buffer of size tePathSize, into which the entry's path shall be stored.
+	 * This pointer is initialized by the TreeView widget.
+	 */
+	void*					niPath;
+	
+	/**
+	 * Node flags; 0, or bitwise-OR of one or more of GWM_NODE_*
+	 */
+	int					niFlags;
+	
+	/**
+	 * Pointer to an array of 'teNumCols' pointers, each specifying the value for a corresponding
+	 * column. All entries are to be on the heap, and they are free()d by the TreeView widget.
+	 * This pointer itself is initialized by the TreeView widget.
+	 */
+	void**					niValues;
+	
+	/**
+	 * A 16x16 surface to use as an icon for the entry. This is initialized to NULL by the TreeView
+	 * widget, indicating that no icon will be used by default. The TreeView widget WILL NOT call
+	 * ddiDeleteSurface() on this.
+	 */
+	DDISurface*				niIcon;
+} GWMNodeInfo;
+
+/**
+ * Describes a tree enumerator for use with a TreeView widget.
+ */
+typedef struct
+{
+	/**
+	 * Size of this structure.
+	 */
+	size_t					teSize;
+	
+	/**
+	 * The size of a 'path' used by this enumerator.
+	 */
+	size_t					tePathSize;
+	
+	/**
+	 * Number of columns that this enumerator returns.
+	 */
+	size_t					teNumCols;
+	
+	/**
+	 * Returns the caption of the column with the given index; the returned string shall
+	 * be on the heap, and the TreeView widget will call free() on it.
+	 */
+	char* (*teGetColCaption)(int index);
+	
+	/**
+	 * Open a node on the tree. Return NULL if that failed; a pointer to an opaque iterator structure
+	 * otherwise.
+	 */
+	void* (*teOpenNode)(const void *path);
+	
+	/**
+	 * Get the next entry of a node; return 0 on success or -1 if there are no more entries. If an entry
+	 * does exist, the 'info' structure shall be filled in with information about the node. The 'node'
+	 * argument is one previously returned by teOpenNode().
+	 */
+	int (*teGetNext)(void *node, GWMNodeInfo *info, size_t infoSize);
+	
+	/**
+	 * Close the node previously opened by teOpenNode().
+	 */
+	void (*teCloseNode)(void *node);
+} GWMTreeEnum;
+
+extern GWMTreeEnum gwmTreeFilesystem;
+extern char gwmFSRoot[PATH_MAX];
+#define	GWM_TREE_FILESYSTEM (&gwmTreeFilesystem)
+#define	GWM_FS_ROOT gwmFSRoot
+
+/**
+ * TreeView flags.
+ */
+#define	GWM_TV_NOHEADS				(1 << 0)
+
+/**
+ * Clipboard magic number.
+ */
+#define	GWM_CB_MAGIC				0xC1B0
+
+/**
+ * Clipboard data types.
+ */
+#define	GWM_CB_EMPTY				0
+#define	GWM_CB_TEXT				1
+
+/**
+ * This data structure is placed at the beginnig of /run/clipboard to specify information about the clipboard
+ * contents.
+ */
+typedef struct
+{
+	uint16_t				cbMagic;
+	uint16_t				cbType;
+	char					cbPad[60];		/* pad to 64 bytes */
+} GWMClipboardHeader;
 
 /**
  * Initialises the GWM library. This must be called before using any other functions.
@@ -777,6 +910,11 @@ void gwmMenuAddSeparator(GWMMenu *menu);
 GWMMenu *gwmMenuAddSub(GWMMenu *menu, const char *label);
 
 /**
+ * Set the icon of the last entry in the menu. The icon shall be 16x16.
+ */
+void gwmMenuSetIcon(GWMMenu *menu, DDISurface *icon);
+
+/**
  * Sets the close callback of a menu.
  */
 void gwmMenuSetCloseCallback(GWMMenu *menu, GWMMenuCloseCallback callback, void *param);
@@ -811,5 +949,58 @@ void gwmMenubarAdjust(GWMWindow *menubar);
  * or gwmDestroyMenu() on it (gwmDestroyMenu() will be automatically called when you call gwmDestroyMenubar()).
  */
 void gwmMenubarAdd(GWMWindow *menubar, const char *label, GWMMenu *menu);
+
+/**
+ * Classify the character 'c' as either a whitespace (0) or other character (1).
+ */
+int gwmClassifyChar(char c);
+
+/**
+ * Create a new notebook widget.
+ */
+GWMWindow *gwmCreateNotebook(GWMWindow *parent, int x, int y, int width, int height, int flags);
+
+/**
+ * Returns the dimensions of the client area of a notebook tab.
+ */
+void gwmNotebookGetDisplaySize(GWMWindow *notebook, int *width, int *height);
+
+/**
+ * Adds a new tab to a notebook, with the specified label, and return its display window.
+ */
+GWMWindow *gwmNotebookAdd(GWMWindow *notebook, const char *label);
+
+/**
+ * Sets which tab (given as a zero-based index) is to be visible in the notebook.
+ */
+void gwmNotebookSetTab(GWMWindow *notebook, int index);
+
+/**
+ * Destroy a notebook widget.
+ */
+void gwmDestroyNotebook(GWMWindow *notebook);
+
+/**
+ * Put plain text in the clipboard.
+ */
+void gwmClipboardPutText(const char *text, size_t textSize);
+
+/**
+ * Attempt to get plain text from the clipboard. On success, returns a pointer to the buffer containing
+ * the text, and sets *sizeOut to the size; you are responsible for later calling free() on the buffer
+ * to release it. If no text is in the clipboard, returns NULL. A NUL terminator is placed at the end
+ * of the buffer; the 'sizeOut' value does NOT include this NUL character!
+ */
+char* gwmClipboardGetText(size_t *sizeOut);
+
+/**
+ * Create a new TreeView widget, whose root displays the path 'root' in the specified 'tree'.
+ */
+GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int height, GWMTreeEnum *tree, const void *root, int flags);
+
+/**
+ * Destroy a TreeView object.
+ */
+void gwmDestroyTreeView(GWMWindow *treeview);
 
 #endif
