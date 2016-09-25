@@ -35,11 +35,11 @@
 
 void initConsole();
 void kvprintf(const char *fmt, va_list ap);
-void kprintf(const char *fmt, ...);
+FORMAT(printf, 1, 2) void kprintf(const char *fmt, ...);
 void kputbuf(const char *buf, size_t size);
 void kputbuf_debug(const char *buf, size_t size);
 void kdumpregs(Regs *regs);
-void kprintf_debug(const char *fmt, ...);
+FORMAT(printf, 1, 2) void kprintf_debug(const char *fmt, ...);
 void unlockConsole();
 void clearScreen();
 void setConsoleColor(uint8_t col);
@@ -48,9 +48,9 @@ void switchConsoleToSoftwareBuffer(unsigned char *buffer, int width, int height)
 void renderConsoleToScreen();
 void setGfxTerm(int value);
 
-#define	DONE()						kprintf("%$\x02" "Done%#\n")
-#define	FAILED()					kprintf("%$\x04" "Failed%#\n")
+#define	DONE()						kprintf("Done\n")
+#define	FAILED()					kprintf("Failed\n")
 
-#define	PRINTFLAG(cond, c)	if (cond) {kprintf("%$\x02" "%c%#", c);} else {kprintf("%$\x04" "%c%#", c-'A'+'a');}
+#define	PRINTFLAG(cond, c)	if (cond) {kprintf("%c", c);} else {kprintf("%c", c-'A'+'a');}
 
 #endif

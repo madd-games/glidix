@@ -39,47 +39,53 @@
 #include <glidix/pagetab.h>
 #include <glidix/physmem.h>
 #include <glidix/idt.h>
+#include <glidix/mutex.h>
 
 /**
  * Implements the ACPICA Operating System Layer (OSL) functions.
  */
- 
+
+//#define	TRACE()			kprintf("[ACGLIDIX] %s\n", __func__);
+#define	TRACE()
+
 static PAGE_ALIGN PDPT pdptAcpi;
 static uint64_t nextFreePage = 0;
 static Spinlock acpiMemoryLock;
 
 void* AcpiOsAllocate(ACPI_SIZE size)
 {
+	TRACE();
 	return kmalloc(size);
 };
 
 void AcpiOsFree(void *ptr)
 {
+	TRACE();
 	kfree(ptr);
 };
 
 void AcpiOsVprintf(const char *fmt, va_list ap)
 {
-	(void)fmt;
-	//kvprintf(fmt, ap);
+	kvprintf(fmt, ap);
 };
 
 void AcpiOsPrintf(const char *fmt, ...)
 {
-	(void)fmt;
 	va_list ap;
 	va_start(ap, fmt);
-	//kvprintf(fmt, ap);
+	kvprintf(fmt, ap);
 	va_end(ap);
 };
 
 void AcpiOsSleep(UINT64 ms)
 {
+	TRACE();
 	sleep(ms);
 };
 
 ACPI_PHYSICAL_ADDRESS AcpiOsGetRootPointer()
 {
+	TRACE();
 	ACPI_SIZE Ret;
 	AcpiFindRootPointer(&Ret);
 	return Ret;
@@ -87,6 +93,7 @@ ACPI_PHYSICAL_ADDRESS AcpiOsGetRootPointer()
 
 ACPI_STATUS AcpiOsWritePort(ACPI_IO_ADDRESS port, UINT32 value, UINT32 width)
 {
+	TRACE();
 	switch (width)
 	{
 	case 8:
@@ -105,6 +112,7 @@ ACPI_STATUS AcpiOsWritePort(ACPI_IO_ADDRESS port, UINT32 value, UINT32 width)
 
 ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS port, UINT32 *value, UINT32 width)
 {
+	TRACE();
 	*value = 0;
 	switch (width)
 	{
@@ -124,12 +132,14 @@ ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS port, UINT32 *value, UINT32 width)
 
 void AcpiOsStall(UINT32 ms)
 {
+	TRACE();
 	int then = getUptime() + ms;
 	while (getUptime() < then);
 };
 
 ACPI_STATUS AcpiOsReadMemory(ACPI_PHYSICAL_ADDRESS addr, UINT64 *value, UINT32 width)
 {
+	TRACE();
 	*value = 0;
 	size_t len = (size_t)width / 8;
 	pmem_read(value, (uint64_t) addr, len);
@@ -145,6 +155,7 @@ ACPI_STATUS AcpiOsWriteMemory(ACPI_PHYSICAL_ADDRESS addr, UINT64 value, UINT32 w
 
 void* AcpiOsAllocateZeroed(ACPI_SIZE size)
 {
+	TRACE();
 	void *ret = kmalloc(size);
 	memset(ret, 0, size);
 	return ret;
@@ -152,6 +163,7 @@ void* AcpiOsAllocateZeroed(ACPI_SIZE size)
 
 ACPI_STATUS AcpiOsCreateLock(ACPI_SPINLOCK *spinlock)
 {
+	TRACE();
 	/**
 	 * And the kmalloc() will return a block of 16 bytes to store a single spinlock (one byte). It will
 	 * also fragment the kernel heap. Perhaps we should have a function for such "microallocations"?
@@ -163,39 +175,46 @@ ACPI_STATUS AcpiOsCreateLock(ACPI_SPINLOCK *spinlock)
 
 void AcpiOsDeleteLock(ACPI_SPINLOCK spinlock)
 {
+	TRACE();
 	kfree(spinlock);
 };
 
 ACPI_CPU_FLAGS AcpiOsAcquireLock(ACPI_SPINLOCK spinlock)
 {
+	TRACE();
 	spinlockAcquire(spinlock);
 	return 0;
 };
 
 void AcpiOsReleaseLock(ACPI_SPINLOCK spinlock, ACPI_CPU_FLAGS flags)
 {
+	TRACE();
 	(void)flags;
 	spinlockRelease(spinlock);
 };
 
 BOOLEAN AcpiOsReadable(void *mem, ACPI_SIZE size)
 {
+	TRACE();
 	// this should not actually be called
 	return 0;
 };
 
 ACPI_THREAD_ID AcpiOsGetThreadId()
 {
+	TRACE();
 	return (ACPI_THREAD_ID) getCurrentThread();
 };
 
 UINT64 AcpiOsGetTimer()
 {
+	TRACE();
 	return getNanotime() / 100;
 };
 
 ACPI_STATUS AcpiOsCreateSemaphore(UINT32 maxUnits, UINT32 initUnits, ACPI_SEMAPHORE *semptr)
 {
+	TRACE();
 	(void)maxUnits;
 	if (semptr == NULL)
 	{
@@ -209,16 +228,28 @@ ACPI_STATUS AcpiOsCreateSemaphore(UINT32 maxUnits, UINT32 initUnits, ACPI_SEMAPH
 
 ACPI_STATUS AcpiOsDeleteSemaphore(ACPI_SEMAPHORE sem)
 {
+	TRACE();
 	if (sem == NULL) return AE_BAD_PARAMETER;
 	kfree(sem);
 	return AE_OK;
 };
 
-/**
- * Stupidly, it's not like our average semWaitTimeout() - we can't return less resources than were requested.
- */
 ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE sem, UINT32 units, UINT16 timeout)
 {
+	TRACE();
+	//kprintf("AcpiOsWaitSemaphore(%p, %u, %hu)\n", sem, units, timeout);
+	//stackTraceHere();
+	/*
+	if (sem == (void*)0xFFFF810000290E80)
+	{
+		kprintf("Semaphore %p waited by %p\n", sem, getCurrentThread());
+		stackTraceHere();
+		
+		//uint64_t sleepUntil = getNanotime() + NT_SECS(2);
+		//while (getNanotime() < sleepUntil);
+	};*/
+	
+	
 	int count = (int) units;
 	if (sem == NULL)
 	{
@@ -281,6 +312,12 @@ ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE sem, UINT32 units, UINT16 timeout
 
 ACPI_STATUS AcpiOsSignalSemaphore(ACPI_SEMAPHORE sem, UINT32 units)
 {
+	TRACE();
+	//if (sem == (void*)0xFFFF810000290E80)
+	//{
+	//	kprintf("Semaphore %p signalled by %p\n", sem, getCurrentThread());
+	//};
+	
 	if (sem == NULL)
 	{
 		return AE_BAD_PARAMETER;
@@ -297,12 +334,14 @@ ACPI_STATUS AcpiOsSignalSemaphore(ACPI_SEMAPHORE sem, UINT32 units)
 
 ACPI_STATUS AcpiOsGetLine(char *buffer, UINT32 len, UINT32 *read)
 {
+	TRACE();
 	*read = 0;
 	return AE_OK;
 };
 
 ACPI_STATUS AcpiOsSignal(UINT32 func, void *info)
 {
+	TRACE();
 	if (func == ACPI_SIGNAL_FATAL)
 	{
 		ACPI_SIGNAL_FATAL_INFO *fin = (ACPI_SIGNAL_FATAL_INFO*) info;
@@ -318,6 +357,7 @@ ACPI_STATUS AcpiOsSignal(UINT32 func, void *info)
 
 ACPI_STATUS AcpiOsExecute(ACPI_EXECUTE_TYPE type, ACPI_OSD_EXEC_CALLBACK func, void *ctx)
 {
+	TRACE();
 	// coincidently, ACPICA uses the same type of callback function as CreateKernelThread
 	(void)type;
 	if (func == NULL) return AE_BAD_PARAMETER;
@@ -331,6 +371,7 @@ ACPI_STATUS AcpiOsExecute(ACPI_EXECUTE_TYPE type, ACPI_OSD_EXEC_CALLBACK func, v
 
 ACPI_STATUS AcpiOsInitialize()
 {
+	TRACE();
 	memset(&pdptAcpi, 0, sizeof(PDPT));
 	pdptAcpi.entries[511].present = 1;
 	pdptAcpi.entries[511].rw = 1;
@@ -346,33 +387,39 @@ ACPI_STATUS AcpiOsInitialize()
 
 ACPI_STATUS AcpiOsTerminate()
 {
+	TRACE();
 	return AE_OK;
 };
 
 ACPI_STATUS AcpiOsPredefinedOverride(const ACPI_PREDEFINED_NAMES *PredefinedObject, ACPI_STRING *NewValue)
 {
+	TRACE();
 	*NewValue = NULL;
 	return AE_OK;
 };
 
 ACPI_STATUS AcpiOsTableOverride(ACPI_TABLE_HEADER *ExistingTable, ACPI_TABLE_HEADER **NewTable)
 {
+	TRACE();
 	*NewTable = NULL;
 	return AE_OK;
 };
 
 void AcpiOsWaitEventsComplete()
 {
+	TRACE();
 };
 
 ACPI_STATUS AcpiOsPhysicalTableOverride(ACPI_TABLE_HEADER *ExistingTable, ACPI_PHYSICAL_ADDRESS *NewAddress, UINT32 *NewTableLength)
 {
+	TRACE();
 	*NewAddress = 0;
 	return AE_OK;
 };
 
 ACPI_STATUS AcpiOsReadPciConfiguration(ACPI_PCI_ID *id, UINT32 reg, UINT64 *value, UINT32 width)
 {
+	TRACE();
 	uint32_t regAligned = reg & ~3;
 	uint32_t offsetIntoReg = reg & 3;
 	uint32_t addr = (id->Bus << 16) | (id->Device << 11) | (id->Function << 8) | (1 << 31) | regAligned;
@@ -389,6 +436,7 @@ ACPI_STATUS AcpiOsReadPciConfiguration(ACPI_PCI_ID *id, UINT32 reg, UINT64 *valu
 
 ACPI_STATUS AcpiOsWritePciConfiguration(ACPI_PCI_ID *id, UINT32 reg, UINT64 value, UINT32 width)
 {
+	TRACE();
 	uint32_t regAligned = reg & ~3;
 	uint32_t offsetIntoReg = reg & 3;
 	uint32_t addr = (id->Bus << 16) | (id->Device << 11) | (id->Function << 8) | (1 << 31) | regAligned;
@@ -413,11 +461,13 @@ static ACPI_OSD_HANDLER AcpiIntHandlers[16];
 
 void AcpiOsGenericInt(int irq)
 {
+	TRACE();
 	AcpiIntHandlers[irq](AcpiIntContexts[irq]);
 };
 
 ACPI_STATUS AcpiOsInstallInterruptHandler(UINT32 irq, ACPI_OSD_HANDLER handler, void *context)
 {
+	TRACE();
 	AcpiIntContexts[irq] = context;
 	AcpiIntHandlers[irq] = handler;
 	registerIRQHandler(irq, AcpiOsGenericInt);
@@ -426,6 +476,7 @@ ACPI_STATUS AcpiOsInstallInterruptHandler(UINT32 irq, ACPI_OSD_HANDLER handler, 
 
 ACPI_STATUS AcpiOsRemoveInterruptHandler(UINT32 intno, ACPI_OSD_HANDLER handler)
 {
+	TRACE();
 	(void)intno;
 	(void)handler;
 	return AE_OK;
@@ -478,6 +529,7 @@ static PTe *acgetPage(uint64_t index)
 
 void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS phaddr, ACPI_SIZE len)
 {
+	TRACE();
 	spinlockAcquire(&acpiMemoryLock);
 	uint64_t startPhys = phaddr >> 12;
 	uint64_t endPhys = (phaddr+len) >> 12;
@@ -499,6 +551,7 @@ void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS phaddr, ACPI_SIZE len)
 
 void AcpiOsUnmapMemory(void *laddr, ACPI_SIZE len)
 {
+	TRACE();
 	spinlockAcquire(&acpiMemoryLock);
 	uint64_t startLog = ((uint64_t)laddr-0xFFFF830000000000) >> 12;
 	uint64_t endLog = ((uint64_t)laddr-0xFFFF830000000000+len) >> 12;
@@ -523,4 +576,29 @@ void* mapPhysMemory(uint64_t phaddr, uint64_t len)
 void unmapPhysMemory(void *laddr, uint64_t len)
 {
 	AcpiOsUnmapMemory(laddr, len);
+};
+
+ACPI_STATUS AcpiOsCreateMutex(ACPI_MUTEX *out)
+{
+	Mutex *mutex = (Mutex*) kmalloc(sizeof(Mutex));
+	mutexInit(mutex);
+	*out = mutex;
+	return AE_OK;
+};
+
+void AcpiOsDeleteMutex(ACPI_MUTEX mutex)
+{
+	kfree(mutex);
+};
+
+ACPI_STATUS AcpiOsAcquireMutex(ACPI_MUTEX handle, UINT16 timeout)
+{
+	// TODO: take timeout into account
+	mutexLock((Mutex*)handle);
+	return AE_OK;
+};
+
+void AcpiOsReleaseMutex(ACPI_MUTEX handle)
+{
+	mutexUnlock((Mutex*)handle);
 };

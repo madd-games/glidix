@@ -154,7 +154,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 		return -1;
 	};
 
-	kprintf_debug("gxfs: filesystem creation time: %d\n", cis.cisCreateTime);
+	kprintf_debug("gxfs: filesystem creation time: %ld\n", cis.cisCreateTime);
 
 	size_t numSections = cis.cisTotalIno / cis.cisInoPerSection;
 	if (numSections != (cis.cisTotalBlocks / cis.cisBlocksPerSection))
@@ -165,7 +165,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 		return -1;
 	};
 
-	kprintf_debug("gxfs: this filesystem has %d sections\n", numSections);
+	kprintf_debug("gxfs: this filesystem has %lu sections\n", numSections);
 
 	GXFileSystem *gxfs = (GXFileSystem*) kmalloc(sizeof(GXFileSystem) + cis.cisBlockSize);
 	memset(gxfs, 0, sizeof(GXFileSystem) + cis.cisBlockSize);

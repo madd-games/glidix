@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2015, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2016, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -187,7 +187,7 @@ AcpiTbSetTableLoadedFlag (
  */
 void
 AcpiTbParseFadt (
-    UINT32                  TableIndex);
+    void);
 
 void
 AcpiTbCreateLocalFadt (
@@ -250,6 +250,19 @@ void
 AcpiTbUninstallTable (
     ACPI_TABLE_DESC        *TableDesc);
 
+ACPI_STATUS
+AcpiTbLoadTable (
+    UINT32                  TableIndex,
+    ACPI_NAMESPACE_NODE     *ParentNode);
+
+ACPI_STATUS
+AcpiTbInstallAndLoadTable (
+    ACPI_TABLE_HEADER       *Table,
+    ACPI_PHYSICAL_ADDRESS   Address,
+    UINT8                   Flags,
+    BOOLEAN                 Override,
+    UINT32                  *TableIndex);
+
 void
 AcpiTbTerminate (
     void);
@@ -277,10 +290,6 @@ AcpiTbGetOwnerId (
  */
 ACPI_STATUS
 AcpiTbInitializeFacs (
-    void);
-
-BOOLEAN
-AcpiTbTablesLoaded (
     void);
 
 void
@@ -313,18 +322,8 @@ AcpiTbInstallTableWithOverride (
     UINT32                  *TableIndex);
 
 ACPI_STATUS
-AcpiTbInstallFixedTable (
-    ACPI_PHYSICAL_ADDRESS   Address,
-    char                    *Signature,
-    UINT32                  *TableIndex);
-
-ACPI_STATUS
 AcpiTbParseRootTable (
     ACPI_PHYSICAL_ADDRESS   RsdpAddress);
-
-BOOLEAN
-AcpiIsValidSignature (
-    char                    *Signature);
 
 
 /*

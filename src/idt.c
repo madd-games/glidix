@@ -350,7 +350,7 @@ static void onPageFault(Regs *regs)
 		kernelDead = 1;
 		//heapDump();
 		//kdumpregs(regs);
-		kprintf("A page fault occured (rip=%a, thread='%s')\n", regs->rip, getCurrentThread()->name);
+		kprintf("A page fault occured (rip=0x%016lX, thread='%s')\n", regs->rip, getCurrentThread()->name);
 		if ((regs->errCode & 1) == 0)
 		{
 			kprintf("[non-present]");
@@ -384,7 +384,7 @@ static void onPageFault(Regs *regs)
 			kprintf("[fetch]");
 		};
 
-		kprintf("\nVirtual address: %a\n", faultAddr);
+		kprintf("\nVirtual address: 0x%016lX\n", faultAddr);
 		stackTraceHere();
 		debugKernel(regs);
 	}
@@ -415,40 +415,12 @@ static void onPageFault(Regs *regs)
 	};
 };
 
-static void onGPF(Regs *regs)
-{
-	throw(EX_GPF);
-	
-	if (1)
-	{
-		ASM("cli");
-		haltAllCPU();
-		kernelDead = 1;
-		//heapDump();
-		kdumpregs(regs);
-		kprintf("GPF (rip=%a)\n", regs->rip);
-		stackTrace(regs->rip, regs->rbp);
-		//kprintf("Peek at RIP: ");
-		//uint8_t *peek = (uint8_t*) regs->rip;
-		//size_t sz = 16;
-		//while (sz--)
-		//{
-		//	printbyte(*peek++);
-		//};
-		//kprintf("\n");
-		//dumpProcessMemory(getCurrentThread()->pm, regs->rip);
-		debugKernel(regs);
-		//panic("meme");
-	};
-};
-
-void switchTask(Regs *regs);		// sched.c
-
 void sendCPUErrorSignal(Regs *regs, int signal, int code, void *addr)
 {
 	Thread *thread = getCurrentThread();
 
 	siginfo_t siginfo;
+	memset(&siginfo, 0, sizeof(siginfo_t));
 	siginfo.si_signo = signal;
 	siginfo.si_code = code;
 	siginfo.si_addr = addr;
@@ -458,11 +430,24 @@ void sendCPUErrorSignal(Regs *regs, int signal, int code, void *addr)
 	switchTask(regs);
 };
 
-void onInvalidOpcode(Regs *regs)
+static void onGPF(Regs *regs)
 {
-	kprintf("INVALID OPCODE\n");
-	debugKernel(regs);
-	panic("I died");
+	throw(EX_GPF);
+	
+	if ((regs->cs & 3) == 0)
+	{
+		cli();
+		haltAllCPU();
+		kernelDead = 1;
+		kdumpregs(regs);
+		kprintf("GPF (rip=0x%016lX)\n", regs->rip);
+		stackTrace(regs->rip, regs->rbp);
+		debugKernel(regs);
+	}
+	else
+	{
+		sendCPUErrorSignal(regs, SIGILL, ILL_ILLOPN, (void*) regs->rip);
+	};
 };
 
 void isrHandler(Regs *regs)
@@ -493,7 +478,7 @@ void isrHandler(Regs *regs)
 		sendCPUErrorSignal(regs, SIGFPE, FPE_INTDIV, (void*) regs->rip);
 		break;
 	case I_UNDEF_OPCODE:
-		onInvalidOpcode(regs);
+		sendCPUErrorSignal(regs, SIGILL, ILL_ILLOPC, (void*) regs->rip);
 		break;
 	case I_GPF:
 		onGPF(regs);
@@ -503,7 +488,6 @@ void isrHandler(Regs *regs)
 		break;
 	case I_FLOAT_EX:
 	case I_SIMD_EX:
-		//kprintf("SIMD WITH: %a\n", (uint64_t)fpuGetMXCSR());
 		sendCPUErrorSignal(regs, SIGFPE, FPE_FLTUND, (void*) regs->rip);
 		break;
 	case I_APIC_TIMER:

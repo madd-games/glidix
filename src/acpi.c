@@ -77,12 +77,13 @@ static ACPI_RSDPDescriptor *findRSDP()
 
 	uint16_t ebdaSegment = *((uint16_t*)0xFFFF80000000040E);
 	uint64_t start = 0xFFFF800000000000+(((uint64_t)ebdaSegment) << 4);
-	kprintf("START: %a\n", start);
+	//kprintf("START: %a\n", start);
 	return findRSDPInRange(start, start+0x400);
 };
 
 // maps an IRQ to a system interrupt
 static int irqMap[16];
+static uint16_t irqFlags[16];
 
 static void ioapicInit(uint64_t ioapicbasephys)
 {
@@ -104,6 +105,14 @@ static void ioapicInit(uint64_t ioapicbasephys)
 		*regsel = (0x10+2*irqMap[i]);
 		__sync_synchronize();
 		uint64_t entry = (uint64_t)(i+32) | ((uint64_t)(apic->id) << 56);
+		if ((irqFlags[i] & 3) == 3)
+		{
+			entry |= (1 << 13);		// active low
+		};
+		if ((irqFlags[i] & 0x30) == 0x30)
+		{
+			entry |= (1 << 15);
+		};
 		*iowin = (uint32_t)(entry);
 		__sync_synchronize();
 		*regsel = (0x10+2*irqMap[i]+1);
@@ -215,14 +224,15 @@ void acpiInit()
 					//kprintf("INTOVR: BUS=%d, IRQ=%d, SYSINT=%d, FLAGS=%a\n", intovr.bus, intovr.irq, intovr.sysint, intovr.flags);
 					if (intovr.bus == 0)
 					{
-						if (intovr.irq != intovr.sysint)
+						irqFlags[intovr.irq] = intovr.flags;
+						//if (intovr.irq != intovr.sysint)
+						//{
+						irqMap[intovr.irq] = intovr.sysint;
+						if (intovr.sysint < 16)
 						{
-							irqMap[intovr.irq] = intovr.sysint;
-							if (intovr.sysint < 16)
-							{
-								irqMap[intovr.sysint] = 7;
-							};
+							irqMap[intovr.sysint] = 7;
 						};
+						//};
 					};
 				};
 				

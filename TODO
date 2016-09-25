@@ -1,10 +1,10 @@
  * When ne2k.c returns MODINIT_CANCEL, it corrupts the heap and the "strings" block allocated by module.c gets a
    broken footer. Should look into how the module unloading happens. For now, insmod() does not unload cancelled
    modules.
- * Handle all CPU exceptions such as #GP.
  * BSS in modules doesn't get zeroed?
  * During shutdown, GXFS filesystems are not unmounted safely.
  * TCP/IP ports should be freed with a delay of 2 minutes.
  * Executable permissions.
  * mod_sdide fails to write.
  * Remove the 255 file limit from GXFS
+ * IRQ routing of secondary buses (PCI interruupt swizzling)

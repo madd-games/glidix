@@ -471,3 +471,13 @@ size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t en
 	*buffer = 0;
 	return count;
 };
+
+void gwmResizeTextField(GWMWindow *field, int width)
+{
+	if (width < TEXTFIELD_MIN_WIDTH)
+	{
+		width = TEXTFIELD_MIN_WIDTH;
+	};
+	gwmResizeWindow(field, width, TEXTFIELD_HEIGHT);
+	gwmRedrawTextField(field);
+};

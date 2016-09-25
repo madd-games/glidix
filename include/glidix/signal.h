@@ -107,6 +107,18 @@
 #define	BUS_OBJERR	2
 
 /**
+ * si_code for SIGILL
+ */
+#define	ILL_ILLOPC	0
+#define	ILL_ILLOPN	1
+#define	ILL_ILLADR	2
+#define	ILL_ILLTRP	3
+#define	ILL_PRVOPC	4
+#define	ILL_PRVREG	5
+#define	ILL_COPROC	6
+#define	ILL_BADSTK	7
+
+/**
  * Max number of signals that can be sent at once to a process.
  */
 #define	SIGQ_SIZE	16

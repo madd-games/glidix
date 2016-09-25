@@ -146,7 +146,7 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 	isofs->blockSize = (uint64_t)primary.blockSize;
 	isofs->numOpenInodes = 0;
 
-	kprintf_debug("isofs: root directory start LBA is %a, block size is %d\n", rootDir->startLBA, primary.blockSize);
+	kprintf_debug("isofs: root directory start LBA is 0x%X, block size is %X\n", rootDir->startLBA, primary.blockSize);
 
 	fs->fsdata = isofs;
 	fs->fsname = "isofs";

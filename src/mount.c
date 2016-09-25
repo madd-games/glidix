@@ -46,44 +46,44 @@ void initMount()
 	kprintf("Initializing the mountpoint table... ");
 	spinlockRelease(&mountLock);
 	mountTable = NULL;
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Mounting the initrdfs at /initrd... ");
 	int errno = mount("/initrd/", getInitrdfs(), 0);
 	if (errno != 0)
 	{
-		kprintf("%$\x04" "Failed%#\n");
+		FAILED();
 		panic("failed to mount the initrdfs (errno %d)", errno);
 	};
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Mounting the devfs at /dev... ");
 	errno = mount("/dev/", getDevfs(), 0);
 	if (errno != 0)
 	{
-		kprintf("%$\x04", "Failed%#\n");
+		FAILED();
 		panic("failed to mount the devfs (errno %d)", errno);
 	};
 
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Mounting the modfs at /sys/mod... ");
 	errno = mount("/sys/mod/", getModulefs(), 0);
 	if (errno != 0)
 	{
-		kprintf("%$\x04", "Failed%#\n");
+		FAILED();
 		panic("failed to mount the modfs (errno %d)", errno);
 	};
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Mounting the procfs at /proc... ");
 	errno = mount("/proc/", getProcfs(), 0);
 	if (errno != 0)
 	{
-		kprintf("%$\x04", "Failed%#\n");
+		FAILED();
 		panic("failed to mount the procfs (errno %d)", errno);
 	};
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 };
 
 static dev_t nextDev = 1;

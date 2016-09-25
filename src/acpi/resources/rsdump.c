@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2015, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2016, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -129,32 +129,32 @@
 
 static void
 AcpiRsOutString (
-    char                    *Title,
-    char                    *Value);
+    const char              *Title,
+    const char              *Value);
 
 static void
 AcpiRsOutInteger8 (
-    char                    *Title,
+    const char              *Title,
     UINT8                   Value);
 
 static void
 AcpiRsOutInteger16 (
-    char                    *Title,
+    const char              *Title,
     UINT16                  Value);
 
 static void
 AcpiRsOutInteger32 (
-    char                    *Title,
+    const char              *Title,
     UINT32                  Value);
 
 static void
 AcpiRsOutInteger64 (
-    char                    *Title,
+    const char              *Title,
     UINT64                  Value);
 
 static void
 AcpiRsOutTitle (
-    char                    *Title);
+    const char              *Title);
 
 static void
 AcpiRsDumpByteList (
@@ -336,8 +336,8 @@ AcpiRsDumpDescriptor (
 {
     UINT8                   *Target = NULL;
     UINT8                   *PreviousTarget;
-    char                    *Name;
-    UINT8                    Count;
+    const char              *Name;
+    UINT8                   Count;
 
 
     /* First table entry must contain the table length (# of table entries) */
@@ -380,8 +380,7 @@ AcpiRsDumpDescriptor (
 
             if (Table->Pointer)
             {
-                AcpiRsOutString (Name, ACPI_CAST_PTR (char,
-                    Table->Pointer [*Target]));
+                AcpiRsOutString (Name, Table->Pointer [*Target]);
             }
             else
             {
@@ -408,20 +407,17 @@ AcpiRsDumpDescriptor (
 
         case ACPI_RSD_1BITFLAG:
 
-            AcpiRsOutString (Name, ACPI_CAST_PTR (char,
-                Table->Pointer [*Target & 0x01]));
+            AcpiRsOutString (Name, Table->Pointer [*Target & 0x01]);
             break;
 
         case ACPI_RSD_2BITFLAG:
 
-            AcpiRsOutString (Name, ACPI_CAST_PTR (char,
-                Table->Pointer [*Target & 0x03]));
+            AcpiRsOutString (Name, Table->Pointer [*Target & 0x03]);
             break;
 
         case ACPI_RSD_3BITFLAG:
 
-            AcpiRsOutString (Name, ACPI_CAST_PTR (char,
-                Table->Pointer [*Target & 0x07]));
+            AcpiRsOutString (Name, Table->Pointer [*Target & 0x07]);
             break;
 
         case ACPI_RSD_SHORTLIST:
@@ -615,9 +611,10 @@ AcpiRsDumpAddressCommon (
 
 static void
 AcpiRsOutString (
-    char                    *Title,
-    char                    *Value)
+    const char              *Title,
+    const char              *Value)
 {
+
     AcpiOsPrintf ("%27s : %s", Title, Value);
     if (!*Value)
     {
@@ -628,7 +625,7 @@ AcpiRsOutString (
 
 static void
 AcpiRsOutInteger8 (
-    char                    *Title,
+    const char              *Title,
     UINT8                   Value)
 {
     AcpiOsPrintf ("%27s : %2.2X\n", Title, Value);
@@ -636,33 +633,37 @@ AcpiRsOutInteger8 (
 
 static void
 AcpiRsOutInteger16 (
-    char                    *Title,
+    const char              *Title,
     UINT16                  Value)
 {
+
     AcpiOsPrintf ("%27s : %4.4X\n", Title, Value);
 }
 
 static void
 AcpiRsOutInteger32 (
-    char                    *Title,
+    const char              *Title,
     UINT32                  Value)
 {
+
     AcpiOsPrintf ("%27s : %8.8X\n", Title, Value);
 }
 
 static void
 AcpiRsOutInteger64 (
-    char                    *Title,
+    const char              *Title,
     UINT64                  Value)
 {
+
     AcpiOsPrintf ("%27s : %8.8X%8.8X\n", Title,
         ACPI_FORMAT_UINT64 (Value));
 }
 
 static void
 AcpiRsOutTitle (
-    char                    *Title)
+    const char              *Title)
 {
+
     AcpiOsPrintf ("%27s : ", Title);
 }
 
@@ -690,8 +691,7 @@ AcpiRsDumpByteList (
 
     for (i = 0; i < Length; i++)
     {
-        AcpiOsPrintf ("%25s%2.2X : %2.2X\n",
-            "Byte", i, Data[i]);
+        AcpiOsPrintf ("%25s%2.2X : %2.2X\n", "Byte", i, Data[i]);
     }
 }
 
@@ -707,6 +707,7 @@ AcpiRsDumpShortByteList (
     {
         AcpiOsPrintf ("%X ", Data[i]);
     }
+
     AcpiOsPrintf ("\n");
 }
 
@@ -720,8 +721,7 @@ AcpiRsDumpDwordList (
 
     for (i = 0; i < Length; i++)
     {
-        AcpiOsPrintf ("%25s%2.2X : %8.8X\n",
-            "Dword", i, Data[i]);
+        AcpiOsPrintf ("%25s%2.2X : %8.8X\n", "Dword", i, Data[i]);
     }
 }
 
@@ -735,8 +735,8 @@ AcpiRsDumpWordList (
 
     for (i = 0; i < Length; i++)
     {
-        AcpiOsPrintf ("%25s%2.2X : %4.4X\n",
-            "Word", i, Data[i]);
+        AcpiOsPrintf ("%25s%2.2X : %4.4X\n", "Word", i, Data[i]);
     }
 }
+
 #endif

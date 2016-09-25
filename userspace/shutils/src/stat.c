@@ -141,8 +141,7 @@ int main(int argc, char *argv[])
 	{
 		if (lstat(filename, &st) != 0)
 		{
-			fprintf(stderr, "%s: ", argv[0]);
-			perror(argv[1]);
+			fprintf(stderr, "%s: %s: %s\n", argv[0], filename, strerror(errno));
 			return 1;
 		};
 	}

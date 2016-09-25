@@ -130,12 +130,35 @@ typedef struct PCIDevice_
 	char						driverName[128];	// name of driver module
 	char						deviceName[128];	// name of device (default = "Unknown")
 	uint32_t					bar[6];			// base address registers (BARs)
-	
+	uint32_t					barsz[6];		// size of each BAR
+
 	// -- END OF USER AREA --
 	
 	int						intNo;			// which interrupt the device was mapped to
 	WaitCounter					wcInt;			// interrupt wait counter
+	
+	// slot and interrupt pin on the root bridge
+	int						rootSlot;
+	int						rootInt;
 } PCIDevice;
+
+typedef struct
+{
+	uint8_t					bus;
+	uint8_t					dev;
+	uint8_t					func;
+	
+	/**
+	 * Low 2 bits = pin number (0-3 = A-D), top bit (mask 0x80) decides whether intNo
+	 * is a Global System Interupt (0) or an IRQ number (1).
+	 */
+	uint8_t					pinAndType;
+	
+	/**
+	 * GSI number or IRQ number.
+	 */
+	int					intNo;
+} PCIRouteEntry;
 
 void pciInit();
 void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig *config);

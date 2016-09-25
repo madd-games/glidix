@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2015, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2016, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -177,8 +177,8 @@ AcpiPsInitOp (
     Op->Common.AmlOpcode = Opcode;
 
     ACPI_DISASM_ONLY_MEMBERS (strncpy (Op->Common.AmlOpName,
-            (AcpiPsGetOpcodeInfo (Opcode))->Name,
-                sizeof (Op->Common.AmlOpName)));
+        (AcpiPsGetOpcodeInfo (Opcode))->Name,
+        sizeof (Op->Common.AmlOpName)));
 }
 
 
@@ -220,7 +220,7 @@ AcpiPsAllocOp (
     }
     else if (OpInfo->Flags & AML_NAMED)
     {
-        Flags = ACPI_PARSEOP_NAMED;
+        Flags = ACPI_PARSEOP_NAMED_OBJECT;
     }
     else if (Opcode == AML_INT_BYTELIST_OP)
     {
@@ -277,7 +277,8 @@ AcpiPsFreeOp (
 
     if (Op->Common.AmlOpcode == AML_INT_RETURN_VALUE_OP)
     {
-        ACPI_DEBUG_PRINT ((ACPI_DB_ALLOCATIONS, "Free retval op: %p\n", Op));
+        ACPI_DEBUG_PRINT ((ACPI_DB_ALLOCATIONS,
+            "Free retval op: %p\n", Op));
     }
 
     if (Op->Common.Flags & ACPI_PARSEOP_GENERIC)

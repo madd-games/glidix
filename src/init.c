@@ -62,6 +62,15 @@
 #include <glidix/ptty.h>
 #include <glidix/ramfs.h>
 
+#define ACPI_OSC_QUERY_INDEX				0
+#define ACPI_OSC_SUPPORT_INDEX				1
+#define ACPI_OSC_CONTROL_INDEX				2
+
+#define ACPI_OSC_QUERY_ENABLE				0x1
+
+#define ACPI_OSC_SUPPORT_SB_PR3_SUPPORT			0x4
+#define ACPI_OSC_SUPPORT_SB_APEI_SUPPORT		0x10
+
 extern int _bootstrap_stack;
 extern int end;
 extern uint32_t quantumTicks;
@@ -277,21 +286,21 @@ void kmain(MultibootInfo *info)
 	
 	kprintf_debug(" *** TO TRAP THE KERNEL *** \n");
 	kprintf_debug(" set r15=rip\n");
-	kprintf_debug(" set rip=%a\n", &trapKernel);
+	kprintf_debug(" set rip=%p\n", &trapKernel);
 	kprintf_debug(" *** END OF INFO *** \n");
 
 	kprintf("Initializing the IDT... ");
 	initIDT();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	uint64_t mmapAddr = (uint64_t) info->mmapAddr + 0xFFFF800000000000;
 	uint64_t mmapEnd = mmapAddr + info->mmapLen;
-	kprintf("Memory map address: %a memory map size = %d\n", mmapAddr, info->mmapLen);
+	kprintf("Memory map address: 0x%016lX memory map size = %d\n", mmapAddr, info->mmapLen);
 	MultibootMemoryMap *mmap = (MultibootMemoryMap*) mmapAddr;
 	kprintf("Size\tBase\tLen\tType\n");
 	while ((uint64_t)mmap < mmapEnd)
 	{
-		kprintf("%d\t%a\t%d\t%d\n", mmap->size, mmap->baseAddr, mmap->len, mmap->type);
+		kprintf("%u\t0x%016lX\t%lu\t%d\n", mmap->size, mmap->baseAddr, mmap->len, mmap->type);
 		mmap = (MultibootMemoryMap*) ((uint64_t) mmap + mmap->size + 4);
 	};
 
@@ -307,19 +316,19 @@ void kmain(MultibootInfo *info)
 		if (end > memSize) memSize = end;
 		mmap = (MultibootMemoryMap*) ((uint64_t) mmap + mmap->size + 4);
 	};
-	kprintf("%$\x01%dMB%#\n", (int)(memSize/1024/1024));
+	kprintf("%dMB\n", (int)(memSize/1024/1024));
 	
-	kprintf("Initializing memory allocation phase 1 (base=%a)... ", end);
+	kprintf("Initializing memory allocation phase 1 (base=0x%016lX)... ", end);
 	initMemoryPhase1(end);
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing the physical memory manager (%d pages)... ", (int)(memSize/0x1000));
 	initPhysMem(memSize/0x1000, (MultibootMemoryMap*) mmapAddr, mmapEnd);
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing the ISP... ");
 	ispInit();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing per-CPU variable area... ");
 	initPerCPU();
@@ -330,11 +339,11 @@ void kmain(MultibootInfo *info)
 	
 	kprintf("Initializing memory allocation phase 2... ");
 	initMemoryPhase2();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing the frame bitmap... ");
 	initPhysMem2();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing DMA... ");
 	dmaInit();
@@ -353,27 +362,27 @@ void kmain(MultibootInfo *info)
 
 	kprintf("Initializing the VFS... ");
 	vfsInit();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing the initrdfs... ");
 	initInitrdfs(info);
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing the procfs... ");
 	initProcfs();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing the devfs... ");
 	initDevfs();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing PCI... ");
 	pciInit();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing the FS driver interface... ");
 	initFSDrivers();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing the PIT... ");
 	uint16_t divisor = 1193180 / 1000;		// 1000 Hz
@@ -382,7 +391,7 @@ void kmain(MultibootInfo *info)
 	uint8_t h = (uint8_t)( (divisor>>8) & 0xFF );
 	outb(0x40, l);
 	outb(0x40, h);
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Initializing the APIC timer...");
 	sti();
@@ -404,7 +413,7 @@ void kmain(MultibootInfo *info)
 extern void _jmp_usbs(void *stack);
 static void spawnProc(void *stack)
 {
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 	
 	initInterp();
 	
@@ -413,28 +422,28 @@ static void spawnProc(void *stack)
 	AddSegment(getCurrentThread()->pm, 1, fl, PROT_READ | PROT_WRITE | PROT_EXEC);
 	pdownref(fl);
 	SetProcessMemory(getCurrentThread()->pm);
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Setting up the terminal... ");
 	setupTerminal(getCurrentThread()->ftab);
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Loading /initrd/usbs... ");
 	int err;
 	File *file = vfsOpen("/initrd/usbs", VFS_CHECK_ACCESS, &err);
 	if (file == NULL)
 	{
-		kprintf("%$\x04" "Failed%#\n");
+		FAILED();
 		panic("failed to open /initrd/usbs");
 	};
 	ssize_t count = vfsRead(file, (void*) 0x1000, 0x1000);
 	if (count < 1)
 	{
-		kprintf("%$\x04" "Failed%#\n");
+		FAILED();
 		panic("read() /initrd/usbs: %d\n", count);
 	};
 	vfsClose(file);
-	kprintf("%$\x02" "%d bytes%#\n", count);
+	kprintf("%ld bytes\n", count);
 
 	getCurrentThread()->creds->sid = 1;
 	getCurrentThread()->creds->pgid = 1;
@@ -461,6 +470,35 @@ static UINT32 onPowerButton(void *ignore)
 	return 0;
 };
 
+static const UINT8 uuidOffset[16] =
+{
+    6,4,2,0,11,9,16,14,19,21,24,26,28,30,32,34
+};
+static UINT8 hex2num(char hex)
+{
+	if ((hex >= 'A') && (hex <= 'F'))
+	{
+		return (UINT8) (hex-'A');
+	}
+	else
+	{
+		return (UINT8) (hex-'0');
+	};
+};
+static void str2uuid(char *InString, UINT8 *UuidBuffer)
+{
+	UINT32                  i;
+
+	for (i = 0; i < UUID_BUFFER_LENGTH; i++)
+	{
+		UuidBuffer[i] = (hex2num (
+			InString[uuidOffset[i]]) << 4);
+
+		UuidBuffer[i] |= hex2num (
+			InString[uuidOffset[i] + 1]);
+	};
+};
+
 void kmain2()
 {
 	initMount();
@@ -468,10 +506,37 @@ void kmain2()
 	ramfsInit();
 	
 	kprintf("Initializing ACPICA...\n");
+	
 	ACPI_STATUS status = AcpiInitializeSubsystem();
 	if (ACPI_FAILURE(status))
 	{
 		panic("AcpiInitializeSubsystem failed");
+	};
+
+	AcpiInstallInterface("Windows 2009");
+	
+	status = AcpiReallocateRootTable();
+	if (ACPI_FAILURE(status))
+	{
+		panic("AcpiReallocateRootTable failed\n");
+	};
+	
+	status = AcpiInstallAddressSpaceHandler(ACPI_ROOT_OBJECT, ACPI_ADR_SPACE_SYSTEM_MEMORY, ACPI_DEFAULT_HANDLER, NULL, NULL);
+	if (ACPI_FAILURE(status))
+	{
+		panic("AcpiInstallAddressSpaceHandler failed");
+	};
+
+	status = AcpiInstallAddressSpaceHandler(ACPI_ROOT_OBJECT, ACPI_ADR_SPACE_SYSTEM_IO, ACPI_DEFAULT_HANDLER, NULL, NULL);
+	if (ACPI_FAILURE(status))
+	{
+		panic("AcpiInstallAddressSpaceHandler failed");
+	};
+
+	status = AcpiInstallAddressSpaceHandler(ACPI_ROOT_OBJECT, ACPI_ADR_SPACE_PCI_CONFIG, ACPI_DEFAULT_HANDLER, NULL, NULL);
+	if (ACPI_FAILURE(status))
+	{
+		panic("AcpiInstallAddressSpaceHandler failed");
 	};
 	
 	// this must come after AcpiInitializeSubsystem() because ACPI calls
@@ -482,7 +547,7 @@ void kmain2()
 	
 	kprintf("Initializing SDI... ");
 	sdInit();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 	
 	status = AcpiInitializeTables(NULL, 16, FALSE);
 	if (ACPI_FAILURE(status))
@@ -510,6 +575,56 @@ void kmain2()
 	{
 		panic("AcpiInitializeObjects failed");
 	};
+
+	uint32_t capabilities[2];
+	capabilities[ACPI_OSC_QUERY_INDEX] = ACPI_OSC_QUERY_ENABLE;
+	capabilities[ACPI_OSC_SUPPORT_INDEX] = ACPI_OSC_SUPPORT_SB_PR3_SUPPORT;
+	
+	ACPI_OBJECT_LIST input;
+	ACPI_OBJECT inParams[4];
+	uint8_t uuid[16];
+	ACPI_BUFFER output;
+	
+	str2uuid("0811B06E-4A27-44F9-8D60-3CBBC22E7B48", uuid);
+	output.Length = ACPI_ALLOCATE_BUFFER;
+	output.Pointer = NULL;
+	
+	input.Count = 4;
+	input.Pointer = inParams;
+
+	inParams[0].Type = ACPI_TYPE_BUFFER;
+	inParams[0].Buffer.Length = 16;
+	inParams[0].Buffer.Pointer = uuid;
+
+	inParams[1].Type = ACPI_TYPE_INTEGER;
+	inParams[1].Integer.Value = 1;
+
+	inParams[2].Type = ACPI_TYPE_INTEGER;
+	inParams[2].Integer.Value = 2;
+
+	inParams[3].Type = ACPI_TYPE_BUFFER;
+	inParams[3].Buffer.Length = 8;
+	inParams[3].Buffer.Pointer = (UINT8*) capabilities;
+
+	ACPI_HANDLE rootHandle;
+	if (ACPI_FAILURE(AcpiGetHandle(NULL, "\\_SB", &rootHandle)))
+	{
+		panic("Failed to get \\_SB object!");
+	};
+	
+	status = AcpiEvaluateObject(rootHandle, "_OSC", &input, &output);
+	
+	// ---
+	
+	ACPI_OBJECT arg1;
+	arg1.Type = ACPI_TYPE_INTEGER;
+	arg1.Integer.Value = 1;		/* IOAPIC */
+	
+	ACPI_OBJECT_LIST args;
+	args.Count = 1;
+	args.Pointer = &arg1;
+	
+	AcpiEvaluateObject(ACPI_ROOT_OBJECT, "_PIC", &args, NULL);
 	
 	kprintf("Installing power button handler...\n");
 	if (AcpiInstallFixedEventHandler(ACPI_EVENT_POWER_BUTTON, onPowerButton, NULL) != AE_OK)
@@ -522,12 +637,12 @@ void kmain2()
 	
 	kprintf("Initializing the RTC... ");
 	initRTC();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 	
 	kprintf("Initializing the network interface... ");
 	ipreasmInit();
 	initNetIf();
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 	
 	kprintf("Initializing the shared memory API... ");
 	shmemInit();

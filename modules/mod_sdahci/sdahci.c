@@ -97,6 +97,8 @@ static void ahciAtaThread(void *data)
 			panic("cmd->count > 8");
 		};
 		
+		dev->port->is = dev->port->is;
+		
 		// we don't need to protect the device with semaphores, because only this thread
 		// accesses its port.
 
@@ -113,15 +115,17 @@ static void ahciAtaThread(void *data)
 		// do not zero it; it was already zeroed before and only this thread updates the
 		// structures so we know that any unused fields are already zero.
 		cmdhead[slot].cfl = sizeof(FIS_REG_H2D)/4;
-		if (cmd->type == SD_CMD_READ)
-		{
-			cmdhead[slot].w = 0;
-		}
-		else
-		{
-			cmdhead[slot].w = 1;
-		};
+		//if (cmd->type == SD_CMD_READ)
+		//{
+		//	cmdhead[slot].w = 0;
+		//}
+		//else
+		//{
+		//	cmdhead[slot].w = 1;
+		//};
+		cmdhead[slot].w = 0;
 		cmdhead[slot].prdtl = 1;
+		__sync_synchronize();
 		
 		AHCICommandTable *cmdtbl = (AHCICommandTable*) ((char*)dmaGetPtr(&dev->dmabuf) + 1024+256+8*1024+256*slot);
 		cmdtbl->prdt_entry[0].dba = dmaGetPhys(&dev->iobuf) + 4096*slot;
@@ -159,8 +163,9 @@ static void ahciAtaThread(void *data)
 		};
 		
 		// wait for the port to stop being busy
-		int busy = (1 << 7) || (1 << 3);
+		int busy = (1 << 7) | (1 << 3);
 		while (dev->port->tfd & busy) __sync_synchronize();
+		__sync_synchronize();
 		
 		if (dev->port->tfd & (1 << 0))
 		{
@@ -168,14 +173,23 @@ static void ahciAtaThread(void *data)
 		};
 		
 		dev->port->ci = (1 << slot);
-
+		__sync_synchronize();
+		
 		while (dev->port->ci & (1 << slot))
 		{
+			if (dev->port->is & (1 << 27))
+			{
+				panic("AHCI error!");
+			};
 			__sync_synchronize();
 		};
-			
-		memcpy(cmd->block, hwbuf, 512*cmd->count);
+		__sync_synchronize();
 		
+		if (cmd->type == SD_CMD_READ)
+		{
+			memcpy(cmd->block, hwbuf, 512*cmd->count);
+		};
+
 		sdPostComplete(cmd);
 	};
 };
@@ -237,6 +251,7 @@ static void initCtrl(AHCIController *ctrl)
 						
 						__sync_synchronize();
 						ahciStartCmd(port);
+						port->is = port->is;
 						
 						// we must now identify the device to find out its size
 						// just use the first header
@@ -251,7 +266,7 @@ static void initCtrl(AHCIController *ctrl)
 						
 						cmdtbl->prdt_entry[0].dba = dmaGetPhys(&dev->iobuf);
 						cmdtbl->prdt_entry[0].dbc = 511;
-						cmdtbl->prdt_entry[0].i = 1;	// interrupt when identify complete
+						cmdtbl->prdt_entry[0].i = 0;	// interrupt when identify complete
 						
 						FIS_REG_H2D *cmdfis = (FIS_REG_H2D*) cmdtbl->cfis;
 						memset(cmdfis, 0, sizeof(FIS_REG_H2D));

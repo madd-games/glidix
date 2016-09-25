@@ -207,7 +207,7 @@ void timedPost(TimedEvent *ev, uint64_t nanotime)
 {
 	ev->nanotime = nanotime;
 	ev->thread = getCurrentThread();
-	
+
 	if (nanotime == 0)
 	{
 		ev->prev = ev->next = NULL;

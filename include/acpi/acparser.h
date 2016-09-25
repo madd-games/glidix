@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2015, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2016, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -155,6 +155,10 @@ ACPI_STATUS
 AcpiPsExecuteMethod (
     ACPI_EVALUATE_INFO      *Info);
 
+ACPI_STATUS
+AcpiPsExecuteTable (
+    ACPI_EVALUATE_INFO      *Info);
+
 
 /*
  * psargs - Parse AML opcode arguments
@@ -178,7 +182,12 @@ AcpiPsGetNextNamepath (
     ACPI_WALK_STATE         *WalkState,
     ACPI_PARSE_STATE        *ParserState,
     ACPI_PARSE_OBJECT       *Arg,
-    BOOLEAN                 MethodCall);
+    BOOLEAN                 PossibleMethodCall);
+
+/* Values for BOOLEAN above */
+
+#define ACPI_NOT_METHOD_CALL            FALSE
+#define ACPI_POSSIBLE_METHOD_CALL       TRUE
 
 ACPI_STATUS
 AcpiPsGetNextArg (
@@ -238,7 +247,7 @@ const ACPI_OPCODE_INFO *
 AcpiPsGetOpcodeInfo (
     UINT16                  Opcode);
 
-char *
+const char *
 AcpiPsGetOpcodeName (
     UINT16                  Opcode);
 

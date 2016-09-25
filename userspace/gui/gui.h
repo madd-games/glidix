@@ -790,6 +790,11 @@ size_t gwmGetTextFieldSize(GWMWindow *field);
 size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t endPos);
 
 /**
+ * Set the length of a text field.
+ */
+void gwmResizeTextField(GWMWindow *field, int width);
+
+/**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
  * Returns 0 on success, -1 on error.
  */
@@ -1002,5 +1007,17 @@ GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int hei
  * Destroy a TreeView object.
  */
 void gwmDestroyTreeView(GWMWindow *treeview);
+
+/**
+ * Set a TreeView double-click handler. The TreeView event handler will return whatever the callback returns.
+ */
+typedef int (*GWMTreeViewActivateCallback)(void *param);
+void gwmTreeViewSetActivateCallback(GWMWindow *treeview, GWMTreeViewActivateCallback handler, void *param);
+
+/**
+ * Store the currently-selected path on a TreeView in the given buffer. Returns 0 if something actually was
+ * selected; otherwise returns -1 and the buffer is untouched.
+ */
+int gwmTreeViewGetSelection(GWMWindow *treeview, void *buffer);
 
 #endif

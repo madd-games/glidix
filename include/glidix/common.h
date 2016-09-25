@@ -45,6 +45,7 @@
 #define	ATOMIC(t)		ALIGN(sizeof(t)) t
 #define	SECTION(n)		__attribute__ ((section(n)))
 #define	PER_CPU			SECTION(".data_per_cpu")
+#define	FORMAT(a, b, c)		__attribute__ ((format(a, b, c)))
 #define	cli()			ASM ("cli")
 #define	hlt()			ASM ("hlt")
 #define	sti()			ASM ("sti")

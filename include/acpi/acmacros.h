@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2015, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2016, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -359,10 +359,10 @@
 /* Generic bitfield macros and masks */
 
 #define ACPI_GET_BITS(SourcePtr, Position, Mask) \
-    ((*SourcePtr >> Position) & Mask)
+    ((*(SourcePtr) >> (Position)) & (Mask))
 
 #define ACPI_SET_BITS(TargetPtr, Position, Mask, Value) \
-    (*TargetPtr |= ((Value & Mask) << Position))
+    (*(TargetPtr) |= (((Value) & (Mask)) << (Position)))
 
 #define ACPI_1BIT_MASK      0x00000001
 #define ACPI_2BIT_MASK      0x00000003
@@ -474,18 +474,6 @@
 #define ACPI_HW_OPTIONAL_FUNCTION(addr)     addr
 #else
 #define ACPI_HW_OPTIONAL_FUNCTION(addr)     NULL
-#endif
-
-
-/*
- * Some code only gets executed when the debugger is built in.
- * Note that this is entirely independent of whether the
- * DEBUG_PRINT stuff (set by ACPI_DEBUG_OUTPUT) is on, or not.
- */
-#ifdef ACPI_DEBUGGER
-#define ACPI_DEBUGGER_EXEC(a)           a
-#else
-#define ACPI_DEBUGGER_EXEC(a)
 #endif
 
 

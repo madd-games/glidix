@@ -330,7 +330,7 @@ void packetDump(const void *packet, size_t packetlen)
 	static const char hexdigits[16] = "0123456789abcdef";
 	for (offset=0; offset<packetlen; offset+=16)
 	{
-		kprintf_debug("%p ", offset);
+		kprintf_debug("0x%016lX ", offset);
 		
 		size_t fullOffset;
 		for (fullOffset=offset; fullOffset<(offset+16) && (fullOffset<packetlen); fullOffset++)

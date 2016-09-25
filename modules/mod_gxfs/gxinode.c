@@ -32,6 +32,7 @@
 #include <glidix/string.h>
 #include <glidix/memory.h>
 
+#if 0
 void GXDumpInode(GXFileSystem *gxfs, ino_t ino)
 {
 	GXInode gxino;
@@ -40,13 +41,13 @@ void GXDumpInode(GXFileSystem *gxfs, ino_t ino)
 	gxfsInode inode;
 	vfsRead(gxfs->fp, &inode, sizeof(gxfsInode));
 
-	kprintf("Dumping fragment list for inode %d\n", ino);
-	kprintf("#\tOffset\tBlock\tExtent\n");
+	//kprintf("Dumping fragment list for inode %d\n", ino);
+	//kprintf("#\tOffset\tBlock\tExtent\n");
 	int i;
 	for (i=0; i<14; i++)
 	{
 		gxfsFragment *frag = &inode.inoFrags[i];
-		kprintf("%d\t%p\t%p\t%p\n", i, frag->fOff, frag->fBlock, frag->fExtent);
+		//kprintf("%d\t%p\t%p\t%p\n", i, frag->fOff, frag->fBlock, frag->fExtent);
 	};
 
 	gxfsXFT *xft = (gxfsXFT*) kmalloc(gxfs->cis.cisBlockSize);
@@ -60,21 +61,23 @@ void GXDumpInode(GXFileSystem *gxfs, ino_t ino)
 		uint64_t offsetToBlock = gxfs->sections[sectionContainingBlock].sdOffTabBlocks + blockIndexInSection * gxfs->cis.cisBlockSize;
 		gxfs->fp->seek(gxfs->fp, offsetToBlock, SEEK_SET);
 		vfsRead(gxfs->fp, xft, gxfs->cis.cisBlockSize);
-		kprintf("<XFT at %p, level %d, count %d>\n", xftBlock, count++, xft->xftCount);
+		//kprintf("<XFT at %p, level %d, count %d>\n", xftBlock, count++, xft->xftCount);
 		
 		for (i=0; i<xft->xftCount; i++)
 		{
 			gxfsFragment *frag = &xft->xftFrags[i];
 			if (frag->fExtent == 0) break;
-			kprintf("%d\t%p\t%p\t%p\n", i, frag->fOff, frag->fBlock, frag->fExtent);
+			//kprintf("%d\t%p\t%p\t%p\n", i, frag->fOff, frag->fBlock, frag->fExtent);
 		};
 		
 		xftBlock = xft->xftNext;
 	};
 };
+#endif
 
 void GXDumpInodeBuffer(GXFileSystem *gxfs)
 {
+#if 0
 	kprintf_debug("Currently-buffered inodes: %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d, %d*%d\n",
 		gxfs->ibuf[0].num, gxfs->ibuf[0].counter,
 		gxfs->ibuf[1].num, gxfs->ibuf[1].counter,
@@ -93,6 +96,7 @@ void GXDumpInodeBuffer(GXFileSystem *gxfs)
 		gxfs->ibuf[14].num, gxfs->ibuf[14].counter,
 		gxfs->ibuf[15].num, gxfs->ibuf[15].counter
 	);
+#endif
 };
 
 static ino_t GXCreateInodeInSection(GXFileSystem *gxfs, GXInode *gxino, uint64_t section)
@@ -592,7 +596,7 @@ size_t GXWriteInode(GXInode *gxino, const void *buffer, size_t size)
 			if (GXPositionXFT(gxino->gxfs, inode.inoExFrag, gxino->pos, &block, &offsetIntoBlock) != 0)
 			{
 				// not found in XFT either, stop trying to write
-				GXDumpInode(gxino->gxfs, gxino->ino);
+				//GXDumpInode(gxino->gxfs, gxino->ino);
 				panic("cannot find position %p in the file!", gxino->pos);
 				break;
 			};

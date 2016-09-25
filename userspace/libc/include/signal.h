@@ -115,6 +115,15 @@
 #define	BUS_ADRERR	1
 #define	BUS_OBJERR	2
 
+#define	ILL_ILLOPC	0
+#define	ILL_ILLOPN	1
+#define	ILL_ILLADR	2
+#define	ILL_ILLTRP	3
+#define	ILL_PRVOPC	4
+#define	ILL_PRVREG	5
+#define	ILL_COPROC	6
+#define	ILL_BADSTK	7
+
 /**
  * 'int' is signal-atomic on x86_64 according to Intel spec.
  */

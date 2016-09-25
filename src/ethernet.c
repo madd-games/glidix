@@ -429,7 +429,7 @@ void onEtherFrame(NetIf *netif, const void *frame, size_t framelen, int flags)
 	if ((flags & ETHER_IGNORE_CRC) == 0)
 	{
 		uint32_t crc = ether_checksum(frame, framelen);
-		kprintf_debug("RECEIVED CRC: %a\n", (uint64_t)crc);
+		kprintf_debug("RECEIVED CRC: 0x%08u\n", crc);
 		// TODO: is the CRC correct???
 	};
 	

@@ -72,6 +72,8 @@ typedef struct
 	int						colResizing;
 	int						resizeAnchor;
 	int						oldColSize;
+	GWMTreeViewActivateCallback			actCallback;
+	void*						actParam;
 	char						pathBuffer[];
 } GWMTreeViewData;
 
@@ -355,6 +357,12 @@ static int treeviewHandler(GWMEvent *ev, GWMWindow *treeview)
 		data->hoverX = data->hoverY = -1;
 		gwmRedrawTreeView(treeview);
 		return 0;
+	case GWM_EVENT_DOUBLECLICK:
+		if (data->actCallback != NULL)
+		{
+			return data->actCallback(data->actParam);
+		};
+		return 0;
 	default:
 		return gwmDefaultHandler(ev, treeview);
 	};
@@ -419,7 +427,8 @@ GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int hei
 	data->clicked = 0;
 	data->selectedPath = NULL;
 	data->colResizing = -1;
-	
+	data->actCallback = NULL;
+		
 	int scrollbarY = 1;
 	int scrollbarLen = height-2;
 	
@@ -457,4 +466,19 @@ void gwmDestroyTreeView(GWMWindow *treeview)
 	free(data->root);
 	
 	gwmDestroyWindow(treeview);
+};
+
+void gwmTreeViewSetActivateCallback(GWMWindow *treeview, GWMTreeViewActivateCallback cb, void *param)
+{
+	GWMTreeViewData *data = (GWMTreeViewData*) treeview->data;
+	data->actCallback = cb;
+	data->actParam = param;
+};
+
+int gwmTreeViewGetSelection(GWMWindow *treeview, void *buffer)
+{
+	GWMTreeViewData *data = (GWMTreeViewData*) treeview->data;
+	if (data->selectedPath == NULL) return -1;
+	memcpy(buffer, data->selectedPath, data->tree->tePathSize);
+	return 0;
 };

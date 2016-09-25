@@ -124,7 +124,7 @@ void initModuleInterface()
 	uint64_t pdptPhysAddr = (uint64_t) &pdptModuleSpace - 0xFFFF800000000000;
 	if (pdptPhysAddr % 0x1000)
 	{
-		kprintf("%$\x04" "Failed%#\n");
+		FAILED();
 		panic("pdptModuleSpace is not page-aligned: kernel insane");
 	};
 
@@ -141,7 +141,7 @@ void initModuleInterface()
 	moduleFileSystem->fsname = "modfs";
 	moduleFileSystem->openroot = modfs_openroot;
 
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 };
 
 static int allocModuleBlock()
@@ -321,7 +321,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 
 	if (elfHeader.e_shentsize != sizeof(Elf64_Shdr))
 	{
-		kprintf("insmod(%s): %s: e_shentsize is %d, should be %d\n", modname, path, elfHeader.e_shentsize, sizeof(Elf64_Shdr));
+		kprintf("insmod(%s): %s: e_shentsize is %d, should be %lu\n", modname, path, elfHeader.e_shentsize, sizeof(Elf64_Shdr));
 		vfsClose(fp);
 		spinlockRelease(&modLock);
 		return -1;
@@ -350,7 +350,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 
 	if (flags & INSMOD_VERBOSE)
 	{
-		kprintf("insmod(%s): string section is %d bytes\n", modname, shstr.sh_size);
+		kprintf("insmod(%s): string section is %lu bytes\n", modname, shstr.sh_size);
 		kprintf("insmod(%s): reading kernel module image %s containing %d sections\n", modname, path, elfHeader.e_shnum);
 	};
 
@@ -384,7 +384,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		{
 			if (section.sh_addr != 0)
 			{
-				kprintf("insmod(%s): section .modbody has nonzero load address %a\n", modname, section.sh_addr);
+				kprintf("insmod(%s): section .modbody has nonzero load address 0x%016lX\n", modname, section.sh_addr);
 				vfsClose(fp);
 				kfree(strings);
 				spinlockRelease(&modLock);
@@ -498,7 +498,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	uint64_t baseAddr = (uint64_t)MODULE_AREA_BASE + (uint64_t)modblock * (uint64_t)MODULE_BLOCK_SIZE;
 	if (flags & INSMOD_VERBOSE)
 	{
-		kprintf("insmod(%s): loading at %a (modblock %d)\n", modname, baseAddr, modblock);
+		kprintf("insmod(%s): loading at 0x%016lX (modblock %d)\n", modname, baseAddr, modblock);
 	};
 
 	Elf64_Shdr modbodySection;
@@ -507,7 +507,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 
 	if (flags & INSMOD_VERBOSE)
 	{
-		kprintf("insmod(%s): size of section .modbody is %d bytes\n", modname, modbodySection.sh_size);
+		kprintf("insmod(%s): size of section .modbody is %lu bytes\n", modname, modbodySection.sh_size);
 	};
 
 	Module *module = (Module*) kmalloc(sizeof(Module));
@@ -553,7 +553,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 				uint64_t addr = baseAddr + symbol->st_value;
 				if (flags & INSMOD_VERBOSE)
 				{
-					kprintf("insmod(%s): found __module_init at %a\n", modname, addr);
+					kprintf("insmod(%s): found __module_init at 0x%016lX\n", modname, addr);
 				};
 				moduleInitEvent = (int (*)(const char*)) addr;
 			}
@@ -562,7 +562,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 				uint64_t addr = baseAddr + symbol->st_value;
 				if (flags & INSMOD_VERBOSE)
 				{
-					kprintf("insmod(%s): found _fini at %a\n", modname, addr);
+					kprintf("insmod(%s): found _fini at 0x%016lX\n", modname, addr);
 				};
 				module->fini = (void(*)(void)) addr;
 			}
@@ -571,7 +571,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 				uint64_t addr = baseAddr + symbol->st_value;
 				if (flags & INSMOD_VERBOSE)
 				{
-					kprintf("insmod(%s): found __module_fini at %a\n", modname, addr);
+					kprintf("insmod(%s): found __module_fini at 0x%016lX\n", modname, addr);
 				};
 				module->modfini = (int(*)(void)) addr;
 			};
@@ -591,7 +591,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 
 	if (flags & INSMOD_VERBOSE)
 	{
-		kprintf("insmod(%s): the module body has %d relocation entries\n", modname, numRelocs);
+		kprintf("insmod(%s): the module body has %lu relocation entries\n", modname, numRelocs);
 	};
 
 	fp->seek(fp, relaSection.sh_offset, SEEK_SET);
@@ -654,7 +654,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		case R_X86_64_64:
 			if (flags & INSMOD_VERBOSE)
 			{
-				kprintf("insmod(%s): R_X86_64_64 at .modbody+%d = '%s'+%d = %a+%d\n",
+				kprintf("insmod(%s): R_X86_64_64 at .modbody+0x%lX = '%s'+%ld = %p+%ld\n",
 					modname, rela.r_offset, symname, rela.r_addend, symaddr, rela.r_addend);
 			};
 			*((uint64_t*)reladdr) = (uint64_t) symaddr + rela.r_addend;
@@ -709,7 +709,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			{
 				if (flags & INSMOD_VERBOSE)
 				{
-					kprintf("insmod(%s): module not needed\n");
+					kprintf("insmod(%s): module not needed\n", modname);
 				};
 				
 				return 0;
@@ -718,7 +718,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			{
 				if (flags & INSMOD_VERBOSE)
 				{
-					kprintf("insmod(%s): module init fatal error\n");
+					kprintf("insmod(%s): module init fatal error\n", modname);
 				};
 				
 				return -1;
@@ -856,7 +856,7 @@ void dumpModules()
 
 	for (module=firstModule; module!=NULL; module=module->next)
 	{
-		kprintf("%a\t%dMB\t%s\n", module->baseAddr, module->numSectors*2, module->name);
+		kprintf("0x%016lX\t%dMB\t%s\n", module->baseAddr, module->numSectors*2, module->name);
 	};
 };
 

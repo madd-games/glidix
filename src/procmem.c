@@ -907,14 +907,14 @@ void dumpProcessMemory(ProcMem *pm, uint64_t checkAddr)
 			};
 		};
 
-		kprintf("%c%a\t%a\t%d%s\t", arrow, base, end, displaySize, sizeUnits[sizeIndex]);
+		kprintf("%c%p\t%p\t%d%s\t", arrow, (void*)base, (void*)end, displaySize, sizeUnits[sizeIndex]);
 		PRINTFLAG(seg->flags & PROT_READ, 'R');
 		PRINTFLAG(seg->flags & PROT_WRITE, 'W');
 		PRINTFLAG(seg->flags & PROT_EXEC, 'X');
 		PRINTFLAG(seg->fl->flags & FL_SHARED, 'S');
 		kprintf("\n");
 	};
-	kprintf("Virtual addr %a is frame %a and cow frame %a (refcount %d)\n", checkAddr, frameInList, frameInCOW, cowRefcount);
+	kprintf("Virtual addr %p is frame %p and cow frame %p (refcount %lu)\n", (void*)checkAddr, (void*)frameInList, (void*)frameInCOW, cowRefcount);
 };
 
 int canAccessPage(ProcMem *pm, uint64_t pageindex, int perms)

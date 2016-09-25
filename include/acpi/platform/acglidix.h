@@ -140,6 +140,7 @@
 #define ACPI_SPINLOCK               Spinlock*
 #define ACPI_SEMAPHORE              Semaphore*
 #define ACPI_CPU_FLAGS              unsigned long
+#define	ACPI_MUTEX_TYPE             ACPI_OSL_MUTEX
 //#define	ACPI_DEBUGGER
 //#define	ACPI_EXEC_APP
 

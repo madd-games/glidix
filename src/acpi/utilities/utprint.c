@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2015, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2016, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -158,12 +158,6 @@ AcpiUtPutNumber (
     UINT64                  Number,
     UINT8                   Base,
     BOOLEAN                 Upper);
-
-
-/* Module globals */
-
-static const char           AcpiGbl_LowerHexDigits[] = "0123456789abcdef";
-static const char           AcpiGbl_UpperHexDigits[] = "0123456789ABCDEF";
 
 
 /*******************************************************************************
@@ -462,8 +456,8 @@ AcpiUtFormatNumber (
         String = AcpiUtBoundStringOutput (String, End, '0');
         if (Base == 16)
         {
-            String = AcpiUtBoundStringOutput (String, End,
-                        Upper ? 'X' : 'x');
+            String = AcpiUtBoundStringOutput (
+                String, End, Upper ? 'X' : 'x');
         }
     }
     if (!(Type & ACPI_FORMAT_LEFT))
@@ -494,7 +488,7 @@ AcpiUtFormatNumber (
 
 /*******************************************************************************
  *
- * FUNCTION:    AcpiUtVsnprintf
+ * FUNCTION:    vsnprintf
  *
  * PARAMETERS:  String              - String with boundary
  *              Size                - Boundary of the string
@@ -508,7 +502,7 @@ AcpiUtFormatNumber (
  ******************************************************************************/
 
 int
-AcpiUtVsnprintf (
+vsnprintf (
     char                    *String,
     ACPI_SIZE               Size,
     const char              *Format,
@@ -572,6 +566,7 @@ AcpiUtVsnprintf (
             {
                 break;
             }
+
         } while (1);
 
         /* Process width */
@@ -609,6 +604,7 @@ AcpiUtVsnprintf (
                 ++Format;
                 Precision = va_arg (Args, int);
             }
+
             if (Precision < 0)
             {
                 Precision = 0;
@@ -671,11 +667,13 @@ AcpiUtVsnprintf (
                     Pos = AcpiUtBoundStringOutput (Pos, End, ' ');
                 }
             }
+
             for (i = 0; i < Length; ++i)
             {
                 Pos = AcpiUtBoundStringOutput (Pos, End, *s);
                 ++s;
             }
+
             while (Length < Width--)
             {
                 Pos = AcpiUtBoundStringOutput (Pos, End, ' ');
@@ -714,8 +712,8 @@ AcpiUtVsnprintf (
             }
 
             p = va_arg (Args, void *);
-            Pos = AcpiUtFormatNumber (Pos, End,
-                    ACPI_TO_INTEGER (p), 16, Width, Precision, Type);
+            Pos = AcpiUtFormatNumber (
+                Pos, End, ACPI_TO_INTEGER (p), 16, Width, Precision, Type);
             continue;
 
         default:
@@ -766,7 +764,7 @@ AcpiUtVsnprintf (
         }
 
         Pos = AcpiUtFormatNumber (Pos, End, Number, Base,
-                Width, Precision, Type);
+            Width, Precision, Type);
     }
 
     if (Size > 0)
@@ -787,7 +785,7 @@ AcpiUtVsnprintf (
 
 /*******************************************************************************
  *
- * FUNCTION:    AcpiUtSnprintf
+ * FUNCTION:    snprintf
  *
  * PARAMETERS:  String              - String with boundary
  *              Size                - Boundary of the string
@@ -800,7 +798,7 @@ AcpiUtVsnprintf (
  ******************************************************************************/
 
 int
-AcpiUtSnprintf (
+snprintf (
     char                    *String,
     ACPI_SIZE               Size,
     const char              *Format,
@@ -811,7 +809,38 @@ AcpiUtSnprintf (
 
 
     va_start (Args, Format);
-    Length = AcpiUtVsnprintf (String, Size, Format, Args);
+    Length = vsnprintf (String, Size, Format, Args);
+    va_end (Args);
+
+    return (Length);
+}
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    sprintf
+ *
+ * PARAMETERS:  String              - String with boundary
+ *              Format, ...         - Standard printf format
+ *
+ * RETURN:      Number of bytes actually written.
+ *
+ * DESCRIPTION: Formatted output to a string.
+ *
+ ******************************************************************************/
+
+int
+sprintf (
+    char                    *String,
+    const char              *Format,
+    ...)
+{
+    va_list                 Args;
+    int                     Length;
+
+
+    va_start (Args, Format);
+    Length = vsnprintf (String, ACPI_UINT32_MAX, Format, Args);
     va_end (Args);
 
     return (Length);
@@ -821,7 +850,69 @@ AcpiUtSnprintf (
 #ifdef ACPI_APPLICATION
 /*******************************************************************************
  *
- * FUNCTION:    AcpiUtFileVprintf
+ * FUNCTION:    vprintf
+ *
+ * PARAMETERS:  Format              - Standard printf format
+ *              Args                - Argument list
+ *
+ * RETURN:      Number of bytes actually written.
+ *
+ * DESCRIPTION: Formatted output to stdout using argument list pointer.
+ *
+ ******************************************************************************/
+
+int
+vprintf (
+    const char              *Format,
+    va_list                 Args)
+{
+    ACPI_CPU_FLAGS          Flags;
+    int                     Length;
+
+
+    Flags = AcpiOsAcquireLock (AcpiGbl_PrintLock);
+    Length = vsnprintf (AcpiGbl_PrintBuffer,
+                sizeof (AcpiGbl_PrintBuffer), Format, Args);
+
+    (void) fwrite (AcpiGbl_PrintBuffer, Length, 1, ACPI_FILE_OUT);
+    AcpiOsReleaseLock (AcpiGbl_PrintLock, Flags);
+
+    return (Length);
+}
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    printf
+ *
+ * PARAMETERS:  Format, ...         - Standard printf format
+ *
+ * RETURN:      Number of bytes actually written.
+ *
+ * DESCRIPTION: Formatted output to stdout.
+ *
+ ******************************************************************************/
+
+int
+printf (
+    const char              *Format,
+    ...)
+{
+    va_list                 Args;
+    int                     Length;
+
+
+    va_start (Args, Format);
+    Length = vprintf (Format, Args);
+    va_end (Args);
+
+    return (Length);
+}
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    vfprintf
  *
  * PARAMETERS:  File                - File descriptor
  *              Format              - Standard printf format
@@ -834,8 +925,8 @@ AcpiUtSnprintf (
  ******************************************************************************/
 
 int
-AcpiUtFileVprintf (
-    ACPI_FILE               File,
+vfprintf (
+    FILE                    *File,
     const char              *Format,
     va_list                 Args)
 {
@@ -844,10 +935,10 @@ AcpiUtFileVprintf (
 
 
     Flags = AcpiOsAcquireLock (AcpiGbl_PrintLock);
-    Length = AcpiUtVsnprintf (AcpiGbl_PrintBuffer,
-                sizeof (AcpiGbl_PrintBuffer), Format, Args);
+    Length = vsnprintf (AcpiGbl_PrintBuffer,
+        sizeof (AcpiGbl_PrintBuffer), Format, Args);
 
-    (void) AcpiOsWriteFile (File, AcpiGbl_PrintBuffer, Length, 1);
+    (void) fwrite (AcpiGbl_PrintBuffer, Length, 1, File);
     AcpiOsReleaseLock (AcpiGbl_PrintLock, Flags);
 
     return (Length);
@@ -856,7 +947,7 @@ AcpiUtFileVprintf (
 
 /*******************************************************************************
  *
- * FUNCTION:    AcpiUtFilePrintf
+ * FUNCTION:    fprintf
  *
  * PARAMETERS:  File                - File descriptor
  *              Format, ...         - Standard printf format
@@ -868,8 +959,8 @@ AcpiUtFileVprintf (
  ******************************************************************************/
 
 int
-AcpiUtFilePrintf (
-    ACPI_FILE               File,
+fprintf (
+    FILE                    *File,
     const char              *Format,
     ...)
 {
@@ -878,7 +969,7 @@ AcpiUtFilePrintf (
 
 
     va_start (Args, Format);
-    Length = AcpiUtFileVprintf (File, Format, Args);
+    Length = vfprintf (File, Format, Args);
     va_end (Args);
 
     return (Length);

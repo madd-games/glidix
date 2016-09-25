@@ -52,7 +52,7 @@ void stackTrace(uint64_t rip, uint64_t rbp)
 			//Symbol *symbol = findSymbolForAddr(rip);
 			SymbolInfo info;
 			findDebugSymbolInModules(rip, &info);
-			kprintf("%a %a %s:%s+%d\n", rip, rbp, info.modname, info.symname, info.offset);
+			kprintf("%p %p %s:%s+%lu\n", (void*)rip, (void*)rbp, info.modname, info.symname, info.offset);
 			if (rbp == 0) break;
 			uint64_t *lastFrame = (uint64_t*) rbp;
 			rbp = lastFrame[0];

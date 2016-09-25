@@ -49,8 +49,65 @@ static int nextPCIID = 0;
 
 static int pciIntInitDone = 0;
 
-static void checkBus(uint8_t bus);
-static void checkSlot(uint8_t bus, uint8_t slot)
+typedef struct PCIBridge_
+{
+	struct PCIBridge_*			up;
+	uint8_t					masterSlot;
+} PCIBridge;
+
+static uint32_t pciGetBarSize(PCIDevice *dev, uint32_t i)
+{
+	uint32_t addr = 0;
+	uint32_t lbus = (uint32_t) dev->bus;
+	uint32_t lslot = (uint32_t) dev->slot;
+	uint32_t lfunc = (uint32_t) dev->func;
+	addr = (lbus << 16) | (lslot << 11) | (lfunc << 8) | (1 << 31) | (0x10 + 4 * i);
+	
+	outd(PCI_CONFIG_ADDR, addr);
+	uint32_t bar = ind(PCI_CONFIG_DATA);
+	
+	outd(PCI_CONFIG_ADDR, addr);
+	outd(PCI_CONFIG_DATA, 0xFFFFFFFF);
+	
+	outd(PCI_CONFIG_ADDR, addr);
+	uint32_t barsz = ind(PCI_CONFIG_DATA);
+	
+	outd(PCI_CONFIG_ADDR, addr);
+	outd(PCI_CONFIG_DATA, bar);
+	
+	if (barsz & 1)
+	{
+		barsz &= ~3;
+	}
+	else
+	{
+		barsz &= ~0xF;
+	};
+	
+	return (~barsz) + 1;
+};
+
+static void findRootPin(PCIDevice *dev, uint8_t slot, uint8_t intpin, PCIBridge *bridge)
+{
+	if (intpin == 0)
+	{
+		dev->rootInt = 0;
+		return;
+	};
+	
+	if (bridge == NULL)
+	{
+		dev->rootSlot = slot;
+		dev->rootInt = intpin;
+	}
+	else
+	{
+		findRootPin(dev, bridge->masterSlot, ((slot + (intpin-1)) & 3) | 1, bridge->up);
+	};
+};
+
+static void checkBus(uint8_t bus, PCIBridge *bridge);
+static void checkSlot(uint8_t bus, uint8_t slot, PCIBridge *bridge)
 {
 	PCIDeviceConfig config;
 	uint8_t funcs = 1;
@@ -66,7 +123,10 @@ static void checkSlot(uint8_t bus, uint8_t slot)
 	if ((config.std.headerType & 0x7F) == 0x01)
 	{
 		// PCI-to-PCI bridge, scan secondary bus
-		checkBus(config.bridge.secondaryBus);
+		PCIBridge newBridge;
+		newBridge.up = bridge;
+		newBridge.masterSlot = slot;
+		checkBus(config.bridge.secondaryBus, &newBridge);
 	}
 	else
 	{
@@ -91,9 +151,17 @@ static void checkSlot(uint8_t bus, uint8_t slot)
 				strcpy(dev->driverName, "null");
 				strcpy(dev->deviceName, "Unknown");
 				memcpy(dev->bar, config.std.bar, 4*6);
+				
+				uint32_t i;
+				for (i=0; i<6; i++)
+				{
+					dev->barsz[i] = pciGetBarSize(dev, i);
+				};
+				
 				dev->intNo = 0;
 				wcInit(&dev->wcInt);
 				
+				findRootPin(dev, dev->slot, dev->intpin, bridge);
 				if (lastDevice == NULL)
 				{
 					pciDevices = dev;
@@ -115,12 +183,12 @@ static void checkSlot(uint8_t bus, uint8_t slot)
 	};
 };
 
-static void checkBus(uint8_t bus)
+static void checkBus(uint8_t bus, PCIBridge *bridge)
 {
 	uint8_t slot;
 	for (slot=0; slot<32; slot++)
 	{
-		checkSlot(bus, slot);
+		checkSlot(bus, slot, bridge);
 	};
 };
 
@@ -132,7 +200,7 @@ static void pciMapLocalInterrupt(uint8_t bus, uint8_t slot, uint8_t intpin, int 
 	PCIDevice *dev;
 	for (dev=pciDevices; dev!=NULL; dev=dev->next)
 	{
-		if ((dev->bus == bus) && (dev->slot == slot) && (dev->intpin == intpin))
+		if ((dev->rootSlot == slot) && (dev->rootInt == intpin))
 		{
 			dev->intNo = intNo;
 			return;
@@ -155,7 +223,7 @@ static int gsiMapSize = 0;
  */
 static void pciMapInterruptFromGSI(uint8_t bus, uint8_t slot, uint8_t intpin, int gsi)
 {
-	kprintf_debug("PCI %d/%d INT%c# -> GSI %d\n", (int) bus, (int) slot, 'A'+intpin, gsi);
+	//kprintf("PCI %d/%d INT%c# -> GSI %d\n", (int) bus, (int) slot, 'A'+intpin-1, gsi);
 	static int nextLocalInt = 0;
 	
 	int i;
@@ -177,13 +245,14 @@ static void pciMapInterruptFromGSI(uint8_t bus, uint8_t slot, uint8_t intpin, in
 	newCache[gsiMapSize].intNo = intNo;
 	if (gsiMapCache != NULL) kfree(gsiMapCache);
 	gsiMapCache = newCache;
+	gsiMapSize++;
 	
 	// remap the interrupt
 	uint32_t volatile* regsel = (uint32_t volatile*) 0xFFFF808000002000;
 	uint32_t volatile* iowin = (uint32_t volatile*) 0xFFFF808000002010;
 	*regsel = (0x10+2*gsi);
 	__sync_synchronize();
-	uint64_t entry = (uint64_t)(intNo) | ((uint64_t)(apic->id) << 56);
+	uint64_t entry = (uint64_t)(intNo) | ((uint64_t)(apic->id) << 56) | (1 << 15) | (1 << 13); // level-triggered, active low
 	*iowin = (uint32_t) entry;
 	__sync_synchronize();
 	*regsel = (0x10+2*gsi+1);
@@ -234,9 +303,7 @@ static ACPI_STATUS pciWalkCallback(ACPI_HANDLE object, UINT32 nestingLevel, void
 		status = AcpiGetIrqRoutingTable(object, &prtbuf);
 		if (status != AE_OK)
 		{
-			kprintf("WARNING: AcpiGetIrqRoutingTable failed for a root bridge!\n");
-			ACPI_FREE(info);
-			return AE_OK;
+			panic("AcpiGetIrqRoutingTable failed for a root bridge!\n");
 		};
 		
 		char *scan = (char*) prtbuf.Pointer;
@@ -249,7 +316,7 @@ static ACPI_STATUS pciWalkCallback(ACPI_HANDLE object, UINT32 nestingLevel, void
 			};
 			
 			uint8_t slot = (uint8_t) (table->Address >> 16);
-			if (table->Source == 0)
+			if (table->Source[0] == 0)
 			{
 				// static assignment
 				pciMapInterruptFromGSI(0, slot, table->Pin+1, table->SourceIndex);
@@ -325,21 +392,45 @@ static ACPI_STATUS pciWalkCallback(ACPI_HANDLE object, UINT32 nestingLevel, void
 void pciInit()
 {
 	spinlockRelease(&pciLock);
-	checkBus(0);
+	checkBus(0, NULL);
 };
 
 void pciInitACPI()
 {
-	void *retval;
-	ACPI_STATUS status = AcpiGetDevices(NULL, pciWalkCallback, NULL, &retval);
-	if (status != AE_OK)
+	int error;
+	File *fp = vfsOpen("/initrd/pciroute", 0, &error);
+	if (fp == NULL)
 	{
-		panic("AcpiGetDevices failed");
-	};
+		void *retval;
+		ACPI_STATUS status = AcpiGetDevices(NULL, pciWalkCallback, NULL, &retval);
+		if (status != AE_OK)
+		{
+			panic("AcpiGetDevices failed");
+		};
 	
-	if (!foundRootBridge)
+		if (!foundRootBridge)
+		{
+			panic("failed to find PCI root bridge");
+		};
+	}
+	else
 	{
-		panic("failed to find PCI root bridge");
+		kprintf("PCI: Using manual routing from initrd!\n");
+		
+		PCIRouteEntry entry;
+		while (vfsRead(fp, &entry, sizeof(PCIRouteEntry)) == sizeof(PCIRouteEntry))
+		{
+			if (entry.pinAndType & 0x80)
+			{
+				pciMapInterruptFromIRQ(entry.bus, entry.dev, entry.pinAndType & 3, entry.intNo);
+			}
+			else
+			{
+				pciMapInterruptFromGSI(entry.bus, entry.dev, entry.pinAndType & 3, entry.intNo);
+			};
+		};
+		
+		vfsClose(fp);
 	};
 	
 	pciIntInitDone = 1;

@@ -73,11 +73,11 @@ static void printThreadFlags(uint64_t flags)
 	{
 		if (flags & info->mask)
 		{
-			kprintf("%$\x02%c%#", info->symbol);
+			kprintf("%c", info->symbol);
 		}
 		else
 		{
-			kprintf("%$\x04%c%#", info->symbol-'A'+'a');
+			kprintf("%c", info->symbol-'A'+'a');
 		};
 	};
 };
@@ -105,11 +105,11 @@ void dumpRunqueue()
 		printThreadFlags(th->flags);
 		if (th->regs.cs == 8)
 		{
-			kprintf("%$\x02" "K%#");
+			kprintf("\x02" "K");
 		}
 		else
 		{
-			kprintf("%$\x04" "K%#");
+			kprintf("\x04" "K");
 		};
 		kprintf("\t%d\t%d\n", euid, egid);
 		th = th->next;
@@ -241,7 +241,7 @@ void credsDownref(Creds *creds)
 
 static void startupThread()
 {
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 	kmain2();
 
 	while (1);		// never return! the stack below us is invalid.

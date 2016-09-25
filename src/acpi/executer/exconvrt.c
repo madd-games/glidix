@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2015, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2016, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -209,7 +209,8 @@ AcpiExConvertToInteger (
          * of ACPI 3.0) is that the ToInteger() operator allows both decimal
          * and hexadecimal strings (hex prefixed with "0x").
          */
-        Status = AcpiUtStrtoul64 ((char *) Pointer, Flags, &Result);
+        Status = AcpiUtStrtoul64 (ACPI_CAST_PTR (char, Pointer),
+            (AcpiGbl_IntegerByteWidth | Flags), &Result);
         if (ACPI_FAILURE (Status))
         {
             return_ACPI_STATUS (Status);
@@ -323,9 +324,7 @@ AcpiExConvertToBuffer (
         /* Copy the integer to the buffer, LSB first */
 
         NewBuf = ReturnDesc->Buffer.Pointer;
-        memcpy (NewBuf,
-                        &ObjDesc->Integer.Value,
-                        AcpiGbl_IntegerByteWidth);
+        memcpy (NewBuf, &ObjDesc->Integer.Value, AcpiGbl_IntegerByteWidth);
         break;
 
     case ACPI_TYPE_STRING:
@@ -338,8 +337,8 @@ AcpiExConvertToBuffer (
          * ASL/AML code that depends on the null being transferred to the new
          * buffer.
          */
-        ReturnDesc = AcpiUtCreateBufferObject (
-                        (ACPI_SIZE) ObjDesc->String.Length + 1);
+        ReturnDesc = AcpiUtCreateBufferObject ((ACPI_SIZE)
+            ObjDesc->String.Length + 1);
         if (!ReturnDesc)
         {
             return_ACPI_STATUS (AE_NO_MEMORY);
@@ -462,7 +461,8 @@ AcpiExConvertToAscii (
         {
             /* Get one hex digit, most significant digits first */
 
-            String[k] = (UINT8) AcpiUtHexToAsciiChar (Integer, ACPI_MUL_4 (j));
+            String[k] = (UINT8)
+                AcpiUtHexToAsciiChar (Integer, ACPI_MUL_4 (j));
             k++;
         }
         break;
@@ -563,8 +563,8 @@ AcpiExConvertToString (
 
         /* Convert integer to string */
 
-        StringLength = AcpiExConvertToAscii (ObjDesc->Integer.Value, Base,
-                            NewBuf, AcpiGbl_IntegerByteWidth);
+        StringLength = AcpiExConvertToAscii (
+            ObjDesc->Integer.Value, Base, NewBuf, AcpiGbl_IntegerByteWidth);
 
         /* Null terminate at the correct place */
 
@@ -653,8 +653,7 @@ AcpiExConvertToString (
         for (i = 0; i < ObjDesc->Buffer.Length; i++)
         {
             NewBuf += AcpiExConvertToAscii (
-                        (UINT64) ObjDesc->Buffer.Pointer[i], Base,
-                        NewBuf, 1);
+                (UINT64) ObjDesc->Buffer.Pointer[i], Base, NewBuf, 1);
             *NewBuf++ = Separator; /* each separated by a comma or space */
         }
 
@@ -745,6 +744,7 @@ AcpiExConvertToTargetType (
         break;
 
     case ARGI_TARGETREF:
+    case ARGI_STORE_TARGET:
 
         switch (DestinationType)
         {
@@ -757,7 +757,7 @@ AcpiExConvertToTargetType (
              * a Buffer or a String to an Integer if necessary.
              */
             Status = AcpiExConvertToInteger (SourceDesc, ResultDesc,
-                        16);
+                ACPI_STRTOUL_BASE16);
             break;
 
         case ACPI_TYPE_STRING:
@@ -766,7 +766,7 @@ AcpiExConvertToTargetType (
              * Integer or Buffer if necessary
              */
             Status = AcpiExConvertToString (SourceDesc, ResultDesc,
-                        ACPI_IMPLICIT_CONVERT_HEX);
+                ACPI_IMPLICIT_CONVERT_HEX);
             break;
 
         case ACPI_TYPE_BUFFER:
@@ -779,7 +779,8 @@ AcpiExConvertToTargetType (
 
         default:
 
-            ACPI_ERROR ((AE_INFO, "Bad destination type during conversion: 0x%X",
+            ACPI_ERROR ((AE_INFO,
+                "Bad destination type during conversion: 0x%X",
                 DestinationType));
             Status = AE_AML_INTERNAL;
             break;

@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2015, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2016, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -343,11 +343,13 @@ AcpiSetGpe (
     case ACPI_GPE_ENABLE:
 
         Status = AcpiHwLowSetGpe (GpeEventInfo, ACPI_GPE_ENABLE);
+        GpeEventInfo->DisableForDispatch = FALSE;
         break;
 
     case ACPI_GPE_DISABLE:
 
         Status = AcpiHwLowSetGpe (GpeEventInfo, ACPI_GPE_DISABLE);
+        GpeEventInfo->DisableForDispatch = TRUE;
         break;
 
     default:
@@ -362,6 +364,56 @@ UnlockAndExit:
 }
 
 ACPI_EXPORT_SYMBOL (AcpiSetGpe)
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    AcpiMaskGpe
+ *
+ * PARAMETERS:  GpeDevice           - Parent GPE Device. NULL for GPE0/GPE1
+ *              GpeNumber           - GPE level within the GPE block
+ *              IsMasked            - Whether the GPE is masked or not
+ *
+ * RETURN:      Status
+ *
+ * DESCRIPTION: Unconditionally mask/unmask the an individual GPE, ex., to
+ *              prevent a GPE flooding.
+ *
+ ******************************************************************************/
+
+ACPI_STATUS
+AcpiMaskGpe (
+    ACPI_HANDLE             GpeDevice,
+    UINT32                  GpeNumber,
+    BOOLEAN                 IsMasked)
+{
+    ACPI_GPE_EVENT_INFO     *GpeEventInfo;
+    ACPI_STATUS             Status;
+    ACPI_CPU_FLAGS          Flags;
+
+
+    ACPI_FUNCTION_TRACE (AcpiMaskGpe);
+
+
+    Flags = AcpiOsAcquireLock (AcpiGbl_GpeLock);
+
+    /* Ensure that we have a valid GPE number */
+
+    GpeEventInfo = AcpiEvGetGpeEventInfo (GpeDevice, GpeNumber);
+    if (!GpeEventInfo)
+    {
+        Status = AE_BAD_PARAMETER;
+        goto UnlockAndExit;
+    }
+
+    Status = AcpiEvMaskGpe (GpeEventInfo, IsMasked);
+
+UnlockAndExit:
+    AcpiOsReleaseLock (AcpiGbl_GpeLock, Flags);
+    return_ACPI_STATUS (Status);
+}
+
+ACPI_EXPORT_SYMBOL (AcpiMaskGpe)
 
 
 /*******************************************************************************
@@ -512,7 +564,7 @@ AcpiSetupGpeForWake (
      * level-triggered (for windows compatibility).
      */
     if (ACPI_GPE_DISPATCH_TYPE (GpeEventInfo->Flags) ==
-            ACPI_GPE_DISPATCH_NONE)
+        ACPI_GPE_DISPATCH_NONE)
     {
         /*
          * This is the first device for implicit notify on this GPE.
@@ -527,7 +579,7 @@ AcpiSetupGpeForWake (
      * this device to the notify list.
      */
     if (ACPI_GPE_DISPATCH_TYPE (GpeEventInfo->Flags) ==
-            ACPI_GPE_DISPATCH_NOTIFY)
+        ACPI_GPE_DISPATCH_NOTIFY)
     {
         /* Ensure that the device is not already in the list */
 
@@ -992,8 +1044,8 @@ AcpiInstallGpeBlock (
      * is always zero
      */
     Status = AcpiEvCreateGpeBlock (Node, GpeBlockAddress->Address,
-                GpeBlockAddress->SpaceId, RegisterCount,
-                0, InterruptNumber, &GpeBlock);
+        GpeBlockAddress->SpaceId, RegisterCount,
+        0, InterruptNumber, &GpeBlock);
     if (ACPI_FAILURE (Status))
     {
         goto UnlockAndExit;

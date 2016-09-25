@@ -145,6 +145,8 @@ typedef struct
 	void*				ignore2;
 	char				driverName[128];
 	char				deviceName[128];
+	uint32_t			bar[6];
+	uint32_t			barsz[6];
 } _glidix_pcidev;
 
 struct sockaddr_cap

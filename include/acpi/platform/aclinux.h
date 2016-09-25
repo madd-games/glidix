@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2015, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2016, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -136,10 +136,14 @@
 
 #define ACPI_USE_SYSTEM_INTTYPES
 
-/* Compile for reduced hardware mode only with this kernel config */
+/* Kernel specific ACPICA configuration */
 
 #ifdef CONFIG_ACPI_REDUCED_HARDWARE_ONLY
 #define ACPI_REDUCED_HARDWARE 1
+#endif
+
+#ifdef CONFIG_ACPI_DEBUGGER
+#define ACPI_DEBUGGER
 #endif
 
 #include <linux/string.h>
@@ -156,6 +160,8 @@
 #ifdef CONFIG_ACPI
 #include <asm/acenv.h>
 #endif
+
+#define ACPI_INIT_FUNCTION __init
 
 #ifndef CONFIG_ACPI
 
@@ -224,7 +230,6 @@
  * OSL interfaces used by utilities
  */
 #define ACPI_USE_ALTERNATE_PROTOTYPE_AcpiOsRedirectOutput
-#define ACPI_USE_ALTERNATE_PROTOTYPE_AcpiOsGetLine
 #define ACPI_USE_ALTERNATE_PROTOTYPE_AcpiOsGetTableByName
 #define ACPI_USE_ALTERNATE_PROTOTYPE_AcpiOsGetTableByIndex
 #define ACPI_USE_ALTERNATE_PROTOTYPE_AcpiOsGetTableByAddress
@@ -232,13 +237,21 @@
 #define ACPI_USE_ALTERNATE_PROTOTYPE_AcpiOsGetNextFilename
 #define ACPI_USE_ALTERNATE_PROTOTYPE_AcpiOsCloseDirectory
 
+#define ACPI_MSG_ERROR          KERN_ERR "ACPI Error: "
+#define ACPI_MSG_EXCEPTION      KERN_ERR "ACPI Exception: "
+#define ACPI_MSG_WARNING        KERN_WARNING "ACPI Warning: "
+#define ACPI_MSG_INFO           KERN_INFO "ACPI: "
+
+#define ACPI_MSG_BIOS_ERROR     KERN_ERR "ACPI BIOS Error (bug): "
+#define ACPI_MSG_BIOS_WARNING   KERN_WARNING "ACPI BIOS Warning (bug): "
+
 #else /* !__KERNEL__ */
 
-#include <stdarg.h>
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
+#define ACPI_USE_STANDARD_HEADERS
+
+#ifdef ACPI_USE_STANDARD_HEADERS
 #include <unistd.h>
+#endif
 
 /* Define/disable kernel-specific declarators */
 
@@ -268,9 +281,5 @@
 #endif
 
 #endif /* __KERNEL__ */
-
-/* Linux uses GCC */
-
-#include "acgcc.h"
 
 #endif /* __ACLINUX_H__ */

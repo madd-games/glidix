@@ -67,7 +67,7 @@ static void dumpDir(Dir *dir, int prefix)
 		}
 		else
 		{
-			kprintf("%s (%d bytes)\n", dir->dirent.d_name, dir->stat.st_size);
+			kprintf("%s (%ld bytes)\n", dir->dirent.d_name, dir->stat.st_size);
 		};
 
 		if (dir->next(dir) != 0) break;

@@ -73,7 +73,7 @@ void initSymtab()
 	File *file = vfsOpen("/initrd/ksyms", 0, &error);
 	if (file == NULL)
 	{
-		kprintf("%$\x04" "Failed%#\n");
+		FAILED();
 		panic("could not load /initrd/ksyms!");
 	};
 
@@ -88,7 +88,7 @@ void initSymtab()
 
 		if (vfsRead(file, dump, 3) != 3)
 		{
-			kprintf("%$\x04" "Failed%#\n");
+			FAILED();
 			panic("could not parse /initrd/ksyms!");
 		};
 
@@ -99,7 +99,7 @@ void initSymtab()
 		{
 			if (vfsRead(file, &c, 1) != 1)
 			{
-				kprintf("%$\x04" "Failed%#\n");
+				FAILED();
 				panic("could not parse /initrd/ksyms!");
 			};
 
@@ -118,23 +118,23 @@ void initSymtab()
 		last = sym;
 	};
 
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 
 	kprintf("Validating the symbol table... ");
 	void *sym = getSymbol("_symtab_test");
 	if (sym == NULL)
 	{
-		kprintf("%$\x04" "Failed%#\n");
+		FAILED();
 		panic("could not resolve _symtab_test dynamically");
 	};
 
 	if (sym != &_symtab_test)
 	{
-		kprintf("%$\x04" "Failed%#\n");
+		FAILED();
 		panic("the resolved address of _symtab_test is invalid: should be %a, is %a", &_symtab_test, sym);
 	};
 
-	kprintf("%$\x02" "Done%#\n");
+	DONE();
 };
 
 void *getSymbol(const char *name)
