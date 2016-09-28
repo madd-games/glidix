@@ -90,7 +90,7 @@ cd userspace/gui
 sudo cp gui.h /glidix/usr/include/libgwm.h || exit 1
 x86_64-glidix-gcc gui.c -o ../../mipdir/usr/bin/gui -I ../../include -lddi -Wall -Werror || exit 1
 cd libgwm
-x86_64-glidix-gcc -fPIC -shared libgwm.c button.c msgbox.c checkbox.c textfield.c scrollbar.c menu.c menubar.c notebook.c clipboard.c fstree.c treeview.c -o ../../../mipdir/usr/lib/libgwm.so -lddi || exit 1
+x86_64-glidix-gcc -fPIC -shared libgwm.c button.c msgbox.c checkbox.c textfield.c scrollbar.c menu.c menubar.c notebook.c clipboard.c fstree.c treeview.c inputdialog.c -o ../../../mipdir/usr/lib/libgwm.so -lddi || exit 1
 cd ..
 sudo cp ../../mipdir/usr/lib/libgwm.so /glidix/usr/lib/libgwm.so || exit 1
 x86_64-glidix-gcc gui-init.c -o ../../mipdir/usr/libexec/gui-init -lddi -lgwm || exit 1
@@ -101,7 +101,10 @@ x86_64-glidix-gcc snake.c -o ../../mipdir/usr/bin/snake -lddi -lgwm || exit 1
 x86_64-glidix-gcc desktop-info.c -o ../../mipdir/usr/bin/desktop-info -lgwm || exit 1
 x86_64-glidix-gcc sysbar.c -o ../../mipdir/usr/libexec/sysbar -lddi -lgwm || exit 1
 x86_64-glidix-gcc gui-login.c -o ../../mipdir/usr/bin/gui-login -lddi -lgwm -lcrypt || exit 1
-x86_64-glidix-gcc sysinfo/sysinfo.c sysinfo/pci.c -o ../../mipdir/usr/bin/sysinfo -lddi -lgwm -lcrypt || exit 1
+x86_64-glidix-gcc sysinfo/sysinfo.c sysinfo/pci.c -o ../../mipdir/usr/bin/sysinfo -lddi -lgwm || exit 1
+cd filemgr
+x86_64-glidix-gcc main.c -o ../../../mipdir/usr/bin/filemgr -lddi -lgwm || exit 1
+cd ..
 cd ../..
 cp -r userspace/images mipdir/usr/share/images || exit 1
 cp -r userspace/apps mipdir/usr/share/apps || exit 1
@@ -144,12 +147,6 @@ modmake --sysroot=/glidix --host=x86_64-glidix --modname=ps2kbd || exit 1
 cp out/ps2kbd.gkm ../../initrd/initmod/ps2kbd.gkm || exit 1
 cd ../..
 
-# mod_specdevs
-#cd modules/mod_specdevs
-#modmake --sysroot=/glidix --host=x86_64-glidix --modname=specdevs || exit 1
-#cp out/specdevs.gkm ../../initrd/initmod/specdevs.gkm || exit 1
-#cd ../..
-
 # mod_sdide
 cd modules/mod_sdide
 modmake --sysroot=/glidix --host=x86_64-glidix --modname=sdide || exit 1
@@ -157,7 +154,6 @@ cp out/sdide.gkm ../../initrd/sdide.gkm || exit 1
 cd ../..
 
 # mod_sdahci
-# Do not place it as an initmode yet - experimental and stuff
 cd modules/mod_sdahci
 modmake --sysroot=/glidix --host=x86_64-glidix --modname=sdahci || exit 1
 cp out/sdahci.gkm ../../initrd/initmod/sdahci.gkm || exit 1
@@ -175,29 +171,37 @@ modmake --sysroot=/glidix --host=x86_64-glidix --modname=gxfs || exit 1
 cp out/gxfs.gkm ../../initrd/initmod/gxfs.gkm || exit 1
 cd ../..
 
-# mod_bga
+# BGA driver
+rm -rf mipdir
+mkdir -p mipdir/etc/modules
+
 cd modules/mod_bga
 modmake --sysroot=/glidix --host=x86_64-glidix --modname=bga || exit 1
-cp out/bga.gkm ../../initrd/initmod/bga.gkm || exit 1
+cp out/bga.gkm ../../mipdir/etc/modules/bga.gkm || exit 1
 cd ../..
 
-# mod_ne2k
+mkmip mipdir isodir/bga.mip
+
+# Network drivers
+rm -rf mipdir
+mkdir -p mipdir/etc/modules
+
 cd modules/mod_ne2k
 modmake --sysroot=/glidix --host=x86_64-glidix --modname=ne2k || exit 1
-cp out/ne2k.gkm ../../initrd/initmod/ne2k.gkm || exit 1
+cp out/ne2k.gkm ../../mipdir/etc/modules/ne2k.gkm || exit 1
 cd ../..
 
-# mod_e1000
 cd modules/mod_e1000
 modmake --sysroot=/glidix --host=x86_64-glidix --modname=e1000 || exit 1
-cp out/e1000.gkm ../../initrd/initmod/e1000.gkm || exit 1
+cp out/e1000.gkm ../../mipdir/etc/modules/e1000.gkm || exit 1
 cd ../..
 
-# mod_vionet
 cd modules/mod_vionet
 modmake --sysroot=/glidix --host=x86_64-glidix --modname=vionet || exit 1
-cp out/vionet.gkm ../../initrd/initmod/vionet.gkm || exit 1
+cp out/vionet.gkm ../../mipdir/etc/modules/vionet.gkm || exit 1
 cd ../..
+
+mkmip mipdir isodir/netdrv.mip
 
 x86_64-glidix-gcc -I/glidix/usr/include/freetype2 userspace/test.c -o isodir/bin/test -lz -lfreetype -lddi -lgwm || exit 1
 

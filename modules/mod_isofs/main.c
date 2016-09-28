@@ -70,7 +70,7 @@ static int iso_unmount(FileSystem *fs)
 	semWait(&isofs->sem);
 	if (isofs->numOpenInodes != 0)
 	{
-		kprintf_debug("isofs: cannot unmount because %d inodes are open\n", isofs->numOpenInodes);
+		kprintf("isofs: cannot unmount because %d inodes are open\n", isofs->numOpenInodes);
 		semSignal(&isofs->sem);
 		return -1;
 	};

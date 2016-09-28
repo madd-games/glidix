@@ -247,7 +247,7 @@ int pciActivate(void *context)
 		
 		gwmPostDirty(win);
 		gwmSetEventHandler(win, pciInfoHandler);
-		gwmSetWindowFlags(win, 0);
+		gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
 	};
 	
 	return 0;

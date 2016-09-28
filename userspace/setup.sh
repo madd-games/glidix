@@ -19,6 +19,8 @@ mkdir /media
 mkdir /media/cdrom
 mkdir /etc
 mkdir /etc/init
+mkdir /run
+mkdir /tmp
 
 cp /mnt/fstab /etc/fstab
 

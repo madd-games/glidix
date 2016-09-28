@@ -14,7 +14,18 @@
 
 int main()
 {
-	printf("Putting something in the clipboard\n");
-	gwmClipboardPutText("hello world", 11);
+	gwmInit();
+	char *text = gwmGetInput("Example caption", "Enter text:", "Hello, world!");
+	if (text == NULL)
+	{
+		printf("You clicked cancel!\n");
+	}
+	else
+	{
+		printf("You clicked OK and typed: %s\n", text);
+		free(text);
+	};
+	
+	gwmQuit(); 
 	return 0;
 };

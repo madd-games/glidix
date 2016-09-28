@@ -79,6 +79,7 @@ enum SDCommandType
 	SD_CMD_WRITE,
 	SD_CMD_EJECT,
 	SD_CMD_GET_SIZE,
+	SD_CMD_SIGNAL,
 };
 
 /**
@@ -271,5 +272,6 @@ StorageDevice*	sdCreate(SDParams *params);
 void		sdHangup(StorageDevice *sd);
 SDCommand*	sdPop(StorageDevice *dev);
 void		sdPostComplete(SDCommand *cmd);
+void		sdSignal(StorageDevice *dev);
 
 #endif

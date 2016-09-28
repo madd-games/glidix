@@ -510,6 +510,9 @@ typedef struct GWMWindow_
 	int					lastClickX;
 	int					lastClickY;
 	clock_t					lastClickTime;
+	
+	// modal ID; 0 = main program, other values = modal dialogs
+	uint64_t				modalID;
 } GWMWindow;
 
 /**
@@ -1019,5 +1022,24 @@ void gwmTreeViewSetActivateCallback(GWMWindow *treeview, GWMTreeViewActivateCall
  * selected; otherwise returns -1 and the buffer is untouched.
  */
 int gwmTreeViewGetSelection(GWMWindow *treeview, void *buffer);
+
+/**
+ * Create a modal dialog. You may place children in it, and then run it using gwmRunModal(). You can set an
+ * event handler as for a normal window. A modal dialog closes when an event handler returns -1 (the application
+ * does not close in this case). You may also use the "data" field in the window in whatever way you wish.
+ */
+GWMWindow* gwmCreateModal(const char *caption, unsigned int x, unsigned int y, unsigned int width, unsigned int height);
+
+/**
+ * Run a modal dialog. This function will return when an event handler within the modal dialog returns -1.
+ */
+void gwmRunModal(GWMWindow *modal, int flags);
+
+/**
+ * Displays a dialog asking the user to input a line of text. If the user clicks "Cancel", returns NULL.
+ * Otherwise, returns the string that was typed in. The string is placed on the heap, so you must call
+ * free() on it.
+ */
+char* gwmGetInput(const char *caption, const char *prompt, const char *initialText);
 
 #endif

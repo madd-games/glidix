@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/glidix.h>
+#include <sys/fsinfo.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -38,6 +39,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <time.h>
+#include <errno.h>
 
 int shouldHalt = 0;
 int shouldRunPoweroff = 0;
@@ -46,6 +48,23 @@ int ranPoweroff = 0;
 char* confRootType = NULL;
 char* confRootDevice = NULL;
 char** confExec = NULL;
+
+struct fsinfo startupFSList[256];
+size_t startupFSCount;
+
+int isStartupFS(struct fsinfo *info)
+{
+	size_t i;
+	for (i=0; i<256; i++)
+	{
+		if (info->fs_dev == startupFSList[i].fs_dev)
+		{
+			return 1;
+		};
+	};
+	
+	return 0;
+};
 
 void loadmods()
 {
@@ -246,9 +265,6 @@ void on_signal(int sig, siginfo_t *si, void *ignore)
 
 void init_parts()
 {
-	//close(open("/dev/sda", O_RDONLY));
-	//close(open("/dev/sdc", O_RDONLY));
-	
 	DIR *dirp = opendir("/dev");
 	if (dirp == NULL)
 	{
@@ -272,15 +288,193 @@ void init_parts()
 	closedir(dirp);
 };
 
+/**
+ * Find a process to kill (during shutdown), kill it and return 0. If no more processes need to be killed,
+ * returns -1.
+ */
+int killNextProcess()
+{
+	DIR *dirp = opendir("/proc");
+	if (dirp == NULL)
+	{
+		printf("init: critical error: failed to open /proc: %s\n", strerror(errno));
+		printf("WARNING: waiting 5 seconds and skipping process termination!\n");
+		sleep(5);
+		return -1;
+	};
+	
+	struct stat st;
+	struct dirent *ent;
+	
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		if (ent->d_name[0] == '.')
+		{
+			continue;
+		}
+		else if (strcmp(ent->d_name, "self") == 0)
+		{
+			continue;
+		}
+		else if (strcmp(ent->d_name, "1") == 0)
+		{
+			continue;
+		}
+		else
+		{
+			// kill it only if it's our child right now
+			char parentPath[256];
+			char exePath[256];
+			char procName[256];
+			sprintf(parentPath, "/proc/%s/parent", ent->d_name);
+			sprintf(exePath, "/proc/%s/exe", ent->d_name);
+			procName[readlink(exePath, procName, 256)] = 0;
+			
+			if (stat(parentPath, &st) != 0)
+			{
+				printf("init: failed to stat %s: %s\n", parentPath, strerror(errno));
+				printf("init: assuming process terminated\n");
+				continue;
+			};
+			
+			if (st.st_rdev == 1)
+			{
+				int pid;
+				sscanf(ent->d_name, "%d", &pid);
+				
+				kill(pid, SIGTERM);
+				
+				alarm(10);
+				int status = waitpid(pid, NULL, 0);
+				int errnum = errno;
+				alarm(0);
+				
+				if (status == -1)
+				{
+					if (errnum == EINTR)
+					{
+						printf("init: process %d ('%s') failed to terminate in 10 seconds; killing\n",
+							pid, procName);
+
+						kill(pid, SIGKILL);
+						if (waitpid(pid, NULL, 0) == -1)
+						{
+							printf("init: waitpid unexpectedly failed on %d: %s\n",
+								pid, strerror(errno));
+							printf("init: assuming process terminated\n");
+							continue;
+						};
+					}
+					else
+					{
+						printf("init: waitpid unexpectedly failed on %d: %s\n", pid, strerror(errnum));
+						printf("init: assuming process terminated\n");
+						continue;
+					};
+				};
+				
+				// we terminated a process successfully
+				closedir(dirp);
+				return 0;
+			};
+		};
+	};
+	
+	closedir(dirp);
+	return -1;
+};
+
+void onShutdownAlarm(int sig, siginfo_t *si, void *ignore)
+{
+	// NOP; just to interrupt the waitpid().
+};
+
+void shutdownSystem(int action)
+{
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(struct sigaction));
+	sa.sa_handler = SIG_IGN;
+	
+	sigaction(SIGCHLD, &sa, NULL);
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGTERM, &sa, NULL);
+	sigaction(SIGHUP, &sa, NULL);
+	
+	sa.sa_flags = SA_SIGINFO;
+	sa.sa_sigaction = onShutdownAlarm;
+	sigaction(SIGALRM, &sa, NULL);
+	
+	printf("init: asking remaining processes to terminate...\n");
+	while (killNextProcess() == 0);
+	
+	printf("init: closing my remaining files...\n");
+	int fd;
+	for (fd=3; fd<sysconf(_SC_OPEN_MAX); fd++)
+	{
+		close(fd);
+	};
+	
+	printf("init: unmounting non-startup filesystems...\n");
+	struct fsinfo currentFSList[256];
+	size_t count = _glidix_fsinfo(currentFSList, 256);
+	
+	size_t i;
+	for (i=0; i<count; i++)
+	{
+		if (!isStartupFS(&currentFSList[i]))
+		{
+			if (_glidix_unmount(currentFSList[i].fs_mntpoint) != 0)
+			{
+				printf("init: failed to unmount %s: %s\n", currentFSList[i].fs_mntpoint, strerror(errno));
+				printf("init: waiting 5 seconds and skipping this filesystem\n");
+				sleep(5);
+			};
+		};
+	};
+	
+	printf("init: removing all kernel modules...\n");
+	DIR *dirp = opendir("/sys/mod");
+	if (dirp == NULL)
+	{
+		printf("init: failed to open /sys/mod: %s\n", strerror(errno));
+		printf("init: waiting 5 seconds and assuming modules don't need unloading\n");
+		sleep(5);
+	}
+	else
+	{
+		struct dirent *ent;
+		while ((ent = readdir(dirp)) != NULL)
+		{
+			if (ent->d_name[0] != '.')
+			{
+				if (_glidix_rmmod(ent->d_name, 0) != 0)
+				{
+					printf("init: failed to rmmod %s: %s\n", ent->d_name, strerror(errno));
+					printf("Report this problem to the module developer.\n");
+					printf("I will now hang, you may turn off power manually.\n");
+					printf("If the problem persists, remove the module for your safety.\n");
+					while (1) pause();
+				};
+			};
+		};
+		
+		closedir(dirp);
+	};
+	
+	printf("init: bringing the system down...\n");
+	_glidix_down(action);
+};
+
 int main(int argc, char *argv[])
 {
 	if (getpid() == 1)
-	{
+	{	
 		setenv("PATH", "/bin:/usr/local/bin:/usr/bin:/mnt/bin", 1);
 		setenv("HOME", "/root", 1);
 		setenv("LD_LIBRARY_PATH", "/usr/lib:/lib", 1);
 
 		struct sigaction sa;
+		memset(&sa, 0, sizeof(struct sigaction));
 		sa.sa_sigaction = on_signal;
 		sigemptyset(&sa.sa_mask);
 		sa.sa_flags = SA_SIGINFO;
@@ -305,6 +499,9 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 
+		// get the list of "startup filesystems", which shall not be unmounted when shutting down
+		startupFSCount = _glidix_fsinfo(startupFSList, 256);
+		
 		_glidix_mount("ramfs", ".tmp", "/tmp/", 0);
 		_glidix_mount("ramfs", ".run", "/run/", 0);
 		_glidix_mount("ramfs", ".run", "/var/run/", 0);
@@ -329,13 +526,9 @@ int main(int argc, char *argv[])
 			pause();
 			if (shouldHalt)
 			{
-				sa.sa_handler = SIG_DFL;
-				if (sigaction(SIGCHLD, &sa, NULL) != 0)
-				{
-					perror("sigaction SIGCHLD");
-					return 1;
-				};
-
+				tcsetpgrp(0, getpgrp());
+				
+				printf("init: received shutdown request\n");
 				int fd = open("/run/down-action", O_RDONLY);
 				char downAction[256];
 				memset(downAction, 0, 256);
@@ -352,7 +545,7 @@ int main(int argc, char *argv[])
 					action = _GLIDIX_DOWN_REBOOT;
 				};
 
-				_glidix_down(action);
+				shutdownSystem(action);
 			}
 			else if ((shouldRunPoweroff) && (!ranPoweroff))
 			{

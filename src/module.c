@@ -59,7 +59,7 @@ static int getModule(Dir *dir)
 
 	while (mod != NULL)
 	{
-		if (mod->block == (int)dir->stat.st_ino)
+		if (mod->block == (int)(dir->stat.st_ino-1))
 		{
 			strcpy(dir->dirent.d_name, mod->name);
 			dir->dirent.d_ino = dir->stat.st_ino;
@@ -87,7 +87,7 @@ static int modfs_next(Dir *dir)
 	while (1)
 	{
 		dir->stat.st_ino++;
-		if (dir->stat.st_ino == 512) return -1;
+		if (dir->stat.st_ino == 513) return -1;
 		if (getModule(dir) == 0) return 0;
 	};
 
@@ -103,11 +103,11 @@ static int modfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 {
 	dir->next = modfs_next;
 	dir->unlink = modfs_unlink;
-	dir->stat.st_ino = 0;
+	dir->stat.st_ino = 1;
 
 	while (1)
 	{
-		if (dir->stat.st_ino == 512) return VFS_EMPTY_DIRECTORY;
+		if (dir->stat.st_ino == 513) return VFS_EMPTY_DIRECTORY;
 		if (getModule(dir) == 0) return 0;
 		dir->stat.st_ino++;
 	};
@@ -788,7 +788,7 @@ int rmmod(const char *modname, int flags)
 	{
 		if (flags & RMMOD_FORCE)
 		{
-			kprintf("rmmod(%s): WARNING: no module fini event by RMMOD_FORCE is set!\n", modname);
+			kprintf("rmmod(%s): WARNING: no module fini event but RMMOD_FORCE is set!\n", modname);
 		}
 		else
 		{
@@ -827,7 +827,7 @@ int rmmod(const char *modname, int flags)
 
 	if (prevmod == NULL)
 	{
-		firstModule = NULL;
+		firstModule = mod->next;
 	}
 	else
 	{

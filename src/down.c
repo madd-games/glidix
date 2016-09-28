@@ -71,6 +71,7 @@ int systemDown(int action)
 		return -1;
 	};
 
+#if 0
 	kprintf("Asking any remaining processes to terminate...\n");
 
 	siginfo_t termsig;
@@ -154,16 +155,19 @@ int systemDown(int action)
 
 		thread = thread->next;
 	};
+#endif
 
 	kprintf("Cleaning up the init process...\n");
 	DownrefProcessMemory(ct->pm);
 	ftabDownref(ct->ftab);
 
+#if 0
 	kprintf("Unmounting remaining filesystems...\n");
 	unmountAll();
 
 	kprintf("Shutting down kernel modules...\n");
 	rmmodAll();
+#endif
 
 	kprintf("Kernel going down for %s\n", actionNames[action]);
 	haltAllCPU();

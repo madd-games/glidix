@@ -34,15 +34,6 @@
 
 typedef struct
 {
-	pid_t				ps_pid;
-	uid_t				ps_euid;
-	gid_t				ps_egid;
-	pid_t				ps_parent;
-	uint64_t			ps_flags;
-} ProcStatus;
-
-typedef struct
-{
 	off_t				ppi_offset;
 	size_t				ppi_length;
 	uint64_t			ppi_flags;

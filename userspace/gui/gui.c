@@ -346,7 +346,7 @@ void PaintWindows(Window *win, DDISurface *target)
 						ddiBlit(defWinIcon, 0, 0, target, win->params.x+2, win->params.y+2, 16, 16);
 					};
 
-					int btnIndex = ((mouseX - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/16;
+					int btnIndex = ((mouseX - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/14;
 					if ((mouseY < (int)win->params.y+GUI_WINDOW_BORDER) || (mouseY > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
 					{
 						btnIndex = -1;
@@ -375,7 +375,7 @@ void PaintWindows(Window *win, DDISurface *target)
 								};
 							};
 							
-							ddiBlit(winButtons, 16*i, 16*yi, target, win->params.x+(win->params.width-48)+16*i, win->params.y+GUI_WINDOW_BORDER, 16, 16);
+							ddiBlit(winButtons, 14*i, 16*yi, target, win->params.x+(win->params.width-48)+14*i, win->params.y+GUI_WINDOW_BORDER, 16, 16);
 						};
 					};
 					
@@ -956,7 +956,7 @@ void onMouseLeftRelease()
 		{
 			if ((win->params.flags & (GWM_WINDOW_NODECORATE | GWM_WINDOW_NOSYSMENU)) == 0)
 			{
-				int btnIndex = ((x - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/16;
+				int btnIndex = ((x - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/14;
 				if ((y < (int)win->params.y+GUI_WINDOW_BORDER) || (y > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
 				{
 					btnIndex = -1;

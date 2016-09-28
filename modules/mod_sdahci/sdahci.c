@@ -92,6 +92,12 @@ static void ahciAtaThread(void *data)
 	while (1)
 	{
 		SDCommand *cmd = sdPop(dev->sd);
+		if (cmd->type == SD_CMD_SIGNAL)
+		{
+			sdPostComplete(cmd);
+			break;
+		};
+		
 		if (cmd->count > 8)
 		{
 			panic("cmd->count > 8");
@@ -192,12 +198,15 @@ static void ahciAtaThread(void *data)
 
 		sdPostComplete(cmd);
 	};
+	
+	sdHangup(dev->sd);
 };
 
 static void initCtrl(AHCIController *ctrl)
 {
 	pciSetBusMastering(ctrl->pcidev, 1);
 	ctrl->regs = mapPhysMemory((uint64_t) ctrl->pcidev->bar[5], sizeof(AHCIMemoryRegs));
+	ctrl->numAtaDevices = 0;
 	
 	uint32_t pi = ctrl->regs->pi;
 	int i;
@@ -220,6 +229,7 @@ static void initCtrl(AHCIController *ctrl)
 					{
 						kprintf("sdahci: found ATA device on port %d\n", i);
 						ATADevice *dev = NEW(ATADevice);
+						ctrl->ataDevices[ctrl->numAtaDevices++] = dev;
 						dev->ctrl = ctrl;
 						dev->port = port;
 						ahciStopCmd(port);
@@ -295,13 +305,11 @@ static void initCtrl(AHCIController *ctrl)
 						uint64_t size;
 						if (cmdset & (1 << 26))
 						{
-							//kprintf("LBA48 DEVICE\n");
 							uint64_t *szptr = (uint64_t*) &defer[ATA_IDENT_MAX_LBA_EXT];
 							size = (*szptr) & 0xFFFFFFFFFFFF;
 						}
 						else
 						{
-							//kprintf("NON-LBA48 DEVICE\n");
 							uint32_t *szptr = (uint32_t*) &defer[ATA_IDENT_MAX_LBA];
 							size = (uint64_t) (*szptr);
 						};
@@ -386,5 +394,28 @@ MODULE_INIT()
 
 MODULE_FINI()
 {
+	kprintf("sdahci: removing AHCI controllers...\n");
+	AHCIController *ctrl = firstCtrl;
+	while (ctrl != NULL)
+	{
+		kprintf("sdahci: removing controller with %d ATA devices\n", ctrl->numAtaDevices);
+		
+		int i;
+		for (i=0; i<ctrl->numAtaDevices; i++)
+		{
+			ATADevice *dev = ctrl->ataDevices[i];
+			sdSignal(dev->sd);
+			ReleaseKernelThread(dev->ctlThread);
+			dmaReleaseBuffer(&dev->dmabuf);
+			dmaReleaseBuffer(&dev->iobuf);
+			kfree(dev);
+		};
+		
+		AHCIController *next = ctrl->next;
+		kfree(ctrl);
+		ctrl = next;
+	};
+	
+	kprintf("sdahci: terminating\n");
 	return 0;
 };

@@ -351,6 +351,9 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		};
 	};
 	
+	// we can close the main handle now
+	vfsClose(fp);
+	
 	// allocate a 2MB stack
 	FrameList *flStack = palloc_later(NULL, 0x200, -1, 0);
 	if (AddSegment(pm, 0x200, flStack, PROT_READ | PROT_WRITE) != 0)

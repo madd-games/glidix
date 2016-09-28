@@ -264,6 +264,9 @@ GWMWindow* gwmCreateWindow(
 		win->handlerInfo = NULL;
 		win->currentBuffer = 1;
 		win->lastClickTime = 0;
+		
+		win->modalID = 0;
+		if (parent != NULL) win->modalID = parent->modalID;
 		return win;
 	};
 	
@@ -404,7 +407,7 @@ int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win)
 	};
 };
 
-void gwmMainLoop()
+static void gwmModalLoop(uint64_t modalID)
 {
 	GWMEvent ev;
 	GWMHandlerInfo *info;
@@ -415,7 +418,7 @@ void gwmMainLoop()
 		
 		for (info=firstHandler; info!=NULL; info=info->next)
 		{
-			if (ev.win == info->win->id)
+			if ((ev.win == info->win->id) && (info->win->modalID == modalID))
 			{
 				info->state = 1;
 				if (info->callback(&ev, info->win) != 0)
@@ -461,6 +464,11 @@ void gwmMainLoop()
 			};
 		};
 	};
+};
+
+void gwmMainLoop()
+{
+	gwmModalLoop(0);
 };
 
 void gwmScreenSize(int *width, int *height)
@@ -701,4 +709,18 @@ int gwmClassifyChar(char c)
 	};
 	
 	return 1;
+};
+
+GWMWindow* gwmCreateModal(const char *caption, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
+{
+	static uint64_t nextModalID = 1;
+	GWMWindow *win = gwmCreateWindow(NULL, caption, x, y, width, height, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
+	win->modalID = nextModalID++;
+	return win;
+};
+
+void gwmRunModal(GWMWindow *modal, int flags)
+{
+	gwmSetWindowFlags(modal, flags);
+	gwmModalLoop(modal->modalID);
 };

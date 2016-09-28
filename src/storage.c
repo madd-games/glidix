@@ -670,7 +670,7 @@ static void sdFlushThread(void *context)
 		uint64_t nanotimeout = NT_SECS(10);
 		int status = semWaitGen(&sd->semFlush, 1, 0, nanotimeout);
 		
-		if (status == 0)
+		if (status == 1)
 		{
 			break;
 		}
@@ -795,7 +795,7 @@ void sdHangup(StorageDevice *sd)
 	sd->devMaster = NULL;
 	sdFreeLetter(sd->letter);
 	sd->letter = 0;
-	
+
 	sd->flags |= SD_HANGUP;
 	semSignal(&sd->semFlush);
 	ReleaseKernelThread(sd->threadFlush);
@@ -824,4 +824,16 @@ void sdPostComplete(SDCommand *cmd)
 {
 	if (cmd->cmdlock != NULL) semSignal(cmd->cmdlock);
 	kfree(cmd);
+};
+
+void sdSignal(StorageDevice *dev)
+{
+	SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
+	cmd->type = SD_CMD_SIGNAL;
+	cmd->block = 0;
+	cmd->index = 0;
+	cmd->count = 0;
+	cmd->cmdlock = NULL;
+	
+	sdPush(dev, cmd);
 };

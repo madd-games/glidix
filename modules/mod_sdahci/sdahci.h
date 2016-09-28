@@ -144,9 +144,11 @@ typedef struct AHCIController_
 	struct AHCIController_*		next;
 	PCIDevice*			pcidev;
 	volatile AHCIMemoryRegs*	regs;
+	struct ATADevice_*		ataDevices[32];
+	int				numAtaDevices;
 } AHCIController;
 
-typedef struct
+typedef struct ATADevice_
 {
 	AHCIController*			ctrl;
 	int				portno;

@@ -53,11 +53,6 @@ enum
 	PFI_NA,
 
 	/**
-	 * The file /proc/pid/status, from which you can read the ProcStatus structure.
-	 */
-	PFI_STATUS,
-
-	/**
 	 * The file /proc/pid/pages, from which an array of ProcPageInfo can be read to describe
 	 * each memory segment, and with appropriate priviliges, mmap() may be called to map
 	 * the memory into your own address space.
@@ -77,10 +72,15 @@ enum
 	PFI_EXECPARS,
 
 	/**
-	 * The file /proc/pid/cwd, a symbol to the current working directory of the process.
+	 * The file /proc/pid/cwd, a symlink to the current working directory of the process.
 	 */
 	PFI_CWD,
 
+	/**
+	 * The file /proc/pid/parent, a symlink to the directory describing this process' parent.
+	 */
+	PFI_PARENT,
+	
 	PFI_NUM
 };
 
@@ -95,11 +95,11 @@ typedef struct
 static pfiInfo pfiInfos[PFI_NUM] = {
 	{"", 0},
 	{"", 0},
-	{"status", 0444},
-	{"pages", 0444},
-	{"exe", 0444 | VFS_MODE_LINK},
-	{"execpars", 0444},
-	{"cwd", 0755 | VFS_MODE_LINK}
+	{"pages", 0600},
+	{"exe", 0600 | VFS_MODE_LINK},
+	{"execpars", 0600},
+	{"cwd", 0700 | VFS_MODE_LINK},
+	{"parent", 0600 | VFS_MODE_LINK}
 };
 
 static FileSystem *procfs;
@@ -187,10 +187,6 @@ static void procfs_dir_info(Dir *dir)
 		if (th != NULL) dir->stat.st_size = strlen(th->cwd);
 		unlockSched();
 		sti();
-	}
-	else if (ino == PFI_STATUS)
-	{
-		dir->stat.st_size = sizeof(ProcStatus);
 	};
 };
 
@@ -224,6 +220,10 @@ static ssize_t procfs_dir_readlink(Dir *dir, char *buffer)
 			strcpy(buffer, th->cwd);
 			out = strlen(th->name);
 			break;
+		case PFI_PARENT:
+			strformat(buffer, 256, "/proc/%d", th->creds->ppid);
+			out = strlen(buffer);
+			break;
 		};
 	};
 	unlockSched();
@@ -240,7 +240,7 @@ static int procfs_root_opendir(Dir *me, Dir *dir, size_t szdir)
 		pid = getCurrentThread()->creds->pid;
 	};
 
-	dir->dirent.d_ino = pid * PFI_SIZE + PFI_STATUS;
+	dir->dirent.d_ino = pid * PFI_SIZE + PFI_PAGES;
 	dir->stat.st_nlink = 1;
 	dir->stat.st_uid = me->stat.st_uid;
 	dir->stat.st_gid = me->stat.st_gid;
@@ -293,20 +293,37 @@ static int procfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 	{
 		if (th->creds != NULL)
 		{
-			_pidstr(ents[i].ent.d_name, th->creds->pid);
-			ents[i].ent.d_ino = th->creds->pid * PFI_SIZE;
-			ents[i].st.st_ino = th->creds->pid * PFI_SIZE;
-			ents[i].st.st_mode = 0700 | VFS_MODE_DIRECTORY;
-			ents[i].st.st_nlink = 1;
-			ents[i].st.st_uid = th->creds->ruid;
-			ents[i].st.st_gid = th->creds->rgid;
-			ents[i].st.st_rdev = th->creds->pid;
-			ents[i].st.st_size = PFI_NUM;
-			ents[i].st.st_blksize = 1;
-			ents[i].st.st_blocks = 1;
-			ents[i].st.st_atime = 0;
-			ents[i].st.st_ctime = 0;
-			ents[i].st.st_mtime = 0;
+			int j;
+			int haveDoneAlready = 0;
+			for (j=0; j<i; j++)
+			{
+				if (ents[j].st.st_ino == (th->creds->pid * PFI_SIZE))
+				{
+					haveDoneAlready = 1;
+				};
+			};
+			
+			if (haveDoneAlready)
+			{
+				ents[i].ent.d_ino = 0;
+			}
+			else
+			{
+				_pidstr(ents[i].ent.d_name, th->creds->pid);
+				ents[i].ent.d_ino = th->creds->pid * PFI_SIZE;
+				ents[i].st.st_ino = th->creds->pid * PFI_SIZE;
+				ents[i].st.st_mode = 0700 | VFS_MODE_DIRECTORY;
+				ents[i].st.st_nlink = 1;
+				ents[i].st.st_uid = th->creds->ruid;
+				ents[i].st.st_gid = th->creds->rgid;
+				ents[i].st.st_rdev = th->creds->pid;
+				ents[i].st.st_size = PFI_NUM;
+				ents[i].st.st_blksize = 1;
+				ents[i].st.st_blocks = 1;
+				ents[i].st.st_atime = 0;
+				ents[i].st.st_ctime = 0;
+				ents[i].st.st_mtime = 0;
+			};
 			i++;
 		};
 		
