@@ -39,4 +39,5 @@ cp /mnt/init/login.sh /etc/init/login.sh
 cp /mnt/init/startup.sh /etc/init/startup.sh
 chmod 644 /etc/init/login.sh
 chmod 644 /etc/init/startup.sh
+echo "Rebooting..."
 reboot

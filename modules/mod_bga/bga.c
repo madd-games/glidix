@@ -553,5 +553,6 @@ MODULE_INIT()
 
 MODULE_FINI()
 {
+	setGfxTerm(0);
 	return 0;
 };

@@ -131,6 +131,12 @@ typedef struct _SDCommand
 	Semaphore*				cmdlock;
 
 	/**
+	 * Status, set by default to 0 by the kernel, the driver sets this to -1 if it can't execute
+	 * a command.
+	 */
+	int					status;
+	
+	/**
 	 * For queues.
 	 */
 	struct _SDCommand*			next;

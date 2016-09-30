@@ -164,12 +164,7 @@ int sys_mqserver()
 
 static MessageQueue *findQueue(int pid, int fd)
 {
-	if ((fd < 0) || (fd > MAX_OPEN_FILES))
-	{
-		return NULL;
-	};
-	
-	if (pid < 1)
+	if ((fd < 1) || (fd > MAX_OPEN_FILES))
 	{
 		return NULL;
 	};
@@ -187,8 +182,9 @@ static MessageQueue *findQueue(int pid, int fd)
 		};
 	} while (thread != getCurrentThread());
 	
-	if (thread->creds->pid != pid)
+	if (thread == getCurrentThread())
 	{
+		// no such pid at all
 		unlockSched();
 		sti();
 		return NULL;

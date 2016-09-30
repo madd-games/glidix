@@ -32,6 +32,7 @@
 #include <glidix/common.h>
 #include <glidix/spinlock.h>
 
+#ifndef _SIGNAL_H
 #define	SIGHUP		1
 #define	SIGINT		2
 #define	SIGQUIT		3
@@ -69,7 +70,9 @@
 #define	SIGTHKILL	35		/* kill a single thread */
 #define	SIGTHWAKE	36		/* wake a thread without dispatching a signal */
 #define	SIGMXULK	37		/* mutex unlock signal */
+#endif
 #define	SIG_NUM		38
+#ifndef _SIGNAL_H
 
 /**
  * si_code for SIGSEGV
@@ -166,6 +169,7 @@ typedef struct
 	long		si_band;
 	union sigval	si_value;
 } siginfo_t;
+#endif			/* _SIGNAL_H */
 
 /**
  * Must match 'struct sigaction' from libc.

@@ -121,14 +121,6 @@ static void ahciAtaThread(void *data)
 		// do not zero it; it was already zeroed before and only this thread updates the
 		// structures so we know that any unused fields are already zero.
 		cmdhead[slot].cfl = sizeof(FIS_REG_H2D)/4;
-		//if (cmd->type == SD_CMD_READ)
-		//{
-		//	cmdhead[slot].w = 0;
-		//}
-		//else
-		//{
-		//	cmdhead[slot].w = 1;
-		//};
 		cmdhead[slot].w = 0;
 		cmdhead[slot].prdtl = 1;
 		__sync_synchronize();
@@ -202,6 +194,262 @@ static void ahciAtaThread(void *data)
 	sdHangup(dev->sd);
 };
 
+static void ahciAtapiThread(void *data)
+{
+	ATADevice *dev = (ATADevice*) data;
+
+	AHCICommandHeader *cmdhead = (AHCICommandHeader*) dmaGetPtr(&dev->dmabuf);
+	while (1)
+	{
+		SDCommand *cmd = sdPop(dev->sd);
+		if (cmd->type == SD_CMD_SIGNAL)
+		{
+			sdPostComplete(cmd);
+			break;
+		}
+		else if (cmd->type == SD_CMD_GET_SIZE)
+		{
+			dev->port->is = dev->port->is;
+
+			// first find a free command slot; we may wait for some time if the drive is
+			// particularly busy.
+			uint32_t slot = 0;
+			while (dev->port->ci & (1 << slot))
+			{
+				slot = (slot + 1) % 32;
+				__sync_synchronize();
+			};
+	
+			// fill in the appropriate structure.
+			// do not zero it; it was already zeroed before and only this thread updates the
+			// structures so we know that any unused fields are already zero.
+			cmdhead[slot].cfl = sizeof(FIS_REG_H2D)/4;
+			cmdhead[slot].w = 0;
+			cmdhead[slot].prdtl = 1;
+			cmdhead[slot].a = 1;
+			__sync_synchronize();
+	
+			AHCICommandTable *cmdtbl = (AHCICommandTable*) ((char*)dmaGetPtr(&dev->dmabuf)
+							+ 1024+256+8*1024+256*slot);
+			memset(cmdtbl->acmd, 0, 16);
+			cmdtbl->acmd[0] = 0x25;
+			
+			cmdtbl->prdt_entry[0].dba = dmaGetPhys(&dev->iobuf) + 4096*slot;
+			cmdtbl->prdt_entry[0].dbc = 2048*cmd->count;
+			cmdtbl->prdt_entry[0].i = 0;
+	
+			FIS_REG_H2D *cmdfis = (FIS_REG_H2D*)(&cmdtbl->cfis);
+			cmdfis->fis_type = FIS_TYPE_REG_H2D;
+			cmdfis->c = 1;
+			cmdfis->command = ATA_CMD_PACKET;
+	
+			cmdfis->lba0 = 0;
+			cmdfis->lba1 = 0;
+			cmdfis->lba2 = 0;
+			cmdfis->device = 0;
+		 
+			cmdfis->lba3 = 0;
+			cmdfis->lba4 = 0;
+			cmdfis->lba5 = 0;
+	
+			cmdfis->countl = (uint8_t)(cmd->count);
+			cmdfis->counth = (uint8_t)(cmd->count>>8);
+	
+			char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);
+	
+			// wait for the port to stop being busy
+			int busy = (1 << 7) | (1 << 3);
+			while (dev->port->tfd & busy) __sync_synchronize();
+			__sync_synchronize();
+	
+			dev->port->ci = (1 << slot);
+			__sync_synchronize();
+	
+			while (dev->port->ci & (1 << slot))
+			{
+				if (dev->port->is & ((1 << 30) | (1 << 27) | (1 << 29) | (1 << 28)))
+				{
+					dev->port->is = dev->port->is;
+					ahciStopCmd(dev->port);
+					ahciStartCmd(dev->port);
+					memset(hwbuf, 0, 4);
+					//kprintf("TFD: %x\n", dev->port->tfd);
+				};
+				__sync_synchronize();
+			};
+			__sync_synchronize();
+
+			*((uint32_t*)cmd->block) = __builtin_bswap32(*((uint32_t*)hwbuf)) * 2048;
+			sdPostComplete(cmd);
+		}
+		else if (cmd->type == SD_CMD_READ)
+		{
+			if (cmd->count > 2)
+			{
+				panic("cmd->count > 2");
+			};
+			
+			dev->port->is = dev->port->is;
+
+			// first find a free command slot; we may wait for some time if the drive is
+			// particularly busy.
+			uint32_t slot = 0;
+			while (dev->port->ci & (1 << slot))
+			{
+				slot = (slot + 1) % 32;
+				__sync_synchronize();
+			};
+	
+			// fill in the appropriate structure.
+			// do not zero it; it was already zeroed before and only this thread updates the
+			// structures so we know that any unused fields are already zero.
+			cmdhead[slot].cfl = sizeof(FIS_REG_H2D)/4;
+			cmdhead[slot].w = 0;
+			cmdhead[slot].prdtl = 1;
+			cmdhead[slot].a = 1;
+			__sync_synchronize();
+	
+			AHCICommandTable *cmdtbl = (AHCICommandTable*) ((char*)dmaGetPtr(&dev->dmabuf)
+							+ 1024+256+8*1024+256*slot);
+			memset(cmdtbl->acmd, 0, 16);
+			cmdtbl->acmd[0] = ATAPI_CMD_READ;
+			cmdtbl->acmd[1] = 0;
+			cmdtbl->acmd[2] = (cmd->index >> 24) & 0xFF;
+			cmdtbl->acmd[3] = (cmd->index >> 16) & 0xFF;
+			cmdtbl->acmd[4] = (cmd->index >> 8) & 0xFF;
+			cmdtbl->acmd[5] = cmd->index & 0xFF;
+			cmdtbl->acmd[6] = 0;
+			cmdtbl->acmd[7] = 0;
+			cmdtbl->acmd[8] = 0;
+			cmdtbl->acmd[9] = cmd->count;
+			cmdtbl->acmd[10] = 0;
+			cmdtbl->acmd[11] = 0;
+			
+			cmdtbl->prdt_entry[0].dba = dmaGetPhys(&dev->iobuf) + 4096*slot;
+			cmdtbl->prdt_entry[0].dbc = 2048*cmd->count;
+			cmdtbl->prdt_entry[0].i = 0;
+	
+			FIS_REG_H2D *cmdfis = (FIS_REG_H2D*)(&cmdtbl->cfis);
+			cmdfis->fis_type = FIS_TYPE_REG_H2D;
+			cmdfis->c = 1;
+			cmdfis->command = ATA_CMD_PACKET;
+	
+			cmdfis->lba0 = 0;
+			cmdfis->lba1 = 0;
+			cmdfis->lba2 = 0;
+			cmdfis->device = 0;
+		 
+			cmdfis->lba3 = 0;
+			cmdfis->lba4 = 0;
+			cmdfis->lba5 = 0;
+	
+			cmdfis->countl = (uint8_t)(cmd->count);
+			cmdfis->counth = (uint8_t)(cmd->count>>8);
+	
+			char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);
+	
+			// wait for the port to stop being busy
+			int busy = (1 << 7) | (1 << 3);
+			while (dev->port->tfd & busy) __sync_synchronize();
+			__sync_synchronize();
+	
+			dev->port->ci = (1 << slot);
+			__sync_synchronize();
+	
+			while (dev->port->ci & (1 << slot))
+			{
+				if (dev->port->is & ((1 << 30) | (1 << 27) | (1 << 29) | (1 << 28)))
+				{
+					dev->port->is = dev->port->is;
+					ahciStopCmd(dev->port);
+					ahciStartCmd(dev->port);
+					memset(hwbuf, 0, 2048*cmd->count);
+					//kprintf("TFD: %x\n", dev->port->tfd);
+				};
+				__sync_synchronize();
+			};
+			__sync_synchronize();
+
+			memcpy(cmd->block, hwbuf, 2048*cmd->count);
+			sdPostComplete(cmd);
+		}
+		else if (cmd->type == SD_CMD_EJECT)
+		{
+			dev->port->is = dev->port->is;
+
+			// first find a free command slot; we may wait for some time if the drive is
+			// particularly busy.
+			uint32_t slot = 0;
+			while (dev->port->ci & (1 << slot))
+			{
+				slot = (slot + 1) % 32;
+				__sync_synchronize();
+			};
+	
+			// fill in the appropriate structure.
+			// do not zero it; it was already zeroed before and only this thread updates the
+			// structures so we know that any unused fields are already zero.
+			cmdhead[slot].cfl = sizeof(FIS_REG_H2D)/4;
+			cmdhead[slot].w = 0;
+			cmdhead[slot].prdtl = 1;
+			cmdhead[slot].a = 1;
+			__sync_synchronize();
+	
+			AHCICommandTable *cmdtbl = (AHCICommandTable*) ((char*)dmaGetPtr(&dev->dmabuf)
+							+ 1024+256+8*1024+256*slot);
+			memset(cmdtbl->acmd, 0, 16);
+			cmdtbl->acmd[0] = 0x1B;
+			cmdtbl->acmd[4] = 2;
+			
+			cmdtbl->prdt_entry[0].dba = dmaGetPhys(&dev->iobuf) + 4096*slot;
+			cmdtbl->prdt_entry[0].dbc = 2048*cmd->count;
+			cmdtbl->prdt_entry[0].i = 0;
+	
+			FIS_REG_H2D *cmdfis = (FIS_REG_H2D*)(&cmdtbl->cfis);
+			cmdfis->fis_type = FIS_TYPE_REG_H2D;
+			cmdfis->c = 1;
+			cmdfis->command = ATA_CMD_PACKET;
+	
+			cmdfis->lba0 = 0;
+			cmdfis->lba1 = 0;
+			cmdfis->lba2 = 0;
+			cmdfis->device = 0;
+		 
+			cmdfis->lba3 = 0;
+			cmdfis->lba4 = 0;
+			cmdfis->lba5 = 0;
+	
+			cmdfis->countl = (uint8_t)(cmd->count);
+			cmdfis->counth = (uint8_t)(cmd->count>>8);
+	
+			// wait for the port to stop being busy
+			int busy = (1 << 7) | (1 << 3);
+			while (dev->port->tfd & busy) __sync_synchronize();
+			__sync_synchronize();
+	
+			dev->port->ci = (1 << slot);
+			__sync_synchronize();
+	
+			while (dev->port->ci & (1 << slot))
+			{
+				if (dev->port->is & ((1 << 30) | (1 << 27) | (1 << 29) | (1 << 28)))
+				{
+					dev->port->is = dev->port->is;
+					ahciStopCmd(dev->port);
+					ahciStartCmd(dev->port);
+					//kprintf("TFD: %x\n", dev->port->tfd);
+				};
+				__sync_synchronize();
+			};
+			__sync_synchronize();
+
+			sdPostComplete(cmd);
+		};
+	};
+	
+	sdHangup(dev->sd);
+};
+
 static void initCtrl(AHCIController *ctrl)
 {
 	pciSetBusMastering(ctrl->pcidev, 1);
@@ -241,7 +489,7 @@ static void initCtrl(AHCIController *ctrl)
 						
 						if (dmaCreateBuffer(&dev->iobuf, 128*1024, 0) != 0)
 						{
-							panic("failed to allocate AHCI 16 KB I/O buffer");
+							panic("failed to allocate AHCI 128 KB I/O buffer");
 						};
 						
 						memset(dmaGetPtr(&dev->dmabuf), 0, 1024+256+8*1024+32*256);
@@ -340,6 +588,61 @@ static void initCtrl(AHCIController *ctrl)
 					else if (port->sig == AHCI_SIG_ATAPI)
 					{
 						kprintf("sdahci: found ATAPI device on port %d\n", i);
+						ATADevice *dev = NEW(ATADevice);
+						ctrl->ataDevices[ctrl->numAtaDevices++] = dev;
+						dev->ctrl = ctrl;
+						dev->port = port;
+						ahciStopCmd(port);
+						
+						if (dmaCreateBuffer(&dev->dmabuf, 1024+256+8*1024+32*256, 0) != 0)
+						{
+							panic("failed to allocate AHCI DMA buffer");
+						};
+						
+						if (dmaCreateBuffer(&dev->iobuf, 128*1024, 0) != 0)
+						{
+							panic("failed to allocate AHCI 128 KB I/O buffer");
+						};
+						
+						memset(dmaGetPtr(&dev->dmabuf), 0, 1024+256+8*1024+32*256);
+						__sync_synchronize();
+						port->clb = dmaGetPhys(&dev->dmabuf);
+						port->fb = dmaGetPhys(&dev->dmabuf) + 1024;
+						
+						__sync_synchronize();
+						AHCICommandHeader *cmdhead = (AHCICommandHeader*) dmaGetPtr(&dev->dmabuf);
+						
+						int i;
+						for (i=0; i<32; i++)
+						{
+							cmdhead[i].prdtl = 8;
+							cmdhead[i].ctba = dmaGetPhys(&dev->dmabuf) + 1024 + 256 + 8*1024 + 256*i;
+						};
+						
+						__sync_synchronize();
+						ahciStartCmd(port);
+						port->is = port->is;
+						
+						SDParams pars;
+						pars.flags = SD_READONLY;
+						pars.blockSize = 2048;
+						pars.totalSize = 0;
+						
+						dev->sd = sdCreate(&pars);
+						if (dev->sd == NULL)
+						{
+							kprintf("sdahci: storage device creation failed!\n");
+						}
+						else
+						{
+							KernelThreadParams kpars;
+							memset(&kpars, 0, sizeof(KernelThreadParams));
+							kpars.stackSize = DEFAULT_STACK_SIZE;
+							kpars.name = "AHCI ATAPI device";
+							
+							dev->ctlThread = CreateKernelThread(ahciAtapiThread, &kpars, dev);
+							kprintf("sdahci: ATAPI device initialized!\n");
+						};
 					};
 				};
 			};

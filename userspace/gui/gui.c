@@ -43,6 +43,7 @@
 #include <errno.h>
 #include <poll.h>
 #include <dirent.h>
+#include <signal.h>
 #include "gui.h"
 #include <glidix/video.h>
 #include <glidix/humin.h>
@@ -1727,12 +1728,28 @@ int strStartsWith(const char *str, const char *prefix)
 	return memcmp(str, prefix, strlen(prefix)) == 0;
 };
 
+void onTerm(int signo, siginfo_t *si, void *context)
+{
+	_glidix_kopt(_GLIDIX_KOPT_GFXTERM, 1);
+	exit(1);
+};
+
 int main(int argc, char *argv[])
 {
 	srand(time(NULL));
 	
 	const char *displayDevice = NULL;
 	int modeSelected = -1;
+	
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(struct sigaction));
+	sa.sa_sigaction = onTerm;
+	sa.sa_flags = SA_SIGINFO;
+	if (sigaction(SIGTERM, &sa, NULL) != 0)
+	{
+		fprintf(stderr, "sigaction SIGTERM failed: %s\n", strerror(errno));
+		return 1;
+	};
 	
 	int i;
 	for (i=1; i<argc; i++)

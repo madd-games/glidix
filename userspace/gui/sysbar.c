@@ -400,6 +400,22 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 	};
 };
 
+int sysbarShutdown(void *context)
+{
+	if (gwmMessageBox(NULL, "Shut down", "Are you sure you want to shut down?", GWM_MBICON_WARN | GWM_MBUT_YESNO) == 0)
+	{
+		if (fork() == 0)
+		{
+			execl("/usr/bin/halt", "poweroff", NULL);
+			exit(1);
+		};
+		
+		return -1;
+	};
+	
+	return 0;
+};
+
 int main()
 {
 	struct sigaction sa;
@@ -443,7 +459,7 @@ int main()
 	};
 	
 	gwmMenuAddSeparator(menuSys);
-	gwmMenuAddEntry(menuSys, "Shut down...", NULL, NULL);
+	gwmMenuAddEntry(menuSys, "Shut down...", sysbarShutdown, NULL);
 	
 	loadApps();
 

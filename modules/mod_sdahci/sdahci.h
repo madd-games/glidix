@@ -63,6 +63,9 @@
 #define ATA_IDENT_COMMANDSETS				164
 #define ATA_IDENT_MAX_LBA_EXT				200
 
+#define	ATAPI_CMD_READ					0xA8
+#define	ATAPI_CMD_EJECT					0x1B
+
 typedef enum
 {
 	FIS_TYPE_REG_H2D	= 0x27,	// Register FIS - host to device
@@ -148,7 +151,7 @@ typedef struct AHCIController_
 	int				numAtaDevices;
 } AHCIController;
 
-typedef struct ATADevice_
+typedef struct ATADevice_	/* or ATAPI */
 {
 	AHCIController*			ctrl;
 	int				portno;
