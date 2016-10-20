@@ -121,7 +121,18 @@ static void ahciAtaThread(void *data)
 		// do not zero it; it was already zeroed before and only this thread updates the
 		// structures so we know that any unused fields are already zero.
 		cmdhead[slot].cfl = sizeof(FIS_REG_H2D)/4;
-		cmdhead[slot].w = 0;
+		if (cmd->type == SD_CMD_READ)
+		{
+			cmdhead[slot].w = 0;
+			cmdhead[slot].p = 0;
+			cmdhead[slot].c = 0;
+		}
+		else
+		{
+			cmdhead[slot].w = 1;
+			cmdhead[slot].p = 1;
+			cmdhead[slot].c = 1;
+		};
 		cmdhead[slot].prdtl = 1;
 		__sync_synchronize();
 		
@@ -175,6 +186,7 @@ static void ahciAtaThread(void *data)
 		
 		while (dev->port->ci & (1 << slot))
 		{
+			//kprintf("IS: 0x%08x\n", dev->port->is);
 			if (dev->port->is & (1 << 27))
 			{
 				panic("AHCI error!");
@@ -714,6 +726,7 @@ MODULE_FINI()
 			kfree(dev);
 		};
 		
+		pciReleaseDevice(ctrl->pcidev);
 		AHCIController *next = ctrl->next;
 		kfree(ctrl);
 		ctrl = next;

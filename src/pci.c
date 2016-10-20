@@ -143,6 +143,7 @@ static void checkSlot(uint8_t bus, uint8_t slot, PCIBridge *bridge)
 				dev->id = nextPCIID++;
 				dev->vendor = config.std.vendor;
 				dev->device = config.std.device;
+				dev->progif = config.std.progif;
 				uint16_t classcode16 = (uint16_t) config.std.classcode;
 				uint16_t subclass16 = (uint16_t) config.std.subclass;
 				dev->type = (classcode16 << 8) | (subclass16 & 0xFF);

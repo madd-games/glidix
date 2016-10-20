@@ -798,6 +798,17 @@ size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t en
 void gwmResizeTextField(GWMWindow *field, int width);
 
 /**
+ * Change the text in a text field.
+ */
+void gwmWriteTextField(GWMWindow *field, const char *newText);
+
+/**
+ * Sets the callback for when the user pressed ENTER while typing in a text field.
+ */
+typedef int (*GWMTextFieldCallback)(void *param);
+void gwmSetTextFieldAcceptCallback(GWMWindow *field, GWMTextFieldCallback callback, void *param);
+
+/**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
  * Returns 0 on success, -1 on error.
  */
@@ -880,6 +891,11 @@ int gwmGetScrollbarOffset(GWMWindow *sbar);
  * Set scrollbar parameters and redraw. Note: the orientation will NOT be changed by this function.
  */
 void gwmSetScrollbarParams(GWMWindow *sbar, int viewOffset, int viewSize, int viewTotal, int flags);
+
+/**
+ * Change the length of a scrollbar.
+ */
+void gwmSetScrollbarLen(GWMWindow *sbar, int len);
 
 /**
  * Change the size of a window. This frees, and hence invalidates, a previous return value from gwmGetWindowCanvas()!

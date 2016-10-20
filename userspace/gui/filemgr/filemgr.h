@@ -29,4 +29,38 @@
 #ifndef FILEMGR_H_
 #define FILEMGR_H_
 
+/**
+ * Information on a file type.
+ */
+typedef struct FMFileType_
+{
+	char*					mimeName;
+	char*					humanName;	// human-readable name of the type
+	DDISurface*				icon;
+	struct FMFileType_*			next;
+} FMFileType;
+extern FMFileType* ftDir;
+extern FMFileType* ftBinFile;
+extern FMFileType* ftTextFile;
+
+/**
+ * Information on a directory entry.
+ */
+typedef struct FMDirEntry_
+{
+	char*					name;
+	FMFileType*				type;
+	struct FMDirEntry_*			next;
+} FMDirEntry;
+
+/**
+ * Information on a directory.
+ */
+typedef struct
+{
+	char*					path;
+	FMDirEntry*				list;
+	int					numElements;
+} FMDir;
+
 #endif

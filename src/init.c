@@ -61,6 +61,7 @@
 #include <glidix/cpu.h>
 #include <glidix/ptty.h>
 #include <glidix/ramfs.h>
+#include <glidix/usb.h>
 
 #define ACPI_OSC_QUERY_INDEX				0
 #define ACPI_OSC_SUPPORT_INDEX				1
@@ -380,6 +381,10 @@ void kmain(MultibootInfo *info)
 	pciInit();
 	DONE();
 
+	kprintf("Initializing USB...");
+	usbInit();
+	DONE();
+	
 	kprintf("Initializing the FS driver interface... ");
 	initFSDrivers();
 	DONE();

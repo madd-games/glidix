@@ -63,6 +63,12 @@ typedef struct
 	 * The right-click menu.
 	 */
 	GWMMenu*		menu;
+	
+	/**
+	 * Accept callback.
+	 */
+	GWMTextFieldCallback	acceptCallback;
+	void*			acceptParam;
 } GWMTextFieldData;
 
 void gwmRedrawTextField(GWMWindow *field)
@@ -354,6 +360,10 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 		}
 		else if (ev->keycode == '\n')
 		{
+			if (data->acceptCallback != NULL)
+			{
+				return data->acceptCallback(data->acceptParam);
+			};
 		}
 		else if ((ev->keycode == '\b') && (!disabled))
 		{
@@ -423,6 +433,8 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->clickPos = -1;
 	data->pen = NULL;
 	
+	data->acceptCallback = NULL;
+	
 	data->menu = gwmCreateMenu();
 	gwmMenuAddEntry(data->menu, "Cut", txtCut, field);
 	gwmMenuAddEntry(data->menu, "Copy", txtCopy, field);
@@ -480,4 +492,22 @@ void gwmResizeTextField(GWMWindow *field, int width)
 	};
 	gwmResizeWindow(field, width, TEXTFIELD_HEIGHT);
 	gwmRedrawTextField(field);
+};
+
+void gwmWriteTextField(GWMWindow *field, const char *newText)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	free(data->text);
+	data->text = strdup(newText);
+	data->textSize = strlen(newText);
+	data->selectStart = data->selectEnd = 0;
+	data->cursorPos = 0;
+	gwmRedrawTextField(field);
+};
+
+void gwmSetTextFieldAcceptCallback(GWMWindow *field, GWMTextFieldCallback callback, void *param)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	data->acceptCallback = callback;
+	data->acceptParam = param;
 };

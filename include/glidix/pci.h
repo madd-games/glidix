@@ -131,6 +131,7 @@ typedef struct PCIDevice_
 	char						deviceName[128];	// name of device (default = "Unknown")
 	uint32_t					bar[6];			// base address registers (BARs)
 	uint32_t					barsz[6];		// size of each BAR
+	uint8_t						progif;
 
 	// -- END OF USER AREA --
 	

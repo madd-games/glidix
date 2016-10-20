@@ -179,6 +179,7 @@ int main()
 	gwmPostDirty(tab1);
 	redraw();
 	
+	_heap_dump();
 	gwmSetEventHandler(win, myEventHandler);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	gwmMainLoop();

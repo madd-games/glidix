@@ -284,3 +284,20 @@ void gwmSetScrollbarParams(GWMWindow *sbar, int viewOffset, int viewSize, int vi
 	data->flags = (data->flags & ~SCROLLBAR_UPDATEABLE_FLAGS) | (flags & SCROLLBAR_UPDATEABLE_FLAGS);
 	gwmRedrawScrollbar(sbar);
 };
+
+void gwmSetScrollbarLen(GWMWindow *sbar, int len)
+{
+	GWMScrollbarData *data = (GWMScrollbarData*) sbar->data;
+	data->len = len;
+
+	if (data->flags & GWM_SCROLLBAR_HORIZ)
+	{
+		gwmResizeWindow(sbar, len, SCROLLBAR_WIDTH);
+	}
+	else
+	{
+		gwmResizeWindow(sbar, SCROLLBAR_WIDTH, len);
+	};
+	
+	gwmRedrawScrollbar(sbar);
+};

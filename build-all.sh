@@ -103,7 +103,7 @@ x86_64-glidix-gcc sysbar.c -o ../../mipdir/usr/libexec/sysbar -lddi -lgwm || exi
 x86_64-glidix-gcc gui-login.c -o ../../mipdir/usr/bin/gui-login -lddi -lgwm -lcrypt || exit 1
 x86_64-glidix-gcc sysinfo/sysinfo.c sysinfo/pci.c -o ../../mipdir/usr/bin/sysinfo -lddi -lgwm || exit 1
 cd filemgr
-x86_64-glidix-gcc main.c -o ../../../mipdir/usr/bin/filemgr -lddi -lgwm || exit 1
+x86_64-glidix-gcc main.c -o ../../../mipdir/usr/bin/filemgr -lddi -lgwm -Wall -Werror || exit 1
 cd ..
 cd ../..
 cp -r userspace/images mipdir/usr/share/images || exit 1
@@ -169,6 +169,12 @@ cd ../..
 cd modules/mod_gxfs
 modmake --sysroot=/glidix --host=x86_64-glidix --modname=gxfs || exit 1
 cp out/gxfs.gkm ../../initrd/initmod/gxfs.gkm || exit 1
+cd ../..
+
+# mod_ohci
+cd modules/mod_ohci
+modmake --sysroot=/glidix --host=x86_64-glidix --modname=ohci || exit 1
+cp out/ohci.gkm ../../initrd/initmod/ohci.gkm || exit 1
 cd ../..
 
 # BGA driver

@@ -279,6 +279,11 @@ void _heap_dump()
 
 	while (1)
 	{
+		if ((uint64_t)head > 0x7c0000f710UL)
+		{
+			break;
+		};
+		
 		printf("%p ", &head[1]);
 		if (head->flags & _HEAP_BLOCK_USED)
 		{
@@ -329,8 +334,8 @@ void _heap_dump()
 	};
 
 	printf("end of heap\n");
-	printf("stack trace:\n");
-	_print_stack_trace(_get_rbp());
+	//printf("stack trace:\n");
+	//_print_stack_trace(_get_rbp());
 };
 
 void _heap_expand()
