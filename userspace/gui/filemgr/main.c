@@ -27,6 +27,7 @@
 */
 
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <libgwm.h>
 #include <time.h>
@@ -58,6 +59,7 @@ FMDir *currentDir;
 FMFileType* ftDir;
 FMFileType* ftBinFile;
 FMFileType* ftTextFile;
+FMFileType* ftExecFile;
 
 GWMMenu *menuEdit;
 
@@ -129,6 +131,36 @@ int isTextFile(const char *path, struct stat *st)
 	return 1;
 };
 
+int isExecFile(const char *path, struct stat *st)
+{
+	if (st->st_size < 18) return 0;
+	
+	int fd = open(path, O_RDONLY);
+	if (fd == -1) return 0;
+	
+	char buffer[18];
+	static char elfMagic[18] = {
+					0x7F, 'E', 'L', 'F', 	/* magic */
+					2,			/* ELF64 */
+					1,			/* little endian */
+					1,			/* ELF version 1 */
+					0,			/* System V ABI */
+					0,			/* ABI version */
+					0, 0, 0, 0, 0, 0, 0,	/* padding */
+					2, 0			/* executable file */
+	};
+	
+	if (read(fd, buffer, 18) != 18)
+	{
+		close(fd);
+		return 0;
+	};
+	
+	close(fd);
+	
+	return memcmp(buffer, elfMagic, 18) == 0;
+};
+
 FMFileType *fmDetermineType(const char *path)
 {
 	struct stat st;
@@ -145,6 +177,7 @@ FMFileType *fmDetermineType(const char *path)
 	{
 		// TODO: determine type of file
 		if (isTextFile(path, &st)) return ftTextFile;
+		if (isExecFile(path, &st)) return ftExecFile;
 		return ftBinFile;
 	};
 };
@@ -315,6 +348,35 @@ void onDoubleClick()
 		sprintf(newPath, "%s/%s", currentDir->path, selectedEntry->name);
 		fmSwitchDir(newPath);
 		redraw();
+	}
+	else if (strcmp(selectedEntry->type->mimeName, "application/x-executable") == 0)
+	{
+		char execPath[PATH_MAX];
+		sprintf(execPath, "%s/%s", currentDir->path, selectedEntry->name);
+		
+		pid_t pid = fork();
+		if (pid == -1)
+		{
+			char errmsg[1024];
+			sprintf(errmsg, "fork failed: %s", strerror(errno));
+			gwmMessageBox(NULL, "Run Executable", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+			return;
+		}
+		else if (pid == 0)
+		{
+			// i am the child
+			if (fork() == 0)
+			{
+				chdir(currentDir->path);
+				execl(execPath, execPath, NULL);
+			};
+			
+			exit(1);
+		}
+		else
+		{
+			waitpid(pid, NULL, 0);
+		};
 	};
 };
 
@@ -459,6 +521,7 @@ int main(int argc, char *argv[])
 	ftDir = addFileType("inode/directory", "Directory", "/usr/share/images/dir.png");
 	ftBinFile = addFileType("application/octet-stream", "Binary File", "/usr/share/images/binfile.png");
 	ftTextFile = addFileType("text/plain", "Text File", "/usr/share/images/textfile.png");
+	ftExecFile = addFileType("application/x-executable", "Executable File", "/usr/share/images/exe.png");
 	
 	txtPath = gwmCreateTextField(winMain, "?", 0, 20, DEFAULT_WIDTH, 0);
 	gwmSetTextFieldAcceptCallback(txtPath, pathUpdate, NULL);

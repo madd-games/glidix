@@ -42,6 +42,7 @@ typedef struct FMFileType_
 extern FMFileType* ftDir;
 extern FMFileType* ftBinFile;
 extern FMFileType* ftTextFile;
+extern FMFileType* ftExecFile;
 
 /**
  * Information on a directory entry.
