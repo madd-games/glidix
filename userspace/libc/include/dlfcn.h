@@ -33,6 +33,8 @@
 extern "C" {
 #endif
 
+#include <inttypes.h>
+
 #define	RTLD_LAZY				(1 << 0)
 #define	RTLD_NOW				(1 << 1)
 #define	RTLD_LOCAL				(1 << 2)

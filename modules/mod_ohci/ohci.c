@@ -108,17 +108,17 @@ static void scanPorts()
 			uint32_t tdPhys = (uint32_t) (dmaGetPhys(&dmaComm) + offsetof(OHCICommPage, initTD));
 			commPage->initED.edHeadPCH = tdPhys;
 			
-			kprintf("waiting for SET_ADDRESS to finish\n");
-			while ((ohciRegs->hcInterruptStatus & HC_INT_WDH) == 0)
-			{
-				//kprintf("STATUS: 0x%08x\n", ohciRegs->hcInterruptStatus);
-				__sync_synchronize();
-			};
-			if (commPage->hcca.hccaDoneHead != tdPhys)
-			{
-				panic("hccaDoneHead is wrong!");
-			};
-			panic("hccaDoneHead is right!");
+			//kprintf("waiting for SET_ADDRESS to finish\n");
+			//while ((ohciRegs->hcInterruptStatus & HC_INT_WDH) == 0)
+			//{
+			//	//kprintf("STATUS: 0x%08x\n", ohciRegs->hcInterruptStatus);
+			//	__sync_synchronize();
+			//};
+			//if (commPage->hcca.hccaDoneHead != tdPhys)
+			//{
+			//	panic("hccaDoneHead is wrong!");
+			//};
+			//panic("hccaDoneHead is right!");
 			ohciRegs->hcInterruptStatus = HC_INT_WDH;
 			__sync_synchronize();
 			
