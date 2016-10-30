@@ -98,6 +98,7 @@ x86_64-glidix-gcc terminal.c font.c -o ../../mipdir/usr/bin/terminal -lddi -lgwm
 x86_64-glidix-gcc calc.c -o ../../mipdir/usr/bin/calc -lddi -lgwm || exit 1
 x86_64-glidix-gcc widget-test.c -o ../../mipdir/usr/bin/widget-test -lddi -lgwm || exit 1
 x86_64-glidix-gcc snake.c -o ../../mipdir/usr/bin/snake -lddi -lgwm || exit 1
+x86_64-glidix-gcc mystic.c -o ../../mipdir/usr/bin/mystic -lddi -lgwm || exit 1
 x86_64-glidix-gcc desktop-info.c -o ../../mipdir/usr/bin/desktop-info -lgwm || exit 1
 x86_64-glidix-gcc sysbar.c -o ../../mipdir/usr/libexec/sysbar -lddi -lgwm || exit 1
 x86_64-glidix-gcc gui-login.c -o ../../mipdir/usr/bin/gui-login -lddi -lgwm -lcrypt || exit 1

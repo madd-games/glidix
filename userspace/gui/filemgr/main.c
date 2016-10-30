@@ -467,6 +467,22 @@ int fmNewFile(void *param)
 	return 0;
 };
 
+int fmOpenTerminal(void *param)
+{
+	if (fork() == 0)
+	{
+		if (fork() == 0)
+		{
+			chdir(currentDir->path);
+			execl("/usr/bin/terminal", "terminal", NULL);
+		};
+		
+		exit(0);
+	};
+	
+	return 0;
+};
+
 int filemgrHandler(GWMEvent *ev, GWMWindow *win)
 {
 	DDISurface *canvas = gwmGetWindowCanvas(win);
@@ -531,6 +547,8 @@ int main(int argc, char *argv[])
 	menuEdit = gwmCreateMenu();
 	gwmMenuAddEntry(menuEdit, "New directory...", fmNewDir, NULL);
 	gwmMenuAddEntry(menuEdit, "New empty file...", fmNewFile, NULL);
+	gwmMenuAddSeparator(menuEdit);
+	gwmMenuAddEntry(menuEdit, "Open terminal", fmOpenTerminal, NULL);
 	
 	menubar = gwmCreateMenubar(winMain);
 	gwmMenubarAdd(menubar, "Edit", menuEdit);
