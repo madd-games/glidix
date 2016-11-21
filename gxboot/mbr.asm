@@ -40,6 +40,7 @@ mov es, ax
 mov si, 0x7C00
 mov di, 0x6000
 mov cx, 512
+cld
 rep movsb
 
 ; set CS

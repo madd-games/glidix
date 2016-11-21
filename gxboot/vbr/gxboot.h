@@ -29,6 +29,45 @@
 #ifndef GXBOOT_H
 #define GXBOOT_H
 
+typedef unsigned char			byte_t;
+typedef	unsigned short			word_t;
+typedef	unsigned int			dword_t;
+typedef	unsigned long long		qword_t;
+
+typedef struct
+{
+	byte_t				size;
+	byte_t				unused;
+	word_t				numSectors;
+	word_t				offset;
+	word_t				segment;
+	qword_t				lba;
+} DAP;
+
+typedef struct
+{
+	byte_t				sbMagic[8];
+	byte_t				sbMGSID[16];
+	qword_t				sbFormatTime;
+	qword_t				sbTotalBlocks;
+	qword_t				sbChecksum;
+	qword_t				sbUsedBlocks;
+	qword_t				sbFreeHead;
+	byte_t				sbPad[512-0x40];
+} Superblock;
+
+extern DAP dap;
+extern byte_t sectorBuffer[];
+
 void memset(void *buffer, unsigned char b, unsigned int size);
+void memcpy(void *dest, const void *src, unsigned int size);
+int  memcmp(const void *a, const void *b, unsigned int size);
+
+/**
+ * Call the BIOS to read a sector from disk. Implemented in entry.asm.
+ * Arguments taken from DAP, returned in sectorBuffer. Calls INT 0x18 if
+ * read failed.
+ */
+void biosRead();
 
 #endif

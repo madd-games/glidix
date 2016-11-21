@@ -28,8 +28,18 @@
 
 #include "gxboot.h"
 
+#define	GXBOOT_DEBUG
+
+#ifdef GXBOOT_DEBUG
+#	define	dtermput		termput
+#else
+#	define	dtermput(...)
+#endif
+
 int consoleX, consoleY;
 char *vidmem = (char*) 0xB8000;
+extern dword_t part_start;
+qword_t blockBase;			/* LBA of start of block table */
 
 void termput(const char *str)
 {
@@ -54,11 +64,46 @@ void termput(const char *str)
 	};
 };
 
+void readBlock(qword_t index, void *buffer)
+{
+	dap.lba = blockBase + index;
+	biosRead();
+	memcpy(buffer, sectorBuffer, 512);
+};
+
 void bmain()
 {
 	consoleX = 0;
 	consoleY = 0;
 	memset(vidmem, 0, 80*25*2);
 	
-	termput("Hello, world!\n");
+	dtermput("Validating superblock...\n");
+	blockBase = (qword_t) part_start + 0x1000;
+	dap.offset = (word_t) (dword_t) sectorBuffer;
+	dap.numSectors = 1;
+	
+	Superblock sb;
+	readBlock(0, &sb);
+	
+	if (memcmp(sb.sbMagic, "GLIDIXFS", 8) != 0)
+	{
+		termput("ERROR: Superblock invalid (no GLIDIXFS magic value)\n");
+		return;
+	};
+	
+	qword_t sum = 0;
+	qword_t *scan;
+	
+	for (scan=(qword_t*)&sb; scan<=&sb.sbChecksum; scan++)
+	{
+		sum += *scan;
+	};
+	
+	if (sum != 0)
+	{
+		termput("ERROR: Superblock invalid (bad checksum)\n");
+		return;
+	};
+	
+	dtermput("Superblock OK\n");
 };

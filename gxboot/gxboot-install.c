@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
 	
 	close(fd);
 	
-	if (pwrite(drive, vbrBuffer, vbrSize, 512 * mbr.parts[bootPart].startLBA) != vbrSize)
+	if (pwrite(drive, vbrBuffer, vbrSize, 512UL * (uint64_t) mbr.parts[bootPart].startLBA) != vbrSize)
 	{
 		fprintf(stderr, "%s: failed to write VBR: %s\n", argv[0], strerror(errno));
 		close(drive);

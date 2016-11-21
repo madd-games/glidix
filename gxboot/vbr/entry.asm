@@ -4,13 +4,15 @@ extern bmain
 global boot_disk
 global part_start
 global _start
+global biosRead
+global dap
+global sectorBuffer
 
 section .entry_text
 bits 16
 
 _start:
 cli
-xchg bx, bx
 
 ; figure out the size in sectors
 mov eax, [size]
@@ -74,6 +76,38 @@ part_start dd 0
 boot_failed:
 int 0x18
 
+_biosRead_rm:
+	; disable protected mode
+	mov eax, cr0
+	and eax, ~1
+	mov cr0, eax
+	
+	; go to real mode
+	jmp 0:_biosRead_switch
+
+_biosRead_switch:
+
+	; load real mode segments
+	xor ax, ax
+	mov ds, ax
+	mov es, ax
+	mov ss, ax
+	
+	; call the BIOS
+	mov ah, 0x42
+	mov dl, [boot_disk]
+	mov si, dap
+	int 0x13
+	jc boot_failed
+	
+	; enable protected mode again
+	mov eax, cr0
+	or eax, 1
+	mov cr0, eax
+	
+	; jump to the protected mode part
+	jmp 0x08:_biosRead_pm
+	
 bits 32
 GDT32:                               ; Global Descriptor Table (32-bit).
 	.Null: equ $ - GDT32
@@ -117,9 +151,42 @@ mov fs, ax
 mov gs, ax
 
 mov esp, 0x7C00
+cld
 call bmain
 
 crash_loop:
 cli
 hlt
 jmp crash_loop
+
+sectorBuffer:
+times 512 db 0
+
+biosRead:
+	; preserve registers
+	push ebp
+	push ebx
+	push esi
+	push edi
+	
+	; go to 16-bit protected mode
+	jmp 0x18:_biosRead_rm
+	
+_biosRead_pm:
+	; load protected mode segments
+	mov ax, 0x10
+	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
+	mov ss, ax
+	
+	; restore registers
+	pop edi
+	pop esi
+	pop ebx
+	pop ebp
+	
+	; return
+	cld
+	ret

@@ -33,3 +33,15 @@ void memset(void *buffer, unsigned char b, unsigned int size)
 	unsigned char *put = (unsigned char*) buffer;
 	while (size--) *put++ = b;
 };
+
+void memcpy(void *dest_, const void *src_, unsigned int size)
+{
+	char *dest = (char*) dest_;
+	char *src = (char*) src_;
+	while (size--) *dest++ = *src++;
+};
+
+int memcmp(const void *a, const void *b, unsigned int size)
+{
+	
+};
