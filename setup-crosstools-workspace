@@ -89,6 +89,6 @@ if [ "$create_links" = "yes" ]
 then
 	for name in $tools
 	do
-		echo >>Makefile "	rm -f \$(SYSROOT)/usr/bin/$name && ln -s \$(SYSROOT)/usr/bin/$name /usr/bin/$name"
+		echo >>Makefile "	rm -f /usr/bin/$name && ln -s \$(SYSROOT)/usr/bin/$name /usr/bin/$name"
 	done
 fi
