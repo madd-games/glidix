@@ -1,0 +1,37 @@
+>NAME
+
+_glidix_chxperm - change executable permissions of a file
+
+>SYNOPSIS
+
+	#include <sys/xperm.h>
+	
+	int _glidix_chxperm(const char *'path', xperm_t 'ixperm', xperm_t 'oxperm', xperm_t 'dxperm');
+
+>DESCRIPTION
+
+This function changes the executable permissions of the file identified by 'path'. The arguments 'ixperm', 'oxperm' and 'dxperm' specify the new inheritable, own, and delegatable permissions for the file, respectively. Passing the special value *XP_NCHG* for any argument cuases that set to not be modified; for example, if 'ixperm' is *XP_NCHG*, then the inheritable permission set remains unchanged.
+
+If a set is not *XP_NCHG*, then it is a bitwise-OR of one or more executable permissions (*XP_*\*). Additionaly, all permissions you give to the file msut be in the calling thread\'s delegatable set (but not necessarily in the own set). The calling thread must also have the *XP_CHXPERM* own permission.
+
+The inode named by 'path' must be a regular file.
+
+Upon success, the 'st_ctime' field of the file is updated. See [stat.2].
+
+>RETURN VALUE
+
+Upon success, this function returns 0. On error, it returns -1 and sets 'errno' to indicate the error.
+
+>ERRORS
+
+This function may set 'errno' to one of the following values:
+
+\* *ENOENT* - the file named by 'path' does not exist.
+\* *EACCES* - search permission was denied for a component of 'path'.
+\* *EPERM* - the calling thread lacks the *XP_CHXPERM* own permission; or it passed a permission in one of the three sets that is not in its own delegatable permission set (that is, it attempted to delegate a permission that it's not allowed to delegate).
+\* *EINVAL* - 'path' does not refer to a regular file.
+\* *EIO* - the underlying filesystem does not support this operation, or there was a problem reading/writing the underlying device.
+
+>SEE ALSO
+
+[xperm.6], [errno.6], [stat.2]

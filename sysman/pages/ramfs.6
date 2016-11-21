@@ -1,0 +1,21 @@
+>NAME
+
+ramfs - RAM filesystems
+
+>DESCRIPTION
+
+The Glidix kernel implements a special filesystem type called 'ramfs', or a RAM filesystem. It is possible to create multiple such filesystems, each with a distinct name, and mount each of them at multiple mountpoints. They are normal read/write filesystems, but all their content is stored in RAM; so it is erased whenever the system shuts down.
+
+A RAM filesystem is identified by a name, no longer than 63 characters, which begins with a dot ('.'). The [init.6] process creates the following RAM filesystems automatically:
+
+\* '.tmp' mounted under '/tmp' - used for temporary file storage.
+\* '.run' mounted under '/run' and '/var/run' - used for shared runtime resources such as service PIDs.
+
+A RAM filesystem is created automatically when a non-existent name is passed to [mount.1]; if an existing ramfs name is passed to [mount.1], then it is simply mounted at an additional mountpoint. The filesystem persists even after it was unmounted from all its mountpoints, and can still be mounted again (until a shutdown).
+
+>EXAMPLE
+
+Create, or mount, a RAM filesystem named '.my_temp' at '/mnt':
+
+	mount -t ramfs .my_temp /mnt
+

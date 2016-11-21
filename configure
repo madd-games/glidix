@@ -1,136 +1,217 @@
-#! /usr/bin/python
-#	Copyright (c) 2014-2016, Madd Games.
-#	All rights reserved.
-#	
-#	Redistribution and use in source and binary forms, with or without
-#	modification, are permitted provided that the following conditions are met:
-#	
-#	* Redistributions of source code must retain the above copyright notice, this
-#	  list of conditions and the following disclaimer.
-#	
-#	* Redistributions in binary form must reproduce the above copyright notice,
-#	  this list of conditions and the following disclaimer in the documentation
-#	  and/or other materials provided with the distribution.
-#	
-#	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-#	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-#	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-#	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-#	FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-#	DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-#	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-#	CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-#	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-#	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#! /bin/sh
+export GLIDIX_VERSION="0.1"
 
-import sys, os
-import subprocess
-import json
+sysroot="/"
+srcdir="`dirname $0`"
+build="`gcc -dumpmachine`"
 
-sysroot = ""
-host = ""
+if [ "$srcdir" = "." ]
+then
+	echo >&2 "$0: error: cannot build in the source directory"
+fi
 
-for param in sys.argv[1:]:
-	if param.startswith("--sysroot="):
-		sysroot = param[len("--sysroot="):]
-	elif param.startswith("--host="):
-		host = param[len("--host="):]
-	elif param.startswith("--exec-prefix="):
-		exec_prefix = param[len("--exec-prefix="):]
+echo >config.log "configure command: $0 $@"
 
-compiler = "gcc"
-ar = "ar"
-ranlib = "ranlib"
-ld = "ld"
-modcc = "modcc"
-modld = "modld"
-if host != "":
-	compiler = host + "-gcc"
-	ar = host + "-ar"
-	ranlib = host + "-ranlib"
-	ld = host + "-ld"
-	modcc = host + "-modcc"
-	modld = host + "-modld"
+mkdir -p modconf
 
-if (host != "") and (sysroot == ""):
-	sys.stderr.write("%s: error: you must specify a --sysroot when cross-compiling the kernel\n" % sys.argv[0])
-	sys.exit(1)
+moddirs="`ls -d $srcdir/modules/*`"
+MODULES=""
 
-def assertCommand(cmd, msg = None):
-	if msg is None:
-		msg = "checking for %s... " % cmd
-	sys.stderr.write(msg)
-	sys.stderr.flush()
+for modname in $moddirs
+do
+	if [ "`basename $modname`" != "subconf.sh" ]
+	then
+		MODULES="$MODULES `basename $modname`"
+	fi
+done
 
-	output = ""
-	try:
-		output = subprocess.check_output("command -v %s" % cmd, shell=True)
-	except:
-		pass
+# enable all modules by default
+for modname in $MODULES
+do
+	echo >modconf/$modname "enable"
+done
 
-	if output == "":
-		sys.stderr.write("\n%s: command not found: %s\n" % (sys.argv[0], cmd))
-		sys.exit(1)
-	else:
-		sys.stderr.write(output)
-
-# Make sure all the tools we need are here
-assertCommand(compiler)
-assertCommand(ar)
-assertCommand(ranlib)
-assertCommand(ld)
-assertCommand("nasm")
-
-sys.stderr.write("checking build system type... ")
-sys.stderr.flush()
-systype = subprocess.check_output(compiler + " -dumpmachine", shell=True)[:-1]	# discard the newline at the end
-sys.stderr.write(systype+"\n")
-if systype != "x86_64-glidix":
-	sys.stderr.write("%s: error: the compiler %s does not target x86_64-glidix\n" % (sys.argv[0], compiler))
-	sys.exit(1)
-
-config = {
-	"compiler":	compiler,
-	"sysroot":	sysroot,
-	"ar":		ar,
-	"ranlib":	ranlib,
-	"ld":		ld
+assert_module()
+{
+	for modname in $MODULES
+	do
+		if [ "$modname" = "$1" ]
+		then
+			return
+		fi
+	done
+	
+	echo >&2 "$0: unknown module: $1"
+	exit 1
 }
 
-sys.stderr.write("creating module tools... ")
-sys.stderr.flush()
-f = open("utils/modcc", "wb")
-f.write("#! /bin/sh\n")
-f.write("# USAGE: modcc <input-file> <output-file>\n")
-f.write("%s -c $1 -o $2 -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -I %s/kernel-include -Wall -Werror\n" % (compiler, sysroot))
-f.close()
+assert_mod_setting()
+{
+	if [ "$1" = "initmod" ]
+	then
+		return
+	fi
+	
+	if [ "$1" = "enable" ]
+	then
+		return
+	fi
+	
+	if [ "$1" = "disable" ]
+	then
+		return
+	fi
+	
+	echo >&2 "$0: invalid module setting: $1"
+	exit 1
+}
 
-f = open("utils/modld", "wb")
-f.write("#! /bin/sh\n")
-f.write("# USAGE: modld <output-file> <object-files...>\n")
-f.write("%s -r -T %s/lib/module.ld %s/lib/module_start.o -o $@ %s/lib/module_end.o\n" % (ld, sysroot, sysroot, sysroot))
-f.close()
+maybe_gxsetup=""
+maybe_binutils=""
+maybe_gxboot=""
+binutils_version="2.27"
 
-os.system("chmod +x utils/modcc")
-os.system("chmod +x utils/modld")
-sys.stderr.write("OK\n")
+for i in "$@"
+do
+case $i in
+	--help)
+		cat >&2 "$srcdir/configure.help"
+		exit 1
+		;;
+	
+	--sysroot=*)
+		sysroot=`echo $i | sed 's/[-a-zA-Z0-9]*=//'`
+		;;
+	
+	--module-*=*)
+		modpart=`echo $i | sed 's/--module-//'`
+		setting=`echo $modpart | sed 's/[-a-zA-Z0-9]*=//'`
+		modname=`echo $modpart | cut -f1 -d"="`
+		assert_module $modname
+		assert_mod_setting $setting
+		echo >modconf/$modname $setting
+		;;
+	
+	--enable-gxsetup)
+		maybe_gxsetup="gxsetup"
+		;;
+	
+	--disable--gxsetup)
+		maybe_gxsetup=""
+		;;
+		
+	--enable-binutils)
+		maybe_binutils="binutils"
+		;;
+	
+	--disable-binutils)
+		maybe_binutils=""
+		;;
+	
+	--binutils-version=*)
+		binutils_version=`echo $i | sed 's/[-a-zA-Z0-9]*=//'`
+		;;
+	
+	--enable-gxboot)
+		maybe_gxboot="gxboot"
+		;;
+	
+	--disable-gxboot)
+		maybe_gxboot=""
+		;;
+	
+	*)
+		echo >&2 "$0: unrecognised command-line option '$i'"
+		echo >&2 "run '$0 --help' for more information"
+esac
+done
 
-# Write the configuration to config.json
-f = open("config.json", "wb")
-json.dump(config, f)
-f.close()
+# targets
+# NOTE: Those need to be in order; a target must come AFTER all the targets that it depends on.
+TARGETS="kernel build-tools libc shutils init modules mbload sh $maybe_gxsetup $maybe_binutils sysman $maybe_gxboot"
 
-# Create a Makefile
-f = open("Makefile", "wb")
-f.write(".PHONY: all install install-dev clean distclean\n")
-f.write("all:\n")
-f.write("\tpython build.py\n")
-f.write("install: install-dev\n")
-f.write("\tsh install.sh %s\n" % sysroot)
-f.write("install-dev:\n")
-f.write("\tsh install-dev.sh %s %s %s\n" % (sysroot, modcc, modld))
-f.write("clean:\n")
-f.write("\trm -rf build isodir build.mk config.json Makefile\n")
-f.write("distclean:\n")
-f.write("\trm -rf build isodir build.mk config.json Makefile initrd out\n")
-f.close()
+# determine build parameters
+export GLIDIX_SYSROOT="$sysroot"
+export BUILD_GCC="$build-gcc"
+export HOST_GCC="x86_64-glidix-gcc"
+export HOST_AS="x86_64-glidix-as"
+export GLIDIX_BINUTILS_VERSION="$binutils_version"
+
+# sanity checks
+test_command()
+{
+	printf >&2 "checking if %s exists... " $1
+	command -v $1 >>config.log 2>&1 || {
+		echo >&2 "not found"
+		echo >&2 "$0: error: $1 not found"
+		exit 1
+	}
+	
+	echo >&2 "OK"
+}
+
+test_command $BUILD_GCC
+test_command $HOST_GCC
+test_command $HOST_AS
+test_command nasm
+test_command wget
+test_command tar
+
+for target in $TARGETS
+do
+	echo >&2 "configuring $target..."
+	mkdir -p $target
+	cd $target
+	../$srcdir/$target/subconf.sh || exit 1
+	cd ..
+done
+
+echo "generating Makefile..."
+echo >Makefile ".PHONY: all install clean mip $TARGETS"
+echo >>Makefile "all: $TARGETS"
+
+echo >>Makefile "install: install-libc install-kernel install-modules install-shutils install-mbload install-sh"
+
+for target in $TARGETS
+do
+	echo >>Makefile "$target: build-tools"
+	echo >>Makefile "	@cd $target && make"
+done
+
+for target in $TARGETS
+do
+	if [ "$target" != "kernel" ]
+	then
+		echo >>Makefile ".PHONY: install-$target"
+		echo >>Makefile "install-$target:"
+		echo >>Makefile "	cd $target && DESTDIR=$GLIDIX_SYSROOT make install"
+	fi
+done
+
+echo >>Makefile "clean:"
+for target in $TARGETS
+do
+	echo >>Makefile "	rm -rf $target"
+done
+
+echo >>Makefile "	rm Makefile config.log"
+
+echo >>Makefile "install-kernel:"
+echo >>Makefile "	@mkdir -p $GLIDIX_SYSROOT/boot"
+echo >>Makefile "	sh $srcdir/initrd.sh $GLIDIX_SYSROOT/boot/vmglidix.tar"
+
+echo >>Makefile "PKGDIR ?= pkg"
+if [ "$maybe_binutils" = "binutils" ]
+then
+	echo >>Makefile "MIP_BINUTILS := yes"
+else
+	echo >>Makefile "MIP_BINUTILS := no"
+fi
+
+echo >>Makefile "mip:"
+echo >>Makefile "	export MIP_BINUTILS=\$(MIP_BINUTILS) && sh $srcdir/mip.sh \$(PKGDIR)"
+
+echo "*** CONFIGURATION SUMMARY ***"
+echo "Build environment:	$build"
+echo "System root:		$sysroot"
+

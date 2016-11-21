@@ -1,0 +1,25 @@
+>NAME
+
+free - free a block of dynamically allocated memory
+
+>SYNOPSIS
+
+	#include <stdlib.h>
+	
+	void free(void *'block');
+
+>DESCRIPTION
+
+This function returns the block identified by 'block' to the heap, such that it may be reused by later calls to [malloc.2] or related functions. The 'block' must either be *NULL* (in which case nothing happens), or a pointer previously returned by [malloc.2] or related functions. Attempting to free an invalid pointer results in undefined behavior. Furthermore, accessing 'block' after it has been freed results in undefined behavior too.
+
+>RETURN VALUE
+
+This function does not return anything.
+
+>ERRORS
+
+This function does not return errors, but it may abort if it detects heap corruption, or an attempt to free an invalid pointer.
+
+>SEE ALSO
+
+[malloc.2], [calloc.2], [realloc.2]

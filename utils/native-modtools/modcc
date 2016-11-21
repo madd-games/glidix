@@ -1,3 +1,0 @@
-#! /bin/sh
-# USAGE: modcc <input-file> <output-file>
-gcc -c $1 -o $2 -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -fno-omit-frame-pointer -I /usr/kernel-include -Wall -Werror

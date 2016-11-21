@@ -1,0 +1,23 @@
+>NAME
+
+malloc - allocate dynamic memory
+
+>SYNOPSIS
+
+	#include <stdlib.h>
+	
+	void* malloc(size_t 'size');
+
+>DESCRIPTION
+
+This function allocates a block of memory on the heap, of at least 'size' bytes, and returns a pointer to it. If the memory ran out, returns *NULL*. The block of data can be safely accessed until the calling process terminates, or [free.2] or [realloc.2] are called on it.
+
+If more than 'size' bytes past the pointer are accessed, the result is undefined. Modifying data out of range may lead to heap corruption, which results in unpredictable behaviour or crashes and/or aborts if the library detects the corruption.
+
+>RETURN VALUE
+
+On success, returns a pointer to the allocated block. On error, returns *NULL*.
+
+>SEE ALSO
+
+[calloc.2], [realloc.2], [free.2]

@@ -1,8 +1,0 @@
-%DEPFILE%: %CFILE%
-	set -e; rm -f $@; \
-	$(TARGET_CC) -M $(CFLAGS) $< > $@.$$$$; \
-	sed 's,%REPLACE%[ :]*,%OBJFILE% $@ : ,g' < $@.$$$$ > $@; \
-	rm -f $@.$$$$
-
-%OBJFILE%: %CFILE%
-	$(TARGET_CC) -c $< -o $@ $(CFLAGS)
