@@ -41,7 +41,20 @@ void memcpy(void *dest_, const void *src_, unsigned int size)
 	while (size--) *dest++ = *src++;
 };
 
-int memcmp(const void *a, const void *b, unsigned int size)
+int memcmp(const void *a_, const void *b_, unsigned int size)
 {
+	const char *a = (const char*) a_;
+	const char *b = (const char*) b_;
+	while (size--) if (*a++ != *b++) return 1;
+	return 0;
+};
+
+int strcmp(const char *a, const char *b)
+{
+	while ((*a != 0) && (*b != 0))
+	{
+		if ((*a++) != (*b++)) return 1;
+	};
 	
+	return *a - *b;
 };

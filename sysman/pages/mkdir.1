@@ -1,0 +1,23 @@
+>NAME
+
+mkdir - make directory
+
+>SYNOPSIS
+
+	mkdir ['options']... 'dirnames'...
+
+>DESCRIPTION
+
+This command creates a directory, or directories, named by 'dirnames'. The defualt behavior (without options) is to fail if one of the directories already exist, or if the parent of one of the directories does not exist. By default, the access mode of a new directory is '755' (owner can read, write and search, everyone else can read and search but not write). 'mkdir' also accepts the following command-line options:
+
+\* *-v*, *--verbose* - tells the program to print a message to standard output for every directory that is created. By default, 'mkdir' only prints error messages (to standard error) when those occur.
+
+\* *-p*, *--parents* - silently ignores directories which already exist, and creates any parent directories that do not yet exist.
+
+\* *-m* 'mode', *--mode=*'mode' - specifies an access mode setting (in octal) for all new directories, overriding the default value of '755'.
+
+\* *--* - all arguments following this one are treated as directory names to create, not as options; even if they start with a '-'.
+
+>SEE ALSO
+
+[mkdir.2], [access_mode.6]

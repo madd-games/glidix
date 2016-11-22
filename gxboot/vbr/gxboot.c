@@ -64,20 +64,13 @@ void termput(const char *str)
 	};
 };
 
-void readBlock(qword_t index, void *buffer)
-{
-	dap.lba = blockBase + index;
-	biosRead();
-	memcpy(buffer, sectorBuffer, 512);
-};
-
 void bmain()
 {
 	consoleX = 0;
 	consoleY = 0;
 	memset(vidmem, 0, 80*25*2);
 	
-	dtermput("Validating superblock...\n");
+	dtermput("Validating superblock... ");
 	blockBase = (qword_t) part_start + 0x1000;
 	dap.offset = (word_t) (dword_t) sectorBuffer;
 	dap.numSectors = 1;
@@ -87,6 +80,7 @@ void bmain()
 	
 	if (memcmp(sb.sbMagic, "GLIDIXFS", 8) != 0)
 	{
+		dtermput("FAILED\n");
 		termput("ERROR: Superblock invalid (no GLIDIXFS magic value)\n");
 		return;
 	};
@@ -101,9 +95,137 @@ void bmain()
 	
 	if (sum != 0)
 	{
+		dtermput("FAILED\n");
 		termput("ERROR: Superblock invalid (bad checksum)\n");
 		return;
 	};
 	
-	dtermput("Superblock OK\n");
+	dtermput("OK\n");
+	
+	dtermput("Finding /boot/vmglidix.tar... ");
+	FileHandle initrd;
+	if (openFile(&initrd, "/boot/vmglidix.tar") != 0)
+	{
+		dtermput("FAILED\n");
+		termput("ERROR: Cannot find /boot/vmglidix.tar\n");
+		return;
+	};
+	
+	dtermput("OK\n");
+	
+	dtermput("Looking for kernel.so... ");
+	qword_t pos = 0;
+	qword_t size;
+	int found = 0;
+	
+	while (pos < initrd.inode.inoSize)
+	{
+		TARFileHeader header;
+		
+		readFile(&initrd, &header, sizeof(TARFileHeader), pos);
+		
+		size = 0;
+		const char *scan;
+		for (scan=header.size; *scan!=0; scan++)
+		{
+			size = (size << 3) + ((*scan)-'0');
+		};
+		
+		if (strcmp(header.filename, "kernel.so") == 0)
+		{
+			found = 1;
+			break;
+		};
+		
+		size = (size + 511) & ~511;
+		pos += 512 * (size + 1);
+	};
+	
+	pos += 512;
+	if (!found)
+	{
+		dtermput("FAILED\n");
+		termput("ERROR: Cannot find kernel.so in /boot/vmglidix.tar!\n");
+		return;
+	};
+	
+	dtermput("OK\n");
+	
+	Elf64_Ehdr header;
+	readFile(&initrd, &header, sizeof(Elf64_Ehdr), pos);
+	
+	dtermput("Validating ELF64 header... ");
+	if (memcmp(header.e_ident, "\x7f" "ELF", 4) != 0)
+	{
+		dtermput("FAILED\n");
+		termput("ERROR: Invalid ELF64 signature in kernel.so\n");
+		return;
+	};
+
+	if (header.e_ident[EI_CLASS] != ELFCLASS64)
+	{
+		dtermput("FAILED\n");
+		termput("ERROR: kernel.so is not an ELF64 file");
+		return;
+	};
+
+	if (header.e_ident[EI_DATA] != ELFDATA2LSB)
+	{
+		dtermput("FAILED\n");
+		termput("ERROR: kernel.so is not little endian");
+		return;
+	};
+
+	if (header.e_ident[EI_VERSION] != 1)
+	{
+		dtermput("FAILED\n");
+		termput("kernel.so is not ELF64 version 1");
+		return;
+	};
+
+	if (header.e_type != ET_EXEC)
+	{
+		dtermput("FAILED\n");
+		termput("ERROR: kernel.so is not an executable");
+		return;
+	};
+
+	if (header.e_phentsize != sizeof(Elf64_Phdr))
+	{
+		dtermput("FAILED\n");
+		termput("ERROR: kernel.so program header size unexpected");
+		return;
+	};
+	
+	dtermput("OK\n");
+	
+	dtermput("Loading initrd to memory... ");
+	Elf64_Phdr phead;
+	void *initrdStart = NULL;
+	
+	int i;
+	for (i=0; i<header.e_phnum; i++)
+	{
+		readFile(&initrd, &phead, sizeof(Elf64_Phdr), pos + header.e_phoff + i * sizeof(Elf64_Phdr));
+		
+		if (phead.p_type == PT_GLIDIX_INITRD)
+		{
+			initrdStart = (void*) (dword_t) phead.p_paddr;
+			break;
+		};
+	};
+	
+	if (initrdStart == NULL)
+	{
+		dtermput("FAILED\n");
+		termput("ERROR: no initrd segment in kernel.so");
+		return;
+	};
+	
+	readFile(&initrd, initrdStart, size, 0);
+	dtermput("OK\n");
+	
+	char *elfPtr = (char*) initrdStart + pos;
+	Elf64_Ehdr *elfHeader = (Elf64_Ehdr*) elfPtr;
+	
 };

@@ -1,0 +1,39 @@
+>NAME
+
+mkdir - make directory
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <sys/stat.h>
+	
+	int mkdir(const char *'path', mode_t 'mode');
+
+>DESCRIPTION
+
+This function creates a new directory named 'path', with access mode 'mode'. A typical value for the access mode is '0755'. The named directory must not yet exist, and all its parents must already exist.
+
+The new directory\'s owner is set to the effective user ID of the calling process, and its associated group is set to the effective group ID of the calling process. The new directory is initially empty.
+
+The new directory\'s 'st_btime', 'st_ctime', 'st_mtime' and 'st_atime' fields are initialized to the current time. Furthermore, the 'st_mtime' field of the parent directory shall be set to the current time. See [stat.2] for more information.
+
+>RETURN VALUE
+
+Returns 0 on success, or -1 on error (and in this case, no directory is created).
+
+>ERRORS
+
+On error, this functions returns -1, does not create a directory, and sets [errno.6] to one of the following values:
+
+\* *EACCES* - access to one of the parent directories was denied.
+\* *EEXIST* - an object named 'path' already exists.
+\* *ELOOP* - symbolic link depth too high.
+\* *ENAMETOOLONG* - the path name is too long.
+\* *ENOENT* - one of the parent directories does not exist.
+\* *ENOSPC* - target filesystem ran out of storage space.
+\* *ENOTDIR* - a component of 'path' is not a directory.
+\* *EROFS* - the parent directory is located on a read-only filesystem.
+
+>SEE ALSO
+
+[mkdir.1], [stat.2], [errno.6], [access_mode.6]
