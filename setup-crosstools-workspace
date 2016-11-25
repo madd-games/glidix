@@ -76,3 +76,8 @@ echo >>install.sh "SRCDIR=$srcdir"
 echo >>install.sh "SYSROOT=$sysroot"
 cat >>install.sh $srcdir/crosstools-install
 chmod +x install.sh
+
+echo "Generating make-patches script..."
+echo >make-patches.sh "#! /bin/sh"
+echo >>make-patches.sh "diff -urN binutils-$binutils_version glidix-binutils > binutils-$binutils_version.patch"
+echo >>make-patches.sh "diff -urN gcc-$gcc_version glidix-gcc binutils-$binutils_version.patch"
