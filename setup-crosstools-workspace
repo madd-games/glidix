@@ -3,8 +3,6 @@ srcdir="`dirname $0`"
 binutils_version="2.27"
 gcc_version="6.2.0"
 sysroot=""
-tools="x86_64-glidix-addr2line x86_64-glidix-ar x86_64-glidix-as x86_64-glidix-c++ x86_64-glidix-c++filt x86_64-glidix-cpp x86_64-glidix-elfedit x86_64-glidix-g++ x86_64-glidix-gcc x86_64-glidix-gcc-4.9.0 x86_64-glidix-gcc-6.2.0 x86_64-glidix-gcc-ar x86_64-glidix-gcc-nm x86_64-glidix-gcc-ranlib x86_64-glidix-gcov x86_64-glidix-gcov-tool x86_64-glidix-gprof x86_64-glidix-ld x86_64-glidix-ld.bfd x86_64-glidix-nm x86_64-glidix-objcopy x86_64-glidix-objdump x86_64-glidix-ranlib x86_64-glidix-readelf x86_64-glidix-size x86_64-glidix-strings x86_64-glidix-strip"
-create_links="no"
 
 for i in "$@"
 do
@@ -19,14 +17,6 @@ case $i in
 	
 	--gcc-version=*)
 		gcc_version=`echo $i | sed 's/[-a-zA-Z0-9]*=//'`
-		;;
-	
-	--enable-links)
-		create_links="yes"
-		;;
-	
-	--disable-links)
-		create_links="no"
 		;;
 	
 	*)
@@ -63,7 +53,7 @@ tar -xzf binutils-$binutils_version.tar.gz || exit 1
 
 echo "Downloading GCC..."
 rm -f gcc-$gcc_version.tar.gz
-wget ftp://ftp.mirrorservice.org/sites/sourceware.org/pub/gcc/releases/gcc-$gcc_version/gcc-$gcc_version.tar.gz || exit 1
+wget http://nl.mirror.babylon.network/gcc/releases/gcc-$gcc_version/gcc-$gcc_version.tar.gz || exit 1
 tar -xzf gcc-$gcc_version.tar.gz || exit 1
 mv gcc-$gcc_version glidix-gcc || exit 1
 tar -xzf gcc-$gcc_version.tar.gz || exit 1
@@ -78,17 +68,11 @@ cd glidix-gcc
 patch -p1 < ../$srcdir/gcc/gcc-$gcc_version.patch || exit 1
 cd ..
 
-echo "Generating a Makefile..."
-echo >Makefile "SYSROOT := $sysroot"
-echo >>Makefile "SRCDIR := $srcdir"
-echo >>Makefile "BINUTILS_VERSION := $binutils_version"
-echo >>Makefile "GCC_VERSION := $gcc_version"
-cat >>Makefile $srcdir/crosstools.mk
-
-if [ "$create_links" = "yes" ]
-then
-	for name in $tools
-	do
-		echo >>Makefile "	rm -f /usr/bin/$name && ln -s \$(SYSROOT)/usr/bin/$name /usr/bin/$name"
-	done
-fi
+echo "Generating install script..."
+echo >install.sh "#! /bin/sh"
+echo >>install.sh "GCC_VERSION=$gcc_version"
+echo >>install.sh "BINUTILS_VERSION=$binutils_version"
+echo >>install.sh "SRCDIR=$srcdir"
+echo >>install.sh "SYSROOT=$sysroot"
+cat >>install.sh $srcdir/crosstools-install
+chmod +x install.sh
