@@ -44,4 +44,9 @@ void partEditor();
  */
 void partFlush();
 
+/**
+ * Unmount all the filesystems we mouted before.
+ */
+void unmountParts();
+
 #endif

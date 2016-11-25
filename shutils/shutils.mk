@@ -14,4 +14,4 @@ install:
 	@mkdir -p $(DESTDIR)/usr/bin
 	@mkdir -p $(DESTDIR)/usr/libexec
 	export DESTDIR=$(DESTDIR) && sh $(SRCDIR)/install.sh $(OUT)
-	cp $(SRCDIR)/shutils-setup.sh $(DESTDIR)/usr/libexec/shutils.setup.sh
+	cp $(SRCDIR)/shutils-setup.sh $(DESTDIR)/usr/libexec/shutils-setup.sh

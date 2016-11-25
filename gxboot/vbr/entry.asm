@@ -7,6 +7,8 @@ global _start
 global biosRead
 global dap
 global sectorBuffer
+global biosGetMap
+global go64
 
 section .entry_text
 bits 16
@@ -86,7 +88,6 @@ _biosRead_rm:
 	jmp 0:_biosRead_switch
 
 _biosRead_switch:
-
 	; load real mode segments
 	xor ax, ax
 	mov ds, ax
@@ -94,11 +95,13 @@ _biosRead_switch:
 	mov ss, ax
 	
 	; call the BIOS
+	sti
 	mov ah, 0x42
 	mov dl, [boot_disk]
 	mov si, dap
 	int 0x13
 	jc boot_failed
+	cli
 	
 	; enable protected mode again
 	mov eax, cr0
@@ -107,7 +110,56 @@ _biosRead_switch:
 	
 	; jump to the protected mode part
 	jmp 0x08:_biosRead_pm
+
+_biosGetMap_rm:
+	; disable protected mode
+	mov eax, cr0
+	and eax, ~1
+	mov cr0, eax
 	
+	; go to real mode
+	jmp 0:_biosGetMap_switch
+
+_biosGetMap_switch:
+	; load real mode segments
+	xor ax, ax
+	mov ds, ax
+	mov es, ax
+	mov ss, ax
+	
+	; preserve destination, ok pointer
+	push dx
+	
+	; call the BIOS
+	sti
+	mov di, mmapBuffer
+	mov edx, 0x534D4150
+	mov eax, 0xE820
+	mov ecx, 24
+	int 0x15
+	cli
+	
+	; if carry flag is set, we change "ok" to 0 and return whatever,
+	; otherwise just normally return to protected mode
+	pop di
+	jnc .no_carry
+	xor eax, eax
+	mov [di], eax
+	
+.no_carry:
+	mov eax, ebx
+	
+	; enable protected mode again
+	mov ecx, cr0
+	or ecx, 1
+	mov cr0, ecx
+	
+	; jump back to the protected mode part
+	jmp 0x08:_biosGetMap_pm
+
+mmapBuffer:
+times 24 db 0
+
 bits 32
 GDT32:                               ; Global Descriptor Table (32-bit).
 	.Null: equ $ - GDT32
@@ -137,6 +189,20 @@ GDT32:                               ; Global Descriptor Table (32-bit).
 	db 0                         ; Base (middle)
 	db 10011000b                 ; Access.
 	db 00001111b                 ; Granularity.
+	db 0                         ; Base (high).
+	.Code64: equ $ - GDT32         ; The code descriptor.
+	dw 0                         ; Limit (low).
+	dw 0                         ; Base (low).
+	db 0                         ; Base (middle)
+	db 10011000b                 ; Access.
+	db 00100000b                 ; Granularity.
+	db 0                         ; Base (high).
+	.Data64: equ $ - GDT32         ; The data descriptor.
+	dw 0                         ; Limit (low).
+	dw 0                         ; Base (low).
+	db 0                         ; Base (middle)
+	db 10010000b                 ; Access.
+	db 00000000b                 ; Granularity.
 	db 0                         ; Base (high).
 	.Pointer:                    ; The GDT-pointer.
 	dw $ - GDT32 - 1             ; Limit.
@@ -190,3 +256,75 @@ _biosRead_pm:
 	; return
 	cld
 	ret
+	
+biosGetMap:
+	push ebp
+	mov ebp, esp
+	push ebx
+	push esi
+	push edi
+	
+	mov ebx, [ebp+8]		; index into EBX
+	mov esi, [ebp+12]		; destination into ESI
+	mov edx, [ebp+16]		; ok pointer into EDX
+	push esi
+	
+	; go to 16-bit protected mode
+	jmp 0x18:_biosGetMap_rm
+
+_biosGetMap_pm:
+	; restore 32-bit segments
+	mov bx, 0x10
+	mov ds, bx
+	mov ss, bx
+	mov es, bx
+	mov fs, bx
+	mov gs, bx
+	
+	pop edi
+	mov esi, mmapBuffer
+	mov ecx, 20
+	rep movsb
+	
+	pop edi
+	pop esi
+	pop ebx
+	pop ebp
+	cld
+	ret
+
+go64:
+	; edit segment selection 0x08 to be 64-bit
+	mov esi, GDT32 + 0x20
+	mov edi, GDT32 + 0x08
+	mov ecx, 8
+	rep movsb
+	
+	mov esi, [esp+4]
+	
+	; load the PML4
+	mov eax, [esi+0x18]
+	mov cr3, eax
+
+	; enable PAE
+	mov eax, cr4
+	or eax, 1 << 5
+	mov cr4, eax
+
+	; enable long mode
+	mov ecx, 0xC0000080
+	rdmsr
+	or eax, 1 << 8
+	wrmsr
+
+	; enable paging and write-protect
+	mov eax, cr0
+	or eax, 1 << 31
+	or eax, 1 << 16
+	mov cr0, eax
+	
+	; go to 64-bit mode
+	jmp 0x08:_entry64
+
+_entry64:
+incbin "stub64.bin"

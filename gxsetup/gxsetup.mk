@@ -5,7 +5,7 @@ CFLAGS := -Wall -Werror
 
 gxsetup: $(OBJ)
 	@mkdir -p out
-	$(HOST_GCC) -o $@ $^
+	$(HOST_GCC) -o $@ $^ -lcrypt
 
 -include $(DEP)
 

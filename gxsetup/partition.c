@@ -26,6 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <sys/glidix.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <stdio.h>
@@ -34,10 +35,13 @@
 #include <string.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "render.h"
 #include "msgbox.h"
 #include "progress.h"
+
+#define	NUM_SETUP_OPS			5
 
 enum
 {
@@ -86,8 +90,42 @@ typedef struct
 	uint16_t sig;
 } __attribute__ ((packed)) MBR;
 
+typedef struct
+{
+	char mntpoint[256];
+	char type[256];
+	char device[256];
+} FSTabEntry;
+
 Drive *firstDrive = NULL;
 static int startX, startY;
+
+static FSTabEntry *fstab = NULL;
+static size_t fsnum = 0;
+
+static const char *startupScript = "\
+# /etc/init/startup.sh\n\
+# The startup script, responsible for starting up the whole system.\n\
+# See startup(3) for more info.\n\
+echo \"Mounting all filesystems...\"\n\
+mount -a\n\
+echo \"Starting level 1 services...\"\n\
+service state 1\n\
+echo \"Loading kernel modules...\n\
+ldmods\n\
+echo \"Starting level 2 services...\"\n\
+service state 2\n\
+echo \"Starting login manager...\"\n\
+logmgr\n\
+";
+
+static const char *loginScript = "\
+# /etc/init/login.sh\n\
+# The login script, invoked when a user logs in.\n\
+# See login(3) for more info.\n\
+$SHELL\n\
+echo \"logout\"\n\
+";
 
 Partition *splitArea(Partition *area, size_t offMB, size_t sizeMB)
 {
@@ -947,6 +985,12 @@ void formatDrive(const char *path)
 	}
 	else if (pid == 0)
 	{
+		close(0);
+		close(1);
+		close(2);
+		open("/dev/null", O_RDWR);
+		dup(0);
+		dup(1);
 		execl("/usr/bin/mkgxfs", "mkgxfs", path, NULL);
 		exit(1);
 	}
@@ -961,6 +1005,26 @@ void formatDrive(const char *path)
 			msgbox("ERROR", "mkgxfs failed!");
 			return;
 		};
+	};
+};
+
+static void makeMountPointDirs(const char *mntpoint)
+{
+	char dirname[256];
+	strcpy(dirname, "/mnt/");
+	char *put = &dirname[4];
+	
+	mntpoint = &mntpoint[4];
+	
+	while (*mntpoint != 0)
+	{
+		do
+		{
+			*put++ = *mntpoint++;
+		} while ((*mntpoint != 0) && (*mntpoint != '/'));
+		
+		*put = 0;
+		mkdir(dirname, 0755);
 	};
 };
 
@@ -1054,5 +1118,253 @@ void partFlush()
 		};
 	};
 	
-	msgbox("COMPLETE", "All partitioning and formatting done.");
+	// sort the partitions into a list of mountpoints (fstab) sorted by ascending mountpoint
+	// path length; since this is the order we'll have to mount them in.
+	while (1)
+	{
+		Partition *shortestPart = NULL;
+		char shortestMountPoint[256];
+		char deviceName[256];
+		
+		for (drive=firstDrive; drive!=NULL; drive=drive->next)
+		{
+			int partIndex = 0;
+			Partition *part;
+			
+			for (part=drive->parts; part!=NULL; part=part->next)
+			{
+				if (part->type == PART_TYPE_GXFS)
+				{
+					if (part->mntpoint[0] != 0)
+					{
+						int thisOne = 0;
+						
+						if (shortestPart == NULL)
+						{
+							thisOne = 1;
+						}
+						else
+						{
+							if (strlen(part->mntpoint) < strlen(shortestMountPoint))
+							{
+								thisOne = 1;
+							};
+						};
+						
+						if (thisOne)
+						{
+							shortestPart = part;
+							strcpy(shortestMountPoint, part->mntpoint);
+							sprintf(deviceName, "/dev/%s%d", drive->name, partIndex);
+						};
+					};
+				};
+				
+				partIndex++;
+			};
+		};
+		
+		if (shortestPart == NULL)
+		{
+			break;
+		};
+		
+		shortestPart->mntpoint[0] = 0;
+		
+		size_t fstabIndex = fsnum++;
+		fstab = (FSTabEntry*) realloc(fstab, sizeof(FSTabEntry)*fsnum);
+		sprintf(fstab[fstabIndex].mntpoint, "/mnt%s", shortestMountPoint);
+		strcpy(fstab[fstabIndex].type, "gxfs");
+		strcpy(fstab[fstabIndex].device, deviceName);
+		
+		char *mntpoint = fstab[fstabIndex].mntpoint;
+		if (mntpoint[strlen(mntpoint)-1] != '/')
+		{
+			strcat(mntpoint, "/");
+		};
+	};
+	
+	// install the bootloader
+	drawProgress("SETUP", "Installing bootloader...", 0, NUM_SETUP_OPS);
+	size_t idx;
+	char bootdev[256];
+	for (idx=0; idx<fsnum; idx++)
+	{
+		if (strcmp(fstab[idx].mntpoint, "/mnt/") == 0)
+		{
+			memcpy(bootdev, fstab[idx].device, 8);	/* /dev/sdX */
+			bootdev[8] = 0;
+		};
+	};
+	
+	// we can simply assume the boot device exists; the partition editor forces the user
+	// to specify one.
+	pid_t pid = fork();
+	if (pid == -1)
+	{
+		msgbox("ERROR", "fork() failed");
+		return;
+	};
+	
+	if (pid == 0)
+	{
+		close(0);
+		close(1);
+		close(2);
+		open("/dev/null", O_RDWR);
+		dup(0);
+		dup(1);
+		execl("/usr/bin/gxboot-i", "gxboot-install", bootdev, NULL);
+		exit(1);
+	};
+	
+	int status;
+	waitpid(pid, &status, 0);
+	
+	if (!WIFEXITED(status))
+	{
+		msgbox("ERROR", "gxboot-install didn't terminate successfully!");
+		return;
+	};
+	
+	if (WEXITSTATUS(status) != 0)
+	{
+		msgbox("ERROR", "gxboot-install didn't terminate successfully!");
+		return;
+	};
+	
+	// mount all partitions
+	drawProgress("SETUP", "Mounting filesystems...", 1, NUM_SETUP_OPS);
+	for (idx=0; idx<fsnum; idx++)
+	{
+		makeMountPointDirs(fstab[idx].mntpoint);
+		if (_glidix_mount(fstab[idx].type, fstab[idx].device, fstab[idx].mntpoint, 0) != 0)
+		{
+			char errmsg[256];
+			sprintf(errmsg, "Cannot mount %s at %s: %s", fstab[idx].device, fstab[idx].mntpoint, strerror(errno));
+			msgbox("ERROR", errmsg);
+		};
+	};
+	
+	// create all the directories that should exist on a glidix filesystem
+	drawProgress("SETUP", "Creating directories...", 2, NUM_SETUP_OPS);
+	mkdir("/mnt/usr", 0755);
+	mkdir("/mnt/usr/bin", 0755);
+	mkdir("/mnt/usr/lib", 0755);
+	mkdir("/mnt/usr/libexec", 0755);
+	mkdir("/mnt/usr/share", 0755);
+	mkdir("/mnt/usr/local", 0755);
+	mkdir("/mnt/usr/local/bin", 0755);
+	mkdir("/mnt/usr/local/lib", 0755);
+	mkdir("/mnt/usr/local/share", 0755);
+	mkdir("/mnt/bin", 0755);
+	mkdir("/mnt/lib", 0755);
+	mkdir("/mnt/mnt", 0755);
+	mkdir("/mnt/sys", 0755);
+	mkdir("/mnt/sys/mod", 0755);
+	mkdir("/mnt/proc", 0755);
+	mkdir("/mnt/dev", 0755);
+	mkdir("/mnt/run", 0755);
+	mkdir("/mnt/var", 0755);
+	mkdir("/mnt/var/run", 0755);
+	mkdir("/mnt/var/log", 0755);
+	mkdir("/mnt/etc", 0755);
+	mkdir("/mnt/etc/init", 0755);
+	mkdir("/mnt/etc/modules", 0755);
+	mkdir("/mnt/boot", 0755);
+	mkdir("/mnt/initrd", 0755);
+	mkdir("/mnt/tmp", 0755);
+	mkdir("/mnt/media", 0755);
+	mkdir("/mnt/home", 0755);
+	
+	// configuration files
+	drawProgress("SETUP", "Creating configuration files...", 3, NUM_SETUP_OPS);
+	
+	// set up /etc/fstab
+	FILE *fp = fopen("/mnt/etc/fstab", "w");
+	fprintf(fp, "# /etc/fstab\n");
+	fprintf(fp, "# Lists filesystems to be automatically mounted on startup\n");
+	fprintf(fp, "# See fstab(3) for more info.\n");
+	
+	for (idx=0; idx<fsnum; idx++)
+	{
+		if (strcmp(fstab[idx].mntpoint, "/mnt/") != 0)
+		{
+			char mntpoint[256];
+			strcpy(mntpoint, &fstab[idx].mntpoint[4]);
+			mntpoint[strlen(mntpoint)-1] = 0;		// remove final slash
+			
+			fprintf(fp, "%s\t%s\t%s\n", mntpoint, fstab[idx].type, fstab[idx].device);
+		};
+	};
+	
+	fclose(fp);
+	
+	// create the /etc/init/startup.sh script
+	fp = fopen("/mnt/etc/init/startup.sh", "w");
+	fprintf(fp, "%s", startupScript);
+	fclose(fp);
+	
+	// create the /etc/init/login.sh script
+	fp = fopen("/mnt/etc/init/login.sh", "w");
+	fprintf(fp, "%s", loginScript);
+	fclose(fp);
+	
+	// now onto setting up the initrd
+	drawProgress("SETUP", "Creating the initrd...", 4, NUM_SETUP_OPS);
+	
+	pid = fork();
+	if (pid == -1)
+	{
+		msgbox("ERROR", "fork() failed for mkinitrd");
+		return;
+	};
+	
+	if (pid == 0)
+	{
+		close(0);
+		close(1);
+		close(2);
+		open("/dev/null", O_RDWR);
+		dup(0);
+		dup(1);
+		
+		char optRootDev[512];
+		for (idx=0; idx<fsnum; idx++)
+		{
+			if (strcmp(fstab[idx].mntpoint, "/mnt/") == 0)
+			{
+				sprintf(optRootDev, "--rootdev=%s", fstab[idx].device);
+			};
+		};
+		execl("/usr/bin/mkinitrd", "mkinitrd", optRootDev, "--rootfs=gxfs", "--output=/mnt/boot/vmglidix.tar", NULL);
+		exit(1);
+	};
+	
+	waitpid(pid, &status, 0);
+	
+	if (!WIFEXITED(status))
+	{
+		msgbox("ERROR", "mkinitrd terminated with an error!");
+		return;
+	};
+	
+	if (WEXITSTATUS(status) != 0)
+	{
+		msgbox("ERROR", "mkinitrd terminated with an error!");
+		return;
+	};
+};
+
+void unmountParts()
+{
+	size_t i;
+	for (i=fsnum; i!=0; i--)
+	{
+		if (_glidix_unmount(fstab[i-1].mntpoint) != 0)
+		{
+			msgbox("ERROR", "Failed to unmount filesystem!");
+			return;
+		};
+	};
 };

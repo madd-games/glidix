@@ -32,7 +32,7 @@ vbr/%.o: $(SRCDIR)/vbr/%.c
 	@mkdir -p vbr
 	$(HOST_GCC) -c $< -o $@ $(GXBOOT_CFLAGS)
 
-asm/%.o: $(SRCDIR)/vbr/%.asm
+asm/%.o: $(SRCDIR)/vbr/%.asm stub64.bin
 	@mkdir -p asm
 	nasm -felf32 -o $@ $<
 
@@ -40,3 +40,6 @@ vbr/%.d: $(SRCDIR)/vbr/%.c
 	@mkdir -p vbr
 	$(HOST_GCC) -c $< -MM -MT $(subst .d,.o,$@) -o $@ $(CFLAGS)
 
+# NOTE: The file must have the *.asmb extension because asm is compiled to ELF32!
+stub64.bin: $(SRCDIR)/vbr/stub64.asmb
+	nasm -fbin -o $@ $<

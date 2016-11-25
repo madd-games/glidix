@@ -21,6 +21,14 @@ make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/shutils.mip --setup=/usr/libexec/shutils-setup.sh || exit 1
 
+# modules
+rm -rf mipdir
+mkdir mipdir || exit 1
+cd modules
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/modules.mip
+
 # sh
 rm -rf mipdir
 mkdir mipdir || exit 1

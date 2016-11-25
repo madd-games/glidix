@@ -26,79 +26,12 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <sys/stat.h>
-#include <stdio.h>
-#include <termios.h>
-#include <string.h>
-#include <stdlib.h>
-#include <signal.h>
-#include <unistd.h>
+#ifndef PKG_H_
+#define PKG_H_
 
-#include "render.h"
-#include "welcome.h"
-#include "msgbox.h"
-#include "partition.h"
-#include "user.h"
-#include "pkg.h"
+/**
+ * Install all packages.
+ */
+void pkgInstall();
 
-void doInstall()
-{
-	partEditor();
-	promptUserInfo();
-	
-	partFlush();
-	userSetup();
-	pkgInstall();
-	
-	unmountParts();
-	msgbox("COMPLETED", "Glidix has been installed and may now be ran.");
-};
-
-int main()
-{
-	struct termios tc;
-	struct termios tcOrig;
-	tcgetattr(0, &tcOrig);
-	
-	tcgetattr(0, &tc);
-	tc.c_lflag &= ~(ECHO | ECHONL | ICANON);
-	tcsetattr(0, TCSANOW, &tc);
-	
-	int option;
-	while (1)
-	{
-		option = displayWelcome();
-		
-		if (option == WELCOME_OPT_INSTALL)
-		{
-			if (partInit() == 0)
-			{
-				break;
-			};
-		}
-		else if (option == WELCOME_OPT_SHELL)
-		{
-			msgbox("NOTICE", "Run 'gxsetup' to return to installer.");
-			setColor(0x07);
-			write(1, "\e!", 2);
-			tcsetattr(0, TCSANOW, &tcOrig);
-			
-			printf("gxsetup: Dropping to shell (/bin/sh)...\n");
-			execl("/bin/sh", "sh", NULL);
-			perror("execl");
-			
-			while (1) pause();
-		}
-		else
-		{
-			msgbox("ERROR", "Feature not yet implemented.");
-		};
-	};
-	
-	if (option == WELCOME_OPT_INSTALL)
-	{
-		doInstall();
-	};
-	
-	return 0;
-};
+#endif

@@ -217,6 +217,7 @@ uint64_t *mb_get_page_entry(uint64_t addr)
 	if (pml4[pdptIndex] == 0)
 	{
 		pdpt = (uint64_t*) mb_alloc(0x1000, 0x1000);
+		memset(pdpt, 0, 0x1000);
 		pml4[pdptIndex] = (uint64_t)(uint32_t)pdpt | PT_PRESENT | PT_WRITE;
 	}
 	else
@@ -228,6 +229,7 @@ uint64_t *mb_get_page_entry(uint64_t addr)
 	if (pdpt[pdIndex] == 0)
 	{
 		pd = (uint64_t*) mb_alloc(0x1000, 0x1000);
+		memset(pd, 0, 0x1000);
 		pdpt[pdIndex] = (uint64_t)(uint32_t)pd | PT_PRESENT | PT_WRITE;
 	}
 	else
@@ -239,6 +241,7 @@ uint64_t *mb_get_page_entry(uint64_t addr)
 	if (pd[ptIndex] == 0)
 	{
 		pt = (uint64_t*) mb_alloc(0x1000, 0x1000);
+		memset(pt, 0, 0x1000);
 		pd[ptIndex] = (uint64_t)(uint32_t)pt | PT_PRESENT | PT_WRITE;
 	}
 	else

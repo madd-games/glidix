@@ -31,6 +31,9 @@
 
 #define	NULL				((void*)0)
 
+#define	PT_PRESENT			(1 << 0)
+#define	PT_WRITE			(1 << 1)
+
 #define	EI_MAG0				0
 #define	EI_MAG1				1
 #define	EI_MAG2				2
@@ -296,6 +299,32 @@ typedef struct
 	} d_un;
 } Elf64_Dyn;
 
+typedef struct
+{
+	dword_t			size;
+	qword_t			baseAddr;
+	qword_t			len;
+	dword_t			type;
+} __attribute__ ((packed)) MemoryMap;
+
+/**
+ * Kernel information structure; this is passed to the kernel.
+ */
+typedef struct
+{
+	qword_t				features;			/* 0x00 */
+	qword_t				kernelMain;			/* 0x08 */
+	qword_t				gdtPointerVirt;			/* 0x10 */
+	dword_t				pml4Phys;			/* 0x18 */
+	dword_t				mmapSize;			/* 0x1C */
+	qword_t				mmapVirt;			/* 0x20 */
+	qword_t				initrdSize;			/* 0x28 */
+	qword_t				end;				/* 0x30 */
+	qword_t				initrdSymtabOffset;		/* 0x38 */
+	qword_t				initrdStrtabOffset;		/* 0x40 */
+	qword_t				numSymbols;			/* 0x48 */
+} KernelInfo;
+
 extern DAP dap;
 extern byte_t sectorBuffer[];
 
@@ -330,5 +359,16 @@ void readFile(FileHandle *fh, void *buffer, qword_t size, qword_t offset);
  * Open a file by path. Return 0 on success, -1 if the file does not exist.
  */
 int openFile(FileHandle *fh, const char *path);
+
+/**
+ * Get a BIOS memory map entry. Returns the index of the next entry. Sets 'ok' to 0 if the
+ * carry flag has been set.
+ */
+dword_t biosGetMap(dword_t index, void *put, int *ok);
+
+/**
+ * Jump to the 64-bit kernel.
+ */
+void go64(KernelInfo *kinfo, qword_t kinfoVirt);
 
 #endif

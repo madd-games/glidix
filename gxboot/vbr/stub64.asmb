@@ -1,0 +1,43 @@
+bits 64
+
+; first set up the temporary 64-bit data segments
+mov ax, 0x28
+mov ds, ax
+mov es, ax
+mov fs, ax
+mov gs, ax
+xor ax, ax
+mov ss, ax
+
+; move the stack to the virtual KernelInfo pointer, passed as the second argument
+; (in 32-bit mode; so on the stack)
+mov rsp, [rsp+8]
+
+; also pass that as the first argument to the kernel
+mov rdi, rsp
+
+; SysV ABI requires that the deepest stack frame have RBP=0
+xor rbp, rbp
+
+; load the kernel's GDT
+mov rax, [rsp+0x10]
+lgdt [rax]
+
+; load the real data segments now
+mov ax, 0x10
+mov ds, ax
+mov es, ax
+mov fs, ax
+mov gs, ax
+
+; get the address of kmain into RBX
+mov rbx, [rsp+0x08]
+
+; call the kernel
+call rbx
+
+; hang if the kernel exits
+_hang:
+cli
+hlt
+jmp _hang
