@@ -79,6 +79,6 @@ chmod +x install.sh
 
 echo "Generating make-patches script..."
 echo >make-patches.sh "#! /bin/sh"
-echo >>make-patches.sh "diff -urN binutils-$binutils_version glidix-binutils > binutils-$binutils_version.patch"
-echo >>make-patches.sh "diff -urN gcc-$gcc_version glidix-gcc binutils-$binutils_version.patch"
+echo >>make-patches.sh "diff -urN binutils-$binutils_version glidix-binutils > $srcdir/binutils/binutils-$binutils_version.patch"
+echo >>make-patches.sh "diff -urN gcc-$gcc_version glidix-gcc > $srcdir/gcc/gcc-$gcc_version.patch"
 chmod +x make-patches.sh
