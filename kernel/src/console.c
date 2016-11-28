@@ -868,7 +868,43 @@ void kputbuf(const char *buf, size_t size)
 	consoleState.putcon = 1;
 	while (size--)
 	{
-		kputch(*buf++);
+		if (*buf == '\e')
+		{
+			buf++;
+			
+			if (size == 0) break;
+			
+			char cmd = *buf++;
+			size--;
+			
+			if (cmd == 33)
+			{
+				tlUnlock(&consoleLock);
+				clearScreen();
+				tlLock(&consoleLock);
+			}
+			else if (cmd == 34)
+			{
+				tlUnlock(&consoleLock);
+				setConsoleColor((uint8_t) *buf++);
+				tlLock(&consoleLock);
+				size--;
+			}
+			else if (cmd == 35)
+			{
+				uint8_t x = (uint8_t) *buf++;
+				uint8_t y = (uint8_t) *buf++;
+				size -= 2;
+
+				tlUnlock(&consoleLock);
+				setCursorPos(x, y);
+				tlLock(&consoleLock);
+			};
+		}
+		else
+		{
+			kputch(*buf++);
+		};
 	};
 	updateVGACursor();
 	tlUnlock(&consoleLock);

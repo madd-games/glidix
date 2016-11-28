@@ -1,5 +1,5 @@
 /*
-	Glidix Shell
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
@@ -26,29 +26,23 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdlib.h>
 #include <stdio.h>
 
-void exit_usage()
+int main(int argc, char *argv[])
 {
-	fprintf(stderr, "USAGE:\texit [status]\n");
-	fprintf(stderr, "\tExit, returning the specified status to the OS (default is 0).\n");
-};
-
-int cmd_exit(int argc, char *argv[])
-{
-	if (argc > 2)
+	int i;
+	for (i=1; i<argc; i++)
 	{
-		exit_usage();
-		return 1;
+		printf("%s", argv[i]);
+		if (i == (argc-1))
+		{
+			printf("\n");
+		}
+		else
+		{
+			printf(" ");
+		};
 	};
-
-	int status = 0;
-	if (argc == 2)
-	{
-		status = atoi(argv[1]);
-	};
-
-	exit(status);
+	
 	return 0;
 };

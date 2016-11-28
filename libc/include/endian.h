@@ -1,5 +1,5 @@
 /*
-	Glidix Shell
+	Glidix Runtime
 
 	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
@@ -26,51 +26,23 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#ifndef _ENDIAN_H
+#define _ENDIAN_H
 
-void cd_usage()
-{
-	fprintf(stderr, "USAGE:\tcd [dirname]\n\n");
-	fprintf(stderr, "\tChange the current working directory. If dirname is not\n");
-	fprintf(stderr, "\tspecified, the HOME environment variable is used.\n");
-};
+#define	htole16(x)				(x)
+#define	htole32(x)				(x)
+#define	htole64(x)				(x)
 
-int cmd_cd(int argc, char **argv)
-{
-	if ((argc != 1) && (argc != 2))
-	{
-		cd_usage();
-		return 1;
-	};
+#define	le16toh(x)				(x)
+#define	le32toh(x)				(x)
+#define	le64toh(x)				(x)
 
-	const char *dirname;
-	if (argc == 2)
-	{
-		if (argv[1][0] == '-')
-		{
-			cd_usage();
-			return 1;
-		};
+#define	htobe16					__builtin_bswap16
+#define	htobe32					__builtin_bswap32
+#define	htobe64					__builtin_bswap64
 
-		dirname = argv[1];
-	}
-	else
-	{
-		dirname = getenv("HOME");
-		if (dirname == NULL)
-		{
-			dirname = "/initrd";
-		};
-	};
+#define	be16toh					__builtin_bswap16
+#define	be32toh					__builtin_bswap32
+#define	be64toh					__builtin_bswap64
 
-	if (chdir(dirname) != 0)
-	{
-		perror(dirname);
-		return 1;
-	};
-
-	return 0;
-};
+#endif

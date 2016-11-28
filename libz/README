@@ -1,0 +1,111 @@
+LIBZ DATA COMPRESSION LIBRARY
+
+This is Sortix libz. This is not zlib. This is a fork of zlib. It is licensed
+under the zlib license as found in the included <zlib.h>. Don't confuse people
+by calling it `Sortix zlib'. This library comes with no warranty as described in
+the license.
+
+libz is a general purpose data compression library. The data format used by libz
+is described by RFC 1950 (zlib format), RFC 1951 (deflate format), and RFC 1952
+(gzip format).
+
+This libz has been cleaned up:
+
+ * Support for anything but modern Unix operating systems has been deleted.
+ * Support for 16-bit segmented platforms has been deleted.
+ * K&R function prototypes and declarations have been upgraded to ISO C ones.
+ * Mysterious work-arounds for broken toolchains and operating systems have been
+   deleted.
+ * Questionable abstractions like local, z_const, and Z_NULL have been replaced
+   with static, const, and NULL.
+ * Unsafe standard library interfaces are no longer used if safe standard
+   library interfaces are missing. The safe ones are used unconditionally.
+ * Needless non-standard types have been replaced with standard ones.
+ * The standard C library is assumed to be present and compliant.
+ * Useless files have been deleted from the source distributions.
+ * (And more)
+
+Please note the purpose of this fork is not to replace or discredit zlib. The
+zlib library was written in another age where robust coding practices were not
+as widespread and the common operating systems were often of low quality. The
+zlib library remains truly useful to many severely limited embedded platforms
+and other obscure platforms. As such, by popular demand it works on almost
+everything imaginable. This is fine.
+
+The real issue is that it fits in poorly with modern operating systems, where we
+can do better with simpler, clearer and more robust coding practices, where we
+can assume the toolchains actually work and implement standard C. The coding
+style of zlib can be obscure and hard to audit. It doesn't take advantage of
+core standard library responsibilities such as fixed size integers and endian
+detection. It feels odd to compile a modern operating system from scratch and
+find such a poorly-integrated library at the core of the dependency graph.
+
+This fork cleans up the official zlib to integrate it better with modern C
+environments. Not everyone has one of those and they can't use this fork. That's
+okay: They can use zlib instead. Relevant upstream work will be continuously
+merged, this is no big concern as zlib is largely in maintenance mode. It's
+unlikely that zlib will ever adopt the greater changes in this fork. Individual
+defects found while cleaning and auditing the code should be easily upstreamable
+though.
+
+This libz is API-compatible with zlib and ABI-compatible with zlib on relevant
+and sane platforms. Various junk preprocessor macros were removed from the
+public header, this may break some low quality programs.
+
+See the FAQ entry on altered source distributions for the Sortix libz stance and
+the original zlib answer.
+
+Please check my work. I supply a script that can help you:
+
+    # Ensure diff-against-zlib.sh lists all the files that came from zlib. List
+    # all the new files that are new and check them separately.
+    sh ./diff-against-zlib.sh /path/to/zlib-1.2.8
+
+This gives you a diff of my changes to the zlib release I diverged from. My
+original changes were deliberately done so this diff is reasonably readable
+without noise, but it's still big.
+
+I believe zlib-1.2.8.tar.xz to have this sha256sum:
+
+    831df043236df8e9a7667b9e3bb37e1fcb1220a0f163b6de2626774b9590d057  zlib-1.2.8.tar.xz
+
+---
+
+Acknowledgments:
+
+  The deflate format used by zlib was defined by Phil Katz.  The deflate and
+  zlib specifications were written by L.  Peter Deutsch.  Thanks to all the
+  people who reported problems and suggested various improvements in zlib; they
+  are too numerous to cite here.
+
+Copyright notice:
+
+ (C) 1995-2013 Jean-loup Gailly and Mark Adler
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+  Jean-loup Gailly        Mark Adler
+  jloup@gzip.org          madler@alumni.caltech.edu
+
+If you use the zlib library in a product, we would appreciate *not* receiving
+lengthy legal documents to sign.  The sources are provided for free but without
+warranty of any kind.  The library has been entirely written by Jean-loup
+Gailly and Mark Adler; it does not include third-party code.
+
+If you redistribute modified sources, we would appreciate that you include in
+the file ChangeLog history information documenting your changes.  Please read
+the FAQ for more information on the distribution of modified source versions.

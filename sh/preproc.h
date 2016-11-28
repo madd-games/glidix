@@ -26,16 +26,14 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
+#ifndef PREPROC_H_
+#define PREPROC_H_
 
-int cmd_echo(int argc, char **argv)
-{
-	int i;
-	for (i=1; i<argc; i++)
-	{
-		char c = (i == argc-1) ? '\n' : ' ';
-		printf("%s%c", argv[i], c);
-	};
+/**
+ * Pass a line through preprocessing, and return the pre-processed line. The argument that
+ * gets passed in is freed (by a call to free()), and the returned value is also on the heap
+ * and must later be passed to free().
+ */
+char *preprocLine(char *line);
 
-	return 0;
-};
+#endif

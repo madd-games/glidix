@@ -71,6 +71,7 @@ static int gxfs_unmount(FileSystem *fs)
 	
 	vfsClose(gxfs->fp);
 	kfree(gxfs);
+	__sync_fetch_and_add(&numMounts, -1);
 	return 0;
 };
 

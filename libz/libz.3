@@ -1,0 +1,96 @@
+.TH ZLIB 3 "14 Aug 2014"
+.SH NAME
+libz \- compression/decompression library
+.SH SYNOPSIS
+[see
+.I zlib.h
+for full description]
+.SH DESCRIPTION
+The
+.I libz
+library is a general purpose data compression library.
+The code is thread safe.
+It provides in-memory compression and decompression functions,
+including integrity checks of the uncompressed data.
+This version of the library supports only one compression method (deflation).
+.LP
+Compression can be done in a single step if the buffers are large enough
+or can be done by repeated calls of the compression function.
+In the latter case,
+the application must provide more input and/or consume the output
+(providing more output space) before each call.
+.LP
+The library also supports reading and writing files in
+.IR gzip (1)
+(.gz) format
+with an interface similar to that of stdio.
+.LP
+The library does not install any signal handler.
+The decoder checks the consistency of the compressed data,
+so the library should never crash even in the case of corrupted input.
+.LP
+All functions of the compression library are documented in the file
+.IR zlib.h .
+.SH "SEE ALSO"
+The
+.I Sortix zlib
+web site can be found at:
+.IP
+https://sortix.org/libz/
+.LP
+The data format used by the libz library is described by RFC
+(Request for Comments) 1950 to 1952 in the files:
+.IP
+http://tools.ietf.org/html/rfc1950 (for the zlib header and trailer format)
+.br
+http://tools.ietf.org/html/rfc1951 (for the deflate compressed data format)
+.br
+http://tools.ietf.org/html/rfc1952 (for the gzip header and trailer format)
+.LP
+Mark Nelson wrote an article about
+.I zlib
+for the Jan. 1997 issue of  Dr. Dobb's Journal;
+a copy of the article is available at:
+.IP
+http://marknelson.us/1997/01/01/zlib-engine/
+.SH "REPORTING PROBLEMS"
+Before reporting a problem,
+please check the
+.I libz
+web site to verify that you have the latest version of
+.IR libz ;
+otherwise,
+obtain the latest version and see if the problem still exists.
+Please read the
+FAQ at the website
+before asking for help.
+.SH AUTHORS
+This is Sortix libz. This is not zlib.
+.LP
+Sortix libz is based on the offical Zlib version 1.2.8 release.
+.LP
+Zlib version 1.2.8
+Copyright (C) 1995-2013 Jean-loup Gailly (jloup@gzip.org)
+and Mark Adler (madler@alumni.caltech.edu).
+.LP
+This software is provided "as-is,"
+without any express or implied warranty.
+In no event will the authors be held liable for any damages
+arising from the use of this software.
+See the distribution directory with respect to requirements
+governing redistribution.
+The deflate format used by
+.I zlib
+was defined by Phil Katz.
+The deflate and
+.I zlib
+specifications were written by L. Peter Deutsch.
+Thanks to all the people who reported problems and suggested various
+improvements in
+.IR zlib ;
+who are too numerous to cite here.
+.LP
+UNIX manual page by R. P. C. Rodgers,
+U.S. National Library of Medicine (rodgers@nlm.nih.gov);
+subsequently adapted by Sortix libz.
+.\" end of man page

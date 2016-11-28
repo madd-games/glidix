@@ -1,0 +1,23 @@
+>NAME
+
+access_mode - POSIX access modes
+
+>DESCRIPTION
+
+The access mode is a file/directory attribute which specified permissions for accessing it. When determining if a certain permission is granted to a user, the user is first placed in one of the 3 possible 'classes':
+
+\* If the user ID is equal to the owner UID ('st_uid'), then that user is the 'owner'.
+\* If the user belongs to the group with the associated group GID ('st_gid'), then that user is an 'associated group member'.
+\* In any other case, the user is part of the 'world' class.
+
+The access mode is a 12-bit number, usually written in octal, having the format *SUGW*, where *U* is the set of permissions granted to the owner, *G* is the set of permissions granted to the group, and *W* is the set of permissions granted to the world. Each set is a digit that is a sum of zero or more of the following:
+
+\* *4* ('r') - read permission: the permission to [open.2] the file in read mode (*O_RDONLY* or *O_RDWR*), and then [read.2] its contents. In the case of directories, this grants permission to read the directory contents ([opendir.2], [readdir.2], [closedir.2]).
+\* *2* ('w') - write permission: the permission to [open.2] the file in write mode (*O_WRONLY* or *O_RDWR*) and then [write.2] its contents. In the case of directories, this grants permission to add or remove directory contents ([open.2] with *O_CREAT*, [mkdir.2], [unlink.2], etc).
+\* *1* ('x') - execute permission: in the case of files, this grants the permission to [exec.2] the file. In the case of directories, this grants 'search permission' - allowing the user to access files and subdirectories contained within (instead of just being able to list them, as granted by read permission).
+
+The *S* digit specifies extra attributes. It is the sum of zero or more of the following:
+
+\* *4* ('suid') - indicates that, if a certain user has permission to execute the file, and they do it, then the executable is ran with the effective user ID set to the owner of this file; that is, everyone who runs this file, runs it on behalf of its owner.
+\* *2* ('sgid') - same as above, except for the effective group ID.
+\* *1* ('sticky') - only meaningful for directories. Indicates that contents of this directory may only be deleted or renamed by the owner of that file/subdirectory, by the owner of the directory itself, or by 'root'. By default (if this bit is not set), everyone with write permission to the directory may delete and rename all its contents.

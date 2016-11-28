@@ -49,22 +49,6 @@ static volatile int				lineBufferSize;
 static struct termios				termState;
 static int					termGroup = 1;
 
-static void handleEscape(EscapeSequence *seq)
-{
-	switch (seq->head.command)
-	{
-	case ESC_CLEAR_SCREEN:
-		clearScreen();
-		break;
-	case ESC_SET_COLOR:
-		setConsoleColor(seq->setcolor.attr);
-		break;
-	case ESC_SET_CURSOR:
-		setCursorPos(seq->setcursor.x, seq->setcursor.y);
-		break;
-	};
-};
-
 static ssize_t termWrite(File *file, const void *buffer, size_t size)
 {
 	if (getCurrentThread()->creds->pgid != termGroup)
@@ -79,20 +63,7 @@ static ssize_t termWrite(File *file, const void *buffer, size_t size)
 		ERRNO = ENOTTY;
 		return -1;
 	};
-	
-	if (size > 1)
-	{
-		if (*((const char*)buffer) == '\e')
-		{
-			EscapeSequence seq;
-			memset(&seq, 0, sizeof(EscapeSequence));
-			if (size > sizeof(EscapeSequence)) size = sizeof(EscapeSequence);
-			memcpy(&seq, buffer, size);
-			handleEscape(&seq);
-			return size;
-		};
-	};
-	
+
 	kputbuf((const char*) buffer, size);
 	return size;
 };

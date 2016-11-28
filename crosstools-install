@@ -7,6 +7,7 @@ then
 	exit 1
 fi
 
+mkdir -p $SYSROOT/usr/include
 cp -RT $SRCDIR/libc/include $SYSROOT/usr/include
 
 echo "Building binutils..."

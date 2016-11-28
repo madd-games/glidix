@@ -25,6 +25,8 @@ SECTIONS
 		code = .;
 		*(.text)
 		*(.rodata)
+		. = ALIGN(4096);
+		*(.usup_text)
 	} :text
 	
 	. = ALIGN(4096);

@@ -35,146 +35,185 @@
 #include <string.h>
 #include <pwd.h>
 #include <signal.h>
-#include "command.h"
-#include "sh.h"
+#include <stdlib.h>
 
-pid_t shellChildPid = 0;
-int scriptArgCount = 0;
-char **scriptArgs;
+#include "strops.h"
+#include "dict.h"
+#include "preproc.h"
+#include "command.h"
+
+#define	MAX_STACK_DEPTH			32
+
+static char username[256] = "unknown";
+static char *inlineCommand = NULL;
+
+enum
+{
+	MODE_INTERACTIVE,
+	MODE_INLINE,
+	MODE_FILE,
+};
+static int shellMode = MODE_INTERACTIVE;
+static FILE *inputFile = NULL;
+
+typedef struct
+{
+	int shellMode;
+	char *inlineCommand;
+	FILE *inputFile;
+} StackFrame;
+
+static StackFrame stack[MAX_STACK_DEPTH];
+static int stackIndex = 0;
+
+void shSource(FILE *script)
+{
+	if (stackIndex == MAX_STACK_DEPTH)
+	{
+		fprintf(stderr, "%sShell stack exhausted!%s\n", "\e\"\x04", "\e\"\x07");
+		exit(1);
+	};
+	
+	stack[stackIndex].shellMode = shellMode;
+	stack[stackIndex].inlineCommand = inlineCommand;
+	stack[stackIndex].inputFile = inputFile;
+	stackIndex++;
+	
+	shellMode = MODE_FILE;
+	inlineCommand = NULL;
+	inputFile = script;
+};
+
+/**
+ * Fetch a line of input, and return a pointer to it on the heap. The returned value shall
+ * be passed to free() later. If 'cont' is 1, that means we are asking for a line continuation;
+ * otherwise we're asking for the beginning of a line (this is only used for interactive input,
+ * where the line continuation prompt is shown as ">"). Returns NULL on end of file.
+ */
+static char *shGetLine(int cont)
+{
+	if (shellMode == MODE_INLINE)
+	{
+		if (inlineCommand == NULL) return NULL;
+		else
+		{
+			char *result = strdup(inlineCommand);
+			inlineCommand = NULL;
+			return result;
+		};
+	};
+	
+	if (shellMode == MODE_INTERACTIVE)
+	{
+		if (cont)
+		{
+			printf("> ");
+		}
+		else
+		{
+			char cwd[PATH_MAX];
+			getcwd(cwd, PATH_MAX);
+		
+			const char *promptColor;
+			char prompt;
+			if (getuid() == 0)
+			{
+				prompt = '#';
+				promptColor = "\e\"\x04";
+			}
+			else
+			{
+				prompt = '$';
+				promptColor = "\e\"\x02";
+			};
+		
+			printf("%s%s%s:%s%s%s%c%s ",
+				"\e\"\x09", username, "\e\"\x07", "\e\"\x06", cwd, promptColor, prompt, "\e\"\x07");
+		};
+	};
+
+	char *line = (char*) malloc(1);
+	line[0] = 0;
+	
+	char linebuf[4096];
+	while (1)
+	{
+		if (fgets(linebuf, 4096, inputFile) == NULL)
+		{
+			if (errno == EINTR)
+			{
+				free(line);
+				printf("\n");
+				return strdup("");
+			};
+			if (line[0] == 0) return NULL;
+			break;
+		};
+		
+		char *newline = str_concat(line, linebuf);
+		free(line);
+		line = newline;
+		
+		if (strlen(linebuf) != 0)
+		{
+			if (linebuf[strlen(linebuf)-1] == '\n') break;
+		};
+	};
+	
+	line[strlen(line)-1] = 0;	// remove terminating '\n'
+	return line;
+};
+
+char *shFetch()
+{
+	char *line = strdup("");
+	
+	int cont = 0;
+	do
+	{
+		if (line[strlen(line)-1] == '\\')
+		{
+			line[strlen(line)-1] = 0;
+		};
+		
+		char *nextBit = shGetLine(cont);
+		cont = 1;
+		
+		if (nextBit == NULL)
+		{
+			if (line[0] == 0)
+			{
+				free(line);
+				return NULL;
+			};
+			
+			break;
+		};
+		
+		char *commentStart = str_find(nextBit, "#", "\"'");
+		if (commentStart != NULL)
+		{
+			*commentStart = 0;
+		};
+		
+		char *newline = str_concat(line, nextBit);
+		free(line);
+		free(nextBit);
+		line = newline;
+	} while (line[strlen(line)-1] == '\\');
+	
+	return line;
+};
 
 void on_signal(int sig, siginfo_t *si, void *ignore)
 {
 
 };
 
-int getline(int fd, char *buf, size_t max)
-{
-	size_t sofar = 0;
-	int status = 0;
-	char *bufstart = buf;
-
-	while (1)
-	{
-		char c;
-		ssize_t sz = read(fd, &c, 1);
-		if (sz == -1)
-		{
-			*bufstart = 0;
-			return -2;
-		};
-
-		if (sz == 0)
-		{
-			return 1;
-		};
-
-		if (c == '\n')
-		{
-			*buf = 0;
-			return 0;
-		};
-
-		if (sofar == max)
-		{
-			status = -1;
-			continue;
-		};
-
-		*buf++ = c;
-		sofar++;
-	};
-
-	return status;
-};
-
-int startInteractive()
-{
-	struct passwd *pwd = getpwuid(geteuid());
-	char username[256] = "unknown";
-	if (pwd != NULL) strcpy(username, pwd->pw_name);
-
-	while (1)
-	{
-		char cwd[256];
-		getcwd(cwd, 256);
-
-		char prompt;
-		if (getuid() == 0)
-		{
-			prompt = '#';
-		}
-		else
-		{
-			prompt = '$';
-		};
-
-		printf("%s:%s%c ", username, cwd, prompt);
-
-		char line[256];
-		int status = getline(0, line, 256);
-		if (status == -1)
-		{
-			fprintf(stderr, "line too long\n");
-		}
-		else if (status == -2)
-		{
-			if (errno == EINTR)
-			{
-				printf("\n");
-			};
-		};
-
-		if (line[0] != 0)
-		{
-			execCommand(line);
-		};
-	};
-	return 0;
-};
-
-int runScript(const char *filename, int argc, char *argv[])
-{
-	int fd = open(filename, O_RDONLY);
-	scriptArgs = argv;
-	scriptArgCount = argc;
-	if (fd == -1)
-	{
-		perror(filename);
-	};
-
-	while (1)
-	{
-		char line[256];
-		int status = getline(fd, line, 256);
-
-		if (status == -1)
-		{
-			close(fd);
-			return 1;
-		}
-		else if (status == -2)
-		{
-			close(fd);
-			return 1;
-		}
-		else if (status == 1)
-		{
-			close(fd);
-			return 0;
-		}
-		else
-		{
-			execCommand(line);
-		};
-	};
-
-	close(fd);
-	return 0;
-};
-
-int main(int argc, char *argv[])
+int main(int argc, char *argv[], char *initEnv[])
 {
 	struct sigaction sa;
+	memset(&sa, 0, sizeof(struct sigaction));
 	sa.sa_sigaction = on_signal;
 	sa.sa_flags = SA_SIGINFO;
 	if (sigaction(SIGINT, &sa, NULL) != 0)
@@ -182,38 +221,105 @@ int main(int argc, char *argv[])
 		perror("sigaction SIGINT");
 		return 1;
 	};
+
+	struct passwd *pwd = getpwuid(geteuid());
+	if (pwd != NULL) strcpy(username, pwd->pw_name);
+
+	dictInitFrom(&dictEnviron, initEnv);
+	dictInit(&dictShellVars);
 	
-	if (argc == 1)
+	int i;
+	const char *filename = NULL;
+	for (i=1; i<argc; i++)
 	{
-		return startInteractive();
-	};
-
-	char shellType = 'x';
-	if (strcmp(argv[1], "-s") == 0)
-	{
-		shellType = 's';
-	}
-	else if (strcmp(argv[1], "-c") == 0)
-	{
-		shellType = 'c';
-	};
-
-	if (shellType == 'x')
-	{
-		return runScript(argv[1], argc-1, &argv[1]);
-	}
-	else if (shellType == 'c')
-	{
-		if (argc != 3)
+		if (strcmp(argv[i], "-s") == 0)
 		{
-			fprintf(stderr, "no command specified\n");
+			shellMode = MODE_INTERACTIVE;
+		}
+		else if (strcmp(argv[i], "-c") == 0)
+		{
+			i++;
+			shellMode = MODE_INLINE;
+			
+			if (argv[i] == NULL)
+			{
+				fprintf(stderr, "%s: the -c option requires a parameter\n", argv[0]);
+				return 1;
+			};
+			
+			inlineCommand = argv[i];
+		}
+		else if (strcmp(argv[i], "-x") == 0)
+		{
+			shellMode = MODE_FILE;
+		}
+		else if (argv[i][0] != '-')
+		{
+			if (filename != NULL)
+			{
+				fprintf(stderr, "%s: multiple scripts specified\n", argv[0]);
+				return 1;
+			};
+			
+			filename = argv[i];
+			shellMode = MODE_FILE;
+		}
+		else
+		{
+			fprintf(stderr, "%s: unrecognised command-line option: %s\n", argv[0], argv[i]);
 			return 1;
 		};
-
-		return execCommand(argv[2]);
+	};
+	
+	if ((shellMode == MODE_FILE) && (filename == NULL))
+	{
+		fprintf(stderr, "%s: -x passed but no input file\n", argv[0]);
+		return 1;
+	};
+	
+	if (shellMode == MODE_FILE)
+	{
+		inputFile = fopen(filename, "r");
+		if (inputFile == NULL)
+		{
+			fprintf(stderr, "%s: cannot open %s: %s\n", argv[0], filename, strerror(errno));
+			return 1;
+		};
 	}
 	else
 	{
-		return startInteractive();
+		inputFile = stdin;
 	};
+	
+	while (1)
+	{
+		while (1)
+		{
+			char *line = shFetch();
+			if (line == NULL) break;
+			line = preprocLine(line);
+			cmdRun(line);
+			free(line);
+		};
+		
+		if (stackIndex == 0)
+		{
+			break;
+		};
+		
+		if (inputFile != NULL)
+		{
+			if (inputFile != stdin)
+			{
+				fclose(inputFile);
+			};
+		};
+		
+		stackIndex--;
+		shellMode = stack[stackIndex].shellMode;
+		inlineCommand = stack[stackIndex].inlineCommand;
+		inputFile = stack[stackIndex].inputFile;
+	};
+	
+	return 0;
 };

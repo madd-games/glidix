@@ -109,6 +109,8 @@ static const char *startupScript = "\
 # See startup(3) for more info.\n\
 echo \"Mounting all filesystems...\"\n\
 mount -a\n\
+echo \"Loading configuration...\"\n\
+. /etc/init/startup.conf\n\
 echo \"Starting level 1 services...\"\n\
 service state 1\n\
 echo \"Loading kernel modules...\n\
@@ -116,7 +118,7 @@ ldmods\n\
 echo \"Starting level 2 services...\"\n\
 service state 2\n\
 echo \"Starting login manager...\"\n\
-logmgr\n\
+$logmgr\n\
 ";
 
 static const char *loginScript = "\
@@ -125,6 +127,12 @@ static const char *loginScript = "\
 # See login(3) for more info.\n\
 $SHELL\n\
 echo \"logout\"\n\
+";
+
+static const char *startupConf = "\
+# /etc/init/startup.conf\n\
+# Startup configuration file. See startup(3) for more info.\n\
+logmgr=\"logmgr\"\n\
 ";
 
 Partition *splitArea(Partition *area, size_t offMB, size_t sizeMB)
@@ -1310,6 +1318,11 @@ void partFlush()
 	fprintf(fp, "%s", loginScript);
 	fclose(fp);
 	
+	// create the /etc/init/startup.conf file
+	fp = fopen("/mnt/etc/init/startup.conf", "w");
+	fprintf(fp, "%s", startupConf);
+	fclose(fp);
+	
 	// now onto setting up the initrd
 	drawProgress("SETUP", "Creating the initrd...", 4, NUM_SETUP_OPS);
 	
@@ -1353,18 +1366,5 @@ void partFlush()
 	{
 		msgbox("ERROR", "mkinitrd terminated with an error!");
 		return;
-	};
-};
-
-void unmountParts()
-{
-	size_t i;
-	for (i=fsnum; i!=0; i--)
-	{
-		if (_glidix_unmount(fstab[i-1].mntpoint) != 0)
-		{
-			msgbox("ERROR", "Failed to unmount filesystem!");
-			return;
-		};
 	};
 };

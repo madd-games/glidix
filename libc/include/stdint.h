@@ -50,6 +50,9 @@
 #define	INT32_MAX				0x7FFFFFFF
 #define	INT64_MAX				0x7FFFFFFFFFFFFFFFL
 
+#define	SIZE_MAX				0xFFFFFFFFFFFFFFFFUL
+#define	SSIZE_MAX				0x7FFFFFFFFFFFFFFFL
+
 typedef	signed char				int8_t;
 typedef	unsigned char				uint8_t;
 typedef	signed short				int16_t;

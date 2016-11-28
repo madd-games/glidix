@@ -30,7 +30,12 @@
 #define PKG_H_
 
 /**
- * Install all packages.
+ * Display a window asking the user to select which packages to install.
+ */
+void pkgSelection();
+
+/**
+ * Install all selected packages.
  */
 void pkgInstall();
 

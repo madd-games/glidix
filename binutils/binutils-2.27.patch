@@ -1,6 +1,6 @@
 diff -urN binutils-2.27/bfd/config.bfd glidix-binutils/bfd/config.bfd
 --- binutils-2.27/bfd/config.bfd	2016-08-03 08:36:50.000000000 +0100
-+++ glidix-binutils/bfd/config.bfd	2016-11-10 21:56:48.614129410 +0000
++++ glidix-binutils/bfd/config.bfd	2016-11-26 00:23:19.208882254 +0000
 @@ -270,6 +270,11 @@
      targ_selvecs="sparc_elf32_vec sparc_aout_sunos_be_vec"
      want64=true
@@ -15,7 +15,7 @@ diff -urN binutils-2.27/bfd/config.bfd glidix-binutils/bfd/config.bfd
    am33_2.0-*-linux*)
 diff -urN binutils-2.27/config.sub glidix-binutils/config.sub
 --- binutils-2.27/config.sub	2016-08-03 08:36:51.000000000 +0100
-+++ glidix-binutils/config.sub	2016-11-10 21:47:18.582065314 +0000
++++ glidix-binutils/config.sub	2016-11-26 00:23:19.216882179 +0000
 @@ -1376,7 +1376,7 @@
  	-gnu* | -bsd* | -mach* | -minix* | -genix* | -ultrix* | -irix* \
  	      | -*vms* | -sco* | -esix* | -isc* | -aix* | -cnk* | -sunos | -sunos[34]*\
@@ -27,7 +27,7 @@ diff -urN binutils-2.27/config.sub glidix-binutils/config.sub
  	      | -nindy* | -vxsim* | -vxworks* | -ebmon* | -hms* | -mvs* \
 diff -urN binutils-2.27/gas/configure.tgt glidix-binutils/gas/configure.tgt
 --- binutils-2.27/gas/configure.tgt	2016-08-03 08:36:51.000000000 +0100
-+++ glidix-binutils/gas/configure.tgt	2016-11-10 22:01:21.532348721 +0000
++++ glidix-binutils/gas/configure.tgt	2016-11-26 00:23:19.228882068 +0000
 @@ -212,6 +212,7 @@
  
    i370-*-elf* | i370-*-linux*)		fmt=elf ;;
@@ -38,7 +38,7 @@ diff -urN binutils-2.27/gas/configure.tgt glidix-binutils/gas/configure.tgt
    i386-*-beospe*)			fmt=coff em=pe ;;
 diff -urN binutils-2.27/ld/autom4te.cache/output.0 glidix-binutils/ld/autom4te.cache/output.0
 --- binutils-2.27/ld/autom4te.cache/output.0	1970-01-01 01:00:00.000000000 +0100
-+++ glidix-binutils/ld/autom4te.cache/output.0	2016-11-10 23:13:17.769479878 +0000
++++ glidix-binutils/ld/autom4te.cache/output.0	2016-11-26 00:23:19.252881841 +0000
 @@ -0,0 +1,19996 @@
 +@%:@! /bin/sh
 +@%:@ Guess values for system-dependent variables and create Makefiles.
@@ -20038,7 +20038,7 @@ diff -urN binutils-2.27/ld/autom4te.cache/output.0 glidix-binutils/ld/autom4te.c
 +
 diff -urN binutils-2.27/ld/autom4te.cache/requests glidix-binutils/ld/autom4te.cache/requests
 --- binutils-2.27/ld/autom4te.cache/requests	1970-01-01 01:00:00.000000000 +0100
-+++ glidix-binutils/ld/autom4te.cache/requests	2016-11-10 23:13:17.801479695 +0000
++++ glidix-binutils/ld/autom4te.cache/requests	2016-11-26 00:23:19.252881841 +0000
 @@ -0,0 +1,69 @@
 +# This file was generated.
 +# It contains the lists of macros which have been traced.
@@ -20111,7 +20111,7 @@ diff -urN binutils-2.27/ld/autom4te.cache/requests glidix-binutils/ld/autom4te.c
 +
 diff -urN binutils-2.27/ld/autom4te.cache/traces.0 glidix-binutils/ld/autom4te.cache/traces.0
 --- binutils-2.27/ld/autom4te.cache/traces.0	1970-01-01 01:00:00.000000000 +0100
-+++ glidix-binutils/ld/autom4te.cache/traces.0	2016-11-10 23:13:17.769479878 +0000
++++ glidix-binutils/ld/autom4te.cache/traces.0	2016-11-26 00:23:19.256881801 +0000
 @@ -0,0 +1,1037 @@
 +m4trace:aclocal.m4:1012: -1- m4_include([../bfd/acinclude.m4])
 +m4trace:aclocal.m4:1013: -1- m4_include([../bfd/warning.m4])
@@ -21152,7 +21152,7 @@ diff -urN binutils-2.27/ld/autom4te.cache/traces.0 glidix-binutils/ld/autom4te.c
 +m4trace:configure.ac:453: -1- AC_REQUIRE_AUX_FILE([ltmain.sh])
 diff -urN binutils-2.27/ld/configure.tgt glidix-binutils/ld/configure.tgt
 --- binutils-2.27/ld/configure.tgt	2016-08-03 08:36:54.000000000 +0100
-+++ glidix-binutils/ld/configure.tgt	2016-11-10 22:12:46.843894526 +0000
++++ glidix-binutils/ld/configure.tgt	2016-11-26 00:23:19.264881726 +0000
 @@ -269,6 +269,9 @@
  			targ_extra_libpath="elf_i386 elf32_x86_64 elf_l1om elf_k1om"
  			tdir_i386linux=`echo ${targ_alias}aout | sed -e 's/x86_64/i386/'`
@@ -21165,7 +21165,7 @@ diff -urN binutils-2.27/ld/configure.tgt glidix-binutils/ld/configure.tgt
  i[3-7]86-*-solaris2*)	targ_emul=elf_i386_sol2
 diff -urN binutils-2.27/ld/emulparams/elf_x86_64_glidix.sh glidix-binutils/ld/emulparams/elf_x86_64_glidix.sh
 --- binutils-2.27/ld/emulparams/elf_x86_64_glidix.sh	1970-01-01 01:00:00.000000000 +0100
-+++ glidix-binutils/ld/emulparams/elf_x86_64_glidix.sh	2016-11-01 14:34:57.635245000 +0000
++++ glidix-binutils/ld/emulparams/elf_x86_64_glidix.sh	2016-11-26 00:23:19.264881726 +0000
 @@ -0,0 +1,4 @@
 +. ${srcdir}/emulparams/elf_x86_64.sh
 +
@@ -21173,7 +21173,7 @@ diff -urN binutils-2.27/ld/emulparams/elf_x86_64_glidix.sh glidix-binutils/ld/em
 +GENERATE_PIE_SCRIPT=yes
 diff -urN binutils-2.27/ld/Makefile.am glidix-binutils/ld/Makefile.am
 --- binutils-2.27/ld/Makefile.am	2016-08-03 08:36:54.000000000 +0100
-+++ glidix-binutils/ld/Makefile.am	2016-11-10 22:53:33.355853069 +0000
++++ glidix-binutils/ld/Makefile.am	2016-11-26 00:23:19.268881690 +0000
 @@ -503,6 +503,7 @@
  	eelf_k1om.c \
  	eelf_k1om_fbsd.c \
@@ -21195,7 +21195,7 @@ diff -urN binutils-2.27/ld/Makefile.am glidix-binutils/ld/Makefile.am
    $(ELF_X86_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
 diff -urN binutils-2.27/ld/Makefile.in glidix-binutils/ld/Makefile.in
 --- binutils-2.27/ld/Makefile.in	2016-08-03 08:36:54.000000000 +0100
-+++ glidix-binutils/ld/Makefile.in	2016-11-10 23:13:17.957478794 +0000
++++ glidix-binutils/ld/Makefile.in	2016-11-26 00:23:19.272881650 +0000
 @@ -870,6 +870,7 @@
  	eelf_k1om.c \
  	eelf_k1om_fbsd.c \

@@ -26,16 +26,14 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef COMMAND_H
-#define COMMAND_H
+#ifndef COMMAND_H_
+#define COMMAND_H_
 
-#include <stdio.h>
-
-typedef struct
-{
-	char **argv;
-} Command;
-
-int execCommand(char *cmd);
+/**
+ * Run the specified command, and return the exit status (which must be parsed by the macros
+ * in <sys/wait.h>). The 'cmd' string must already be pre-processed. This function destroys
+ * the contents of 'cmd', but does not call free() on it!
+ */
+int cmdRun(char *cmd);
 
 #endif

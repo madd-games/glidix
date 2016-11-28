@@ -31,17 +31,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 const char *progname;
 int showAll = 0;
 int showInode = 0;
+int showDetails = 0;
 
 void usage()
 {
-	fprintf(stderr, "USAGE:\t%s [-a] [dirname]\n\n", progname);
+	fprintf(stderr, "USAGE:\t%s [-ail] [dirname]\n\n", progname);
 	fprintf(stderr, "\tList the contents of a directory. If no dirname is specified, it defaults\n");
 	fprintf(stderr, "\tto the current working directory (`.`).\n");
 	fprintf(stderr, "\t-a\tShows also entries with names starting with '.'\n");
+	fprintf(stderr, "\t-i\tShows the inode number of each entry.\n");
+	fprintf(stderr, "\t-l\tShows details of each entry.\n");
 };
 
 void processSwitch(const char *sw)
@@ -58,6 +62,9 @@ void processSwitch(const char *sw)
 			break;
 		case 'i':
 			showInode = 1;
+			break;
+		case 'l':
+			showDetails = 1;
 			break;
 		default:
 			fprintf(stderr, "%s: unknown command-line option: -%c\n", progname, c);
@@ -102,8 +109,7 @@ int main(int argc, char *argv[])
 	DIR *dp = opendir(dirname);
 	if (dp == NULL)
 	{
-		printf("%s ", argv[0]);
-		perror(dirname);
+		fprintf(stderr, "%s: %s: %s\n", argv[0], dirname, strerror(errno));
 		return 1;
 	};
 
@@ -111,9 +117,30 @@ int main(int argc, char *argv[])
 	while ((ent = readdir(dp)) != NULL)
 	{
 		if ((ent->d_name[0] != '.') || (showAll))
-		{
-			if (!showInode) printf("%s\n", ent->d_name);
-			else printf("%s (ino %lu)\n", ent->d_name, ent->d_ino);
+		{	
+			if (showDetails)
+			{
+				char fullpath[256];
+				sprintf(fullpath, "%s/%s", dirname, ent->d_name);
+				
+				struct stat st;
+				if (stat(fullpath, &st) != 0)
+				{
+					fprintf(stderr, "%s: failed to stat %s: %s\n", argv[0], fullpath, strerror(errno));
+					return 1;
+				};
+				
+				printf("%04lo %3lu %10lu %10lu %s\n",
+					st.st_mode & 0xFFF, st.st_nlink, st.st_uid, st.st_gid, ent->d_name);
+			}
+			else if (showInode)
+			{
+				printf("%s (ino %lu)\n", ent->d_name, ent->d_ino);
+			}
+			else
+			{
+				printf("%s\n", ent->d_name);
+			};
 		};
 	};
 

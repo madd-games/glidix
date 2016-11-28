@@ -26,314 +26,262 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <sys/stat.h>
 #include <sys/wait.h>
-#include <sys/glidix.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <ctype.h>
-#include <signal.h>
-#include <fcntl.h>
 #include <errno.h>
+#include <string.h>
+#include <signal.h>
 
 #include "command.h"
+#include "strops.h"
+#include "dict.h"
 #include "sh.h"
 
-int findCommand(char *path, char *cmd)
+#define	WHITESPACES	" \t\n"
+
+static int findExecPath(const char *cmd, char *path)
 {
-	const char *scan = cmd;
-	while (*scan != 0)
+	if (strchr(cmd, '/') != NULL)
 	{
-		if (*scan == '/')
+		if (strlen(cmd) >= PATH_MAX) return -1;
+		else
 		{
 			strcpy(path, cmd);
 			return 0;
 		};
-		scan++;
-	};
-
-	char *search = strdup(getenv("PATH"));
-	char *token = strtok(search, ":");
-
-	do
-	{
-		strcpy(path, token);
-		if (path[strlen(path)-1] != '/') strcat(path, "/");
-		strcat(path, cmd);
-
-		struct stat st;
-		if (stat(path, &st) == 0)
-		{
-			free(search);
-			return 0;
-		};
-		token = strtok(NULL, ":");
-	} while (token != NULL);
-
-	free(search);
-	return -1;
-};
-
-int cmd_cd(int argc, char **argv);
-int cmd_exit(int argc, char **argv);
-int cmd_echo(int argc, char **argv);
-
-int execCommand(char *cmd)
-{
-	if (*cmd == '#') return 0;
-
-	// remove comments
-	int currentlyInString = 0;
-	char *commentScan = cmd;
-
-	while (*commentScan != 0)
-	{
-		if ((*commentScan) == '"') currentlyInString = !currentlyInString;
-		else if (((*commentScan) == '#') && (!currentlyInString))
-		{
-			*commentScan = 0;
-			break;
-		};
-
-		commentScan++;
-	};
-
-	// stdout redirection
-	const char *outfile = NULL;
-	char *arrowPtr = strrchr(cmd, '>');
-	if (arrowPtr != NULL)
-	{
-		*arrowPtr = 0;
-		outfile = arrowPtr + 1;
-	};
-	
-	if (*cmd == 0) return 0;
-
-	char processedCommand[1024];
-	char *put = processedCommand;
-	char *scan = cmd;
-	while (*scan != 0)
-	{
-		if (*scan == '\\')
-		{
-			scan++;
-			if (*scan == 0) break;
-			*put++ = *scan++;
-			continue;
-		}
-		else if (*scan == '$')
-		{
-			char envname[256];
-			char *envnameput = envname;
-			scan++;
-			if (*scan == '@')
-			{
-				scan++;
-				int argi;
-				for (argi=1; argi<scriptArgCount; argi++)
-				{
-					strcpy(put, scriptArgs[argi]);
-					put += strlen(scriptArgs[argi]);
-					*put++ = ' ';
-				};
-			}
-			else
-			{
-				while (isalnum(*scan))
-				{
-					*envnameput++ = *scan++;
-				};
-
-				*envnameput = 0;
-			
-				int argNo;
-				if (sscanf(envname, "%d", &argNo) == 1)
-				{
-					if ((argNo >= 0) && (argNo < scriptArgCount))
-					{
-						strcpy(put, scriptArgs[argNo]);
-						put += strlen(scriptArgs[argNo]);
-					};
-				}
-				else
-				{
-					char *value = getenv(envname);
-					if (value != NULL)
-					{
-						strcpy(put, value);
-						put += strlen(value);
-					};
-				};
-			};
-		}
-		else
-		{
-			*put++ = *scan++;
-		};
-	};
-	*put = 0;
-
-	int argc = 0;
-	char **argv = NULL;
-	char *nextToStrtok = processedCommand;
-
-	while (1)
-	{
-		char *token = nextToStrtok;
-
-		if (token != NULL)
-		{
-			while (isspace(*token)) token++;
-			if (*token == 0)
-			{
-				token = NULL;
-			}
-			else
-			{
-				const char *termString = " \t";
-				if (*token == '"')
-				{
-					termString = "\"";
-					token++;
-				};
-
-				char *endpos = strpbrk(token, termString);
-				if (endpos == NULL)
-				{
-					nextToStrtok = NULL;
-				}
-				else
-				{
-					*endpos = 0;
-					nextToStrtok = endpos+1;
-				};
-			};
-		};
-
-		int shouldAdd = 0;
-		if (token == NULL)
-		{
-			shouldAdd = 1;
-		}
-		else
-		{
-			if (strlen(token) > 0)
-			{
-				shouldAdd = 1;
-			};
-		};
-
-		if (shouldAdd)
-		{
-			argv = realloc(argv, sizeof(char*)*(argc+1));
-			argv[argc++] = token;
-		};
-
-		if (token == NULL) break;
-	};
-
-	if (argc == 1) return 0;
-
-	if (strcmp(argv[0], "cd") == 0)
-	{
-		int status = cmd_cd(argc-1, argv);
-		free(argv);
-		return status;
 	}
-	else if (strcmp(argv[0], "exit") == 0)
+	else
 	{
-		int status = cmd_exit(argc-1, argv);
-		free(argv);
-		return status;
-	}
-	else if (strcmp(argv[0], "echo") == 0)
-	{
-		int status = cmd_echo(argc-1, argv);
-		free(argv);
-		return status;
-	}
-	else if (strcmp(argv[0], "diag") == 0)
-	{
-		_glidix_diag();
-		free(argv);
-		return 0;
-	};
-
-	char execpath[256];
-	if (findCommand(execpath, argv[0]) == -1)
-	{
-		free(argv);
-		fprintf(stderr, "%s: command not found\n", argv[0]);
-		return 1;
-	};
-
-	pid_t pid = fork();
-	if (pid == 0)
-	{
-		if (outfile != NULL)
+		const char *pathspec = dictGet(&dictEnviron, "PATH");
+		if (pathspec == NULL)
 		{
-			int fd = open(outfile, O_WRONLY | O_TRUNC | O_CREAT, 0644);
-			if (fd == -1)
-			{
-				fprintf(stderr, "%s: cannot open output file %s: %s\n", argv[0], outfile, strerror(errno));
-				exit(1);
-			};
-			
-			close(1);
-			dup2(fd, 1);
+			return -1;
 		};
 		
-		setpgrp();
-		tcsetpgrp(0, getpgrp());
-		if (execv(execpath, argv) != 0)
+		char *pathlist = strdup(pathspec);
+		char *saveptr;
+		char *token;
+		
+		for (token=strtok_r(pathlist, ":", &saveptr); token!=NULL; token=strtok_r(NULL, ":", &saveptr))
 		{
-			perror(argv[0]);
-			exit(1);
+			if ((strlen(token) + strlen(cmd) + 1) < PATH_MAX)
+			{
+				sprintf(path, "%s/%s", token, cmd);
+				if (access(path, X_OK) == 0)
+				{
+					free(pathlist);
+					return 0;
+				};
+			};
 		};
+		
+		free(pathlist);
+		return -1;
+	};
+};
 
-		// the compiler won't stop moaning otherwise.
-		// even though execv() obviously doesn't return.
+int cmdRun(char *cmd)
+{
+	Dict localEnviron;
+	dictInitFrom(&localEnviron, dictEnviron.list);
+	
+	int count = 0;
+	char **argv = NULL;
+	
+	char *strp = cmd;
+	char *token;
+	
+	for (token=str_token(&strp, WHITESPACES, "\"'"); token!=NULL; token=str_token(&strp, WHITESPACES, "\"'"))
+	{
+		int index = count++;
+		argv = (char**) realloc(argv, sizeof(char*)*count);
+		argv[index] = token;
+		str_canon(token);
+	};
+	
+	argv = (char**) realloc(argv, sizeof(char*)*(count+1));
+	argv[count] = NULL;
+	
+	int isVarSetting = 1;
+	char **ptr;
+	for (ptr=argv; *ptr!=NULL; ptr++)
+	{
+		if (str_find(*ptr, "=", "\"'") == NULL)
+		{
+			isVarSetting = 0;
+		};
+	};
+	
+	if (isVarSetting)
+	{
+		for (ptr=argv; *ptr!=NULL; ptr++)
+		{
+			dictPut(&dictShellVars, *ptr);
+		};
+		
 		return 0;
 	}
 	else
 	{
-		free(argv);
-		shellChildPid = pid;
-		int status;
-		int ret;
-		while (1)
+		for (ptr=argv; *ptr!=NULL; ptr++)
 		{
-			ret = waitpid(pid, &status, 0);
+			if (str_find(*ptr, "=", "\"'") == NULL)
+			{
+				break;
+			};
 			
-			// EINTR is the only possible error here, so if it occurs, try again.
-			if (ret != -1)
-			{
-				break;
-			};
+			dictPut(&localEnviron, *ptr);
 		};
-
-		tcsetpgrp(0, getpgrp());
-		shellChildPid = 0;
 		
-		if (WIFSIGNALLED(status))
+		if (strcmp(*ptr, "exit") == 0)
 		{
-			int termsig = WTERMSIG(status);
-			switch (termsig)
+			if (ptr[1] == NULL)
 			{
-			case SIGSEGV:
-				fprintf(stderr, "Invalid memory access\n");
-				break;
-			case SIGSYS:
-				fprintf(stderr, "Invalid system call\n");
-				break;
-			case SIGFPE:
-				fprintf(stderr, "Arithmetic error\n");
-				break;
+				exit(0);
+			}
+			else
+			{
+				int exitStatus;
+				sscanf(ptr[1], "%d", &exitStatus);
+				exit(exitStatus);
+			};
+		}
+		else if (strcmp(*ptr, "export") == 0)
+		{
+			for (ptr++; *ptr!=NULL; ptr++)
+			{
+				if (strchr(*ptr, '=') != NULL)
+				{
+					dictPut(&dictEnviron, *ptr);
+				}
+				else
+				{
+					const char *currentValue = dictGet(&dictShellVars, *ptr);
+					if (currentValue == NULL)
+					{
+						currentValue = "";
+					};
+					
+					char spec[strlen(currentValue) + strlen(*ptr) + 2];
+					sprintf(spec, "%s=%s", *ptr, currentValue);
+					
+					dictPut(&dictEnviron, spec);
+				};
+			};
+			
+			free(argv);
+			return 0;
+		}
+		else if (strcmp(*ptr, "cd") == 0)
+		{
+			const char *dir;
+			if (ptr[1] == NULL)
+			{
+				dir = dictGet(&dictEnviron, "HOME");
+				if (dir == NULL)
+				{
+					dir = "/";
+				};
+			}
+			else
+			{
+				dir = ptr[1];
+			};
+			
+			free(argv);
+			if (chdir(dir) != 0)
+			{
+				fprintf(stderr, "cd: %s: %s\n", dir, strerror(errno));
+				return 1;
+			};
+			
+			return 0;
+		}
+		else if (strcmp(*ptr, ".") == 0)
+		{
+			if (ptr[1] == NULL)
+			{
+				fprintf(stderr, "SYNTAX:\t. <script>\n");
+				free(argv);
+				return 1;
+			};
+			
+			FILE *fp = fopen(ptr[1], "r");
+			if (fp == NULL)
+			{
+				fprintf(stderr, "%s: %s\n", ptr[1], strerror(errno));
+				free(argv);
+				return 1;
+			};
+			
+			free(argv);
+			shSource(fp);
+			return 0;
+		}
+		else
+		{
+			char execPath[PATH_MAX];
+			if (findExecPath(*ptr, execPath) != 0)
+			{
+				fprintf(stderr, "%s: command not found\n", *ptr);
+				free(argv);
+				return 1;
+			};
+		
+			pid_t pid = fork();
+			if (pid == -1)
+			{
+				fprintf(stderr, "fork: %s\n", strerror(errno));
+				free(argv);
+				return 1;
+			}
+			else if (pid == 0)
+			{
+				setpgrp();
+				tcsetpgrp(0, getpgrp());
+				execve(execPath, ptr, localEnviron.list);
+				fprintf(stderr, "exec %s: %s\n", execPath, strerror(errno));
+				exit(1);
+			}
+			else
+			{
+				free(argv);
+				int status;
+				while (waitpid(pid, &status, 0) == -1);		// ignore the EINTRs
+				tcsetpgrp(0, getpgrp());
+
+				if (WIFSIGNALLED(status))
+				{
+					const char *colA = "";
+					const char *colB = "";
+					if (isatty(0))
+					{
+						colA = "\e\"\x04";
+						colB = "\e\"\x07";
+					};
+					
+					int termsig = WTERMSIG(status);
+					switch (termsig)
+					{
+					case SIGSEGV:
+						fprintf(stderr, "%sInvalid memory access%s\n", colA, colB);
+						break;
+					case SIGSYS:
+						fprintf(stderr, "%sInvalid system call%s\n", colA, colB);
+						break;
+					case SIGFPE:
+						fprintf(stderr, "%sArithmetic error%s\n", colA, colB);
+						break;
+					case SIGILL:
+						fprintf(stderr, "%sIllegal instruction%s\n", colA, colB);
+						break;
+					};
+				};
+
+				return status;
 			};
 		};
-		
-		return status;
 	};
 };

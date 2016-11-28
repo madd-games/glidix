@@ -1,0 +1,162 @@
+VERSION = 1.2.8
+
+AR = @AR@
+CC = @CC@
+CFLAGS = @CFLAGS@
+CPPFLAGS = @CPPFLAGS@
+
+srcdir = @srcdir@
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+libdir = @libdir@
+includedir = @includedir@
+includeexecdir = @includeexecdir@
+pkgconfigdir = @pkgconfigdir@
+mandir = @mandir@
+
+VPATH = $(srcdir)
+
+Z_CFLAGS = $(CFLAGS) -Wall -Wextra
+Z_CPPFLAGS = $(CPPFLAGS) -I$(srcdir) -DZ_INSIDE_LIBZ
+
+STATIC_OBJS=\
+adler32.o \
+compress.o \
+crc32.o \
+deflate.o \
+gzclose.o \
+gzlib.o \
+gzread.o \
+gzwrite.o \
+infback.o \
+inffast.o \
+inflate.o \
+inftrees.o \
+trees.o \
+uncompr.o \
+zutil.o \
+
+# TODO: What extension to use here?
+SHARED_OBJS=$(STATIC_OBJS:.o=.lo)
+
+all: @TARGET_ALL_PREREQUISITES@ z.pc
+
+.PHONY: all static shared clean distclean install install-static \
+        install-shared install-include install-includeexec install-pkgconfig \
+        install-static-lib install-shared-lib install-man dist
+
+static: libz.a z.pc
+
+shared: @TARGET_SHARED_PREREQUISITES@ z.pc
+
+.SUFFIXES:
+
+.SUFFIXES: .c .o .lo
+
+.c.o:
+	$(CC) $(Z_CFLAGS) $(Z_CPPFLAGS) -c $< -o $@
+
+.c.lo:
+	$(CC) $(Z_CFLAGS) $(Z_CPPFLAGS) -c $< -o $@ -fPIC
+
+libz.a: $(STATIC_OBJS)
+	$(AR) -crs libz.a $(STATIC_OBJS)
+
+libz.so.$(VERSION): $(SHARED_OBJS)
+	$(CC) -shared -Wl,-soname,libz.so.1,--version-script,$(srcdir)/libz.map $(Z_CFLAGS) $(SHARED_OBJS) -o $@
+
+libz.so.1: libz.so.$(VERSION)
+	ln -fs libz.so.$(VERSION) $@
+
+libz.so: libz.so.$(VERSION) libz.so.1
+	ln -fs libz.so.$(VERSION) $@
+
+libz.$(VERSION).dylib: $(SHARED_OBJS)
+	$(CC) -dynamiclib -install_name $(LIBDIR)/libz.1.dylib -compatibility_version 1 -current_version $(VERSION) $(Z_CFLAGS) $(SHARED_OBJS) -o $@
+
+libz.1.dylib: libz.$(VERSION).dylib
+	ln -fs libz.$(VERSION).dylib $@
+
+libz.dylib: libz.$(VERSION).dylib libz.1.dylib
+	ln -fs libz.$(VERSION).dylib $@
+
+z.pc: $(srcdir)/z.pc.in
+	sed \
+	-e 's|\@prefix\@|$(prefix)|g' \
+	-e 's|\@exec_prefix\@|$(prefix)|g' \
+	-e 's|\@libdir\@|$(libdir)|g' \
+	-e 's|\@includedir\@|$(includedir)|g' \
+	-e 's|\@includeexecdir\@|$(includeexecdir)|g' \
+	-e 's|\@VERSION\@|$(VERSION)|g' \
+	$(srcdir)/z.pc.in > z.pc
+
+gencrc32: $(srcdir)/gencrc32.c
+	$(CC) $(Z_CFLAGS) $(Z_CPPFLAGS) $(srcdir)/gencrc32.c -o $@
+
+genfixed: $(srcdir)/genfixed.c $(srcdir)/inftrees.c
+	$(CC) $(Z_CFLAGS) $(Z_CPPFLAGS) $(srcdir)/genfixed.c $(srcdir)/inftrees.c -o $@
+
+gentrees: $(srcdir)/gentrees.c
+	$(CC) $(Z_CFLAGS) $(Z_CPPFLAGS) $(srcdir)/gentrees.c -o $@
+
+sync: gencrc32 genfixed gentrees
+	./gencrc32 crc32.h
+	./genfixed inffixed.h
+	./gentrees trees.h
+
+clean:
+	rm -f libz.a
+	rm -f libz.so libz.so.*
+	rm -f libz.dylib libz.*.dylib
+	rm -f z.pc
+	rm -f $(STATIC_OBJS) $(SHARED_OBJS)
+	rm -f gencrc32 genfixed gentrees
+	rm -rf conftest.* conftest
+
+distclean: clean
+	rm -f Makefile config.status endian.h
+
+maintainer-clean: distclean
+	rm -f crc32.h inffixed.h trees.h
+
+install: install-include install-pkgconfig install-man \
+         @TARGET_INSTALL_PREREQUISITES@
+
+install-static: install-include install-includeexec install-pkgconfig install-static-lib install-man
+
+install-shared: install-include install-includeexec install-pkgconfig install-shared-lib install-man
+
+install-include:
+	mkdir -p $(DESTDIR)$(includedir)
+	install -m 644 $(srcdir)/zlib.h $(DESTDIR)$(includedir)/zlib.h
+
+install-includeexec:
+	mkdir -p $(DESTDIR)$(includeexecdir)
+	install -m 644 $(srcdir)/zconf.h $(DESTDIR)$(includeexecdir)/zconf.h
+
+install-pkgconfig: z.pc
+	mkdir -p $(DESTDIR)$(pkgconfigdir)
+	install -m 644 z.pc $(DESTDIR)$(pkgconfigdir)/z.pc
+	ln -fs z.pc $(DESTDIR)$(pkgconfigdir)/zlib.pc
+
+install-static-lib: libz.a
+	mkdir -p $(DESTDIR)$(libdir)
+	install -m 644 libz.a $(DESTDIR)$(libdir)/libz.a
+
+install-shared-lib-so: libz.so
+	mkdir -p $(DESTDIR)$(libdir)
+	install -m 644 libz.so.$(VERSION) $(DESTDIR)$(libdir)/libz.so.$(VERSION)
+	ln -fs libz.so.$(VERSION) $(DESTDIR)$(libdir)/libz.so.1
+	ln -fs libz.so.$(VERSION) $(DESTDIR)$(libdir)/libz.so
+
+install-shared-lib-dylib: libz.dylib
+	mkdir -p $(DESTDIR)$(libdir)
+	install -m 755 libz.$(VERSION).dylib $(DESTDIR)$(libdir)/libz.$(VERSION).dylib
+	ln -fs libz.$(VERSION).dylib $(DESTDIR)$(libdir)/libz.1.dylib
+	ln -fs libz.$(VERSION).dylib $(DESTDIR)$(libdir)/libz.dylib
+
+install-shared-lib: @TARGET_INSTALL_SHARED_LIB_PREREQUISITES@
+
+install-man:
+	mkdir -p $(DESTDIR)$(mandir)/man3
+	install -m 644 $(srcdir)/libz.3 $(DESTDIR)$(mandir)/man3/libz.3

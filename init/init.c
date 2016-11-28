@@ -469,9 +469,9 @@ int main(int argc, char *argv[])
 {
 	if (getpid() == 1)
 	{	
-		setenv("PATH", "/bin:/usr/local/bin:/usr/bin:/mnt/bin", 1);
+		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
 		setenv("HOME", "/root", 1);
-		setenv("LD_LIBRARY_PATH", "/usr/lib:/lib", 1);
+		setenv("LD_LIBRARY_PATH", "/usr/local/lib:/usr/lib:/lib", 1);
 
 		struct sigaction sa;
 		memset(&sa, 0, sizeof(struct sigaction));

@@ -1,0 +1,77 @@
+* Delete irrelevant files:
+  * Build systems for irrelevant operating systems.
+  * Unmaintained example and test programs.
+  * Unsupported contributed files (many unmaintained):
+    * Assembly code.
+    * Language bindings.
+    * Examples.
+  * Unused old files (marked as such).
+  * (And much more miscellaneous cruft)
+* Use standard C:
+  * Remove local keyword (#define local static).
+  * Replace K&R function prototypes with ANSI function prototypes.
+  * Replace Z_NULL with NULL.
+  * Replace z_const with const.
+  * Assume stdarg is available.
+* Remove useless types:
+  * Byte (unsigned char), uInt (unsigned int), uLong (unsigned long).
+  * Bytef (Byte FAR), charf (char FAR), intf (int FAR), uIntf (uInt FAR),
+    uLongf (uLong FAR).
+  * voidp (void *), voidpf (void FAR *), voidpc (const void *).
+  * uch (unsigned char), ush (unsigned short), usl (unsigned short).
+  * uchf (uch FAR), ushf (ush FAR), uslf (usl FAR).
+* Use standard library:
+  * Assume the standard library and headers are available.
+  * Don't provide function prototypes if the standard headers forgets to do it.
+  * Don't provide SEEK_SET, SEEK_CUR, and SEEK_END if stdio.h didn't.
+  * Replace zmemzero with memset.
+  * Replace zmemcpy with memcpy.
+  * Replace zmemcmp with memcmp.
+  * Replace zstrerror with strerror.
+* Require functional toolchain:
+  * Remove support for buggy, silly and unhappy compilers.
+  * Remove support for debuggers that can't deal with static symbols.
+* Remove support for troublesome platforms:
+  * Remove support for 16-bit platforms.
+  * Remove work-arounds for Windows.
+  * Remove work-arounds for Windows CE (UNDER_CE).
+* Remove bug compatibility:
+  * Remove NO_DUMMY_DECL configuration.
+  * Remove PKZIP_BUG_WORKAROUND configuration.
+  * Remove INFLATE_ALLOW_INVALID_DISTANCE_TOOFAR_ARRR.
+  * Remove !INFLATE_STRICT configuration.
+* Remove special configurations:
+  * Remove ASMINF configuration.
+  * Remove ASMV configuration.
+  * Remove BUILDFIXED configuration.
+  * Remove DYNAMIC_CRC_TABLE configuration.
+  * Remove FASTEST configuration.
+  * Remove MAXSEG_64K configuration.
+  * Remove NO_DEFLATE and NO_GZCOMPRESS configurations.
+  * Remove SYS16BIT configuration.
+  * Remove UNALIGNED_OK configuration.
+  * Remove NO_DIVIDE configuration.
+  * Remove ZLIB_WINAPI configuration.
+  * Remove Z_PREFIX configuration.
+  * Remove Z_SOLO configuration.
+  * Remove !GZIP and !GUNZIP configurations.
+* Adopt safer practices:
+  * Unconditionally use vsnprintf (refuse to use vsprintf as a fallback).
+  * Remove support for thread-unsafely generating tables on first use.
+  * Use the system allocator for both if either zalloc or zfree is unset to avoid
+    mixing allocators.
+  * Replace ZALLOC(), ZFREE() and TRY_FREE() macros with replacement functions
+    that check for multiplication overflow and doesn't trust user allocators to
+    deal safely with more than UINT_MAX bytes.
+  * Use asprintf where appropriate.
+  * Better whether-this-value-fits-in-that-type checks.
+  * Saturate instead of overflow in deflateBound and compressBound.
+* Miscellaneous changes:
+  * Remove uses of the register keyword.
+  * Remove EQUAL macro.
+  * Remove ERR_RETURN macro and inline uses of it.
+  * Remove PUP() macro and do post-pointer-read-increment normally.
+  * Move code that generates C headers out of the core files and into utilities.
+  * Assume attribute visibility hidden is available.
+  * Improved large file support compatibility.
+  * Simplify adler32 code.

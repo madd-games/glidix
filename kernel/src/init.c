@@ -430,7 +430,7 @@ static void spawnProc(void *stack)
 	getCurrentThread()->creds->sid = 1;
 	getCurrentThread()->creds->pgid = 1;
 	
-	static char initExecpars[] = "init\0\0USERNAME=root\0SHELL=/bin/sh\0HOME=root\0\0";
+	static char initExecpars[] = "init\0\0USERNAME=root\0SHELL=/bin/sh\0\0";
 	kyield();
 	kprintf("Executing /initrd/init...\n");
 	elfExec("/initrd/init", initExecpars, sizeof(initExecpars));

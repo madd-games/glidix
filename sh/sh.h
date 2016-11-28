@@ -26,18 +26,21 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SH_H
-#define SH_H
+#ifndef SH_H_
+#define SH_H_
 
 #include <stdio.h>
 
-extern pid_t shellChildPid;
-extern int scriptArgCount;
-extern char **scriptArgs;
+/**
+ * Fetch the next line of input. Returns NULL on end of input, or a string on the heap
+ * if a line has been fetched; that string must then be passed to free().
+ */
+char *shFetch();
 
 /**
- * Returns -1 if the line was too long.
+ * Switch to running a different script. Used by the "." command. A stack is used to remember
+ * which scripts to return to.
  */
-int getline(int fd, char *buf, size_t max);
+void shSource(FILE *script);
 
 #endif

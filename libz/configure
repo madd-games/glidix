@@ -1,0 +1,759 @@
+#!/bin/sh
+# configure script for libz.
+#
+# This configure script is hand-written, but meant to be interface compatible
+# with standard generated GNU scripts. If this script doesn't behave like a GNU
+# configure script, then it's probably a bug. This script does assume a decent
+# POSIX system, however, and is intentionally less portable.
+#
+set -e
+
+show_version() {
+  cat << EOF
+libz configure
+EOF
+  exit 0
+}
+
+show_help() {
+  cat << EOF
+\`configure' configures libz to adapt to many kinds of systems.
+
+Usage: ./configure [OPTION]... [VAR=VALUE]...
+
+To assign environment variables (e.g., CC, CFLAGS...), specify them as
+VAR=VALUE.  See below for descriptions of some of the useful variables.
+
+Defaults for the options are specified in brackets.
+
+Configuration:
+  -h, --help              display this help and exit
+      --help=short        display options specific to this package
+      --help=recursive    display the short help of all the included packages
+  -V, --version           display version information and exit
+  -q, --quiet, --silent   do not print \`checking ...' messages
+EOF
+#      --cache-file=FILE   cache test results in FILE [disabled]
+#  -C, --config-cache      alias for \`--cache-file=config.cache'
+#  -n, --no-create         do not create output files
+  cat << EOF
+      --srcdir=DIR        find the sources in DIR [configure dir or \`..']
+
+Installation directories:
+  --prefix=PREFIX         install architecture-independent files in PREFIX
+                          [/usr/local]
+  --exec-prefix=EPREFIX   install architecture-dependent files in EPREFIX
+                          [PREFIX]
+
+By default, \`make install' will install all the files in
+\`/usr/local/bin', \`/usr/local/lib' etc.  You can specify
+an installation prefix other than \`/usr/local' using \`--prefix',
+for instance \`--prefix=\$HOME'.
+
+For better control, use the options below.
+
+Fine tuning of the installation directories:
+  --bindir=DIR            user executables [EPREFIX/bin]
+  --sbindir=DIR           system admin executables [EPREFIX/sbin]
+  --libexecdir=DIR        program executables [EPREFIX/libexec]
+  --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
+  --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
+  --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
+  --libdir=DIR            object code libraries [EPREFIX/lib]
+  --includedir=DIR        C header files [PREFIX/include]
+  --datarootdir=DIR       read-only arch.-independent data root [PREFIX/share]
+  --datadir=DIR           read-only architecture-independent data [DATAROOTDIR]
+  --infodir=DIR           info documentation [DATAROOTDIR/info]
+  --localedir=DIR         locale-dependent data [DATAROOTDIR/locale]
+  --mandir=DIR            man documentation [DATAROOTDIR/man]
+  --docdir=DIR            documentation root [DATAROOTDIR/doc/make]
+  --htmldir=DIR           html documentation [DOCDIR]
+  --dvidir=DIR            dvi documentation [DOCDIR]
+  --pdfdir=DIR            pdf documentation [DOCDIR]
+  --psdir=DIR             ps documentation [DOCDIR]
+
+System types:
+  --build=BUILD     configure for building on BUILD [guessed]
+  --host=HOST       cross-compile to build programs to run on HOST [BUILD]
+
+Optional Features:
+  --disable-option-checking  ignore unrecognized --enable/--with options
+  --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
+  --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
+  --enable-static         build static libraries [default=yes]
+  --enable-shared         build static libraries [default=yes]
+
+Optional Packages:
+  --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
+  --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+
+Some influential environment variables:
+  CC          C compiler command
+  CFLAGS      C compiler flags
+  LDFLAGS     linker flags, e.g. -L<lib dir> if you have libraries in a
+              nonstandard directory <lib dir>
+  LIBS        libraries to pass to the linker, e.g. -l<library>
+  CPPFLAGS    (Objective) C/C++ preprocessor flags, e.g. -I<include dir> if
+              you have headers in a nonstandard directory <include dir>
+
+Use these variables to override the choices made by \`configure' or to help
+it to find libraries and programs with nonstandard names/locations.
+EOF
+  exit 0
+}
+
+imported_variables=$configuration_directory_variables'
+AR
+CC
+CFLAGS
+CPPFLAGS
+LDFLAGS
+LIBS
+'
+
+install_directory_variables='
+bindir
+datadir
+datarootdir
+docdir
+dvidir
+exec_prefix
+htmldir
+includedir
+includeexecdir
+infodir
+libdir
+libexecdir
+localedir
+localstatedir
+mandir
+oldincludedir
+pdfdir
+pkgconfigdir
+prefix
+psdir
+sbindir
+sharedstatedir
+sysconfdir
+'
+
+other_variables='
+build
+srcdir
+host
+target
+TARGET_ALL_PREREQUISITES
+TARGET_INSTALL_PREREQUISITES
+TARGET_INSTALL_SHARED_LIB_PREREQUISITES
+TARGET_SHARED_PREREQUISITES
+'
+
+nonimported_variables="
+$install_directory_variables
+$other_variables
+"
+
+exported_variables="
+$imported_variables
+$install_directory_variables
+$other_variables
+"
+
+for var in $nonimported_variables; do
+  unset $var
+done
+
+cross_compiling=maybe
+enable_static=maybe
+enable_shared=maybe
+
+dashdash=
+previous_option=
+configure_arguments=\'$(echo $0 | sed "s/'/'\\''/g")\'
+option_checking=true
+for argument do
+  escaped_argument=$(echo $argument | sed "s/'/'\\''/g")
+  configure_arguments="$configure_arguments '$escaped_argument'"
+
+  if test -n "$previous_option"; then
+    eval $previous_option=\$argument
+    previous_option=
+    continue
+  fi
+
+  case $argument in
+  *=?*) parameter=$(expr "X$argument" : '[^=]*=\(.*\)') ;;
+  *=)   parameter= ;;
+  *)    parameter=yes ;;
+  esac
+
+  case $dashdash$argument in
+  --) dashdash=yes ;;
+  --bindir=*) bindir=$parameter ;;
+  --bindir) previous_option=bindir ;;
+  --build=*) build=$parameter ;;
+  --build) previous_option=build ;;
+  --datadir=*) datadir=$parameter ;;
+  --datadir) previous_option=datadir ;;
+  --datarootdir=*) datarootdir=$parameter ;;
+  --datarootdir) previous_option=datarootdir ;;
+  --docdir=*) docdir=$parameter ;;
+  --docdir) previous_option=docdir ;;
+  --dvidir=*) dvidir=$parameter ;;
+  --dvidir) previous_option=dvidir ;;
+  --exec-prefix=*) exec_prefix=$parameter ;;
+  --exec-prefix) previous_option=exec_prefix ;;
+  --host=*) host=$parameter ;;
+  --host) previous_option=host ;;
+  --htmldir=*) htmldir=$parameter ;;
+  --htmldir) previous_option=htmldir ;;
+  --includedir=*) includedir=$parameter ;;
+  --includedir) previous_option=includedir ;;
+  --includeexecdir=*) includeexecdir=$parameter ;;
+  --includeexecdir) previous_option=includeexecdir ;;
+  --infodir=*) infodir=$parameter ;;
+  --infodir) previous_option=infodir ;;
+  --libdir=*) libdir=$parameter ;;
+  --libdir) previous_option=libdir ;;
+  --libexecdir=*) libexecdir=$parameter ;;
+  --libexecdir) previous_option=libexecdir ;;
+  --localedir=*) localedir=$parameter ;;
+  --localedir) previous_option=localedir ;;
+  --localstatedir=*) localstatedir=$parameter ;;
+  --localstatedir) previous_option=localstatedir ;;
+  --oldincludedir=*) oldincludedir=$parameter ;;
+  --oldincludedir) previous_option=oldincludedir ;;
+  --mandir=*) mandir=$parameter ;;
+  --mandir) previous_option=mandir ;;
+  --pdfdir=*) pdfdir=$parameter ;;
+  --pdfdir) previous_option=pdfdir ;;
+  --pkgconfigdir=*) pkgconfigdir=$parameter ;;
+  --pkgconfigdir) previous_option=pkgconfigdir ;;
+  --prefix=*) prefix=$parameter ;;
+  --prefix) previous_option=prefix ;;
+  --psdir) previous_option=psdir ;;
+  --psdir=*) psdir=$parameter ;;
+  --sbindir) previous_option=sbindir ;;
+  --sbindir=*) sbindir=$parameter ;;
+  --sharedstatedir) previous_option=sharedstatedir ;;
+  --sharedstatedir=*) sharedstatedir=$parameter ;;
+  --srcdir) previous_option=srcdir ;;
+  --srcdir=*) srcdir=$parameter ;;
+  --sysconfdir) previous_option=sysconfdir ;;
+  --sysconfdir=*) sysconfdir=$parameter ;;
+  --target) previous_option=target ;;
+  --target=*) target=$parameter ;;
+  --disable-option-checking) option_checking=false ;;
+  --enable-option-checking) option_checking=true ;;
+  --disable-static | --enable-static=no) enable_static=false ;;
+  --enable-static | --enable-static=yes) enable_static=true ;;
+  --disable-shared | --enable-shared=no) enable_shared=false ;;
+  --enable-shared | --enable-shared=yes) enable_shared=true ;;
+  -q | --quiet | --silent) : ;; # TODO: Implement this.
+  -v | --verbose) : ;; # TODO: Implement this.
+  -h | --help | --help=*) show_help ;;
+  -V | --version) show_version ;;
+  -*) echo "$0: unrecognized option $argument" >&2
+      $option_checking && exit 1 ;;
+  *=*) envvar=`expr "x$argument" : 'x\([^=]*\)=' || true`
+       case $envvar in #(
+         '' | [0-9]* | *[!_a-zA-Z0-9]* )
+         echo "$0: invalid variable name: \`$envvar'" >&2
+         exit 1 ;;
+       esac
+       eval $envvar=\$parameter
+       export $envvar ;;
+  *) echo "$0: unexpected operand $argument" >&2
+     exit 1 ;;
+  esac
+done
+
+if test -n "$previous_option"; then
+  echo "$0: option '$argument' requires an argument" >&2
+  exit 1
+fi
+
+for var in $install_directory_variables; do
+  [ -z $(eval echo \${$var+x}) ] && continue
+  eval value=\$$var
+  # Remove trailing slashes.
+  case $value in
+    */) value=$(expr "X$value" : 'X\(.*[^/]\)' \| "X$value" : 'X\(.*\)')
+        eval $var=\$value ;;
+  esac
+  # Be sure to have absolute directory names.
+  case $value in
+    [\\/$]* | ?:[\\/]* ) continue ;;
+    '' ) case $var in *prefix ) continue ;; esac ;;
+  esac
+  echo "$0: expected an absolute directory name for --$var: $value"
+  exit 1
+done
+
+if [ -z ${srcdir+x} ]; then
+  if [ -f "$(dirname -- "$0")/zlib.h" ]; then
+    srcdir=$(dirname -- "$0")
+  elif [ -f "./zlib.h" ]; then
+    srcdir=.
+  elif [ -f "../zlib.h" ]; then
+    srcdir=..
+  else
+    echo "$0: can't locate the source code" >&2
+    exit 1
+  fi
+fi
+
+case $srcdir in
+*/) srcdir=$(expr "X$srcdir" : 'X\(.*[^/]\)' \| "X$srcdir" : 'X\(.*\)') ;;
+esac
+
+linefeed='
+'
+case `pwd` in
+  *[\\\"\#\$\&\'\`$linefeed]*)
+    echo "$0: unsafe absolute working directory name: \``pwd`'" >&2
+    exit 1 ;;
+esac
+case $srcdir in
+  *[\\\"\#\$\&\'\`$linefeed\ \	]*)
+    echo "$0: unsafe srcdir value: \`$srcdir'" >&2
+    exit 1 ;;
+esac
+
+test -n "$host" && tool_prefix=$host- || tool_prefix=
+
+[ -z ${prefix+x} ] && prefix="/usr/local"
+[ -z ${exec_prefix+x} ] && exec_prefix="$prefix"
+[ -z ${bindir+x} ] && bindir="$exec_prefix/bin"
+[ -z ${sbindir+x} ] && sbindir="$exec_prefix/sbin"
+[ -z ${libexecdir+x} ] && libexecdir="$exec_prefix/libexec"
+[ -z ${sysconfdir+x} ] && sysconfdir="$prefix/etc"
+[ -z ${datarootdir+x} ] && datarootdir="$prefix/share"
+[ -z ${datadir+x} ] && datadir="$datarootdir"
+[ -z ${sharedstatedir+x} ] && sharedstatedir="$prefix/com"
+[ -z ${localstatedir+x} ] && localstatedir="$prefix/var"
+[ -z ${runstatedir+x} ] && runstatedir="$localstatedir/run"
+[ -z ${includedir+x} ] && includedir="$prefix/include"
+if [ -z ${includeexecdir+x} ]; then
+  if [ "x$prefix" = "x$exec_prefix" ]; then
+    includeexecdir="$includedir"
+  else
+    includeexecdir="$exec_prefix/include"
+  fi
+fi
+[ -z ${docdir+x} ] && docdir="$datarootdir/doc"
+[ -z ${infodir+x} ] && infodir="$datarootdir/info"
+[ -z ${htmldir+x} ] && htmldir="$docdir"
+[ -z ${dvidir+x} ] && dvidir="$docdir"
+[ -z ${pdfdir+x} ] && pdfdir="$docdir"
+[ -z ${psdir+x} ] && psdir="$docdir"
+[ -z ${libdir+x} ] && libdir="$exec_prefix/lib"
+[ -z ${pkgconfigdir+x} ] && pkgconfigdir="$libdir/pkgconfig"
+[ -z ${localedir+x} ] && localedir="$datarootdir/locale"
+[ -z ${mandir+x} ] && mandir="$datarootdir/man"
+
+trim_whitespace() {
+  sed -e 's/^  *//' -e 's/  *$//'
+}
+
+check_begin() {
+  printf "checking %s... " "$1"
+}
+
+check_end() {
+  printf "%s\n" "$1" | trim_whitespace
+}
+
+check_begin "whether we are cross-compiling"
+if [ "$cross_compiling" = maybe ] && [ -n "$host" ]; then
+  if [ "x$build" = "x$host" ]; then
+    cross_compiling=no
+  else
+    cross_compiling=yes
+  fi
+elif [ "$cross_compiling" = maybe ]; then
+  cross_compiling=no
+fi
+check_end "$cross_compiling"
+if [ "$cross_compiling" = yes ]; then
+  cross_compiling=true
+else
+  cross_compiling=false
+fi
+
+search_tool() {
+  eval unset $2
+  check_begin "for $1"
+  candidates=
+  if [ -n "$4" ]; then
+    for candidate in $5; do
+      candidates="$candidates $4$candidate"
+    done
+  fi
+  for candidate in $5; do
+    candidates="$candidates $candidate"
+  done
+  candidates_found=false
+  for candidate in $candidates; do
+     if ! which $candidate 1>/dev/null 2>/dev/null; then
+       continue
+     fi
+     # Avoid picking up a broken gcc-ar built without plugin support.
+     if [ x"$3" = x"ar" ]; then
+       rm -f conftest.a conftest.o
+       touch conftest.o
+       if ! $candidate -cr conftest.a conftest.o 1>/dev/null 2>/dev/null; then
+         rm -f conftest.a conftest.o
+         continue
+       fi
+       rm -f conftest.a conftest.o
+     fi
+     check_end "$candidate"
+     candidates_found=true
+     eval $2="$candidate"
+     break
+  done
+  if ! $candidates_found; then
+    check_end "not found"
+  fi
+}
+
+search_tool_found() {
+  check_begin "for $1"
+  check_end "$2"
+}
+
+c_compile() {
+  if ! $1 $2 $3 -c conftest.c -o conftest.o $4 $5 1>/dev/null 2>/dev/null; then
+    rm -f conftest.o
+    false
+  else
+    rm -f conftest.o
+    true
+  fi
+}
+
+c_compile_link() {
+  if ! $1 $2 $3 -c conftest.c -o conftest $4 $5 1>/dev/null 2>/dev/null; then
+    rm -f conftest
+    false
+  else
+    rm -f conftest
+    true
+  fi
+}
+
+c_compile_link_so() {
+  if ! $1 $2 $3 -shared conftest.c -o conftest.so $4 $5 1>/dev/null 2>/dev/null; then
+    rm -f conftest.so
+    false
+  else
+    rm -f conftest.so
+    true
+  fi
+}
+
+c_compile_link_dylib() {
+  if ! $1 $2 $3 -dynamiclib conftest.c -o conftest.dylib $4 $5 1>/dev/null 2>/dev/null; then
+    rm -f conftest.dylib
+    false
+  else
+    rm -f conftest.dylib
+    true
+  fi
+}
+
+check() {
+  check_begin "$2"
+  if ! "$1" "$3" "$4" "$5" "$6" "$7" "$8"; then
+    check_end "no"
+    false
+  else
+    check_end "yes"
+    true
+  fi
+}
+
+#
+# Locate the system compiler.
+#
+
+if [ -z "$CC" ]; then
+  search_tool "compiler" CC cc "${tool_prefix}" "cc gcc"
+  if [ -z "$CC" ]; then
+    echo "$0: error: no system compiler was found"
+    exit 1
+  fi
+else
+  search_tool_found "compiler" "$CC"
+fi
+
+if [ -z "$CFLAGS" ]; then
+  CFLAGS="-O2 -g"
+fi
+
+if [ -z "$CPPFLAGS" ]; then
+  CPPFLAGS=""
+fi
+
+if [ -z "$LDFLAGS" ]; then
+  LDFLAGS=""
+fi
+
+if [ -z "$LIBS" ]; then
+  LIBS=""
+fi
+
+#
+# Check if the system compiler works.
+#
+
+cat > conftest.c << EOF
+#include <stdio.h>
+int main(void)
+{
+	printf("Hello, World!\n");
+	return 0;
+}
+EOF
+
+if ! check c_compile_link "whether compiler works" "$CC" "$CFLAGS" "$CPPFLAGS" "$LDFLAGS" "$LIBS"; then
+  rm -f conftest.c
+  echo "$0: error: the compiler doesn't work"
+  exit 1
+fi
+
+rm -f conftest.c
+
+#
+# Search for the library archiver.
+#
+
+if [ -z "$AR" ]; then
+  search_tool "library archiver" AR ar "${tool_prefix}" "cc-ar gcc-ar ar"
+  if [ -z "$AR" ]; then
+    echo "$0: error: no library archiver compiler was found"
+    exit 1
+  fi
+else
+  search_tool_found "library archiver" "$AR"
+fi
+
+#
+# Determine how to build C11 code.
+#
+
+cat > conftest.c << EOF
+#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < DESIRED_VERSION
+#error "not c11"
+#endif
+int notemptyfile;
+EOF
+
+check_begin "how to enable C11"
+if c_compile "$CC" "$CFLAGS" "$CPPFLAGS -DDESIRED_VERSION=201112L" "$LDFLAGS" "$LIBS"; then
+  check_end "enabled by default"
+elif c_compile "$CC" "$CFLAGS -std=c11" "$CPPFLAGS -DDESIRED_VERSION=201112L" "$LDFLAGS" "$LIBS"; then
+  check_end "-std=c11"
+  CFLAGS="$CFLAGS -std=c11"
+elif c_compile "$CC" "$CFLAGS -std=c1x" "$CPPFLAGS -DDESIRED_VERSION=201112L" "$LDFLAGS" "$LIBS"; then
+  check_end "-std=c1x"
+  CFLAGS="$CFLAGS -std=c1x"
+elif c_compile "$CC" "$CFLAGS" "$CPPFLAGS -DDESIRED_VERSION=199901L" "$LDFLAGS" "$LIBS"; then
+  check_end "(C99 fallback) enabled by default"
+elif c_compile "$CC" "$CFLAGS -std=c99" "$CPPFLAGS -DDESIRED_VERSION=199901L" "$LDFLAGS" "$LIBS"; then
+  check_end "(C99 fallback) -std=c99"
+  CFLAGS="$CFLAGS -std=c99"
+else
+  check_end "unknown"
+fi
+
+rm -f conftest.c
+
+#
+# Determine which feature macros to pass.
+#
+
+conftest_c_asprintf() {
+cat > conftest.c << EOF
+#include <stdio.h>
+int main(void)
+{
+	int (*func)(char**, const char*, ...) = asprintf;
+	return func ? 0 : 1;
+}
+EOF
+}
+
+conftest_c_apple() {
+cat > conftest.c << EOF
+#if !defined(__APPLE__)
+#error "not apple"
+#endif
+EOF
+}
+
+check_begin "for feature macros"
+FEATURE_MACROS=""
+conftest_c_asprintf
+if c_compile "$CC" "$CFLAGS" "$CPPFLAGS" "$LDFLAGS" "$LIBS"; then
+  : # No feature macros are needed.
+elif c_compile "$CC" "$CFLAGS" "$CPPFLAGS -D_ALL_SOURCE" "$LDFLAGS" "$LIBS"; then
+  FEATURE_MACROS="$FEATURE_MACROS -D_ALL_SOURCE"
+elif c_compile "$CC" "$CFLAGS" "$CPPFLAGS -D_GNU_SOURCE" "$LDFLAGS" "$LIBS"; then
+  FEATURE_MACROS="$FEATURE_MACROS -D_GNU_SOURCE"
+fi
+conftest_c_apple
+if c_compile "$CC" "$CFLAGS" "$CPPFLAGS" "$LDFLAGS" "$LIBS"; then
+  FEATURE_MACROS="$FEATURE_MACROS -D_DARWIN_C_SOURCE"
+fi
+CPPFLAGS="$CPPFLAGS $FEATURE_MACROS"
+[ -n "$FEATURE_MACROS" ] || FEATURE_MACROS="none needed"
+check_end "$FEATURE_MACROS"
+
+rm -f conftest.c
+
+#
+# Determine whether _FILE_OFFSET_BITS=64 would have a good effect.
+#
+
+cat > conftest.c << EOF
+#include <unistd.h>
+#if !(defined(_LFS64_LARGEFILE) || _LFS64_LARGEFILE-0)
+#error "nope not a LFS-capable system"
+#endif
+#include <limits.h>
+#if 0x7FFFFFFF < LONG_MAX
+#error "nope this system should have a 64-bit off_t anyways"
+#endif
+/* Use -D_FILE_OFFSET_BITS=64. */
+EOF
+if check c_compile "for _FILE_OFFSET_BITS value needed for large files" \
+         "$CC" "$CFLAGS" "$CPPFLAGS" "$LDFLAGS" "$LIBS"; then
+  CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64"
+fi
+rm -f conftest.c
+
+#
+# Detect endian detection or fallbacks.
+#
+
+rm -f endian.h
+cat > conftest.c << EOF
+#ifdef TRY_ENDIAN_H
+#include <endian.h>
+#endif
+#ifdef TRY_SYS_ENDIAN_H
+#include <sys/endian.h>
+#endif
+#ifdef TRY_MACHINE_ENDIAN_H
+#include <machine/endian.h>
+#endif
+#if !defined(BYTE_ORDER)
+#error "not satisfied"
+#endif
+EOF
+
+check_begin "for endian.h"
+if c_compile "$CC" "$CFLAGS" "$CPPFLAGS -DTRY_ENDIAN_H" "$LDFLAGS" "$LIBS"; then
+  ENDIAN_H="endian.h"
+elif c_compile "$CC" "$CFLAGS" "$CPPFLAGS -DTRY_SYS_ENDIAN_H" "$LDFLAGS" "$LIBS"; then
+  ENDIAN_H="sys/endian.h"
+  echo "#include <$ENDIAN_H>" > endian.h
+elif c_compile "$CC" "$CFLAGS" "$CPPFLAGS -DTRY_MACHINE_ENDIAN_H" "$LDFLAGS" "$LIBS"; then
+  ENDIAN_H="machine/endian.h"
+  echo "#include <$ENDIAN_H>" > endian.h
+else
+  ENDIAN_H="unknown"
+  cat > endian.h << EOF
+#ifndef ENDIAN_H
+#define ENDIAN_H
+#define BYTE_ORDER 0000
+#define LITTLE_ENDIAN 1234
+#define BIG_ENDIAN 4321
+#endif
+EOF
+fi
+check_end "$ENDIAN_H"
+
+#
+# Detect the kind of shared libaries.
+#
+
+cat > conftest.c << EOF
+#if !defined(__APPLE__)
+#error "this system doesn't use dylib"
+#endif
+EOF
+shared_library_type=so
+if check c_compile "whether shared libraries are dylib" \
+         "$CC" "$CFLAGS" "$CPPFLAGS" "$LDFLAGS" "$LIBS"; then
+  shared_library_type=dylib
+fi
+rm -f conftest.c
+
+#
+# Decide whether to build static and shared libraries.
+#
+
+if [ $enable_static = maybe ]; then
+  enable_static=true
+fi
+
+if [ $enable_shared = maybe ]; then
+  enable_shared=false
+  cat > conftest.c << EOF
+int footest(int input) { return input + 42; }
+EOF
+  if [ $shared_library_type = dylib ]; then
+    if check c_compile_link_dylib "whether shared libraries work" \
+             "$CC" "$CFLAGS" "$CPPFLAGS" "$LDFLAGS" "$LIBS"; then
+      enable_shared=true
+    fi
+  else
+    if check c_compile_link_so "whether shared libraries work" \
+             "$CC" "$CFLAGS" "$CPPFLAGS" "$LDFLAGS" "$LIBS"; then
+      enable_shared=true
+    fi
+  fi
+  rm -f conftest.c
+fi
+
+#
+# Decide which targets to build by default.
+#
+
+TARGET_ALL_PREREQUISITES=
+TARGET_INSTALL_PREREQUISITES=
+
+if [ $enable_static = true ]; then
+  TARGET_ALL_PREREQUISITES="$TARGET_ALL_PREREQUISITES libz.a"
+  TARGET_INSTALL_PREREQUISITES="$TARGET_INSTALL_PREREQUISITES install-static"
+fi
+
+if [ $shared_library_type = dylib ]; then
+  TARGET_SHARED_PREREQUISITES="libz.dylib"
+  TARGET_INSTALL_SHARED_LIB_PREREQUISITES="install-shared-lib-dylib"
+else
+  TARGET_SHARED_PREREQUISITES="libz.so"
+  TARGET_INSTALL_SHARED_LIB_PREREQUISITES="install-shared-lib-so"
+fi
+
+if [ $enable_shared = true ]; then
+  TARGET_ALL_PREREQUISITES="$TARGET_ALL_PREREQUISITES $TARGET_SHARED_PREREQUISITES"
+  TARGET_INSTALL_PREREQUISITES="$TARGET_INSTALL_PREREQUISITES install-shared"
+fi
+
+#
+# Create the makefile.
+#
+
+(for var in $exported_variables; do
+  eval value=\$$var
+  echo "s=@$var@=$(echo "$value" | sed 's,=,\\=,g')=g"
+done) > Makefile.sed
+sed -f Makefile.sed "$srcdir/Makefile.in" > Makefile
+rm -f Makefile.sed
+
+echo "$configure_arguments" > config.status
+chmod +x config.status

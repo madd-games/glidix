@@ -1,0 +1,12 @@
+*.o
+*.lo
+*.a
+*.so
+*.so.*
+z.pc
+gencrc32
+genfixed
+gentrees
+config.status
+Makefile
+endian.h

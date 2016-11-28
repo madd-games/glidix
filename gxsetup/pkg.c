@@ -38,10 +38,20 @@
 #include "progress.h"
 #include "pkg.h"
 #include "msgbox.h"
+#include "render.h"
 
-void pkgInstall()
+typedef struct
 {
-	int numPkg = 0;
+	const char*			name;
+	int				install;
+} Package;
+
+static Package *packages = NULL;
+static size_t numPackages = 0;
+
+void pkgSelection()
+{
+	// make a list of all the packages
 	DIR *dirp = opendir("/usr/share/pkg");
 	if (dirp == NULL)
 	{
@@ -52,30 +62,104 @@ void pkgInstall()
 	struct dirent *ent;
 	while ((ent = readdir(dirp)) != NULL)
 	{
-		if (ent->d_name[0] != '.') numPkg++;
+		if (ent->d_name[0] != '.')
+		{
+			size_t index = numPackages++;
+			packages = (Package*) realloc(packages, sizeof(Package) * numPackages);
+			packages[index].name = strdup(ent->d_name);
+			packages[index].install = 1;
+		};
 	};
 	
 	closedir(dirp);
 	
-	if (numPkg == 0) return;
+	int startX, startY;
+	size_t selected = 0;
 	
-	dirp = opendir("/usr/share/pkg");
-	if (dirp == NULL)
+	renderWindow("\30" "\31" " Select package\t<ENTER> Toggle installation\t" "\x1A" " Proceed",
+			"SELECT PACKAGES",
+			 50, (int) numPackages,
+			 &startX, &startY);
+	
+	while (1)
 	{
-		msgbox("ERROR", "Failed to open /usr/share/pkg!");
-		return;
+		size_t i;
+		for (i=0; i<numPackages; i++)
+		{
+			char prefix, tick;
+			if (i == selected)
+			{
+				setColor(COLOR_SELECTION);
+				prefix = 16;
+			}
+			else
+			{
+				setColor(COLOR_WINDOW);
+				prefix = ' ';
+			};
+		
+			if (packages[i].install)
+			{
+				tick = '*';
+			}
+			else
+			{
+				tick = ' ';
+			};
+		
+			setCursor((uint8_t)startX, (uint8_t)(startY+i));
+			printf("%c[%c] %-45s", prefix, tick, packages[i].name);
+		};
+
+		setCursor(79, 24);
+		
+		uint8_t c;
+		if (read(0, &c, 1) != 1) continue;
+		
+		if (c == 0x8B)
+		{
+			// up
+			if (selected != 0) selected--;
+		}
+		else if (c == 0x8C)
+		{
+			// down
+			if (selected != (numPackages-1)) selected++;
+		}
+		else if (c == '\n')
+		{
+			// toggle
+			packages[selected].install = !packages[selected].install;
+		}
+		else if (c == 0x8E)
+		{
+			// right
+			break;
+		};
+	};
+};
+
+void pkgInstall()
+{
+	int numPkg = 0;
+	size_t i;
+	for (i=0; i<numPackages; i++)
+	{
+		if (packages[i].install) numPkg++;
 	};
 	
+	if (numPkg == 0) return;
+	
 	int count = 0;
-	while ((ent = readdir(dirp)) != NULL)
+	for (i=0; i<numPackages; i++)
 	{
-		if (ent->d_name[0] != '.')
+		if (packages[i].install)
 		{
 			char msg[256];
-			sprintf(msg, "Unpacking %s...", ent->d_name);
+			sprintf(msg, "Unpacking %s...", packages[i].name);
 		
 			char path[256];
-			sprintf(path, "/usr/share/pkg/%s", ent->d_name);
+			sprintf(path, "/usr/share/pkg/%s", packages[i].name);
 		
 			drawProgress("SETUP", msg, count++, numPkg);
 		
@@ -114,6 +198,4 @@ void pkgInstall()
 			};
 		};
 	};
-	
-	closedir(dirp);
 };

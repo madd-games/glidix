@@ -1,0 +1,37 @@
+TODO:
+* Consider importing ChangeLog from official zlib.
+* The upstream FAQ talks about valgrind complaining about branching on an
+  uninitialized value, but they dismiss it because of performance reasons.
+  XgF defends it by linking to <http://research.swtch.com/sparse>.
+* Migrate the man page to mandoc.
+* Create man pages for all the libz functions? Looks like OpenBSD has man
+  pages for zlib in compress(3)?
+* OpenBSD changed z_stream_s::total_in and z_stream_s::total_out from
+  uLong to z_off_t. Seems reasonable, perhaps, but an incompatible ABI
+  change and a change in signedness.
+* `FILE-OF-HORRORS'? `HORROR'? Put fun stuff there.
+* Examine and address all the todo statements in the code.
+* Closely audit the code semantically.
+* Are the strerror() calls unsafe on some operating systems?
+* gzputs doesn't work for strings longer than UINT_MAX!
+* Fun gzvprintf truncation issues. I can fix that.
+* Are z_stream allocated strings or string constants?
+* Document all the remaining #ifdef's.
+* What's up with the inftrees.c expression `(unsigned int)(-1)'?
+* Where do the trailing braces in tr_static_init's output come from?
+* Bounds checks in zError.
+* Get rid of the Tracev() macro.
+* windowBits bit manipulation is low quality.
+* Use function pointers in gzclose to optimize static linking.
+* What's with inflateMark doing `return -1L << 16;'?
+* The windowBits code in inflateReset2 is needlessly hard to read.
+* Probably delete the version checks, we're not going to break the ABI.
+* Perhaps restore gzflags that was removed in 1.2.7 for ABI compatibility.
+* I'd like to see a proof that compressBound is correct.
+* Do we need to modify deflate_copyright?
+* What is the 256-byte window bug mentioned in deflate.c?
+
+Upstream-ideas:
+* What's with the awful original line `if ((int)len < 0) {' from
+  the gzread.c file? That's bad.
+* Truncation checks in compress2 and uncompress.

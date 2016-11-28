@@ -45,13 +45,16 @@ void doInstall()
 {
 	partEditor();
 	promptUserInfo();
+	pkgSelection();
 	
 	partFlush();
 	userSetup();
 	pkgInstall();
 	
-	unmountParts();
-	msgbox("COMPLETED", "Glidix has been installed and may now be ran.");
+	msgbox("COMPLETED", "Glidix has been installed. Press ENTER to reboot");
+	
+	execl("/usr/bin/halt", "reboot", NULL);
+	exit(1);
 };
 
 int main()

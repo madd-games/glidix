@@ -47,3 +47,11 @@ then
 	cd ..
 	build-tools/mkmip mipdir $1/binutils.mip
 fi
+
+# libz
+rm -rf mipdir || exit 1
+cd libz
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/libz.mip
+

@@ -1,0 +1,200 @@
+
+                Frequently Asked Questions about libz
+
+If your question is not there, please check the Sortix libz home page
+https://sortix.org/libz/ which may have more recent information.
+
+ 1. Is this a drop-in replacement for zlib?
+
+    Yes.  libz is ABI and API compatible with zlib.
+
+    No.  Some cruft was removed from the public headers.  Very low quality
+    applications could depend on this and would need a fix.
+
+    No.  It has a different build system, but it is better and should be
+    indistinguishable from autoconf.  Automated build scripts need adaption.
+
+ 2. What operating systems are supported?
+
+    libz is portable to reasonable POSIX operating systems such as Linux, the
+    BSD systems, and OS X.  Additionally it is portable to operating systems it
+    knows nothing about, assuming the compiler toolchain acts traditionally.
+
+    The native Windows C environment is not supported because it would require
+    dumbing down libz in harmful ways.  If you need this, you can just use zlib.
+
+ 3. compress() returns Z_BUF_ERROR.
+
+    Make sure that before the call of compress(), the length of the compressed
+    buffer is equal to the available size of the compressed buffer and not
+    zero.
+
+ 4. deflate() or inflate() returns Z_BUF_ERROR.
+
+    Before making the call, make sure that avail_in and avail_out are not zero.
+    When setting the parameter flush equal to Z_FINISH, also make sure that
+    avail_out is big enough to allow processing all pending input.  Note that a
+    Z_BUF_ERROR is not fatal--another call to deflate() or inflate() can be
+    made with more input or output space.  A Z_BUF_ERROR may in fact be
+    unavoidable depending on how the functions are used, since it is not
+    possible to tell whether or not there is more output pending when
+    strm.avail_out returns with zero.  See http://zlib.net/zlib_how.html for a
+    heavily annotated example.
+
+ 5. Where's the libz documentation (man pages, etc.)?
+
+    It's in zlib.h.
+
+ 6. I found a bug in libz.
+
+    Most of the time, such problems are due to an incorrect usage of libz.
+    Please try to reproduce the problem with a small program and send the
+    corresponding source to us.
+
+ 7. Why does gzip give an error on a file I make with compress/deflate?
+
+    The compress and deflate functions produce data in the zlib format, which
+    is different and incompatible with the gzip format.  The gz* functions in
+    zlib on the other hand use the gzip format.  Both the zlib and gzip formats
+    use the same compressed data format internally, but have different headers
+    and trailers around the compressed data.
+
+ 8. Ok, so why are there two different formats?
+
+    The gzip format was designed to retain the directory information about a
+    single file, such as the name and last modification date.  The zlib format
+    on the other hand was designed for in-memory and communication channel
+    applications, and has a much more compact header and trailer and uses a
+    faster integrity check than gzip.
+
+ 9. Well that's nice, but how do I make a gzip file in memory?
+
+    You can request that deflate write the gzip format instead of the zlib
+    format using deflateInit2().  You can also request that inflate decode the
+    gzip format using inflateInit2().  Read zlib.h for more details.
+
+10. Is libz thread-safe?
+
+    Yes.
+
+    Of course, you should only operate on any given zlib or gzip stream from a
+    single thread at a time.
+
+11. The license says that altered source versions must be "plainly marked".  So
+    what exactly do I need to do to meet that requirement?
+
+    The Sortix libz stance is that we don't care how they are plainly marked as
+    long as you make the origins of the software clear to the recipients.  A
+    clear statement like:
+
+        This is ${VENDOR} libz.  This is not Sortix libz.
+
+    in a prominent location should satisfy this requirement (as long as there
+    are no contradictory statements elsewhere).  You should re-brand the
+    library if you effectively fork it.  Unless you really need it for
+    compatibility reasons, you should remove the Z_IS_SORTIX_LIBZ macro from
+    the <zlib.h> header.  You could add your own Z_IS_${VENDOR}_LIBZ macro.
+
+    We don't require you to do anything regarding version numbers and version
+    strings, but see what the zlib developers said below.  We set the last
+    version component permanently to "f".
+
+    The original zlib developers had this answer:
+
+    You need to change the ZLIB_VERSION and ZLIB_VERNUM #defines in zlib.h.  In
+    particular, the final version number needs to be changed to "f", and an
+    identification string should be appended to ZLIB_VERSION.  Version numbers
+    x.x.x.f are reserved for modifications to zlib by others than the zlib
+    maintainers.  For example, if the version of the base zlib you are altering
+    is "1.2.3.4", then in zlib.h you should change ZLIB_VERNUM to 0x123f, and
+    ZLIB_VERSION to something like "1.2.3.f-zachary-mods-v3".  You can also
+    update the version strings in deflate.c and inftrees.c.
+
+    For altered source distributions, you should also note the origin and
+    nature of the changes in zlib.h, as well as in ChangeLog and README, along
+    with the dates of the alterations.  The origin should include at least your
+    name (or your company's name), and an email address to contact for help or
+    issues with the library.
+
+    Note that distributing a compiled zlib library along with zlib.h and
+    zconf.h is also a source distribution, and so you should change
+    ZLIB_VERSION and ZLIB_VERNUM and note the origin and nature of the changes
+    in zlib.h as you would for a full source distribution.
+
+12. Can I access data randomly in a compressed stream?
+
+    No, not without some preparation.  If when compressing you periodically use
+    Z_FULL_FLUSH, carefully write all the pending data at those points, and
+    keep an index of those locations, then you can start decompression at those
+    points.  You have to be careful to not use Z_FULL_FLUSH too often, since it
+    can significantly degrade compression.  Alternatively, you can scan a
+    deflate stream once to generate an index, and then use that index for
+    random access.  See examples/zran.c.
+
+13. Is there some simpler, easier to read version of inflate I can look at to
+    understand the deflate format?
+
+    First off, you should read RFC 1951.  Second, yes.  Look in the upstream
+    zlib's contrib/puff directory.
+
+14. Does libz infringe on any patents?
+
+    As far as we know, no.  In fact, that was originally the whole point behind
+    zlib.  Look here for some more information:
+
+    http://www.gzip.org/#faq11
+
+15. Can libz work with greater than 4 GB of data?
+
+    Yes.  inflate() and deflate() will process any amount of data correctly.
+    Each call of inflate() or deflate() is limited to input and output chunks
+    of the maximum value that can be stored in the compiler's "unsigned int"
+    type, but there is no limit to the number of chunks.  Note however that the
+    strm.total_in and strm_total_out counters may be limited to 4 GB.  These
+    counters are provided as a convenience and are not used internally by
+    inflate() or deflate().  The application can easily set up its own counters
+    updated after each call of inflate() or deflate() to count beyond 4 GB.
+    compress() and uncompress() may be limited to 4 GB, since they operate in a
+    single call.  gzseek() and gztell() may be limited to 4 GB depending on how
+    libz is compiled.  See the zlibCompileFlags() function in zlib.h.
+
+    The word "may" appears several times above since there is a 4 GB limit only
+    if the compiler's "long" type is 32 bits.  If the compiler's "long" type is
+    64 bits, then the limit is 16 exabytes.
+
+16. Does libz have any security vulnerabilities?
+
+    Please audit the code to find the true answer.
+
+    The original code has a lot of unsafe or obscure coding practices, some of
+    which has been fixed in this library.  The public API also has a lot of
+    surprises, such uses unsigned ints or unsigned longs instead instead of
+    size_t's for buffer lengths, but there are also other quirks.  This can make
+    the library harder to use safely, so you must remember that the library
+    doesn't exist in a vacuum: Any program that use the library must be audited
+    as well and considered as a whole.  It would not surprise me if there are
+    issues hidden here, exploitable or not.
+
+    As usual, if I know of any security vulnerabilities then I'll fix them.  If
+    they are in the upstream zlib as well, then they'll get reported there too.
+
+    Mind that the upstream zlib releases has had security vulnerabilities in
+    particular releases.  Zlib builds can be unsafe if the host operating system
+    doesn't have proper safe standard interfaces.  Please read the offical zlib
+    FAQ for information about that.
+
+17. What's the difference between the "gzip" and "deflate" HTTP 1.1 encodings?
+
+    "gzip" is the gzip format, and "deflate" is the zlib format.  They should
+    probably have called the second one "zlib" instead to avoid confusion with
+    the raw deflate compressed data format.  While the HTTP 1.1 RFC 2616
+    correctly points to the zlib specification in RFC 1950 for the "deflate"
+    transfer encoding, there have been reports of servers and browsers that
+    incorrectly produce or expect raw deflate data per the deflate
+    specification in RFC 1951, most notably Microsoft.  So even though the
+    "deflate" transfer encoding using the zlib format would be the more
+    efficient approach (and in fact exactly what the zlib format was designed
+    for), using the "gzip" transfer encoding is probably more reliable due to
+    an unfortunate choice of name on the part of the HTTP 1.1 authors.
+
+    Bottom line: use the gzip format for HTTP 1.1 encoding.

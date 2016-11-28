@@ -1,0 +1,19 @@
+>NAME
+
+ls - list directory entries
+
+>SYNOPSIS
+
+	ls ['options']... 'directory'
+
+>DESCRIPTION
+
+This command lists the contents of the specified 'directory'; or the current working directory if none was specified. By default, this command will show the list of names inside the specified directory, each on one line, except names beginning with a period ('.'). It also accepts options which change this default behavior:
+
+\* *-a* - list all entries, including ones which start with a period ('.'). Note this will also include the 2 special entries '.' and '..'.
+\* *-i* - specifiy the inode number of each entry, alongside the name. This option is ignored if *-l* is passed.
+\* *-l* - lists extra details about each entry: the [access_mode.6], link count, owner UID, associated group GID, and name. See [stat.2] for more information.
+
+>SEE ALSO
+
+[stat.2], [access_mode.6]

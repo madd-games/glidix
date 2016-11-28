@@ -45,3 +45,4 @@ install:
 	cp -RT crt $(DESTDIR)/lib
 	cp -RT support $(DESTDIR)/lib
 	cp -RT $(SRCDIR)/include $(DESTDIR)/usr/include
+	ln -sf libc.so $(DESTDIR)/lib/libg.so
