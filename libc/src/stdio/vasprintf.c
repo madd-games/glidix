@@ -27,54 +27,39 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
+#include <errno.h>
 
-size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
+int asprintf(char **strp, const char *fmt, ...)
 {
-	if ((fp->_flags & __FILE_WRITE) == 0)
-	{
-		fp->_flags |= __FILE_FERROR;
-		return 0;
-	};
-
-	const void *buf_org = buf;
-
-	size_t ret = size * count;
-	size_t rsz = size * count;
-	while (fp->_bufsiz < rsz)
-	{
-		if (fp->_flush == NULL)
-		{
-			// truncate
-			rsz = fp->_bufsiz;
-		}
-		else
-		{
-			if (fp->_bufsiz != 0) memcpy(fp->_wrbuf, buf, fp->_bufsiz);
-			fp->_wrbuf += fp->_bufsiz;
-			buf = (void*) ((char*) buf + fp->_bufsiz);
-			rsz -= fp->_bufsiz;
-			fp->_bufsiz = 0;
-			fflush(fp);
-		};
-	};
-
-	if (rsz != 0) memcpy(fp->_wrbuf, buf, rsz);
-	fp->_wrbuf += rsz;
-	fp->_bufsiz -= rsz;
-	const char *scan = (const char *) buf_org;
-
-	while (rsz--)
-	{
-		if (*scan == fp->_trigger)
-		{
-			if (fp->_flush != NULL) fflush(fp);
-		};
-
-		scan++;
-	};
-
-	//BREAKPOINT();
-	if (fp->_flush != NULL) fflush(fp);		// TODO: shit, we need some way to call fflush() at exit instead.
+	va_list ap;
+	va_start(ap, fmt);
+	int ret = vasprintf(strp, fmt, ap);
+	va_end(ap);
 	return ret;
+};
+
+int vasprintf(char **strp, const char *fmt, va_list ap)
+{
+	char buffer[256];
+	int count = vsnprintf(buffer, 256, fmt, ap);
+	
+	if (count < 256)
+	{
+		*strp = strdup(buffer);
+		return count;
+	}
+	else
+	{
+		*strp = (char*) malloc((size_t)count + 1);
+		if (*strp == NULL)
+		{
+			errno = ENOMEM;
+			return -1;
+		};
+		
+		return vsnprintf(*strp, (size_t)count + 1, fmt, ap);
+	};
 };

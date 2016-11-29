@@ -133,6 +133,8 @@ int	vsprintf(char *s, const char *fmt, va_list ap);
 int	sprintf(char *s, const char *fmt, ...);
 int	vsnprintf(char *s, size_t n, const char *fmt, va_list ap);
 int	snprintf(char *s, size_t n, const char *fmt, ...);
+int	asprintf(char **strp, const char *fmt, ...);
+int	vasprintf(char **strp, const char *fmt, va_list ap);
 int	fputs(const char *s, FILE *stream);
 int	fputc(int, FILE*);
 int	fgetc(FILE*);
