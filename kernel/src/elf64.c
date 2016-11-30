@@ -34,6 +34,7 @@
 #include <glidix/memory.h>
 #include <glidix/errno.h>
 #include <glidix/interp.h>
+#include <glidix/syscall.h>
 
 typedef struct
 {
@@ -118,6 +119,53 @@ int execScript(File *fp, const char *path, const char *pars, size_t parsz)
 
 int elfExec(const char *path, const char *pars, size_t parsz)
 {
+	if (parsz < 4)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if ((pars[parsz-1] != 0) || (pars[parsz-2] != 0))
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	// offset to each argument and argument count
+	uint64_t argOffsets[2048];
+	int stillArgs = 1;
+	uint64_t argc = 0;
+	uint64_t totalTokens = 0;
+	uint64_t uptrPars = (0x400000 - parsz) & ~0xF;
+	
+	uint64_t scan;
+	for (scan=0; scan<parsz; scan++)
+	{
+		if (pars[scan] == 0)
+		{
+			argOffsets[totalTokens++] = 0;
+			
+			if (stillArgs)
+			{
+				stillArgs = 0;
+			}
+			else
+			{
+				break;
+			};
+		}
+		else
+		{
+			argOffsets[totalTokens++] = uptrPars + scan;
+			if (stillArgs) argc++;
+			
+			while (pars[scan] != 0) scan++;
+		};
+	};
+	
+	// we must zero it out because it's going to userspace
+	memset(argOffsets, 0, 2048 * 8);
+	
 	Regs regs;
 	initUserRegs(&regs);
 	
@@ -409,9 +457,16 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	getCurrentThread()->oxperm = (getCurrentThread()->oxperm & (getCurrentThread()->dxperm & st.st_ixperm)) | st.st_oxperm;
 	getCurrentThread()->dxperm = st.st_dxperm;
 	
-	regs.rsp = 0x400000;
-	regs.rbp = 0;
 	refreshAddrSpace();
+	memcpy_k2u((void*)uptrPars, pars, parsz);
+	uint64_t stack = (uptrPars - 8 * totalTokens) & ~0xF;
+	memcpy_k2u((void*)stack, argOffsets, 8 * totalTokens);
+	
+	regs.rsp = stack;
+	regs.rbp = 0;
+	regs.r12 = argc;
+	regs.r13 = stack;
+	regs.r14 = stack + 8 * (argc+1);	// beginning of environment pointers
 
 	// do not block any signals in a new executable by default
 	getCurrentThread()->sigmask = 0;

@@ -33,7 +33,6 @@ _init:
 	mov rbp, rsp
 
 section .fini
-global __glidixrt_glob_fini
 
 _fini:
 	push rbp
