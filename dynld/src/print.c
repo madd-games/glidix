@@ -1,5 +1,5 @@
 /*
-	Glidix Shell
+	Glidix dynamic linker
 
 	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
@@ -26,25 +26,42 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SH_H_
-#define SH_H_
+#include "dynld.h"
 
-#include <stdio.h>
+void dynld_printf(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	dynld_vprintf(fmt, ap);
+	va_end(ap);
+};
 
-extern int shLastStatus;
-extern int shScriptArgc;
-extern char **shScriptArgs;
-
-/**
- * Fetch the next line of input. Returns NULL on end of input, or a string on the heap
- * if a line has been fetched; that string must then be passed to free().
- */
-char *shFetch();
-
-/**
- * Switch to running a different script. Used by the "." command. A stack is used to remember
- * which scripts to return to.
- */
-void shSource(FILE *script);
-
-#endif
+void dynld_vprintf(const char *fmt, va_list ap)
+{
+	while (*fmt != 0)
+	{
+		if (*fmt != '%')
+		{
+			write(2, fmt, 1);
+			fmt++;
+		}
+		else
+		{
+			fmt++;
+			char spec = *fmt++;
+			
+			const char *sarg;
+			
+			switch (spec)
+			{
+			case '%':
+				write(2, "%", 1);
+				break;
+			case 's':
+				sarg = va_arg(ap, const char*);
+				write(2, sarg, strlen(sarg));
+				break;
+			};
+		};
+	};
+};

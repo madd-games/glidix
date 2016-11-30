@@ -34,6 +34,7 @@
 
 #include "strops.h"
 #include "dict.h"
+#include "sh.h"
 
 const char* getVarValue(const char *varname)
 {
@@ -72,22 +73,59 @@ static char* preprocVars(char *line)
 		scan++;
 		
 		char varname[256];
+		const char *value = NULL;
+		char numbuf[64];
+		int argIndex;
 		
-		char *put = varname;
-		while ((strchr(nameChars, *scan) != NULL) && (*scan != 0))
+		if (*scan == '?')
 		{
-			if ((put-varname) > 255)
+			scan++;
+			sprintf(numbuf, "%d", shLastStatus);
+			value = numbuf;
+		}
+		else if (*scan == '$')
+		{
+			scan++;
+			sprintf(numbuf, "%d", getpid());
+			value = numbuf;
+		}
+		else if (sscanf(scan, "%d", &argIndex) == 1)
+		{
+			while ((*scan >= '0') && (*scan <= '9')) scan++;
+			if (argIndex >= shScriptArgc)
 			{
-				// name too long
-				break;
+				value = NULL;
+			}
+			else
+			{
+				value = shScriptArgs[argIndex];
 			};
+		}
+		else if (*scan == '#')
+		{
+			scan++;
+			sprintf(numbuf, "%d", shScriptArgc);
+			value = numbuf;
+		}
+		else
+		{
+			char *put = varname;
+			while ((strchr(nameChars, *scan) != NULL) && (*scan != 0))
+			{
+				if ((put-varname) > 255)
+				{
+					// name too long
+					break;
+				};
 			
-			*put++ = *scan++;
+				*put++ = *scan++;
+			};
+		
+			*put = 0;
+		
+			value = getVarValue(varname);
 		};
 		
-		*put = 0;
-		
-		const char *value = getVarValue(varname);
 		if (value != NULL)
 		{
 			char *newline = str_concat(result, value);

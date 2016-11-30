@@ -1,5 +1,5 @@
 /*
-	Glidix Shell
+	Glidix dynamic linker
 
 	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
@@ -26,25 +26,27 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SH_H_
-#define SH_H_
+#ifndef DYNLD_H_
+#define DYNLD_H_
 
-#include <stdio.h>
-
-extern int shLastStatus;
-extern int shScriptArgc;
-extern char **shScriptArgs;
+#include <sys/types.h>
+#include <stdarg.h>
+#include <inttypes.h>
 
 /**
- * Fetch the next line of input. Returns NULL on end of input, or a string on the heap
- * if a line has been fetched; that string must then be passed to free().
+ * Write to a file.
  */
-char *shFetch();
+ssize_t write(int fd, const void *buffer, size_t size);
 
 /**
- * Switch to running a different script. Used by the "." command. A stack is used to remember
- * which scripts to return to.
+ * A very simplistic string-formatting function.
  */
-void shSource(FILE *script);
+void dynld_vprintf(const char *fmt, va_list ap);
+void dynld_printf(const char *fmt, ...);
+
+/**
+ * String operations.
+ */
+size_t strlen(const char *s);
 
 #endif

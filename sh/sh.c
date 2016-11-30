@@ -41,6 +41,7 @@
 #include "dict.h"
 #include "preproc.h"
 #include "command.h"
+#include "sh.h"
 
 #define	MAX_STACK_DEPTH			32
 
@@ -65,6 +66,10 @@ typedef struct
 
 static StackFrame stack[MAX_STACK_DEPTH];
 static int stackIndex = 0;
+
+int shLastStatus = 0;
+int shScriptArgc;
+char **shScriptArgs;
 
 void shSource(FILE *script)
 {
@@ -228,6 +233,9 @@ int main(int argc, char *argv[], char *initEnv[])
 	dictInitFrom(&dictEnviron, initEnv);
 	dictInit(&dictShellVars);
 	
+	shScriptArgc = argc - 1;
+	shScriptArgs = &argv[1];
+	
 	int i;
 	const char *filename = NULL;
 	for (i=1; i<argc; i++)
@@ -255,14 +263,11 @@ int main(int argc, char *argv[], char *initEnv[])
 		}
 		else if (argv[i][0] != '-')
 		{
-			if (filename != NULL)
-			{
-				fprintf(stderr, "%s: multiple scripts specified\n", argv[0]);
-				return 1;
-			};
-			
 			filename = argv[i];
+			shScriptArgc = argc - i;
+			shScriptArgs = &argv[i];
 			shellMode = MODE_FILE;
+			break;
 		}
 		else
 		{
@@ -298,7 +303,7 @@ int main(int argc, char *argv[], char *initEnv[])
 			char *line = shFetch();
 			if (line == NULL) break;
 			line = preprocLine(line);
-			cmdRun(line);
+			shLastStatus = cmdRun(line);
 			free(line);
 		};
 		

@@ -220,6 +220,27 @@ int cmdRun(char *cmd)
 			shSource(fp);
 			return 0;
 		}
+		else if (strcmp(*ptr, "exec") == 0)
+		{
+			ptr++;
+			if (ptr == NULL)
+			{
+				fprintf(stderr, "USAGE:\texec <command> [args]...\n");
+				return 1;
+			};
+			
+			char execPath[PATH_MAX];
+			if (findExecPath(*ptr, execPath) != 0)
+			{
+				fprintf(stderr, "%s: command not found\n", *ptr);
+				free(argv);
+				return 1;
+			};
+			
+			execve(execPath, ptr, localEnviron.list);
+			fprintf(stderr, "exec %s: %s\n", *ptr, strerror(errno));
+			return 1;
+		}
 		else
 		{
 			char execPath[PATH_MAX];

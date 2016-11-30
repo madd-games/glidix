@@ -118,7 +118,7 @@ ldmods\n\
 echo \"Starting level 2 services...\"\n\
 service state 2\n\
 echo \"Starting login manager...\"\n\
-$logmgr\n\
+exec $logmgr\n\
 ";
 
 static const char *loginScript = "\
