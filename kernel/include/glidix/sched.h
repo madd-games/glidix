@@ -39,6 +39,7 @@
 #include <glidix/signal.h>
 #include <glidix/vfs.h>
 #include <glidix/fpu.h>
+#include <glidix/time.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -208,6 +209,18 @@ void	credsUpref(Creds *creds);
 void	credsDownref(Creds *creds);
 
 /**
+ * Represents a runqueue entry. An entry is pre-allocated within the Thread structure, and they
+ * are linked by the "next" field into a queue, from which the scheduler gets next commands to
+ * run.
+ */
+struct _Thread;
+typedef struct _RunqueueEntry
+{
+	struct _Thread*			thread;
+	struct _RunqueueEntry*		next;
+} RunqueueEntry;
+
+/**
  * WARNING: The first few fields of this structure must not be reordered as they are accessed by
  * assembly code. The end of this "assembly region" is marked with a comment.
  */
@@ -310,12 +323,6 @@ typedef struct _Thread
 	 * Pointer to where the errno shall be stored after syscalls complete.
 	 */
 	int				*errnoptr;
-
-	/**
-	 * The time at which to wake this process up; 0 if it should not be awaken by clock.
-	 * This is used by stuff like sleep(). Given in milliseconds.
-	 */
-	//uint64_t			wakeTime;
 	
 	/**
 	 * The time at which to send the SIGALRM signal; 0 means the signal shall not be sent.
@@ -324,9 +331,9 @@ typedef struct _Thread
 	uint64_t			alarmTime;
 	
 	/**
-	 * ID of the CPU that this thread shall run on.
+	 * The TimedEvent representing the wakeup time.
 	 */
-	int				cpuID;
+	TimedEvent			alarmTimer;
 	
 	/**
 	 * The thread's signal disposition list.
@@ -365,6 +372,11 @@ typedef struct _Thread
 	 */
 	uint64_t			oxperm;
 	uint64_t			dxperm;
+	
+	/**
+	 * Runqueue entry structure. Linked/unlinked from the runqueue.
+	 */
+	RunqueueEntry			runq;
 	
 	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.

@@ -53,6 +53,9 @@ static Thread *threadSysMan;
 static Spinlock notifLock;
 static SchedNotif *firstNotif;
 
+static RunqueueEntry *runqFirst;
+static RunqueueEntry *runqLast;
+
 typedef struct
 {
 	char symbol;
@@ -101,7 +104,7 @@ void dumpRunqueue()
 			euid = th->creds->euid;
 			egid = th->creds->egid;
 		};
-		kprintf("%d\t%d\t%d\t%d\t%s", i++, pid, ppid, th->cpuID, name);
+		kprintf("%d\t%d\t%d\t%s", i++, pid, ppid, name);
 		printThreadFlags(th->flags);
 		if (th->regs.cs == 8)
 		{
@@ -292,9 +295,7 @@ void initSched()
 	
 	// do not send alarms
 	firstThread.alarmTime = 0;
-
-	// run on the BSP
-	firstThread.cpuID = 0;
+	timedPost(&firstThread.alarmTimer, 0);
 	
 	// signal stuff
 	firstThread.sigdisp = NULL;
@@ -413,8 +414,7 @@ void initSchedAP()
 	Thread *idleThread = NEW(Thread);
 	memcpy(idleThread, &firstThread, sizeof(Thread));
 	idleThread->flags = THREAD_WAITING;
-	idleThread->cpuID = getCurrentCPU()->id;
-	strformat(idleThread->name, 256, "CPU %d idle thread", idleThread->cpuID);
+	strformat(idleThread->name, 256, "CPU %d idle thread", getCurrentCPU()->id);
 		
 	// interrupts are already disabled
 	// link the idle thread into the runqueue
@@ -480,85 +480,48 @@ void unlockSched()
 };
 
 int canSched(Thread *thread)
-{
-	if (getCurrentCPU() != NULL)
-	{
-		// do not even try waking/alarming threads that do not belong to this CPU!
-		if (thread->cpuID != getCurrentCPU()->id) return 0;
-	};
-
-#if 0
-	if (thread->wakeTime != 0)
-	{
-		uint64_t currentTime = (uint64_t) getTicks();
-		if (currentTime >= thread->wakeTime)
-		{
-			thread->wakeTime = 0;
-			thread->flags &= ~THREAD_WAITING;
-		};
-	};
-#endif
-
-	if (thread->alarmTime != 0)
-	{
-		uint64_t currentTime = getNanotime();
-		if (currentTime >= thread->alarmTime)
-		{
-			siginfo_t si;
-			si.si_signo = SIGALRM;
-			si.si_code = 0;
-			si.si_errno = 0;
-			si.si_pid = 0;
-			si.si_uid = 0;
-			si.si_addr = NULL;
-			si.si_status = 0;
-			si.si_band = 0;
-			si.si_value.sival_int = 0;
-			thread->alarmTime = 0;
-			sendSignal(thread, &si);
-		};
-	};
-	
+{	
 	if (thread->flags & THREAD_NOSCHED) return 0;
 	return 1;
 };
 
 void switchTaskUnlocked(Regs *regs)
 {
-	Thread *threadPrev = currentThread;
-	
 	// remember the context of this thread.
 	fpuSave(&currentThread->fpuRegs);
 	memcpy(&currentThread->regs, regs, sizeof(Regs));
 
-	// get the next thread
-	while (1)
+	// put the current thread back into the queue if still running
+	if (canSched(currentThread))
 	{
-		int numSeenFirst = 0;
-		do
+		if (currentThread->runq.thread == NULL)
 		{
-			currentThread = currentThread->next;
-			if (currentThread == &firstThread) numSeenFirst++;
-		} while ((!canSched(currentThread)) && (numSeenFirst < 2));
-
-		if (numSeenFirst >= 2)
-		{
-			if (!canSched(threadPrev))
+			currentThread->runq.thread = currentThread;
+			currentThread->runq.next = NULL;
+			if (runqLast == NULL)
 			{
-				// got nothing to do
-				spinlockRelease(&schedLock);
-				cooloff();
-				spinlockAcquire(&schedLock);
-				continue;
+				runqFirst = runqLast = &currentThread->runq;
 			}
 			else
 			{
-				currentThread = threadPrev;
+				runqLast->next = &currentThread->runq;
+				runqLast = &currentThread->runq;
 			};
 		};
-		
-		break;
 	};
+
+	// wait for the next thread to execute
+	while (runqFirst == NULL)
+	{
+		spinlockRelease(&schedLock);
+		cooloff();
+		spinlockAcquire(&schedLock);
+	};
+	
+	currentThread = runqFirst->thread;
+	runqFirst = runqFirst->next;
+	if (runqFirst == NULL) runqLast = NULL;
+	currentThread->runq.thread = NULL;
 	
 	// if there are signals ready to dispatch, dispatch them.
 	if (haveReadySigs(currentThread))
@@ -639,7 +602,6 @@ static void kernelThreadExit()
 	currentThread->prev->next = currentThread->next;
 	currentThread->next->prev = currentThread->prev;
 	currentThread->flags |= THREAD_TERMINATED;
-	downrefCPU(currentThread->cpuID);
 	switchTaskUnlocked(&regs);
 };
 
@@ -698,6 +660,7 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->thid = 0;
 	thread->ftab = NULL;
 	thread->alarmTime = 0;
+	timedPost(&thread->alarmTimer, 0);
 	
 	thread->sigdisp = NULL;
 	thread->pendingSet = 0;
@@ -721,9 +684,6 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	// this is so that when entry() returns, the thread can safely exit.
 	thread->regs.rdi = (uint64_t) data;
 	*((uint64_t*)thread->regs.rsp) = (uint64_t) &kernelThreadExit;
-
-	// allocate a CPU to run this thread on
-	thread->cpuID = allocCPU();
 	
 	// link into the runqueue
 	cli();
@@ -732,9 +692,24 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->next = currentThread->next;
 	thread->prev = currentThread;
 	currentThread->next = thread;
+	
+	if (canSched(thread))
+	{
+		thread->runq.thread = thread;
+		thread->runq.next = NULL;
+		if (runqLast == NULL)
+		{
+			runqFirst = runqLast = &thread->runq;
+		}
+		else
+		{
+			runqLast->next = &thread->runq;
+			runqLast = &thread->runq;
+		};
+	};
+	
 	// there is no need to update currentThread->prev, it will only be broken for the init
 	// thread, which never exits, and therefore its prev will never need to be valid.
-	sendHintToCPU(thread->cpuID);
 	unlockSched();
 	sti();
 	
@@ -760,13 +735,44 @@ void waitThread(Thread *thread)
 
 void signalThread(Thread *thread)
 {
+	if (thread->alarmTime != 0)
+	{
+		uint64_t currentTime = getNanotime();
+		if (currentTime >= thread->alarmTime)
+		{
+			timedCancel(&thread->alarmTimer);
+			siginfo_t si;
+			si.si_signo = SIGALRM;
+			si.si_code = 0;
+			si.si_errno = 0;
+			si.si_pid = 0;
+			si.si_uid = 0;
+			si.si_addr = NULL;
+			si.si_status = 0;
+			si.si_band = 0;
+			si.si_value.sival_int = 0;
+			thread->alarmTime = 0;
+			sendSignal(thread, &si);
+		};
+	};
+
 	if (thread->flags & THREAD_WAITING)
 	{
 		thread->flags &= ~THREAD_WAITING;
-		if (thread->cpuID != getCurrentCPU()->id)
+		
+		if (thread->runq.thread == NULL)
 		{
-			// interrupt the thread's host CPU in case it is in cooloff state
-			sendHintToCPU(thread->cpuID);
+			thread->runq.thread = thread;
+			thread->runq.next = NULL;
+			if (runqLast == NULL)
+			{
+				runqFirst = runqLast = &thread->runq;
+			}
+			else
+			{
+				runqLast->next = &thread->runq;
+				runqLast = &thread->runq;
+			};
 		};
 	}
 	else
@@ -933,9 +939,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	
 	// alarms shall be cancelled in the new process/thread
 	thread->alarmTime = 0;
-	
-	// allocate a CPU to run this thread on
-	thread->cpuID = allocCPU();
+	timedPost(&thread->alarmTimer, 0);
 	
 	// if the address space is shared, the errnoptr is now invalid;
 	// otherwise, it can just stay where it is.
@@ -966,7 +970,19 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->next = currentThread->next;
 	thread->prev = currentThread;
 	currentThread->next = thread;
-	sendHintToCPU(thread->cpuID);
+
+	thread->runq.thread = thread;
+	thread->runq.next = NULL;
+	if (runqLast == NULL)
+	{
+		runqFirst = runqLast = &thread->runq;
+	}
+	else
+	{
+		runqLast->next = &thread->runq;
+		runqLast = &thread->runq;
+	};
+
 	spinlockRelease(&schedLock);
 	sti();
 
@@ -1017,11 +1033,11 @@ void threadExitEx(uint64_t retval)
 	spinlockAcquire(&sysManLock);
 	cli();
 	lockSched();
+	timedCancel(&currentThread->alarmTimer);
 	currentThread->flags |= THREAD_TERMINATED;
 	numThreadsToClean++;
 	spinlockRelease(&sysManLock);
 	signalThread(threadSysMan);
-	downrefCPU(currentThread->cpuID);
 	Regs regs;
 	switchTaskUnlocked(&regs);
 };

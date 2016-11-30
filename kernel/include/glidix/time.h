@@ -64,7 +64,7 @@ void initRTC();
  * on the event, even if the deadline passed. The TimedEvent structure may be allocated on the stack; it shall not be
  * initialized (this function performs initialization).
  *
- * Seeting nanotime to zero causes the event to be ignored.
+ * Setting nanotime to zero causes the event to be ignored.
  */
 void timedPost(TimedEvent *ev, uint64_t nanotime);
 

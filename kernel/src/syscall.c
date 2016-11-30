@@ -3021,7 +3021,15 @@ unsigned sys_alarm(unsigned sec)
 {
 	uint64_t currentTime = getNanotime();
 	uint64_t timeToSignal = currentTime + (uint64_t) sec * NANO_PER_SEC;
-	uint64_t old = atomic_swap64(&getCurrentThread()->alarmTime, timeToSignal);
+	
+	cli();
+	lockSched();
+	uint64_t old = getCurrentThread()->alarmTime;
+	getCurrentThread()->alarmTime = timeToSignal;
+	timedCancel(&getCurrentThread()->alarmTimer);
+	timedPost(&getCurrentThread()->alarmTimer, timeToSignal);
+	unlockSched();
+	sti();
 	
 	if (old == 0) return 0;
 	return (unsigned) ((old - currentTime) / NANO_PER_SEC);
