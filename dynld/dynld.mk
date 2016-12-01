@@ -2,12 +2,12 @@ C_SRC := $(shell find $(SRCDIR)/src -name '*.c')
 ASM_SRC := $(shell find $(SRCDIR)/asm -name '*.asm')
 OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(C_SRC)) $(patsubst $(SRCDIR)/asm/%.asm, asm/%.o, $(ASM_SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -Bsymbolic -O2 -fPIC
+CFLAGS := -Wall -Werror -Bsymbolic -fPIC
 
 .PHONY: install
 
 dynld: $(OBJ)
-	$(HOST_GCC) -T $(SRCDIR)/dynld.ld -o $@ -Wl,-Bsymbolic -O2 -nostdlib $^ -lgcc
+	$(HOST_GCC) -T $(SRCDIR)/dynld.ld -o $@ -Wl,-Bsymbolic -nostdlib $^ -lgcc
 
 -include $(DEP)
 

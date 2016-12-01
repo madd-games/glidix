@@ -55,3 +55,10 @@ make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/libz.mip
 
+# dynld
+rm -rf mipdir || exit 1
+cd dynld
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/dynld.mip
+

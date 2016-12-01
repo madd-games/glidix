@@ -133,6 +133,10 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	
 	// offset to each argument and argument count
 	uint64_t argOffsets[2048];
+	
+	// we must zero it out because it's going to userspace
+	memset(argOffsets, 0, 2048 * 8);
+	
 	int stillArgs = 1;
 	uint64_t argc = 0;
 	uint64_t totalTokens = 0;
@@ -162,9 +166,6 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			while (pars[scan] != 0) scan++;
 		};
 	};
-	
-	// we must zero it out because it's going to userspace
-	memset(argOffsets, 0, 2048 * 8);
 	
 	Regs regs;
 	initUserRegs(&regs);
@@ -458,9 +459,16 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	getCurrentThread()->dxperm = st.st_dxperm;
 	
 	refreshAddrSpace();
-	memcpy_k2u((void*)uptrPars, pars, parsz);
+	if (memcpy_k2u((void*)uptrPars, pars, parsz) != 0)
+	{
+		panic("memcpy_k2u failed unexpectedly");
+	};
+	
 	uint64_t stack = (uptrPars - 8 * totalTokens) & ~0xF;
-	memcpy_k2u((void*)stack, argOffsets, 8 * totalTokens);
+	if (memcpy_k2u((void*)stack, argOffsets, 8 * totalTokens) != 0)
+	{
+		panic("memcpy_k2u failed unexpectedly");
+	};
 	
 	regs.rsp = stack;
 	regs.rbp = 0;
