@@ -62,3 +62,16 @@ make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/dynld.mip
 
+# libpng
+rm -rf mipdir || exit 1
+cd libpng
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/libpng.mip
+
+# freetype
+rm -rf mipdir || exit 1
+cd freetype
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/freetype.mip
