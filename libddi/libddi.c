@@ -203,7 +203,7 @@ DDISurface* ddiCreateSurface(DDIPixelFormat *format, unsigned int width, unsigne
 	}
 	else
 	{
-		surface->data = data;
+		surface->data = (uint8_t*) data;
 	};
 	
 	return surface;
@@ -321,7 +321,7 @@ void ddiFillRect(DDISurface *surface, int x, int y, unsigned int width, unsigned
 	memcpy(pixbuf, &pixel, 4);
 	
 	size_t offset = scanlineSize * y + pixelSize * x;
-	char *put = surface->data + offset;
+	unsigned char *put = surface->data + offset;
 	for (; height; height--)
 	{
 		ddiFill(put, pixbuf, pixelSize, width);
@@ -424,8 +424,8 @@ void ddiOverlay(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX
 	size_t srcScanlineSize = src->format.scanlineSpacing + pixelSize * src->width;
 	size_t destScanlineSize = dest->format.scanlineSpacing + pixelSize * dest->width;
 	
-	char *scan = src->data + pixelSize * srcX + srcScanlineSize * srcY;
-	char *put = dest->data + pixelSize * destX + destScanlineSize * destY;
+	unsigned char *scan = src->data + pixelSize * srcX + srcScanlineSize * srcY;
+	unsigned char *put = dest->data + pixelSize * destX + destScanlineSize * destY;
 	
 	for (; height; height--)
 	{
@@ -440,7 +440,7 @@ void ddiOverlay(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX
 
 DDISurface* ddiLoadPNG(const char *filename, const char **error)
 {
-	char header[8];
+	unsigned char header[8];
 	
 	FILE *fp = fopen(filename, "rb");
 	if (fp == NULL)
@@ -489,9 +489,7 @@ DDISurface* ddiLoadPNG(const char *filename, const char **error)
 	unsigned int width = png_get_image_width(png_ptr, info_ptr);
 	unsigned int height = png_get_image_height(png_ptr, info_ptr);
 	png_byte colorType = png_get_color_type(png_ptr, info_ptr);
-	png_byte bitDepth = png_get_color_type(png_ptr, info_ptr);
 	
-	int numPasses = png_set_interlace_handling(png_ptr);
 	png_read_update_info(png_ptr, info_ptr);
 	
 	if (setjmp(png_jmpbuf(png_ptr)))
@@ -539,7 +537,7 @@ DDISurface* ddiLoadPNG(const char *filename, const char **error)
 	format.scanlineSpacing = 0;
 	
 	DDISurface *surface = ddiCreateSurface(&format, width, height, NULL, 0);
-	char *put = surface->data;
+	unsigned char *put = surface->data;
 	
 	for (y=0; y<height; y++)
 	{
@@ -576,13 +574,11 @@ DDISurface* ddiConvertSurface(DDIPixelFormat *format, DDISurface *surface, const
 	DDISurface *newsurf = ddiCreateSurface(format, surface->width, surface->height, NULL, 0);
 	
 	size_t targetPixelSize = format->bpp + format->pixelSpacing;
-	size_t targetScanlineSize = format->scanlineSpacing + targetPixelSize * surface->width;
 	
 	size_t srcPixelSize = surface->format.bpp + surface->format.pixelSpacing;
-	size_t srcScanlineSize = surface->format.scanlineSpacing + srcPixelSize * surface->width;
 	
-	char *put = newsurf->data;
-	char *scan = surface->data;
+	unsigned char *put = newsurf->data;
+	unsigned char *scan = surface->data;
 	
 	int x, y;
 	for (y=0; y<surface->height; y++)
@@ -760,7 +756,7 @@ void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, i
 	};
 };
 
-static void ddiExpandBitmapRow(char *put, uint8_t row, const void *fill, int bpp, size_t pixelSize)
+static void ddiExpandBitmapRow(unsigned char *put, uint8_t row, const void *fill, int bpp, size_t pixelSize)
 {
 	static uint8_t mask[8] = {1, 2, 4, 8, 16, 32, 64, 128};
 	int i;
@@ -808,7 +804,7 @@ void ddiExpandBitmap(DDISurface *surface, unsigned int x, unsigned int y, int ty
 	size_t scanlineSize = surface->format.scanlineSpacing + pixelSize * surface->width;
 	
 	size_t offset = scanlineSize * y + pixelSize * x;
-	char *put = surface->data + offset;
+	unsigned char *put = surface->data + offset;
 	
 	int by;
 	for (by=0; by<charHeight; by++)
@@ -1380,7 +1376,6 @@ void ddiSetPenColor(DDIPen *pen, DDIColor *fg)
 void ddiGetPenSize(DDIPen *pen, int *widthOut, int *heightOut)
 {
 	PenLine *line;
-	PenSegment *seg;
 	
 	int height = 0;
 	int width = 0;
@@ -1432,7 +1427,6 @@ int ddiPenCoordsToPos(DDIPen *pen, int x, int y)
 		for (seg=line->firstSegment; seg!=NULL; seg=seg->next)
 		{
 			int endX = seg->drawX + seg->surface->width;
-			int endY = seg->drawY + seg->surface->height;
 			bestBet = seg->firstCharPos + (int)seg->numChars;
 			
 			if ((x >= seg->drawX) && (x < endX))

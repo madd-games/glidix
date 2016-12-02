@@ -11736,7 +11736,6 @@ glidix*)
   need_lib_prefix=no
   need_version=no
   library_names_spec='$libname$shared_ext'
-  soname_spec='$libname$release$shared_ext$major'
   finish_cmds='PATH="\$PATH:/sbin" ldconfig -m $libdir'
   dynamic_linker='Glidix dynld'
   shlibpath_var=LD_LIBRARY_PATH

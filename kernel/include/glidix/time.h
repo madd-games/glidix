@@ -53,9 +53,11 @@ typedef struct TimedEvent_
 uint64_t getUptime();			// idt.c
 #define	getTicks getUptime
 uint64_t getNanotime();
-void sleep(int ticks);
 time_t makeUnixTime(int64_t year, int64_t month, int64_t day, int64_t hour, int64_t minute, int64_t second);
+#ifdef __KERNEL__
+void sleep(int ticks);
 time_t time();
+#endif
 void initRTC();
 
 /**

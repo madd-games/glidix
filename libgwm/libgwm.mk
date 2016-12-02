@@ -1,11 +1,11 @@
 C_SRC := $(shell find $(SRCDIR) -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, %.o, $(C_SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -fPIC -I/glidix/usr/include/freetype2
+CFLAGS := -Wall -Werror -fPIC -I$(SRCDIR)/../libddi -I$(SRCDIR)
 
-libddi.so: $(OBJ)
+libgwm.so: $(OBJ)
 	@mkdir -p out
-	$(HOST_GCC) -shared -o $@ $^ -lfreetype -lpng
+	$(HOST_GCC) -shared -o $@ $^ -L../libddi -lddi
 
 -include $(DEP)
 
@@ -19,5 +19,7 @@ libddi.so: $(OBJ)
 install:
 	@mkdir -p $(DESTDIR)/usr/lib
 	@mkdir -p $(DESTDIR)/usr/include
-	cp libddi.so $(DESTDIR)/usr/lib/libddi.so
-	cp $(SRCDIR)/libddi.h $(DESTDIR)/usr/include/libddi.h
+	@mkdir -p $(DESTDIR)/usr/share/images
+	cp libgwm.so $(DESTDIR)/usr/lib/libddi.so
+	cp $(SRCDIR)/libgwm.h $(DESTDIR)/usr/include/libgwm.h
+	cp -RT $(SRCDIR)/images $(DESTDIR)/usr/share/images

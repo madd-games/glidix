@@ -75,3 +75,24 @@ cd freetype
 make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/freetype.mip
+
+# libddi
+rm -rf mipdir || exit 1
+cd libddi
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/libddi.mip
+
+# libgwm
+rm -rf mipdir || exit 1
+cd libgwm || exit 1
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/libgwm.mip
+
+# gui
+rm -rf mipdir || exit 1
+cd gui || exit 1
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/gui.mip
