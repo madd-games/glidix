@@ -60,6 +60,9 @@ int selectAnchor = -1;
 int fdMaster;
 GWMWindow *termWindow;
 
+char escapeBuffer[4];
+int escapePos = -1;
+
 DDIColor consoleColors[16] = {
 	{0x00, 0x00, 0x00, 0xFF},		/* 0 */
 	{0x00, 0x00, 0xAA, 0xFF},		/* 1 */
@@ -375,7 +378,40 @@ void writeConsole(const char *buf, size_t sz)
 	{
 		char c = *buf++;
 
-		if (c == '\b')
+		if (escapePos != -1)
+		{
+			if (escapePos == 4)
+			{
+				// discard
+				escapePos = -1;
+			}
+			else
+			{
+				escapeBuffer[escapePos++] = c;
+				
+				if ((escapeBuffer[0] == 33) && (escapePos == 1))
+				{
+					clearConsole();
+					escapePos = -1;
+				}
+				else if ((escapeBuffer[0] == 34) && (escapePos == 2))
+				{
+					currentAttr = (uint8_t) escapeBuffer[1];
+					escapePos = -1;
+				}
+				else if ((escapeBuffer[0] == 35) && (escapePos == 3))
+				{
+					cursorX = (int) escapeBuffer[1] % 80;
+					cursorY = (int) escapeBuffer[2] % 25;
+					escapePos = -1;
+				};
+			};
+		}
+		else if (c == '\e')
+		{
+			escapePos = 0;
+		}
+		else if (c == '\b')
 		{
 			if ((cursorX == 0) && (cursorY == 0))
 			{

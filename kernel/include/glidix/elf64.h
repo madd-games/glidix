@@ -147,10 +147,10 @@ typedef	int64_t				Elf64_Sxword;
 #define	R_X86_64_GLOB_DAT		6
 #define	R_X86_64_JUMP_SLOT		7
 #define	R_X86_64_RELATIVE		8
-/**
- * Please remember that all the structures here are NOT packed, because ELF64 has all the
- * types aligned.
- */
+
+#define	AT_NULL				0
+#define	AT_IGNORE			1
+#define	AT_EXECFD			2
 
 typedef struct
 {
@@ -222,6 +222,16 @@ typedef struct
 		Elf64_Addr		d_ptr;
 	} d_un;
 } Elf64_Dyn;
+
+typedef struct
+{
+	uint32_t			a_type;
+	union
+	{
+		uint64_t		a_val;
+		void*			a_ptr;
+	} a_un;
+} Elf64_Auxv;
 
 int elfExec(const char *path, const char *execPars, size_t parsz);
 

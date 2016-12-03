@@ -130,7 +130,12 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		ERRNO = EINVAL;
 		return -1;
 	};
-	
+
+	// auxiliary vector; up to 2 entries (AT_EXECFD and AT_NULL) or just
+	// 2 AT_NULLs
+	Elf64_Auxv auxv[2];
+	memset(auxv, 0, sizeof(Elf64_Auxv)*2);
+
 	// offset to each argument and argument count
 	uint64_t argOffsets[2048];
 	
@@ -464,17 +469,35 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		panic("memcpy_k2u failed unexpectedly");
 	};
 	
-	uint64_t stack = (uptrPars - 8 * totalTokens) & ~0xF;
-	if (memcpy_k2u((void*)stack, argOffsets, 8 * totalTokens) != 0)
+	uint64_t uptrAuxv = uptrPars - sizeof(Elf64_Auxv)*2;
+	
+	// totalTokens must be odd in order to break the 16-byte alignment of uptrList
+	// such that the stack is 16-byte aligned. if, however, it is even, subtract 8 bytes
+	// to fix that
+	if ((totalTokens & 1) == 0)
+	{
+		uptrAuxv -= 8;
+	};
+	
+	if (memcpy_k2u((void*)uptrAuxv, auxv, sizeof(Elf64_Auxv)*2) != 0)
+	{
+		panic("memcpy_k2u failed unexpectedly");
+	};
+	
+	uint64_t uptrList = uptrAuxv - 8 * totalTokens;
+	if (memcpy_k2u((void*)uptrList, argOffsets, 8 * totalTokens) != 0)
+	{
+		panic("memcpy_k2u failed unexpectedly");
+	};
+	
+	uint64_t stack = uptrList - 8;
+	if (memcpy_k2u((void*)stack, &argc, 8) != 0)
 	{
 		panic("memcpy_k2u failed unexpectedly");
 	};
 	
 	regs.rsp = stack;
 	regs.rbp = 0;
-	regs.r12 = argc;
-	regs.r13 = stack;
-	regs.r14 = stack + 8 * (argc+1);	// beginning of environment pointers
 
 	// do not block any signals in a new executable by default
 	getCurrentThread()->sigmask = 0;

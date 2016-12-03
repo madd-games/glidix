@@ -1,3 +1,3 @@
 init: $(SRCDIR)/init.c
-	$(HOST_GCC) $< -o $@ -Wall -Werror -L../libc
+	$(HOST_GCC) $< -o $@ -Wall -Werror -L../libc -static
 

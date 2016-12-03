@@ -132,7 +132,7 @@ echo \"logout\"\n\
 static const char *startupConf = "\
 # /etc/init/startup.conf\n\
 # Startup configuration file. See startup(3) for more info.\n\
-logmgr=\"logmgr\"\n\
+logmgr=\"gui --display=/dev/bga\"\n\
 ";
 
 Partition *splitArea(Partition *area, size_t offMB, size_t sizeMB)

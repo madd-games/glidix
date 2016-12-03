@@ -26,6 +26,8 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <unistd.h>
+
 #include "dynld.h"
 
 void dynld_printf(const char *fmt, ...)

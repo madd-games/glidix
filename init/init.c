@@ -41,6 +41,9 @@
 #include <time.h>
 #include <errno.h>
 
+/* hack to let libc.a link (TODO: remove once the dynamic linker is out of libc) */
+char _DYNAMIC[1];
+
 int shouldHalt = 0;
 int shouldRunPoweroff = 0;
 int ranPoweroff = 0;

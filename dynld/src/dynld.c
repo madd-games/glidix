@@ -26,15 +26,43 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <unistd.h>
+#include <fcntl.h>
 #include "dynld.h"
 
 int dynld_main(int argc, char *argv[], char *envp[])
 {
-	int i;
-	for (i=0; i<argc; i++)
+	// get the auxiliary vector
+	char **auxvp;
+	for (auxvp=envp; *auxvp!=NULL; auxvp++);
+	Elf64_Auxv *auxv = (Elf64_Auxv*) &envp[1];
+	
+	// see if we can get the executable file descriptor
+	for (; auxv->a_type != AT_NULL; auxv++)
 	{
-		dynld_printf("%s\n", argv[i]);
+		if (auxv->a_type == AT_EXECFD) break;
 	};
 	
-	return 5;
+	int execfd;
+	if (auxv->a_type == AT_EXECFD)
+	{
+		execfd = (int) auxv->a_un.a_val;
+	}
+	else
+	{
+		if (argc < 2)
+		{
+			dynld_printf("dynld: no AT_EXECFD and no arguments given, see dynld(1)\n");
+			return 1;
+		};
+		
+		execfd = open(argv[1], O_RDONLY);
+		if (execfd == -1)
+		{
+			dynld_printf("dynld: failed to open %s\n", argv[1]);
+			return 1;
+		};
+	};
+	
+	return 0;
 };

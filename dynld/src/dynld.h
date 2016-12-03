@@ -33,10 +33,58 @@
 #include <stdarg.h>
 #include <inttypes.h>
 
+#include "elf64.h"
+
 /**
- * Write to a file.
+ * Describes a library segment mapped into memory.
  */
-ssize_t write(int fd, const void *buffer, size_t size);
+typedef struct
+{
+	/**
+	 * Base address.
+	 */
+	void*					base;
+	
+	/**
+	 * Size in bytes.
+	 */
+	size_t					size;
+} Segment;
+
+/**
+ * Describes a library loaded into memory.
+ */
+typedef struct Library_
+{
+	/**
+	 * Links to the previous and next library in the chain.
+	 */
+	struct Library_*			prev;
+	struct Library_*			next;
+	
+	/**
+	 * Reference count - how many times this library was dlopen()'ed. dlclose()
+	 * decrements this and releases the library once this reaches zero.
+	 */
+	int					refcount;
+	
+	/**
+	 * Name of this library.
+	 */
+	char					soname[128];
+	
+	/**
+	 * Segments constituing this library (max 64) and they actual amount.
+	 */
+	int					numSegs;
+	Segment					segs[64];
+	
+	/**
+	 * Pointers to libraries which this one depends on.
+	 */
+	int					numDeps;
+	struct Library_*			deps[64];
+} Library;
 
 /**
  * A very simplistic string-formatting function.

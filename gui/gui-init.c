@@ -26,6 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <sys/wait.h>
 #include <sys/glidix.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,6 +48,13 @@ int main()
 	{
 		perror("fork");
 		return 1;
+	}
+	else
+	{
+		int status;
+		waitpid(pid, &status, 0);
+		
+		printf("gui-login exited with status: %d\n", status);
 	};
 	
 	return 0;

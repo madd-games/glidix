@@ -11,10 +11,14 @@ CRT_SRC := $(shell find $(SRCDIR)/crt -name '*.asm')
 CRT_OUT := $(patsubst $(SRCDIR)/crt/%.asm, crt/%.o, $(CRT_SRC))
 
 .PHONY: all install
-all: libc.so $(SUP_OUT) $(CRT_OUT)
+all: libc.so libc.a $(SUP_OUT) $(CRT_OUT)
 
 libc.so: $(OBJ)
 	$(HOST_GCC) -shared -o $@ $^
+
+libc.a: $(OBJ)
+	$(HOST_AR) rc $@ $^
+	$(HOST_RANLIB) $@
 
 -include $(DEP)
 

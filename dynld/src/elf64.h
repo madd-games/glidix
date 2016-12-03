@@ -147,6 +147,10 @@ typedef	uint64_t			Elf64_Xword;
 #define	R_X86_64_JUMP_SLOT		7
 #define	R_X86_64_RELATIVE		8
 
+#define	AT_NULL				0
+#define	AT_IGNORE			1
+#define	AT_EXECFD			2
+
 typedef struct
 {
 	unsigned char			e_ident[EI_NIDENT];
@@ -217,5 +221,15 @@ typedef struct
 		Elf64_Addr		d_ptr;
 	} d_un;
 } Elf64_Dyn;
+
+typedef struct
+{
+	uint32_t			a_type;
+	union
+	{
+		uint64_t		a_val;
+		void*			a_ptr;
+	} a_un;
+} Elf64_Auxv;
 
 #endif

@@ -135,6 +135,8 @@ export GLIDIX_SYSROOT="$sysroot"
 export BUILD_GCC="$build-gcc"
 export HOST_GCC="x86_64-glidix-gcc"
 export HOST_AS="x86_64-glidix-as"
+export HOST_AR="x86_64-glidix-ar"
+export HOST_RANLIB="x86_64-glidix-ranlib"
 export GLIDIX_BINUTILS_VERSION="$binutils_version"
 
 # sanity checks
@@ -153,6 +155,8 @@ test_command()
 test_command $BUILD_GCC
 test_command $HOST_GCC
 test_command $HOST_AS
+test_command $HOST_AR
+test_command $HOST_RANLIB
 test_command nasm
 test_command wget
 test_command tar

@@ -29,9 +29,13 @@ extern dynld_main
 
 section .text
 _start:
-	mov rdi, r12
-	mov rsi, r13
-	mov rdx, r14
+	mov rdi, [rsp]
+	lea rsi, [rsp+8]
+	mov rdx, rdi
+	inc rdx
+	shl rdx, 3
+	add rdx, rsi
+	and rsp, ~0xF		; align the stack
 	call dynld_main
 	
 	mov rdi, rax
@@ -41,5 +45,11 @@ _start:
 global write
 write:
 	mov rax, 1
+	syscall
+	ret
+
+global open
+open:
+	mov rax, 4
 	syscall
 	ret

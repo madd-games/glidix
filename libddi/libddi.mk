@@ -1,11 +1,11 @@
 C_SRC := $(shell find $(SRCDIR) -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, %.o, $(C_SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -fPIC -I/glidix/usr/include/freetype2
+CFLAGS := -Wall -Werror -fPIC -I/glidix/usr/include/freetype2 -O3
 
 libddi.so: $(OBJ)
 	@mkdir -p out
-	$(HOST_GCC) -shared -o $@ $^ -lfreetype -lpng
+	$(HOST_GCC) -shared -o $@ $^ -lfreetype -lpng -O3
 
 -include $(DEP)
 

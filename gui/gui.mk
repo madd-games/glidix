@@ -13,5 +13,6 @@ out/%: $(SRCDIR)/%.c
 install:
 	@mkdir -p $(DESTDIR)/usr/bin
 	@mkdir -p $(DESTDIR)/usr/libexec
+	@mkdir -p $(DESTDIR)/usr/share/apps
 	export DESTDIR=$(DESTDIR) && sh $(SRCDIR)/install.sh $(OUT)
-
+	cp -RT $(SRCDIR)/apps $(DESTDIR)/usr/share/apps

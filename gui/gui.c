@@ -1960,7 +1960,7 @@ int main(int argc, char *argv[])
 	
 	if (child == 0)
 	{
-		execl("/usr/libexec/gui-init", "gui-init", NULL);
+		execl("/usr/bin/gui-init", "gui-init", NULL);
 		return 1;
 	}
 	else

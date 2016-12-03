@@ -211,7 +211,7 @@ int logInCallback(void *ignore)
 				exit(1);
 			};
 
-			execl("/usr/libexec/sysbar", "sysbar", NULL);
+			execl("/usr/bin/sysbar", "sysbar", NULL);
 			exit(1);
 		};
 		
