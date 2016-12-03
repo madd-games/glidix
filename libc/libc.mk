@@ -11,13 +11,18 @@ CRT_SRC := $(shell find $(SRCDIR)/crt -name '*.asm')
 CRT_OUT := $(patsubst $(SRCDIR)/crt/%.asm, crt/%.o, $(CRT_SRC))
 
 .PHONY: all install
-all: libc.so libc.a $(SUP_OUT) $(CRT_OUT)
+all: libc.so libc.a libc32.a $(SUP_OUT) $(CRT_OUT)
 
 libc.so: $(OBJ)
 	$(HOST_GCC) -shared -o $@ $^
 
 libc.a: $(OBJ)
 	$(HOST_AR) rc $@ $^
+	$(HOST_RANLIB) $@
+
+libc32.a: $(SRCDIR)/libc32.s
+	$(HOST_AS) -c $< -o libc32.o --32
+	$(HOST_AR) rc $@ libc32.o
 	$(HOST_RANLIB) $@
 
 -include $(DEP)
@@ -44,8 +49,11 @@ crt/%.o: $(SRCDIR)/crt/%.asm
 
 install:
 	mkdir -p $(DESTDIR)/lib
+	mkdir -p $(DESTDIR)/lib32
 	mkdir -p $(DESTDIR)/usr/include
 	cp libc.so $(DESTDIR)/lib/libc.so
+	cp libc.a $(DESTDIR)/lib/libc.a
+	cp libc32.a $(DESTDIR)/lib32/libc.a
 	cp -RT crt $(DESTDIR)/lib
 	cp -RT support $(DESTDIR)/lib
 	cp -RT $(SRCDIR)/include $(DESTDIR)/usr/include
