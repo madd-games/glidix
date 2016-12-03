@@ -26,7 +26,7 @@ There are also some special, pseudo-filesystems mounted automatically by the ker
 
 \* The [initrd.6] mounted under '/initrd'.
 
-\* The [procfs.6] mounted under '/proc', presenting information abotu running processes.
+\* The [procfs.6] mounted under '/proc', presenting information about running processes.
 
 \* The [devfs.6] mounted under '/dev', giving access to various devices.
 
@@ -34,9 +34,9 @@ There are also some special, pseudo-filesystems mounted automatically by the ker
 
 \* A 'directory' is an inode which lists other inodes; it is a branch in the hierarchy of the filesystem.
 \* A 'regular file' contains arbitrary data and is random-access.
-\* A 'symbolic link' contains the path to another inode, and most system calls "follow" this linkwhen an operation is requested on it; the only 2 exceptions are lstat (see [stat.2]) and [unlink.2].
-\* A 'FIFO' (first-in first-out) or 'named pipe' is used to connect together 2 processed. Not implemented in Glidix yet.
+\* A 'symbolic link' contains the path to another inode, and most system calls "follow" this link when an operation is requested on it; the only 2 exceptions are lstat (see [stat.2]) and [unlink.2].
+\* A 'FIFO' (first-in first-out) or 'named pipe' is used to connect together 2 processes. Not implemented in Glidix yet.
 \* A 'character device' is a character from which it is possible to read/write bytes sequentially, but is not random-access.
-\* A 'block device' is the same as a charcter device under Glidix.
+\* A 'block device' is the same as a character device under Glidix.
 
 Note that character and block devices are treated exactly the same as normal files in most circumstances, under Glidix; they are simply reported as different types to denote their intended purpose.

@@ -33,7 +33,7 @@ The 'dest' argument specifies the destination address of the packet. If it speci
 \* If 'src' has family *AF_INET* then it is still an error and *EINVAL* is raised.
 \* If 'src' is valid (or became valid due to binding it to '::' above), i.e. has family *AF_INET6*, then *sendPacketEx*() is called recursively, specifying the default IPv4 address as the source, and the embedded IPv4 address as the destination, this time using *AF_INET* addressing. Hence, IPv4 can be handled transparently by the IPv6 interface.
 
-If the *PKT_DONTROUTE* flag is passed, then 'dest' must be the address of a neighbor or gateway (if an IP header is already prepended), as this isntructs the system not to perform any routing. See the *GSO_SNDFLAGS* option below.
+If the *PKT_DONTROUTE* flag is passed, then 'dest' must be the address of a neighbor or gateway (if an IP header is already prepended), as this instructs the system not to perform any routing. See the *GSO_SNDFLAGS* option below.
 
 The 'packet' argument points to the first octet of the packet to be sent, and 'packetlen' specifies the size of the packet in bytes. If the *PKT_HDRINC* send flag is passed (see *GSO_SNDFLAGS* options below), then the packet must begin with a valid IP header (which means an IPv4 or IPv6 header); otherwise, *sendPacketEx*() automatically prepends a valid header before sending, specifying the correct source and destination address, hop count etc.
 
@@ -41,7 +41,7 @@ The 'proto' field specifies the IP protocol number to place in the header. For *
 
 The 'sockopts' argument points to an array of 'uint64_t' with *GSO_COUNT* elements, and represents socket options, from which send options are read.
 
-The 'ifname' argument specifies which interface to send the packet to; if routing is being performed, it is restricted to routing table entries that point to this interface. If 'ifname' points to an empty string, or *NULL*, then all interface are allowed.
+The 'ifname' argument specifies which interface to send the packet to; if routing is being performed, it is restricted to routing table entries that point to this interface. If 'ifname' points to an empty string, or *NULL*, then all interfaces are allowed.
 
 >>Options
 
@@ -57,7 +57,7 @@ The 'ifname' argument specifies which interface to send the packet to; if routin
 
 >>Send Flags
 
-The send flags are a bitwise-OR of zero or more of the following macros. For *sendPacket*(), the send flags are bitwise-ORd with the protocol number to produce the 'flags' field; that is, 'flags = proto | sndflags'. For *sendPacketEx*(), they are passed in the *GSO_SNDFLAGS* option (see above).
+The send flags are a bitwise-OR of zero or more of the following macros. For *sendPacket*(), the send flags are bitwise-OR-ed with the protocol number to produce the 'flags' field; that is, 'flags = proto | sndflags'. For *sendPacketEx*(), they are passed in the *GSO_SNDFLAGS* option (see above).
 
 \* *PKT_HDRINC* - indicates that 'packet' points to a packet which already includes the appropriate IP header. If this flag is not passed, the header is prepended by the function itself. Note that the header 'must' have a valid checksum (if using IPv4; IPv6 headers do not have checksums).
 

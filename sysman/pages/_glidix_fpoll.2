@@ -16,7 +16,7 @@ This is a low-level system call, used to implement [poll.2] and [select.2]. It s
 
 The 'bitmapReq' and 'bitmapRes' arguments are arrays (which may have exactly the same address), of size equal to 'sysconf(_SC_OPEN_MAX)'. Each entry in the arrays corresponds to a file descriptor.
 
-The 'bitmapReq' array shall be initialized so that for each file descriptor, it contains the value '0' if the descriptor shall be ignored, or a bitwise-OR of one of more poll flags as specified below, if the events specified by the poll flags shall be polled for on the specified file. When this function returns, the entries in the 'bitmapRes' array will reflect what happend to each file descriptor: '0' meaning nothing happend, a bitwise-OR of one or more poll flags that were specified in 'bitmapReq' if an event occured. For example, if 'bitmapReq[2]' had the value *POLLIN | POLLOUT*, and file descriptor 2 became available for reading, but not writing, 'bitmapRes[2]' will have the value *POLLIN*.
+The 'bitmapReq' array shall be initialized so that for each file descriptor, it contains the value '0' if the descriptor shall be ignored, or a bitwise-OR of one or more poll flags as specified below, if the events specified by the poll flags shall be polled for on the specified file. When this function returns, the entries in the 'bitmapRes' array will reflect what happend to each file descriptor: '0' meaning nothing happend, a bitwise-OR of one or more poll flags that were specified in 'bitmapReq' if an event occured. For example, if 'bitmapReq[2]' had the value *POLLIN | POLLOUT*, and file descriptor 2 became available for reading, but not writing, 'bitmapRes[2]' will have the value *POLLIN*.
 
 The flags *POLLERR*, *POLLHUP* and *POLLNVAL* may be set in 'bitmapRes' even if they were not set in 'bitmapReq'; except if the corresponding value in 'bitmapReq' was 0; in this case, the entry in 'bitmapRes' will always contain 0.
 
@@ -33,7 +33,7 @@ The poll flags are as follows:
 \* *POLLIN* - the file is available for reading; [read.2] will not block (but see NOTES).
 \* *POLLOUT* - the file is available for writing; [write.2] will not block (but see NOTES).
 \* *POLLERR* - an error has occured on the file; this may be returned in 'bitmapRes' even if not set in 'bitmapReq'.
-\* *POLLHUP* - the other side of a connection represented by the file has been closed; this may be returned in 'bitmapRes' even if not set in 'bitmapReq'. This happens, ofr example, if you poll one side of a pipe and the other side gets closed; see [pipe.2].
+\* *POLLHUP* - the other side of a connection represented by the file has been closed; this may be returned in 'bitmapRes' even if not set in 'bitmapReq'. This happens, for example, if you poll one side of a pipe and the other side gets closed; see [pipe.2].
 \* *POLLNVAL* - the file descriptor is not open, and its entry in 'bitmapReq' was not zero. This is always returned in 'bitmapReq' for invalid file descriptors when the corresponding entry in 'bitmapReq' is nonzero - even if it does not have *POLLNVAL* set.
 
 >RETURN VALUE
