@@ -266,6 +266,13 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		return -1;
 	};
 
+	if (elfHeader.e_machine != EM_X86_64)
+	{
+		vfsClose(fp);
+		ERRNO = ENOEXEC;
+		return -1;
+	};
+	
 	if (elfHeader.e_phentsize < sizeof(Elf64_Phdr))
 	{
 		vfsClose(fp);

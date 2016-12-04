@@ -64,6 +64,8 @@ typedef	int64_t				Elf64_Sxword;
 #define	ET_EXEC				2
 #define	ET_DYN				3
 
+#define	EM_X86_64			62		/* e_machine for x86_64 */
+
 #define	PT_NULL				0
 #define	PT_LOAD				1
 #define	PT_DYNAMIC			2
