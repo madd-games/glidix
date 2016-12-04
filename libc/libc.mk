@@ -58,3 +58,5 @@ install:
 	cp -RT support $(DESTDIR)/lib
 	cp -RT $(SRCDIR)/include $(DESTDIR)/usr/include
 	ln -sf libc.so $(DESTDIR)/lib/libg.so
+	ln -sf libc.a $(DESTDIR)/lib/libg.a
+	ln -sf libc.a $(DESTDIR)/lib32/libg.a
