@@ -10,4 +10,4 @@ echo >>Makefile "	cd build && make install"
 echo >>Makefile "configure:"
 echo >>Makefile "	@mkdir -p build"
 echo >>Makefile "	cd build && ../\$(SRCDIR)/configure --prefix=/usr --host=x86_64-glidix --disable-static"
-
+echo >>Makefile "	touch configure"
