@@ -77,6 +77,10 @@ echo >>install.sh "SYSROOT=$sysroot"
 cat >>install.sh $srcdir/crosstools-install
 chmod +x install.sh
 
+echo "Generating install-stage2 script..."
+cp $srcdir/crosstools-install-stage2 install-stage2.sh
+chmod +x install-stage2.sh
+
 echo "Generating make-patches script..."
 echo >make-patches.sh "#! /bin/sh"
 echo >>make-patches.sh "diff -urN binutils-$binutils_version glidix-binutils > $srcdir/binutils/binutils-$binutils_version.patch"

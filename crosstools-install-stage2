@@ -1,0 +1,5 @@
+#! /bin/sh
+# Second stage of cross-compiler installtion. This installs the C++ compiler.
+cd gcc-build || exit 1
+make || exit 1
+make install || exit 1
