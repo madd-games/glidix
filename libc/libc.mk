@@ -41,7 +41,7 @@ asm/%.o: $(SRCDIR)/asm/%.s
 
 support/%.so: $(SRCDIR)/support/%.c
 	@mkdir -p support
-	$(HOST_GCC) -shared $< -o $@ $(CFLAGS)
+	$(HOST_GCC) -shared $< -o $@ $(CFLAGS) -L.
 
 crt/%.o: $(SRCDIR)/crt/%.asm
 	@mkdir -p crt
