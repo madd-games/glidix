@@ -55,9 +55,11 @@ h1, h2, h3\n\
 \n\
 p, li\n\
 {\n\
-	line-height: 140%;\n\
+	line-height: 150%;\n\
 	color: #333333;\n\
 	font-size: 17px;\n\
+	font-family: sans-serif;\n\
+	letter-spacing: 1px;\n\
 }\n\
 \n\
 pre\n\
