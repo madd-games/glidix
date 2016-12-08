@@ -14,7 +14,7 @@ CRT_OUT := $(patsubst $(SRCDIR)/crt/%.asm, crt/%.o, $(CRT_SRC))
 all: libc.so libc.a libc32.a $(SUP_OUT) $(CRT_OUT)
 
 libc.so: $(OBJ)
-	$(HOST_GCC) -shared -o $@ $^
+	$(HOST_GCC) -shared -o $@ $^ -nostdlib -lgcc
 
 libc.a: $(OBJ)
 	$(HOST_AR) rc $@ $^
