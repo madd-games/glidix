@@ -16,8 +16,8 @@ CFLAGS_STATIC := -I $(SRCDIR)/include -Wall -Werror -D_GLIDIX_SOURCE
 SUP_SRC := $(shell find $(SRCDIR)/support -name '*.c')
 SUP_OUT := $(patsubst $(SRCDIR)/support/%.c, support/%.so, $(SUP_SRC))
 
-CRT_SRC := $(shell find $(SRCDIR)/crt -name '*.asm')
-CRT_OUT := $(patsubst $(SRCDIR)/crt/%.asm, crt/%.o, $(CRT_SRC))
+CRT_SRC := $(shell find $(SRCDIR)/crt -name '*.s')
+CRT_OUT := $(patsubst $(SRCDIR)/crt/%.s, crt/%.o, $(CRT_SRC))
 
 .PHONY: all install
 all: libc.so libc.a libc32.a $(SUP_OUT) $(CRT_OUT)
@@ -60,9 +60,9 @@ support/%.so: $(SRCDIR)/support/%.c
 	@mkdir -p support
 	$(HOST_GCC) -shared $< -o $@ $(CFLAGS) -L.
 
-crt/%.o: $(SRCDIR)/crt/%.asm
+crt/%.o: $(SRCDIR)/crt/%.s
 	@mkdir -p crt
-	nasm -felf64 -o $@ $<
+	$(HOST_AS) -c $< -o $@
 
 install:
 	mkdir -p $(DESTDIR)/lib
