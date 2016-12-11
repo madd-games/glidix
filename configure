@@ -236,7 +236,7 @@ else
 fi
 
 echo >>Makefile "mip:"
-echo >>Makefile "	export MIP_BINUTILS=\$(MIP_BINUTILS) && sh $srcdir/mip.sh \$(PKGDIR)"
+echo >>Makefile "	export MIP_BINUTILS=\$(MIP_BINUTILS) export MIP_GCC=\$(MIP_GCC) && sh $srcdir/mip.sh \$(PKGDIR)"
 
 echo "*** CONFIGURATION SUMMARY ***"
 echo "Build environment:	$build"
