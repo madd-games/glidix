@@ -41,9 +41,6 @@
 #include <time.h>
 #include <errno.h>
 
-/* hack to let libc.a link (TODO: remove once the dynamic linker is out of libc) */
-char _DYNAMIC[1];
-
 int shouldHalt = 0;
 int shouldRunPoweroff = 0;
 int ranPoweroff = 0;
@@ -471,7 +468,8 @@ void shutdownSystem(int action)
 int main(int argc, char *argv[])
 {
 	if (getpid() == 1)
-	{	
+	{
+		printf("something fucking happening\n");
 		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
 		setenv("HOME", "/root", 1);
 		setenv("LD_LIBRARY_PATH", "/usr/local/lib:/usr/lib:/lib", 1);

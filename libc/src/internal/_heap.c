@@ -255,23 +255,6 @@ void _heap_free(void *block)
 	footerRight->size = newSize;
 };
 
-struct stack_frame
-{
-	struct stack_frame*	prev;
-	void*			rip;
-};
-
-struct stack_frame* _get_rbp();
-const char *__dlsymname(void *ptr);
-void _print_stack_trace(struct stack_frame *frame)
-{
-	while (frame != NULL)
-	{
-		printf("%p <%s>\n", frame->rip, __dlsymname(frame->rip));
-		frame = frame->prev;
-	};
-};
-
 void _heap_dump()
 {
 	__heap_header *head = (__heap_header*) _HEAP_BASE_ADDR;
@@ -334,8 +317,6 @@ void _heap_dump()
 	};
 
 	printf("end of heap\n");
-	//printf("stack trace:\n");
-	//_print_stack_trace(_get_rbp());
 };
 
 void _heap_expand()

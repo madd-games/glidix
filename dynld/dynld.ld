@@ -22,4 +22,6 @@ SECTIONS
 		bss = .;
 		*(.bss)
 	}
+	
+	__dynld_end = .;
 }

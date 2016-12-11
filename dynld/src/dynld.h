@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <stdarg.h>
 #include <inttypes.h>
+#include <dlfcn.h>		/* RTLD_* */
 
 #include "elf64.h"
 
@@ -52,6 +53,12 @@ typedef struct
 } Segment;
 
 /**
+ * Initialization/termination function.
+ */
+typedef void (*InitFunc)(void);
+typedef void (*FiniFunc)(void);
+
+/**
  * Describes a library loaded into memory.
  */
 typedef struct Library_
@@ -69,12 +76,75 @@ typedef struct Library_
 	int					refcount;
 	
 	/**
+	 * Load address of this object.
+	 */
+	uint64_t				base;
+	
+	/**
 	 * Name of this library.
 	 */
 	char					soname[128];
 	
 	/**
-	 * Segments constituing this library (max 64) and they actual amount.
+	 * Loading flags (RTLD_*)
+	 */
+	int					flags;
+	
+	/**
+	 * Points to the dynamic linker information.
+	 */
+	Elf64_Dyn*				dyn;
+	
+	/**
+	 * Points to the symbol table and string table.
+	 */
+	Elf64_Sym*				symtab;
+	char*					strtab;
+	size_t					numSymbols;
+	
+	/**
+	 * Relocation table, and its size.
+	 */
+	Elf64_Rela*				rela;
+	size_t					numRela;
+	
+	/**
+	 * PLT relocation table.
+	 */
+	Elf64_Rela*				pltRela;
+	
+	/**
+	 * Hash table.
+	 */
+	Elf64_Word*				hashtab;
+	
+	/**
+	 * PLT GOT.
+	 */
+	void**					pltgot;
+	
+	/**
+	 * Initialization function (or NULL), extra initialization functions, and
+	 * the number of them.
+	 */
+	InitFunc				initFunc;
+	InitFunc*				initVec;
+	size_t					numInit;
+	
+	/**
+	 * Same except destructors.
+	 */
+	FiniFunc				finiFunc;
+	FiniFunc*				finiVec;
+	size_t					numFini;
+	
+	/**
+	 * Set to 1 if initialization has been performed.
+	 */
+	int					initDone;
+	
+	/**
+	 * Segments constituting this library (max 64) and the actual amount.
 	 */
 	int					numSegs;
 	Segment					segs[64];
@@ -96,5 +166,78 @@ void dynld_printf(const char *fmt, ...);
  * String operations.
  */
 size_t strlen(const char *s);
+void strcpy(char *dst, const char *src);
+int memcmp(const void *a_, const void *b_, size_t sz);
+char* strchr(const char *s, char c);
+void memcpy(void *dst_, const void *src_, size_t sz);
+int strcmp(const char *a, const char *b);
+
+/**
+ * Linker error message buffer.
+ */
+extern char dynld_errmsg[];
+
+/**
+ * Value of the LD_LIBRARY_PATH, if present (else empty string).
+ */
+extern const char *libraryPath;
+
+/**
+ * Set to 1 if we are debugging.
+ */
+extern int debugMode;
+
+/**
+ * Set to 1 if PLT relocations msut be resolved immediately.
+ */
+extern int bindNow;
+
+/**
+ * Error number (from system calls).
+ */
+extern int dynld_errno;
+
+/**
+ * Get a library handle, and increase its reference count, if the specified object is already loaded.
+ * Otherwise, return NULL.
+ */
+Library* dynld_getlib(const char *soname);
+
+/**
+ * Find a symbol by name in the specified library. Returns NULL if the symbol is not present.
+ * 'binding' specified whether global (STB_GLOBAL) or weak (STB_WEAK) symbols should be searched for.
+ */
+void* dynld_libsym(Library *lib, const char *symname, unsigned char binding);
+
+/**
+ * Search for the named symbol in the global namespace. Returns NULL if not found.
+ */
+void* dynld_globsym(const char *symname);
+
+/**
+ * Map an object from a file into memory. Returns the amount of bytes to advance the load address
+ * by on success, or 0 on error; in which case dynld_errmsg is set to an error string.
+ */
+uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int flags);
+
+/**
+ * Open a library file. If 'soname' contains a slash, it is interpreted as a direct path name; otherwise,
+ * the remaining arguments are a NULL-terminated lsit of strings, which may contain multiple paths separated
+ * by the ":" character. The paths are searches left-to-right, to find the desired library.
+ *
+ * On success, returns a file descriptor referring to the library; on error returns -1 and dynld_errmsg is filled
+ * with an error message.
+ */
+int dynld_open(const char *soname, ...);
+
+/**
+ * Close a library. This may result in unmapping all its segments if it is no longer in use.
+ */
+void dynld_libclose(Library *lib);
+
+/**
+ * Initialize a library (and all its dependencies).
+ */
+void dynld_initlib(Library *lib);
 
 #endif

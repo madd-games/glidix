@@ -42,7 +42,7 @@ static int __argc;
 static char **__argv;
 static int __errno_init;
 
-void __do_init()
+__attribute__ ((constructor)) void __do_init()
 {
 	_glidix_seterrnoptr(&__errno_init);
 	_heap_init();
@@ -92,14 +92,4 @@ void __do_init()
 	__argc = argc;
 	__argv = argv;
 	__init_done = 1;
-};
-
-void __glidixrt_init(int (*_main)(int,char*[],char*[]))
-{
-	if (!__init_done)
-	{
-		__do_init();
-	};
-
-	exit(_main(__argc, __argv, environ));
 };

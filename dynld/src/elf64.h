@@ -63,6 +63,8 @@ typedef	uint64_t			Elf64_Xword;
 #define	ET_EXEC				2
 #define	ET_DYN				3
 
+#define	EM_X86_64			62
+
 #define	PT_NULL				0
 #define	PT_LOAD				1
 #define	PT_DYNAMIC			2
@@ -143,6 +145,7 @@ typedef	uint64_t			Elf64_Xword;
 
 #define	R_X86_64_NONE			0
 #define	R_X86_64_64			1
+#define	R_X86_64_COPY			5
 #define	R_X86_64_GLOB_DAT		6
 #define	R_X86_64_JUMP_SLOT		7
 #define	R_X86_64_RELATIVE		8
@@ -150,6 +153,13 @@ typedef	uint64_t			Elf64_Xword;
 #define	AT_NULL				0
 #define	AT_IGNORE			1
 #define	AT_EXECFD			2
+
+#define	ELF64_S_BINDING(i)		((i >> 4) & 0xF)
+#define	ELF64_S_TYPE(i)			(i & 0xF)
+
+#define	STB_LOCAL			0
+#define	STB_GLOBAL			1
+#define	STB_WEAK			2
 
 typedef struct
 {

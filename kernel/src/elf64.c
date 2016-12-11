@@ -33,7 +33,6 @@
 #include <glidix/sched.h>
 #include <glidix/memory.h>
 #include <glidix/errno.h>
-#include <glidix/interp.h>
 #include <glidix/syscall.h>
 
 typedef struct
@@ -115,6 +114,46 @@ int execScript(File *fp, const char *path, const char *pars, size_t parsz)
 	// do it
 	vfsClose(fp);
 	return elfExec(newPars, newPars, newParsz);
+};
+
+static int validateElfHeader(Elf64_Ehdr *header)
+{
+	if (memcmp(header->e_ident, "\x7f" "ELF", 4) != 0)
+	{
+		return -1;
+	};
+
+	if (header->e_ident[EI_CLASS] != ELFCLASS64)
+	{
+		return -1;
+	};
+
+	if (header->e_ident[EI_DATA] != ELFDATA2LSB)
+	{
+		return -1;
+	};
+
+	if (header->e_ident[EI_VERSION] != 1)
+	{
+		return -1;
+	};
+
+	if (header->e_type != ET_EXEC)
+	{
+		return -1;
+	};
+
+	if (header->e_machine != EM_X86_64)
+	{
+		return -1;
+	};
+	
+	if (header->e_phentsize < sizeof(Elf64_Phdr))
+	{
+		return -1;
+	};
+	
+	return 0;
 };
 
 int elfExec(const char *path, const char *pars, size_t parsz)
@@ -231,62 +270,18 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		return -1;
 	};
 
-	if (memcmp(elfHeader.e_ident, "\x7f" "ELF", 4) != 0)
-	{
-		vfsClose(fp);
-		getCurrentThread()->therrno = ENOEXEC;
-		return -1;
-	};
-
-	if (elfHeader.e_ident[EI_CLASS] != ELFCLASS64)
-	{
-		vfsClose(fp);
-		getCurrentThread()->therrno = ENOEXEC;
-		return -1;
-	};
-
-	if (elfHeader.e_ident[EI_DATA] != ELFDATA2LSB)
-	{
-		vfsClose(fp);
-		getCurrentThread()->therrno = ENOEXEC;
-		return -1;
-	};
-
-	if (elfHeader.e_ident[EI_VERSION] != 1)
-	{
-		vfsClose(fp);
-		getCurrentThread()->therrno = ENOEXEC;
-		return -1;
-	};
-
-	if (elfHeader.e_type != ET_EXEC)
-	{
-		vfsClose(fp);
-		getCurrentThread()->therrno = ENOEXEC;
-		return -1;
-	};
-
-	if (elfHeader.e_machine != EM_X86_64)
+	if (validateElfHeader(&elfHeader) != 0)
 	{
 		vfsClose(fp);
 		ERRNO = ENOEXEC;
-		return -1;
-	};
-	
-	if (elfHeader.e_phentsize < sizeof(Elf64_Phdr))
-	{
-		vfsClose(fp);
-		getCurrentThread()->therrno = ENOEXEC;
 		return -1;
 	};
 
 	ProgramSegment *segments = (ProgramSegment*) kmalloc(sizeof(ProgramSegment)*(elfHeader.e_phnum));
 	memset(segments, 0, sizeof(ProgramSegment) * elfHeader.e_phnum);
 
-	int interpNeeded = 0;
-	Elf64_Dyn *dynamic;
-
 	unsigned int i;
+	int execfd = -1;
 	for (i=0; i<elfHeader.e_phnum; i++)
 	{
 		fp->seek(fp, elfHeader.e_phoff + i * elfHeader.e_phentsize, SEEK_SET);
@@ -294,6 +289,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		if (vfsRead(fp, &proghead, sizeof(Elf64_Phdr)) < sizeof(Elf64_Phdr))
 		{
 			kfree(segments);
+			vfsClose(fp);
 			getCurrentThread()->therrno = ENOEXEC;
 			return -1;
 		};
@@ -329,7 +325,6 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			uint64_t end = proghead.p_vaddr + proghead.p_memsz;
 			uint64_t size = end - start;
 			uint64_t numPages = ((start + size) / 0x1000) - segments[i].index + 1; 
-			//if (size % 0x1000) numPages++;
 
 			segments[i].count = (int) numPages;
 			segments[i].fileOffset = proghead.p_offset;
@@ -355,14 +350,175 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		}
 		else if (proghead.p_type == PT_INTERP)
 		{
-			interpNeeded = 1;
+			// execute the interpreter instead of the requested executable
+			char interpPath[PATH_MAX];
+			memset(interpPath, 0, PATH_MAX);
+			if (proghead.p_filesz >= PATH_MAX)
+			{
+				vfsClose(fp);
+				kfree(segments);
+				ERRNO = ENOEXEC;
+				return -1;
+			};
+			
+			fp->seek(fp, proghead.p_offset, SEEK_SET);
+			if (vfsRead(fp, interpPath, proghead.p_filesz) != proghead.p_filesz)
+			{
+				vfsClose(fp);
+				kfree(segments);
+				ERRNO = ENOEXEC;
+				return -1;
+			};
+			
+			File *execfp = fp;
+			fp = vfsOpen(interpPath, VFS_CHECK_ACCESS, &error);
+			fp->refcount = 1;
+			if (fp == NULL)
+			{
+				vfsClose(execfp);
+				kfree(segments);
+				ERRNO = ENOEXEC;
+				return -1;
+			};
+			
+			if (fp->seek == NULL)
+			{
+				vfsClose(execfp);
+				vfsClose(fp);
+				kfree(segments);
+				ERRNO = ENOEXEC;
+				return -1;
+			};
+			
+			if (vfsRead(fp, &elfHeader, sizeof(Elf64_Ehdr)) != sizeof(Elf64_Ehdr))
+			{
+				vfsClose(execfp);
+				vfsClose(fp);
+				kfree(segments);
+				ERRNO = ENOEXEC;
+				return -1;
+			};
+			
+			if (validateElfHeader(&elfHeader) != 0)
+			{
+				vfsClose(execfp);
+				vfsClose(fp);
+				kfree(segments);
+				ERRNO = ENOEXEC;
+				return -1;
+			};
+			
+			kfree(segments);
+			segments = (ProgramSegment*) kmalloc(sizeof(ProgramSegment)*(elfHeader.e_phnum));
+			memset(segments, 0, sizeof(ProgramSegment) * elfHeader.e_phnum);
+
+			for (i=0; i<elfHeader.e_phnum; i++)
+			{
+				fp->seek(fp, elfHeader.e_phoff + i * elfHeader.e_phentsize, SEEK_SET);
+				Elf64_Phdr proghead;
+				if (vfsRead(fp, &proghead, sizeof(Elf64_Phdr)) < sizeof(Elf64_Phdr))
+				{
+					kfree(segments);
+					vfsClose(fp);
+					vfsClose(execfp);
+					ERRNO = ENOEXEC;
+					return -1;
+				};
+				
+				if (proghead.p_type == PT_LOAD)
+				{
+					if (proghead.p_vaddr < 0x400000)
+					{
+						vfsClose(fp);
+						kfree(segments);
+						getCurrentThread()->therrno = ENOEXEC;
+						return -1;
+					};
+
+					if ((proghead.p_vaddr+proghead.p_memsz) > 0x8000000000)
+					{
+						vfsClose(fp);
+						kfree(segments);
+						return -1;
+					};
+
+					uint64_t start = proghead.p_vaddr;
+					segments[i].index = (start)/0x1000;
+
+					uint64_t end = proghead.p_vaddr + proghead.p_memsz;
+					uint64_t size = end - start;
+					uint64_t numPages = ((start + size) / 0x1000) - segments[i].index + 1; 
+
+					segments[i].count = (int) numPages;
+					segments[i].fileOffset = proghead.p_offset;
+					segments[i].memorySize = proghead.p_memsz;
+					segments[i].fileSize = proghead.p_filesz;
+					segments[i].loadAddr = proghead.p_vaddr;
+					segments[i].flags = 0;
+
+					if (proghead.p_flags & PF_R)
+					{
+						segments[i].flags |= PROT_READ;
+					};
+
+					if (proghead.p_flags & PF_W)
+					{
+						segments[i].flags |= PROT_WRITE;
+					};
+
+					if (proghead.p_flags & PF_X)
+					{
+						segments[i].flags |= PROT_EXEC;
+					};
+				}
+				else
+				{
+					kfree(segments);
+					vfsClose(fp);
+					vfsClose(execfp);
+					ERRNO = ENOEXEC;
+					return -1;
+				};
+			};
+			
+			FileTable *ftab = getCurrentThread()->ftab;
+			spinlockAcquire(&ftab->spinlock);
+
+			size_t i;
+			for (i=0; i<MAX_OPEN_FILES; i++)
+			{
+				if (ftab->entries[i] == NULL)
+				{
+					break;
+				};
+			};
+
+			if (i == MAX_OPEN_FILES)
+			{
+				kfree(segments);
+				vfsClose(fp);
+				vfsClose(execfp);
+				ERRNO = EMFILE;
+				return -1;
+			};
+			
+			execfp->oflag = O_RDONLY;
+			ftab->entries[i] = execfp;
+			spinlockRelease(&ftab->spinlock);
+			
+			auxv[0].a_type = AT_EXECFD;
+			auxv[0].a_un.a_val = i;
+			execfd = (int) i;
+
+			break;
 		}
 		else if (proghead.p_type == PT_DYNAMIC)
 		{
-			dynamic = (Elf64_Dyn*) proghead.p_vaddr;
+			// ignore
 		}
 		else
 		{
+			vfsClose(fp);
 			kfree(segments);
 			getCurrentThread()->therrno = ENOEXEC;
 			return -1;
@@ -436,13 +592,16 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	spinlockAcquire(&getCurrentThread()->ftab->spinlock);
 	for (i=0; i<MAX_OPEN_FILES; i++)
 	{
-		File *fp = getCurrentThread()->ftab->entries[i];
-		if (fp != NULL)
+		if (i != execfd)
 		{
-			if (fp->oflag & O_CLOEXEC)
+			File *fp = getCurrentThread()->ftab->entries[i];
+			if (fp != NULL)
 			{
-				getCurrentThread()->ftab->entries[i] = NULL;
-				vfsClose(fp);
+				if (fp->oflag & O_CLOEXEC)
+				{
+					getCurrentThread()->ftab->entries[i] = NULL;
+					vfsClose(fp);
+				};
 			};
 		};
 	};
@@ -459,11 +618,6 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	{
 		thread->creds->egid = st.st_gid;
 		thread->flags |= THREAD_REBEL;
-	};
-
-	if (interpNeeded)
-	{
-		linkInterp(&regs, dynamic, pm);
 	};
 	
 	// permissions
@@ -505,6 +659,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	
 	regs.rsp = stack;
 	regs.rbp = 0;
+	regs.rdx = 0;
 
 	// do not block any signals in a new executable by default
 	getCurrentThread()->sigmask = 0;

@@ -26,14 +26,18 @@
 
 section .init
 global _init
-global _fini
 
 _init:
 	push rbp
 	mov rbp, rsp
 
 section .fini
+global _fini
 
 _fini:
 	push rbp
 	mov rbp, rsp
+
+section .init_array
+global __init_array_start
+__init_array_start:

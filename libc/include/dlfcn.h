@@ -40,24 +40,6 @@ extern "C" {
 #define	RTLD_LOCAL				(1 << 2)
 #define	RTLD_GLOBAL				(1 << 3)
 
-#define	__DLFCN_MAX_SEGMENTS			16
-
-typedef struct
-{
-	void*				addr;
-	size_t				len;
-} __libinfo_segment;
-
-typedef struct
-{
-	uint64_t			dynSize;
-	void*				dynSection;
-	uint64_t			loadAddr;
-	uint64_t			nextLoadAddr;
-	int				numSegments;
-	__libinfo_segment		segments[__DLFCN_MAX_SEGMENTS];
-} __libinfo;
-
 void *dlopen(const char *path, int mode);
 void *dlsym(void *lib, const char *name);
 int   dlclose(void *lib);

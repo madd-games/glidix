@@ -29,14 +29,36 @@ global _start
 
 extern _init
 extern _fini
-extern __glidixrt_init
 extern main
+extern exit
+extern __init_array_start
 
 __default_mxcsr dd (1 << 15) | (1 << 12)
 
 _start:
 	ldmxcsr		[__default_mxcsr]
 	call		_init
-	mov		rdi, main
-	call		__glidixrt_init
-	jmp $
+	
+	mov rbx,	__init_array_start
+.repeat:
+	mov rax,	[rbx]
+	test rax,	rax
+	jz .end
+	
+	call		rax
+	add rbx,	8
+	jmp .repeat
+	
+.end:
+	mov rdi,	[rsp]
+	lea rsi,	[rsp+8]
+	
+	mov rdx,	rdi
+	inc rdx
+	shl rdx,	3
+	add rdx,	rsi
+	
+	call main
+	
+	mov rdi,	rax
+	call exit

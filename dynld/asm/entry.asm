@@ -26,15 +26,22 @@
 
 global _start
 extern dynld_main
+extern dynld_errno
 
 section .text
 _start:
+	; errno location
+	mov rdi, dynld_errno
+	mov rax, 49
+	syscall
+	
 	mov rdi, [rsp]
 	lea rsi, [rsp+8]
 	mov rdx, rdi
 	inc rdx
 	shl rdx, 3
 	add rdx, rsi
+	mov rcx, rsp		; pass the return stack as fourth argument
 	and rsp, ~0xF		; align the stack
 	call dynld_main
 	
@@ -53,3 +60,85 @@ open:
 	mov rax, 4
 	syscall
 	ret
+
+global pread
+pread:
+	mov r10, rcx
+	mov rax, 52
+	syscall
+	ret
+
+global mmap
+mmap:
+	mov r10, rcx
+	mov rax, 54
+	syscall
+	ret
+
+global munmap
+munmap:
+	mov r10, rcx
+	mov rax, 99
+	syscall
+	ret
+
+global close
+close:
+	mov rax, 5
+	syscall
+	ret
+
+global _glidix_fstat
+_glidix_fstat:
+	mov rax, 37
+	syscall
+	ret
+
+global raise
+raise:
+	mov rax, 18
+	syscall
+	ret
+
+extern dynld_pltreloc
+extern dynld_abort
+global dynld_lazybind
+dynld_lazybind:
+	; entry point to the lazy binder
+	xchg bx, bx
+	xchg rdi, [rsp]			; library handle
+	xchg rsi, [rsp+8]		; index
+	
+	; preserve the rest of the argument registers
+	push rdx
+	push rcx
+	push r8
+	push r9
+	
+	; perform the relocation
+	call dynld_pltreloc
+	
+	; if it returned NULL, abort
+	test rax, rax
+	jz .fail
+	
+	; restore argument registers
+	; because of the exchanges above, this will also return the stack to the state of the attempted
+	; call, so we just have to jump to the function (rax) after that
+	pop r9
+	pop r8
+	pop rcx
+	pop rdx
+	pop rdi
+	pop rsi
+	jmp rax
+
+.fail:
+	call dynld_abort
+
+global dynld_enter
+dynld_enter:
+	mov rsp, rdi
+	xor rbp, rbp
+	xor rdx, rdx
+	jmp rsi

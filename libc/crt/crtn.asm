@@ -31,3 +31,7 @@ section .init
 section .fini
 	pop rbp
 	ret
+
+section .init_array
+global __init_array_end
+__init_array_end: dq 0

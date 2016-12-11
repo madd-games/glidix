@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix dynamic linker
 
 	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
@@ -26,20 +26,61 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_interp_h
-#define __glidix_interp_h
+#include <unistd.h>
+#include <fcntl.h>
 
-#include <glidix/common.h>
-#include <glidix/elf64.h>
-#include <glidix/procmem.h>
+#include "dynld.h"
 
-/**
- * This is here so that we can pre-cache a readily-relocated C library from the initrd
- * (/initrd/lib/libc.so) on system boot up. We can then easily load dynamically-linked
- * executables, because the C library contains an interpreter.
- */
-
-void initInterp();
-void linkInterp(Regs *regs, Elf64_Dyn *dynamic, ProcMem *pm);
-
-#endif
+int dynld_open(const char *soname, ...)
+{
+	if (strchr(soname, '/') != NULL)
+	{
+		strcpy(dynld_errmsg, "library not found");		// in case open() returns -1
+		return open(soname, O_RDONLY);
+	}
+	else
+	{
+		char libpath[PATH_MAX];
+		
+		va_list ap;
+		va_start(ap, soname);
+		
+		while (1)
+		{
+			const char *pathspec = va_arg(ap, char*);
+			if (pathspec == NULL)
+			{
+				strcpy(dynld_errmsg, "library not found");
+				return -1;
+			};
+			
+			while (*pathspec != 0)
+			{
+				size_t size;
+				char *colonPos = strchr(pathspec, ':');
+				
+				if (colonPos == NULL)
+				{
+					size = strlen(pathspec);
+				}
+				else
+				{
+					size = colonPos - pathspec;
+				};
+				
+				if ((size+strlen(soname)+1) < PATH_MAX)
+				{
+					memcpy(libpath, pathspec, size);
+					libpath[size] = '/';
+					strcpy(&libpath[size+1], soname);
+					
+					int fd = open(libpath, O_RDONLY);
+					if (fd != -1) return fd;
+				};
+				
+				pathspec += size;
+				if (*pathspec == ':') pathspec++;
+			};
+		};
+	};
+};

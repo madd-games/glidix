@@ -28,26 +28,23 @@
 
 #include <dlfcn.h>
 
-void *__dlopen(const char *soname, int mode);
-void *dlopen(const char *soname, int mode)
+__attribute__ ((weak)) void* dlopen(const char *soname, int mode)
 {
-	return __dlopen(soname, mode);
+	return NULL;
 };
 
-void *__dlsym(void *lib, const char *name);
-void *dlsym(void *lib, const char *name)
+__attribute__ ((weak)) void* dlsym(void *dl, const char *name)
 {
-	return __dlsym(lib, name);
+	return NULL;
 };
 
-int __dlclose(void *lib);
-int dlclose(void *lib)
+__attribute__ ((weak)) int dlclose(void *dl)
 {
-	return __dlclose(lib);
+	return -1;
 };
 
-char *__dlerror();
-char *dlerror()
+__attribute__ ((weak)) char* dlerror()
 {
-	return __dlerror();
+	static char errmsg[] = "dynamic linker not available\0";
+	return errmsg;
 };

@@ -1,5 +1,6 @@
 .macro GLIDIX_SYSCALL num, name
 .globl \name
+.type \name, @function
 \name:
 	mov	%rcx,	%r10
 	mov	$\num,	%rax

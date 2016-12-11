@@ -391,7 +391,7 @@ ssize_t sys_pread(int fd, void *buf, size_t size, off_t offset)
 				if ((fp->oflag & O_RDONLY) == 0)
 				{
 					spinlockRelease(&ftab->spinlock);
-					getCurrentThread()->therrno = EPERM;
+					getCurrentThread()->therrno = EACCES;
 					out = -1;
 				}
 				else
@@ -496,7 +496,7 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 			// we're creating a new file, fake a stat.
 			st.st_uid = getCurrentThread()->creds->euid;
 			st.st_gid = getCurrentThread()->creds->egid;
-			st.st_mode = 0777;				// because mode shall not affect the open (see POSIX open() )
+			st.st_mode = 0777;	// because mode shall not affect the open (see POSIX open() )
 		};
 	}
 	else if (oflag & O_EXCL)

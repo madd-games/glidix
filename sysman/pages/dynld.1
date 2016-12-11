@@ -1,0 +1,44 @@
+>NAME
+
+dynld - dynamic linker
+
+>SYNOPSIS
+
+	dynld 'executable' ['args']...
+
+>DESCRIPTION
+
+The dynamic linker, located at '/bin/dynld', is a static executable which is responsible for loading dynamic executables (executables which make use of shared libraries). It can be invoked from the command line to load 'executable', or in the usual way - indirectly, when a dynamic executable is being executed.
+
+Most Glidix executable are dynamic. Their program header tables contain a *PT_INTERP* program header, which points to an interpreter (typically '/bin/dynld') which is loaded by the kernel instead of the executable. The kernel then passes a file descriptor referring to the executable in the ELF auxiliary vector to the dynamic linker, via the *AT_EXECFD* entry. The linker then loads the executable and all libraries it depends on into memory, resolves references, and passes control to the application, in the same environment as the one set up by [exec.2] (see [entry.6]).
+
+By default, the linker runs in 'normal mode'. However, when loading an executable that is SUID or GUID (see [access_mode.6]), or when the own permission set of the executable is nonzero (see [xperm.6]), it switches to 'safe-execution mode'. The following paragraphs will refer to those modes wherever there are differences.
+
+If the name of a library to be loaded contains a slash ('/'), it is interpreted as a path to the library. If there is no slash, then the named library is searched for, in the following locations (in this order):
+
+\* The colon-separated list of locations specified by the *DT_RPATH* dynamic attribute of the object requesting the dependency, if such an attribute is defined. Use of this attribute is deprecated. 
+
+\* The colon-separated list of locations specified by the *LD_LIBRARY_PATH* environment variable; note that this is ignored in safe-execution mode.
+
+\* The colon-separated list of locations specified by the *DT_RUNPATH* dynamic attribute of the object requesting the dependency, if such an attribute is defined.
+
+\* The default library locations: first '/usr/local/lib', then '/usr/lib' and finally '/lib'.
+
+If a dependency or symbol cannot be resolved, the linker prints out an error message to standard error output ('stderr') and exits with status 1.
+
+The dynamic linker resolves references to symbols [dlopen.2], [dlsym.2], [dlclose.2] and [dlerror.2] to its own code, hence implementing the runtime loader interface. The definitions of those functions in 'libdl.so' are simply weak symbols, which always return errors; so an executable must be loaded by the linker in order to use the real implementations.
+
+>>Symbol Resolution
+
+When resolving a symbol, the following things are attempted (in this order):
+
+\* If the symbol is [dlopen.2], [dlsym.2], [dlclose.2], or [dlerror.2], it is resolved to internal functions.
+
+\* The executable, and then all libraries in order of loading (a library comes before its dependencies), are searched for a global symbol with the specified name.
+
+\* If not found, then the libraries are searched against, this time for a 'weak' symbol with that name.
+
+\* Resolution fails.
+
+>SEE ALSO
+[auxv.6], [elf.6]

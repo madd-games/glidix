@@ -1044,6 +1044,11 @@ void threadExitEx(uint64_t retval)
 
 void processExit(int status)
 {
+	if (currentThread->creds->pid == 1)
+	{
+		panic("init terminated with status %d", status);
+	};
+	
 	killOtherThreads();
 	currentThread->creds->status = status;
 	threadExit();

@@ -347,7 +347,8 @@ typedef struct _Dir
 	 */
 	struct dirent			dirent;
 	struct stat			stat;
-
+	char				_pad[1024 - sizeof(struct stat) - sizeof(struct dirent)];
+	
 	/**
 	 * If this entry points to a file, open the file. Return 0 on success, -1 on error.
 	 * The passed File structure was initialized to default values; please only change

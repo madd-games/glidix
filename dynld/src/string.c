@@ -34,3 +34,52 @@ size_t strlen(const char *s)
 	for (; *s!=0; s++) count++;
 	return count;
 };
+
+void strcpy(char *dst, const char *src)
+{
+	while (*src != 0) *dst++ = *src++;
+	*dst = 0;
+};
+
+int memcmp(const void *a_, const void *b_, size_t sz)
+{
+	const char *a = (const char*) a_;
+	const char *b = (const char*) b_;
+	
+	while (sz--)
+	{
+		if ((*a++) != (*b++)) return 1;
+	};
+	
+	return 0;
+};
+
+char* strchr(const char *s, char c)
+{
+	while (*s != 0)
+	{
+		if (*s == c) return (char*) s;
+		s++;
+	};
+	
+	return NULL;
+};
+
+void memcpy(void *dst_, const void *src_, size_t sz)
+{
+	char *dst = (char*) dst_;
+	const char *src = (const char*) src_;
+	while (sz--) *dst++ = *src++;
+};
+
+int strcmp(const char *a, const char *b)
+{
+	while ((*a) == (*b))
+	{
+		if (*a == 0) return 0;
+		a++;
+		b++;
+	};
+	
+	return 1;
+};

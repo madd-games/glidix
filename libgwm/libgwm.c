@@ -46,6 +46,14 @@ static uint64_t nextSeq;
 static pthread_t listenThread;
 static DDIFont *defaultFont;
 
+uint64_t pagesPlacement = 0x2000000000;
+uint64_t __alloc_pages(uint64_t sz)
+{
+	uint64_t ret = pagesPlacement;
+	pagesPlacement += sz;
+	return ret;
+};
+
 typedef struct GWMWaiter_
 {
 	struct GWMWaiter_*		prev;

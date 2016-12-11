@@ -1,8 +1,17 @@
 C_SRC := $(shell find $(SRCDIR)/src -name '*.c')
 ASM_SRC := $(shell find $(SRCDIR)/asm -name '*.s')
-OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(C_SRC)) $(patsubst $(SRCDIR)/asm/%.s, asm/%.o, $(ASM_SRC))
-DEP := $(OBJ:.o=.d)
+ASM_STATIC := $(shell find $(SRCDIR)/sasm -name '*.s')
+
+OBJ_DYN := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(C_SRC)) $(patsubst $(SRCDIR)/asm/%.s, asm/%.o, $(ASM_SRC))
+OBJ_STATIC := $(patsubst $(SRCDIR)/%.c, sobj/%.o, $(C_SRC)) $(patsubst $(SRCDIR)/asm/%.s, asm/%.o, $(ASM_SRC)) $(patsubst $(SRCDIR)/sasm/%.s, sasm/%.o, $(ASM_STATIC))
+
+DEP_DYN := $(OBJ_DYN:.o=.d)
+DEP_STATIC := $(OBJ_STATIC:.o=.d)
+
+DEP := $(DEP_DYN) $(DEP_STATIC)
+
 CFLAGS := -fPIC -I $(SRCDIR)/include -Wall -Werror -D_GLIDIX_SOURCE
+CFLAGS_STATIC := -I $(SRCDIR)/include -Wall -Werror -D_GLIDIX_SOURCE
 
 SUP_SRC := $(shell find $(SRCDIR)/support -name '*.c')
 SUP_OUT := $(patsubst $(SRCDIR)/support/%.c, support/%.so, $(SUP_SRC))
@@ -13,10 +22,10 @@ CRT_OUT := $(patsubst $(SRCDIR)/crt/%.asm, crt/%.o, $(CRT_SRC))
 .PHONY: all install
 all: libc.so libc.a libc32.a $(SUP_OUT) $(CRT_OUT)
 
-libc.so: $(OBJ)
+libc.so: $(OBJ_DYN)
 	$(HOST_GCC) -shared -o $@ $^ -nostdlib -lgcc
 
-libc.a: $(OBJ)
+libc.a: $(OBJ_STATIC)
 	$(HOST_AR) rc $@ $^
 	$(HOST_RANLIB) $@
 
@@ -35,8 +44,16 @@ obj/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(dir $@)
 	$(HOST_GCC) -c $< -o $@ $(CFLAGS)
 
+sobj/%.o: $(SRCDIR)/%.c
+	@mkdir -p $(dir $@)
+	$(HOST_GCC) -c $< -o $@ $(CFLAGS_STATIC)
+
 asm/%.o: $(SRCDIR)/asm/%.s
 	@mkdir -p asm
+	$(HOST_AS) -c $< -o $@
+
+sasm/%.o: $(SRCDIR)/sasm/%.s
+	@mkdir -p sasm
 	$(HOST_AS) -c $< -o $@
 
 support/%.so: $(SRCDIR)/support/%.c

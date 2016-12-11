@@ -38,6 +38,40 @@ void dynld_printf(const char *fmt, ...)
 	va_end(ap);
 };
 
+void dynld_print_p(uint64_t val)
+{
+	static char hexd[16] = "0123456789abcdef";
+	
+	char buffer[64];
+	char *put = buffer + 64;
+	size_t sz = 0;
+	
+	do
+	{
+		*--put = hexd[val & 0xF];
+		val >>= 4;
+		sz++;
+	} while (val != 0);
+	
+	write(2, put, sz);
+};
+
+void dynld_print_d(int val)
+{
+	char buffer[64];
+	char *put = buffer + 64;
+	size_t sz = 0;
+	
+	do
+	{
+		*--put = '0' + (val % 10);
+		val /= 10;
+		sz++;
+	} while (val != 0);
+	
+	write(2, put, sz);
+};
+
 void dynld_vprintf(const char *fmt, va_list ap)
 {
 	while (*fmt != 0)
@@ -53,6 +87,8 @@ void dynld_vprintf(const char *fmt, va_list ap)
 			char spec = *fmt++;
 			
 			const char *sarg;
+			uint64_t uarg;
+			int iarg;
 			
 			switch (spec)
 			{
@@ -62,6 +98,14 @@ void dynld_vprintf(const char *fmt, va_list ap)
 			case 's':
 				sarg = va_arg(ap, const char*);
 				write(2, sarg, strlen(sarg));
+				break;
+			case 'p':
+				uarg = va_arg(ap, uint64_t);
+				dynld_print_p(uarg);
+				break;
+			case 'd':
+				iarg = va_arg(ap, int);
+				dynld_print_d(iarg);
 				break;
 			};
 		};

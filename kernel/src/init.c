@@ -49,7 +49,6 @@
 #include <glidix/storage.h>
 #include <glidix/fsdriver.h>
 #include <glidix/time.h>
-#include <glidix/interp.h>
 #include <glidix/fpu.h>
 #include <glidix/apic.h>
 #include <glidix/acpi.h>
@@ -418,8 +417,6 @@ void kmain(KernelBootInfo *info)
 static void spawnProc(void *stack)
 {
 	DONE();
-	
-	initInterp();
 
 	kprintf("Setting up the terminal... ");
 	setupTerminal(getCurrentThread()->ftab);

@@ -247,6 +247,14 @@ int mouseLeftDown = 0;
 
 void PostDesktopUpdate();
 
+uint64_t pagesPlacement = 0x2000000000;
+uint64_t __alloc_pages(uint64_t sz)
+{
+	uint64_t ret = pagesPlacement;
+	pagesPlacement += sz;
+	return ret;
+};
+
 int isWindowFocused(Window *win)
 {
 	Window *check = focusedWindow;
