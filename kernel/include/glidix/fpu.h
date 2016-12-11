@@ -31,10 +31,43 @@
 
 #include <stdint.h>
 
+#define	MX_IE				(1 << 0)
+#define	MX_DE				(1 << 1)
+#define	MX_ZE				(1 << 2)
+#define	MX_OE				(1 << 3)
+#define	MX_UE				(1 << 4)
+#define	MX_PE				(1 << 5)
+#define	MX_DAZ				(1 << 6)
+#define	MX_IM				(1 << 7)
+#define	MX_DM				(1 << 8)
+#define	MX_ZM				(1 << 9)
+#define	MX_OM				(1 << 10)
+#define	MX_UM				(1 << 11)
+#define	MX_PM				(1 << 12)
+#define	MX_RC_RN			0
+#define	MX_RC_RNEG			0x2000
+#define	MX_RC_RPOS			0x4000
+#define	MX_RC_RZ			0x6000
+#define	MX_RC_FZ			(1 << 15)
+
 typedef struct
 {
-	uint8_t block[512];
-} PACKED FPURegs;
+	//uint8_t block[512];
+	uint16_t			fcw;
+	uint16_t			fsw;
+	uint8_t				ftw;
+	/* 1-byte padding inserted by alignment */
+	uint16_t			fop;
+	uint32_t			fpuIP;
+	uint16_t			cs;
+	uint16_t			_rsv0;
+	uint32_t			fpuDP;
+	uint16_t			ds;
+	uint16_t			_rsv1;
+	uint32_t			mxcsr;
+	uint32_t			mxcsrMask;
+	uint8_t				block[512-32];
+} ALIGN(16) FPURegs;
 
 /* all functions implemented in fpu.asm */
 void fpuInit();

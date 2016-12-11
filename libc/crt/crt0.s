@@ -2,11 +2,7 @@
 .globl _start
 .weak __call_init_array
 
-__default_mxcsr:
-	.quad (1 << 15) | (1 << 12)
-
 _start:
-	ldmxcsr __default_mxcsr
 	call _init
 	call __call_init_array
 	

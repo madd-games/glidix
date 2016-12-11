@@ -648,7 +648,7 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	memset(&thread->fpuRegs, 0, 512);
 	memset(&thread->regs, 0, sizeof(Regs));
 	thread->regs.rip = (uint64_t) entry;
-	thread->regs.rsp = ((uint64_t) thread->stack + thread->stackSize - 8) & ~0xF;	// -8 because we'll push the return address...
+	thread->regs.rsp = (((uint64_t) thread->stack + thread->stackSize) & ~0xF) - 8;
 	thread->regs.cs = 8;
 	thread->regs.ds = 16;
 	thread->regs.ss = 0;

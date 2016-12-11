@@ -661,6 +661,12 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	regs.rbp = 0;
 	regs.rdx = 0;
 
+	// initialize MXCSR
+	FPURegs fregs;
+	fpuSave(&fregs);
+	fregs.mxcsr = MX_PM | MX_UM | MX_OM | MX_ZM | MX_DM | MX_IM;
+	fpuLoad(&fregs);
+	
 	// do not block any signals in a new executable by default
 	getCurrentThread()->sigmask = 0;
 	switchContext(&regs);

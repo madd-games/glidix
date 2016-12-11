@@ -639,7 +639,7 @@ void kmain2()
 	memset(&state.fpuRegs, 0, 512);
 	void *spawnStack = kmalloc(0x200000);
 	state.rip = (uint64_t) &spawnProc;
-	state.rsp = (uint64_t) spawnStack + 0x200000 - 16;
+	state.rsp = (uint64_t) spawnStack + 0x200000 - 16 - 8;
 	((uint64_t*)state.rsp)[0] = 0;
 	((uint64_t*)state.rsp)[1] = 0;
 	state.rdi = (uint64_t) spawnStack;

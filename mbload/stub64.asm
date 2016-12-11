@@ -14,7 +14,9 @@ bits 64
 	
 	xor rbp, rbp
 	mov rdi, rsp
-	call [rsp+8]
+	mov rax, [rsp+8]
+	and rsp, ~0xF
+	call rax
 	
 _hang2:
 	cli

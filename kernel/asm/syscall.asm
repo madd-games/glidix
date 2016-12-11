@@ -122,8 +122,10 @@ _syscall_entry:
 	test rax, rax
 	jz .invalid			; entry is NULL
 	
-	; invoke the system call
+	; invoke the system call (while aligning the stack)
+	sub rsp, 8
 	call rax
+	add rsp, 8
 	
 	; we must always perform the epilog
 	mov rdi, rax
