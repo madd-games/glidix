@@ -186,3 +186,8 @@ double frexp(double f, int* p)
 		f = (f * pow2(DBL_MAX_EXP - 1)) * pow2(x - (DBL_MAX_EXP - 1));
 	return f;
 };
+
+double ldexp(double a, int b)
+{
+	return a * (double)(1 << b);
+};

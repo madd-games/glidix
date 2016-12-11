@@ -40,6 +40,10 @@ obj/%.d: $(SRCDIR)/%.c
 	@mkdir -p $(dir $@)
 	$(HOST_GCC) -c $< -MM -MT $(subst .d,.o,$@) -o $@ $(CFLAGS)
 
+sobj/%.d: $(SRCDIR)/%.c
+	@mkdir -p $(dir $@)
+	$(HOST_GCC) -c $< -MM -MT $(subst .d,.o,$@) -o $@ $(CFLAGS)
+
 obj/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(dir $@)
 	$(HOST_GCC) -c $< -o $@ $(CFLAGS)

@@ -48,6 +48,17 @@ then
 	build-tools/mkmip mipdir $1/binutils.mip
 fi
 
+# gcc
+if [ "$MIP_GCC" = "yes" ]
+then
+	rm -rf mipdir
+	mkdir mipdir || exit 1
+	cd gcc
+	make install || exit 1
+	cd ..
+	build-tools/mkmip mipdir $1/gcc.mip
+fi
+
 # libz
 rm -rf mipdir || exit 1
 cd libz

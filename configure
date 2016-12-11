@@ -69,7 +69,10 @@ assert_mod_setting()
 maybe_gxsetup=""
 maybe_binutils=""
 maybe_gxboot=""
+maybe_gcc=""
+
 binutils_version="2.27"
+gcc_version="6.2.0"
 
 for i in "$@"
 do
@@ -120,6 +123,18 @@ case $i in
 		maybe_gxboot=""
 		;;
 	
+	--enable-gcc)
+		maybe_gcc="gcc"
+		;;
+	
+	--disable-gcc)
+		maybe_gcc=""
+		;;
+	
+	gcc-version=*)
+		gcc_version=`echo $i | sed 's/[-a-zA-Z0-9]*=//'`
+		;;
+		
 	*)
 		echo >&2 "$0: unrecognised command-line option '$i'"
 		echo >&2 "run '$0 --help' for more information"
@@ -128,7 +143,7 @@ done
 
 # targets
 # NOTE: Those need to be in order; a target must come AFTER all the targets that it depends on.
-TARGETS="kernel build-tools libc dynld shutils init modules mbload sh $maybe_gxsetup $maybe_binutils sysman $maybe_gxboot libz libpng freetype libddi libgwm gui"
+TARGETS="kernel build-tools libc dynld shutils init modules mbload sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libz libpng freetype libddi libgwm gui"
 
 # determine build parameters
 export GLIDIX_SYSROOT="$sysroot"
@@ -138,6 +153,7 @@ export HOST_AS="x86_64-glidix-as"
 export HOST_AR="x86_64-glidix-ar"
 export HOST_RANLIB="x86_64-glidix-ranlib"
 export GLIDIX_BINUTILS_VERSION="$binutils_version"
+export GLIDIX_GCC_VERSION="$gcc_version"
 
 # sanity checks
 test_command()
@@ -210,6 +226,13 @@ then
 	echo >>Makefile "MIP_BINUTILS := yes"
 else
 	echo >>Makefile "MIP_BINUTILS := no"
+fi
+
+if [ "$maybe_gcc" = "gcc" ]
+then
+	echo >>Makefile "MIP_GCC := yes"
+else
+	echo >>Makefile "MIP_GCC := no"
 fi
 
 echo >>Makefile "mip:"

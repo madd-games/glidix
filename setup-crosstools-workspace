@@ -57,6 +57,11 @@ wget http://nl.mirror.babylon.network/gcc/releases/gcc-$gcc_version/gcc-$gcc_ver
 tar -xzf gcc-$gcc_version.tar.gz || exit 1
 mv gcc-$gcc_version glidix-gcc || exit 1
 tar -xzf gcc-$gcc_version.tar.gz || exit 1
+cd gcc-$gcc_version
+./contrib/download_prerequisites
+cd ../glidix-gcc
+./contrib/download_prerequisites
+cd ..
 
 echo "Patching binutils..."
 cd glidix-binutils
@@ -83,6 +88,7 @@ chmod +x install-stage2.sh
 
 echo "Generating make-patches script..."
 echo >make-patches.sh "#! /bin/sh"
+echo >>make-patches.sh "rm -f gcc-$gcc_version/isl gcc-$gcc_version/mpc gcc-$gcc_version/gmp gcc-$gcc_version/mpfr glidix-gcc/isl glidix-gcc/mpc glidix-gcc/gmp glidix-gcc/mpfr || exit 1"
 echo >>make-patches.sh "diff -urN binutils-$binutils_version glidix-binutils > $srcdir/binutils/binutils-$binutils_version.patch"
 echo >>make-patches.sh "diff -urN gcc-$gcc_version glidix-gcc > $srcdir/gcc/gcc-$gcc_version.patch"
 chmod +x make-patches.sh
