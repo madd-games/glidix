@@ -339,7 +339,6 @@ uint64_t phmAllocZeroFrame()
 	uint64_t frame = phmAllocFrame();
 	ispLock();
 	ispSetFrame(frame);
-	//memset(ispGetPointer(), 0, 0x1000);
 	ispZero();
 	ispUnlock();
 	return frame;

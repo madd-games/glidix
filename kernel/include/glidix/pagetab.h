@@ -122,4 +122,14 @@ typedef struct
 PML4 *getPML4();
 void refreshAddrSpace();
 
+/**
+ * Write data from the 'buffer' into the specified memory frame.
+ */
+void frameWrite(uint64_t frame, const void *buffer);
+
+/**
+ * Read data into the 'buffer' from the specified memory frame.
+ */
+void frameRead(uint64_t frame, void *buffer);
+
 #endif

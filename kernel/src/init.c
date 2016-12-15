@@ -61,6 +61,7 @@
 #include <glidix/ptty.h>
 #include <glidix/ramfs.h>
 #include <glidix/usb.h>
+#include <glidix/pageinfo.h>
 
 #define ACPI_OSC_QUERY_INDEX				0
 #define ACPI_OSC_SUPPORT_INDEX				1
@@ -324,7 +325,7 @@ void kmain(KernelBootInfo *info)
 	kprintf("Initializing the ISP... ");
 	ispInit();
 	DONE();
-
+	
 	//kprintf("Initializing per-CPU variable area... ");
 	//initPerCPU();
 	//DONE();
@@ -342,6 +343,10 @@ void kmain(KernelBootInfo *info)
 
 	kprintf("Initializing DMA... ");
 	dmaInit();
+	DONE();
+
+	kprintf("Initializing pageinfo... ");
+	piInit();
 	DONE();
 	
 	initModuleInterface();

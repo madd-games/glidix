@@ -40,3 +40,84 @@ ispZero:
 	mov	rcx,	512			; 512 qwords per page (4KB)
 	rep stosq
 	ret
+
+[global frameWrite]
+frameWrite:
+	push	rbp
+	mov	rbp, rsp
+	
+	; turn the frame address that was passed in into a valid PTE
+	shl	rdi, 12
+	or	rdi, 3	; present, write
+	
+	; allocate a page-aligned page-sized region on the stack to temporarily remap
+	sub	rsp, 0x1000
+	and	rsp, ~0xFFF
+	
+	; find the virtual address of the PTE (thanks to recursive mapping); put that in RDX
+	mov	rdx, rsp
+	mov	rax, 0xffffff8000000000
+	shr	rdx, 9
+	or	rdx, rax
+	
+	; preserve old PTE in R8, write the new PTE in
+	mov	r8, [rdx]
+	mov	[rdx], rdi
+	
+	; invalidate that page
+	invlpg	[rsp]
+	
+	; do the copying (buffer already in RSI)
+	mov	rdi, rsp
+	mov	rcx, 0x200	; 512 qwords in a page
+	rep movsq
+	
+	; restore the old PTE and invalidate the page again
+	mov	[rdx], r8
+	invlpg	[rsp]
+	
+	; thanks
+	mov	rsp, rbp
+	pop	rbp
+	ret
+
+[global frameRead]
+frameRead:
+	push	rbp
+	mov	rbp, rsp
+	
+	; turn the frame address that was passed in into a valid PTE
+	shl	rdi, 12
+	or	rdi, 3	; present, write
+	
+	; allocate a page-aligned page-sized region on the stack to temporarily remap
+	sub	rsp, 0x1000
+	and	rsp, ~0xFFF
+	
+	; find the virtual address of the PTE (thanks to recursive mapping); put that in RDX
+	mov	rdx, rsp
+	mov	rax, 0xffffff8000000000
+	shr	rdx, 9
+	or	rdx, rax
+	
+	; preserve old PTE in R8, write the new PTE in
+	mov	r8, [rdx]
+	mov	[rdx], rdi
+	
+	; invalidate that page
+	invlpg	[rsp]
+	
+	; do the copying
+	mov	rdi, rsi
+	mov	rsi, rsp
+	mov	rcx, 0x200
+	rep movsq
+	
+	; restore the old PTE and invalidate the page again
+	mov	[rdx], r8
+	invlpg	[rsp]
+	
+	; thanks
+	mov	rsp, rbp
+	pop	rbp
+	ret
