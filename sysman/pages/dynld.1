@@ -10,7 +10,7 @@ dynld - dynamic linker
 
 The dynamic linker, located at '/bin/dynld', is a static executable which is responsible for loading dynamic executables (executables which make use of shared libraries). It can be invoked from the command line to load 'executable', or in the usual way - indirectly, when a dynamic executable is being executed.
 
-Most Glidix executable are dynamic. Their program header tables contain a *PT_INTERP* program header, which points to an interpreter (typically '/bin/dynld') which is loaded by the kernel instead of the executable. The kernel then passes a file descriptor referring to the executable in the ELF auxiliary vector to the dynamic linker, via the *AT_EXECFD* entry. The linker then loads the executable and all libraries it depends on into memory, resolves references, and passes control to the application, in the same environment as the one set up by [exec.2] (see [entry.6]).
+Most Glidix executables are dynamic. Their program header tables contain a *PT_INTERP* program header, which points to an interpreter (typically '/bin/dynld') which is loaded by the kernel instead of the executable. The kernel then passes a file descriptor referring to the executable in the ELF auxiliary vector to the dynamic linker, via the *AT_EXECFD* entry. The linker then loads the executable and all libraries it depends on into memory, resolves references, and passes control to the application, in the same environment as the one set up by [exec.2] (see [entry.6]).
 
 By default, the linker runs in 'normal mode'. However, when loading an executable that is SUID or GUID (see [access_mode.6]), or when the own permission set of the executable is nonzero (see [xperm.6]), it switches to 'safe-execution mode'. The following paragraphs will refer to those modes wherever there are differences.
 
@@ -36,7 +36,7 @@ When resolving a symbol, the following things are attempted (in this order):
 
 \* The executable, and then all libraries in order of loading (a library comes before its dependencies), are searched for a global symbol with the specified name.
 
-\* If not found, then the libraries are searched against, this time for a 'weak' symbol with that name.
+\* If not found, then the libraries are searched again, this time for a 'weak' symbol with that name.
 
 \* Resolution fails.
 
