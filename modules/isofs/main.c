@@ -104,14 +104,14 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 	if (fp == NULL)
 	{
 		spinlockRelease(&isoMountLock);
-		kprintf_debug("isofs: could not open %s\n", image);
+		kprintf("isofs: could not open %s\n", image);
 		return -1;
 	};
 
 	if (fp->seek == NULL)
 	{
 		spinlockRelease(&isoMountLock);
-		kprintf_debug("isofs: %s cannot seek\n", image);
+		kprintf("isofs: %s cannot seek\n", image);
 		vfsClose(fp);
 		return -1;
 	};
@@ -121,7 +121,7 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 	if (vfsRead(fp, &primary, sizeof(ISOPrimaryVolumeDescriptor)) != sizeof(ISOPrimaryVolumeDescriptor))
 	{
 		spinlockRelease(&isoMountLock);
-		kprintf_debug("isofs: cannot read the whole ISOPrimaryVolumeDescriptor (EOF)\n");
+		kprintf("isofs: cannot read the whole ISOPrimaryVolumeDescriptor (EOF)\n");
 		vfsClose(fp);
 		return -1;
 	};
@@ -129,7 +129,7 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 	if (!checkPVD(&primary))
 	{
 		spinlockRelease(&isoMountLock);
-		kprintf_debug("isofs: the Primary Volume Descriptor is invalid\n");
+		kprintf("isofs: the Primary Volume Descriptor is invalid\n");
 		vfsClose(fp);
 		return -1;
 	};

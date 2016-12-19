@@ -51,32 +51,22 @@
 #define	SD_MASTER_OPEN				0xFFFFFFFFFFFFFFFFUL
 
 /**
- * Size of a single cache page.
+ * The size of a track (32KB).
  */
-#define	SD_PAGE_SIZE				0x1000UL
+#define	SD_TRACK_SIZE				0x8000UL
 
 /**
- * Number of pages to cache per device.
+ * Cache flags.
  */
-#define	SD_CACHE_PAGES				64
-
-/**
- * Offset value indicating a cache page is unused.
- */
-#define	SD_CACHE_NONE				0xFFFFFFFFFFFFFFFF
-
-/**
- * Maximum allowed cache page importance.
- */
-#define	SD_IMPORTANCE_MAX			32
+#define	SD_BLOCK_DIRTY				(1UL << 48)
 
 /**
  * Command types.
  */
 enum SDCommandType
 {
-	SD_CMD_READ,
-	SD_CMD_WRITE,
+	SD_CMD_READ_TRACK,
+	SD_CMD_WRITE_TRACK,
 	SD_CMD_EJECT,
 	SD_CMD_GET_SIZE,
 	SD_CMD_SIGNAL,
@@ -102,12 +92,8 @@ typedef struct _SDCommand
 	enum SDCommandType			type;
 
 	/**
-	 * For write commands, the block pointer shall point to the area straight after
-	 * the command structure, such that when kfree() is called on it, the block is
-	 * also freed.
-	 *
-	 * For read commands, it points to an arbitrary area in memory to which the block
-	 * will be stored once read from disk.
+	 * For read/write commands, this is the PHYSICAL address to read into/write from,
+	 * and must be 32KB in size (one track).
 	 *
 	 * For eject commands, it must be NULL.
 	 *
@@ -116,14 +102,9 @@ typedef struct _SDCommand
 	void*					block;
 
 	/**
-	 * Index of the block on disk (0 = first block). This is like an LBA address.
+	 * Byte position within the track to read to/write from. Always track-aligned.
 	 */
-	uint64_t				index;
-
-	/**
-	 * Number of blocks to read/write.
-	 */
-	uint64_t				count;
+	uint64_t				pos;
 
 	/**
 	 * Semaphore used to decice when an operation is complete.
@@ -132,9 +113,9 @@ typedef struct _SDCommand
 
 	/**
 	 * Status, set by default to 0 by the kernel, the driver sets this to -1 if it can't execute
-	 * a command.
+	 * a command. If NULL, the driver should ignore errors.
 	 */
-	int					status;
+	int*					status;
 	
 	/**
 	 * For queues.
@@ -142,31 +123,24 @@ typedef struct _SDCommand
 	struct _SDCommand*			next;
 } SDCommand;
 
+/**
+ * Represents a node of the block tree. The block tree is used for caching; it is a tree with
+ * 7 levels, each with 128 entries, indexed by groups of 7 bits from left to right of an offset
+ * into the device; the last 15 bits are the offsets into the track. We cache in tracks, which are
+ * units of 32KB, for performance reasons.
+ */
 typedef struct
 {
 	/**
-	 * Byte offset into the disk, where this cache page starts. Must be 4KB aligned.
-	 * 
+	 * The bottom 48 bits are the address of the next level; the higher 8 bits are flags (described above).
+	 * The high 8 bits contain the number of times this page was accessed.
 	 */
-	uint64_t				offset;
-	
-	/**
-	 * If nonzero, this page was modified since it was read from disk
-	 * (and so must be flushed).
-	 */
-	int					dirty;
-	
-	/**
-	 * The importance of this cache page.
-	 */
-	int					importance;
-	
-	/**
-	 * The actual data.
-	 */
-	uint8_t					data[SD_PAGE_SIZE];
-} SDCachePage;
+	uint64_t				entries[128];
+} BlockTreeNode;
 
+/**
+ * Represents a storage device.
+ */
 typedef struct
 {
 	/**
@@ -244,9 +218,9 @@ typedef struct
 	Mutex					cacheLock;
 	
 	/**
-	 * The cache.
+	 * Top level of the block tree.
 	 */
-	SDCachePage				cache[SD_CACHE_PAGES];
+	BlockTreeNode				cacheTop;
 } StorageDevice;
 
 typedef struct
@@ -279,5 +253,6 @@ void		sdHangup(StorageDevice *sd);
 SDCommand*	sdPop(StorageDevice *dev);
 void		sdPostComplete(SDCommand *cmd);
 void		sdSignal(StorageDevice *dev);
+void		sdSync();
 
 #endif

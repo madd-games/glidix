@@ -142,6 +142,7 @@ pid_t		getpgid(pid_t pid);
 ssize_t		pread(int fd, void *buf, size_t count, off_t offset);
 ssize_t		pwrite(int fd, const void *buf, size_t count, off_t offset);
 int		lockf(int fd, int cmd, off_t len);
+void		sync();
 
 /* libcrypt */
 char*		crypt(const char *key, const char *salt);

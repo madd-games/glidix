@@ -98,11 +98,6 @@ static void ahciAtaThread(void *data)
 			break;
 		};
 		
-		if (cmd->count > 8)
-		{
-			panic("cmd->count > 8");
-		};
-		
 		dev->port->is = dev->port->is;
 		
 		// we don't need to protect the device with semaphores, because only this thread
@@ -121,7 +116,7 @@ static void ahciAtaThread(void *data)
 		// do not zero it; it was already zeroed before and only this thread updates the
 		// structures so we know that any unused fields are already zero.
 		cmdhead[slot].cfl = sizeof(FIS_REG_H2D)/4;
-		if (cmd->type == SD_CMD_READ)
+		if (cmd->type == SD_CMD_READ_TRACK)
 		{
 			cmdhead[slot].w = 0;
 			cmdhead[slot].p = 0;
@@ -137,14 +132,14 @@ static void ahciAtaThread(void *data)
 		__sync_synchronize();
 		
 		AHCICommandTable *cmdtbl = (AHCICommandTable*) ((char*)dmaGetPtr(&dev->dmabuf) + 1024+256+8*1024+256*slot);
-		cmdtbl->prdt_entry[0].dba = dmaGetPhys(&dev->iobuf) + 4096*slot;
-		cmdtbl->prdt_entry[0].dbc = 512*cmd->count;
+		cmdtbl->prdt_entry[0].dba = (uint64_t) cmd->block;
+		cmdtbl->prdt_entry[0].dbc = 0x8000;
 		cmdtbl->prdt_entry[0].i = 0;
 		
 		FIS_REG_H2D *cmdfis = (FIS_REG_H2D*)(&cmdtbl->cfis);
 		cmdfis->fis_type = FIS_TYPE_REG_H2D;
 		cmdfis->c = 1;
-		if (cmd->type == SD_CMD_READ)
+		if (cmd->type == SD_CMD_READ_TRACK)
 		{
 			cmdfis->command = ATA_CMD_READ_DMA_EXT;
 		}
@@ -153,23 +148,25 @@ static void ahciAtaThread(void *data)
 			cmdfis->command = ATA_CMD_WRITE_DMA_EXT;
 		};
 		
-		cmdfis->lba0 = (uint8_t)cmd->index;
-		cmdfis->lba1 = (uint8_t)(cmd->index>>8);
-		cmdfis->lba2 = (uint8_t)(cmd->index>>16);
+		uint64_t index = cmd->pos >> 9;
+		cmdfis->lba0 = (uint8_t)index;
+		cmdfis->lba1 = (uint8_t)(index>>8);
+		cmdfis->lba2 = (uint8_t)(index>>16);
 		cmdfis->device = 1<<6;	// LBA mode
 	 
-		cmdfis->lba3 = (uint8_t)(cmd->index>>24);
-		cmdfis->lba4 = (uint8_t)(cmd->index>>32);
-		cmdfis->lba5 = (uint8_t)(cmd->index>>40);
+		cmdfis->lba3 = (uint8_t)(index>>24);
+		cmdfis->lba4 = (uint8_t)(index>>32);
+		cmdfis->lba5 = (uint8_t)(index>>40);
 		
-		cmdfis->countl = (uint8_t)(cmd->count);
-		cmdfis->counth = (uint8_t)(cmd->count>>8);
+		// 32 KB
+		cmdfis->countl = 0x40;
+		cmdfis->counth = 0;
 		
-		char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);
-		if (cmd->type == SD_CMD_WRITE)
-		{
-			memcpy(hwbuf, cmd->block, 512*cmd->count);
-		};
+		//char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);
+		//if (cmd->type == SD_CMD_WRITE)
+		//{
+		//	memcpy(hwbuf, cmd->block, 512*cmd->count);
+		//};
 		
 		// wait for the port to stop being busy
 		int busy = (1 << 7) | (1 << 3);
@@ -195,10 +192,10 @@ static void ahciAtaThread(void *data)
 		};
 		__sync_synchronize();
 		
-		if (cmd->type == SD_CMD_READ)
-		{
-			memcpy(cmd->block, hwbuf, 512*cmd->count);
-		};
+		//if (cmd->type == SD_CMD_READ)
+		//{
+		//	memcpy(cmd->block, hwbuf, 512*cmd->count);
+		//};
 
 		sdPostComplete(cmd);
 	};
@@ -247,7 +244,7 @@ static void ahciAtapiThread(void *data)
 			cmdtbl->acmd[0] = 0x25;
 			
 			cmdtbl->prdt_entry[0].dba = dmaGetPhys(&dev->iobuf) + 4096*slot;
-			cmdtbl->prdt_entry[0].dbc = 2048*cmd->count;
+			cmdtbl->prdt_entry[0].dbc = 2048;
 			cmdtbl->prdt_entry[0].i = 0;
 	
 			FIS_REG_H2D *cmdfis = (FIS_REG_H2D*)(&cmdtbl->cfis);
@@ -264,8 +261,8 @@ static void ahciAtapiThread(void *data)
 			cmdfis->lba4 = 0;
 			cmdfis->lba5 = 0;
 	
-			cmdfis->countl = (uint8_t)(cmd->count);
-			cmdfis->counth = (uint8_t)(cmd->count>>8);
+			cmdfis->countl = 0;
+			cmdfis->counth = 0;
 	
 			char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);
 	
@@ -294,13 +291,8 @@ static void ahciAtapiThread(void *data)
 			*((uint32_t*)cmd->block) = __builtin_bswap32(*((uint32_t*)hwbuf)) * 2048;
 			sdPostComplete(cmd);
 		}
-		else if (cmd->type == SD_CMD_READ)
-		{
-			if (cmd->count > 2)
-			{
-				panic("cmd->count > 2");
-			};
-			
+		else if (cmd->type == SD_CMD_READ_TRACK)
+		{	
 			dev->port->is = dev->port->is;
 
 			// first find a free command slot; we may wait for some time if the drive is
@@ -324,21 +316,22 @@ static void ahciAtapiThread(void *data)
 			AHCICommandTable *cmdtbl = (AHCICommandTable*) ((char*)dmaGetPtr(&dev->dmabuf)
 							+ 1024+256+8*1024+256*slot);
 			memset(cmdtbl->acmd, 0, 16);
+			uint64_t index = cmd->pos >> 11;
 			cmdtbl->acmd[0] = ATAPI_CMD_READ;
 			cmdtbl->acmd[1] = 0;
-			cmdtbl->acmd[2] = (cmd->index >> 24) & 0xFF;
-			cmdtbl->acmd[3] = (cmd->index >> 16) & 0xFF;
-			cmdtbl->acmd[4] = (cmd->index >> 8) & 0xFF;
-			cmdtbl->acmd[5] = cmd->index & 0xFF;
+			cmdtbl->acmd[2] = (index >> 24) & 0xFF;
+			cmdtbl->acmd[3] = (index >> 16) & 0xFF;
+			cmdtbl->acmd[4] = (index >> 8) & 0xFF;
+			cmdtbl->acmd[5] = index & 0xFF;
 			cmdtbl->acmd[6] = 0;
 			cmdtbl->acmd[7] = 0;
 			cmdtbl->acmd[8] = 0;
-			cmdtbl->acmd[9] = cmd->count;
+			cmdtbl->acmd[9] = 0x40;
 			cmdtbl->acmd[10] = 0;
 			cmdtbl->acmd[11] = 0;
 			
-			cmdtbl->prdt_entry[0].dba = dmaGetPhys(&dev->iobuf) + 4096*slot;
-			cmdtbl->prdt_entry[0].dbc = 2048*cmd->count;
+			cmdtbl->prdt_entry[0].dba = (uint64_t) cmd->block;
+			cmdtbl->prdt_entry[0].dbc = 0x8000;
 			cmdtbl->prdt_entry[0].i = 0;
 	
 			FIS_REG_H2D *cmdfis = (FIS_REG_H2D*)(&cmdtbl->cfis);
@@ -355,10 +348,10 @@ static void ahciAtapiThread(void *data)
 			cmdfis->lba4 = 0;
 			cmdfis->lba5 = 0;
 	
-			cmdfis->countl = (uint8_t)(cmd->count);
-			cmdfis->counth = (uint8_t)(cmd->count>>8);
+			cmdfis->countl = 0x40;
+			cmdfis->counth = 0;
 	
-			char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);
+			//char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);
 	
 			// wait for the port to stop being busy
 			int busy = (1 << 7) | (1 << 3);
@@ -375,14 +368,14 @@ static void ahciAtapiThread(void *data)
 					dev->port->is = dev->port->is;
 					ahciStopCmd(dev->port);
 					ahciStartCmd(dev->port);
-					memset(hwbuf, 0, 2048*cmd->count);
+					//memset(hwbuf, 0, 2048*cmd->count);
 					//kprintf("TFD: %x\n", dev->port->tfd);
 				};
 				__sync_synchronize();
 			};
 			__sync_synchronize();
 
-			memcpy(cmd->block, hwbuf, 2048*cmd->count);
+			//memcpy(cmd->block, hwbuf, 2048*cmd->count);
 			sdPostComplete(cmd);
 		}
 		else if (cmd->type == SD_CMD_EJECT)
@@ -413,8 +406,8 @@ static void ahciAtapiThread(void *data)
 			cmdtbl->acmd[0] = 0x1B;
 			cmdtbl->acmd[4] = 2;
 			
-			cmdtbl->prdt_entry[0].dba = dmaGetPhys(&dev->iobuf) + 4096*slot;
-			cmdtbl->prdt_entry[0].dbc = 2048*cmd->count;
+			cmdtbl->prdt_entry[0].dba = 0;
+			cmdtbl->prdt_entry[0].dbc = 0;
 			cmdtbl->prdt_entry[0].i = 0;
 	
 			FIS_REG_H2D *cmdfis = (FIS_REG_H2D*)(&cmdtbl->cfis);
@@ -431,8 +424,8 @@ static void ahciAtapiThread(void *data)
 			cmdfis->lba4 = 0;
 			cmdfis->lba5 = 0;
 	
-			cmdfis->countl = (uint8_t)(cmd->count);
-			cmdfis->counth = (uint8_t)(cmd->count>>8);
+			cmdfis->countl = 0;
+			cmdfis->counth = 0;
 	
 			// wait for the port to stop being busy
 			int busy = (1 << 7) | (1 << 3);

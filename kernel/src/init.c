@@ -487,7 +487,7 @@ static void str2uuid(char *InString, UINT8 *UuidBuffer)
 };
 
 void kmain2()
-{
+{	
 	initMount();
 	initSymtab();
 	ramfsInit();

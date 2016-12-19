@@ -52,6 +52,7 @@
 #include <glidix/message.h>
 #include <glidix/shmem.h>
 #include <glidix/catch.h>
+#include <glidix/storage.h>
 
 /**
  * Options for _glidix_kopt().
@@ -4202,10 +4203,15 @@ int sys_haveperm(uint64_t mask)
 	return havePerm(mask);
 };
 
+void sys_sync()
+{
+	sdSync();
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 131
+#define SYSCALL_NUMBER 132
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -4338,6 +4344,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_fsinfo,				// 128
 	&sys_chxperm,				// 129
 	&sys_haveperm,				// 130
+	&sys_sync,				// 131
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

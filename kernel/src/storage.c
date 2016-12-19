@@ -31,6 +31,7 @@
 #include <glidix/memory.h>
 #include <glidix/string.h>
 #include <glidix/console.h>
+#include <glidix/physmem.h>
 
 /**
  * Bitmap of used drive letters (for /dev/sdX). Bit n represents letter 'a'+n,
@@ -38,6 +39,12 @@
  * are only 26 possible letters.
  */
 static uint32_t sdLetters;
+
+/**
+ * Maps drive letters (index 0 being 'a', index 1 being 'b', etc) to respective storage devices.
+ */
+Mutex mtxList;
+static StorageDevice* sdList[26];
 
 static void reloadPartTable(StorageDevice *sd);
 
@@ -102,6 +109,8 @@ static void sdPush(StorageDevice *sd, SDCommand *cmd)
 void sdInit()
 {
 	sdLetters = 0;
+	memset(sdList, 0, sizeof(void*)*26);
+	mutexInit(&mtxList);
 };
 
 static int sdfile_ioctl(File *fp, uint64_t cmd, void *params)
@@ -185,43 +194,53 @@ int sdfile_fstat(File *fp, struct stat *st)
 	return 0;
 };
 
-static void sdFlushPage(StorageDevice *sd, uint64_t pos, const void *buffer, int wait)
-{	
-	Semaphore semFinish;
-	semInit2(&semFinish, 0);
-	
-	SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand) + SD_PAGE_SIZE);
-	cmd->type = SD_CMD_WRITE;
-	cmd->block = &cmd[1];
-	cmd->index = pos / sd->blockSize;
-	cmd->count = SD_PAGE_SIZE / sd->blockSize;
-	cmd->cmdlock = NULL;
-	if (wait) cmd->cmdlock = &semFinish;
-	cmd->next = NULL;
-	
-	memcpy(&cmd[1], buffer, SD_PAGE_SIZE);
-	mutexLock(&sd->lock);
-	sdPush(sd, cmd);
-	mutexUnlock(&sd->lock);
-	
-	if (wait) semWait(&semFinish);
+static void sdFlushTree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t pos)
+{
+	uint64_t i;
+	for (i=0; i<128; i++)
+	{
+		if (node->entries[i] & SD_BLOCK_DIRTY)
+		{
+			node->entries[i] &= ~SD_BLOCK_DIRTY;
+			if (level == 6)
+			{
+				uint64_t canaddr = (node->entries[i] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+				uint64_t *pte = (uint64_t*) ((canaddr >> 9) | 0xffffff8000000000L);
+				uint64_t phys = (*pte) & 0x0000fffffffff000L;
+				
+				Semaphore semCmd;
+				semInit2(&semCmd, 0);
+				
+				SDCommand *cmd = NEW(SDCommand);
+				cmd->type = SD_CMD_WRITE_TRACK;
+				cmd->block = (void*) phys;
+				cmd->pos = ((pos << 7) | i) << 15;
+				cmd->cmdlock = &semCmd;
+				cmd->status = NULL;
+				sdPush(sd, cmd);
+				
+				semWait(&semCmd);
+			}
+			else
+			{
+				uint64_t canaddr = (node->entries[i] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+				sdFlushTree(sd, (BlockTreeNode*)canaddr, level+1, (pos << 7) | i);
+			};
+		};
+	};
+};
+
+static void sdFlush(StorageDevice *sd)
+{
+	// call this only when the cache is locked
+	sdFlushTree(sd, &sd->cacheTop, 0, 0);
 };
 
 static void sdfile_fsync(File *fp)
 {
 	SDHandle *handle = (SDHandle*) fp->fsdata;
 	mutexLock(&handle->sd->cacheLock);
-	
-	uint64_t i;
-	for (i=0; i<SD_CACHE_PAGES; i++)
-	{
-		if ((handle->sd->cache[i].dirty) && (handle->sd->cache[i].offset != SD_CACHE_NONE))
-		{
-			sdFlushPage(handle->sd, handle->sd->cache[i].offset, handle->sd->cache[i].data, 1);
-			handle->sd->cache[i].dirty = 0;
-		};
-	};
-	
+	sdFlush(handle->sd);
 	mutexUnlock(&handle->sd->cacheLock);
 };
 
@@ -262,9 +281,8 @@ static ssize_t sdRead(StorageDevice *sd, uint64_t pos, void *buf, size_t size)
 	
 	while (size > 0)
 	{
-		uint64_t page = pos & ~(SD_PAGE_SIZE-1);
-		uint64_t offsetIntoPage = pos & (SD_PAGE_SIZE-1);
-		uint64_t toRead = SD_PAGE_SIZE - offsetIntoPage;
+		uint64_t offsetIntoPage = pos & (SD_TRACK_SIZE-1);
+		uint64_t toRead = SD_TRACK_SIZE - offsetIntoPage;
 		
 		if (toRead > size)
 		{
@@ -275,75 +293,101 @@ static ssize_t sdRead(StorageDevice *sd, uint64_t pos, void *buf, size_t size)
 		mutexLock(&sd->cacheLock);
 		
 		uint64_t i;
-		int found = 0;
-		
-		for (i=0; i<SD_CACHE_PAGES; i++)
+		BlockTreeNode *node = &sd->cacheTop;
+		for (i=0; i<6; i++)
 		{
-			if (sd->cache[i].offset == page)
+			uint64_t sub = (pos >> (15 + 7 * (6 - i))) & 0x7F;
+			uint64_t entry = node->entries[sub];
+			
+			if (entry == 0)
 			{
-				if (sd->cache[i].importance != SD_IMPORTANCE_MAX)
+				BlockTreeNode *nextNode = NEW(BlockTreeNode);
+				memset(nextNode, 0, sizeof(BlockTreeNode));
+				
+				// bottom 48 bits of address, set usage counter to 1, not dirty
+				node->entries[sub] = ((uint64_t) nextNode & 0xFFFFFFFFFFFF) | (1UL << 56);
+				
+				node = nextNode;
+			}
+			else
+			{
+				// increment usage counter
+				uint64_t ucnt = entry >> 56;
+				if (ucnt != 255)
 				{
-					sd->cache[i].importance++;
+					node->entries[sub] += (1UL << 56);
 				};
 				
-				memcpy(put, &sd->cache[i].data[offsetIntoPage], toRead);
-				found = 1;
+				// get canonical address
+				uint64_t canaddr = (node->entries[sub] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
 				
-				size -= toRead;
-				put += toRead;
-				pos += toRead;
-				sizeRead += toRead;
+				// follow
+				node = (BlockTreeNode*) canaddr;
+			};
+		};
+		
+		// see if an entry exists for this track
+		uint64_t track = (pos >> 15) & 0x7F;
+		uint64_t trackAddr;
+		if (node->entries[track] == 0)
+		{
+			// we need to load the track
+			uint64_t physStartFrame = phmAllocFrameEx(8, 0);
+			if (physStartFrame == 0)
+			{
+				mutexUnlock(&sd->cacheLock);
+				
+				if (sizeRead == 0)
+				{
+					ERRNO = ENOMEM;
+					return -1;
+				};
+				
 				break;
 			};
-		};
-		
-		if (!found)
-		{
-			uint64_t leastImportant = 0;
-			int lowestImportance = sd->cache[0].importance;
 			
-			// we need to read it from the disk; find the least important page
-			for (i=1; i<SD_CACHE_PAGES; i++)
-			{
-				if (sd->cache[i].importance < lowestImportance)
-				{
-					leastImportant = i;
-					lowestImportance = sd->cache[i].importance;
-				};
-			};
+			Semaphore semCmd;
+			semInit2(&semCmd, 0);
 			
-			if ((sd->cache[leastImportant].dirty) && (sd->cache[leastImportant].offset != SD_CACHE_NONE))
-			{
-				sdFlushPage(sd, sd->cache[leastImportant].offset, sd->cache[leastImportant].data, 0);
-			};
+			int status = 0;
 			
-			sd->cache[leastImportant].offset = page;
-			sd->cache[leastImportant].dirty = 0;
-			sd->cache[leastImportant].importance = 1;
-			
-			Semaphore semRead;
-			semInit2(&semRead, 0);
-			
-			mutexLock(&sd->lock);
-			SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
-			cmd->type = SD_CMD_READ;
-			cmd->block = sd->cache[leastImportant].data;
-			cmd->index = page / sd->blockSize;
-			cmd->count = SD_PAGE_SIZE / sd->blockSize;
-			cmd->cmdlock = &semRead;
-			
+			SDCommand *cmd = NEW(SDCommand);
+			cmd->type = SD_CMD_READ_TRACK;
+			cmd->block = (void*) (physStartFrame << 12);
+			cmd->pos = pos & ~0x7FFFUL;
+			cmd->cmdlock = &semCmd;
+			cmd->status = &status;
 			sdPush(sd, cmd);
-			mutexUnlock(&sd->lock);
 			
-			semWait(&semRead);
-		
-			memcpy(put, &sd->cache[leastImportant].data[offsetIntoPage], toRead);
+			semWait(&semCmd);
 			
-			size -= toRead;
-			put += toRead;
-			pos += toRead;
-			sizeRead += toRead;
+			if (status != 0)
+			{
+				mutexUnlock(&sd->cacheLock);
+				
+				if (sizeRead == 0)
+				{
+					ERRNO = EIO;
+					return -1;
+				};
+				
+				break;
+			};
+			
+			void *vptr = mapPhysMemory(physStartFrame << 12, 0x8000);
+			node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56);
+			trackAddr = (uint64_t) vptr;
+		}
+		else
+		{
+			trackAddr = (node->entries[track] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
 		};
+		
+		memcpy(put, (void*)(trackAddr + offsetIntoPage), toRead);
+		put += toRead;
+		sizeRead += toRead;
+		pos += toRead;
+		size -= toRead;
 		
 		mutexUnlock(&sd->cacheLock);
 	};
@@ -364,9 +408,8 @@ static ssize_t sdWrite(StorageDevice *sd, uint64_t pos, const void *buf, size_t 
 	
 	while (size > 0)
 	{
-		uint64_t page = pos & ~(SD_PAGE_SIZE-1UL);
-		uint64_t offsetIntoPage = pos & (SD_PAGE_SIZE-1UL);
-		uint64_t toWrite = SD_PAGE_SIZE - offsetIntoPage;
+		uint64_t offsetIntoPage = pos & (SD_TRACK_SIZE-1UL);
+		uint64_t toWrite = SD_TRACK_SIZE - offsetIntoPage;
 		
 		if (toWrite > size)
 		{
@@ -377,75 +420,103 @@ static ssize_t sdWrite(StorageDevice *sd, uint64_t pos, const void *buf, size_t 
 		mutexLock(&sd->cacheLock);
 		
 		uint64_t i;
-		int found = 0;
-		
-		for (i=0; i<SD_CACHE_PAGES; i++)
+		BlockTreeNode *node = &sd->cacheTop;
+		for (i=0; i<6; i++)
 		{
-			if (sd->cache[i].offset == page)
+			uint64_t sub = (pos >> (15 + 7 * (6 - i))) & 0x7F;
+			uint64_t entry = node->entries[sub];
+			
+			if (entry == 0)
 			{
-				if (sd->cache[i].importance != SD_IMPORTANCE_MAX)
+				BlockTreeNode *nextNode = NEW(BlockTreeNode);
+				memset(nextNode, 0, sizeof(BlockTreeNode));
+				
+				// bottom 48 bits of address, set usage counter to 1, not dirty
+				node->entries[sub] = ((uint64_t) nextNode & 0xFFFFFFFFFFFF) | (1UL << 56) | SD_BLOCK_DIRTY;
+				
+				node = nextNode;
+			}
+			else
+			{
+				// increment usage counter
+				uint64_t ucnt = entry >> 56;
+				if (ucnt != 255)
 				{
-					sd->cache[i].importance++;
+					node->entries[sub] += (1UL << 56);
+				};
+				node->entries[sub] |= SD_BLOCK_DIRTY;
+				
+				// get canonical address
+				uint64_t canaddr = (node->entries[sub] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+				
+				// follow
+				node = (BlockTreeNode*) canaddr;
+			};
+		};
+		
+		// see if an entry exists for this track
+		uint64_t track = (pos >> 15) & 0x7F;
+		uint64_t trackAddr;
+		if (node->entries[track] == 0)
+		{
+			// we need to load the track
+			uint64_t physStartFrame = phmAllocFrameEx(8, 0);
+			if (physStartFrame == 0)
+			{
+				mutexUnlock(&sd->cacheLock);
+				
+				if (sizeWritten == 0)
+				{
+					ERRNO = ENOMEM;
+					return -1;
 				};
 				
-				sd->cache[i].dirty = 1;
-				memcpy(&sd->cache[i].data[offsetIntoPage], scan, toWrite);
-				found = 1;
-				
-				size -= toWrite;
-				scan += toWrite;
-				pos += toWrite;
-				sizeWritten += toWrite;
 				break;
 			};
+			
+			Semaphore semCmd;
+			semInit2(&semCmd, 0);
+			
+			int status = 0;
+			
+			SDCommand *cmd = NEW(SDCommand);
+			cmd->type = SD_CMD_READ_TRACK;
+			cmd->block = (void*) (physStartFrame << 12);
+			cmd->pos = pos & ~0x7FFFUL;
+			cmd->cmdlock = &semCmd;
+			cmd->status = &status;
+			sdPush(sd, cmd);
+			
+			semWait(&semCmd);
+			
+			if (status != 0)
+			{
+				mutexUnlock(&sd->cacheLock);
+				
+				if (sizeWritten == 0)
+				{
+					ERRNO = EIO;
+					return -1;
+				};
+				
+				break;
+			};
+			
+			void *vptr = mapPhysMemory(physStartFrame << 12, 0x8000);
+			node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56) | SD_BLOCK_DIRTY;
+			trackAddr = (uint64_t) vptr;
+		}
+		else
+		{
+			trackAddr = (node->entries[track] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+			node->entries[track] |= SD_BLOCK_DIRTY;
 		};
 		
-		if (!found)
-		{
-			uint64_t leastImportant = 0;
-			int lowestImportance = sd->cache[0].importance;
-			
-			// we need to read it from the disk; find the least important page
-			for (i=1; i<SD_CACHE_PAGES; i++)
-			{
-				if (sd->cache[i].importance < lowestImportance)
-				{
-					leastImportant = i;
-					lowestImportance = sd->cache[i].importance;
-				};
-			};
-			
-			if ((sd->cache[leastImportant].dirty) && (sd->cache[leastImportant].offset != SD_CACHE_NONE))
-			{
-				sdFlushPage(sd, sd->cache[leastImportant].offset, sd->cache[leastImportant].data, 0);
-			};
-			
-			sd->cache[leastImportant].offset = page;
-			sd->cache[leastImportant].dirty = 1;
-			sd->cache[leastImportant].importance = 1;
-
-			Semaphore semRead;
-			semInit2(&semRead, 0);
-			
-			mutexLock(&sd->lock);
-			SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
-			cmd->type = SD_CMD_READ;
-			cmd->block = sd->cache[leastImportant].data;
-			cmd->index = page / sd->blockSize;
-			cmd->count = SD_PAGE_SIZE / sd->blockSize;
-			cmd->cmdlock = &semRead;
-			
-			sdPush(sd, cmd);
-			mutexUnlock(&sd->lock);
-			semWait(&semRead);
-
-			memcpy(&sd->cache[leastImportant].data[offsetIntoPage], scan, toWrite);
-			
-			size -= toWrite;
-			scan += toWrite;
-			pos += toWrite;
-			sizeWritten += toWrite;
-		};
+		memcpy((void*)(trackAddr + offsetIntoPage), scan, toWrite);
+		scan += toWrite;
+		sizeWritten += toWrite;
+		pos += toWrite;
+		size -= toWrite;
 		
 		mutexUnlock(&sd->cacheLock);
 	};
@@ -680,7 +751,7 @@ static void sdFlushThread(void *context)
 	
 	while (1)
 	{
-		uint64_t nanotimeout = NT_SECS(10);
+		uint64_t nanotimeout = NT_SECS(120);
 		int status = semWaitGen(&sd->semFlush, 1, 0, nanotimeout);
 		
 		if (status == 1)
@@ -690,22 +761,7 @@ static void sdFlushThread(void *context)
 		else if (status == -ETIMEDOUT)
 		{
 			mutexLock(&sd->cacheLock);
-	
-			uint64_t i;
-			for (i=0; i<SD_CACHE_PAGES; i++)
-			{
-				if ((sd->cache[i].dirty) && (sd->cache[i].offset != SD_CACHE_NONE))
-				{
-					sdFlushPage(sd, sd->cache[i].offset, sd->cache[i].data, 0);
-					sd->cache[i].dirty = 0;
-				};
-				
-				if (sd->cache[i].importance != 0)
-				{
-					sd->cache[i].importance--;
-				};
-			};
-	
+			sdFlush(sd);
 			mutexUnlock(&sd->cacheLock);
 		};
 	};
@@ -747,14 +803,7 @@ StorageDevice* sdCreate(SDParams *params)
 	sd->threadFlush = CreateKernelThread(sdFlushThread, &pars, sd);
 	
 	mutexInit(&sd->cacheLock);
-	
-	uint64_t i;
-	for (i=0; i<SD_CACHE_PAGES; i++)
-	{
-		sd->cache[i].offset = SD_CACHE_NONE;
-		sd->cache[i].dirty = 0;
-		sd->cache[i].importance = 0;
-	};
+	memset(&sd->cacheTop, 0, sizeof(BlockTreeNode));
 	
 	// master device file
 	SDDeviceFile *fdev = NEW(SDDeviceFile);
@@ -786,6 +835,11 @@ StorageDevice* sdCreate(SDParams *params)
 
 	mutexUnlock(&sd->cacheLock);
 	mutexUnlock(&sd->lock);
+	
+	mutexLock(&mtxList);
+	sdList[letter-'a'] = sd;
+	mutexUnlock(&mtxList);
+	
 	return sd;
 };
 
@@ -813,6 +867,10 @@ void sdHangup(StorageDevice *sd)
 	semSignal(&sd->semFlush);
 	ReleaseKernelThread(sd->threadFlush);
 	mutexUnlock(&sd->lock);
+	
+	mutexLock(&mtxList);
+	sdList[sd->letter-'a'] = NULL;
+	mutexUnlock(&mtxList);
 	
 	while (numRefs--)
 	{
@@ -843,10 +901,26 @@ void sdSignal(StorageDevice *dev)
 {
 	SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
 	cmd->type = SD_CMD_SIGNAL;
-	cmd->block = 0;
-	cmd->index = 0;
-	cmd->count = 0;
 	cmd->cmdlock = NULL;
 	
 	sdPush(dev, cmd);
+};
+
+void sdSync()
+{
+	mutexLock(&mtxList);
+	
+	size_t i;
+	for (i=0; i<26; i++)
+	{
+		if (sdList[i] != NULL)
+		{
+			StorageDevice *sd = sdList[i];
+			mutexLock(&sd->cacheLock);
+			sdFlush(sd);
+			mutexUnlock(&sd->cacheLock);
+		};
+	};
+	
+	mutexUnlock(&mtxList);
 };
