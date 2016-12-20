@@ -53,8 +53,8 @@ static Thread *threadSysMan;
 static Spinlock notifLock;
 static SchedNotif *firstNotif;
 
-static RunqueueEntry *runqFirst;
-static RunqueueEntry *runqLast;
+static RunqueueEntry *runqFirst[NUM_PRIO_Q];
+static RunqueueEntry *runqLast[NUM_PRIO_Q];
 
 typedef struct
 {
@@ -312,6 +312,9 @@ void initSched()
 	firstThread.prev = &firstThread;
 	firstThread.next = &firstThread;
 
+	// normal priority
+	firstThread.niceVal = 0;
+	
 	// switch to this new thread's context
 	currentThread = &firstThread;
 	apic->timerInitCount = quantumTicks;
@@ -485,6 +488,11 @@ int canSched(Thread *thread)
 	return 1;
 };
 
+static int getPrio(Thread *thread)
+{
+	return (NUM_PRIO_Q/2) - 1 + thread->niceVal;
+};
+
 void switchTaskUnlocked(Regs *regs)
 {
 	// remember the context of this thread.
@@ -498,30 +506,45 @@ void switchTaskUnlocked(Regs *regs)
 		{
 			currentThread->runq.thread = currentThread;
 			currentThread->runq.next = NULL;
-			if (runqLast == NULL)
+			if (runqLast[getPrio(currentThread)] == NULL)
 			{
-				runqFirst = runqLast = &currentThread->runq;
+				runqFirst[getPrio(currentThread)] = runqLast[getPrio(currentThread)] = &currentThread->runq;
 			}
 			else
 			{
-				runqLast->next = &currentThread->runq;
-				runqLast = &currentThread->runq;
+				runqLast[getPrio(currentThread)]->next = &currentThread->runq;
+				runqLast[getPrio(currentThread)] = &currentThread->runq;
 			};
 		};
 	};
 
 	// wait for the next thread to execute
-	while (runqFirst == NULL)
+	while (1)
 	{
-		spinlockRelease(&schedLock);
-		cooloff();
-		spinlockAcquire(&schedLock);
+		int i;
+		for (i=0; i<NUM_PRIO_Q; i++)
+		{
+			if (runqFirst[i] != NULL)
+			{
+				break;
+			};
+		};
+		
+		if (i == NUM_PRIO_Q)
+		{
+			spinlockRelease(&schedLock);
+			cooloff();
+			spinlockAcquire(&schedLock);
+		}
+		else
+		{
+			currentThread = runqFirst[i]->thread;
+			runqFirst[i] = runqFirst[i]->next;
+			if (runqFirst[i] == NULL) runqLast[i] = NULL;
+			currentThread->runq.thread = NULL;
+			break;
+		};
 	};
-	
-	currentThread = runqFirst->thread;
-	runqFirst = runqFirst->next;
-	if (runqFirst == NULL) runqLast = NULL;
-	currentThread->runq.thread = NULL;
 	
 	// if there are signals ready to dispatch, dispatch them.
 	if (haveReadySigs(currentThread))
@@ -677,13 +700,13 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	// no errnoptr
 	thread->errnoptr = NULL;
 
-	// do not wake
-	//thread->wakeTime = 0;
-
 	// this will simulate a call from kernelThreadExit() to "entry()"
 	// this is so that when entry() returns, the thread can safely exit.
 	thread->regs.rdi = (uint64_t) data;
 	*((uint64_t*)thread->regs.rsp) = (uint64_t) &kernelThreadExit;
+	
+	// normal priority by default
+	thread->niceVal = 0;
 	
 	// link into the runqueue
 	cli();
@@ -697,14 +720,14 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	{
 		thread->runq.thread = thread;
 		thread->runq.next = NULL;
-		if (runqLast == NULL)
+		if (runqLast[NUM_PRIO_Q/2 - 1] == NULL)
 		{
-			runqFirst = runqLast = &thread->runq;
+			runqFirst[NUM_PRIO_Q/2 - 1] = runqLast[NUM_PRIO_Q/2 - 1] = &thread->runq;
 		}
 		else
 		{
-			runqLast->next = &thread->runq;
-			runqLast = &thread->runq;
+			runqLast[NUM_PRIO_Q/2 - 1]->next = &thread->runq;
+			runqLast[NUM_PRIO_Q/2 - 1] = &thread->runq;
 		};
 	};
 	
@@ -764,14 +787,14 @@ void signalThread(Thread *thread)
 		{
 			thread->runq.thread = thread;
 			thread->runq.next = NULL;
-			if (runqLast == NULL)
+			if (runqLast[getPrio(thread)] == NULL)
 			{
-				runqFirst = runqLast = &thread->runq;
+				runqFirst[getPrio(thread)] = runqLast[getPrio(thread)] = &thread->runq;
 			}
 			else
 			{
-				runqLast->next = &thread->runq;
-				runqLast = &thread->runq;
+				runqLast[getPrio(thread)]->next = &thread->runq;
+				runqLast[getPrio(thread)] = &thread->runq;
 			};
 		};
 	}
@@ -963,6 +986,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->oxperm = currentThread->oxperm;
 	thread->dxperm = currentThread->dxperm;
 	
+	// inherit priority
+	thread->niceVal = currentThread->niceVal;
+	
 	// link into the runqueue
 	cli();
 	spinlockAcquire(&schedLock);
@@ -973,14 +999,14 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 
 	thread->runq.thread = thread;
 	thread->runq.next = NULL;
-	if (runqLast == NULL)
+	if (runqLast[getPrio(thread)] == NULL)
 	{
-		runqFirst = runqLast = &thread->runq;
+		runqFirst[getPrio(thread)] = runqLast[getPrio(thread)] = &thread->runq;
 	}
 	else
 	{
-		runqLast->next = &thread->runq;
-		runqLast = &thread->runq;
+		runqLast[getPrio(thread)]->next = &thread->runq;
+		runqLast[getPrio(thread)] = &thread->runq;
 	};
 
 	spinlockRelease(&schedLock);
@@ -1599,4 +1625,28 @@ int havePerm(uint64_t xperm)
 	};
 	
 	return currentThread->oxperm & xperm;
+};
+
+int thnice(int incr)
+{
+	int newVal = currentThread->niceVal + incr;
+	if (newVal <= -(NUM_PRIO_Q/2))
+	{
+		newVal = -(NUM_PRIO_Q/2) + 1;
+	};
+	
+	if (newVal >= (NUM_PRIO_Q/2))
+	{
+		newVal = (NUM_PRIO_Q/2) - 1;
+	};
+	
+	currentThread->niceVal = newVal;
+	
+	if (incr > 0)
+	{
+		// we dropped priority
+		kyield();
+	};
+	
+	return newVal;
 };

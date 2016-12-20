@@ -143,6 +143,7 @@ ssize_t		pread(int fd, void *buf, size_t count, off_t offset);
 ssize_t		pwrite(int fd, const void *buf, size_t count, off_t offset);
 int		lockf(int fd, int cmd, off_t len);
 void		sync();
+int		nice(int incr);
 
 /* libcrypt */
 char*		crypt(const char *key, const char *salt);

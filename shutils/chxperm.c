@@ -49,6 +49,7 @@ PermName perms[] = {
 	{"module",				XP_MODULE},
 	{"mount",				XP_MOUNT},
 	{"chxperm",				XP_CHXPERM},
+	{"nice",				XP_NICE},
 	{NULL,					0}
 };
 

@@ -4208,10 +4208,24 @@ void sys_sync()
 	sdSync();
 };
 
+int sys_nice(int incr)
+{
+	if (incr < 0)
+	{
+		if (!havePerm(XP_NICE))
+		{
+			ERRNO = EPERM;
+			return -1;
+		};
+	};
+	
+	return thnice(incr);
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 132
+#define SYSCALL_NUMBER 133
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -4345,6 +4359,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_chxperm,				// 129
 	&sys_haveperm,				// 130
 	&sys_sync,				// 131
+	&sys_nice,				// 132
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

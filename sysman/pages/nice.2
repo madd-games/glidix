@@ -1,0 +1,29 @@
+>NAME
+
+nice - set scheduling priority
+
+>SYNOPSIS
+
+	#include <unistd.h>
+	
+	int nice(int 'incr');
+
+>DESCRIPTION
+
+This function adds 'incr' to the current nice value of the calling thread. A higher nice value means a lower scheduling priority. The allowed nice values range from -7 to 7 (inclusive); attempts to set a nice value outside the range are simply clamped to the range. The nice value of a new process is inherited from its parent during a [fork.2], but in most cases this will be the value 0 (normal priority).
+
+The calling thread must have the *XP_NICE* executable permission in order to decrease its nice value (set a higher priority); all threads are allowed to increase the nice value and hence lower their priority.
+
+>RETURN VALUE
+
+On success, this function returns the new absolute nice value of the calling thread. Hence, 'nice(0)' simple returns the current nice value. On error, -1 is returned, but -1 may also be returned on success, indicating the new nice value is -1.
+
+>ERRORS
+
+Upon error, this function returns -1. However, this may also be returned on success. Hence, the caller must set [errno.6] to 0 before the call, and if the value of [errno.6] is nonzero after the call, then an error occured, and the value may be one of the following:
+
+\* *EPERM* - The calling thread attempting to set a higher priotity for itself ('incr' is negative), but it does not have the *XP_NICE* executable permission.
+
+>SEE ALSO
+
+[xperm.6], [errno.6]

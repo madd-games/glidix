@@ -65,6 +65,7 @@ typedef struct
 #define	XP_MODULE			(1 << 2)
 #define	XP_MOUNT			(1 << 3)
 #define	XP_CHXPERM			(1 << 4)
+#define	XP_NICE				(1 << 5)
 
 #define	XP_ALL				0x7FFFFFFFFFFFFFFF
 #define	XP_NCHG				0xFFFFFFFFFFFFFFFF
@@ -104,6 +105,12 @@ typedef struct
 #define	WDETACH				(1 << 1)
 #define	WUNTRACED			(1 << 2)
 #define	WCONTINUED			(1 << 3)
+
+/**
+ * Number of priority queues. Valid nice values, 'n', are:
+ * -(NUM_PRIO_Q/2) < n < (NUM_PRIO_Q/2)
+ */
+#define	NUM_PRIO_Q			16
 
 /**
  * Scheduler notification. This data structure is stored in a doubly-linked list
@@ -379,6 +386,11 @@ typedef struct _Thread
 	RunqueueEntry			runq;
 	
 	/**
+	 * Nice value of the thread.
+	 */
+	int				niceVal;
+	
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;
@@ -554,5 +566,10 @@ int signalThid(int thid, int sig);
  * Returns nonzero if the calling thread has the specified permission.
  */
 int havePerm(uint64_t xperm);
+
+/**
+ * Set the relative nice value of the calling thread.
+ */
+int thnice(int incr);
 
 #endif

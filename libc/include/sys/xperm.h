@@ -40,6 +40,7 @@ extern "C" {
 #define	XP_MODULE			(1 << 2)
 #define	XP_MOUNT			(1 << 3)
 #define	XP_CHXPERM			(1 << 4)
+#define	XP_NICE				(1 << 5)
 
 #define	XP_ALL				0x7FFFFFFFFFFFFFFF
 #define	XP_NCHG				0xFFFFFFFFFFFFFFFF
