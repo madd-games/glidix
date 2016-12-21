@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2016, Madd Games.
 	All rights reserved.
@@ -26,48 +26,10 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/waitcnt.h>
+#include <unistd.h>
 
-void wcInit(WaitCounter *wc)
+int main()
 {
-	spinlockRelease(&wc->lock);
-	wc->server = NULL;
-	wc->count = 0;
-};
-
-void wcUp(WaitCounter *wc)
-{
-	// we must disable interrupts to make sure the locking is interrupt-safe.
-	cli();
-	spinlockAcquire(&wc->lock);
-	wc->count++;
-	int doResched = 0;
-	if (wc->server != NULL)
-	{
-		doResched = signalThread(wc->server);
-	};
-	spinlockRelease(&wc->lock);
-	if (doResched) kyield();
-	sti();
-};
-
-void wcDown(WaitCounter *wc)
-{
-	ASM("cli");
-	spinlockAcquire(&wc->lock);
-	wc->server = getCurrentThread();
-
-	while (wc->count == 0)
-	{
-		//getCurrentThread()->flags |= THREAD_WAITING;
-		waitThread(getCurrentThread());
-		spinlockRelease(&wc->lock);
-		kyield();
-		ASM("cli");
-		spinlockAcquire(&wc->lock);
-	};
-
-	wc->count--;
-	spinlockRelease(&wc->lock);
-	ASM("sti");
+	sync();
+	return 0;
 };

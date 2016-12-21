@@ -104,6 +104,11 @@ int cvWait(CondVar *cv, uint64_t nanotimeout)
 void cvSignal(CondVar *cv)
 {
 	spinlockAcquire(&cv->lock);
+	cli();
+	lockSched();
+	
+	int doResched = 0;
+	
 	if (!cv->value)
 	{
 		cv->value = 1;
@@ -111,11 +116,15 @@ void cvSignal(CondVar *cv)
 		CondVarWaiter *waiter = cv->waiters;
 		while (waiter != NULL)
 		{
-			signalThread(waiter->thread);
+			doResched = doResched || signalThread(waiter->thread);
 			CondVarWaiter *next = waiter->next;
 			kfree(waiter);
 			waiter = next;
 		};
 	};
 	spinlockRelease(&cv->lock);
+	unlockSched();
+	
+	if (doResched) kyield();
+	sti();
 };

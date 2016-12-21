@@ -355,7 +355,11 @@ static void ahciAtapiThread(void *data)
 	
 			// wait for the port to stop being busy
 			int busy = (1 << 7) | (1 << 3);
-			while (dev->port->tfd & busy) __sync_synchronize();
+			while (dev->port->tfd & busy)
+			{
+				kyield();
+				__sync_synchronize();
+			};
 			__sync_synchronize();
 	
 			dev->port->ci = (1 << slot);
@@ -371,6 +375,8 @@ static void ahciAtapiThread(void *data)
 					//memset(hwbuf, 0, 2048*cmd->count);
 					//kprintf("TFD: %x\n", dev->port->tfd);
 				};
+				
+				kyield();
 				__sync_synchronize();
 			};
 			__sync_synchronize();
@@ -429,7 +435,11 @@ static void ahciAtapiThread(void *data)
 	
 			// wait for the port to stop being busy
 			int busy = (1 << 7) | (1 << 3);
-			while (dev->port->tfd & busy) __sync_synchronize();
+			while (dev->port->tfd & busy)
+			{
+				kyield();
+				__sync_synchronize();
+			};
 			__sync_synchronize();
 	
 			dev->port->ci = (1 << slot);
@@ -444,6 +454,8 @@ static void ahciAtapiThread(void *data)
 					ahciStartCmd(dev->port);
 					//kprintf("TFD: %x\n", dev->port->tfd);
 				};
+				
+				kyield();
 				__sync_synchronize();
 			};
 			__sync_synchronize();

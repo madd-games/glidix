@@ -480,9 +480,10 @@ Thread *getCurrentThread();
 void waitThread(Thread *thread);
 
 /**
- * Signal a thread to stop waiting.
+ * Signal a thread to stop waiting. Returns 1 if preemption is required (a higher-priority thread has
+ * been awoken).
  */
-void signalThread(Thread *thread);
+int signalThread(Thread *thread);
 
 /**
  * This function is used to create new user threads and processes, it can be used to implement

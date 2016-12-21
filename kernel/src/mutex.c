@@ -101,14 +101,16 @@ void mutexUnlock(Mutex *mutex)
 	
 	if (thread != NULL)
 	{
+		int doResched = 0;
 		cli();
 		lockSched();
 		thread = mutex->queue[nextToGo];
 		if (thread != NULL)
 		{
-			signalThread(thread);
+			doResched = signalThread(thread);
 		};
 		unlockSched();
+		if (doResched) kyield();
 		sti();
 	};
 };

@@ -181,6 +181,7 @@ int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 		sem->count = 0;
 	};
 	
+	int doResched = 0;
 	if (sem->count != 0)
 	{
 		// if there is another thread waiting, notify it
@@ -193,7 +194,7 @@ int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 			if (sem->first != NULL) sem->first->prev = NULL;
 			
 			lockSched();
-			signalThread(thread);
+			doResched = doResched || signalThread(thread);
 			unlockSched();
 		};
 	}
@@ -203,6 +204,7 @@ int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 	};
 	
 	spinlockRelease(&sem->lock);
+	if (doResched) kyield();
 	sti();
 	return result;
 };
@@ -243,6 +245,7 @@ void semSignal2(Semaphore *sem, int count)
 		return;
 	};
 	
+	int doResched = 0;
 	sem->count += count;
 	if (sem->first != NULL)
 	{
@@ -253,11 +256,12 @@ void semSignal2(Semaphore *sem, int count)
 		if (sem->first != NULL) sem->first->prev = NULL;
 		
 		lockSched();
-		signalThread(thread);
+		doResched = signalThread(thread);
 		unlockSched();
 	};
 	
 	spinlockRelease(&sem->lock);
+	if (doResched) kyield();
 	sti();
 };
 
@@ -272,6 +276,7 @@ void semTerminate(Semaphore *sem)
 		panic("attempted to terminate an already-terminated semaphore");
 	};
 	
+	int doResched = 0;
 	sem->terminated = 1;
 	if (sem->count == 0)
 	{
@@ -285,12 +290,13 @@ void semTerminate(Semaphore *sem)
 			if (sem->first != NULL) sem->first->prev = NULL;
 			
 			lockSched();
-			signalThread(thread);
+			doResched = doResched || signalThread(thread);
 			unlockSched();
 		};
 	};
 	
 	spinlockRelease(&sem->lock);
+	if (doResched) kyield();
 	sti();
 };
 
@@ -441,6 +447,7 @@ int semPoll(int numSems, Semaphore **sems, uint8_t *bitmap, int flags, uint64_t 
 	
 	timedCancel(&ev);
 	
+	int doResched = 0;
 	// remove ourselves from all queues; and wake up any necessary threads!
 	for (i=0; i<numSems; i++)
 	{
@@ -458,7 +465,7 @@ int semPoll(int numSems, Semaphore **sems, uint8_t *bitmap, int flags, uint64_t 
 					sems[i]->first = sems[i]->first->next;
 					if (sems[i]->first != NULL) sems[i]->first->prev = NULL;
 					
-					signalThread(thread);
+					doResched = doResched || signalThread(thread);
 				};
 			}
 			else
@@ -476,6 +483,7 @@ int semPoll(int numSems, Semaphore **sems, uint8_t *bitmap, int flags, uint64_t 
 	};
 	
 	unlockSched();
+	if (doResched) kyield();
 	sti();
 	return numFreeSems;
 };

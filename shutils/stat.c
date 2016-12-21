@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
 
 	printf("Device:     %lu\n", st.st_dev);
 	printf("Inode:      %lu\n", st.st_ino);
-	printf("Mode:       %lo\n", st.st_mode & 07777);
+	printf("Mode:       %04lo\n", st.st_mode & 07777);
 	printf("Links:      %lu\n", st.st_nlink);
 	printf("Owner:      %lu <%s>\n", st.st_uid, name);
 	printf("Group:      %lu <%s>\n", st.st_gid, grpname);
@@ -192,6 +192,7 @@ int main(int argc, char *argv[])
 	printf("A-time:     %s", ctime(&st.st_atime));
 	printf("M-time:     %s", ctime(&st.st_mtime));
 	printf("C-time:     %s", ctime(&st.st_ctime));
+	printf("B-time:     %s", ctime(&st.st_btime));
 	printf("Block size: "); print_size(st.st_blksize); printf("\n");
 	printf("Blocks:     %lu\n", st.st_blocks);
 	printf("I. Perms:   %s\n", binary64(st.st_ixperm));

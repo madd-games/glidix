@@ -271,6 +271,7 @@ void onTick()
 {
 	lockSched();
 	
+	int doResched = 0;
 	while (1)
 	{
 		if (timedEvents == NULL) break;
@@ -281,8 +282,9 @@ void onTick()
 		timedEvents = ev->next;
 		if (timedEvents != NULL) timedEvents->prev = NULL;
 		ev->prev = ev->next = NULL;
-		signalThread(thread);
+		doResched = doResched || signalThread(thread);
 	};
 	
 	unlockSched();
+	if (doResched) kyield();
 };

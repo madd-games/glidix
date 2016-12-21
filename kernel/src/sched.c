@@ -756,7 +756,7 @@ void waitThread(Thread *thread)
 	};
 };
 
-void signalThread(Thread *thread)
+int signalThread(Thread *thread)
 {
 	if (thread->alarmTime != 0)
 	{
@@ -802,6 +802,8 @@ void signalThread(Thread *thread)
 	{
 		thread->wakeCounter++;
 	};
+	
+	return thread->niceVal < currentThread->niceVal;
 };
 
 int threadClone(Regs *regs, int flags, MachineState *state)
