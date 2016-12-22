@@ -35,15 +35,16 @@
 #include <glidix/spinlock.h>
 #include <glidix/semaphore.h>
 #include <glidix/errno.h>
+#include <glidix/mutex.h>
 
-static Spinlock vfsSpinlockCreation;
+static Mutex vfsMutexCreation;
 static FileLock *fileLocks;
 static Semaphore semFileLocks;
 static Semaphore semConst;
 
 void vfsInit()
 {
-	spinlockRelease(&vfsSpinlockCreation);
+	mutexInit(&vfsMutexCreation);
 	fileLocks = NULL;
 	semInit(&semFileLocks);
 	semInit2(&semConst, 1);
@@ -787,12 +788,12 @@ void vfsClose(File *file)
 
 void vfsLockCreation()
 {
-	spinlockAcquire(&vfsSpinlockCreation);
+	mutexLock(&vfsMutexCreation);
 };
 
 void vfsUnlockCreation()
 {
-	spinlockRelease(&vfsSpinlockCreation);
+	mutexUnlock(&vfsMutexCreation);
 };
 
 int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len)

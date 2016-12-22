@@ -41,6 +41,10 @@ The two processes are similar, and different, in the following ways:
 
 When the child termiantes, it becomes a 'zombie process'. The parent is usually expected to reap the child by calling [wait.2] on it, which returns its exit status.
 
+>SAFETY
+
+In a multithreaded application, the child process created by 'fork()' contains only 1 thrad - the copy of the callng thread. This means that if other threads have acquires some lock, such as a semaphore, the child process will deadlock upon trying to acquire it. Hence, in such a situation, the child process is not allowed to call library functions such as [malloc.2], only system calls or trivial system call wrappers, suh as [exec.2].
+
 >RETURN VALUE
 
 On success, this function returns 0 to the child process, and a positive value - the PID of the newly-created child process - to the parent. On error, no child process is created, and -1 is returned, and [errno.6] is set to the appropriate value.

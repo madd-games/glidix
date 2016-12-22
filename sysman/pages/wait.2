@@ -1,0 +1,57 @@
+>NAME
+
+wait, waitpid - wait for child process to teminate and get exit status
+
+>SYNOPSIS
+
+	#include <sys/wait.h>
+	#include <sys/types.h>
+	
+	pid_t wait(int *'wstatus');
+	pid_t waitpid(pid_t 'pid', int *'wstatus', int 'options');
+
+>DESCRIPTION
+
+The 'wait(wstatus)' function is equivalent to:
+
+	waitpid(-1, 'wstatus', 0);
+
+The 'waitpid()' function waits for a child process to terminate. If 'pid' is '-1', then it waits for any child process to terminate; otherwise, it waits only for the one with the specified 'pid'. If the process has already terminated, and has no yet been waited for, 'waitpid()' returns immediately. Otherwise, it by default blocks until 'pid' (or any child process if 'pid' is '-1') terminates; unless *WNOHANG* is passed in 'options', in which case it returns '-1' and sets [errno.6] to *ECHILD*.
+
+If 'wstatus' is not *NULL*, then it is a pointer to an integer variable, where the 'wait status' will be stored. The '<sys/wait.h>' header defines macros which can be used to process the wait status:
+
+\* *WIFEXITED(*'wstatus'*)* evalues to true if 'wstatus' indicates that the process has terminated normally (by calling [exit.2] or by returning from 'main()').
+
+\* *WEXITSTATUS(*'wstatus'*)* evaluates to an integer specifying the exit status, if 'wstatus' indicates that the process has terminated normally - that is, it is the value it returned from 'main()', or passed to [exit.2].
+
+\* *WIFSIGNALLED(*'wstatus'*)* evaluates to true if 'wstatus' indicates that the process has been terminated by reception of a terminaated signal.
+
+\* *WTERMSIG(*'wstatus'*)* evaluates to an integer specifying the signal that caused the process to terminate, if 'wstatus' indicates that the process has been terminated by a signal. See [signal.6].
+
+The 'options' argument may be 0 to indicate default behaviour (block until a process becomes waitable), or it may be a bitwise-OR of one or more of the following flags, defined in '<sys/wait.h>':
+
+\* *WNOHANG* - do not block; if no child process is waitable (or 'pid' is something other than '-1' and the process indicated by it is not waitable), return -1 and set [errno.6] to *ECHILD*.
+
+\* *WDETACH* - do not wait for the specified process; instead, set its parent to 1 ([init.6]), and return 0, unless the process doesn\'t exist (in which case an error occurs).
+
+\* *WUNTRACED* and *WCONTINUED* have no effect under Glidix.
+
+When this function blocks, and a signal is caught, and the indicated process is not yet waitable, it returns -1 and sets [errno.6] to *EINTR*; in which case you should try calling it again.
+
+When a child process exits, it becomes a 'zombie process', still resident in memory, until its parent calls 'wait()' to acquire the wait status. Once this happens, the process is completely deleted, and all further calls involving the specified PID result in undefined bahavior.
+
+>RETURN VALUE
+
+On success, those functions return the PID of the process that terminates, and if 'wstatus' is not *NULL*, it is set to the wait status of that process (if 'pid' is something other than '-1', the return value will always be equal to 'pid' on success). On error, they return '-1', and set [errno.6] appropriately.
+
+>ERRORS
+
+On error, those functions return '-1' and set [errno.6] to one of the following:
+
+\* *EINTR* - a signal was caught before a child process became waitable; you should try again.
+
+\* *ECHILD* - if 'pid' is '-1', there are no child processes; otherwise, it means that the process indicated by 'pid' does not exist. If *WNOHANG* was passed, this error may also mean that no child (or the indicated child) is currently waitable.
+
+>SEE ALSO
+
+[fork.2], [exec.2]

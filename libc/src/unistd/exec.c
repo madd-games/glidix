@@ -59,7 +59,7 @@ int execve(const char *pathname, char* const argv[], char *const envp[])
 	};
 
 	size_t execparsz = argcount + argsize + envcount + envsize + 4;
-	char *execpars = (char*) malloc(execparsz);
+	char *execpars = (char*) __builtin_alloca(execparsz);
 	memset(execpars, 0, execparsz);
 
 	size_t i;
@@ -79,7 +79,6 @@ int execve(const char *pathname, char* const argv[], char *const envp[])
 
 	// obviously _glidix_exec() will only return on failure.
 	int ret = _glidix_exec(pathname, execpars, execparsz);
-	free(execpars);
 	return ret;
 };
 

@@ -924,3 +924,11 @@ void sdSync()
 	
 	mutexUnlock(&mtxList);
 };
+
+int sdFreeMemory()
+{
+	mutexLock(&mtxList);
+	
+	mutexUnlock(&mtxList);
+	return -1;
+};

@@ -27,7 +27,6 @@
 */
 
 #include <glidix/mount.h>
-#include <glidix/spinlock.h>
 #include <glidix/console.h>
 #include <glidix/string.h>
 #include <glidix/memory.h>
@@ -37,14 +36,15 @@
 #include <glidix/sched.h>
 #include <glidix/errno.h>
 #include <glidix/procfs.h>
+#include <glidix/mutex.h>
 
-static Spinlock mountLock;
+static Mutex mountLock;
 static MountPoint *mountTable;
 
 void initMount()
 {
 	kprintf("Initializing the mountpoint table... ");
-	spinlockRelease(&mountLock);
+	mutexInit(&mountLock);
 	mountTable = NULL;
 	DONE();
 
@@ -107,7 +107,7 @@ int mount(const char *prefix, FileSystem *fs, int flags)
 	mp->fs = fs;
 
 	// link the mountpoint (and sort...)
-	spinlockAcquire(&mountLock);
+	mutexLock(&mountLock);
 
 	if (mountTable == NULL)
 	{
@@ -152,7 +152,7 @@ int mount(const char *prefix, FileSystem *fs, int flags)
 	};
 
 	fs->dev = nextDev++;
-	spinlockRelease(&mountLock);
+	mutexUnlock(&mountLock);
 	return 0;
 };
 
@@ -164,7 +164,7 @@ int unmount(const char *prefix)
 		return -1;
 	};
 
-	spinlockAcquire(&mountLock);
+	mutexLock(&mountLock);
 	MountPoint *mp = mountTable;
 
 	int status = -1;
@@ -178,14 +178,14 @@ int unmount(const char *prefix)
 				if (mp->fs->unmount(mp->fs) != 0)
 				{
 					getCurrentThread()->therrno = EBUSY;
-					spinlockRelease(&mountLock);
+					mutexUnlock(&mountLock);
 					return -1;
 				};
 			}
 			else
 			{
 				getCurrentThread()->therrno = EINVAL;
-				spinlockRelease(&mountLock);
+				mutexUnlock(&mountLock);
 				return -1;
 			};
 
@@ -206,7 +206,7 @@ int unmount(const char *prefix)
 		mp = mp->next;
 	};
 
-	spinlockRelease(&mountLock);
+	mutexUnlock(&mountLock);
 
 	if (status == -1)
 	{
@@ -218,7 +218,7 @@ int unmount(const char *prefix)
 
 int resolveMounts(const char *path, SplitPath *out)
 {
-	spinlockAcquire(&mountLock);
+	mutexLock(&mountLock);
 	MountPoint *mp = mountTable;
 
 	size_t szpath = strlen(path);
@@ -232,7 +232,7 @@ int resolveMounts(const char *path, SplitPath *out)
 				strcpy(out->filename, &path[strlen(mp->prefix)]);
 				memset(out->parent, 0, 512);
 				memcpy(out->parent, path, strlen(mp->prefix)-1);
-				spinlockRelease(&mountLock);
+				mutexUnlock(&mountLock);
 				return 0;
 			};
 		};
@@ -240,7 +240,7 @@ int resolveMounts(const char *path, SplitPath *out)
 		mp = mp->next;
 	};
 
-	spinlockRelease(&mountLock);
+	mutexUnlock(&mountLock);
 	return -1;
 };
 
@@ -250,27 +250,27 @@ int isMountPoint(const char *dirpath)
 	strcpy(prefix, dirpath);
 	strcat(prefix, "/");
 	
-	spinlockAcquire(&mountLock);
+	mutexLock(&mountLock);
 	MountPoint *mp = mountTable;
 	
 	while (mp != NULL)
 	{
 		if (strcmp(mp->prefix, prefix) == 0)
 		{
-			spinlockRelease(&mountLock);
+			mutexUnlock(&mountLock);
 			return 1;
 		};
 		
 		mp = mp->next;
 	};
 	
-	spinlockRelease(&mountLock);
+	mutexUnlock(&mountLock);
 	return 0;
 };
 
 void dumpMountTable()
 {
-	spinlockAcquire(&mountLock);
+	mutexLock(&mountLock);
 	MountPoint *mp = mountTable;
 	while (mp != NULL)
 	{
@@ -282,7 +282,7 @@ void dumpMountTable()
 		kprintf("%s (type=%s, prev=%s)\n", mp->prefix, mp->fs->fsname, prev);
 		mp = mp->next;
 	};
-	spinlockRelease(&mountLock);
+	mutexUnlock(&mountLock);
 };
 
 void unmountAll()
@@ -305,7 +305,7 @@ void unmountAll()
 
 size_t getFSInfo(FSInfo *list, size_t max)
 {
-	spinlockAcquire(&mountLock);
+	mutexLock(&mountLock);
 	
 	MountPoint *mp = mountTable;
 	size_t count = 0;
@@ -325,6 +325,6 @@ size_t getFSInfo(FSInfo *list, size_t max)
 		mp = mp->next;
 	};
 	
-	spinlockRelease(&mountLock);
+	mutexUnlock(&mountLock);
 	return count;
 };

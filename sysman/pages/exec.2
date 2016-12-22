@@ -1,0 +1,79 @@
+>NAME
+
+exec - execute a file
+
+>SYNOPSIS
+
+	#include <unistd.h>
+	
+	int execl(const char *'pathname', const char *'arg0', ..., /* NULL */ );
+	int execle(const char *'pathname', const char *'arg0', ..., /* NULL, */ char *const 'envp'[]);
+	int execv(const char *'pathname', char *const 'argv'[]);
+	int execve(const char *'pathname', char *const 'argv'[], char *const 'envp'[]);
+	
+	/* Glidix-specific: */
+	#include <sys/glidix.h>
+	
+	int _glidix_exec(const char *'pathname', const char *'execpars', size_t 'execparsz');
+
+>DESCRIPTION
+
+This family of functions is used to load an executable from an executable image named by 'pathname'. All threads of the calling process, except the calling thread, are killed, and all memory mappings are removed and replaced by segments from the given executable image.
+
+The 'execl()' function takes a variable argument list, and the arguments 'arg0', followed by an unspecified number of strings, terminated with *NULL*, are passed as command-line arguments to the new executable. The current list of environment variables ('environ') is passed as the initial environment of the new executable. The 'execv()' function takes an array of strings, also termianted by *NULL*, as the arguments to pass to the executable, instead of using a variable argument list. Functions with the '-e' suffix ('execle()', 'execve()') takem as the final argument, an array of strings terminated by *NULL*, in the format 'varname=value', as the initial environment of the new executable.
+
+The calling process is transformed in the following way:
+
+\* Credentials, open file descriptions, and other data associated with the calling process remains unchanged, unless otherwise specified.
+
+\* All threads except the calling thread are killed.
+
+\* All memory mappings are unmapped, and segments from the executable named by 'pathname' are loaded isntead (usually indirectly, by invoking [dynld.1]).
+
+\* All file descriptions marked with the *FD_CLOEXEC* flag (or opened with *O_CLOEXEC*) are closed.
+
+\* If the SUID bit is set on the [access_mode.6] ('st_mode') of 'pathname' (see [stat.2]), the effective user ID (EUID) of the process is set to the owner ('st_uid') of the executable.
+
+\* If the GUID bit is set on the [access_mode.6] ('st_mode') of 'pathname' (see [stat.2]), the effeective group ID (EGID) of the process is set to the associated group ('st_gid') of the executable.
+
+\* The own permission set of the thread is set to 'current_oxperm & (current_dxperm & executable_ixperm) | executable_oxperm'. See [xperm.6].
+
+\* The delegatable permission set of the thread is set to that of the executable. See [xperm.6].
+
+\* The signal mask is reset to 0 (no signals are blocked).
+
+The new executable begins executing at its entry point, with ana initial stack of 2MB, containing command-line arguments, the environment, and auxiliary information. See [entry.6] for more information on the entry environment.
+
+The executable named by 'pathname' may be either an ELF64 executable compatible with Glidix, or an exeuctable script, where the top line contains:
+
+	#! 'interpreter_path'
+
+In this case, the interpreter named by 'interpreter_path' is executed, and 'pathname' is passed as a command-line argument to it.
+
+The function '_glidix_exec()' is a low-level system call, over which 'exec\*()' are wrappers. It takes the pathname to an executable, and a buffer containing the command-line arguments and the environment, 'execpars', as an argument, followed by 'execparsz', the size of this buffer. The buffer contains the command-line sargument separated by the '\\0' character, terminated with '\\0\\0', followed by the environment stings (in the format 'varname=value'), separated by '\\0', and finally terminated by '\\0\\0'.
+
+>SAFETY
+
+If the calling process was created with a [fork.2] from a multithreaded application, it is only safe to call 'execv()', 'execve()' and '_glidix_exec()', but not 'execl()' or 'execle()', because they make calls to [malloc.2], which may deadlock in this case.
+
+>RETURN VALUE
+
+This function never returns on success; instead, it begins executing the executable. On error, it returns -1, and sets [errno.6] to an appropriate value.
+
+>ERRORS
+
+On error, this function returns -1 and sets [errno.6] to one of the following:
+
+\* *ENOENT* - the object named by 'pathname' does not exist.
+
+\* *EACCES* - the caller does not have permission to execute the object named by 'pathname'; see [access_mode.6] and [stat.2].
+
+\* *EMFILE* - the executable named by 'pathname' is dynamic, [dynld.1] or some other interpreter needs to be invoked, but no free file descriptors are available to pass the executable.
+
+\* *ENOEXEC* - executable file format error.
+
+\* *EIO* - the underlying filesystem could not be accessed.
+
+>SEE ALSO
+
+[fork.2]

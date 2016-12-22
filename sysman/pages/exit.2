@@ -1,0 +1,29 @@
+>NAME
+
+exit - terminate the calling process
+
+>SYNOPSIS
+
+	#include <stdlib.h>
+	
+	void exit(int 'status');
+	void _exit(int 'status');
+	void _Exit(int 'status');
+
+>DESCRIPTION
+
+Those functions are used to terminate the calling process. All threads in the process are terminated, and 'status' is reported as the exit status. The parent process may call [wait.2] to obtain this status; the wait status will be reported as a normal exit with the specified exit 'status'.
+
+The functions '_exit()' and '_Exit()' are equivalent, and they cause immediately termination, without calling any terminating functions. The 'exit()' function additionally calls termiantion functions, such as global terminators and an functions registered with [atexit.2].
+
+>SAFETY
+
+If 'exit()' is called from within a function registered using [atexit.2], the result is unspecified. Furthermore, 'exit()' may use global locks and cannot be safely called from within a child process created via [fork.2] from a multithreaded application. It is always safe to call '_exit()' and '_Exit()'.
+
+>RETURN VALUE
+
+This function never returns and is always successful.
+
+>ERRORS
+
+This function is always successful.
