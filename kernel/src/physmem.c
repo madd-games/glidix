@@ -33,6 +33,7 @@
 #include <glidix/console.h>
 #include <glidix/string.h>
 #include <glidix/isp.h>
+#include <glidix/storage.h>
 
 /**
  * The next frame to return if we are allocating using placement. This is done before
@@ -166,78 +167,106 @@ static uint64_t phmAllocSingle()
 
 static uint64_t phmAlloc8()
 {
-	uint64_t i;
-	uint64_t numGroups = numSystemFrames/8;
-	
-	uint8_t *bitmap8 = frameBitmap;
-	for (i=(lowestFreeFrame>>3); i<(numGroups>>3); i++)
+	while (1)
 	{
-		if (atomic_compare_and_swap8(&bitmap8[i], 0, 0xFF) == 0)
+		uint64_t i;
+		uint64_t numGroups = numSystemFrames/8;
+	
+		uint8_t *bitmap8 = frameBitmap;
+		for (i=(lowestFreeFrame>>3); i<(numGroups>>3); i++)
 		{
-			// just claimed the 8 frames at this location
-			return i << 3;
+			if (atomic_compare_and_swap8(&bitmap8[i], 0, 0xFF) == 0)
+			{
+				// just claimed the 8 frames at this location
+				return i << 3;
+			};
+		};
+		
+		// try freeing some more memory
+		if (sdFreeMemory() == -1)
+		{
+			// that didn't work
+			panic("out of physical memory!");
 		};
 	};
-	
-	panic("out of physical memory!");
-	return 0;
 };
 
 static uint64_t phmAlloc16()
 {
-	uint64_t i;
-	uint64_t numGroups = numSystemFrames/16;
-	
-	uint16_t *bitmap16 = (uint16_t*) frameBitmap;
-	for (i=(lowestFreeFrame>>4); i<(numGroups>>4); i++)
+	while (1)
 	{
-		if (atomic_compare_and_swap16(&bitmap16[i], 0, 0xFFFF) == 0)
+		uint64_t i;
+		uint64_t numGroups = numSystemFrames/16;
+	
+		uint16_t *bitmap16 = (uint16_t*) frameBitmap;
+		for (i=(lowestFreeFrame>>4); i<(numGroups>>4); i++)
 		{
-			// just claimed the 16 frames at this location
-			return i << 4;
+			if (atomic_compare_and_swap16(&bitmap16[i], 0, 0xFFFF) == 0)
+			{
+				// just claimed the 16 frames at this location
+				return i << 4;
+			};
+		};
+
+		// try freeing some more memory
+		if (sdFreeMemory() == -1)
+		{
+			// that didn't work
+			panic("out of physical memory!");
 		};
 	};
-	
-	panic("out of physical memory!");
-	return 0;
 };
 
 static uint64_t phmAlloc32()
 {
-	uint64_t i;
-	uint64_t numGroups = numSystemFrames/32;
-	
-	uint32_t *bitmap32 = (uint32_t*) frameBitmap;
-	for (i=(lowestFreeFrame>>5); i<(numGroups>>5); i++)
+	while (1)
 	{
-		if (atomic_compare_and_swap32(&bitmap32[i], 0, 0xFFFFFFFF) == 0)
+		uint64_t i;
+		uint64_t numGroups = numSystemFrames/32;
+	
+		uint32_t *bitmap32 = (uint32_t*) frameBitmap;
+		for (i=(lowestFreeFrame>>5); i<(numGroups>>5); i++)
 		{
-			// just claimed the 32 frames at this location
-			return i << 5;
+			if (atomic_compare_and_swap32(&bitmap32[i], 0, 0xFFFFFFFF) == 0)
+			{
+				// just claimed the 32 frames at this location
+				return i << 5;
+			};
+		};
+
+		// try freeing some more memory
+		if (sdFreeMemory() == -1)
+		{
+			// that didn't work
+			panic("out of physical memory!");
 		};
 	};
-
-	panic("out of physical memory!");
-	return 0;
 };
 
 static uint64_t phmAlloc64()
 {
-	uint64_t i;
-	uint64_t numGroups = numSystemFrames/64;
-	
-	uint64_t *bitmap64 = (uint64_t*) frameBitmap;
-	for (i=(lowestFreeFrame>>6); i<(numGroups>>6); i++)
+	while (1)
 	{
-		if (atomic_compare_and_swap64(&bitmap64[i], 0, 0xFFFFFFFFFFFFFFFF) == 0)
+		uint64_t i;
+		uint64_t numGroups = numSystemFrames/64;
+	
+		uint64_t *bitmap64 = (uint64_t*) frameBitmap;
+		for (i=(lowestFreeFrame>>6); i<(numGroups>>6); i++)
 		{
-			// just claimed the 64 frames at this location
-			return i << 6;
+			if (atomic_compare_and_swap64(&bitmap64[i], 0, 0xFFFFFFFFFFFFFFFF) == 0)
+			{
+				// just claimed the 64 frames at this location
+				return i << 6;
+			};
+		};
+		
+		// try freeing some more memory
+		if (sdFreeMemory() == -1)
+		{
+			// that didn't work
+			panic("out of physical memory!");
 		};
 	};
-	
-	panic("out of physical memory!");
-	return 0;
 };
 
 void initPhysMem2()

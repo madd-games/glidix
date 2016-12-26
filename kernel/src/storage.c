@@ -925,10 +925,107 @@ void sdSync()
 	mutexUnlock(&mtxList);
 };
 
+static int sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t addr)
+{
+	while (1)
+	{
+		uint64_t i;
+	
+		uint64_t lowestUsage;
+		uint64_t lowestIndex;
+		int foundAny = 0;
+	
+		for (i=0; i<128; i++)
+		{
+			if (node->entries[i] != 0)
+			{
+				if (!foundAny)
+				{
+					lowestUsage = node->entries[i] >> 56;
+					lowestIndex = i;
+				}
+				else if ((node->entries[i] >> 56) < lowestUsage)
+				{
+					lowestUsage = node->entries[i] >> 56;
+					lowestIndex = i;
+				};
+			};
+		};
+	
+		// we cached nothing at this level, report failure
+		if (!foundAny)
+		{
+			return -1;
+		};
+	
+		if (level == 6)
+		{
+			if (node->entries[lowestIndex] & SD_BLOCK_DIRTY)
+			{
+				uint64_t canaddr = (node->entries[lowestIndex] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+				uint64_t *pte = (uint64_t*) ((canaddr >> 9) | 0xffffff8000000000L);
+				uint64_t phys = (*pte) & 0x0000fffffffff000L;
+			
+				Semaphore semCmd;
+				semInit2(&semCmd, 0);
+			
+				SDCommand *cmd = NEW(SDCommand);
+				cmd->type = SD_CMD_WRITE_TRACK;
+				cmd->block = (void*) phys;
+				cmd->pos = ((addr << 7) | lowestIndex) << 15;
+				cmd->cmdlock = &semCmd;
+				cmd->status = NULL;
+				sdPush(sd, cmd);
+			
+				semWait(&semCmd);
+			};
+		
+			uint64_t canaddr = (node->entries[lowestIndex] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+			uint64_t *pte = (uint64_t*) ((canaddr >> 9) | 0xffffff8000000000L);
+			uint64_t phys = (*pte) & 0x0000fffffffff000L;
+		
+			node->entries[lowestIndex] = 0;
+			phmFreeFrameEx(phys >> 12, 8);
+			unmapPhysMemory((void*)canaddr, 0x8000);
+		}
+		else
+		{
+			uint64_t canaddr = (node->entries[lowestIndex] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+			int status = sdTryFree(sd, (BlockTreeNode*) canaddr, level+1, (addr << 7) | lowestIndex);
+			
+			if (status == 0)
+			{
+				return 0;
+			}
+			else
+			{
+				kfree((void*)canaddr);
+				node->entries[lowestIndex] = 0;
+				// and try again
+			};
+		};
+	};
+};
+
 int sdFreeMemory()
 {
 	mutexLock(&mtxList);
+	int status = -1;
+	
+	int i;
+	for (i=0; i<26; i++)
+	{
+		StorageDevice *sd = sdList[i];
+		if (sd != NULL)
+		{
+			mutexLock(&sd->cacheLock);
+			status = sdTryFree(sd, &sd->cacheTop, 0, 0);
+			mutexUnlock(&sd->cacheLock);
+		
+			if (status == 0) break;
+		};
+	};
 	
 	mutexUnlock(&mtxList);
-	return -1;
+	return 0;
 };

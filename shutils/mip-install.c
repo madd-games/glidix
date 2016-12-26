@@ -36,6 +36,8 @@
 #include <errno.h>
 #include "mip.h"
 
+#define	COPY_BUFFER_SIZE			0x8000
+
 char destDir[256];
 int installPackage(const char *path)
 {
@@ -121,13 +123,13 @@ int installPackage(const char *path)
 				return 1;
 			};
 			
-			char buffer[4096];
+			char buffer[COPY_BUFFER_SIZE];
 			uint64_t togo = fileinfo.size;
 			
 			while (togo > 0)
 			{
 				uint64_t doNow = togo;
-				if (doNow > 4096) doNow = 4096;
+				if (doNow > COPY_BUFFER_SIZE) doNow = COPY_BUFFER_SIZE;
 				
 				fread(buffer, 1, doNow, fp);
 				write(fd, buffer, doNow);

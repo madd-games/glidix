@@ -132,6 +132,8 @@ static EDevice knownDevices[] = {
 
 static void e1000_qthread(void *context)
 {
+	thnice(NICE_NETRECV);
+	
 	EInterface *nif = (EInterface*) context;
 	while (nif->running)
 	{

@@ -61,9 +61,6 @@ int main(int argc, char *argv[])
 	
 	ftruncate(fd, 0x200000);
 	
-	printf("Testing with 1 byte blocks...\n");
-	doTest(fd, 1);
-	
 	printf("Testing with 512 byte blocks...\n");
 	doTest(fd, 512);
 	

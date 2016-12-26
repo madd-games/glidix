@@ -58,6 +58,13 @@ typedef struct
 #define	CLONE_DETACHED			(1 << 1)
 
 /**
+ * Stanard priorities.
+ */
+#define	NICE_NORMAL			0		/* normal priority */
+#define	NICE_NETRECV			-2		/* network receiver */
+#define	NICE_UIN			-4		/* user input handlers */
+
+/**
  * Executable permissions.
  */
 #define	XP_RAWSOCK			(1 << 0)
@@ -202,7 +209,7 @@ typedef struct
 	/**
 	 * Exit status to be sent to the parent of the process when all the threads
 	 * have terminated. This is set to zero initially; this way, if all threads
-	 * terminate by calling _glidix_thexit(), it will be as if the entire process
+	 * terminate by calling pthread_exit(), it will be as if the entire process
 	 * exited with exit() with a status of 0. Otherwise, if a thread calls exit(),
 	 * all threads get terminated and this is set to the status specified in the
 	 * exit() call.

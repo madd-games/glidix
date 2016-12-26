@@ -22,6 +22,6 @@ then
 	ROOTFS="gxfs"
 fi
 
-command="build-tools/mkinitrd --kernel=kernel/out/kernel.so --init=init/init --libc=libc/libc.so --rootdev=$ROOTDEV --rootfs=$ROOTFS --output=$1 --no-default-initmod $initmod"
+command="build-tools/mkinitrd --kernel=kernel/out/kernel.so --init=init/init --rootdev=$ROOTDEV --rootfs=$ROOTFS --output=$1 --no-default-initmod $initmod"
 echo $command
 $command

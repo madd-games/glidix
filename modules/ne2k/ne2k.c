@@ -182,6 +182,8 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 
 static void ne2k_thread(void *context)
 {
+	thnice(NICE_NETRECV);
+	
 	// buffer to store largest possible frame:
 	// max payload (1500) + size of ethernet header (14) + FCS (4)
 	// we do this to avoid using kmalloc() and kfree() as this would

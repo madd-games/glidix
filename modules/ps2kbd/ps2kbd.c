@@ -74,6 +74,8 @@ static uint8_t mouseStateWas = 0;
 
 static void kbdThread(void *data)
 {
+	thnice(NICE_UIN);
+	
 	while (1)
 	{
 		wcDown(&wcKeyboard);

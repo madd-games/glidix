@@ -40,7 +40,6 @@ const char *progName;
 
 const char *optKernel = "/initrd/kernel.so";
 const char *optOutput = "/boot/vmglidix.tar";
-const char *optLibc = "/initrd/lib/libc.so";
 const char *optInit = "/initrd/init";
 const char *optRootDev = "/dev/sda0";
 const char *optRootFS = "gxfs";
@@ -208,10 +207,6 @@ int main(int argc, char *argv[])
 		{
 			optOutput = &argv[i][9];
 		}
-		else if (startsWith(argv[i], "--libc="))
-		{
-			optLibc = &argv[i][7];
-		}
 		else if (startsWith(argv[i], "--init="))
 		{
 			optInit = &argv[i][7];
@@ -244,13 +239,6 @@ int main(int argc, char *argv[])
 	};
 	
 	if (appendFile("init", optInit) != 0)
-	{
-		return 1;
-	};
-	
-	appendDir("lib/");
-	
-	if (appendFile("lib/libc.so", optLibc) != 0)
 	{
 		return 1;
 	};

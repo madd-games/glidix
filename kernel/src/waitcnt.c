@@ -53,21 +53,20 @@ void wcUp(WaitCounter *wc)
 
 void wcDown(WaitCounter *wc)
 {
-	ASM("cli");
+	cli();
 	spinlockAcquire(&wc->lock);
 	wc->server = getCurrentThread();
 
 	while (wc->count == 0)
 	{
-		//getCurrentThread()->flags |= THREAD_WAITING;
 		waitThread(getCurrentThread());
 		spinlockRelease(&wc->lock);
 		kyield();
-		ASM("cli");
+		cli();
 		spinlockAcquire(&wc->lock);
 	};
 
 	wc->count--;
 	spinlockRelease(&wc->lock);
-	ASM("sti");
+	sti();
 };

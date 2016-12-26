@@ -20,5 +20,8 @@ install:
 	@mkdir -p $(DESTDIR)/bin
 	@mkdir -p $(DESTDIR)/etc/init
 	@mkdir -p $(DESTDIR)/dev
+	@mkdir -p $(DESTDIR)/proc
+	@mkdir -p $(DESTDIR)/mnt
+	@mkdir -p $(DESTDIR)/sys/mod
 	cp gxsetup $(DESTDIR)/bin/gxsetup
 	cp $(SRCDIR)/startup.sh $(DESTDIR)/etc/init/startup.sh

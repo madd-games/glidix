@@ -39,6 +39,8 @@
 
 static Thread firstThread;
 PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
+static PER_CPU Thread idleThread;
+
 static Spinlock schedLock;		// for PID and stuff
 static int nextPid;
 
@@ -393,6 +395,14 @@ static void sysManFunc(void *ignore)
 	};
 };
 
+static void idleThreadFunc()
+{
+	while (1)
+	{
+		hlt();
+	};
+};
+
 void initSched2()
 {
 	spinlockRelease(&expireLock);
@@ -408,6 +418,16 @@ void initSched2()
 	
 	// wait for the system manager to release the lock, indicating that it is ready
 	spinlockAcquire(&sysManReadySignal);
+	
+	// the idle thread needs 2 things: the registers and flags indicating
+	// it is always waiting. everthing else can be uninitialized
+	idleThread.regs.cs = 0x08;
+	idleThread.regs.ds = 0x10;
+	idleThread.regs.ss = 0;
+	idleThread.regs.rsp = (uint64_t) kmalloc(0x4000) + 0x4000 - 8;
+	idleThread.regs.rip = (uint64_t) &idleThreadFunc;
+	idleThread.regs.rbp = 0;
+	idleThread.flags = THREAD_WAITING;
 };
 
 void initSchedAP()
@@ -490,7 +510,7 @@ int canSched(Thread *thread)
 
 static int getPrio(Thread *thread)
 {
-	return (NUM_PRIO_Q/2) - 1 + thread->niceVal;
+	return (NUM_PRIO_Q/2) + thread->niceVal;
 };
 
 void switchTaskUnlocked(Regs *regs)
@@ -519,31 +539,26 @@ void switchTaskUnlocked(Regs *regs)
 	};
 
 	// wait for the next thread to execute
-	while (1)
+	int i;
+	for (i=0; i<NUM_PRIO_Q; i++)
 	{
-		int i;
-		for (i=0; i<NUM_PRIO_Q; i++)
+		if (runqFirst[i] != NULL)
 		{
-			if (runqFirst[i] != NULL)
-			{
-				break;
-			};
-		};
-		
-		if (i == NUM_PRIO_Q)
-		{
-			spinlockRelease(&schedLock);
-			cooloff();
-			spinlockAcquire(&schedLock);
-		}
-		else
-		{
-			currentThread = runqFirst[i]->thread;
-			runqFirst[i] = runqFirst[i]->next;
-			if (runqFirst[i] == NULL) runqLast[i] = NULL;
-			currentThread->runq.thread = NULL;
 			break;
 		};
+	};
+	
+	if (i == NUM_PRIO_Q)
+	{
+		// no thread waiting; go idle
+		currentThread = &idleThread;
+	}
+	else
+	{	
+		currentThread = runqFirst[i]->thread;
+		runqFirst[i] = runqFirst[i]->next;
+		if (runqFirst[i] == NULL) runqLast[i] = NULL;
+		currentThread->runq.thread = NULL;
 	};
 	
 	// if there are signals ready to dispatch, dispatch them.
@@ -1631,6 +1646,9 @@ int havePerm(uint64_t xperm)
 
 int thnice(int incr)
 {
+	cli();
+	lockSched();
+	
 	int newVal = currentThread->niceVal + incr;
 	if (newVal <= -(NUM_PRIO_Q/2))
 	{
@@ -1644,11 +1662,13 @@ int thnice(int incr)
 	
 	currentThread->niceVal = newVal;
 	
+	unlockSched();
 	if (incr > 0)
 	{
 		// we dropped priority
 		kyield();
 	};
-	
+	sti();
+		
 	return newVal;
 };

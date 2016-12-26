@@ -27,7 +27,7 @@
 */
 
 #include <glidix/memory.h>
-#include <glidix/spinlock.h>
+#include <glidix/mutex.h>
 #include <glidix/console.h>
 #include <glidix/pagetab.h>
 #include <glidix/string.h>
@@ -39,7 +39,7 @@
 
 #define	HEAP_BASE_ADDR				0xFFFF810000000000
 
-static Spinlock heapLock;
+static Mutex heapLock;
 
 static uint64_t placement;
 static int readyForDynamic;
@@ -53,7 +53,7 @@ void initMemoryPhase1(uint64_t pc, uint64_t size)
 {
 	placement = pc;
 	placementEnd = pc + size;
-	spinlockRelease(&heapLock);
+	mutexInit(&heapLock);
 	readyForDynamic = 0;
 };
 
@@ -265,7 +265,7 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 {
 	// TODO: don't ignore the flags!
 	void *retAddr = NULL;
-	spinlockAcquire(&heapLock);
+	mutexLock(&heapLock);
 
 	// make the size divisible by 16.
 	if ((size & 0xF) != 0)
@@ -315,7 +315,7 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 	//	lowestFreeHeader = findFreeHeader(head);
 	//};
 
-	spinlockRelease(&heapLock);
+	mutexUnlock(&heapLock);
 	//ASM("sti");
 	return retAddr;
 };
@@ -334,7 +334,7 @@ void *_kxmalloc(size_t size, int flags, const char *aid, int lineno)
 		return kxmallocDynamic(size, flags, aid, lineno);
 	};
 
-	spinlockAcquire(&heapLock);
+	mutexLock(&heapLock);
 
 	// align the placement addr on a page boundary if neccessary
 	if (flags & MEM_PAGEALIGN)
@@ -357,7 +357,7 @@ void *_kxmalloc(size_t size, int flags, const char *aid, int lineno)
 	{
 		panic("placement allocation exhausted!");
 	};
-	spinlockRelease(&heapLock);
+	mutexUnlock(&heapLock);
 	return ret;
 };
 
@@ -397,7 +397,7 @@ void _kfree(void *block, const char *who, int line)
 	// kfree()ing NULL is perfectly acceptable.
 	if (block == NULL) return;
 	//ASM("cli");
-	spinlockAcquire(&heapLock);
+	mutexLock(&heapLock);
 
 	// all blocks are at least 16 bytes in size because of the alignment magic; so we can safely
 	// feed the generator
@@ -515,7 +515,7 @@ void _kfree(void *block, const char *who, int line)
 		if (head < lowestFreeHeader) lowestFreeHeader = head;
 	};
 
-	spinlockRelease(&heapLock);
+	mutexUnlock(&heapLock);
 	//ASM("sti");
 };
 
@@ -604,7 +604,7 @@ void monitorBlock(void *addr_)
 {
 	uint64_t addr = (uint64_t) addr_;
 
-	spinlockAcquire(&heapLock);
+	mutexLock(&heapLock);
 	HeapHeader *head = (HeapHeader*) (addr - sizeof(HeapHeader));
 	if (head->magic != HEAP_HEADER_MAGIC)
 	{
@@ -623,5 +623,5 @@ void monitorBlock(void *addr_)
 	};
 
 	head->flags |= HEAP_BLOCK_MONITOR;	
-	spinlockRelease(&heapLock);
+	mutexUnlock(&heapLock);
 };

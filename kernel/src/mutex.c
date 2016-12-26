@@ -37,6 +37,9 @@ void mutexInit(Mutex *mutex)
 
 void mutexLock(Mutex *mutex)
 {
+	// mutexes are unnecessary while we still have no multithreading working
+	if (getCurrentThread() == NULL) return;
+	
 	// if we are the owner, just increment our lock count
 	// note that no other thread would ever set 'owner' to our thread ID so this comparison
 	// is thread-safe.
@@ -82,6 +85,9 @@ void mutexLock(Mutex *mutex)
 
 void mutexUnlock(Mutex *mutex)
 {
+	// mutexes are unnecessary while we still have no multithreading working
+	if (getCurrentThread() == NULL) return;
+	
 	if (mutex->owner != getCurrentThread())
 	{
 		stackTraceHere();

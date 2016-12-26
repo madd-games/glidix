@@ -192,7 +192,7 @@ ssize_t sys_write(int fd, const void *buf, size_t size)
 				if ((fp->oflag & O_WRONLY) == 0)
 				{
 					spinlockRelease(&ftab->spinlock);
-					getCurrentThread()->therrno = EPERM;
+					getCurrentThread()->therrno = EACCES;
 					out = -1;
 				}
 				else

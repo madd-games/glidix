@@ -70,6 +70,12 @@ pre\n\
 	font-size: 17px;\n\
 	line-height: 140%;\n\
 	font-family: monospace;\n\
+	\n\
+	white-space: pre-wrap;\n\
+	white-space: -moz-pre-wrap;\n\
+	white-space: -pre-wrap;\n\
+	white-space: -o-pre-wrap;\n\
+	word-wrap: break-word;\n\
 }\n\
 \n\
 pre .ref\n\
