@@ -1,0 +1,21 @@
+>NAME
+
+rewinddir - rewind directory reader
+
+>SYNOPSIS
+
+	#include <dirent.h>
+	
+	void rewinddir(DIR *'dirp');
+
+>DESCRIPTION
+
+This function resets the directory reader 'dirp', previously opened by [opendir.2], back to the first entry. A subsequent call to [readdir.2] will therefore return the first entry.
+
+>ERRORS
+
+This function reports no errors.
+
+>SEE ALSO
+
+[opendir.2], [readdir.2], [closedir.2]

@@ -1,0 +1,26 @@
+>NAME
+
+getppid - get parent process ID
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <unistd.h>
+	
+	pid_t getppid();
+
+>DESCRIPTION
+
+Returns the process ID of the parent of the calling process. If the parent has terminated, the process is adopted by [init.6], so this function returns 1.
+
+>RETURN VALUE
+
+This function returns the PID of the parent of the calling process.
+
+>ERRORS
+
+This function is always successful.
+
+>SEE ALSO
+
+[creds.6]

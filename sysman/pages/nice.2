@@ -22,7 +22,17 @@ On success, this function returns the new absolute nice value of the calling thr
 
 Upon error, this function returns -1. However, this may also be returned on success. Hence, the caller must set [errno.6] to 0 before the call, and if the value of [errno.6] is nonzero after the call, then an error occured, and the value may be one of the following:
 
-\* *EPERM* - The calling thread attempting to set a higher priotity for itself ('incr' is negative), but it does not have the *XP_NICE* executable permission.
+\* *EPERM* - The calling thread attempted to set a higher priotity for itself ('incr' is negative), but it does not have the *XP_NICE* executable permission.
+
+>NOTES
+
+Under Glidix, priorities follow a certain standard in normal system packages. Please document standard priorities below. They should also be '#define'd in '<glidix/sched.h>' in the kernel, with a specific macro name, in case we want to change them.
+
+\* A nice value of '0' ('NICE_NORMAL') is the default priority, in which most processes run.
+
+\* A nice value of '-2' ('NICE_NETRECV') is used by network receiver threads.
+
+\* A nice value of '-4' ('NICE_UIN') is used by human input device drivers, such as keyboard drivers, to respond immediately to interrupts.
 
 >SEE ALSO
 

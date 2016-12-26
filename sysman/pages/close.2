@@ -1,0 +1,25 @@
+>NAME
+
+close - close a file
+
+>SYNOPSIS
+
+	#include <unistd.h>
+	
+	int close(int 'fd');
+
+>DESCRIPTION
+
+This function closes a file previously opened by [open.2] or a similar function. The argument 'fd' is the file descriptor to be closed. Attempting to pass a value of 'fd' which was not previously returned by [open.2] or a related function, or which was already passed to [close.2] before being reused by [open.2] or a related function, results in undefined bahavior.
+
+>RETURN VALUE
+
+Under Glidix, this function always returns 0.
+
+>ERRORS
+
+This function reports no errors, but passing an invalid value in 'fd' causes undefined behavior.
+
+>SEE ALSO
+
+[open.2]

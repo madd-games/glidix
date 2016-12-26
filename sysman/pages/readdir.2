@@ -1,0 +1,35 @@
+>NAME
+
+readdir - get next directory entry
+
+>SYNOPSIS
+
+	#include <dirent.h>
+	
+	struct dirent* readdir(DIR *'dirp');
+
+>DESCRIPTION
+
+This function returns the next directory entry in the directory referred to be the directory reader 'dirp'. The reader is created by calling [opendir.2] on the desired directory. Each call to 'readdir()' returns one entry, and when all entries have been read, *NULL* is returned.
+
+The pointer returned by 'readdir()' is stored within the 'DIR' structure; hence, it is only valid until a subsequent call to 'readdir()' or to [closedir.2].
+
+The strucutre 'struct dirent' is defined in '<dirent.h>' and includes the following fields:
+
+	struct dirent
+	{
+		ino_t			'd_ino';
+		char*			'd_name';
+	};
+
+The 'd_ino' field is the entry\'s inode number (a unique identifier assigned to each object in a filesystem), and 'd_name' contains the name of the entry.
+
+All directories contain 2 special entry: '.' which refers to the directry itself, and '..' which refers to its parent directory.
+
+>RETURN VALUE
+
+This function returns a pointer to a 'struct dirent' describing the directory entry that was just fetched, or *NULL* if no more entries are present.
+
+>SEE ALSO
+
+[opendir.2], [closedir.2], [rewinddir.2]

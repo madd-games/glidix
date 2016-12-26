@@ -42,6 +42,8 @@ The calling process is transformed in the following way:
 
 \* The signal mask is reset to 0 (no signals are blocked).
 
+\* Signal dispositions set to have a handler (instead of being set to default, ignore or terminate) are reset to the default.
+
 The new executable begins executing at its entry point, with ana initial stack of 2MB, containing command-line arguments, the environment, and auxiliary information. See [entry.6] for more information on the entry environment.
 
 The executable named by 'pathname' may be either an ELF64 executable compatible with Glidix, or an exeuctable script, where the top line contains:

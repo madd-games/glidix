@@ -41,7 +41,7 @@ A successful call to one of the functions fills the 'struct stat' pointed to by 
 
 The 'st_dev' field contains a unique ID specifying which mounted filesystem the inode is located on, while 'st_ino' is a unique identifier for the file within the filesystem. Together, those 2 fields form a unique identifier for the inode, which is valid until shutdown.
 
-The 'st_mode' field specifies the type of inode, and the access rights. It is a 16-bit value, and the upper 4 bits are the type of inode, while the bottom 12 are the access rights. See [access_mode.6] for more information. The type can be found using the type following macros:
+The 'st_mode' field specifies the type of inode, and the access rights. It is a 16-bit value, and the upper 4 bits are the type of inode, while the bottom 12 are the access rights. See [access_mode.6] for more information. The type can be found using the following type macros:
 
 \* *S_ISBLK(*'st_mode'*)* evaluates to true if the inode represents a block device.
 \* *S_ISCHR(*'st_mode'*)* evaluates to true if the inode represents a character device.

@@ -1,0 +1,70 @@
+>NAME
+
+open - open file
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <fcntl.h>
+	
+	int open(const char *'pathname', int 'oflag', ...);
+
+>DESCRIPTION
+
+This function opens (possibly while creating) the file named by 'pathname'. It creates a 'file description' which allows the system to find the file and look at its data, and assigns it a 'file descriptor' - a unique positive integer which allows the application to refer to the description in calls to other functions, such as [read.2] or [close.2]. This file descriptor is returned by this function. Once the application is done working on the file, it must call [close.2] on the descriptor.
+
+The exact behavior of this function depends on the value of 'oflag' - it must be one of the following (possibly bitwise-OR\'d with one or more flags described below):
+
+\* *O_RDONLY* - open the file for reading only; calls to [write.2] and other functions which update the file will fail. The effective user ID of the calling process must refer to a user who is allowed to read the file; if the effective user ID is 0, the permission is always granted.
+
+\* *O_WRONLY* - open the file for writing only; calls to [read.2] and other functions which read the file will fail. The effective user ID of the calling process must refer to a user who is allowed to write to the file; if the effective user ID is 0, the permission is always granted.
+
+\* *O_RDWR* - open the file in read/write mode. The effective user must have permission to both read and write the file; if the effective user ID is 0, the permission is always granted.
+
+The following additional flags may be bitwise-OR\'ed into 'oflag':
+
+\* *O_CREAT* - if the file does not exist, create it. In this case, a third argument of type 'mode_t' must be passed to this function, indicating the initial [access_mode.6] of the file (typically '0644'). If the file is being created, its owner is setto the effective user ID of the calling process, nd the associated group is set to the effective group ID of the calling process. The parent directory in whcih the file is to be created must already exist.
+
+\* *O_EXCL* - if the file exists, do not open it. This flag only makes sense if used with *O_CREAT*, in which case it causes the creation of a new file if it doesn\'t exist, or an error if it already exists.
+
+\* *O_APPEND* - after opening, seek to the end of the file, if it is random-access. This flag has no meaning for files that cannot be seeked.
+
+\* *O_TRUNC* - delete all contents of the file, resetting its size to zero, after opening.
+
+\* *O_NONBLOCK* - open the file in nonblocking mode; calls to [read.2], [write.2] and other functions will never block. See their documentation for details.
+
+\* *O_CLOEXEC* - set the close-on-exec flag for the file description; the file will be automatically closed when [exec.2] is called.
+
+>RETURN VALUE
+
+On success, this function returns a positive integer known as a file descriptor, which may be passed to other functions to perform operations on the file. On error, returns '-1' and sets [errno.6] to an appropriate value.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following:
+
+\* *ENOENT* - the file named by 'pathname' does not exist, and *O_CREAT* was not passed in 'oflag'; or *O_CREAT* was passed on 'oflag' but the parent directory does not exist.
+
+\* *EEXIST* - *O_EXCL* was passed in 'oflag' and 'pathname' names a file which already exists.
+
+\* *EACCES* - access was denied to one of the parent directories of 'pathname'; or the read/write permission to 'pathname' was denied.
+
+\* *EIO* - error accessing the underlying filesystem.
+
+\* *EMFILE* - no free file descriptors are available.
+
+\* *EBUSY* - the file named by 'pathname' is busy (for example it refers to a device which is busy).
+
+\* *ENOTDIR* - one of the parent directory of 'pathname' is not really a directory.
+
+\* *ELOOP* - a loop in symbolic links has been detected, or the depth of symbolic links is too high.
+
+\* *ENOMEM* - insufficient memory to handle the request.
+
+\* *ENOSPC* - file creation was requested but the underlying filesystem is out of storage space.
+
+\* *EROFS* - file creation, or writing, was requested but the underlying filesystem is read-only.
+
+>SEE ALSO
+
+[close.2]

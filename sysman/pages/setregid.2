@@ -1,0 +1,32 @@
+>NAME
+
+setregid - set real and effective group ID
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <unistd.h>
+	
+	int setregid(gid_t 'rgid', gid_t 'egid');
+
+>DESCRIPTION
+
+This function changes the real and effective group IDs of the calling process to 'rgid' and 'egid', respectively. Either of those values may be '-1', indicating that their respective value should not change (for example, if 'rgid' is '-1' then the real group ID is not updated).
+
+If 'rgid' is not '-1', then the effective group ID must be 0 ('root'), otherwise the *EPERM* error is raised.
+
+If 'egid' is not '-1', and the effective group ID is not 0 ('root'), then 'egid' must match the current effective or real group ID of the calling process. In either case, if 'egid' is different from the current real group ID, the saved group ID is set to 'egid'.
+
+>RETURN VALUE
+
+This function returns '0' on success, or '-1' on error, and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following values:
+
+\* *EPERM* - 'rgid' is not '-1' and the effective group ID is nonzero; or 'egid' is not '-1' and the current effective group ID is nonzero and 'egid' does not match the current effective or real group ID.
+
+>SEE ALSO
+
+[creds.6]

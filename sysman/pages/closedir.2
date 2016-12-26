@@ -1,0 +1,25 @@
+>NAME
+
+closedir - close directory reader
+
+>SYNOPSIS
+
+	#include <dirent.h>
+	
+	int closedir(DIR *'dirp');
+
+>DESCRIPTION
+
+This function closes the directory reader 'dirp', previously returned by [opendir.2].
+
+>RETURN VALUE
+
+This function returns '0'.
+
+>ERRORS
+
+This function reports no errors.
+
+>SEE ALSO
+
+[opendir.2], [readdir.2], [rewinddir.2]

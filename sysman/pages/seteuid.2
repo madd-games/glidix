@@ -1,0 +1,28 @@
+>NAME
+
+seteuid - set effective user ID
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <unistd.h>
+	
+	int seteuid(uid_t 'uid');
+
+>DESCRIPTION
+
+This function sets the effective user ID of the calling process to 'uid'. If the current effective user ID is 0 ('root'), then it is possible to set the EUID to any value. Otherwise, 'uid' must match the current effective user ID, or the current saved-set-user ID, or the real user ID of the calling process.
+
+>RETURN VALUE
+
+This function returns '0' on success, or '-1' on error and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following values:
+
+\* *EPERM* - the current effective user ID is nonzero and 'uid' is not the current effective, saved, or real user ID of the calling process.
+
+>SEE ALSO
+
+[creds.6]

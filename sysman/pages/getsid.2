@@ -1,0 +1,28 @@
+>NAME
+
+getsid - get session ID of a process
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <unistd.h>
+	
+	pid_t getsid(pid_t 'pid');
+
+>DESCRIPTION
+
+This function returns the session ID of the process with the process ID 'pid'. If 'pid' is 0, it returns the session ID of the calling process.
+
+>RETURN VALUE
+
+On sucess, returns a positive integer specifying the session ID of the specified process. On error, '-1' is returned, and [errno.6] is set appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following:
+
+\* *ESRCH* - 'pid' is not zero and a process with the given 'pid' does not exist.
+
+>SEE ALSO
+
+[creds.6]

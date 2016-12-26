@@ -83,7 +83,7 @@ The following example creates a new process, and executes "ls -l" in the new pro
 		int status;
 		waitpid(pid, &status, 0);
 		
-		printf("Child exited with status %d\n", status);
+		printf("Child exited with status %d\\n", status);
 	};
 
 >SEE ALSO

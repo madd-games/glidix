@@ -32,7 +32,7 @@ The 'options' argument may be 0 to indicate default behaviour (block until a pro
 
 \* *WNOHANG* - do not block; if no child process is waitable (or 'pid' is something other than '-1' and the process indicated by it is not waitable), return -1 and set [errno.6] to *ECHILD*.
 
-\* *WDETACH* - do not wait for the specified process; instead, set its parent to 1 ([init.6]), and return 0, unless the process doesn\'t exist (in which case an error occurs).
+\* *WDETACH* - do not wait for the specified process; instead, set its parent to 1 ([init.6]), and return 'pid', unless the process doesn\'t exist (in which case an error occurs).
 
 \* *WUNTRACED* and *WCONTINUED* have no effect under Glidix.
 

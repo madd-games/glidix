@@ -1,0 +1,26 @@
+>NAME
+
+getgid - get real group ID
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <unistd.h>
+	
+	gid_t getgid();
+
+>DESCRIPTION
+
+Returns the real group ID of the calling process.
+
+>RETURN VALUE
+
+Returns the real group ID of the calling process.
+
+>ERRORS
+
+This function is always successful.
+
+>SEE ALSO
+
+[creds.6], [getgroups.2]

@@ -1,0 +1,31 @@
+>NAME
+
+mkinitrd - create initial ramdisk image
+
+>SYNOPSIS
+
+	mkinitrd [--no-default-initmod] [--kernel='kernel'] [--output='output'] [--init='init'] [--rootdev='rootdev'] [--rootfs='rootfs'] ['initmod']...
+
+>DESCRIPTION
+
+This command is used to create an initial ramdisk image, which may be loaded by a bootloader into memory while booting Glidix, and then be mounted at '/initrd' upon startup; see [initrd.6].
+
+By default, when 'mkinitrd' is ran without arguments, it creates the initrd image at the default location, '/boot/vmglidix.tar', and takes files from the currently-mounted initrd. This means that it should not change anything. When given command-line arguments, it behavior changes, as follows:
+
+\* *--no-default-initmod* - by default, 'mkinitrd' will add to the initrd all modules currently loccated under '/initrd/initmod', as well as modules named at the command-line. When this option is passed, the default modules are not included, and only modules from the command-line are taken.
+
+\* *--kernel=*'kernel' - specifies a kernel image to place on the initrd. By default, it is the current kernel ('/initrd/kernel.so'). The kernel placed in the initrd will be loaded by the bootloader.
+
+\* *--output=*'output' - specified the output file, into which the initrd image will be written. By default, it is '/boot/vmglidix.tar'.
+
+\* *--init=*'init' - specifies the path to the [init.6] executable to place on the initrd. By default, it is the current init daemon ('/initrd/init'). This is the first executable that will be loaded by the kernel upon bootup, and is responsible for starting up the rest of the system. See [init.6] for more information.
+
+\* *--rootdev=*'rootdev' - specifies the root device, from which [init.6] will boot the system. By default, this is currently '/dev/sda0'.
+
+\* *--rootfs=*'rootfs' - specifies the type of filesystem located on the root device. By deault it is 'gxfs'.
+
+\* 'initmod' - command-line argument which do not start with a hyphen (*-*) are treated as modules which shall be placed under '/initrd/initmod' in the image being created.
+
+>SEE ALSO
+
+[initrd.6]

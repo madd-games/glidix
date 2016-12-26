@@ -1,0 +1,35 @@
+>NAME
+
+opendir - open a directory reader
+
+>SYNOPSIS
+
+	#include <dirent.h>
+	
+	DIR* opendir(const char *'dirname');
+
+>DESCRIPTION
+
+This function opens a directory reader on the directory named by 'dirname'. The directory reader can then be passed to [readdir.2] to read directory contents, and finally to [closedir.2] to close the reader.
+
+>RETURN VALUE
+
+On success, this function returns a pointer to an opaque structure 'DIR', representing the directory reader. On error, it returns *NULL* and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns *NULL* and sets [errno.6] to one of the following:
+
+\* *ENOENT* - 'dirname' does not exist.
+
+\* *EACCES* - permission was denied to access 'dirname' or one of its parent directories.
+
+\* *EIO* - error trying to access the underlying filesystem.
+
+\* *ELOOP* - a loop in symbolic links was detected.
+
+\* *ENOTDIR* - 'dirname', or one of its parent directories, is not really a directory.
+
+>SEE ALSO
+
+[readdir.2], [closedir.2], [rewinddir.2]

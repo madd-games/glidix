@@ -1,0 +1,28 @@
+>NAME
+
+setsid - start a new session
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <unistd.h>
+	
+	pid_t setsid();
+
+>DESCRIPTION
+
+This function starts a new session. The calling process must not be a process group leader. After this function is called, and is successful, the session ID becomes equal to the PID, making the calling process the leader of a new session; the process group ID is also set to the PID, creating a new process group in which the calling process is the leader. This disconnects the calling process from its controlling terminal, and you should call [close.2] on any terminal handles (usually standard input/output/error).
+
+>RETURN VALUE
+
+On success, this function returns the new session ID, which is equal to the PID as returned by [getpid.2]. On error, it returns '-1' and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following values:
+
+\* *EPERM* - the calling process is the process group leader.
+
+>SEE ALSO
+
+[creds.6]
