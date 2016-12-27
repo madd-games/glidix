@@ -28,6 +28,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/procstat.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,6 +42,7 @@ int showAll = 0;
 
 void getUserName(uid_t uid, char *buffer)
 {
+#if 0
 	struct passwd *pwd = getpwuid(uid);
 	if (pwd == NULL)
 	{
@@ -50,10 +52,14 @@ void getUserName(uid_t uid, char *buffer)
 	{
 		snprintf(buffer, 256, "%s", pwd->pw_name);
 	};
+#endif
+
+	strcpy(buffer, "TEST");
 };
 
 void getGroupName(gid_t gid, char *buffer)
 {
+#if 0
 	struct group *grp = getgrgid(gid);
 	if (grp == NULL)
 	{
@@ -63,6 +69,9 @@ void getGroupName(gid_t gid, char *buffer)
 	{
 		snprintf(buffer, 256, "%s", grp->gr_name);
 	};
+#endif
+
+	strcpy(buffer, "TEST");
 };
 
 int main(int argc, char *argv[])
@@ -101,7 +110,7 @@ int main(int argc, char *argv[])
 	};
 	
 	// column headers
-	printf("%-12s%-16s%-16s%s\n", "PID", "User", "Group", "Executable");
+	printf("%-12s%-16s%-16s%-10s%-10s%s\n", "PID", "User", "Group", "Ticks", "Entries", "Executable");
 	
 	struct dirent *ent;
 	while ((ent = readdir(dirp)) != NULL)
@@ -134,8 +143,14 @@ int main(int argc, char *argv[])
 					getUserName(st.st_uid, username);
 					getGroupName(st.st_gid, grpname);
 					
+					struct procstat st;
+					if (_glidix_procstat(pid, &st, sizeof(struct procstat)) == -1)
+					{
+						continue;
+					};
+					
 					exepath[sz] = 0;
-					printf("%-12d%-16s%-16s%s\n", pid, username, grpname, exepath);
+					printf("%-12d%-16s%-16s%-10lu%-10lu%s\n", pid, username, grpname, st.ps_ticks, st.ps_entries, exepath);
 				};
 			};
 		};

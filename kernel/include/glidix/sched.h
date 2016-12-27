@@ -120,6 +120,27 @@ typedef struct
 #define	NUM_PRIO_Q			16
 
 /**
+ * Describes the state of a running process. Used by _glidix_procstat().
+ */
+typedef struct
+{
+	/**
+	 * Number of ticks used in total.
+	 */
+	uint64_t			ps_ticks;
+	
+	/**
+	 * Number of times this process was scheduled.
+	 */
+	uint64_t			ps_entries;
+	
+	/**
+	 * Number of ticks in the maximum quantum (quantumTicks).
+	 */
+	uint64_t			ps_quantum;
+} ProcStat;
+
+/**
  * Scheduler notification. This data structure is stored in a doubly-linked list
  * and is used to leave information that may be obtained using wait(), waitpid(),
  * pthread_join(), etc.
@@ -215,6 +236,11 @@ typedef struct
 	 * exit() call.
 	 */
 	int				status;
+	
+	/**
+	 * Process-wide statistics.
+	 */
+	ProcStat			ps;
 } Creds;
 
 Creds*	credsNew();
@@ -396,6 +422,11 @@ typedef struct _Thread
 	 * Nice value of the thread.
 	 */
 	int				niceVal;
+	
+	/**
+	 * Thread-local statistics.
+	 */
+	ProcStat			ps;
 	
 	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.

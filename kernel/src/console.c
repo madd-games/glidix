@@ -32,6 +32,7 @@
 #include <glidix/string.h>
 #include <stdint.h>
 #include <glidix/video.h>
+#include <glidix/mutex.h>
 
 /**
  * Represents parsed flags from a conversion specification.
@@ -69,12 +70,12 @@ static struct
 	int gfxterm;
 } consoleState;
 
-static TicketLine consoleLock;
+static Mutex consoleLock;
 SECTION(".videoram") unsigned char initVideoRAM[2*80*25];
 
 void initConsole()
 {
-	tlInit(&consoleLock);
+	mutexInit(&consoleLock);
 	consoleState.buffer = initVideoRAM;
 	consoleState.usingSoftware = 0;
 	consoleState.width = 80;
@@ -100,7 +101,7 @@ static void updateVGACursor()
 
 void clearScreen()
 {
-	tlLock(&consoleLock);
+	mutexLock(&consoleLock);
 	consoleState.curX = 0;
 	consoleState.curY = 0;
 	consoleState.curColor = 0x07;
@@ -116,23 +117,23 @@ void clearScreen()
 	};
 	
 	updateVGACursor();
-	tlUnlock(&consoleLock);
+	mutexUnlock(&consoleLock);
 };
 
 void setCursorPos(uint8_t x, uint8_t y)
 {
-	tlLock(&consoleLock);
+	mutexLock(&consoleLock);
 	consoleState.curX = x;
 	consoleState.curY = y;
 	updateVGACursor();
-	tlUnlock(&consoleLock);
+	mutexUnlock(&consoleLock);
 };
 
 void setConsoleColor(uint8_t col)
 {
-	tlLock(&consoleLock);
+	mutexLock(&consoleLock);
 	consoleState.curColor = col;
-	tlUnlock(&consoleLock);
+	mutexUnlock(&consoleLock);
 };
 
 static void kputch(char c);
@@ -525,7 +526,7 @@ static void __printf_conv_s(int flags, int lenmod, int fieldWidth, int precision
 
 void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 {
-	if (putcon) tlLock(&consoleLock);
+	if (putcon) mutexLock(&consoleLock);
 	consoleState.putcon = putcon;
 
 	while ((*fmt) != 0)
@@ -656,7 +657,7 @@ void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 
 	updateVGACursor();
 
-	if (putcon) tlUnlock(&consoleLock);
+	if (putcon) mutexUnlock(&consoleLock);
 };
 
 void kvprintf(const char *fmt, va_list ap)
@@ -695,7 +696,7 @@ void kprintf_debug(const char *fmt, ...)
 
 void kputbuf(const char *buf, size_t size)
 {
-	tlLock(&consoleLock);
+	mutexLock(&consoleLock);
 	consoleState.putcon = 1;
 	while (size--)
 	{
@@ -710,15 +711,11 @@ void kputbuf(const char *buf, size_t size)
 			
 			if (cmd == 33)
 			{
-				tlUnlock(&consoleLock);
 				clearScreen();
-				tlLock(&consoleLock);
 			}
 			else if (cmd == 34)
 			{
-				tlUnlock(&consoleLock);
 				setConsoleColor((uint8_t) *buf++);
-				tlLock(&consoleLock);
 				size--;
 			}
 			else if (cmd == 35)
@@ -727,9 +724,7 @@ void kputbuf(const char *buf, size_t size)
 				uint8_t y = (uint8_t) *buf++;
 				size -= 2;
 
-				tlUnlock(&consoleLock);
 				setCursorPos(x, y);
-				tlLock(&consoleLock);
 			};
 		}
 		else
@@ -738,19 +733,19 @@ void kputbuf(const char *buf, size_t size)
 		};
 	};
 	updateVGACursor();
-	tlUnlock(&consoleLock);
+	mutexUnlock(&consoleLock);
 };
 
 void kputbuf_debug(const char *buf, size_t size)
 {
-	tlLock(&consoleLock);
+	mutexLock(&consoleLock);
 	consoleState.putcon = 0;
 	while (size--)
 	{
 		kputch(*buf++);
 	};
 	updateVGACursor();
-	tlUnlock(&consoleLock);
+	mutexUnlock(&consoleLock);
 };
 
 typedef struct
@@ -808,28 +803,28 @@ void kdumpregs(Regs *regs)
 
 void unlockConsole()
 {
-	tlUnlock(&consoleLock);
+	mutexUnlock(&consoleLock);
 };
 
 void switchConsoleToSoftwareBuffer(unsigned char *buffer, int width, int height)
 {
-	tlLock(&consoleLock);
+	mutexLock(&consoleLock);
 	consoleState.usingSoftware = 1;
 	consoleState.buffer = buffer;
 	consoleState.width = width;
 	consoleState.height = height;
-	tlUnlock(&consoleLock);
+	mutexUnlock(&consoleLock);
 	clearScreen();
 };
 
 void renderConsoleToScreen()
 {
-	tlLock(&consoleLock);
+	mutexLock(&consoleLock);
 	if (consoleState.usingSoftware)
 	{
 		lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
 	}
-	tlUnlock(&consoleLock);
+	mutexUnlock(&consoleLock);
 };
 
 void setGfxTerm(int value)

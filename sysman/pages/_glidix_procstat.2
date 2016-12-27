@@ -1,0 +1,43 @@
+>NAME
+
+_glidix_procstat - get information about a process
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <sys/procstat.h>
+	
+	ssize_t _glidix_procstat(pid_t 'pid', struct procstat *'buf', size_t 'bufsz');
+
+>DESCRIPTION
+
+This function fetches information about a process with the ID 'pid', and places said information in the structure pointed to by 'buf', with size 'bufsz', and returns the actual size of the structure, which may be less than requested, if the kernel version is older than what your application was built for. 'bufsz' should generally be set to 'sizeof(struct procstat)'.
+
+The structure 'struct procstat' is defined in '<sys/procstat.h>' and includes the following fields:
+
+	struct procstat
+	{
+		uint64_t			'ps_ticks';
+		uint64_t			'ps_entries';
+		uint64_t			'ps_quantum';
+	};
+
+The 'ps_ticks' field specifies the total number of ticks the process has been running for in total (that is, the amount of CPU cycles it actually used), the 'ps_entries' field specifies the number of time the process has been preempted, and the 'ps_quantum' field is the maximum allowed number of CPU cycles that the process can run for before it is preempted.
+
+If the effective user ID of the calling process is 0 ('root'), then any process may be probed. Otherwise, the real user ID of the calling process must match the real user ID of 'pid'.
+
+>RETURN VALUE
+
+On success, this function returns a positive integer, specifying the size of the data returned in 'buf'. On error, it returns '-1' and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following values:
+
+\* *ESRCH* - the process with ID 'pid' does not exist.
+
+\* *EPERM* - the process with ID 'pid' exists, but the effective user ID of the calling process is nonzero and the real user ID of the calling process does not match the real user ID of the target process.
+
+>SEE ALSO
+
+[procfs.6]

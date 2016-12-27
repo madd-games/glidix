@@ -134,6 +134,9 @@ Creds *credsNew()
 	creds->umask = 0;
 	creds->numGroups = 0;
 	creds->status = 0;
+	creds->ps.ps_ticks = 0;
+	creds->ps.ps_entries = 0;
+	creds->ps.ps_quantum = quantumTicks;
 	return creds;
 };
 
@@ -142,6 +145,9 @@ Creds *credsDup(Creds *old)
 	Creds *new = NEW(Creds);
 	memcpy(new, old, sizeof(Creds));
 	new->refcount = 1;
+	new->ps.ps_ticks = 0;
+	new->ps.ps_entries = 0;
+	new->ps.ps_quantum = quantumTicks;
 	return new;
 };
 
@@ -515,6 +521,18 @@ static int getPrio(Thread *thread)
 
 void switchTaskUnlocked(Regs *regs)
 {
+	// get number of ticks used
+	uint64_t ticks = quantumTicks - apic->timerCurrentCount;
+	currentThread->ps.ps_ticks += ticks;
+	currentThread->ps.ps_entries++;
+	
+	// update process statistics if attached
+	if (currentThread->creds != NULL)
+	{
+		currentThread->creds->ps.ps_ticks += ticks;
+		currentThread->creds->ps.ps_entries++;
+	};
+	
 	// remember the context of this thread.
 	fpuSave(&currentThread->fpuRegs);
 	memcpy(&currentThread->regs, regs, sizeof(Regs));
@@ -722,6 +740,11 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	
 	// normal priority by default
 	thread->niceVal = 0;
+	
+	// zero statistics
+	thread->ps.ps_ticks = 0;
+	thread->ps.ps_entries = 0;
+	thread->ps.ps_quantum = quantumTicks;
 	
 	// link into the runqueue
 	cli();
@@ -1005,6 +1028,11 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	
 	// inherit priority
 	thread->niceVal = currentThread->niceVal;
+	
+	// initialize statistics
+	thread->ps.ps_ticks = 0;
+	thread->ps.ps_entries = 0;
+	thread->ps.ps_quantum = quantumTicks;
 	
 	// link into the runqueue
 	cli();
@@ -1352,16 +1380,7 @@ Thread *getThreadByPID(int pid)
 
 void _preempt(); /* common.asm */
 void kyield()
-{
-	// safely turn off the APIC timer, realising that _preempt() is not reentant.
-	// enable interrupts in case it already fired, disable it, do 2 NOPs, and disable
-	// it again so that there is no chance of it firing at the moment we disable it.
-	sti();
-	apic->timerInitCount = 0;
-	nop();
-	nop();
-	apic->timerInitCount = 0;
-	
+{	
 	// call the assembly-level _preempt() which saves callee-save registers and switches task.
 	_preempt();
 };

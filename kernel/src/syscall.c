@@ -4222,10 +4222,55 @@ int sys_nice(int incr)
 	return thnice(incr);
 };
 
+ssize_t sys_procstat(int pid, ProcStat *buf, size_t bufsz)
+{
+	ProcStat st;
+	
+	cli();
+	lockSched();
+	
+	Thread *th = getThreadByPID(pid);
+	if (th == NULL)
+	{
+		unlockSched();
+		sti();
+		
+		ERRNO = ESRCH;
+		return -1;
+	};
+	
+	if ((th->creds->ruid != getCurrentThread()->creds->ruid) && (getCurrentThread()->creds->euid != 0))
+	{
+		unlockSched();
+		sti();
+		
+		ERRNO = EPERM;
+		return -1;
+	};
+	
+	memcpy(&st, &th->creds->ps, sizeof(ProcStat));
+	unlockSched();
+	sti();
+	
+	ssize_t result = sizeof(ProcStat);
+	if (bufsz < result)
+	{
+		result = bufsz;
+	};
+	
+	if (memcpy_k2u(buf, &st, result) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	return result;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 133
+#define SYSCALL_NUMBER 134
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -4360,6 +4405,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_haveperm,				// 130
 	&sys_sync,				// 131
 	&sys_nice,				// 132
+	&sys_procstat,				// 133
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

@@ -110,7 +110,10 @@ typedef struct
 	uint64_t			ignored:3;
 	uint64_t			framePhysAddr:36;
 	uint64_t			zero:4;
-	uint64_t			moreIgnored:11;
+	uint64_t			gx_r:1;				// PROT_READ
+	uint64_t			gx_w:1;				// PROT_WRITE
+	uint64_t			gx_x:1;				// PROT_EXEC
+	uint64_t			moreIgnored:8;
 	uint64_t			xd:1;
 } PACKED PTe;
 

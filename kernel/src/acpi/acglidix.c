@@ -50,7 +50,7 @@
 
 static PAGE_ALIGN PDPT pdptAcpi;
 static uint64_t nextFreePage = 0;
-static Spinlock acpiMemoryLock;
+static Mutex acpiMemoryLock;
 
 void* AcpiOsAllocate(ACPI_SIZE size)
 {
@@ -182,6 +182,7 @@ void AcpiOsDeleteLock(ACPI_SPINLOCK spinlock)
 ACPI_CPU_FLAGS AcpiOsAcquireLock(ACPI_SPINLOCK spinlock)
 {
 	TRACE();
+	cli();
 	spinlockAcquire(spinlock);
 	return 0;
 };
@@ -191,6 +192,7 @@ void AcpiOsReleaseLock(ACPI_SPINLOCK spinlock, ACPI_CPU_FLAGS flags)
 	TRACE();
 	(void)flags;
 	spinlockRelease(spinlock);
+	sti();
 };
 
 BOOLEAN AcpiOsReadable(void *mem, ACPI_SIZE size)
@@ -381,7 +383,7 @@ ACPI_STATUS AcpiOsInitialize()
 	pml4->entries[262].rw = 1;
 	pml4->entries[262].pdptPhysAddr = ((uint64_t)&pdptAcpi - 0xFFFF800000000000) >> 12;
 	refreshAddrSpace();
-	spinlockRelease(&acpiMemoryLock);
+	mutexInit(&acpiMemoryLock);
 	return AE_OK;
 };
 
@@ -530,7 +532,7 @@ static PTe *acgetPage(uint64_t index)
 void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS phaddr, ACPI_SIZE len)
 {
 	TRACE();
-	spinlockAcquire(&acpiMemoryLock);
+	mutexLock(&acpiMemoryLock);
 	uint64_t startPhys = phaddr >> 12;
 	uint64_t endPhys = (phaddr+len) >> 12;
 	uint64_t outAddr = 0xFFFF830000000000 + nextFreePage * 0x1000 + (phaddr & 0xFFF);
@@ -546,14 +548,14 @@ void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS phaddr, ACPI_SIZE len)
 	};
 	
 	refreshAddrSpace();
-	spinlockRelease(&acpiMemoryLock);
+	mutexUnlock(&acpiMemoryLock);
 	return (void*) outAddr;
 };
 
 void AcpiOsUnmapMemory(void *laddr, ACPI_SIZE len)
 {
 	TRACE();
-	spinlockAcquire(&acpiMemoryLock);
+	mutexLock(&acpiMemoryLock);
 	uint64_t startLog = ((uint64_t)laddr-0xFFFF830000000000) >> 12;
 	uint64_t endLog = ((uint64_t)laddr-0xFFFF830000000000+len) >> 12;
 	uint64_t idx;
@@ -566,7 +568,7 @@ void AcpiOsUnmapMemory(void *laddr, ACPI_SIZE len)
 	};
 	
 	refreshAddrSpace();
-	spinlockRelease(&acpiMemoryLock);
+	mutexUnlock(&acpiMemoryLock);
 };
 
 void* mapPhysMemory(uint64_t phaddr, uint64_t len)
