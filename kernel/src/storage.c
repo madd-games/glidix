@@ -943,6 +943,7 @@ static int sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t
 				{
 					lowestUsage = node->entries[i] >> 56;
 					lowestIndex = i;
+					foundAny = 1;
 				}
 				else if ((node->entries[i] >> 56) < lowestUsage)
 				{
@@ -987,6 +988,8 @@ static int sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t
 			node->entries[lowestIndex] = 0;
 			phmFreeFrameEx(phys >> 12, 8);
 			unmapPhysMemory((void*)canaddr, 0x8000);
+			
+			return 0;
 		}
 		else
 		{
@@ -1027,5 +1030,5 @@ int sdFreeMemory()
 	};
 	
 	mutexUnlock(&mtxList);
-	return 0;
+	return status;
 };

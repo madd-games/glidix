@@ -42,7 +42,6 @@ int showAll = 0;
 
 void getUserName(uid_t uid, char *buffer)
 {
-#if 0
 	struct passwd *pwd = getpwuid(uid);
 	if (pwd == NULL)
 	{
@@ -52,14 +51,10 @@ void getUserName(uid_t uid, char *buffer)
 	{
 		snprintf(buffer, 256, "%s", pwd->pw_name);
 	};
-#endif
-
-	strcpy(buffer, "TEST");
 };
 
 void getGroupName(gid_t gid, char *buffer)
 {
-#if 0
 	struct group *grp = getgrgid(gid);
 	if (grp == NULL)
 	{
@@ -69,9 +64,6 @@ void getGroupName(gid_t gid, char *buffer)
 	{
 		snprintf(buffer, 256, "%s", grp->gr_name);
 	};
-#endif
-
-	strcpy(buffer, "TEST");
 };
 
 int main(int argc, char *argv[])

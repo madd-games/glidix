@@ -133,36 +133,48 @@ static int phmTryFrame(uint64_t frame)
 
 static uint64_t phmAllocSingle()
 {
-	uint64_t i;
-	uint64_t limit = numSystemFrames;
-	
-	// find the first group of 64 frames that isn't all used
-	uint64_t *bitmap64 = (uint64_t*) frameBitmap;
-	uint64_t startAt = 0;
-	for (i=(lowestFreeFrame>>6); i<(limit>>6); i++)
+	while (1)
 	{
-		if (bitmap64[i] != 0xFFFFFFFFFFFFFFFF)
+		uint64_t i;
+		uint64_t limit = numSystemFrames;
+	
+		// find the first group of 64 frames that isn't all used
+		uint64_t *bitmap64 = (uint64_t*) frameBitmap;
+		uint64_t startAt = 0;
+		for (i=(lowestFreeFrame>>6); i<(limit>>6); i++)
 		{
-			startAt = i << 6;
-			break;
+			if (bitmap64[i] != 0xFFFFFFFFFFFFFFFF)
+			{
+				startAt = i << 6;
+				break;
+			};
+		};
+	
+		if (startAt == 0)
+		{
+			if (sdFreeMemory() == -1)
+			{
+				// that didn't work
+				panic("out of physical memory!");
+			};
+			
+			continue;
+		};
+	
+		for (i=startAt; i<limit; i++)
+		{
+			if (phmTryFrame(i) == 0)
+			{
+				return i;
+			};
+		};
+		
+		if (sdFreeMemory() == -1)
+		{
+			// that didn't work
+			panic("out of physical memory!");
 		};
 	};
-	
-	if (startAt == 0)
-	{
-		panic("out of physical memory!");
-	};
-	
-	for (i=startAt; i<limit; i++)
-	{
-		if (phmTryFrame(i) == 0)
-		{
-			return i;
-		};
-	};
-	
-	panic("out of physical memory!");
-	return 0;
 };
 
 static uint64_t phmAlloc8()
