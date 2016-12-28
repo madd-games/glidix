@@ -722,6 +722,9 @@ void kputbuf(const char *buf, size_t size)
 			{
 				uint8_t x = (uint8_t) *buf++;
 				uint8_t y = (uint8_t) *buf++;
+				if (x >= consoleState.width) x = 0;
+				if (y >= consoleState.height) y = 0;
+				
 				size -= 2;
 
 				setCursorPos(x, y);
