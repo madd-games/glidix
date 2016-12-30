@@ -16,7 +16,7 @@ The 'wait(wstatus)' function is equivalent to:
 
 	waitpid(-1, 'wstatus', 0);
 
-The 'waitpid()' function waits for a child process to terminate. If 'pid' is '-1', then it waits for any child process to terminate; otherwise, it waits only for the one with the specified 'pid'. If the process has already terminated, and has no yet been waited for, 'waitpid()' returns immediately. Otherwise, it by default blocks until 'pid' (or any child process if 'pid' is '-1') terminates; unless *WNOHANG* is passed in 'options', in which case it returns '-1' and sets [errno.6] to *ECHILD*.
+The 'waitpid()' function waits for a child process to terminate. If 'pid' is '-1', then it waits for any child process to terminate; otherwise, it waits only for the one with the specified 'pid'. If the process has already terminated, and has not yet been waited for, 'waitpid()' returns immediately. Otherwise, it by default blocks until 'pid' (or any child process if 'pid' is '-1') terminates; unless *WNOHANG* is passed in 'options', in which case it returns '-1' and sets [errno.6] to *ECHILD*.
 
 If 'wstatus' is not *NULL*, then it is a pointer to an integer variable, where the 'wait status' will be stored. The '<sys/wait.h>' header defines macros which can be used to process the wait status:
 
@@ -24,7 +24,7 @@ If 'wstatus' is not *NULL*, then it is a pointer to an integer variable, where t
 
 \* *WEXITSTATUS(*'wstatus'*)* evaluates to an integer specifying the exit status, if 'wstatus' indicates that the process has terminated normally - that is, it is the value it returned from 'main()', or passed to [exit.2].
 
-\* *WIFSIGNALLED(*'wstatus'*)* evaluates to true if 'wstatus' indicates that the process has been terminated by reception of a terminaated signal.
+\* *WIFSIGNALLED(*'wstatus'*)* evaluates to true if 'wstatus' indicates that the process has been terminated by reception of a terminated signal.
 
 \* *WTERMSIG(*'wstatus'*)* evaluates to an integer specifying the signal that caused the process to terminate, if 'wstatus' indicates that the process has been terminated by a signal. See [signal.6].
 

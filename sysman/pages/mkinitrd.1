@@ -10,9 +10,9 @@ mkinitrd - create initial ramdisk image
 
 This command is used to create an initial ramdisk image, which may be loaded by a bootloader into memory while booting Glidix, and then be mounted at '/initrd' upon startup; see [initrd.6].
 
-By default, when 'mkinitrd' is ran without arguments, it creates the initrd image at the default location, '/boot/vmglidix.tar', and takes files from the currently-mounted initrd. This means that it should not change anything. When given command-line arguments, it behavior changes, as follows:
+By default, when 'mkinitrd' is ran without arguments, it creates the initrd image at the default location, '/boot/vmglidix.tar', and takes files from the currently-mounted initrd. This means that it should not change anything. When given command-line arguments, it\'s behavior changes, as follows:
 
-\* *--no-default-initmod* - by default, 'mkinitrd' will add to the initrd all modules currently loccated under '/initrd/initmod', as well as modules named at the command-line. When this option is passed, the default modules are not included, and only modules from the command-line are taken.
+\* *--no-default-initmod* - by default, 'mkinitrd' will add to the initrd all modules currently located under '/initrd/initmod', as well as modules named at the command-line. When this option is passed, the default modules are not included, and only modules from the command-line are taken.
 
 \* *--kernel=*'kernel' - specifies a kernel image to place on the initrd. By default, it is the current kernel ('/initrd/kernel.so'). The kernel placed in the initrd will be loaded by the bootloader.
 
@@ -24,7 +24,7 @@ By default, when 'mkinitrd' is ran without arguments, it creates the initrd imag
 
 \* *--rootfs=*'rootfs' - specifies the type of filesystem located on the root device. By deault it is 'gxfs'.
 
-\* 'initmod' - command-line argument which do not start with a hyphen (*-*) are treated as modules which shall be placed under '/initrd/initmod' in the image being created.
+\* 'initmod' - command-line arguments which do not start with a hyphen (*-*) are treated as modules which shall be placed under '/initrd/initmod' in the image being created.
 
 >SEE ALSO
 

@@ -14,7 +14,7 @@ exit - terminate the calling process
 
 Those functions are used to terminate the calling process. All threads in the process are terminated, and 'status' is reported as the exit status. The parent process may call [wait.2] to obtain this status; the wait status will be reported as a normal exit with the specified exit 'status'.
 
-The functions '_exit()' and '_Exit()' are equivalent, and they cause immediately termination, without calling any terminating functions. The 'exit()' function additionally calls termiantion functions, such as global terminators and an functions registered with [atexit.2].
+The functions '_exit()' and '_Exit()' are equivalent, and they cause immediate termination, without calling any terminating functions. The 'exit()' function additionally calls termination functions, such as global terminators and an functions registered with [atexit.2].
 
 >SAFETY
 

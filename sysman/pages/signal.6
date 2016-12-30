@@ -8,9 +8,9 @@ signal - signals
 
 >DESCRIPTION
 
-Signals are a mechanism by which a process or thread may be interrupted to handle a special condition. There are 2 types of signals: synchronous and asynchronous. Asynchronous signals can be sent a process to another process, or to itself, or to a specific thread within itself, by calling [kill.2] or [pthread_kill.2] - they are typically used to ask the process to terminate, to stop doing a certain job, or to be killed immediately. Synchronous signals are delivered to a thread when an error occurs that cannot be handled by allowing code to continue - for example, an attempt to access memory in a way that violates access settings on that memory, or an address outside of any mappings.
+Signals are a mechanism by which a process or thread may be interrupted to handle a special condition. There are 2 types of signals: synchronous and asynchronous. Asynchronous signals can be sent by a process to another process, or to itself, or to a specific thread within itself, by calling [kill.2] or [pthread_kill.2] - they are typically used to ask the process to terminate, to stop doing a certain job, or to be killed immediately. Synchronous signals are delivered to a thread when an error occurs that cannot be handled by allowing code to continue - for example, an attempt to access memory in a way that violates access settings on that memory, or an address outside of any mappings.
 
-A process has a list of 'signal dispositions' - one for each type of signal - specifying what action to take when that signal is delivered. The action can be to terminate immediately (in which case, if the parent process calls [wait.2], the wait status will indicate that the child was termianted by a signal), to ignore the signal, or to call a special function known as the 'signal handler', which may respond to the signal on some other way. Dispositions can be changed by calling [signal.2] or [sigaction.2]. Refer to their manual pages for information about safety. Each signal also has a default disposition.
+A process has a list of 'signal dispositions' - one for each type of signal - specifying what action to take when that signal is delivered. The action can be to terminate immediately (in which case, if the parent process calls [wait.2], the wait status will indicate that the child was terminated by a signal), to ignore the signal, or to call a special function known as the 'signal handler', which may respond to the signal on some other way. Dispositions can be changed by calling [signal.2] or [sigaction.2]. Refer to their manual pages for information about safety. Each signal also has a default disposition.
 
 Glidix defines all signals required by POSIX, but not all of them are used. The signals that can be sent by [kill.2] are limited for sanity reasons, and the kernel may also send some additional signals when errors occur. All in all, the following signals are actually used by Glidix. In the descriptions, 'sync' means synchronous and 'async' means asynchronous.
 
@@ -36,7 +36,7 @@ Glidix defines all signals required by POSIX, but not all of them are used. The 
 
 \* *SIGALRM* ('async') - delivered after the time set by [alarm.2] has passed.
 
-\* *SIGTERM* ('async') - can be sent using [kill.2] or by the user using [kill.1]. Requests the prcess to terminate, while allowing it to perform any necessary tasks beforehand.
+\* *SIGTERM* ('async') - can be sent using [kill.2] or by the user using [kill.1]. Requests the process to terminate, while allowing it to perform any necessary tasks beforehand.
 
 \* *SIGUSR1*, *SIGUSR2* ('async') - user-defined signals, can be sent using [kill.2] or [kill.1] and have no predefined meaning.
 
@@ -48,11 +48,11 @@ Glidix defines all signals required by POSIX, but not all of them are used. The 
 
 \* *SIGCONT* ('async') - can be sent using [kill.2] or [kill.1], and causes the process to be woken up from a *SIGSTOP*. The signal handler, if any, is called after the waking up.
 
-\* *SIGTTIN* ('sync') - delviered during an attempt to [read.2] from a terminal while being in a background process group.
+\* *SIGTTIN* ('sync') - delivered during an attempt to [read.2] from a terminal while being in a background process group.
 
 \* *SIGTTOU* ('sync') - delivered during an attempt to [write.2] to a terminal while being in a background process group.
 
-The signals *SIGSTOP* and *SIGKILL* cannot be caught or ignored; they will always cause the process to stop or termiante immediately, respectively.
+The signals *SIGSTOP* and *SIGKILL* cannot be caught or ignored; they will always cause the process to stop or terminate immediately, respectively.
 
 The default action for the signals *SIGKILL*, *SIGHUP*, *SIGINT*, *SIGQUIT*, *SIGILL*, *SIGABRT*, *SIGFPE*, *SIGSEGV*, *SIGPIPE*, *SIGALRM*, *SIGTERM*, *SIGUSR1*, *SIGUSR2* and *SIGSYS* is to terminate the process. The default action for all other signals is to ignore.
 

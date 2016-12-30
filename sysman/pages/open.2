@@ -23,7 +23,7 @@ The exact behavior of this function depends on the value of 'oflag' - it must be
 
 The following additional flags may be bitwise-OR\'ed into 'oflag':
 
-\* *O_CREAT* - if the file does not exist, create it. In this case, a third argument of type 'mode_t' must be passed to this function, indicating the initial [access_mode.6] of the file (typically '0644'). If the file is being created, its owner is setto the effective user ID of the calling process, nd the associated group is set to the effective group ID of the calling process. The parent directory in whcih the file is to be created must already exist.
+\* *O_CREAT* - if the file does not exist, create it. In this case, a third argument of type 'mode_t' must be passed to this function, indicating the initial [access_mode.6] of the file (typically '0644'). If the file is being created, its owner is set to the effective user ID of the calling process, and the associated group is set to the effective group ID of the calling process. The parent directory in which the file is to be created must already exist.
 
 \* *O_EXCL* - if the file exists, do not open it. This flag only makes sense if used with *O_CREAT*, in which case it causes the creation of a new file if it doesn\'t exist, or an error if it already exists.
 
@@ -55,7 +55,7 @@ On error, this function returns '-1' and sets [errno.6] to one of the following:
 
 \* *EBUSY* - the file named by 'pathname' is busy (for example it refers to a device which is busy).
 
-\* *ENOTDIR* - one of the parent directory of 'pathname' is not really a directory.
+\* *ENOTDIR* - one of the parent directories of 'pathname' is not really a directory.
 
 \* *ELOOP* - a loop in symbolic links has been detected, or the depth of symbolic links is too high.
 

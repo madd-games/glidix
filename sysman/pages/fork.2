@@ -33,17 +33,17 @@ The two processes are similar, and different, in the following ways:
 
 \* The new process initially has no pending [alarm.2].
 
-\* The value of [errno.6] in the new process is unitialized, and so it is undefined until updated.
+\* The value of [errno.6] in the new process is uninitialized, and so it is undefined until updated.
 
 \* The executable permission sets of the new process are initially equal to that of the calling process, but changes made to them by one process do not affect the other. See [xperm.6].
 
 \* The [nice.2] value of the new process is initially equal to that of the calling process, but changes made to it by one process do not affect the other.
 
-When the child termiantes, it becomes a 'zombie process'. The parent is usually expected to reap the child by calling [wait.2] on it, which returns its exit status.
+When the child terminates, it becomes a 'zombie process'. The parent is usually expected to reap the child by calling [wait.2] on it, which returns its exit status.
 
 >SAFETY
 
-In a multithreaded application, the child process created by 'fork()' contains only 1 thrad - the copy of the callng thread. This means that if other threads have acquires some lock, such as a semaphore, the child process will deadlock upon trying to acquire it. Hence, in such a situation, the child process is not allowed to call library functions such as [malloc.2], only system calls or trivial system call wrappers, suh as [exec.2].
+In a multithreaded application, the child process created by 'fork()' contains only 1 thread - the copy of the calling thread. This means that if other threads have acquired some lock, such as a semaphore, the child process will deadlock upon trying to acquire it. Hence, in such a situation, the child process is not allowed to call library functions such as [malloc.2], only system calls or trivial system call wrappers, suh as [exec.2].
 
 >RETURN VALUE
 

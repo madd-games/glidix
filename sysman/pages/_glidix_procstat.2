@@ -22,7 +22,7 @@ The structure 'struct procstat' is defined in '<sys/procstat.h>' and includes th
 		uint64_t			'ps_quantum';
 	};
 
-The 'ps_ticks' field specifies the total number of ticks the process has been running for in total (that is, the amount of CPU cycles it actually used), the 'ps_entries' field specifies the number of time the process has been preempted, and the 'ps_quantum' field is the maximum allowed number of CPU cycles that the process can run for before it is preempted.
+The 'ps_ticks' field specifies the total number of ticks the process has been running for in total (that is, the amount of CPU cycles it actually used), the 'ps_entries' field specifies the number of times the process has been preempted, and the 'ps_quantum' field is the maximum allowed number of CPU cycles that the process can run for before it is preempted.
 
 If the effective user ID of the calling process is 0 ('root'), then any process may be probed. Otherwise, the real user ID of the calling process must match the real user ID of 'pid'.
 
