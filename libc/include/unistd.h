@@ -62,6 +62,7 @@ extern "C" {
 #define	_POSIX_MAX_INPUT			4095
 #define	_POSIX_NAME_MAX				127
 #define	_POSIX_PATH_MAX				255
+#define	_POSIX_MAPPED_FILES			1
 
 #define	X_OK					(1 << 0)
 #define	W_OK					(1 << 1)

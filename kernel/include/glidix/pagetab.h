@@ -113,7 +113,11 @@ typedef struct
 	uint64_t			gx_r:1;				// PROT_READ
 	uint64_t			gx_w:1;				// PROT_WRITE
 	uint64_t			gx_x:1;				// PROT_EXEC
-	uint64_t			moreIgnored:8;
+	uint64_t			gx_loaded:1;			// page was loaded ("present" may be 0 if PROT_NONE)
+	uint64_t			gx_cow:1;			// copy this page upon write attempt
+	uint64_t			gx_shared:1;			// the page is shared (else it is private)
+	uint64_t			gx_perm_ovr:1;			// override default permissions (set by "mprotect")
+	uint64_t			moreIgnored:4;
 	uint64_t			xd:1;
 } PACKED PTe;
 

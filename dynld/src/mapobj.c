@@ -349,7 +349,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 			
 			if (mmap(lib->segs[index].base, lib->segs[index].size,
 					prot, MAP_PRIVATE | MAP_FIXED,
-					fd, phdr.p_offset & ~0xFFF) == NULL)
+					fd, phdr.p_offset & ~0xFFF) == MAP_FAILED)
 			{
 				strcpy(dynld_errmsg, "failed to map segment into memory");
 				for (i=0; i<lib->numSegs-1; i++)
@@ -372,7 +372,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				lib->segs[index].base = (void*) fileTop;
 				lib->segs[index].size = anonLen;
 				
-				if (mmap((void*)fileTop, anonLen, prot, MAP_PRIVATE | MAP_FIXED | MAP_ANON, -1, 0) == NULL)
+				if (mmap((void*)fileTop, anonLen, prot, MAP_PRIVATE | MAP_FIXED | MAP_ANON, -1, 0) == MAP_FAILED)
 				{
 					strcpy(dynld_errmsg, "failed to map anonymous pages");
 					for (i=0; i<lib->numSegs-1; i++)
@@ -510,7 +510,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				
 				dep = mmap((void*)addrPlacement, 0x1000, PROT_READ | PROT_WRITE,
 						MAP_PRIVATE | MAP_FIXED | MAP_ANON, -1, 0);
-				if (dep == NULL)
+				if (dep == MAP_FAILED)
 				{
 					close(depfd);
 					

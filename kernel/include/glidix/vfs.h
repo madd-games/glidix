@@ -35,6 +35,7 @@
 
 #include <glidix/common.h>
 #include <glidix/procmem.h>
+#include <glidix/ftree.h>
 #include <stddef.h>
 
 #define	SEEK_SET			0
@@ -297,12 +298,10 @@ typedef struct _File
 	void (*truncate)(struct _File *file, off_t length);
 
 	/**
-	 * Create a FrameList that can be used to read/write from the file - this is used by mmap().
-	 * If NULL is returned, then the operation failed and mmap() returns with error code ENODEV.
-	 * The returned FrameList should be such that pdownref() can be called on it aftewards, without
-	 * causing it to delete. For example, it could be returned by palloc().
+	 * Returns the FileTree representing this file, if it is random-access. The reference count of the tree
+	 * shall be incremented, and it is the caller's responsibility to decrement it later.
 	 */
-	FrameList* (*mmap)(struct _File *file, size_t len, int prot, int flags, off_t offset);
+	FileTree* (*tree)(struct _File *file);
 	
 	/**
 	 * Reading/writing at arbitrary offsets, thread-safe calls for random-access files. Most importantly,

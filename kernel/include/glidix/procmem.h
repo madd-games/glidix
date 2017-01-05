@@ -29,41 +29,18 @@
 #ifndef __glidix_procmem_h
 #define __glidix_procmem_h
 
-/**
- * Manipulating process memory.
- */
-
-#include <glidix/pagetab.h>
-#include <stdint.h>
-#include <stddef.h>
 #include <glidix/common.h>
-#include <glidix/spinlock.h>
+#include <glidix/ftree.h>
+#include <glidix/semaphore.h>
 
+/**
+ * Protection settings.
+ */
 #define	PROT_READ			(1 << 0)
 #define	PROT_WRITE			(1 << 1)
 #define	PROT_EXEC			(1 << 2)
-#define	PROT_ALLOC			(1 << 3)
 
 #define	PROT_ALL			((1 << 4)-1)
-
-/**
- * PROT_* flags settable by kernel only.
- */
-#define	PROT_THREAD			(1 << 8)
-
-#define	MEM_SEGMENT_COLLISION		-1
-#define	MEM_SEGMENT_INVALID		-2
-
-/**
- * Return values from tryLoadOnDemand() and tryCopyOnWrite().
- */
-#define	MEM_OK				0			// no error
-#define	MEM_FAILED			1			// the operation is not applicable
-#define	MEM_BUS_ERROR			2			// please raise SIGBUS
-
-#define	MEM_MAKE			(1 << 0)
-
-#define	FL_SHARED			(1 << 0)
 
 /**
  * Only define those if they weren't yet defined, since we might have been included by
@@ -78,176 +55,93 @@
 #	define	MAP_FAILED			((uint64_t)-1)
 #endif
 
-typedef enum
+/**
+ * Minimum allowed address for mapping.
+ */
+#define	ADDR_MIN				0x200000
+
+/**
+ * Describes a segment in a virtual address space.
+ */
+typedef struct Segment_
 {
-	MEM_CURRENT = 0,
-	MEM_OTHER = 1
-} MemorySelector;
-
-typedef struct
-{
 	/**
-	 * Pages still not copied from this COW list.
-	 * (sum of all refcounts).
+	 * Links to the previous and next segment.
 	 */
-	uint64_t pagesToGo;
-
-	/**
-	 * The frames.
-	 */
-	uint64_t *frames;
-
-	/**
-	 * Refcounts for each frame.
-	 */
-	uint64_t *refcounts;
-
-	/**
-	 * Number of FrameLists using this list.
-	 */
-	uint64_t users;
-	Spinlock lock;
-} COWList;
-
-typedef struct
-{
-	int refcount;
-	int count;
-	uint64_t *frames;
-	struct _File *fp;		// NULL for anonymous
-	off_t fileOffset;
-	size_t fileSize;
-	Spinlock lock;
-	int flags;		/* FL_* */
-
-	/**
-	 * If this is a copy-on-write frame list.
-	 */
-	COWList *cowList;
+	struct Segment_*			prev;
+	struct Segment_*			next;
 	
 	/**
-	 * If not NULL, then this is the function that is called when this
-	 * frame list is deleted. Used for managing shared memory. It is
-	 * called before actually deleting the structure; so you can safely
-	 * perform synchronisation.
+	 * Size of this segment, in pages.
 	 */
-	void (*on_destroy)(void*);
-	void* on_destroy_arg;
-} FrameList;
-
-typedef struct _Segment
-{
-	/**
-	 * Index of the page where this segment begins.
-	 */
-	uint64_t			start;
-
-	/**
-	 * The frame list.
-	 */
-	FrameList			*fl;
-
-	/**
-	 * The protection flags.
-	 */
-	int				flags;
-
-	/**
-	 * For MAP_THREAD (PROT_THREAD in 'flags') segments, this is set to the creating thread.
-	 * Otherwise NULL.
-	 */
-	struct _Thread*			thread;
+	size_t					numPages;
 	
 	/**
-	 * Next segment.
+	 * The tree being mapped.
 	 */
-	struct _Segment			*next;
+	FileTree*				ft;
+	
+	/**
+	 * Offset into the file (page-aligned).
+	 */
+	uint64_t				offset;
+	
+	/**
+	 * The thread that created this process (ignored unless MAP_THREAD was passed).
+	 */
+	Thread*					creator;
+	
+	/**
+	 * Mapping flags (MAP_*). If 0, then nothing is mapped here.
+	 */
+	int					flags;
+	
+	/**
+	 * Default permissions if unchanged for specific pages.
+	 */
+	int					prot;
 } Segment;
 
+/**
+ * Description of a virtual address space.
+ */
 typedef struct
 {
 	/**
-	 * The reference count.
+	 * Lock for the object.
 	 */
-	int refcount;
-
+	Semaphore				lock;
+	
 	/**
-	 * The physical frame address of the PDPT for this 512GB block.
+	 * Head of the segment list.
 	 */
-	uint64_t pdptPhysFrame;
-
+	Segment*				segs;
+	
 	/**
-	 * List of segments in this process space.
+	 * Reference count.
 	 */
-	Segment *firstSegment;
-
+	int					refcount;
+	
 	/**
-	 * List of PD and PT frames that are to be erased when this ProcMem gets
-	 * deleted.
+	 * Physical frame number of the PDPT.
 	 */
-	uint64_t *framesToCleanUp;
-	int numFramesToCleanUp;
-
-	/**
-	 * The lock.
-	 */
-	Spinlock lock;
+	uint64_t				phys;
 } ProcMem;
 
-FrameList *palloc_later(struct _File *fp, int count, off_t fileOffset, size_t fileSize);
-FrameList *palloc(int count);
-FrameList *pmap(uint64_t start, int count);
-int pupref(FrameList *fl);			// returns the new refcount
-void pdownref(FrameList *fl);
+/**
+ * Create a new blank address space and switch to it. Returns 0 on success, -1 on error.
+ */
+int vmNew();
 
 /**
- * Make a duplicate of all the frames in a list.
+ * Establish a memory mapping. 'addr' and 'off' must both be page-aligned. The file 'fp' is
+ * only used if MAP_ANON is not passed in 'flags'. If 'addr' is 0, then the highest possible
+ * address is chosen such that the new segment does not collide with others.
+ *
+ * On success, returns an address larger than or equal to ADDR_MIN, otherwise an error number,
+ * e.g. ENODEV.
  */
-FrameList *pdup(FrameList *old);
-
-ProcMem *CreateProcessMemory();
-int AddSegment(ProcMem *pm, uint64_t start, FrameList *frames, int flags);
-int AddSegmentEx(ProcMem *pm, uint64_t start, FrameList *frames, int flags, uint64_t *realAddr);
-int DeleteSegment(ProcMem *pm, uint64_t start);
-void SetProcessMemory(ProcMem *pm);
-ProcMem* DuplicateProcessMemory(ProcMem *pm);
-void UnloadThreadProcessMemory(ProcMem *pm);
-void UprefProcessMemory(ProcMem *pm);
-void DownrefProcessMemory(ProcMem *pm);
-
-/**
- * Try copy-on-writing some data. Returns 0 if it happened, -1 otherwise.
- */
-int tryCopyOnWrite(uint64_t addr);
-
-/**
- * Try loading-on-demand some data. Returns MEM_OK, MEM_FAILED or MEM_BUS_ERROR.
- */
-int tryLoadOnDemand(uint64_t addr);
-
-/**
- * Dump the contents of a process memory, for debugging purposes. Also show an arrow to indicate
- * which segment an address is in.
- */
-void dumpProcessMemory(ProcMem *pm, uint64_t checkAddr);
-
-/**
- * Check if a given page can be safely accessed by a userspace process, for reading (PROT_READ), writing
- * (PROT_WRITE) or both. The page is an index (address/0x1000). Returns 1 if it can be accessed, 0 otherwise.
- */
-int canAccessPage(ProcMem *pm, uint64_t pageindex, int perms);
-
-/**
- * Return 1 if the page containing the given address is mapped into userspace. If "writeable" is true, the page
- * must also be marked writeable.
- */
-int isPageMapped(uint64_t addr, int writeable);
-
-/**
- * Userspace.
- */
-#ifndef _SYS_MMAN_H
-int mprotect(uint64_t addr, uint64_t len, int prot);
-#endif
+struct _File;
+uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, struct _File *fp, off_t off);
 
 #endif
