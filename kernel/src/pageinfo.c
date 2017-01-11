@@ -43,7 +43,7 @@ void piInit()
 
 uint64_t piNew(uint64_t flags)
 {
-	uint64_t frame = phmAllocFrame();
+	uint64_t frame = phmAllocZeroFrame();
 	if (frame == 0) return 0;
 	
 	mutexLock(&piLock);

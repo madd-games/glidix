@@ -36,11 +36,11 @@
 /**
  * Protection settings.
  */
-#define	PROT_READ			(1 << 0)
-#define	PROT_WRITE			(1 << 1)
-#define	PROT_EXEC			(1 << 2)
+#define	PROT_READ				(1 << 0)
+#define	PROT_WRITE				(1 << 1)
+#define	PROT_EXEC				(1 << 2)
 
-#define	PROT_ALL			((1 << 4)-1)
+#define	PROT_ALL				((1 << 3)-1)
 
 /**
  * Only define those if they weren't yet defined, since we might have been included by
@@ -52,13 +52,16 @@
 #	define	MAP_ANON			(1 << 2)
 #	define	MAP_FIXED			(1 << 3)
 #	define	MAP_THREAD			(1 << 4)
+#	define	MAP_UN				(1 << 5)
+#	define	MAP_ALLFLAGS			((1 << 6)-1)
 #	define	MAP_FAILED			((uint64_t)-1)
 #endif
 
 /**
- * Minimum allowed address for mapping.
+ * Minimum and maximum allowed addresses for mapping.
  */
 #define	ADDR_MIN				0x200000
+#define	ADDR_MAX				0x8000000000
 
 /**
  * Describes a segment in a virtual address space.
@@ -87,9 +90,9 @@ typedef struct Segment_
 	uint64_t				offset;
 	
 	/**
-	 * The thread that created this process (ignored unless MAP_THREAD was passed).
+	 * The thread that created this mapping (ignored unless MAP_THREAD was passed).
 	 */
-	Thread*					creator;
+	struct _Thread*				creator;
 	
 	/**
 	 * Mapping flags (MAP_*). If 0, then nothing is mapped here.
@@ -100,6 +103,11 @@ typedef struct Segment_
 	 * Default permissions if unchanged for specific pages.
 	 */
 	int					prot;
+	
+	/**
+	 * Access flags of the mapped file (O_RDONLY, O_WRONLY, or O_RDWR).
+	 */
+	int					access;
 } Segment;
 
 /**
@@ -143,5 +151,49 @@ int vmNew();
  */
 struct _File;
 uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, struct _File *fp, off_t off);
+
+/**
+ * Handle a page fault. Simply returns on success; on error, it sets 'regs' as the return state,
+ * and sends a SIGSEGV or SIGBUS signal and switches task. 'faultAddr' is the address being accessed,
+ * and 'flags' is the page fault flags as passed by the CPU.
+ */
+void vmFault(Regs *regs, uint64_t faultAddr, int flags);
+
+/**
+ * Set the protection on a region of virtual memory. Returns 0 on success, or a nonzero error number
+ * on error.
+ */
+int vmProtect(uint64_t addr, size_t len, int prot);
+
+/**
+ * Unmap all MAP_THREAD mappings established by the calling thread.
+ */
+void vmUnmapThread();
+
+/**
+ * Create a copy of the calling process' memory and return it. Returns a blank address space if the calling
+ * process has no memory attached.
+ */
+ProcMem* vmClone();
+
+/**
+ * Increment the reference count of a process address space.
+ */
+void vmUp(ProcMem *pm);
+
+/**
+ * Decrement the reference count of a process memory, and delete it if it reaches 0.
+ */
+void vmDown(ProcMem *pm);
+
+/**
+ * Switch to the specifies process memory.
+ */
+void vmSwitch(ProcMem *pm);
+
+/**
+ * Dump the list of segments in a process memory object. Show an arrow pointing to the given address.
+ */
+void vmDump(ProcMem *pm, uint64_t addr);
 
 #endif

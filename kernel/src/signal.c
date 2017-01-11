@@ -219,7 +219,7 @@ void dispatchSignal()
 	};
 	
 	// try pushing the signal stack frame. also, don't break the red zone!
-	SetProcessMemory(thread->pm);
+	vmSwitch(thread->pm);
 	
 	// basically, the scheduler which calls us is not reentant, so we cannot copy
 	// the frame directly onto the user stack as that may cause a page fault (which

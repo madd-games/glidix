@@ -1,0 +1,39 @@
+>NAME
+
+mprotect - change protection of a region of memory
+
+>SYNOPSIS
+
+	#include <sys/mman.h>
+	
+	int mprotect(void *'addr', size_t 'len', int 'prot');
+
+>DESCRIPTION
+
+This function changes the protection settings of 'len' bytes of memory starting at 'addr'. 'addr' must be page-aligned. The 'prot' argument is either *PROT_NONE*, incicating that the memory cannot be accessed at all, or bitwise-OR of one or more of the following flags:
+
+\* *PROT_READ* - the memory may be read.
+\* *PROT_WRITE* - the memory may be written to.
+\* *PROT_EXEC* - code from the memory may be executed.
+
+All pages in the indicated range must be mapped. Furthermore, if *PROT_WRITE* is set in 'prot', you must have write access to any files mapped into the pages, if they are shared.
+
+>RETURN VALUE
+
+On success, this function returns '0'. On error, it returns '-1' and sets [errno.6] appropriately. In case it fails, it is unspecified how many pages it has changed permissions on, if any.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following values:
+
+\* *EINVAL* - invalid bits are set in 'prot'.
+
+\* *EINVAL* - 'addr' is not page-aligned.
+
+\* *ENOMEM* - one or more of the indicated pages are not mapped.
+
+\* *EACCES* - one of the indicated pages maps a file as shared, and *PROT_WRITE* is set in 'prot' but the file was not open in write mode.
+
+>SEE ALSO
+
+[mmap.2], [munmap.2], [msync.2]

@@ -41,8 +41,6 @@ usup_start:
 
 ;; entry point to a thread
 ;; kernel passes:
-;;	RBX = start of stack to be unmapped; or 0 if stack is user-defined
-;;	R12 = size of stack; or 0 if stack is user-defined
 ;;	R14 = entry point
 ;;	R15 = argument to entry point
 usup_thread_entry:

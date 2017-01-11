@@ -470,6 +470,7 @@ void initSchedAP();				// initialize scheduling on an AP, when the main sched is
 void switchContext(Regs *regs);
 void dumpRunqueue();
 void switchTask(Regs *regs);
+void switchTaskUnlocked(Regs *regs);
 int haveReadySigs(Thread *thread);
 int wasSignalled();				// returns 1 if the current thread has signals ready
 

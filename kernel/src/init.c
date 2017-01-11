@@ -56,7 +56,6 @@
 #include <glidix/ipreasm.h>
 #include <glidix/ethernet.h>
 #include <glidix/dma.h>
-#include <glidix/shmem.h>
 #include <glidix/cpu.h>
 #include <glidix/ptty.h>
 #include <glidix/ramfs.h>
@@ -634,10 +633,6 @@ void kmain2()
 	kprintf("Initializing the network interface... ");
 	ipreasmInit();
 	initNetIf();
-	DONE();
-	
-	kprintf("Initializing the shared memory API... ");
-	shmemInit();
 	DONE();
 
 	kprintf("Initializing the ptty interface... ");

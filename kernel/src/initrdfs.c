@@ -31,6 +31,7 @@
 #include <glidix/memory.h>
 #include <glidix/console.h>
 #include <glidix/semaphore.h>
+#include <glidix/sched.h>
 
 static FileSystem *initrdfs;
 

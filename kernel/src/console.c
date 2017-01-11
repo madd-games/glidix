@@ -31,7 +31,7 @@
 #include <glidix/ticket.h>
 #include <glidix/string.h>
 #include <stdint.h>
-#include <glidix/video.h>
+//#include <glidix/video.h>
 #include <glidix/mutex.h>
 
 /**
@@ -88,7 +88,7 @@ static void updateVGACursor()
 {
 	if (consoleState.gfxterm)
 	{
-		lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
+		//lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
 	};
 	
 	if (consoleState.usingSoftware) return;
@@ -825,7 +825,7 @@ void renderConsoleToScreen()
 	mutexLock(&consoleLock);
 	if (consoleState.usingSoftware)
 	{
-		lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
+		//lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
 	}
 	mutexUnlock(&consoleLock);
 };

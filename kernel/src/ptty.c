@@ -32,6 +32,7 @@
 #include <glidix/string.h>
 #include <glidix/memory.h>
 #include <glidix/errno.h>
+#include <glidix/sched.h>
 
 static int ptsNextNo = 0;
 

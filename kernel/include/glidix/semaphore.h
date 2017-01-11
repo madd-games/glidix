@@ -34,7 +34,6 @@
  */
 
 #include <glidix/spinlock.h>
-#include <glidix/sched.h>
 #include <glidix/errno.h>
 
 /**
@@ -65,7 +64,7 @@ typedef struct SemWaitThread_
 	/**
 	 * The thread that is waiting.
 	 */
-	Thread*					thread;
+	struct _Thread*					thread;
 	
 	/**
 	 * This is initialized to 0 by the waiting thread, and set to 1 by a thread when it

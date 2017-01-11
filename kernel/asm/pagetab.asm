@@ -121,3 +121,9 @@ frameRead:
 	mov	rsp, rbp
 	pop	rbp
 	ret
+
+[global invlpg]
+invlpg:
+	invlpg	[rdi]
+	ret
+

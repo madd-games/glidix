@@ -32,6 +32,7 @@
 #include <glidix/memory.h>
 #include <glidix/console.h>
 #include <glidix/time.h>
+#include <glidix/sched.h>
 
 void semInit(Semaphore *sem)
 {

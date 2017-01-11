@@ -285,58 +285,12 @@ static void onPageFault(Regs *regs)
 			};
 		};
 		
-		if (faultAddr < 0x7FC0000000)
+		if (faultAddr < ADDR_MAX)
 		{
 			ProcMem *pm = getCurrentThread()->pm;
 			if (pm != NULL)
 			{
-				spinlockAcquire(&pm->lock);
-
-				if (isPageMapped(faultAddr, regs->errCode & 2))
-				{
-					// the page was already mapped in by another thread before we managed to
-					// get the lock.
-					spinlockRelease(&pm->lock);
-					refreshAddrSpace();
-					return;
-				};
-		
-				if (regs->errCode & 2)
-				{
-					// caused by a write
-					if (tryCopyOnWrite(faultAddr) == 0)
-					{
-						spinlockRelease(&pm->lock);
-						return;
-					};
-				};
-
-				int status = tryLoadOnDemand(faultAddr);
-				if (status == MEM_OK)
-				{
-					spinlockRelease(&pm->lock);
-					return;
-				}
-				else if (status == MEM_FAILED)
-				{
-					// ignore
-				}
-				else
-				{
-					// bus error
-					spinlockRelease(&pm->lock);
-					Thread *thread = getCurrentThread();
-
-					siginfo_t siginfo;
-					siginfo.si_signo = SIGBUS;
-					siginfo.si_code = BUS_OBJERR;
-
-					cli();
-					sendSignal(thread, &siginfo);
-					switchTask(regs);
-				};
-			
-				spinlockRelease(&pm->lock);
+				vmFault(regs, faultAddr, regs->errCode);
 			};
 		};
 	};

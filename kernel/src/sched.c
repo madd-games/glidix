@@ -381,7 +381,7 @@ static void sysManFunc(void *ignore)
 			{
 				// removed from runqueue, now do cleanup
 				kfree(threadFound->stack);
-				if (threadFound->pm != NULL) DownrefProcessMemory(threadFound->pm);
+				if (threadFound->pm != NULL) vmDown(threadFound->pm);
 				if (threadFound->ftab != NULL) ftabDownref(threadFound->ftab);
 				if (threadFound->execPars != NULL) kfree(threadFound->execPars);
 				if (threadFound->sigdisp != NULL) sigdispDownref(threadFound->sigdisp);
@@ -476,7 +476,7 @@ static void jumpToTask()
 	reloadTR();
 
 	// switch address space
-	if (currentThread->pm != NULL) SetProcessMemory(currentThread->pm);
+	if (currentThread->pm != NULL) vmSwitch(currentThread->pm);
 
 	// make sure IF is set
 	currentThread->regs.rflags |= (1 << 9);
@@ -667,8 +667,7 @@ void ReleaseKernelThread(Thread *thread)
 	while ((thread->flags & THREAD_TERMINATED) == 0)
 	{
 		__sync_synchronize();
-		// can't call kyield() because it never returns control to the calling thread without
-		// switching to a different one first because of exit stuff.
+		kyield();
 	};
 	
 	// release the stack and thread description
@@ -884,7 +883,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	// process memory
 	if (flags & CLONE_THREAD)
 	{
-		UprefProcessMemory(currentThread->pm);
+		vmUp(currentThread->pm);
 		thread->pm = currentThread->pm;
 		
 		sigdispUpref(currentThread->sigdisp);
@@ -892,14 +891,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	}
 	else
 	{
-		if (currentThread->pm != NULL)
-		{
-			thread->pm = DuplicateProcessMemory(currentThread->pm);
-		}
-		else
-		{
-			thread->pm = CreateProcessMemory();
-		};
+		thread->pm = vmClone();
 		
 		thread->sigdisp = sigdispCreate();
 		if (currentThread->sigdisp != NULL)
@@ -1074,7 +1066,7 @@ void threadExitEx(uint64_t retval)
 		panic("a kernel thread called threadExitEx()");
 	};
 
-	UnloadThreadProcessMemory(currentThread->pm);
+	vmUnmapThread();
 	
 	spinlockAcquire(&notifLock);
 	if ((currentThread->flags & THREAD_DETACHED) == 0)

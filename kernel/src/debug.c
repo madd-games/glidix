@@ -131,7 +131,7 @@ void debugKernel(Regs *regs)
 				break;
 			};
 			kprintf(" *** YOU MAY SPECIFY AN ADDRESS TO CHECK FOR IN RAX ***\n");
-			dumpProcessMemory(getCurrentThread()->pm, getDebugInput());
+			vmDump(getCurrentThread()->pm, getDebugInput());
 			break;
 		case 7:
 			kprintf(" *** SET RAX TO SEMAPHORE ADDRESS ***\n");

@@ -47,6 +47,7 @@ extern "C" {
 
 #ifdef _GLIDIX_SOURCE
 #define	MAP_THREAD			(1 << 4)
+#define	MAP_UN				(1 << 5)
 #endif
 
 #define	MAP_ANON			MAP_ANONYMOUS

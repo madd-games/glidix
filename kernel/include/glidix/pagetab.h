@@ -32,6 +32,15 @@
 #include <glidix/common.h>
 #include <stdint.h>
 
+/**
+ * Page fault flags (set by the CPU).
+ */
+#define	PF_PRESENT			(1 << 0)		/* non-present page */
+#define	PF_WRITE			(1 << 1)		/* a write was attempted (else a read) */
+#define	PF_USER				(1 << 2)		/* caused by user-space code */
+#define	PF_RESV				(1 << 3)		/* reserved bits were set in a page table */
+#define	PF_FETCH			(1 << 4)		/* caused by instruction fetch */
+
 typedef struct
 {
 	uint64_t			present:1;
@@ -138,5 +147,10 @@ void frameWrite(uint64_t frame, const void *buffer);
  * Read data into the 'buffer' from the specified memory frame.
  */
 void frameRead(uint64_t frame, void *buffer);
+
+/**
+ * Invalidate TLB entries for the specified address.
+ */
+void invlpg(void *addr);
 
 #endif

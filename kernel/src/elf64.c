@@ -327,10 +327,10 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			uint64_t numPages = ((start + size) / 0x1000) - segments[i].index + 1; 
 
 			segments[i].count = (int) numPages;
-			segments[i].fileOffset = proghead.p_offset;
-			segments[i].memorySize = proghead.p_memsz;
-			segments[i].fileSize = proghead.p_filesz;
-			segments[i].loadAddr = proghead.p_vaddr;
+			segments[i].fileOffset = proghead.p_offset & ~0xFFF;
+			segments[i].memorySize = proghead.p_memsz + (proghead.p_offset & 0xFFF);
+			segments[i].fileSize = proghead.p_filesz + (proghead.p_offset & 0xFFF);
+			segments[i].loadAddr = proghead.p_vaddr & ~0xFFF;
 			segments[i].flags = 0;
 
 			if (proghead.p_flags & PF_R)
@@ -539,9 +539,11 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	memcpy(thread->execPars, pars, parsz);
 
 	// create a new address space
-	ProcMem *pm = CreateProcessMemory();
-
+	//ProcMem *pm = CreateProcessMemory();
+	vmNew();
+	
 	// switch the address space, so that AddSegment() can optimize mapping
+#if 0
 	cli();
 	lockSched();
 	ProcMem *oldPM = thread->pm;
@@ -550,12 +552,14 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	sti();
 	SetProcessMemory(pm);
 	DownrefProcessMemory(oldPM);
+#endif
 
 	// allocate the frames and map them
 	for (i=0; i<(elfHeader.e_phnum); i++)
 	{
-		if (segments[i].count > 0)
+		if (segments[i].loadAddr > 0)
 		{
+#if 0
 			FrameList *fl = palloc_later(fp, segments[i].count, segments[i].fileOffset, segments[i].fileSize);
 			if (AddSegment(pm, segments[i].index, fl, segments[i].flags) != 0)
 			{
@@ -565,6 +569,12 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 				break;
 			};
 			pdownref(fl);
+#endif
+
+			vmMap(segments[i].loadAddr, segments[i].memorySize, segments[i].flags,
+				MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
+			vmMap(segments[i].loadAddr, segments[i].fileSize, segments[i].flags,
+				MAP_PRIVATE | MAP_FIXED, fp, segments[i].fileOffset);
 		};
 	};
 	
@@ -572,12 +582,15 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	vfsClose(fp);
 	
 	// allocate a 2MB stack
+#if 0
 	FrameList *flStack = palloc_later(NULL, 0x200, -1, 0);
 	if (AddSegment(pm, 0x200, flStack, PROT_READ | PROT_WRITE) != 0)
 	{
 		kprintf_debug("ERROR: failed to map stack for some reason\n");
 	};
 	pdownref(flStack);
+#endif
+	vmMap(0x200000, 0x200000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
 
 	// make sure we jump to the entry upon return
 	regs.rip = elfHeader.e_entry;
@@ -624,7 +637,6 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	getCurrentThread()->oxperm = (getCurrentThread()->oxperm & (getCurrentThread()->dxperm & st.st_ixperm)) | st.st_oxperm;
 	getCurrentThread()->dxperm = st.st_dxperm;
 	
-	refreshAddrSpace();
 	if (memcpy_k2u((void*)uptrPars, pars, parsz) != 0)
 	{
 		panic("memcpy_k2u failed unexpectedly");

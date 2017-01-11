@@ -32,6 +32,7 @@
 #include <glidix/memory.h>
 #include <glidix/string.h>
 #include <glidix/time.h>
+#include <glidix/sched.h>
 
 /**
  * RAM filesystem list lock.

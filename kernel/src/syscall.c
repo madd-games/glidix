@@ -50,7 +50,6 @@
 #include <glidix/utsname.h>
 #include <glidix/thsync.h>
 #include <glidix/message.h>
-#include <glidix/shmem.h>
 #include <glidix/catch.h>
 #include <glidix/storage.h>
 
@@ -1572,176 +1571,55 @@ char *sys_getcwd(char *buf, size_t size)
 
 uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset)
 {
-	int allProt = PROT_READ | PROT_WRITE | PROT_EXEC;
-	int allFlags = MAP_PRIVATE | MAP_SHARED | MAP_ANON | MAP_FIXED | MAP_THREAD;
-
-	if ((offset & 0xFFF) != 0)
+	if ((prot & ~PROT_ALL) != 0)
 	{
 		ERRNO = EINVAL;
 		return MAP_FAILED;
 	};
 	
-	if (prot == 0)
-	{
-		getCurrentThread()->therrno = EINVAL;
-		return MAP_FAILED;
-	};
-
-	if ((prot & allProt) != prot)
-	{
-		getCurrentThread()->therrno = EINVAL;
-		return MAP_FAILED;
-	};
-	
-	if ((flags & allFlags) != flags)
-	{
-		getCurrentThread()->therrno = EINVAL;
-		return MAP_FAILED;
-	};
-
-	if (flags & MAP_THREAD)
-	{
-		prot |= PROT_THREAD;
-	};
-	
-	if ((flags & (MAP_PRIVATE | MAP_SHARED)) == 0)
-	{
-		getCurrentThread()->therrno = EINVAL;
-		return MAP_FAILED;
-	};
-
-	if ((flags & MAP_PRIVATE) && (flags & MAP_SHARED))
-	{
-		getCurrentThread()->therrno = EINVAL;
-		return MAP_FAILED;
-	};
-
-	if (len == 0)
-	{
-		getCurrentThread()->therrno = EINVAL;
-		return MAP_FAILED;
-	};
-
-	if ((flags & MAP_FIXED) == 0)
-	{
-		addr = 0;
-	}
-	else if ((addr < 0x1000) || ((addr+len) > 0x7FC0000000))
+	if ((flags & ~MAP_ALLFLAGS) != 0)
 	{
 		ERRNO = EINVAL;
 		return MAP_FAILED;
-	}
-	else if ((addr & 0xFFF) != 0)
-	{
-		// not page-aligned
-		ERRNO = EINVAL;
-		return MAP_FAILED;
 	};
-
-	if (flags & MAP_ANON)
+	
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
 	{
 		if (fd != -1)
 		{
-			ERRNO = EINVAL;
+			ERRNO = EBADF;
 			return MAP_FAILED;
 		};
-	}
-	else if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	};
+	
+	FileTable *ftab = getCurrentThread()->ftab;
+	spinlockAcquire(&ftab->spinlock);
+	
+	File *fp = NULL;
+	if (fd != -1)
 	{
-		getCurrentThread()->therrno = EBADF;
+		fp = ftab->entries[fd];
+		if (fp == NULL)
+		{
+			spinlockRelease(&ftab->spinlock);
+			ERRNO = EBADF;
+			return MAP_FAILED;
+		};
+	};
+	
+	if (fp != NULL) vfsDup(fp);
+	spinlockRelease(&ftab->spinlock);
+	
+	uint64_t result = vmMap(addr, len, prot, flags, fp, offset);
+	if (fp != NULL) vfsClose(fp);
+	
+	if (result < ADDR_MIN)
+	{
+		ERRNO = (int) result;
 		return MAP_FAILED;
 	};
-
-	if (flags & MAP_ANON)
-	{
-		if (flags & MAP_SHARED)
-		{
-			ERRNO = EINVAL;
-			return MAP_FAILED;
-		};
-		
-		int pageCount = (int) ((len + 0xFFF) & (~0xFFF)) >> 12; 
-		FrameList *fl = palloc_later(NULL, pageCount, -1, 0);
-		
-		uint64_t outAddr;
-		if (AddSegmentEx(getCurrentThread()->pm, addr/0x1000, fl, prot, &outAddr) != 0)
-		{
-			pdownref(fl);
-			ERRNO = EINVAL;
-			return MAP_FAILED;
-		};
-		
-		pdownref(fl);
-		
-		return outAddr;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-
-		File *fp = ftab->entries[fd];
-		if ((fp->oflag & O_RDONLY) == 0)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EACCES;
-			return MAP_FAILED;
-		};
-		
-		if (fp->mmap != NULL)
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			FrameList *fl = fp->mmap(fp, len, prot, flags, offset);
-			vfsClose(fp);
-			if (fl == NULL)
-			{
-				getCurrentThread()->therrno = ENODEV;
-				return MAP_FAILED;
-			};
-
-			uint64_t outAddr;
-			if (AddSegmentEx(getCurrentThread()->pm, addr/0x1000, fl, prot, &outAddr) != 0)
-			{
-				pdownref(fl);
-				getCurrentThread()->therrno = EINVAL;
-				return MAP_FAILED;
-			};
-
-			pdownref(fl);
-
-			return outAddr;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			
-			if (flags & MAP_SHARED)
-			{
-				// TODO: not supported!
-				vfsClose(fp);
-				ERRNO = EINVAL;
-				return MAP_FAILED;
-			};
-			
-			int pageCount = (int) ((len + 0xFFF) & (~0xFFF)) >> 12; 
-			FrameList *fl = palloc_later(fp, pageCount, offset, len);
-			vfsClose(fp);	// already dupped by palloc_later
-			
-			uint64_t outAddr;
-			if (AddSegmentEx(getCurrentThread()->pm, addr/0x1000, fl, prot, &outAddr) != 0)
-			{
-				pdownref(fl);
-				ERRNO = EINVAL;
-				return MAP_FAILED;
-			};
-			
-			pdownref(fl);
-			
-			return outAddr;
-		};
-	};
+	
+	return result;
 };
 
 int setuid(uid_t uid)
@@ -3215,6 +3093,20 @@ void sys_seterrno(int num)
 	ERRNO = num;
 };
 
+int sys_mprotect(uint64_t base, size_t len, int prot)
+{
+	int status = vmProtect(base, len, prot);
+	if (status == 0)
+	{
+		return 0;
+	}
+	else
+	{
+		ERRNO = status;
+		return -1;
+	};
+};
+
 int sys_fork()
 {	
 	Thread *me = getCurrentThread();
@@ -3434,7 +3326,14 @@ int sys_route_clear(int a, const char *ub)
 
 int sys_munmap(uint64_t addr, uint64_t size)
 {
-	return mprotect(addr, size, 0);
+	uint64_t result = vmMap(addr, size, 0, MAP_PRIVATE | MAP_FIXED | MAP_ANON | MAP_UN, NULL, 0);
+	if (result < ADDR_MIN)
+	{
+		ERRNO = (int) result;
+		return -1;
+	};
+	
+	return 0;
 };
 
 int sys_getppid()
@@ -3666,18 +3565,15 @@ int sys_pthread_create(int *thidOut, const ThreadAttr *uattr, uint64_t entry, ui
 	regs.rbp = 0;
 	
 	if (attr.stack == NULL)
-	{
-		int stackPages = (attr.stacksize + 0xFFF) >> 12;
-		FrameList *fl = palloc_later(NULL, stackPages, -1, 0);
-		if (AddSegmentEx(getCurrentThread()->pm, 0, fl, PROT_READ | PROT_WRITE | PROT_THREAD, &regs.rbx) != 0)
+	{	
+		uint64_t stackBase = vmMap(0, attr.stacksize, PROT_READ | PROT_WRITE,
+						MAP_PRIVATE | MAP_ANON | MAP_THREAD, NULL, -1);
+		if (stackBase < ADDR_MIN)
 		{
-			pdownref(fl);
 			return EAGAIN;
 		};
 		
-		pdownref(fl);
-		regs.r12 = stackPages << 12;
-		regs.rsp = regs.rbx + regs.r12;
+		regs.rsp = stackBase + attr.stacksize;
 	}
 	else
 	{
@@ -4293,7 +4189,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_raise,				// 18
 	&sys_geterrno,				// 19
 	&sys_seterrno,				// 20
-	&mprotect,				// 21
+	&sys_mprotect,				// 21
 	&sys_lseek,				// 22
 	&sys_fork,				// 23
 	&sys_pause,				// 24
@@ -4380,8 +4276,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_mqclient,				// 105
 	&sys_mqsend,				// 106
 	&sys_mqrecv,				// 107
-	&sys_shmalloc,				// 108
-	&sys_shmap,				// 109
+	NULL,					// 108	[was shmalloc]
+	NULL,					// 109  [was shmap]
 	&sys_setsid,				// 110
 	&sys_setpgid,				// 111
 	&sys_getsid,				// 112

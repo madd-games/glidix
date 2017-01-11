@@ -1,0 +1,66 @@
+>NAME
+
+mmap - establish a memory mapping
+
+>SYNOPSIS
+
+	#define _GLIDIX_SOURCE	/* for MAP_THREAD and MAP_UN */
+	#include <sys/mman.h>
+	
+	void* mmap(void *'addr', size_t 'len', int 'prot', int 'flags', int 'fd', off_t 'off');
+
+>DESCRIPTION
+
+This function establishes a new mapping between the address space of the calling process, and a file; except for anonymous mappings, which simply map the specified addresses to physical memory, not backed by any file. The argument 'addr' is interpreted as a hint as to where in virtual memory the mapping shall be placed; under Glidix, it will be placed at the closest page boundary below 'addr'. If 'addr' is *NULL*, the kernel automatically chooses a location such that it does not collide with existing mappings. The 'len' argument specifies the size of the mapping in bytes; it is always rounded up to a multiple of the page size (4KB) by the system.
+
+The 'prot' argument specifies the memory protection settings for the memory pages that are part of the mapping - it is either *PROT_NONE* (no access allowed at all) or a bitwise-OR of one or more of the following:
+
+\* *PROT_READ* - the memory may be read.
+\* *PROT_WRITE* - the memory may be written to.
+\* *PROT_EXEC* - code may be executed from the memory.
+
+The 'flags' argument determines how the mapping shall be established. It must be exactly one of the following (optionally with extra flags specified):
+
+\* *MAP_PRIVATE* - establish a private mapping; changes to the contents of the mapped memory are not visible to other processes mapping the same memory, and are not commited to disk. Hence, you can set *PROT_WRITE* on this mapping even if you have no write access to the file being mapped.
+
+\* *MAP_SHARED* - establish a shared mapping; changes to the contents of the mapped memory are visible to other processes, and are eventually commited to disk. In this case, in order to set *PROT_WRITE* on this mapping, you need to have write access to the file.
+
+The following values may additionally be bitwise-ORed into 'flags':
+
+\* *MAP_FIXED* - do not interpret 'addr' as a hint; use exactly that address for the mapping. It must be a multiple of the page size, and must fit within the allowed range (between 2MB and 512GB into memory).
+
+\* *MAP_ANON* - obsolete synonym for *MAP_ANONYMOUS*, included for portability.
+
+\* *MAP_ANONYMOUS* - do not establish a file mapping; instead, allocate free physical memory. The contents of the memory at the mapping are initialized to all zeroes. In this case, 'fd' must be -1 and 'off' must be 0.
+
+The following extra flags are defined if *_GLIDIX_SOURCE* was defined before including 'any' header files:
+
+\* *MAP_THREAD* - the mapping is thread-temporary; when the calling thread exits, this area is unmapped. When a new process is created with [fork.2], the mapping is copied as permanent (without the *MAP_THREAD* flag).
+
+\* *MAP_UN* - do not map memory; unmap instead. Do not use this flag directly; use [munmap.2] instead.
+
+The 'fd' argument specifies the file descriptor which refers to the file to be mapped in; this shall be '-1' if *MAP_ANONYMOUS* (or *MAP_ANON*) is specified in 'flags'; 'off' is the offset into this file, and must be page-aligned.
+
+If some pages of the new mapping collide with pages of existing mappings, those pages are overwritten without warning.
+
+Memory mappings established by *mmap*() are preserved across [fork.2]; the contents of private mappings are copied into the new process (so changes made by one are not visible to the other), while shared mappings remain shared, so changes made to them by one process are visible to the other. *MAP_THREAD* mappings are copied without the *MAP_THREAD* flag, so they become permanent.
+
+>RETURN VALUE
+
+This function returns the memory address of the first byte of the mapping on success (which may be different from 'addr' if *MAP_FIXED* is not specified). On error, the special value *MAP_FAILED* is returned, and [errno.6] is set appropriately.
+
+>ERRORS
+
+On error, this function returns *MAP_FAILED* and sets [errno.6] to one of the following:
+
+\* *EINVAL* - invalid value in 'flags' or 'prot'; or an anonymous mapping was requested but 'fd' is not '-1'; or 'off' is not page-aligned; or *MAP_FIXED* was specified in 'flags' but 'addr' is not valid; or neither *MAP_PRIVATE* or *MAP_SHARED*, or both at once, were specified in 'flags'.
+
+\* *EBADF* - a file mapping was requested but 'fd' is not a valid open file descriptor.
+
+\* *EACCES* - a shared file mapping was requrested (*MAP_SHARED* is set in 'flags' and *MAP_ANONYMOUS* and *MAP_ANON* are not), and *PROT_WRITE* is set in 'prot', but the file specified by 'fd' is not open in write mode. See [open.2].
+
+\* *ENOMEM* - insufficient memory available on the system; or 'addr' is *NULL* but there is no sequence of consecutive pages unmapped which would fit the new mapping.
+
+>SEE ALSO
+
+[mprotect.2], [munmap.2], [msync.2]

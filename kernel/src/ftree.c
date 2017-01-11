@@ -133,7 +133,7 @@ uint64_t ftGetPage(FileTree *ft, off_t pos)
 			return 0;
 		};
 		
-		int flags = PI_CACHE;
+		uint64_t flags = PI_CACHE;
 		if (ft->flags & FT_ANON) flags = 0;
 		
 		uint64_t frame = piNew(flags);
@@ -143,7 +143,7 @@ uint64_t ftGetPage(FileTree *ft, off_t pos)
 			return 0;
 		};
 		
-		frameWrite(frame, buffer);
+		frameWrite(frame, pagebuf);
 		
 		node->entries[pageIndex] = frame;
 		semSignal(&ft->lock);
