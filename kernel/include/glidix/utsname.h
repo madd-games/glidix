@@ -1,7 +1,7 @@
 /*
 	Glidix kernel
 	
-	Copyright (c) 2014-2016, Madd Games.
+	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
