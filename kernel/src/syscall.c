@@ -64,12 +64,12 @@ int memcpy_u2k(void *dst_, const void *src_, size_t size)
 	uint64_t start = (uint64_t) src_;
 	uint64_t end = (uint64_t) src_ + size;
 	
-	if ((start < 0x1000) || (start >= 0x7FC0000000))
+	if ((start < ADDR_MIN) || (start >= ADDR_MAX))
 	{
 		return -1;
 	};
 	
-	if ((end < 0x1000) || (end >= 0x7FC0000000))
+	if ((end < ADDR_MIN) || (end >= ADDR_MAX))
 	{
 		return -1;
 	};
@@ -99,12 +99,12 @@ int memcpy_k2u(void *dst_, const void *src_, size_t size)
 	uint64_t start = (uint64_t) dst_;
 	uint64_t end = (uint64_t) dst_ + size;
 	
-	if ((start < 0x1000) || (start >= 0x7FC0000000))
+	if ((start < ADDR_MIN) || (start >= ADDR_MAX))
 	{
 		return -1;
 	};
 	
-	if ((end < 0x1000) || (end >= 0x7FC0000000))
+	if ((end < ADDR_MIN) || (end >= ADDR_MAX))
 	{
 		return -1;
 	};
@@ -136,7 +136,7 @@ int strcpy_u2k(char *dst, const char *src)
 	size_t count = 0;
 	while (1)
 	{
-		if (addr >= 0x7FC0000000)
+		if (addr >= ADDR_MAX)
 		{
 			return -1;
 		};

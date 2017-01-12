@@ -14,7 +14,7 @@ noninitmods=""
 
 for modname in `ls ../modconf`
 do
-	if [ "`cat ../modconf/$modname`" != "disabled" ]
+	if [ "`cat ../modconf/$modname`" != "disable" ]
 	then
 		modules="$modules $modname"
 	fi

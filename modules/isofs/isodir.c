@@ -33,6 +33,7 @@
 #include <glidix/vfs.h>
 #include <glidix/console.h>
 #include <glidix/time.h>
+#include <glidix/sched.h>
 
 #include "isodir.h"
 #include "isofile.h"

@@ -33,6 +33,7 @@
 #include <glidix/string.h>
 #include <glidix/memory.h>
 #include <glidix/vfs.h>
+#include <glidix/sched.h>
 
 #include "gxfs.h"
 
