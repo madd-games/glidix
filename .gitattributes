@@ -1,2 +1,2 @@
-# Make it all binary so that it works with Cygwin, otherwise Git replaces line endings.
-* binary
+# Only use LF endings.
+* text=auto eol=lf
