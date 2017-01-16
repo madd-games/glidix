@@ -1,0 +1,21 @@
+>NAME
+
+zero - the zero stream
+
+>SYNOPSIS
+
+	/dev/zero
+
+>DESCRIPTION
+
+The special file '/dev/zero' may be opened in read/write mode by any user, and has the following special properties:
+
+\* Reading this file always results in the buffer being filled with all zeroes, and it may be read from indefinetely. See [read.2].
+
+\* Writing to this file results in the write being reported as successful, but the data is discarded. See [write.2].
+
+\* Mapping this file into memory is equivalent to establishing an anonymous mapping - pages are initially zeroed, and are not committed to disk. See [mmap.2].
+
+>SEE ALSO
+
+[read.2], [write.2], [signal.6], [null.3]

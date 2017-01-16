@@ -40,10 +40,9 @@ extern "C" {
  * Some stuff about the libc heap.
  */
 
-#define	_HEAP_BASE_ADDR					0x7C00000000
+#define	_HEAP_SIZE					0x4000000000	/* 256GB */
 #define	_HEAP_HEADER_MAGIC				0xDEADBEEF
 #define	_HEAP_FOOTER_MAGIC				0xBEEF2BAD
-#define	_HEAP_PAGE_SIZE					0x200000
 
 /* header flags */
 #define	_HEAP_BLOCK_USED				(1 << 0)

@@ -145,7 +145,9 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 	isofs->rootEnd = isofs->rootStart + (uint64_t)rootDir->fileSize;
 	isofs->blockSize = (uint64_t)primary.blockSize;
 	isofs->numOpenInodes = 0;
-
+	isofs->metaFirst = NULL;
+	isofs->metaLast = NULL;
+	
 	kprintf_debug("isofs: root directory start LBA is 0x%X, block size is 0x%X\n", rootDir->startLBA, primary.blockSize);
 
 	fs->fsdata = isofs;
@@ -157,6 +159,66 @@ static int isoMount(const char *image, FileSystem *fs, size_t szfs)
 	isoMountCount++;
 	spinlockRelease(&isoMountLock);
 	return 0;
+};
+
+static int iso_ft_load(FileTree *ft, off_t pos, void *buffer)
+{
+	ISOFileMeta *meta = ft->data;
+	
+	if (pos > meta->size) return -1;
+	
+	uint64_t toRead = meta->size - pos;
+	if (toRead > 0x1000) toRead = 0x1000;
+	
+	semWait(&meta->fs->sem);
+	File *fsimg = meta->fs->fp;
+	fsimg->seek(fsimg, meta->start + pos, SEEK_SET);
+	
+	ssize_t result = vfsRead(fsimg, buffer, toRead);
+	
+	semSignal(&meta->fs->sem);
+	
+	if (result == -1)
+	{
+		return -1;
+	};
+	
+	return 0;
+};
+
+FileTree* isoGetTree(ISOFileSystem *isofs, uint64_t start, uint64_t size)
+{
+	ISOFileMeta *meta;
+	for (meta=isofs->metaFirst; meta!=NULL; meta=meta->next)
+	{
+		if (meta->start == start)
+		{
+			ftUp(meta->ft);
+			return meta->ft;
+		};
+	};
+	
+	meta = NEW(ISOFileMeta);
+	meta->next = NULL;
+	meta->start = start;
+	meta->size = size;
+	meta->ft = ftCreate(0);
+	meta->ft->data = meta;
+	meta->ft->load = iso_ft_load;
+	meta->fs = isofs;
+	
+	if (isofs->metaLast == NULL)
+	{
+		isofs->metaFirst = isofs->metaLast = meta;
+	}
+	else
+	{
+		isofs->metaLast->next = meta;
+		isofs->metaLast = meta;
+	};
+	
+	ftUp(meta->ft);
+	return meta->ft;
 };
 
 FSDriver isoDriver = {

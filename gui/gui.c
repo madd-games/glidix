@@ -45,7 +45,7 @@
 #include <dirent.h>
 #include <signal.h>
 #include <libgwm.h>
-#include <glidix/video.h>
+//#include <glidix/video.h>
 #include <glidix/humin.h>
 
 #define	GUI_WINDOW_BORDER				3
@@ -1745,7 +1745,8 @@ void onTerm(int signo, siginfo_t *si, void *context)
 int main(int argc, char *argv[])
 {
 	srand(time(NULL));
-	
+
+#if 0	
 	const char *displayDevice = NULL;
 	int modeSelected = -1;
 	
@@ -1994,6 +1995,7 @@ int main(int argc, char *argv[])
 			sem_wait(&semRedraw);
 		};
 	};
-	
+#endif
+
 	return 0;
 };

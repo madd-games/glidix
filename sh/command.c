@@ -113,7 +113,7 @@ int cmdRun(char *cmd)
 			isVarSetting = 0;
 		};
 	};
-	
+
 	if (isVarSetting)
 	{
 		for (ptr=argv; *ptr!=NULL; ptr++)
@@ -134,7 +134,7 @@ int cmdRun(char *cmd)
 			
 			dictPut(&localEnviron, *ptr);
 		};
-		
+
 		if (strcmp(*ptr, "exit") == 0)
 		{
 			if (ptr[1] == NULL)

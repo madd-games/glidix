@@ -105,4 +105,10 @@ void piMarkDirty(uint64_t frame);
  */
 void piMarkAccessed(uint64_t frame);
 
+/**
+ * Determine if a page needs to be copied upon a write. If this returns false (0) it means that the page can
+ * just be marked writeable because nobody else is using it and no copying is needed.
+ */
+int piNeedsCopyOnWrite(uint64_t frame);
+
 #endif

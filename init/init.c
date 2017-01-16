@@ -466,10 +466,9 @@ void shutdownSystem(int action)
 };
 
 int main(int argc, char *argv[])
-{
+{	
 	if (getpid() == 1)
 	{
-		printf("something fucking happening\n");
 		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
 		setenv("HOME", "/root", 1);
 		setenv("LD_LIBRARY_PATH", "/usr/local/lib:/usr/lib:/lib", 1);

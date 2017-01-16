@@ -3559,13 +3559,14 @@ int sys_pthread_create(int *thidOut, const ThreadAttr *uattr, uint64_t entry, ui
 	initUserRegs(&regs);
 	regs.rip = (uint64_t)(&usup_thread_entry) - (uint64_t)(&usup_start) + 0xFFFF808000003000UL;
 	regs.rbx = 0;
-	regs.r12 = 0;
+	regs.r12 = getCurrentThread()->sigmask;
 	regs.r14 = entry;
 	regs.r15 = arg;
 	regs.rbp = 0;
 	
 	if (attr.stack == NULL)
-	{	
+	{
+#if 0
 		uint64_t stackBase = vmMap(0, attr.stacksize, PROT_READ | PROT_WRITE,
 						MAP_PRIVATE | MAP_ANON | MAP_THREAD, NULL, -1);
 		if (stackBase < ADDR_MIN)
@@ -3574,10 +3575,13 @@ int sys_pthread_create(int *thidOut, const ThreadAttr *uattr, uint64_t entry, ui
 		};
 		
 		regs.rsp = stackBase + attr.stacksize;
+#endif
+		regs.r13 = attr.stacksize;
 	}
 	else
 	{
 		regs.rsp = (uint64_t) attr.stack + attr.stacksize;
+		regs.r13 = 0;
 	};
 	
 	// create the thread
@@ -3587,7 +3591,10 @@ int sys_pthread_create(int *thidOut, const ThreadAttr *uattr, uint64_t entry, ui
 		cloneFlags |= CLONE_DETACHED;
 	};
 	
+	uint64_t oldMask = getCurrentThread()->sigmask;
+	getCurrentThread()->sigmask = 0xFFFFFFFFFFFFFFFFUL;
 	int thid = threadClone(&regs, cloneFlags, NULL);
+	getCurrentThread()->sigmask = oldMask;
 	
 	if (memcpy_k2u(thidOut, &thid, sizeof(int)) != 0)
 	{

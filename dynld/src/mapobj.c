@@ -360,6 +360,13 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				return 0;
 			};
 			
+			uint64_t toZero = (phdr.p_memsz - phdr.p_filesz) & 0xFFF;
+			if (toZero != 0)
+			{
+				uint64_t zeroAddr = (uint64_t) lib->segs[index].base + lib->segs[index].size;
+				memset((void*)zeroAddr, 0, toZero);
+			};
+			
 			// calculate the top page-aligned address based on file and memory
 			// sizes, to see if we need to map extra anonymous pages 
 			uint64_t fileTop = base + ((phdr.p_vaddr + phdr.p_filesz + 0xFFF) & ~0xFFF);

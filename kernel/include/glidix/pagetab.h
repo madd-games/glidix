@@ -35,7 +35,7 @@
 /**
  * Page fault flags (set by the CPU).
  */
-#define	PF_PRESENT			(1 << 0)		/* non-present page */
+#define	PF_PRESENT			(1 << 0)		/* page is present */
 #define	PF_WRITE			(1 << 1)		/* a write was attempted (else a read) */
 #define	PF_USER				(1 << 2)		/* caused by user-space code */
 #define	PF_RESV				(1 << 3)		/* reserved bits were set in a page table */

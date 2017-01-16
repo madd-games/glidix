@@ -168,6 +168,7 @@ void dynld_printf(const char *fmt, ...);
 size_t strlen(const char *s);
 void strcpy(char *dst, const char *src);
 int memcmp(const void *a_, const void *b_, size_t sz);
+void memset(void *put_, int val, size_t sz);
 char* strchr(const char *s, char c);
 void memcpy(void *dst_, const void *src_, size_t sz);
 int strcmp(const char *a, const char *b);

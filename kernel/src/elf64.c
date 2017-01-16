@@ -246,6 +246,13 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		return -1;
 	};
 	
+	if (fp->tree == NULL)
+	{
+		vfsClose(fp);
+		ERRNO = EIO;
+		return -1;
+	};
+	
 	char shebang[2];
 	if (vfsRead(fp, shebang, 2) < 2)
 	{
@@ -554,6 +561,9 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	DownrefProcessMemory(oldPM);
 #endif
 
+	uint8_t zeroPage[0x1000];
+	memset(zeroPage, 0, 0x1000);
+	
 	// allocate the frames and map them
 	for (i=0; i<(elfHeader.e_phnum); i++)
 	{
@@ -575,6 +585,14 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 				MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
 			vmMap(segments[i].loadAddr, segments[i].fileSize, segments[i].flags,
 				MAP_PRIVATE | MAP_FIXED, fp, segments[i].fileOffset);
+			
+			uint64_t toZero = (segments[i].memorySize - segments[i].fileSize) & 0xFFF;
+			uint64_t zeroPos = segments[i].loadAddr + segments[i].fileSize;
+			
+			if (toZero != 0)
+			{
+				memcpy_k2u((void*)zeroPos, zeroPage, toZero);
+			};
 		};
 	};
 	
@@ -639,7 +657,8 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	
 	if (memcpy_k2u((void*)uptrPars, pars, parsz) != 0)
 	{
-		panic("memcpy_k2u failed unexpectedly");
+		vmDump(getCurrentThread()->pm, uptrPars);
+		panic("memcpy_k2u failed unexpectedly (0x%016lx)", uptrPars);
 	};
 	
 	uint64_t uptrAuxv = uptrPars - sizeof(Elf64_Auxv)*2;
@@ -654,19 +673,22 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	
 	if (memcpy_k2u((void*)uptrAuxv, auxv, sizeof(Elf64_Auxv)*2) != 0)
 	{
-		panic("memcpy_k2u failed unexpectedly");
+		vmDump(getCurrentThread()->pm, uptrPars);
+		panic("memcpy_k2u failed unexpectedly (0x%016lx)", uptrPars);
 	};
 	
 	uint64_t uptrList = uptrAuxv - 8 * totalTokens;
 	if (memcpy_k2u((void*)uptrList, argOffsets, 8 * totalTokens) != 0)
 	{
-		panic("memcpy_k2u failed unexpectedly");
+		vmDump(getCurrentThread()->pm, uptrPars);
+		panic("memcpy_k2u failed unexpectedly (0x%016lx)", uptrPars);
 	};
 	
 	uint64_t stack = uptrList - 8;
 	if (memcpy_k2u((void*)stack, &argc, 8) != 0)
 	{
-		panic("memcpy_k2u failed unexpectedly");
+		vmDump(getCurrentThread()->pm, uptrPars);
+		panic("memcpy_k2u failed unexpectedly (0x%016lx)", uptrPars);
 	};
 	
 	regs.rsp = stack;

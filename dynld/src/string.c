@@ -83,3 +83,9 @@ int strcmp(const char *a, const char *b)
 	
 	return 1;
 };
+
+void memset(void *put_, int val, size_t sz)
+{
+	char *put = (char*) put_;
+	while (sz--) *put++ = (char) val;
+};

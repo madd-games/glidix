@@ -32,6 +32,7 @@
 #include <glidix/console.h>
 #include <glidix/semaphore.h>
 #include <glidix/sched.h>
+#include <glidix/ftree.h>
 
 static FileSystem *initrdfs;
 
@@ -50,7 +51,7 @@ typedef struct
 	char			ustart_garb[3];
 	char			owner_uname[32];
 	char			owner_gname[32];
-	char			dev_major[8];
+	FileTree*		ft;			/* dev_major normally here; we don't need it */
 	char			dev_minor[8];
 	char			prefix[155];
 	char			pad[12];
@@ -76,13 +77,16 @@ typedef struct
 typedef struct
 {
 	// points to the start of this file.
-	char			*data;
+	char*			data;
 
 	// the size of this file (in bytes).
 	size_t			size;
 
 	// current position in the file.
 	off_t			pos;
+	
+	// the header
+	TarHeader*		header;
 } TarFile;
 
 static void strcpyUntilSlash(char *dst, const char *src)
@@ -298,6 +302,13 @@ static void pollinfo(File *fp, Semaphore **sems)
 	sems[PEI_WRITE] = vfsGetConstSem();
 };
 
+static FileTree* tree(File *fp)
+{
+	TarFile *tf = (TarFile*) fp->fsdata;
+	ftUp(tf->header->ft);
+	return tf->header->ft;
+};
+
 static int openfile(Dir *me, File *file, size_t szfile)
 {
 	(void)szfile;
@@ -308,6 +319,7 @@ static int openfile(Dir *me, File *file, size_t szfile)
 	tf->data = (char*) &state->header[1];
 	tf->size = me->stat.st_size;
 	tf->pos = 0;
+	tf->header = state->header;
 
 	file->read = read;
 	file->pread = pread;
@@ -316,6 +328,7 @@ static int openfile(Dir *me, File *file, size_t szfile)
 	file->dup = dup;
 	file->fstat = fstat;
 	file->pollinfo = pollinfo;
+	file->tree = tree;
 
 	return 0;
 };
@@ -358,6 +371,25 @@ static int openroot(FileSystem *fs, Dir *dir, size_t szdir)
 	return 0;
 };
 
+static int ft_load(FileTree *ft, off_t pos, void *buffer)
+{
+	TarHeader *head = (TarHeader*) ft->data;
+	
+	size_t sz = parseOct(head->size);
+	char *data = (char*) &head[1];
+	
+	if (pos >= sz)
+	{
+		return -1;
+	};
+	
+	size_t toRead = sz - pos;
+	if (toRead > 0x1000) toRead = 0x1000;
+	
+	memcpy(buffer, &data[pos], toRead);
+	return 0;
+};
+
 void initInitrdfs(KernelBootInfo *info)
 {
 	initrdfs = (FileSystem*) kmalloc(sizeof(FileSystem));
@@ -367,6 +399,28 @@ void initInitrdfs(KernelBootInfo *info)
 
 	initrdEnd = (uint64_t) initrdImage + info->initrdSize;
 	masterHeader = (TarHeader*) initrdImage;
+
+	TarHeader *header = masterHeader;
+	while (1)
+	{
+		header->ft = ftCreate(0);
+		header->ft->data = header;
+		header->ft->load = ft_load;
+		
+		size_t sz = parseOct(header->size);
+		size_t blocks = (sz + 511) / 512;
+		
+		header = &header[1+blocks];
+		if ((uint64_t)(header) >= initrdEnd)
+		{
+			break;
+		};
+
+		if (header->filename[0] == 0)
+		{
+			break;
+		};
+	};
 };
 
 FileSystem *getInitrdfs()

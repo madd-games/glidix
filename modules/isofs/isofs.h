@@ -32,6 +32,7 @@
 #include <glidix/common.h>
 #include <glidix/vfs.h>
 #include <glidix/semaphore.h>
+#include <glidix/ftree.h>
 
 typedef struct
 {
@@ -101,7 +102,17 @@ typedef struct
 	uint8_t					filenameLen;
 } PACKED ISODirentHeader;
 
-typedef struct
+struct ISOFileSystem_;
+typedef struct ISOFileMeta_
+{
+	struct ISOFileMeta_*			next;
+	uint64_t				start;
+	uint64_t				size;
+	FileTree*				ft;
+	struct ISOFileSystem_*			fs;
+} ISOFileMeta;
+
+typedef struct ISOFileSystem_
 {
 	File*					fp;				// the filesystem image file
 	Semaphore				sem;
@@ -109,6 +120,10 @@ typedef struct
 	uint64_t				rootEnd;			// first byte NOT part of the root directory
 	uint64_t				blockSize;
 	int					numOpenInodes;
+	ISOFileMeta*				metaFirst;
+	ISOFileMeta*				metaLast;
 } ISOFileSystem;
+
+FileTree* isoGetTree(ISOFileSystem *isofs, uint64_t start, uint64_t size);		// call only when isofs locked
 
 #endif

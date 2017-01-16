@@ -32,6 +32,7 @@
 #include <glidix/semaphore.h>
 #include <glidix/string.h>
 #include <glidix/console.h>
+#include <glidix/ftree.h>
 
 #include "isofs.h"
 #include "isofile.h"
@@ -163,6 +164,17 @@ static void isofile_pollinfo(File *fp, Semaphore **sems)
 	sems[PEI_WRITE] = vfsGetConstSem();
 };
 
+static FileTree* isofile_tree(File *fp)
+{
+	ISOFile *file = (ISOFile*) fp->fsdata;
+	semWait(&file->isofs->sem);
+
+	FileTree *ft = isoGetTree(file->isofs, file->start, file->size);
+	
+	semSignal(&file->isofs->sem);
+	return ft;
+};
+
 int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, struct stat *st)
 {
 	ISOFile *file = (ISOFile*) kmalloc(sizeof(ISOFile));
@@ -181,7 +193,8 @@ int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, s
 	fp->seek = isofile_seek;
 	fp->fstat = isofile_fstat;
 	fp->pollinfo = isofile_pollinfo;
-
+	fp->tree = isofile_tree;
+	
 	isofs->numOpenInodes++;
 	semSignal(&isofs->sem);
 	return 0;

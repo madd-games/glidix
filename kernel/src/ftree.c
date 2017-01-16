@@ -119,18 +119,21 @@ uint64_t ftGetPage(FileTree *ft, off_t pos)
 	{
 		// first let's try loading
 		uint8_t pagebuf[0x1000];
-		
-		if (ft->load == NULL)
-		{
-			semSignal(&ft->lock);
-			return 0;
-		};
-		
 		memset(pagebuf, 0, 0x1000);
-		if (ft->load(ft, pos, pagebuf) != 0)
+		
+		if ((ft->flags & FT_ANON) == 0)
 		{
-			semSignal(&ft->lock);
-			return 0;
+			if (ft->load == NULL)
+			{
+				semSignal(&ft->lock);
+				return 0;
+			};
+		
+			if (ft->load(ft, pos, pagebuf) != 0)
+			{
+				semSignal(&ft->lock);
+				return 0;
+			};
 		};
 		
 		uint64_t flags = PI_CACHE;

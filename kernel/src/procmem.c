@@ -36,6 +36,7 @@
 #include <glidix/string.h>
 #include <glidix/pageinfo.h>
 #include <glidix/console.h>
+#include <glidix/catch.h>
 
 static PTe *getPage(uint64_t addr, int make)
 {
@@ -253,6 +254,8 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 		return EINVAL;
 	};
 	
+	int anonShared = (flags & MAP_SHARED) && (flags & MAP_ANON);
+	
 	Thread *creator = NULL;
 	if (flags & MAP_THREAD)
 	{
@@ -295,6 +298,7 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 			// just modify the existing segment
 			seg->ft = NULL;
 			if (fp != NULL) seg->ft = fp->tree(fp);
+			if (anonShared) seg->ft = ftCreate(FT_ANON);
 			seg->offset = off;
 			seg->creator = creator;
 			seg->flags = flags;
@@ -325,6 +329,7 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 			newSeg->numPages = numPages;
 			newSeg->ft = NULL;
 			if (fp != NULL) newSeg->ft = fp->tree(fp);
+			if (anonShared) seg->ft = ftCreate(FT_ANON);
 			newSeg->offset = off;
 			newSeg->creator = creator;
 			newSeg->flags = flags;
@@ -388,6 +393,7 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 			
 			seg->ft = NULL;
 			if (fp != NULL) seg->ft = fp->tree(fp);
+			if (anonShared) seg->ft = ftCreate(FT_ANON);
 			seg->offset = off;
 			seg->creator = creator;
 			seg->flags = flags;
@@ -478,6 +484,7 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 			if (seg->ft != NULL) ftDown(seg->ft);
 			seg->ft = NULL;
 			if (fp != NULL) seg->ft = fp->tree(fp);
+			if (anonShared) seg->ft = ftCreate(FT_ANON);
 			seg->offset = off;
 			seg->creator = creator;
 			seg->flags = flags;
@@ -494,6 +501,8 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 {
 	if ((faultAddr < ADDR_MIN) || (faultAddr >= ADDR_MAX))
 	{
+		throw(EX_PAGE_FAULT);
+		
 		siginfo_t si;
 		memset(&si, 0, sizeof(siginfo_t));
 		si.si_signo = SIGSEGV;
@@ -519,9 +528,10 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 		seg = seg->next;
 	};
 	
-	// if unmapped error, send the SIGSEGV signal
+	// if unmapped, send the SIGSEGV signal
 	if (seg->flags == 0)
 	{
+		throw(EX_PAGE_FAULT);
 		semSignal(&pm->lock);
 		
 		siginfo_t si;
@@ -583,6 +593,7 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 	
 	if (!allowed)
 	{
+		throw(EX_PAGE_FAULT);
 		semSignal(&pm->lock);
 		
 		siginfo_t si;
@@ -600,8 +611,6 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 	// if the page is not yet loaded, load it
 	if (!pte->gx_loaded)
 	{
-		pte->gx_shared = !!(seg->flags & MAP_SHARED);
-		
 		if (seg->ft != NULL)
 		{
 			off_t offset = seg->offset + ((faultAddr & ~0xFFF) - pos);
@@ -609,6 +618,7 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 			
 			if (frame == 0)
 			{
+				throw(EX_PAGE_FAULT);
 				semSignal(&pm->lock);
 
 				siginfo_t si;
@@ -629,6 +639,7 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 			uint64_t frame = piNew(0);
 			if (frame == 0)
 			{
+				throw(EX_PAGE_FAULT);
 				semSignal(&pm->lock);
 
 				siginfo_t si;
@@ -644,7 +655,8 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 			
 			pte->framePhysAddr = frame;
 		};
-		
+
+		pte->gx_shared = !!(seg->flags & MAP_SHARED);
 		pte->gx_cow = 0;
 		if (seg->flags & MAP_PRIVATE)
 		{
@@ -658,6 +670,7 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 		
 		if (pte->gx_r) pte->present = 1;
 		pte->user = 1;
+		pte->gx_loaded = 1;
 		
 		// invalidate the page on the CURRENT CPU, in case we need copy-on-write
 		// below
@@ -669,28 +682,34 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 	{
 		if (pte->gx_cow)
 		{
-			uint64_t frame = piNew(0);
-			if (frame == 0)
+			if (piNeedsCopyOnWrite(pte->framePhysAddr))
 			{
-				semSignal(&pm->lock);
+				uint64_t frame = piNew(0);
+				if (frame == 0)
+				{
+					throw(EX_PAGE_FAULT);
+					semSignal(&pm->lock);
 
-				siginfo_t si;
-				memset(&si, 0, sizeof(siginfo_t));
-				si.si_signo = SIGBUS;
-				si.si_code = BUS_OBJERR;
+					siginfo_t si;
+					memset(&si, 0, sizeof(siginfo_t));
+					si.si_signo = SIGBUS;
+					si.si_code = BUS_OBJERR;
 		
-				cli();
-				lockSched();
-				sendSignal(getCurrentThread(), &si);
-				switchTaskUnlocked(regs);
+					cli();
+					lockSched();
+					sendSignal(getCurrentThread(), &si);
+					switchTaskUnlocked(regs);
+				};
+			
+				frameWrite(frame, (void*)(faultAddr & ~0xFFF));
+			
+				uint64_t old = pte->framePhysAddr;
+				pte->framePhysAddr = frame;
+				piDecref(old);
 			};
 			
-			frameWrite(frame, (void*)(faultAddr & ~0xFFF));
-			
-			uint64_t old = pte->framePhysAddr;
-			pte->framePhysAddr = frame;
-			piDecref(old);
 			pte->gx_cow = 0;
+			pte->rw = 1;
 		};
 	};
 	
@@ -1045,13 +1064,20 @@ void vmDump(ProcMem *pm, uint64_t addr)
 	Segment *seg;
 	for (seg=pm->segs; seg!=NULL; seg=seg->next)
 	{
+		char prefix = ' ';
+		if ((pos <= addr) && ((pos + (seg->numPages << 12)) > addr))
+		{
+			prefix = '>';
+		};
+		
 		if (seg->flags == 0)
 		{
-			kprintf("0x%016lx - 0x%016lx UNMAPPED\n", pos, pos + (seg->numPages << 12) - 1);
+			kprintf("%c0x%016lx - 0x%016lx UNMAPPED\n", prefix, pos, pos + (seg->numPages << 12) - 1);
 		}
 		else
 		{
-			kprintf("0x%016lx - 0x%016lx %c%c %c%c%c %c\n",
+			kprintf("%c0x%016lx - 0x%016lx %c%c %c%c%c %c\n",
+				prefix,
 				pos, pos + (seg->numPages << 12) - 1,
 				(seg->flags & MAP_SHARED) ? 'S' : 'P',
 				(seg->flags & MAP_THREAD) ? 'T' : 't',

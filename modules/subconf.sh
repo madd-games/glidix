@@ -53,5 +53,8 @@ echo >>Makefile "	mkdir -p \$(DESTDIR)/etc/modules"
 
 for modname in $noninitmods
 do
-	echo >>Makefile "	cp $modname.gkm \$(DESTDIR)/etc/modules/$modname.gkm"
+	if [ "`cat ../modconf/$modname`" != "disable" ]
+	then
+		echo >>Makefile "	cp $modname.gkm \$(DESTDIR)/etc/modules/$modname.gkm"
+	fi
 done

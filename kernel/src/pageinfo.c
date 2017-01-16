@@ -108,3 +108,15 @@ void piMarkAccessed(uint64_t frame)
 		&piRoot.branches[(frame>>27)&0x1F]->branches[(frame>>18)&0x1F]->branches[(frame>>9)&0x1F]->entries[frame&0x1F],
 		PI_DIRTY);
 };
+
+int piNeedsCopyOnWrite(uint64_t frame)
+{
+	uint64_t val = piRoot.branches[(frame>>27)&0x1F]->branches[(frame>>18)&0x1F]->branches[(frame>>9)&0x1F]->entries[frame&0x1F];
+	
+	if ((val & 0xFFFFFFFF) == 1)
+	{
+		return 0;
+	};
+	
+	return 1;
+};

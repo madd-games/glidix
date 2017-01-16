@@ -1,0 +1,21 @@
+>NAME
+
+null - the null file
+
+>SYNOPSIS
+
+	/dev/null
+
+>DESCRIPTION
+
+The special file '/dev/null' may be opened in read/write mode by any user, and has the following special properties:
+
+\* Reading this file always returns EOF. See [read.2].
+
+\* Writing to this file causes the write to be reported as successful, but the data is simply discarded. See [write.2].
+
+\* It may be successfully mapped into memory, but any attempt to access its pages results in the reception of the *SIGBUS* signal. See [mmap.2] and [signal.6].
+
+>SEE ALSO
+
+[read.2], [write.2], [mmap.2], [signal.6], [zero.3]

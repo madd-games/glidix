@@ -291,6 +291,7 @@ static void onPageFault(Regs *regs)
 			if (pm != NULL)
 			{
 				vmFault(regs, faultAddr, regs->errCode);
+				return;
 			};
 		};
 	};
@@ -425,11 +426,12 @@ void isrHandler(Regs *regs)
 		__sync_fetch_and_add(&uptime, 1);
 		cli();
 		onTick();
-		sendHintToEveryCPU();			// TODO remove when possible
-		//kprintf("UPTIME: %d\n", uptime);
 		break;
 	case I_DIV_ZERO:
 		sendCPUErrorSignal(regs, SIGFPE, FPE_INTDIV, (void*) regs->rip);
+		break;
+	case I_NMI:
+		dumpRunqueue();
 		break;
 	case I_UNDEF_OPCODE:
 		sendCPUErrorSignal(regs, SIGILL, ILL_ILLOPC, (void*) regs->rip);

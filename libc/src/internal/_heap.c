@@ -43,36 +43,26 @@ pthread_mutex_t __heap_lock = PTHREAD_MUTEX_INITIALIZER;
  * realloc(), calloc(), free(), etc. and implement them there!
  */
 
-static uint64_t heapTop;
+static __heap_header *firstHead;
 
 void _heap_init()
-{
-#if 0
-	if (mprotect((void*)_HEAP_BASE_ADDR, _HEAP_PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_ALLOC) != 0)
-	{
-		abort();
-	};
-#endif
-
-	if (mmap((void*)_HEAP_BASE_ADDR, _HEAP_PAGE_SIZE, PROT_READ | PROT_WRITE,
-		MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0) == MAP_FAILED)
-	{
-		abort();
-	};
+{	
+	void *addr = mmap(NULL, _HEAP_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+	if (addr == MAP_FAILED) abort();
 	
 	// create the initial heap block
-	__heap_header *head = (__heap_header*) _HEAP_BASE_ADDR;
-	__heap_footer *foot = (__heap_footer*) (_HEAP_BASE_ADDR + _HEAP_PAGE_SIZE - sizeof(__heap_footer));
+	__heap_header *head = (__heap_header*) addr;
+	__heap_footer *foot = (__heap_footer*) ((uint64_t)addr + _HEAP_SIZE - sizeof(__heap_footer));
 
 	head->magic = _HEAP_HEADER_MAGIC;
-	head->size = _HEAP_PAGE_SIZE - sizeof(__heap_header) - sizeof(__heap_footer);
+	head->size = _HEAP_SIZE - sizeof(__heap_header) - sizeof(__heap_footer);
 	head->flags = 0;
 
 	foot->magic = _HEAP_FOOTER_MAGIC;
 	foot->size = head->size;
 	foot->flags = 0;
-
-	heapTop = _HEAP_BASE_ADDR + _HEAP_PAGE_SIZE;
+	
+	firstHead = head;
 };
 
 __heap_footer *_heap_get_footer(__heap_header *head)
@@ -89,10 +79,10 @@ __heap_header *_heap_get_header(__heap_footer *foot)
 
 void _heap_split_block(__heap_header *head, size_t newSize)
 {
-	if (head->size < (newSize+sizeof(__heap_header)+sizeof(__heap_footer)+8))
+	if (head->size < (newSize+sizeof(__heap_header)+sizeof(__heap_footer)+16))
 	{
-		// don't split blocks below 8 bytes, there'll be enough heap fragmentation from
-		// malloc() calls below 8 bytes.
+		// don't split blocks below 16 bytes, there'll be enough heap fragmentation from
+		// malloc() calls below 16 bytes.
 		return;
 	};
 
@@ -106,9 +96,9 @@ void _heap_split_block(__heap_header *head, size_t newSize)
 
 	foot->size -= (newSize + (size_t)sizeof(__heap_header) + (size_t)sizeof(__heap_footer));
 	__heap_header *newHead = _heap_get_header(foot);
-	if (newHead < (__heap_header*)_HEAP_BASE_ADDR)
+	if (newHead < firstHead)
 	{
-		fprintf(stderr, "libc: splitting block at %p, size %u, gives a header %p, below %p (below heap)\n", head, (unsigned int)newSize, newHead, (void*)_HEAP_BASE_ADDR);
+		fprintf(stderr, "libc: splitting block at %p, size %u, gives a header %p, below %p (below heap)\n", head, (unsigned int)newSize, newHead, firstHead);
 		abort();
 	};
 	newHead->magic = _HEAP_HEADER_MAGIC;
@@ -116,23 +106,12 @@ void _heap_split_block(__heap_header *head, size_t newSize)
 	newHead->flags = _HEAP_BLOCK_HAS_LEFT;
 };
 
-static int __i_debug = 0;
-void __i_am_debug()
-{
-	__i_debug = 1;
-};
-
 void* _heap_malloc(size_t len)
 {
 	if (len == 0) return NULL;
-
-	if (len & 0xF)
-	{
-		len &= ~0xF;
-		len += 0x10;
-	};
+	len = (len + 0xF) & ~0xF;
 	
-	__heap_header *head = (__heap_header*) _HEAP_BASE_ADDR;
+	__heap_header *head = firstHead;
 	while ((head->size < len) || (head->flags & _HEAP_BLOCK_USED))
 	{
 		if (head->magic != _HEAP_HEADER_MAGIC)
@@ -142,21 +121,15 @@ void* _heap_malloc(size_t len)
 		};
 
 		__heap_footer *foot = _heap_get_footer(head);
+		if (foot->magic != _HEAP_FOOTER_MAGIC)
+		{
+			fprintf(stderr, "heap corruption detected: footer for header at %p has invalid magic\n", head);
+			abort();
+		};
+
 		if ((foot->flags & _HEAP_BLOCK_HAS_RIGHT) == 0)
 		{
-			_heap_expand();
-			if (head->flags & _HEAP_BLOCK_USED)
-			{
-				head = (__heap_header*) &foot[1];
-				foot = _heap_get_footer(head);
-			};
-
-			while (head->size < len)
-			{
-				_heap_expand();
-			};
-
-			break;
+			return NULL;
 		};
 
 		head = (__heap_header*) &foot[1];
@@ -201,7 +174,7 @@ void _heap_free(void *block)
 
 	uint64_t addr = (uint64_t) block - sizeof(__heap_header);
 	__heap_header *header = (__heap_header*) addr;
-	if (addr < _HEAP_BASE_ADDR)
+	if (addr < (uint64_t)firstHead)
 	{
 		fprintf(stderr, "libc: invalid pointer passed to free(): %p\n", block);
 		_heap_dump();
@@ -257,7 +230,7 @@ void _heap_free(void *block)
 
 void _heap_dump()
 {
-	__heap_header *head = (__heap_header*) _HEAP_BASE_ADDR;
+	__heap_header *head = firstHead;
 	printf("libc: dumping the heap:\n");
 
 	while (1)
@@ -317,47 +290,4 @@ void _heap_dump()
 	};
 
 	printf("end of heap\n");
-};
-
-void _heap_expand()
-{
-	if (mmap((void*)heapTop, _HEAP_PAGE_SIZE, PROT_READ | PROT_WRITE,
-		MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0) == MAP_FAILED)
-	{
-		fprintf(stderr, "libc: failed to mmap() a heap page at %p\n", (void*)heapTop);
-		abort();
-	};
-	
-	// get the last block
-	__heap_footer *lastFoot = (__heap_footer*) (heapTop - sizeof(__heap_footer));
-	__heap_header *lastHead = _heap_get_header(lastFoot);
-
-	if (lastHead->flags & _HEAP_BLOCK_USED)
-	{
-		// the last block is used, so make a new one
-		__heap_header *head = (__heap_header*) heapTop;
-		head->magic = _HEAP_HEADER_MAGIC;
-		head->size = _HEAP_PAGE_SIZE - sizeof(__heap_header) - sizeof(__heap_footer);
-		head->flags = _HEAP_BLOCK_HAS_LEFT;
-
-		__heap_footer *foot = _heap_get_footer(head);
-		foot->magic = _HEAP_FOOTER_MAGIC;
-		foot->size = head->size;
-		foot->flags = 0;
-
-		lastFoot->flags |= _HEAP_BLOCK_HAS_RIGHT;
-	}
-	else
-	{
-		// the last block is not used, so expand it
-		__heap_header *head = lastHead;
-		head->size += _HEAP_PAGE_SIZE;
-		__heap_footer *foot = _heap_get_footer(head);
-		foot->magic = _HEAP_FOOTER_MAGIC;
-		foot->size = head->size;
-		foot->flags = 0;
-	};
-
-	// make sure we expand heapTop!
-	heapTop += _HEAP_PAGE_SIZE;
 };

@@ -41,16 +41,43 @@ usup_start:
 
 ;; entry point to a thread
 ;; kernel passes:
+;;	R12 = signal mask
+;;	R13 = size of stack (0 if already set)
 ;;	R14 = entry point
 ;;	R15 = argument to entry point
 usup_thread_entry:
+	; map the stack if necessary
+	test	r13,	r13
+	jz	_stack_done
+
+	mov	rax,	54		; mmap
+	mov	rdi,	0		; NULL
+	mov	rsi,	r13		; len = stack size
+	mov	rdx,	3		; PROT_READ | PROT_WRITE
+	mov	r10,	0x15		; MAP_PRIVATE | MAP_ANON | MAP_THREAD
+	mov	r8,	-1		; fd = -1
+	mov	r9,	0		; offset = 0
+	syscall
+	
+	mov	rsp,	rax
+	add	rsp,	r13
+	
+_stack_done:
 	; align the stack to the nearest 16 bytes boundary
 	and	rsp,	~0xF
 	
+	; set the signal mask
+	push	r12
+	mov	rax,	14	; sigprocmask
+	mov	rdi,	2	; SIG_SETMASK
+	mov	rsi,	rsp	; pointer to signal mask we just pushed
+	mov	rdx,	0	; NULL pointer for old mask
+	syscall
+	
 	; put the errno pointer on the stack
 	; we subtract 16 bytes instead of 4 to ensure the stack is still
-	; 16-bytes-aligned
-	sub	rsp,	16
+	; 16-bytes-aligned (and we already subtracted 8 above)
+	sub	rsp,	8
 	mov	rdi,	rsp
 	mov	rax,	49	; _glidix_seterrnoptr()
 	syscall
@@ -67,7 +94,7 @@ usup_thread_entry:
 ;; kernel passes:
 ;;	RBX = pointer to FPU registers
 ;;	R12 = pointer to GPRs
-;;	R13 = old sigmal mask to restore
+;;	R13 = old signal mask to restore
 usup_sigret:
 	; sigmask
 	push	r13		; push the signal mask

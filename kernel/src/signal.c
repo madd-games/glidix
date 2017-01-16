@@ -122,6 +122,7 @@ static int isDeathSig(int signo)
 	case SIGTERM:
 	case SIGUSR1:
 	case SIGUSR2:
+	case SIGBUS:
 	case SIGSYS:
 		return 1;
 	default:
@@ -188,7 +189,15 @@ void dispatchSignal()
 		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
 		return;
 	};
-	
+
+#if 0
+	if (siginfo->si_signo == SIGSEGV)
+	{
+		vmDump(getCurrentThread()->pm, (uint64_t) siginfo->si_addr);
+		kprintf("SIGSEGV at 0x%016lX by %s (rip=0x%016lX)\n", (uint64_t) siginfo->si_addr, getCurrentThread()->name, getCurrentThread()->regs.rip);
+	};
+#endif
+
 	// what action do we take?
 	SigAction *action = &thread->sigdisp->actions[siginfo->si_signo];
 	uint64_t handler;
