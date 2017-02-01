@@ -1,0 +1,29 @@
+>NAME
+
+inet_ntop - convert binary IP address into a string
+
+>SYNOPSIS
+
+	#include <arpa/inet.h>
+	
+	const char *inet_ntop(int 'family', const void *'addr', char *'buffer', socklen_t 'size');
+
+>DESCRIPTION
+
+This function converts a binary representation of a network address into a string representation, and stores it in 'buffer', which is 'size' bytes long. For IPv4, the buffer should be *INET_ADDRSTRLEN* bytes long; for IPv6, it should be *INET6_ADDRSTRLEN* bytes long. If 'family' is *AF_INET*, then 'addr' shall point to a 'struct in_addr'; if it is *AF_INET6*, it should point to a 'struct in6_addr'. All other values of 'family' are invalid.
+
+>RETURN VALUE
+
+This function returns 'buffer' on success, or *NULL* on error, and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns *NULL* and sets [errno.6] to one of the following:
+
+\* *EAFNOSUPPORT* - invalid value passed in 'family'.
+
+\* *ENOSPC* - the specified buffer is too small.
+
+>SEE ALSO
+
+[inet_pton.2], [ipv6.6], [ipv4.6]

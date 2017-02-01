@@ -162,12 +162,6 @@ static void ahciAtaThread(void *data)
 		cmdfis->countl = 0x40;
 		cmdfis->counth = 0;
 		
-		//char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);
-		//if (cmd->type == SD_CMD_WRITE)
-		//{
-		//	memcpy(hwbuf, cmd->block, 512*cmd->count);
-		//};
-		
 		// wait for the port to stop being busy
 		int busy = (1 << 7) | (1 << 3);
 		while (dev->port->tfd & busy) __sync_synchronize();
@@ -191,11 +185,6 @@ static void ahciAtaThread(void *data)
 			__sync_synchronize();
 		};
 		__sync_synchronize();
-		
-		//if (cmd->type == SD_CMD_READ)
-		//{
-		//	memcpy(cmd->block, hwbuf, 512*cmd->count);
-		//};
 
 		sdPostComplete(cmd);
 	};

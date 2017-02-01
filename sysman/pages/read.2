@@ -1,0 +1,43 @@
+>NAME
+
+read - read from a file or device
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <unistd.h>
+	
+	ssize_t read(int 'fd', void *'buffer', size_t 'size');
+	ssize_t pread(int 'fd', void *'buffer', size_t 'size', off_t 'off');
+
+>DESCRIPTION
+
+These functions read 'size' bytes from the file, device or other object represented by the file descriptor 'fd'. The data that has been read out is stored in 'buffer', which must be an area of memory at least 'size' bytes long. The 'read()' function reads from the current position in the file, and advances it by the number of bytes read, if it is a random-access file. For more information about the file position, see [lseek.2]. The 'pread()' function reads from the offset specified by the 'off' argument, and does not update the file position. If the object specified by 'fd' is not a random-access file, then 'read()' and 'pread()' are equivalent, and 'off' is ignored (but should be zero for portability and future compatibility). The specified file must be open in read or read-write mode.
+
+Some types of files, such as pipes or sockets (see [pipe.2] and [socket.2]), are by default in blocking mode, and if no data is yet available, the call to 'read()' or 'pread()' blocks until data is available, the other side of the object terminates, or a signal is caught (in which case the *EINTR* error is reported).
+
+>RETURN VALUE
+
+Both of these functions return the number of bytes successfully read into 'buffer' (which may be less than requested, for example if the end of the file has been encountered), 0 if no error occured by the end of file was encountered, or '-1' on error. In this case, [errno.6] is set to the appropriate value.
+
+>ERRORS
+
+On error, these functions return '-1' and set [errno.6] to one of the following values:
+
+\* *EBADF* - the descriptor 'fd' does not refer to any file description.
+
+\* *EIO* - the file description specified by 'fd' does not support reading.
+
+\* *EACCES* - the specified file is open in write-only mode.
+
+\* *ENOBUFS* - insufficient memory to transport the data.
+
+\* *EFAULT* - the address specified by 'buffer' is invalid, and it is not possible to write 'size' bytes to it.
+
+\* *EINTR* - the read was blocking, and a signal has been caught, and no data arrived yet. See [signal.6].
+
+\* Other errors may be reported by specific types of files or devices.
+
+>SEE ALSO
+
+[write.2], [open.2]

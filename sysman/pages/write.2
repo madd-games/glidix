@@ -1,0 +1,41 @@
+>NAME
+
+write - write to a file or device
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <unistd.h>
+	
+	ssize_t write(int 'fd', const void *'buffer', size_t 'size');
+	ssize_t pwrite(int 'fd', const void *'buffer', size_t 'size', off_t 'off');
+
+>DESCRIPTION
+
+These functions write 'size' bytes from memory specified by 'buffer' into the file, device or other object specified by the file descriptor 'fd'. The 'write()' function writes to the current position in the file, and increments it by the number of bytes written, if the file is random-access. The 'pwrite()' function writes to the offset specified by the 'off' argument, and does not update the file position. See [lseek.2] for more information about the file position. If the file is not random-access, then 'write()' and 'pwrite()' are equivalent, and 'off' is ignored (but should be zero for portability and future compatiblity).
+
+For some types of files, such as a [socket.2], writing may block (for example while waiting for the other side to acknowledge reception). In this case, the function will return if the other side terminates, or a signal is caught (in this case, if no data has been written yet, the *EINTR* error is returend; or if data was written but we're waiting for an acknowledgement, *EINPROGRESS* may be returned).
+
+>RETURN VALUE
+
+These functions return 0 upon end-of-file, the number of bytes written on success, or '-1' on error; in this case, [errno.6] is set appropriately.
+
+>ERRORS
+
+\* *EBADF* - 'fd' does not refer to an open file description.
+
+\* *EROFS* - the underlying filesystem does not support writing.
+
+\* *EACCES* - the file is open in read-only mode.
+
+\* *ENOBUFS* - insufficient memory to transport the data.
+
+\* *EFAULT* - the address specified by 'buffer' is not readable for 'size' bytes.
+
+\* *EINTR* - the write was blocking and a signal was caught and no data was written yet. See [signal.6].
+
+\* *EINPROGRESS* - the write was blocking but a signal arrived, but the write shall continue asonchronously.
+
+>SEE ALSO
+
+[read.2], [open.2]

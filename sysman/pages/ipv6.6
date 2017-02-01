@@ -1,0 +1,56 @@
+>NAME
+
+ipv6 - Internet Protocol version 6
+
+>SYNOPSIS
+
+	#include <netinet/in.h>
+
+>DESCRIPTION
+
+Glidix implements IPv6 sockets for communicating over the Internet. IPv6 sockets also transparently handle IPv4 traffic. This page expands on [socket.2], giving details of the address family *AF_INET6*.
+
+>>Socket Address
+
+The socket address structure for IPv6 is 'struct sockaddr_in6', defined in '<netinet/in.h>'. It includes the following fields:
+
+	struct in6_addr
+	{
+		unsigned char			's6_addr'[16];
+	};
+	
+	struct sockaddr_in6
+	{
+		sa_family_t			'sin6_family';		/* AF_INET6 */
+		in_port_t			'sin6_port';
+		uint32_t			'sin6_flowinfo';
+		struct in6_addr			'sin6_addr';
+		uint32_t			'sin6_scope_id';
+	};
+
+When allocated, the structure must be fully zeroed out before use, as there may be additional private fields.
+
+The 'sin6_family' field must always contain the value *AF_INET6*, such that when the structure is interpreted as 'struct sockaddr', the 'sa_family' field will contain *AF_INET6*.
+
+The 'sin6_port' field specifies the port number, for protocols where that is used, such as [tcp.6]. This field must be in network byte order; to convert from host byte order to network byte order, use [hton.2] (specifically 'htons()' for the port number). To convert back to host byte order, use [ntoh.2].
+
+The 'sin6_flowinfo' field is to flow label to place in outgoing IPv6 headers. Currently this isn\'t used on the standard Internet, so you should leave it as zero.
+
+The 'sin6_addr' field is the IPv6 address in question. It may be loaded from a string representation of the addres using [inet_pton.2].
+
+The 'sin6_scope_id' field specifies the scope ID of the address when relevant. A value of 0 means all interfaces.
+
+>>Special Addresses
+
+A 'struct in6_addr' variable may be initialized to special addresses using the following macros defined in '<netinet/in.h>':
+
+\* *IN6ADDR_ANY_INIT* - the "any" address, '::'.
+\* *IN6ADDR_LOOPBACK_INIT* - the IPv6 loopback address, '::1'.
+
+>>IPv4-mapped IPv6 Addresses
+
+An IPv4-mapped IPv6 address is formed by attaching an IPv4 address to the IPv6 prefix '::ffff:0:0/96'. This way, an IPv4 address may be represented in 'struct sockaddr_in6', hence enabling IPv4 traffic to be handled transparently. Take note of the following:
+
+\* When an IPv6 socket is bound to an IPv6 address, it is also bound to all IPv4 addresses on the given port. So it will receive both from the intended IPv6 address, and all IPv4 addresses.
+
+\* When an IPv6 socket is bound to an IPv6 address, and you send data to an IPv4 address, the default IPv4 address is used, instead of the IPv6 address that the socket is bound to.

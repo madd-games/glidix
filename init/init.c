@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <sys/glidix.h>
 #include <sys/fsinfo.h>
+#include <sys/mman.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -466,7 +467,7 @@ void shutdownSystem(int action)
 };
 
 int main(int argc, char *argv[])
-{	
+{
 	if (getpid() == 1)
 	{
 		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
@@ -510,7 +511,7 @@ int main(int argc, char *argv[])
 		
 		printf("init: initializing partitions...\n");
 		init_parts();
-
+		
 		printf("init: loading configuration file /initrd/startup.conf...\n");
 		if (load_config("/initrd/startup.conf") == -1)
 		{

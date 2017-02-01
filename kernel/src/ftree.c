@@ -77,13 +77,35 @@ void ftUp(FileTree *ft)
 	__sync_fetch_and_add(&ft->refcount, 1);
 };
 
+static void deleteTree(int level, FileNode *node)
+{
+	int i;
+	for (i=0; i<16; i++)
+	{
+		if (level == 12)
+		{
+			if (node->entries[i] != 0) piUncache(node->entries[i]);
+		}
+		else
+		{
+			FileNode *subnode = node->nodes[i];
+			if (subnode != NULL)
+			{
+				deleteTree(level+1, subnode);
+			};
+			kfree(subnode);
+		};
+	};
+};
+
 void ftDown(FileTree *ft)
 {
 	if (__sync_add_and_fetch(&ft->refcount, -1) == 0)
 	{
 		if (ft->flags & FT_ANON)
 		{
-			// all pages assumed to be freed!
+			// uncache all pages
+			deleteTree(0, &ft->top);
 			kfree(ft);
 		};
 	};
@@ -136,10 +158,7 @@ uint64_t ftGetPage(FileTree *ft, off_t pos)
 			};
 		};
 		
-		uint64_t flags = PI_CACHE;
-		if (ft->flags & FT_ANON) flags = 0;
-		
-		uint64_t frame = piNew(flags);
+		uint64_t frame = piNew(PI_CACHE);
 		if (frame == 0)
 		{
 			semSignal(&ft->lock);

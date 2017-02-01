@@ -194,7 +194,8 @@ void dispatchSignal()
 	if (siginfo->si_signo == SIGSEGV)
 	{
 		vmDump(getCurrentThread()->pm, (uint64_t) siginfo->si_addr);
-		kprintf("SIGSEGV at 0x%016lX by %s (rip=0x%016lX)\n", (uint64_t) siginfo->si_addr, getCurrentThread()->name, getCurrentThread()->regs.rip);
+		//kdumpregs(&getCurrentThread()->regs);
+		panic("SIGSEGV at 0x%016lX by %s (rip=0x%016lX)\n", (uint64_t) siginfo->si_addr, getCurrentThread()->name, getCurrentThread()->regs.rip);
 	};
 #endif
 

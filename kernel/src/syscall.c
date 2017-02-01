@@ -258,7 +258,7 @@ uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
 				if ((fp->oflag & O_WRONLY) == 0)
 				{
 					spinlockRelease(&ftab->spinlock);
-					getCurrentThread()->therrno = EPERM;
+					getCurrentThread()->therrno = EACCES;
 					out = -1;
 				}
 				else
@@ -326,7 +326,7 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 				if ((fp->oflag & O_RDONLY) == 0)
 				{
 					spinlockRelease(&ftab->spinlock);
-					getCurrentThread()->therrno = EPERM;
+					getCurrentThread()->therrno = EACCES;
 					out = -1;
 				}
 				else
@@ -3500,10 +3500,10 @@ int sys_getpgid(int pid)
 	return result;
 };
 
-int sys_diag(void *uptr)
+void sys_diag(uint64_t addr)
 {
-	char buffer[30];
-	return memcpy_u2k(buffer, uptr, 30);
+	vmDump(getCurrentThread()->pm, addr);
+	panic("stop");
 };
 
 void sys_pthread_exit(uint64_t retval)
@@ -4205,7 +4205,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_insmod,				// 27
 	&sys_ioctl,				// 28
 	&sys_fdopendir,				// 29
-	NULL,					// 30 (_glidix_diag())
+	&sys_diag,				// 30 (_glidix_diag())
 	&sys_mount,				// 31
 	&sys_yield,				// 32
 	&time,					// 33

@@ -162,6 +162,8 @@ int vmNew()
 
 uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t off)
 {
+	//vmDump(getCurrentThread()->pm, addr);
+	
 	if (prot & PROT_WRITE)
 	{
 		prot |= PROT_READ;
@@ -1076,7 +1078,7 @@ void vmDump(ProcMem *pm, uint64_t addr)
 		}
 		else
 		{
-			kprintf("%c0x%016lx - 0x%016lx %c%c %c%c%c %c\n",
+			kprintf("%c0x%016lx - 0x%016lx %c%c %c%c%c %c @0x%016lX\n",
 				prefix,
 				pos, pos + (seg->numPages << 12) - 1,
 				(seg->flags & MAP_SHARED) ? 'S' : 'P',
@@ -1084,7 +1086,8 @@ void vmDump(ProcMem *pm, uint64_t addr)
 				(seg->prot & PROT_READ) ? 'R' : 'r',
 				(seg->prot & PROT_WRITE) ? 'W' : 'w',
 				(seg->prot & PROT_EXEC) ? 'X' : 'x',
-				(seg->access & O_WRONLY) ? 'W' : 'R');
+				(seg->access & O_WRONLY) ? 'W' : 'R',
+				seg->offset);
 		};
 		
 		pos += seg->numPages << 12;

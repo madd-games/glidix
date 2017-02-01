@@ -123,7 +123,7 @@ File* CreateSocket(int domain, int type, int proto)
 
 	if ((proto < 0) || (proto > 255))
 	{
-		getCurrentThread()->therrno = EINVAL;
+		getCurrentThread()->therrno = EPROTONOSUPPORT;
 		return NULL;
 	};
 	

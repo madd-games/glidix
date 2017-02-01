@@ -115,8 +115,20 @@ int piNeedsCopyOnWrite(uint64_t frame)
 	
 	if ((val & 0xFFFFFFFF) == 1)
 	{
-		return 0;
+		if ((val & PI_CACHE) == 0) return 0;
 	};
 	
 	return 1;
+};
+
+void piUncache(uint64_t frame)
+{
+	uint64_t newEnt = __sync_and_and_fetch(
+		&piRoot.branches[(frame>>27)&0x1F]->branches[(frame>>18)&0x1F]->branches[(frame>>9)&0x1F]->entries[frame&0x1F],
+		~PI_CACHE);
+	
+	if ((newEnt & 0xFFFFFFFF) == 0)
+	{
+		phmFreeFrame(frame);
+	};
 };

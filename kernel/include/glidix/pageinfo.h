@@ -45,7 +45,7 @@
 
 /**
  * Set if the page is used for caching, and should not be freed except by the memory exchange
- * protocol. This flag is immutable.
+ * protocol.
  */
 #define	PI_CACHE				(1UL << 32)
 
@@ -110,5 +110,10 @@ void piMarkAccessed(uint64_t frame);
  * just be marked writeable because nobody else is using it and no copying is needed.
  */
 int piNeedsCopyOnWrite(uint64_t frame);
+
+/**
+ * Uncache the specified page, declaring it is now useless except when mapped somewhere.
+ */
+void piUncache(uint64_t frame);
 
 #endif

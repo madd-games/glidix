@@ -165,7 +165,7 @@ static int iso_ft_load(FileTree *ft, off_t pos, void *buffer)
 {
 	ISOFileMeta *meta = ft->data;
 	
-	if (pos > meta->size) return -1;
+	if (pos >= meta->size) return -1;
 	
 	uint64_t toRead = meta->size - pos;
 	if (toRead > 0x1000) toRead = 0x1000;

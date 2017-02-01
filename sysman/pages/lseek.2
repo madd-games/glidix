@@ -1,0 +1,46 @@
+>NAME
+
+lseek - seek a file
+
+>SYNOPSIS
+
+	#include <sys/types.h>
+	#include <unistd.h>
+	
+	off_t lseek(int 'fd', off_t 'offset', int 'whence');
+
+>DESCRIPTION
+
+This function is used to update and/or determine the current position within the file referenced by 'fd'. The file positino is the offset into the file which the next call to [read.2] or [write.2] will read from/write to. When a file is opened with [open.2], the file position is initialized to 0, unless the *O_APPEND* flag is passed, in which case it is initialized to the end of the file. The 'offset' argument specifies the new position, interpreted depending on the value of 'whence':
+
+\* *SEEK_SET* - 'offset' is the absolute offset (from the beginning of the file).
+
+\* *SEEK_CUR* - 'offset' is to be added to the current file position.
+
+\* *SEEK_END* - 'offset' is relative to the end of the file.
+
+This function returns the new absolute file position (from the beginning of the file) after updating it. Hence, to find out the current position, you can call:
+
+	off_t currentPos = lseek('fd', 0, SEEK_CUR);
+
+Having seeked beyond the end of the file, [read.2] always returns EOF, and [write.2] writes the data to the new position, and fills the gap left over with all zeroes.
+
+>RETURN VALUE
+
+This function returns the new file absolute file offset upon success, which is positive. On error, it returns '-1' and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following values:
+
+\* *EBADF* - 'fd' does not refer to an open file description.
+
+\* *EINVAL* - 'whence' is invalid (neither one of *SEEK_SET*, *SEEK_CUR* or *SEEK_END*).
+
+\* *ESPIPE* - the file specified by 'fd' is not random-access and cannot be seeked.
+
+\* *EOVERFLOW* - the new file position is outside of bounds of the underlying filesystem.
+
+>SEE ALSO
+
+[read.2], [write.2]

@@ -33,6 +33,7 @@
 #include <glidix/string.h>
 #include <glidix/vfs.h>
 #include <glidix/random.h>
+#include <glidix/console.h>
 
 typedef struct _DeviceFile
 {
@@ -320,6 +321,7 @@ Device AddDevice(const char *name, void *data, int (*open)(void*, File*, size_t)
 
 	dev->inode = __sync_fetch_and_add(&nextDevIno, 1);
 	
+	spinlockAcquire(&devfsLock);
 	DeviceFile *last = &nullDevice;
 	while (last->next != NULL) last = last->next;
 	last->next = dev;

@@ -142,3 +142,10 @@ dynld_enter:
 	xor rbp, rbp
 	xor rdx, rdx
 	jmp rsi
+
+global dynld_diag
+dynld_diag:
+	mov rax, 30
+	syscall
+	ret
+

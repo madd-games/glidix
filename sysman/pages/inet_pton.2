@@ -1,0 +1,21 @@
+>NAME
+
+inet_pton - convert address string to network address
+
+>SYNOPSIS
+
+	#include <arpa/inet.h>
+	
+	int inet_pton(int 'family', const char *'string', void *'buffer');
+
+>DESCRIPTION
+
+This function converts the string representation of an IP address, 'string', into binary, and stores it in 'buffer'. If 'family' is *AF_INET*, then 'string' should store the standard dotted-quad representation of an IPv4 address, and 'buffer' should point to a 'struct in_addr' (see [ipv4.6]). If 'family' is *AF_INET6* then 'string' may be a string representation of an IPv4 address (in which case an IPv4-mapped IPv6 address is loaded), or a standard representation of an IPv6 address, and 'buffer' should point to a 'struct in6_addr' (see [ipv6.6]). All other values of 'family' are invalid.
+
+>RETURN VALUE
+
+Returns 1 if the conversion was successful, 0 if the string was invalid, or -1 if 'family' has an invalid value. In this case, [errno.6] is set to *EAFNOSUPPORT*.
+
+>SEE ALSO
+
+[inet_ntop.2]

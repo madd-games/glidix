@@ -1,0 +1,41 @@
+>NAME
+
+bind - assign name to a socket
+
+>SYNOPSIS
+
+	#include <sys/socket.h>
+	
+	int bind(int 'sockfd', const struct sockaddr *'addr', socklen_t 'addrlen');
+
+>DESCRIPTION
+
+This function binds the socket referenced by 'sockfd' to the name 'addr'. The 'addrlen' argument specifies the size of the 'addr' structure (which may be different depending on the address family). The address family of 'addr' must match that of the socket, and it shall be the appropriate address structure (e.g. 'struct sockaddr_in6' for *AF_INET6*) cast to a 'struct sockaddr'.
+
+>RETURN VALUE
+
+This function returns '0' on success, or '-1' on error, and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following:
+
+\* *EFAULT* - failed to read the memory at 'addr'.
+
+\* *EBADF* - 'sockfd' is not an open file descriptor.
+
+\* *EAFNOSUPPORT* - the 'sa_family' field of 'addr' is invalid, or different from the socket\'s address family.
+
+\* *EOPNOTSUPP* - the specified socket does not support binding.
+
+\* *ENOTSOCK* - 'sockfd' does not refer to a socket.
+
+\* *EINVAL* - 'addr' is invalid.
+
+\* *EACCES* - attempted to bind to a restricted port without appropriate permissions.
+
+\* *EADDRINUSE* - attempted to bind to a port that is already in use.
+
+>SEE ALSO
+
+[ipv6.6], [ipv4.6], [capture.6], [socket.2]

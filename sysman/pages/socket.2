@@ -1,0 +1,72 @@
+>NAME
+
+socket - create a communication endpoint
+
+>SYNOPSIS
+
+	#include <sys/socket.h>
+	
+	int socket(int 'family', int 'type', int 'protocol');
+
+>DESCRIPTION
+
+This function creates a socket - a communication endpoint used to communicate between applications, possibly on different machines across a network. A socket has a 'name' and a 'peer'. The name identifies the socket on the local machine, while the peer is another socket (possibly on a different machine on a network) with which the socket communicates. A name is assigned to a socket either by calling [bind.2], or automatically by the system when a first message is sent using [connect.2], [send.2] or [write.2]. The peer is established using [connect.2], or one may be specified in a call to [send.2].
+
+The 'family' argument specifies what type of network the socket is to run over (the "address family"). The values supported by Glidix are:
+
+\* *AF_INET6* - IPv6 internet socket. Transparently handles IPv4 traffic too. See [ipv6.6].
+
+\* *AF_INET* - IPv4 internet socket. Since IPv6 sockets can handle both protocols, you shouldn\'t use this unless you really have to. See [ipv4.6].
+
+\* *AF_CAPTURE* - capture socket, used to sniff traffic on the local network. The calling thread must have the *XP_RAWSOCK* permission in order to be allowed to create capture sockets. See [capture.6].
+
+The 'type' argument allows you to select between 3 different types of sockets:
+
+\* *SOCK_STREAM* - a stream socket. Transmits and receives ordered streams of bytes. Specifics depends on the address family and protocol.
+
+\* *SOCK_DGRAM* - a datagram socket. Transmits possibly unordered messages, one in each call to [send.2] and receives one message in each call to [recv.2]. Specifics depend on the address family and protocol.
+
+\* *SOCK_RAW* - a raw socket. Similar to a datagram socket, but allows for the transmission and receptions of raw data on the given network. The calling thread must have the *XP_RAWSOCK* permission in order to be allowed to open raw sockets (see [xperm.6]). Specifics depends on the address family.
+
+The 'protocol' argument specifies the protocol to use, and the possible values depend on address family and socket type. The value '0' signals the use of the default protocol if possible. For example, if the address family is *AF_INET6* and the socket type is *SOCK_STREAM*, the default protocol is *IPPROTO_TCP*, i.e. [tcp.6].
+
+>>Socket Address
+A socket address is used to represent the name and peer of a socket, and is passed to functions such as [bind.2] and [connect.2]. An abstract socket address is represented by the structure 'struct sockaddr', defined in '<sys/socket.h>', which includes the following fields:
+
+	struct sockaddr
+	{
+		sa_family_t			'sa_family';
+		char				'sa_data'[];
+	};
+
+The 'sa_family' field specifies which address family the address belongs to. The 'sa_data' field is used differently depending on the family. Depending on the value of 'sa_family' field, a socket address structure shall be interpreted as a different type - for example, if 'sa_family' is *AF_INET6*, the structure must be cast to 'struct sockaddr_in6' to read all the relevant fields. More information on that in family-specific manual pages, such as [ipv6.6].
+
+The size of 'struct sockaddr' may not be enough to store an arbitrary socket address from any family. For this reason, another structure called 'struct sockaddr_storage' is defined, which is large enough to store any alias structure. It is defined in '<sys/socket.h>' as follows:
+
+	struct sockaddr_strorage
+	{
+		sa_family_t			'ss_family';
+		char				'ss_data'[];
+	};
+
+The meanings of these fields are the same as those in 'struct sockaddr'.
+
+Please note that all socket address structures must be fully zeroed out before filling in any fields, as they may include private fields that you should not leave uninitialized.
+
+>RETURN VALUE
+
+On error, this function returns a positive file descriptor referring to the newly created socket. On error, it returns '-1' and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following:
+
+\* *EMFILE* - no more free file descriptors available.
+
+\* *EAFNOSUPPORT* - the specified address family is not supported ('family' has an invalid value).
+
+\* *EPROTONOSUPPORT* - the specified combination of 'type' and 'protocol' is not supported for the given address family.
+
+>SEE ALSO
+
+[bind.2], [connect.2], [recv.2], [send.2], [listen.2], [accept.2]

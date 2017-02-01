@@ -500,6 +500,12 @@ void isrHandler(Regs *regs)
 
 IRQHandler registerIRQHandler(int irq, IRQHandler handler)
 {
+	if ((irq < 0) || (irq >= 16))
+	{
+		stackTraceHere();
+		panic("invalid IRQ number (%d)! must be 0-15.\n", irq);
+	};
+	
 	IRQHandler old = irqHandlers[irq];
 	irqHandlers[irq] = handler;
 	return old;

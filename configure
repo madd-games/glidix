@@ -74,7 +74,24 @@ maybe_gcc=""
 binutils_version="2.27"
 gcc_version="6.2.0"
 
+iso_target="no"
+expanded_options=""
+
+# expand options such as "--iso"
 for i in "$@"
+do
+case $i in
+	--iso)
+		expanded_options="$expanded_options --module-gxfs=initmod --module-isofs=initmod --module-sdide=initmod --module-sdahci=initmod --module-bga=disable --enable-gxsetup --enable-binutils --enable-gxboot --enable-gcc"
+		iso_target="yes"
+		;;
+	*)
+		expanded_options="$expanded_options $i"
+		;;
+esac
+done
+
+for i in $expanded_options
 do
 case $i in
 	--help)
@@ -177,6 +194,11 @@ test_command nasm
 test_command wget
 test_command tar
 
+if [ "$iso_target" = "yes" ]
+then
+	test_command grub-mkrescue
+fi
+
 for target in $TARGETS
 do
 	echo >&2 "configuring $target..."
@@ -188,6 +210,28 @@ done
 
 echo "generating Makefile..."
 echo >Makefile ".PHONY: all install clean mip $TARGETS"
+
+ISO_PACKAGES="mbload shutils libc modules sh gxsetup gxboot dynld"
+if [ "$iso_target" = "yes" ]
+then
+	mkdir -p isodir
+	echo >>Makefile "ISODIR := `realpath isodir`"
+	echo >>Makefile "glidix.iso: all"
+	echo >>Makefile "	@rm -rf isodir"
+	echo >>Makefile "	@mkdir -p isodir"
+	echo >>Makefile "	@mkdir -p isodir/boot"
+	echo >>Makefile "	ROOTDEV=/dev/sdb ROOTFS=isofs sh $srcdir/initrd.sh isodir/boot/vmglidix.tar"
+	
+	for pkg in $ISO_PACKAGES
+	do
+		echo >>Makefile "	cd $pkg && DESTDIR=\$(ISODIR) make install"
+	done
+	
+	echo >>Makefile "	@mkdir -p isodir/usr/share/pkg"
+	echo >>Makefile "	PKGDIR=isodir/usr/share/pkg make mip"
+	echo >>Makefile "	grub-mkrescue -o \$@ isodir"
+fi
+
 echo >>Makefile "all: $TARGETS"
 
 echo >>Makefile "install: install-libc install-kernel install-modules install-shutils install-mbload install-sh"
@@ -214,7 +258,7 @@ do
 	echo >>Makefile "	rm -rf $target"
 done
 
-echo >>Makefile "	rm Makefile config.log"
+echo >>Makefile "	rm -r Makefile config.log modconf isodir"
 
 echo >>Makefile "install-kernel:"
 echo >>Makefile "	@mkdir -p $GLIDIX_SYSROOT/boot"

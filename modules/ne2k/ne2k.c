@@ -147,10 +147,6 @@ static void ne2k_settxcount(NeInterface *nif, size_t count)
 
 static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 {
-	(void)netif;
-	(void)frame;
-	(void)framelen;
-	
 	// remove CRC
 	framelen -= 4;
 
@@ -176,8 +172,7 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 	outb(nif->iobase, 0x02);
 	
 	spinlockRelease(&nif->lock);
-	__sync_fetch_and_add(&netif->numRecv, 1);
-	//kprintf_debug("PACKET SENT\n");
+	__sync_fetch_and_add(&netif->numTrans, 1);
 };
 
 static void ne2k_thread(void *context)
@@ -205,7 +200,6 @@ static void ne2k_thread(void *context)
 			ne2k_read(nif, addr, &packetHeader, sizeof(NePacketHeader));
 			
 			size_t frameSize = packetHeader.totalSize-sizeof(NePacketHeader);
-			//kprintf_debug("RECEIVING FRAME OF SIZE: %d\n", (int)frameSize);
 			
 			// copy frame from NIC memory to buffer
 			ne2k_read(nif, addr+sizeof(NePacketHeader), recvBuffer, frameSize);
@@ -218,7 +212,10 @@ static void ne2k_thread(void *context)
 			onEtherFrame(nif->netif, recvBuffer, frameSize+4, ETHER_IGNORE_CRC);
 			
 			// acknowledge the receive
-			writeRegister(nif, 0, 0x07, 0x01);	
+			writeRegister(nif, 0, 0x07, 0x01);
+			
+			// increment reception counter
+			__sync_fetch_and_add(&nif->netif->numRecv, 1);	
 		};
 		
 		spinlockRelease(&nif->lock);

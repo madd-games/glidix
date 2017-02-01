@@ -97,10 +97,55 @@ p .ref, li .ref\n\
 	font-family: monospace;\n\
 }\n\
 \n\
+.search\n\
+{\n\
+	background-color: #999900;\n\
+	color: #ffffff;\n\
+}\n\
+\n\
 a:link {color: #0000AA; text-decoration: none;}\n\
 a:visited {color: #0000AA; text-decoration: none;}\n\
 a:active {color: #0000AA; text-decoration: none;}\n\
 a:hover {color: #AA0000; text-decoration: underline;}\n\
+";
+
+const char *javascript = "\
+function render()\n\
+{\n\
+	var filter = document.getElementById(\"filter\").value;\n\
+	var text = \"<ol>\";\n\
+	var i;\n\
+	for (i=1; i<=6; i++)\n\
+	{\n\
+		text += \"<li>\" + chapterNames[i-1] + \"<ul>\";\n\
+		var j;\n\
+		for (j=0; j<pages[i].length; j++)\n\
+		{\n\
+			var label;\n\
+			var pos = pages[i][j].indexOf(filter);\n\
+			if ((pos !== -1) || (filter == \"\"))\n\
+			{\n\
+				if (filter == \"\")\n\
+				{\n\
+					label = pages[i][j] + \"(\" + i + \")\";\n\
+				}\n\
+				else\n\
+				{\n\
+					var firstBit = pages[i][j].substring(0, pos);\n\
+					var middleBit = pages[i][j].substring(pos, pos+filter.length);\n\
+					var lastBit = pages[i][j].substring(pos+filter.length);\n\
+					label = firstBit + '<span class=\"search\">' + middleBit + '</span>' + lastBit + \"(\" + i + \")\";\n\
+				};\n\
+				text += '<li><a href=\"' + pages[i][j] + \".\" + i + \".html\" + '\">' + label + \"</a></li>\";\n\
+			};\n\
+		};\n\
+		text += \"</ul>\";\n\
+	};\n\
+	text += \"</ol>\";\n\
+	document.getElementById(\"toc\").innerHTML = text;\n\
+};\n\
+\n\
+window.onload = render;\n\
 ";
 
 void usage()
@@ -379,11 +424,37 @@ int doIndex(int count, char *files[])
 	fprintf(fp, "\t\t<title>GLIDIX MANUAL INDEX</title>\n");
 	fprintf(fp, "\t\t<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>\n");
 	fprintf(fp, "\t\t<link rel=\"stylesheet\" type=\"text/css\" href=\"sysman.css\"/>\n");
+	fprintf(fp, "\t\t<script>\n");
+	fprintf(fp, "var chapterNames = [\n");
+	for (i=1; i<=6; i++)
+	{
+		fprintf(fp, "\t\"%s\",\n", chapterNames[i]);
+	};
+	fprintf(fp, "];\n\n");
+	
+	fprintf(fp, "var pages = [\n");
+	for (i=0; i<=6; i++)
+	{
+		fprintf(fp, "\t[\n");
+		
+		int j;
+		for (j=0; j<chapterSizes[i]; j++)
+		{
+			fprintf(fp, "\t\t\"%s\",\n", chapters[i][j]);
+		};
+		
+		fprintf(fp, "\t],\n\n");
+	};
+	
+	fprintf(fp, "];\n");
+	fprintf(fp, "%s", javascript);
+	fprintf(fp, "\t\t</script>\n");
 	fprintf(fp, "\t</head>\n\t<body>\n");
 
 	fprintf(fp, "\t\t<div class=\"header\">GLIDIX MANUAL</div>\n");
 	fprintf(fp, "\t\t<hr/>\n");
 	fprintf(fp, "\t\t<h1>Table of Contents</h1>\n");
+#if 0
 	fprintf(fp, "\t\t<ol>\n");
 	
 	for (i=1; i<=6; i++)
@@ -400,6 +471,10 @@ int doIndex(int count, char *files[])
 	};
 	
 	fprintf(fp, "\t\t</ol>\n");
+#endif
+
+	fprintf(fp, "\t\t<p>Search: <input type=\"text\" id=\"filter\" oninput=\"render()\"/>\n");
+	fprintf(fp, "\t\t<div id=\"toc\"></div>\n");
 	fprintf(fp, "\t</body>\n");
 	fprintf(fp, "</html>\n");
 	fclose(fp);

@@ -34,6 +34,7 @@
 #include <glidix/string.h>
 #include <glidix/isp.h>
 #include <glidix/storage.h>
+#include <glidix/pagetab.h>
 
 /**
  * The next frame to return if we are allocating using placement. This is done before
@@ -377,11 +378,14 @@ void phmFreeFrameEx(uint64_t start, uint64_t count)
 
 uint64_t phmAllocZeroFrame()
 {
+	uint8_t zeroes[0x1000];
+	memset(zeroes, 0, 0x1000);
 	uint64_t frame = phmAllocFrame();
-	ispLock();
-	ispSetFrame(frame);
-	ispZero();
-	ispUnlock();
+	frameWrite(frame, zeroes);
+	//ispLock();
+	//ispSetFrame(frame);
+	//ispZero();
+	//ispUnlock();
 	return frame;
 };
 
@@ -424,5 +428,6 @@ uint64_t phmAllocFrameEx(uint64_t count, int flags)
 
 void phmFreeFrame(uint64_t frame)
 {
+	if (frame == 0) panic("attempted to free a null frame!");
 	phmClearFrame(frame);
 };
