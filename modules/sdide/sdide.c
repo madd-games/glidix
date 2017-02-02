@@ -296,7 +296,9 @@ static void ideAtapiThread(void *param)
 					for (j=0; j<2; j++)
 					{
 						// wait for interrupt
+						kprintf_debug("wait for interrupt\n");
 						wcDown(&wcInts[channel]);
+						kprintf_debug("interrupt came\n");
 					
 						// wait for it to stop being busy
 						while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);

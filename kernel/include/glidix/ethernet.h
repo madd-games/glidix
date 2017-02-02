@@ -41,7 +41,7 @@
 #define	ETHER_TYPE_IPV6			0x86DD
 
 /**
- * Flags for onEtherPacket().
+ * Flags for onEtherFrame().
  */
 #define	ETHER_IGNORE_CRC		(1 << 0)
 

@@ -1,0 +1,80 @@
+>NAME
+
+ethernet - ethernet driver API
+
+>SYNOPSIS
+
+	#include <glidix/netif.h>
+	#include <glidix/ethernet.h>
+
+>DESCRIPTION
+
+An Ethernet card is represented in Glidix as a type of network interface, *IF_ETHERNET*. Each port is a separate interface. When a port is detected, it must be added, and when the driver is unloaded, the interface must be deleted.
+
+>>Adding an Ethernet Interface
+
+You must fill in the 'ethernet' sub-structure of the 'NetIfConfig' union; its 'type' field must be set to *IF_ETHERNET*. In total, it has the following relevant fields (the rest must be zeroed out!):
+
+	typedef union
+	{
+		/* ... */
+		
+		struct
+		{
+			int			'type';		/* IF_ETHERNET */
+			MacAddress		'mac';
+			void (*'send')(NetIf *'netif', const void *'frame', size_t 'framelen');
+		} 'ethernet';
+		
+		/* ... */
+	} NetIfConfig;
+
+\* 'type' must be set to *IF_ETHERNET* to indicate the type of interface.
+\* 'mac' is a structure, which contains a 6 byte long field 'addr', which should contain (in network byte order) the MAC address of the port, as saved in its EEPROM.
+\* 'send' is a pointer to a sending function, described further.
+
+Create the interface as follows:
+
+	NetIfConfig ifconfig;
+	ifconfig.ethernet.type = IF_ETHERNET;
+	/* ...fill in the rest of the structure... */
+	NetIf *netif = CreateNetworkInterface('my_data', &ifconfig);
+
+'netif->drvdata' will be set to 'my_data', an untyped pointer, whose meaning you decide.
+
+>>Deleting an Interface
+
+Just call 'DeleteNetworkInterface()' on it. After that, you may free its 'drvdata' if used. Remember to kill the associated receiver thread before deleting the interface to avoid race conditions!
+
+>>Sending of Frames
+
+The 'send' field of the 'NetIfConfig.ethernet' structure points to a sending function with the following prototype:
+
+	void my_driver_send(NetIf *'netif', const void *'frame', size_t 'framelen');
+
+Remember that 'netif->drvdata' may be set to any pointer, which your driver may wish to use. 'netif' points to the network interface, created by 'CreateNetworkInterface()', that we are sending through; 'frame' points to the beginning of an Ethernet frame, and 'framelen' is its size. The kernel prepends the Ethernet header and appends the Frame Check Sequence (FCS, aka CRC). If the CRC is computed in hardware, just discard the last 4 bytes; in the future, it will also be possible to tell the kernel not to compute the CRC in software.
+
+You must atomically increment 'netif->numTrans' by 1 if the transmission was successful, or 'netif->numErrors' if it wasn't.
+
+>>Receving of Frames
+
+You must create a receiver friend which waits for receive interrupts. After reading a packet into memory, you must pass it to 'onEtherFrame()':
+
+	void onEtherFrame(NetIf *'netif', const void *'frame', size_t 'framelen', int 'flags');
+
+'netif' is the interface from which you received; 'frame' points to the received frame, and 'framelen' is its length. 'flags' may be 0 or a bitwise-OR of one of the following:
+
+\* *ETHER_IGNORE_CRC* - do not check the CRC (because it\'s checked in hardware).
+
+If the CRC is chcked in hardware, you must still append 4 bytes at the end of the frame (they may be uninitialized; so just add 4 to the frame length), and pass the *ETHER_IGNORE_CRC* flag to prevent software CRC checking.
+
+>>MAC filtering
+The kernel cannot currently does not pass information about MAC filtering, but the driver should set the filters up as follows:
+
+\* It must receive frames directed to the port\'s unicast MAC address. Other unicast addresses may be rejected.
+\* It must receive all mulicast and broadcast traffic.
+
+>>Improvements for the Future
+
+\* It should be possible for the driver to report that a software CRC is not necessary.
+\* The kernel should be able to configure MAC filtering.
