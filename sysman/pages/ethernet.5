@@ -54,11 +54,11 @@ The 'send' field of the 'NetIfConfig.ethernet' structure points to a sending fun
 
 Remember that 'netif->drvdata' may be set to any pointer, which your driver may wish to use. 'netif' points to the network interface, created by 'CreateNetworkInterface()', that we are sending through; 'frame' points to the beginning of an Ethernet frame, and 'framelen' is its size. The kernel prepends the Ethernet header and appends the Frame Check Sequence (FCS, aka CRC). If the CRC is computed in hardware, just discard the last 4 bytes; in the future, it will also be possible to tell the kernel not to compute the CRC in software.
 
-You must atomically increment 'netif->numTrans' by 1 if the transmission was successful, or 'netif->numErrors' if it wasn't.
+You must atomically increment 'netif->numTrans' by 1 if the transmission was successful, or 'netif->numErrors' if it wasn\'t.
 
 >>Receving of Frames
 
-You must create a receiver friend which waits for receive interrupts. After reading a packet into memory, you must pass it to 'onEtherFrame()':
+You must create a receiver friend which waits for receive interrupts. After reading a frame into memory, you must pass it to 'onEtherFrame()':
 
 	void onEtherFrame(NetIf *'netif', const void *'frame', size_t 'framelen', int 'flags');
 
@@ -66,10 +66,12 @@ You must create a receiver friend which waits for receive interrupts. After read
 
 \* *ETHER_IGNORE_CRC* - do not check the CRC (because it\'s checked in hardware).
 
-If the CRC is chcked in hardware, you must still append 4 bytes at the end of the frame (they may be uninitialized; so just add 4 to the frame length), and pass the *ETHER_IGNORE_CRC* flag to prevent software CRC checking.
+If the CRC is checked in hardware, you must still append 4 bytes at the end of the frame (they may be uninitialized; so just add 4 to the frame length), and pass the *ETHER_IGNORE_CRC* flag to prevent software CRC checking.
+
+Having successfully received a frame, you must atomically increment 'netif->numRecv' by 1; if you dropped a frame for some reason, or detected that the NIC did so, you must atomically increment 'netif->numDropped'.
 
 >>MAC filtering
-The kernel cannot currently does not pass information about MAC filtering, but the driver should set the filters up as follows:
+The kernel currently does not pass information about MAC filtering, but the driver should set the filters up as follows:
 
 \* It must receive frames directed to the port\'s unicast MAC address. Other unicast addresses may be rejected.
 \* It must receive all mulicast and broadcast traffic.
