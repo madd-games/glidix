@@ -34,7 +34,7 @@ Glidix provides an API for drivers to access PCI devices. A PCI device is descri
 
 \* 'bar' specifies the values of the 6 Base Address Registers (BARs) - see "Base Address Registers (BARs)" below.
 
-\* 'barsz' specifies the size of each BAR - for port BARs, it's the number of consecutive ports from the base which are assigned; for memory BARs, it's the number of consecutive bytes from the base which are assigned. Usually drivers don't care about this, since they should know how many registers the device has in each BAR, but it may sometimes be necessary, and is used by userspace tools to display information.
+\* 'barsz' specifies the size of each BAR - for port BARs, it\'s the number of consecutive ports from the base which are assigned; for memory BARs, it\'s the number of consecutive bytes from the base which are assigned. Usually drivers don\'t care about this, since they should know how many registers the device has in each BAR, but it may sometimes be necessary, and is used by userspace tools to display information.
 
 \* 'progif' represents the type of programming interface. This is just another identification value provided by the vendor.
 
@@ -44,4 +44,38 @@ The first thing a driver must do is enumerate the PCI devices - this involves de
 
 	void pciEnumDevices(Module *'module', int (*'enumerator')(PCIDevice *'dev', void *'param'), void *'param');
 
+The 'module' argument has to be set to the macro *THIS_MODULE*. The 'enumerator' is a function responsible for decidingw hich devices to acquire, and 'param' is an argument to pass to it.
 
+Hence, the enumerator takes 2 arguments: the device ('dev') and an optional parameter ('param'). It may read the vendor or device ID, or device type, or other identifying information from the structure, and return 0 if the device is not supported, or 1 if it is - in this case, it must also copy a name string into the 'deviceName' field. It should also add the device to its internal list of detected devices, but nothing more - the PCI lock is acquired all the time during enumeration so any PCI operation will deadlock. Here\'s an example of detecting a device with vendor ID '0x1234' and device ID '0xABCD':
+
+	int my_enumerator(PCIDevice *dev, void *param)
+	{
+		if ((dev->vendor == 0x1234) && (dev->device == 0xABCD))
+		{
+			strcpy(dev->deviceName, "An Example Device");
+			return 1;
+		};
+		
+		return 0;
+	};
+
+>>Bus Mastering
+
+Bus mastering (the ability of a device to access RAM) can be enabled or disabled using 'pciSetBusMastering()':
+
+	void pciSetBusMastering(PCIDevice *'dev', int 'enable');
+
+>>Base Address Registers (BARs)
+
+Different devices will place different sets of registers in each BAR - refer to specifications of devices for more information. A BAR has one of 2 formats:
+
+\* If the bottom bit is set, then '(bar & ~3)' is the base port number of the set of registers, and port I/O shall be used.
+\* If the bottom bit is clear, then '(bar & ~0xF)' is the 'physical' base address of a set of memory-mapped registers.
+
+>>Interrupts
+
+For handling interrupts, you should create an interrupt handler thread. The function 'pciWaitInt()' blocks until an interrupt is received:
+
+	void pciWaitInt(PCIDevice *'dev');
+
+Note that interrupts may be spurious, or coming from a different device, so your code must confirm the interrupt actually did arrive. A device will typically provide an "interrupt status register" to check this.
