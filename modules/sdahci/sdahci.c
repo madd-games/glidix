@@ -315,7 +315,7 @@ static void ahciAtapiThread(void *data)
 			cmdtbl->acmd[6] = 0;
 			cmdtbl->acmd[7] = 0;
 			cmdtbl->acmd[8] = 0;
-			cmdtbl->acmd[9] = 0x40;
+			cmdtbl->acmd[9] = 0x10;
 			cmdtbl->acmd[10] = 0;
 			cmdtbl->acmd[11] = 0;
 			
@@ -337,7 +337,7 @@ static void ahciAtapiThread(void *data)
 			cmdfis->lba4 = 0;
 			cmdfis->lba5 = 0;
 	
-			cmdfis->countl = 0x40;
+			cmdfis->countl = 0x10;
 			cmdfis->counth = 0;
 	
 			//char *hwbuf = (char*) dmaGetPtr(&dev->iobuf) + (4096*slot);

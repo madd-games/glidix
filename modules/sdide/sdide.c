@@ -121,13 +121,13 @@ IDEController *ctrlFirst;
 IDEController *ctrlLast;
 
 /**
- * Wait counters for interrrupts.
+ * Interrupt flags.
  */
-WaitCounter wcInts[2];
+volatile int ideInts[2];
 
 static void ideIrqHandler(int irq)
 {
-	wcUp(&wcInts[irq-14]);
+	ideInts[irq-14] = 1;
 };
 
 static int ideEnumerator(PCIDevice *dev, void *param)
@@ -172,7 +172,6 @@ static void ideAtaThread(void *param)
 			break;
 		};
 		
-		kprintf_debug("ATA command\n");
 		
 		if (cmd->type == SD_CMD_READ_TRACK)
 		{
@@ -184,7 +183,6 @@ static void ideAtaThread(void *param)
 		};
 		
 		sdPostComplete(cmd);
-		kprintf_debug("ATA command end\n");
 	};
 	
 	sdHangup(dev->sd);
@@ -199,7 +197,6 @@ static void ideAtapiThread(void *param)
 	while (1)
 	{
 		SDCommand *cmd = sdPop(dev->sd);
-		kprintf_debug("ATAPI command\n");
 		if (cmd->type == SD_CMD_SIGNAL)
 		{
 			sdPostComplete(cmd);
@@ -220,6 +217,7 @@ static void ideAtapiThread(void *param)
 			
 			// enable interrupts
 			outb(dev->ctrl->channels[dev->channel].ctrl + ATA_CREG_CONTROL, 0);
+			ideInts[dev->channel] = 0;
 			
 			// ATAPI packet to send
 			uint8_t atapiPacket[12];
@@ -280,11 +278,32 @@ static void ideAtapiThread(void *param)
 			{
 				error = 1;
 			};
-			
+						
 			if (!error)
 			{
 				// send the packet over
 				outsw(ctrl->channels[channel].base + ATA_IOREG_DATA, atapiPacket, 6);
+
+				int k;
+				for (k=0; k<4; k++)
+				{
+					inb(ctrl->channels[channel].ctrl + ATA_CREG_CONTROL);
+				};
+
+				// wait for it to stop being busy
+				while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
+
+				// wait for interrupt
+				while (!ideInts[dev->channel]);
+				ideInts[dev->channel] = 0;
+
+				for (k=0; k<4; k++)
+				{
+					inb(ctrl->channels[channel].ctrl + ATA_CREG_CONTROL);
+				};
+
+				// wait for it to stop being busy
+				while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
 				
 				// receive the data (8 pages)
 				for (i=0; i<8; i++)
@@ -295,30 +314,21 @@ static void ideAtapiThread(void *param)
 					
 					for (j=0; j<2; j++)
 					{
-						// wait for interrupt
-						kprintf_debug("wait for interrupt\n");
-						wcDown(&wcInts[channel]);
-						kprintf_debug("interrupt came\n");
-					
-						// wait for it to stop being busy
-						while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
-						
 						insw(ctrl->channels[channel].base + ATA_IOREG_DATA, &pagebuf[0x800*j], 0x400);
 					};
 					
-					frameWrite(((uint64_t)cmd->block >> 9) + i, pagebuf);
+					frameWrite(((uint64_t)cmd->block >> 12) + i, pagebuf);
 				};
 				
 				// wait for it to stop being busy
-				wcDown(&wcInts[channel]);
-				while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
+				while (!ideInts[dev->channel]);
+				ideInts[dev->channel] = 0;
+				while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & (ATA_SR_BSY | ATA_SR_DRQ));
 			};
 			
 			sdPostComplete(cmd);
 			semSignal(&dev->ctrl->lock);
 		};
-		
-		kprintf_debug("ATAPI command end\n");
 	};
 	
 	sdHangup(dev->sd);
@@ -480,9 +490,6 @@ static void ideInit(IDEController *ctrl)
 
 MODULE_INIT(const char *opt)
 {
-	wcInit(&wcInts[0]);
-	wcInit(&wcInts[1]);
-	
 	registerIRQHandler(14, ideIrqHandler);
 	registerIRQHandler(15, ideIrqHandler);
 	

@@ -1,0 +1,47 @@
+>NAME
+
+pci - PCI drivers
+
+>SYNOPSIS
+
+	#include <glidix/pci.h>
+
+>DESCRIPTION
+
+Glidix provides an API for drivers to access PCI devices. A PCI device is described with a 'PCIDevice' structure, which includes the following fields relevant to drivers:
+
+	typedef struct
+	{
+		/* ... */
+		uint16_t			'vendor';
+		uint16_t			'device';
+		uint16_t			'type';
+		/* ... */
+		char				'deviceName'[128];
+		uint32_t			'bar'[6];
+		uint32_t			'barsz'[6];
+		uint8_t				'progif';
+		/* ... */
+	} PCIDevice;
+
+\* 'vendor' is the vendor ID assigned to the device. It represents the manufacturer of the device, and may be used to identify a specific type of device (together with the 'device' field).
+
+\* 'device' is the device ID assigned by the vendor.
+
+\* 'type' is the type of device. It is a 16-bit value where the high 8 bits are the class code, and the low 8 bits are the subclass code. For example, IDE controllers have a value of '0x0101'.
+
+\* 'deviceName' is the name of the device, as assigned by the driver - see "Enumerating" below.
+
+\* 'bar' specifies the values of the 6 Base Address Registers (BARs) - see "Base Address Registers (BARs)" below.
+
+\* 'barsz' specifies the size of each BAR - for port BARs, it's the number of consecutive ports from the base which are assigned; for memory BARs, it's the number of consecutive bytes from the base which are assigned. Usually drivers don't care about this, since they should know how many registers the device has in each BAR, but it may sometimes be necessary, and is used by userspace tools to display information.
+
+\* 'progif' represents the type of programming interface. This is just another identification value provided by the vendor.
+
+>>Enumerating
+
+The first thing a driver must do is enumerate the PCI devices - this involves deciding if a certain device is supported, and assigning it a name if so. This is done using the 'pciEnumDevices()' function:
+
+	void pciEnumDevices(Module *'module', int (*'enumerator')(PCIDevice *'dev', void *'param'), void *'param');
+
+
