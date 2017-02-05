@@ -31,6 +31,8 @@
 #include <glidix/memory.h>
 #include <glidix/physmem.h>
 #include <glidix/string.h>
+#include <glidix/console.h>
+#include <glidix/common.h>
 
 static Mutex piLock;
 static PageInfoNode piRoot;
@@ -46,12 +48,13 @@ uint64_t piNew(uint64_t flags)
 	uint64_t frame = phmAllocZeroFrame();
 	if (frame == 0) return 0;
 	
+	
 	mutexLock(&piLock);
 	uint64_t i;
 	PageInfoNode *node = &piRoot;
 	for (i=0; i<3; i++)
 	{
-		uint64_t index = (frame >> (9 * (3-i))) & 0x1F;
+		uint64_t index = (frame >> (9 * (3-i))) & 0x1FF;
 		if (node->entries[index] == 0)
 		{
 			PageInfoNode *newNode = NEW(PageInfoNode);
@@ -66,7 +69,7 @@ uint64_t piNew(uint64_t flags)
 		};
 	};
 	
-	uint64_t index = frame & 0x1F;
+	uint64_t index = frame & 0x1FF;
 	node->entries[index] = 1UL | flags;
 	mutexUnlock(&piLock);
 	
@@ -75,17 +78,17 @@ uint64_t piNew(uint64_t flags)
 
 void piIncref(uint64_t frame)
 {
-	__sync_fetch_and_add(
-		&piRoot.branches[(frame>>27)&0x1F]->branches[(frame>>18)&0x1F]->branches[(frame>>9)&0x1F]->entries[frame&0x1F],
+	__sync_add_and_fetch(
+		&piRoot.branches[(frame>>27)&0x1FF]->branches[(frame>>18)&0x1FF]->branches[(frame>>9)&0x1FF]->entries[frame&0x1FF],
 		1);
 };
 
 void piDecref(uint64_t frame)
 {
 	uint64_t newEnt = __sync_add_and_fetch(
-		&piRoot.branches[(frame>>27)&0x1F]->branches[(frame>>18)&0x1F]->branches[(frame>>9)&0x1F]->entries[frame&0x1F],
+		&piRoot.branches[(frame>>27)&0x1FF]->branches[(frame>>18)&0x1FF]->branches[(frame>>9)&0x1FF]->entries[frame&0x1FF],
 		-1);
-	
+
 	if ((newEnt & 0xFFFFFFFF) == 0)
 	{
 		if ((newEnt & PI_CACHE) == 0)
@@ -97,21 +100,21 @@ void piDecref(uint64_t frame)
 
 void piMarkDirty(uint64_t frame)
 {
-	__sync_fetch_and_or(
-		&piRoot.branches[(frame>>27)&0x1F]->branches[(frame>>18)&0x1F]->branches[(frame>>9)&0x1F]->entries[frame&0x1F],
+	__sync_or_and_fetch(
+		&piRoot.branches[(frame>>27)&0x1FF]->branches[(frame>>18)&0x1FF]->branches[(frame>>9)&0x1FF]->entries[frame&0x1FF],
 		PI_DIRTY);
 };
 
 void piMarkAccessed(uint64_t frame)
 {
-	__sync_fetch_and_or(
-		&piRoot.branches[(frame>>27)&0x1F]->branches[(frame>>18)&0x1F]->branches[(frame>>9)&0x1F]->entries[frame&0x1F],
-		PI_DIRTY);
+	__sync_or_and_fetch(
+		&piRoot.branches[(frame>>27)&0x1FF]->branches[(frame>>18)&0x1FF]->branches[(frame>>9)&0x1FF]->entries[frame&0x1FF],
+		PI_ACCESSED);
 };
 
 int piNeedsCopyOnWrite(uint64_t frame)
 {
-	uint64_t val = piRoot.branches[(frame>>27)&0x1F]->branches[(frame>>18)&0x1F]->branches[(frame>>9)&0x1F]->entries[frame&0x1F];
+	uint64_t val = piRoot.branches[(frame>>27)&0x1FF]->branches[(frame>>18)&0x1FF]->branches[(frame>>9)&0x1FF]->entries[frame&0x1FF];
 	
 	if ((val & 0xFFFFFFFF) == 1)
 	{
@@ -124,9 +127,9 @@ int piNeedsCopyOnWrite(uint64_t frame)
 void piUncache(uint64_t frame)
 {
 	uint64_t newEnt = __sync_and_and_fetch(
-		&piRoot.branches[(frame>>27)&0x1F]->branches[(frame>>18)&0x1F]->branches[(frame>>9)&0x1F]->entries[frame&0x1F],
+		&piRoot.branches[(frame>>27)&0x1FF]->branches[(frame>>18)&0x1FF]->branches[(frame>>9)&0x1FF]->entries[frame&0x1FF],
 		~PI_CACHE);
-	
+
 	if ((newEnt & 0xFFFFFFFF) == 0)
 	{
 		phmFreeFrame(frame);

@@ -995,6 +995,8 @@ void deletePT(uint64_t frame)
 	{
 		if (pt.entries[i].gx_loaded)
 		{
+			if (pt.entries[i].dirty) piMarkDirty(pt.entries[i].framePhysAddr);
+			if (pt.entries[i].accessed) piMarkAccessed(pt.entries[i].framePhysAddr);
 			piDecref(pt.entries[i].framePhysAddr);
 		};
 	};

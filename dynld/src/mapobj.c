@@ -44,7 +44,6 @@ Library* dynld_getlib(const char *soname)
 		if (strcmp(soname, lib->soname) == 0)
 		{
 			lib->refcount++;
-			dynld_printf("getlib %s (refcount now %d)\n", soname, lib->refcount);
 			return lib;
 		};
 	};
@@ -215,7 +214,6 @@ void dynld_initlib(Library *lib)
 
 uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int flags)
 {
-	dynld_printf("mapping in %s\n", name);
 	if (debugMode)
 	{
 		dynld_printf("dynld: mapping object `%s' into memory\n", name);
@@ -314,7 +312,6 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 	{
 		if (pread(fd, &phdr, sizeof(Elf64_Phdr), elfHeader.e_phoff + sizeof(Elf64_Phdr) * i) != sizeof(Elf64_Phdr))
 		{
-			dynld_printf("the pread failed\n");
 			strcpy(dynld_errmsg, "failed to read segment");
 			
 			for (i=0; i<lib->numSegs; i++)
@@ -356,7 +353,6 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 					prot, MAP_PRIVATE | MAP_FIXED,
 					fd, phdr.p_offset & ~0xFFF) == MAP_FAILED)
 			{
-				dynld_printf("failed to map segment into memory\n");
 				strcpy(dynld_errmsg, "failed to map segment into memory");
 				for (i=0; i<lib->numSegs-1; i++)
 				{
@@ -365,7 +361,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				
 				return 0;
 			};
-
+			
 			uint64_t zeroAddr = (uint64_t) lib->segs[index].base + lib->segs[index].size;
 			uint64_t toZero = (phdr.p_memsz - phdr.p_filesz) & 0xFFF;
 			if (toZero != 0)
@@ -387,7 +383,6 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				
 				if (mmap((void*)fileTop, anonLen, prot, MAP_PRIVATE | MAP_FIXED | MAP_ANON, -1, 0) == MAP_FAILED)
 				{
-					dynld_printf("failed to map anonymous into memory\n");
 					strcpy(dynld_errmsg, "failed to map anonymous pages");
 					for (i=0; i<lib->numSegs-1; i++)
 					{
@@ -506,13 +501,11 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				int depfd = dynld_open(depname, rpath, libraryPath, runpath, "/usr/local/lib:/usr/lib:/lib", NULL);
 				if (depfd == -1)
 				{
-					dynld_printf("failed to open library %s\n", depname);
 					strcpy(dynld_errmsg, depname);
 					strcpy(&dynld_errmsg[strlen(depname)], ": library not found");
 					
 					for (i=0; i<lib->numDeps; i++)
 					{
-						dynld_printf("libclose[A]\n");
 						dynld_libclose(lib->deps[i]);
 					};
 					
@@ -529,14 +522,12 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				if (dep == MAP_FAILED)
 				{
 					close(depfd);
-					dynld_printf("cannot map library description\n");
 					
 					strcpy(dynld_errmsg, depname);
 					strcpy(&dynld_errmsg[strlen(depname)], ": cannot create library description");
 					
 					for (i=0; i<lib->numDeps; i++)
 					{
-						dynld_printf("libclose[B]\n");
 						dynld_libclose(lib->deps[i]);
 					};
 					
@@ -557,12 +548,10 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				{
 					// leave dynld_errmsg as is; we forward the error from the recursive
 					// invocation
-					dynld_printf("failed to map a library in\n");
 					close(depfd);
 					
 					for (i=0; i<lib->numDeps; i++)
 					{
-						dynld_printf("libclose[C]\n");
 						dynld_libclose(lib->deps[i]);
 					};
 					
@@ -606,8 +595,6 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 			symaddr = dynld_globsym(symname);
 			if (symaddr == NULL)
 			{
-				dynld_printf("the error is here lads (type %d in %s symidx %d, st_name=%d, base=%p)\n", type, lib->soname, (int) symidx, (int) symbol->st_name, (uint64_t) lib->segs[0].base);
-				dynld_diag(symbol);
 				strcpy(dynld_errmsg, name);
 				strcpy(&dynld_errmsg[strlen(dynld_errmsg)], ": undefined reference to `");
 				strcpy(&dynld_errmsg[strlen(dynld_errmsg)], symname);
@@ -673,7 +660,6 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 		default:
 			strcpy(dynld_errmsg, name);
 			strcpy(&dynld_errmsg[strlen(dynld_errmsg)], ": invalid relocation");
-			dynld_printf("libclose[E]\n");
 			dynld_libclose(lib);
 			return 0;
 		};
@@ -704,10 +690,8 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 
 void dynld_libclose(Library *lib)
 {
-	dynld_printf("libclose %s\n", lib->soname);
 	if ((--lib->refcount) == 0)
 	{
-		dynld_printf("unmapping %s\n", lib->soname);
 		
 		// call destructors
 		if (lib->finiFunc != NULL) lib->finiFunc();
@@ -719,7 +703,6 @@ void dynld_libclose(Library *lib)
 		
 		for (i=0; i<lib->numDeps; i++)
 		{
-			dynld_printf("libclose[G]\n");
 			dynld_libclose(lib->deps[i]);
 		};
 		

@@ -73,9 +73,9 @@ void initPerCPU()
 	for (page=firstPage; page<=lastPage; page++)
 	{
 		// we already know the PDPT is 261.
-		uint64_t pageIndex = page & 0x1F;
-		uint64_t ptIndex = (page >> 9) & 0x1F;
-		uint64_t pdIndex = (page >> 18) & 0x1F;
+		uint64_t pageIndex = page & 0x1FF;
+		uint64_t ptIndex = (page >> 9) & 0x1FF;
+		uint64_t pdIndex = (page >> 18) & 0x1FF;
 		
 		PDPT *pdpt = (PDPT*) 0xFFFFFFFFFFF05000;
 		if (!pdpt->entries[pdIndex].present)

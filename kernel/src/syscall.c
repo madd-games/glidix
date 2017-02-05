@@ -3503,7 +3503,6 @@ int sys_getpgid(int pid)
 void sys_diag(uint64_t addr)
 {
 	vmDump(getCurrentThread()->pm, addr);
-	panic("stop");
 };
 
 void sys_pthread_exit(uint64_t retval)

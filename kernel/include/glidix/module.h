@@ -64,7 +64,7 @@
 /**
  * This macro evaluates to a pointer to the current module, when used inside module code. It returns a
  * pointer to the external variable "__this_module" declared below. That variable does not actually exist
- * but the module loader resolved the symbol to the module structure's address.
+ * but the module loader resolves the symbol to the module structure's address.
  */
 #define	THIS_MODULE			(&__this_module)
 
