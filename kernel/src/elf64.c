@@ -170,8 +170,8 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		return -1;
 	};
 
-	// auxiliary vector; up to 2 entries (AT_EXECFD and AT_NULL) or just
-	// 2 AT_NULLs
+	// auxiliary vector; up to 2 entries (AT_EXECFD and AT_NULL or just
+	// 2 AT_NULLs)
 	Elf64_Auxv auxv[2];
 	memset(auxv, 0, sizeof(Elf64_Auxv)*2);
 
@@ -546,20 +546,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	memcpy(thread->execPars, pars, parsz);
 
 	// create a new address space
-	//ProcMem *pm = CreateProcessMemory();
 	vmNew();
-	
-	// switch the address space, so that AddSegment() can optimize mapping
-#if 0
-	cli();
-	lockSched();
-	ProcMem *oldPM = thread->pm;
-	thread->pm = pm;
-	unlockSched();
-	sti();
-	SetProcessMemory(pm);
-	DownrefProcessMemory(oldPM);
-#endif
 
 	uint8_t zeroPage[0x1000];
 	memset(zeroPage, 0, 0x1000);
@@ -569,18 +556,6 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	{
 		if (segments[i].loadAddr > 0)
 		{
-#if 0
-			FrameList *fl = palloc_later(fp, segments[i].count, segments[i].fileOffset, segments[i].fileSize);
-			if (AddSegment(pm, segments[i].index, fl, segments[i].flags) != 0)
-			{
-				getCurrentThread()->therrno = ENOEXEC;
-				pdownref(fl);
-				DownrefProcessMemory(pm);
-				break;
-			};
-			pdownref(fl);
-#endif
-
 			vmMap(segments[i].loadAddr, segments[i].memorySize, segments[i].flags,
 				MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
 			vmMap(segments[i].loadAddr, segments[i].fileSize, segments[i].flags,
@@ -600,14 +575,6 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	vfsClose(fp);
 	
 	// allocate a 2MB stack
-#if 0
-	FrameList *flStack = palloc_later(NULL, 0x200, -1, 0);
-	if (AddSegment(pm, 0x200, flStack, PROT_READ | PROT_WRITE) != 0)
-	{
-		kprintf_debug("ERROR: failed to map stack for some reason\n");
-	};
-	pdownref(flStack);
-#endif
 	vmMap(0x200000, 0x200000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
 
 	// make sure we jump to the entry upon return

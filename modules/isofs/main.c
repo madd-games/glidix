@@ -202,9 +202,10 @@ FileTree* isoGetTree(ISOFileSystem *isofs, uint64_t start, uint64_t size)
 	meta->next = NULL;
 	meta->start = start;
 	meta->size = size;
-	meta->ft = ftCreate(0);
+	meta->ft = ftCreate(FT_READONLY);
 	meta->ft->data = meta;
 	meta->ft->load = iso_ft_load;
+	meta->ft->size = size;
 	meta->fs = isofs;
 	
 	if (isofs->metaLast == NULL)

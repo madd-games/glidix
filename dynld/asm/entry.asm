@@ -149,3 +149,9 @@ dynld_diag:
 	syscall
 	ret
 
+global dynld_getpid
+dynld_getpid:
+	mov rax, 6
+	syscall
+	ret
+

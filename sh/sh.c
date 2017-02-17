@@ -226,7 +226,7 @@ int main(int argc, char *argv[], char *initEnv[])
 		perror("sigaction SIGINT");
 		return 1;
 	};
-
+	
 	struct passwd *pwd = getpwuid(geteuid());
 	if (pwd != NULL) strcpy(username, pwd->pw_name);
 

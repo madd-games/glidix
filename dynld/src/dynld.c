@@ -126,6 +126,11 @@ int dynld_main(int argc, char *argv[], char *envp[], void *retstack)
 		};
 	};
 	
+	if (debugMode)
+	{
+		dynld_printf("dynld: invoked with pid %d\n", dynld_getpid());
+	};
+	
 	chainHead.prev = chainHead.next = NULL;
 	if (dynld_mapobj(&chainHead, execfd, 0, progname, RTLD_LAZY | RTLD_GLOBAL) == 0)
 	{

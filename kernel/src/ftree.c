@@ -32,6 +32,8 @@
 #include <glidix/mutex.h>
 #include <glidix/pageinfo.h>
 #include <glidix/pagetab.h>
+#include <glidix/sched.h>
+#include <glidix/console.h>
 
 static Mutex ftMtx;
 static FileTree* ftFirst;
@@ -53,6 +55,7 @@ FileTree* ftCreate(int flags)
 	ft->data = NULL;
 	ft->load = NULL;
 	ft->flush = NULL;
+	ft->size = 0;
 	
 	mutexLock(&ftMtx);
 	if (ftLast == NULL)
@@ -111,10 +114,10 @@ void ftDown(FileTree *ft)
 	};
 };
 
-uint64_t ftGetPage(FileTree *ft, off_t pos)
+
+
+static uint64_t getPageUnlocked(FileTree *ft, off_t pos)
 {
-	semWait(&ft->lock);
-	
 	FileNode *node = &ft->top;
 	int i;
 	for (i=0; i<12; i++)
@@ -147,13 +150,11 @@ uint64_t ftGetPage(FileTree *ft, off_t pos)
 		{
 			if (ft->load == NULL)
 			{
-				semSignal(&ft->lock);
 				return 0;
 			};
 		
 			if (ft->load(ft, pos, pagebuf) != 0)
 			{
-				semSignal(&ft->lock);
 				return 0;
 			};
 		};
@@ -161,21 +162,117 @@ uint64_t ftGetPage(FileTree *ft, off_t pos)
 		uint64_t frame = piNew(PI_CACHE);
 		if (frame == 0)
 		{
-			semSignal(&ft->lock);
 			return 0;
 		};
 		
 		frameWrite(frame, pagebuf);
 		
 		node->entries[pageIndex] = frame;
-		semSignal(&ft->lock);
 		return frame;
 	}
 	else
 	{
 		uint64_t frame = node->entries[pageIndex];
 		piIncref(frame);
-		semSignal(&ft->lock);
 		return frame;
 	};
+};
+
+uint64_t ftGetPage(FileTree *ft, off_t pos)
+{
+	semWait(&ft->lock);
+	uint64_t frame = getPageUnlocked(ft, pos);
+	semSignal(&ft->lock);
+	return frame;
+};
+
+ssize_t ftRead(FileTree *ft, void *buffer, size_t size, off_t pos)
+{
+	semWait(&ft->lock);
+	
+	if (pos >= ft->size)
+	{
+		semSignal(&ft->lock);
+		return 0;
+	};
+	
+	if ((pos+size) >= ft->size)
+	{
+		size = ft->size - pos;
+	};
+	
+	ssize_t sizeRead = 0;
+	uint8_t *put = (uint8_t*) buffer;
+	
+	while (size > 0)
+	{
+		size_t sizeToRead = size;
+		size_t maxReadable = 0x1000 - (pos & 0xFFF);
+		if (sizeToRead > maxReadable) sizeToRead = maxReadable;
+		
+		uint64_t frame = getPageUnlocked(ft, pos & ~0xFFF);
+		if (frame == 0)
+		{
+			break;
+		}
+		else
+		{
+			uint64_t old = mapTempFrame(frame);
+			memcpy(put, (char*) tmpframe() + (pos & 0xFFF), sizeToRead);
+			mapTempFrame(old);
+			piMarkAccessed(frame);
+			piDecref(frame);
+		};
+		
+		put += sizeToRead;
+		sizeRead += sizeToRead;
+		pos += sizeToRead;
+		size -= sizeToRead;
+	};
+	
+	semSignal(&ft->lock);
+	return sizeRead;
+};
+
+ssize_t ftWrite(FileTree *ft, const void *buffer, size_t size, off_t pos)
+{
+	semWait(&ft->lock);
+	
+	if ((pos+size) >= ft->size)
+	{
+		ft->size = pos + size;
+	};
+	
+	ssize_t sizeWritten = 0;
+	const uint8_t *scan = (const uint8_t*) buffer;
+	
+	while (size > 0)
+	{
+		size_t sizeToWrite = size;
+		size_t maxWriteable = 0x1000 - (pos & 0xFFF);
+		if (sizeToWrite > maxWriteable) sizeToWrite = maxWriteable;
+		
+		uint64_t frame = getPageUnlocked(ft, pos & ~0xFFF);
+		if (frame == 0)
+		{
+			break;
+		}
+		else
+		{
+			uint64_t old = mapTempFrame(frame);
+			memcpy((char*) tmpframe() + (pos & 0xFFF), scan, sizeToWrite);
+			mapTempFrame(old);
+			piMarkAccessed(frame);
+			piMarkDirty(frame);
+			piDecref(frame);
+		};
+		
+		scan += sizeToWrite;
+		sizeWritten += sizeToWrite;
+		pos += sizeToWrite;
+		size -= sizeToWrite;
+	};
+	
+	semSignal(&ft->lock);
+	return sizeWritten;
 };

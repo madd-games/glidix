@@ -403,11 +403,12 @@ void initInitrdfs(KernelBootInfo *info)
 	TarHeader *header = masterHeader;
 	while (1)
 	{
-		header->ft = ftCreate(0);
+		header->ft = ftCreate(FT_READONLY);
 		header->ft->data = header;
 		header->ft->load = ft_load;
 		
 		size_t sz = parseOct(header->size);
+		header->ft->size = sz;
 		size_t blocks = (sz + 511) / 512;
 		
 		header = &header[1+blocks];

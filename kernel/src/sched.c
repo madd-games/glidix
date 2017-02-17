@@ -36,6 +36,7 @@
 #include <glidix/time.h>
 #include <glidix/syscall.h>
 #include <glidix/cpu.h>
+#include <glidix/pagetab.h>
 
 static Thread firstThread;
 PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
@@ -1682,4 +1683,23 @@ int thnice(int incr)
 	sti();
 		
 	return newVal;
+};
+
+uint64_t mapTempFrame(uint64_t frame)
+{
+	uint64_t virt = (uint64_t) tmpframe();
+	PTe *pte = (PTe*) ((virt >> 9) | 0xFFFFFF8000000000UL);
+	
+	uint64_t old = pte->framePhysAddr;
+	pte->framePhysAddr = frame;
+	
+	invlpg(tmpframe());
+	return old;
+};
+
+void* tmpframe()
+{
+	uint64_t virt = (uint64_t) currentThread->stack;
+	virt += 0x1000 - (virt & 0xFFF);		// page-align forward
+	return (void*) virt;
 };

@@ -285,7 +285,7 @@ void kmain(KernelBootInfo *info)
 	
 	kprintf_debug(" *** TO TRAP THE KERNEL *** \n");
 	kprintf_debug(" set r15=rip\n");
-	kprintf_debug(" set rip=%p\n", &trapKernel);
+	kprintf_debug(" set rip=0x%p\n", &trapKernel);
 	kprintf_debug(" *** END OF INFO *** \n");
 
 	kprintf("Initializing the IDT... ");

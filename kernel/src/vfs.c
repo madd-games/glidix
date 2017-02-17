@@ -309,18 +309,15 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 
 	*error = VFS_NO_FILE;			// default error
 
-	//kprintf_debug("start of parsePath('%s')\n", path);
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{
 		return NULL;
 	};
-	//kprintf_debug("rpath='%s'\n", rpath);
 
 	SplitPath spath;
 	if (resolveMounts(rpath, &spath) != 0)
 	{
-		//kprintf_debug("could not resolve mounts\n");
 		return NULL;
 	};
 
@@ -427,7 +424,6 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 		};
 		*put = 0;
 
-		//kprintf_debug("token '%s'\n", token);
 		if (strlen(token) == 0)
 		{
 			if (*scan == 0)
@@ -449,8 +445,6 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 				{
 					if (dir->mkreg != NULL)
 					{
-						//if (dir->getstat != NULL) dir->getstat(dir);
-
 						if (st_parent.st_ino == 0) panic("parent with inode 0!");
 						if (vfsCanCurrentThread(&st_parent, 2))
 						{
@@ -559,14 +553,10 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 					};
 
 					*put = 0;
-					//kprintf_debug("vfs: creating regular file '%s'\n", token);
 					if (*scan == 0)
 					{
-						//kprintf_debug("ok scan is good\n");
-						//if (dir->getstat != NULL) dir->getstat(dir);
 						if (subdir->mkreg != NULL)
 						{
-							//kprintf_debug("ok subdir->mkreg is here\n");
 							if (st_parent.st_ino == 0) panic("parent with inode 0!");
 							if (vfsCanCurrentThread(&st_parent, 2))
 							{
@@ -741,14 +731,108 @@ File *vfsOpen(const char *path, int flags, int *error)
 
 ssize_t vfsRead(File *file, void *buffer, size_t size)
 {
-	if (file->read == NULL) return -1;
+	if (file->read == NULL)
+	{
+		if (file->seek == NULL)
+		{
+			ERRNO = EIO;
+			return -1;
+		};
+		
+		off_t pos = file->seek(file, 0, SEEK_CUR);
+		if (pos == -1)
+		{
+			ERRNO = EIO;
+			return -1;
+		};
+		
+		ssize_t shift = vfsPRead(file, buffer, size, pos);
+		if (shift == -1)
+		{
+			return -1;
+		};
+		
+		file->seek(file, shift, SEEK_CUR);
+		return shift;
+	};
+	
 	return file->read(file, buffer, size);
 };
 
 ssize_t vfsWrite(File *file, const void *buffer, size_t size)
 {
-	if (file->write == NULL) return -1;
+	if (file->write == NULL)
+	{
+		if (file->seek == NULL)
+		{
+			ERRNO = EIO;
+			return -1;
+		};
+		
+		off_t pos = file->seek(file, 0, SEEK_CUR);
+		if (pos == -1)
+		{
+			ERRNO = EIO;
+			return -1;
+		};
+		
+		ssize_t shift = vfsPWrite(file, buffer, size, pos);
+		if (shift == -1)
+		{
+			return -1;
+		};
+		
+		file->seek(file, shift, SEEK_CUR);
+		return shift;
+	};
+	
 	return file->write(file, buffer, size);
+};
+
+ssize_t vfsPRead(File *file, void *buffer, size_t size, off_t pos)
+{
+	if (file->pread == NULL)
+	{
+		if (file->tree == NULL)
+		{
+			ERRNO = EIO;
+			return -1;
+		};
+		
+		FileTree *ft = file->tree(file);
+		ssize_t result = ftRead(ft, buffer, size, pos);
+		ftDown(ft);
+		return result;
+	};
+	
+	return file->pread(file, buffer, size, pos);
+};
+
+ssize_t vfsPWrite(File *file, const void *buffer, size_t size, off_t pos)
+{
+	if (file->pwrite == NULL)
+	{
+		if (file->tree == NULL)
+		{
+			ERRNO = EIO;
+			return -1;
+		};
+		
+		FileTree *ft = file->tree(file);
+		if (ft->flags & FT_READONLY)
+		{
+			ftDown(ft);
+			
+			ERRNO = EROFS;
+			return -1;
+		};
+		
+		ssize_t result = ftWrite(ft, buffer, size, pos);
+		ftDown(ft);
+		return result;
+	};
+	
+	return file->pwrite(file, buffer, size, pos);
 };
 
 void vfsDup(File *file)

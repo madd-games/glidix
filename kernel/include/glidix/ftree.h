@@ -36,6 +36,7 @@
  * Tree flags.
  */
 #define	FT_ANON					(1 << 0)
+#define	FT_READONLY				(1 << 1)
 
 /**
  * Describes a single node on a file page tree. There are 16 entries, indexed by each 4
@@ -99,6 +100,11 @@ typedef struct FileTree_
 	 * Top-level node.
 	 */
 	FileNode				top;
+	
+	/**
+	 * Current size of this file in bytes.
+	 */
+	size_t					size;
 } FileTree;
 
 /**
@@ -129,5 +135,15 @@ void ftDown(FileTree *ft);
  * frame has its reference count incremented.
  */
 uint64_t ftGetPage(FileTree *ft, off_t pos);
+
+/**
+ * Read data from a file tree at the specified position.
+ */
+ssize_t ftRead(FileTree *ft, void *buffer, size_t size, off_t pos);
+
+/**
+ * Write data to a file tree at the specified position.
+ */
+ssize_t ftWrite(FileTree *ft, const void *buffer, size_t size, off_t pos);
 
 #endif

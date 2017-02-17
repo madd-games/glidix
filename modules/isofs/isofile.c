@@ -100,6 +100,7 @@ static off_t isofile_seek(File *fp, off_t offset, int whence)
 	return newOffset;
 };
 
+#if 0
 static ssize_t isofile_read(File *fp, void *buffer, size_t size)
 {
 	ISOFile *file = (ISOFile*) fp->fsdata;
@@ -150,6 +151,7 @@ static ssize_t isofile_pread(File *fp, void *buffer, size_t size, off_t off)
 
 	return count;
 };
+#endif
 
 static int isofile_fstat(File *fp, struct stat *st)
 {
@@ -187,8 +189,8 @@ int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, s
 
 	fp->fsdata = file;
 	fp->close = isofile_close;
-	fp->read = isofile_read;
-	fp->pread = isofile_pread;
+	//fp->read = isofile_read;
+	//fp->pread = isofile_pread;
 	fp->dup = isofile_dup;
 	fp->seek = isofile_seek;
 	fp->fstat = isofile_fstat;

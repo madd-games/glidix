@@ -311,8 +311,7 @@ typedef struct _File
 	ssize_t (*pwrite)(struct _File *file, const void *buffer, size_t count, off_t offset);
 	
 	/**
-	 * Locks held by this file descriptor. Note that those are released on each vfsClose(), even if it doesn't
-	 * release the file description. This list must be handled using atomic operations.
+	 * Locks held by this file descriptor. This list must be handled using atomic operations.
 	 */
 	FileLock* locks[VFS_MAX_LOCKS_PER_FILE];
 	
@@ -537,6 +536,8 @@ int vfsLinkStat(const char *path, struct stat *st);
 File *vfsOpen(const char *path, int flags, int *error);
 ssize_t vfsRead(File *file, void *buffer, size_t size);
 ssize_t vfsWrite(File *file, const void *buffer, size_t size);
+ssize_t vfsPRead(File *file, void *buffer, size_t size, off_t pos);
+ssize_t vfsPWrite(File *file, const void *buffer, size_t size, off_t pos);
 void vfsDup(File *file);
 void vfsClose(File *file);
 

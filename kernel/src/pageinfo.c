@@ -48,7 +48,6 @@ uint64_t piNew(uint64_t flags)
 	uint64_t frame = phmAllocZeroFrame();
 	if (frame == 0) return 0;
 	
-	
 	mutexLock(&piLock);
 	uint64_t i;
 	PageInfoNode *node = &piRoot;

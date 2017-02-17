@@ -612,4 +612,17 @@ int havePerm(uint64_t xperm);
  */
 int thnice(int incr);
 
+/**
+ * Map a different frame into the "temporary page", and return the previous frame number. You MUST map the old
+ * page number by in before the calling function returns. Most importantly, since the temporary page is at the
+ * top of the kernel stack, and that area is used by signal dispatching, it MUST be returned to normal before
+ * returning to userspace.
+ */
+uint64_t mapTempFrame(uint64_t frame);
+
+/**
+ * Returns a virtual pointer which may be used to access the "temporary page".
+ */
+void* tmpframe();
+
 #endif

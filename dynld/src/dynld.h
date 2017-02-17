@@ -241,4 +241,9 @@ void dynld_libclose(Library *lib);
  */
 void dynld_initlib(Library *lib);
 
+/**
+ * Get our PID.
+ */
+int dynld_getpid();
+
 #endif

@@ -180,44 +180,35 @@ ssize_t sys_write(int fd, const void *buf, size_t size)
 		}
 		else
 		{
-			if (fp->write == NULL)
+			if ((fp->oflag & O_WRONLY) == 0)
 			{
 				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EROFS;
+				getCurrentThread()->therrno = EACCES;
 				out = -1;
 			}
 			else
 			{
-				if ((fp->oflag & O_WRONLY) == 0)
+				vfsDup(fp);
+				spinlockRelease(&ftab->spinlock);
+				void *tmpbuf = kmalloc(size);
+				if (tmpbuf == NULL)
 				{
-					spinlockRelease(&ftab->spinlock);
-					getCurrentThread()->therrno = EACCES;
+					vfsClose(fp);
+					ERRNO = ENOBUFS;
+					out = -1;
+				}
+				else if (memcpy_u2k(tmpbuf, buf, size) != 0)
+				{
+					vfsClose(fp);
+					kfree(tmpbuf);
+					ERRNO = EFAULT;
 					out = -1;
 				}
 				else
 				{
-					vfsDup(fp);
-					spinlockRelease(&ftab->spinlock);
-					void *tmpbuf = kmalloc(size);
-					if (tmpbuf == NULL)
-					{
-						vfsClose(fp);
-						ERRNO = ENOBUFS;
-						out = -1;
-					}
-					else if (memcpy_u2k(tmpbuf, buf, size) != 0)
-					{
-						vfsClose(fp);
-						kfree(tmpbuf);
-						ERRNO = EFAULT;
-						out = -1;
-					}
-					else
-					{
-						out = fp->write(fp, tmpbuf, size);
-						vfsClose(fp);
-						kfree(tmpbuf);
-					};
+					out = vfsWrite(fp, tmpbuf, size);
+					vfsClose(fp);
+					kfree(tmpbuf);
 				};
 			};
 		};
@@ -247,45 +238,36 @@ uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
 		}
 		else
 		{
-			if (fp->pwrite == NULL)
+			if ((fp->oflag & O_WRONLY) == 0)
 			{
 				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EROFS;
+				getCurrentThread()->therrno = EACCES;
 				out = -1;
 			}
 			else
 			{
-				if ((fp->oflag & O_WRONLY) == 0)
+				vfsDup(fp);
+				spinlockRelease(&ftab->spinlock);
+				void *tmpbuf = kmalloc(size);
+				if (tmpbuf == NULL)
 				{
-					spinlockRelease(&ftab->spinlock);
-					getCurrentThread()->therrno = EACCES;
-					out = -1;
+					vfsClose(fp);
+					ERRNO = ENOBUFS;
+					return -1;
+				};
+				
+				if (memcpy_u2k(tmpbuf, buf, size) != 0)
+				{
+					vfsClose(fp);
+					kfree(tmpbuf);
+					ERRNO = EFAULT;
+					return -1;
 				}
 				else
 				{
-					vfsDup(fp);
-					spinlockRelease(&ftab->spinlock);
-					void *tmpbuf = kmalloc(size);
-					if (tmpbuf == NULL)
-					{
-						vfsClose(fp);
-						ERRNO = ENOBUFS;
-						return -1;
-					};
-					
-					if (memcpy_u2k(tmpbuf, buf, size) != 0)
-					{
-						vfsClose(fp);
-						kfree(tmpbuf);
-						ERRNO = EFAULT;
-						return -1;
-					}
-					else
-					{
-						out = fp->pwrite(fp, tmpbuf, size, offset);
-						vfsClose(fp);
-						kfree(tmpbuf);
-					};
+					out = vfsPWrite(fp, tmpbuf, size, offset);
+					vfsClose(fp);
+					kfree(tmpbuf);
 				};
 			};
 		};
@@ -315,43 +297,34 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 		}
 		else
 		{
-			if (fp->read == NULL)
+			if ((fp->oflag & O_RDONLY) == 0)
 			{
 				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EIO;
+				getCurrentThread()->therrno = EACCES;
 				out = -1;
 			}
 			else
 			{
-				if ((fp->oflag & O_RDONLY) == 0)
+				vfsDup(fp);
+				spinlockRelease(&ftab->spinlock);
+				void *tmpbuf = kmalloc(size);
+				if (tmpbuf == NULL)
 				{
-					spinlockRelease(&ftab->spinlock);
-					getCurrentThread()->therrno = EACCES;
-					out = -1;
-				}
-				else
-				{
-					vfsDup(fp);
-					spinlockRelease(&ftab->spinlock);
-					void *tmpbuf = kmalloc(size);
-					if (tmpbuf == NULL)
-					{
-						vfsClose(fp);
-						ERRNO = ENOBUFS;
-						return -1;
-					};
-					
-					out = fp->read(fp, tmpbuf, size);
-					size_t toCopy = (size_t) out;
-					if (out == -1) toCopy = 0;
 					vfsClose(fp);
-					if (memcpy_k2u(buf, tmpbuf, toCopy) != 0)
-					{
-						ERRNO = EFAULT;
-						out = -1;
-					};
-					kfree(tmpbuf);
+					ERRNO = ENOBUFS;
+					return -1;
 				};
+				
+				out = vfsRead(fp, tmpbuf, size);
+				size_t toCopy = (size_t) out;
+				if (out == -1) toCopy = 0;
+				vfsClose(fp);
+				if (memcpy_k2u(buf, tmpbuf, toCopy) != 0)
+				{
+					ERRNO = EFAULT;
+					out = -1;
+				};
+				kfree(tmpbuf);
 			};
 		};
 	};
@@ -380,41 +353,32 @@ ssize_t sys_pread(int fd, void *buf, size_t size, off_t offset)
 		}
 		else
 		{
-			if (fp->pread == NULL)
+			if ((fp->oflag & O_RDONLY) == 0)
 			{
 				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EIO;
+				getCurrentThread()->therrno = EACCES;
 				out = -1;
 			}
 			else
 			{
-				if ((fp->oflag & O_RDONLY) == 0)
+				vfsDup(fp);
+				spinlockRelease(&ftab->spinlock);
+				void *tmpbuf = kmalloc(size);
+				if (tmpbuf == NULL)
 				{
-					spinlockRelease(&ftab->spinlock);
-					getCurrentThread()->therrno = EACCES;
-					out = -1;
-				}
-				else
-				{
-					vfsDup(fp);
-					spinlockRelease(&ftab->spinlock);
-					void *tmpbuf = kmalloc(size);
-					if (tmpbuf == NULL)
-					{
-						vfsClose(fp);
-						ERRNO = ENOBUFS;
-						return -1;
-					};
-					
-					out = fp->pread(fp, tmpbuf, size, offset);
 					vfsClose(fp);
-					if (memcpy_k2u(buf, tmpbuf, size) != 0)
-					{
-						ERRNO = EFAULT;
-						out = -1;
-					};
-					kfree(tmpbuf);
+					ERRNO = ENOBUFS;
+					return -1;
 				};
+				
+				out = vfsPRead(fp, tmpbuf, size, offset);
+				vfsClose(fp);
+				if (memcpy_k2u(buf, tmpbuf, size) != 0)
+				{
+					ERRNO = EFAULT;
+					out = -1;
+				};
+				kfree(tmpbuf);
 			};
 		};
 	};
@@ -3500,11 +3464,6 @@ int sys_getpgid(int pid)
 	return result;
 };
 
-void sys_diag(uint64_t addr)
-{
-	vmDump(getCurrentThread()->pm, addr);
-};
-
 void sys_pthread_exit(uint64_t retval)
 {
 	threadExitEx(retval);
@@ -4204,7 +4163,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_insmod,				// 27
 	&sys_ioctl,				// 28
 	&sys_fdopendir,				// 29
-	&sys_diag,				// 30 (_glidix_diag())
+	NULL,					// 30 (_glidix_diag())
 	&sys_mount,				// 31
 	&sys_yield,				// 32
 	&time,					// 33

@@ -10,7 +10,7 @@ mprotect - change protection of a region of memory
 
 >DESCRIPTION
 
-This function changes the protection settings of 'len' bytes of memory starting at 'addr'. 'addr' must be page-aligned. The 'prot' argument is either *PROT_NONE*, incicating that the memory cannot be accessed at all, or bitwise-OR of one or more of the following flags:
+This function changes the protection settings of 'len' bytes of memory starting at 'addr'. 'addr' must be page-aligned. The 'prot' argument is either *PROT_NONE*, indicating that the memory cannot be accessed at all, or bitwise-OR of one or more of the following flags:
 
 \* *PROT_READ* - the memory may be read.
 \* *PROT_WRITE* - the memory may be written to.
