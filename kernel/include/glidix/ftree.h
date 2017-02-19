@@ -97,6 +97,11 @@ typedef struct FileTree_
 	int (*flush)(struct FileTree_ *ft, off_t pos, const void *buffer);
 	
 	/**
+	 * Function pointer set by the driver, called whenever the file is resized by ftWrite().
+	 */
+	void (*update)(struct FileTree_ *ft);
+	
+	/**
 	 * Top-level node.
 	 */
 	FileNode				top;

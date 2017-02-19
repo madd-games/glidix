@@ -232,6 +232,7 @@ then
 	echo >>Makefile "	mkdir -p isodir/var/run"
 	echo >>Makefile "	mkdir -p isodir/run"
 	echo >>Makefile "	mkdir -p isodir/sys/mod"
+	echo >>Makefile "	mkdir -p isodir/proc"
 	echo >>Makefile "	grub-mkrescue -o \$@ isodir"
 fi
 

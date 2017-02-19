@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 			dup(logfd);
 			
 			// close all other files
-			for (i=0; i<sysconf(_SC_OPEN_MAX); i++)
+			for (i=3; i<sysconf(_SC_OPEN_MAX); i++)
 			{
 				if (i != pidfd)
 				{

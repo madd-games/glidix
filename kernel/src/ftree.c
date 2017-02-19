@@ -55,6 +55,7 @@ FileTree* ftCreate(int flags)
 	ft->data = NULL;
 	ft->load = NULL;
 	ft->flush = NULL;
+	ft->update = NULL;
 	ft->size = 0;
 	
 	mutexLock(&ftMtx);
@@ -239,6 +240,7 @@ ssize_t ftWrite(FileTree *ft, const void *buffer, size_t size, off_t pos)
 	if ((pos+size) >= ft->size)
 	{
 		ft->size = pos + size;
+		if (ft->update != NULL) ft->update(ft);
 	};
 	
 	ssize_t sizeWritten = 0;

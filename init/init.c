@@ -208,30 +208,6 @@ int load_config(const char *filename)
 		printf("init: cannot stat executable %s\n", confExec[0]);
 		return -1;
 	};
-
-	printf("init: cleaning up service pid files\n");
-	DIR *dp = opendir("/etc/services");
-	if (dp != NULL)
-	{
-		struct dirent *ent;
-		while ((ent = readdir(dp)) != NULL)
-		{
-			const char *name = ent->d_name;
-			if (strlen(name) > 4)
-			{
-				if (memcmp(&name[strlen(name)-4], ".pid", 4) == 0)
-				{
-					printf("init: removing pid file %s\n", name);
-					
-					char pidpath[256];
-					sprintf(pidpath, "/etc/services/%s", name);
-					unlink(pidpath);
-				};
-			};
-		};
-		
-		closedir(dp);
-	};
 	
 	if (fork() == 0)
 	{

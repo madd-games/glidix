@@ -179,6 +179,12 @@ static int ramtree_load(FileTree *ft, off_t off, void *buffer)
 	return 0;
 };
 
+static void ramtree_update(FileTree *ft)
+{
+	RamfsInode *inode = (RamfsInode*) ft->data;
+	inode->meta.st_size = ft->size;
+};
+
 static int ramdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t gid)
 {
 	DirData *data = (DirData*) dir->fsdata;
@@ -203,7 +209,9 @@ static int ramdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = time();
 	
 	FileTree *ft = ftCreate(0);
+	ft->data = newInode;
 	ft->load = ramtree_load;
+	ft->update = ramtree_update;
 	
 	newInode->data = ft;
 	

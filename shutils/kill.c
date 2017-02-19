@@ -41,7 +41,8 @@ void usage()
 	fprintf(stderr, "\tSIGQUIT, SIGTERM, SIGSTOP, SIGTSTP, SIGUSR, SIGUSR2.\n");
 	fprintf(stderr, "\tSIGTERM is the default signal - if none is specified,\n");
 	fprintf(stderr, "\tSIGTERM will be sent.\n");
-}
+};
+
 int get_signal_name( const char *signame )
 {
 	if (strcmp(signame, "SIGCONT") == 0) return SIGCONT;
@@ -55,10 +56,12 @@ int get_signal_name( const char *signame )
 	if (strcmp(signame, "SIGUSR1") == 0) return SIGUSR1;
 	if (strcmp(signame, "SIGUSR2") == 0) return SIGUSR2;
 	return -1;
-}
+};
+
 int main( int argc, char *argv[] )
 {
 	progName = argv[0];
+	
 	if(argc==2)
 	{
 		int pid;
@@ -76,22 +79,25 @@ int main( int argc, char *argv[] )
 		{
 			return 0;
 		}
-	}
+	};
+	
 	if(argc==3)
 	{
 		int pid;
 		int sig;
-		sig = get_signal_name( argv[1] );
+		sig = get_signal_name(argv[1]);
 		if (sig == -1)
 		{
 			fprintf(stderr, "%s: invalid signal name\n", argv[0]);
 			return 1;
-		}
+		};
+		
 		if (sscanf(argv[2], "%d", &pid) != 1)
 		{
 			usage();
 			return 1;
-		}
+		};
+		
 		if (kill(pid, sig) != 0)
 		{
 			fprintf(stderr, "%s: error: %s\n", argv[0], strerror(errno));
@@ -100,7 +106,7 @@ int main( int argc, char *argv[] )
 		else
 		{
 			return 0;
-		}
+		};
 	}	
 	else
 	{
