@@ -229,6 +229,9 @@ then
 	
 	echo >>Makefile "	@mkdir -p isodir/usr/share/pkg"
 	echo >>Makefile "	PKGDIR=isodir/usr/share/pkg make mip"
+	echo >>Makefile "	mkdir -p isodir/var/run"
+	echo >>Makefile "	mkdir -p isodir/run"
+	echo >>Makefile "	mkdir -p isodir/sys/mod"
 	echo >>Makefile "	grub-mkrescue -o \$@ isodir"
 fi
 

@@ -93,7 +93,7 @@ static int pts_ioctl(File *fp, uint64_t cmd, void *argp)
 	int pgid;
 	struct termios *tc = (struct termios*) argp;
 	Thread *scan;
-	Thread *target;
+	Thread *target = NULL;
 	
 	switch (cmd)
 	{
@@ -124,11 +124,16 @@ static int pts_ioctl(File *fp, uint64_t cmd, void *argp)
 		scan = getCurrentThread();
 		do
 		{
-			if (scan->creds->pgid == pgid)
+			if (scan->creds != NULL)
 			{
-				target = scan;
-				break;
+				if (scan->creds->pgid == pgid)
+				{
+					target = scan;
+					break;
+				};
 			};
+			
+			scan = scan->next;
 		} while (scan != getCurrentThread());
 		if (target == NULL)
 		{

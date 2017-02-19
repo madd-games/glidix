@@ -30,6 +30,103 @@
 #define COMMAND_H_
 
 /**
+ * File redirection entry.
+ */
+typedef struct CmdRedir_
+{
+	/**
+	 * Next entry.
+	 */
+	struct CmdRedir_ *next;
+	
+	/**
+	 * Original file descriptor to redirect.
+	 */
+	int fd;
+	
+	/**
+	 * Name of the file to redirect to (or descriptor specification in the form "&3").
+	 */
+	char *targetName;
+	
+	/**
+	 * Flags to open the file with.
+	 */
+	int oflag;
+} CmdRedir;
+
+/**
+ * Represents a member of a command group.
+ */
+typedef struct CmdMember_
+{
+	/**
+	 * Command tokens; environment settings followed by the command, followed by
+	 * arguments to the command.
+	 */
+	char **tokens;
+	
+	/**
+	 * Number of tokens.
+	 */
+	int numTokens;
+	
+	/**
+	 * Next and previous member of the group.
+	 */
+	struct CmdMember_* prev;
+	struct CmdMember_* next;
+	
+	/**
+	 * Head of the file redirection list.
+	 */
+	CmdRedir* redir;
+	
+	/**
+	 * Exit status of this command, as returned by wait().
+	 */
+	int status;
+	
+	/**
+	 * PID of the member. -1 means already dead.
+	 */
+	pid_t pid;
+} CmdMember;
+
+/**
+ * Represents a command group.
+ */
+typedef struct CmdGroup_
+{
+	/**
+	 * Next group in the chain.
+	 */
+	struct CmdGroup_* next;
+	
+	/**
+	 * First command in the group (the group leader). The entries are sorted right-to-left!
+	 */
+	CmdMember *firstMember;
+	
+	/**
+	 * If true, this group must return success in order to run the next one
+	 * (otherwise it must return failure).
+	 */
+	int mustSucceed;
+} CmdGroup;
+
+/**
+ * Represents a command chain.
+ */
+typedef struct
+{
+	/**
+	 * First member of the chain.
+	 */
+	CmdGroup *firstGroup;
+} CmdChain;
+
+/**
  * Run the specified command, and return the exit status (which must be parsed by the macros
  * in <sys/wait.h>). The 'cmd' string must already be pre-processed. This function destroys
  * the contents of 'cmd', but does not call free() on it!

@@ -89,7 +89,7 @@ static unsigned char keymapShift[128] =
 		0,			/* 29	 - Control */
 	'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':',	/* 39 */
  '\"', '`',	 0x80,		/* Left shift */
- '\\', 'Z', 'X', 'C', 'V', 'B', 'N',			/* 49 */
+ '|', 'Z', 'X', 'C', 'V', 'B', 'N',			/* 49 */
 	'M', '<', '>', '?',	 0x80,				/* Right shift */
 	'*',
 		0,	/* Alt */

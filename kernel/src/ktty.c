@@ -117,7 +117,7 @@ static int termDup(File *old, File *new, size_t szfile)
 
 int termIoctl(File *fp, uint64_t cmd, void *argp)
 {
-	Thread *target;
+	Thread *target = NULL;
 	Thread *scan;
 	int pgid;
 	struct termios *tc = (struct termios*) argp;
@@ -148,11 +148,16 @@ int termIoctl(File *fp, uint64_t cmd, void *argp)
 		scan = getCurrentThread();
 		do
 		{
-			if (scan->creds->pgid == pgid)
+			if (scan->creds != NULL)
 			{
-				target = scan;
-				break;
+				if (scan->creds->pgid == pgid)
+				{
+					target = scan;
+					break;
+				};
 			};
+			
+			scan = scan->next;
 		} while (scan != getCurrentThread());
 		if (target == NULL)
 		{
