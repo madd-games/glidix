@@ -46,8 +46,8 @@ typedef struct RamfsInode_
 	
 	/**
 	 * For directories, this points to the first entry (which is just the directory end pointer
-	 * for empty directories). For files, this points to the first byte of the data. For symlinks,
-	 * this points to a NUL-terminated string specifying the pathname.
+	 * for empty directories). For files, this points to the file tree. For symlinks, this points
+	 * to a NUL-terminated string specifying the pathname.
 	 */
 	void*					data;
 } RamfsInode;

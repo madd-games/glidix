@@ -114,8 +114,6 @@ void ftDown(FileTree *ft)
 	};
 };
 
-
-
 static uint64_t getPageUnlocked(FileTree *ft, off_t pos)
 {
 	FileNode *node = &ft->top;
@@ -275,4 +273,53 @@ ssize_t ftWrite(FileTree *ft, const void *buffer, size_t size, off_t pos)
 	
 	semSignal(&ft->lock);
 	return sizeWritten;
+};
+
+int ftTruncate(FileTree *ft, size_t size)
+{
+	semWait(&ft->lock);
+	if (ft->flags & FT_READONLY)
+	{
+		semSignal(&ft->lock);
+		return -1;
+	};
+	
+	if (size < ft->size)
+	{
+		size_t pos;
+		for (pos=size+0xFFF; pos<ft->size; pos+=0x1000)
+		{
+			FileNode *node = &ft->top;
+			int i;
+			int foundNode = 1;
+			for (i=0; i<12; i++)
+			{
+				uint64_t ent = (pos >> (12 + 4 * (12 - i))) & 0xF;
+		
+				if (node->nodes[ent] == NULL)
+				{
+					foundNode = 0;
+					break;
+				}
+				else
+				{
+					node = node->nodes[ent];
+				};
+			};
+			
+			if (foundNode)
+			{
+				uint64_t pageIndex = (pos >> 12) & 0xF;
+				if (node->entries[pageIndex] != 0)
+				{
+					piUncache(node->entries[pageIndex]);
+					node->entries[pageIndex] = 0;
+				};
+			};
+		};
+	};
+	
+	ft->size = size;
+	semSignal(&ft->lock);
+	return 0;
 };

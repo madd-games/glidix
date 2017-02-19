@@ -33,6 +33,7 @@
 #include <glidix/string.h>
 #include <glidix/time.h>
 #include <glidix/sched.h>
+#include <glidix/ftree.h>
 
 /**
  * RAM filesystem list lock.
@@ -70,7 +71,15 @@ static void nodeDown(RamfsInode *inode)
 {
 	if (__sync_add_and_fetch(&inode->meta.st_nlink, -1) == 0)
 	{
-		kfree(inode->data);
+		if ((inode->meta.st_mode & 0xF000) == 0)
+		{
+			ftDown((FileTree*) inode->data);
+		}
+		else
+		{
+			kfree(inode->data);
+		};
+		
 		kfree(inode);
 	};
 };
@@ -164,6 +173,12 @@ static int ramdir_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	return 0;
 };
 
+static int ramtree_load(FileTree *ft, off_t off, void *buffer)
+{
+	// load no data (all zeroes)
+	return 0;
+};
+
 static int ramdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t gid)
 {
 	DirData *data = (DirData*) dir->fsdata;
@@ -186,7 +201,11 @@ static int ramdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	newInode->meta.st_gid = gid;
 	newInode->meta.st_blksize = 512;
 	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = time();
-	newInode->data = NULL;
+	
+	FileTree *ft = ftCreate(0);
+	ft->load = ramtree_load;
+	
+	newInode->data = ft;
 	
 	RamfsDirent *newEnt = NEW(RamfsDirent);
 	strcpy(newEnt->dent.d_name, name);
@@ -487,99 +506,16 @@ static void ramfile_pollinfo(File *fp, Semaphore **sems)
 	sems[PEI_WRITE] = vfsGetConstSem();
 };
 
-static ssize_t ramfile_pread(File *fp, void *buffer, size_t size, off_t off)
-{
-	if (off < 0)
-	{
-		return 0;
-	};
-	
-	FileData *data = (FileData*) fp->fsdata;
-	semWait(&data->ramfs->lock);
-	
-	if (off > (off_t)data->inode->meta.st_size)
-	{
-		semSignal(&data->ramfs->lock);
-		return 0;
-	};
-	
-	size_t maxSize = data->inode->meta.st_size - (size_t) off;
-	if (size > maxSize) size = maxSize;
-	
-	memcpy(buffer, (char*)data->inode->data + off, size);
-	data->inode->meta.st_atime = time();
-	semSignal(&data->ramfs->lock);
-	
-	return (ssize_t) size;
-};
-
-static ssize_t ramfile_read(File *fp, void *buffer, size_t size)
+static FileTree* ramfile_tree(File *fp)
 {
 	FileData *data = (FileData*) fp->fsdata;
 	semWait(&data->ramfs->lock);
 	
-	if (data->pos > (off_t)data->inode->meta.st_size)
-	{
-		semSignal(&data->ramfs->lock);
-		return 0;
-	};
+	FileTree *ft = (FileTree*) data->inode->data;
+	ftUp(ft);
 	
-	size_t maxSize = data->inode->meta.st_size - (size_t) data->pos;
-	if (size > maxSize) size = maxSize;
-	
-	memcpy(buffer, (char*)data->inode->data + data->pos, size);
-	data->pos += size;
-	data->inode->meta.st_atime = time();
 	semSignal(&data->ramfs->lock);
-	
-	return (ssize_t) size;
-};
-
-static ssize_t ramfile_pwrite(File *fp, const void *buffer, size_t size, off_t off)
-{
-	FileData *data = (FileData*) fp->fsdata;
-	semWait(&data->ramfs->lock);
-	
-	size_t minSize = size + (size_t)off;
-	if (data->inode->meta.st_size < minSize)
-	{
-		void *newData = kmalloc(minSize);
-		memset(newData, 0, minSize);
-		memcpy(newData, data->inode->data, data->inode->meta.st_size);
-		kfree(data->inode->data);
-		data->inode->data = newData;
-		data->inode->meta.st_size = minSize;
-	};
-	
-	memcpy((char*)data->inode->data + off, buffer, size);
-	data->inode->meta.st_mtime = data->inode->meta.st_atime = time();
-	semSignal(&data->ramfs->lock);
-	
-	return (ssize_t) size;
-};
-
-static ssize_t ramfile_write(File *fp, const void *buffer, size_t size)
-{
-	FileData *data = (FileData*) fp->fsdata;
-	semWait(&data->ramfs->lock);
-	
-	size_t minSize = size + (size_t)data->pos;
-	if (data->inode->meta.st_size < minSize)
-	{
-		void *newData = kmalloc(minSize);
-		memset(newData, 0, minSize);
-		memcpy(newData, data->inode->data, data->inode->meta.st_size);
-		kfree(data->inode->data);
-		data->inode->data = newData;
-		data->inode->meta.st_size = minSize;
-	};
-	
-	memcpy((char*)data->inode->data + data->pos, buffer, size);
-	data->pos += size;
-	data->inode->meta.st_mtime = data->inode->meta.st_atime = time();
-	semSignal(&data->ramfs->lock);
-	
-	return (ssize_t) size;
+	return ft;
 };
 
 static void ramfile_truncate(File *fp, off_t len)
@@ -596,16 +532,8 @@ static void ramfile_truncate(File *fp, off_t len)
 		semSignal(&data->ramfs->lock);
 		return;
 	};
-	
-	void *newData = kmalloc(size);
-	memset(newData, 0, size);
-	
-	size_t toCopy = data->inode->meta.st_size;
-	if (toCopy > size) toCopy = size;
-	memcpy(newData, data->inode->data, toCopy);
-	
-	kfree(data->inode->data);
-	data->inode->data = newData;
+
+	ftTruncate((FileTree*)data->inode->data, (size_t) len);
 	data->inode->meta.st_size = size;
 	data->inode->meta.st_ctime = time();
 	
@@ -637,10 +565,7 @@ static int ramdir_openfile(Dir *dir, File *fp, size_t szfile)
 	fp->fchmod = ramfile_fchmod;
 	fp->fchown = ramfile_fchown;
 	fp->pollinfo = ramfile_pollinfo;
-	fp->pread = ramfile_pread;
-	fp->read = ramfile_read;
-	fp->pwrite = ramfile_pwrite;
-	fp->write = ramfile_write;
+	fp->tree = ramfile_tree;
 	fp->truncate = ramfile_truncate;
 	
 	semSignal(&data->ramfs->lock);

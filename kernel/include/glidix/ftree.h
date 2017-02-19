@@ -146,4 +146,11 @@ ssize_t ftRead(FileTree *ft, void *buffer, size_t size, off_t pos);
  */
 ssize_t ftWrite(FileTree *ft, const void *buffer, size_t size, off_t pos);
 
+/**
+ * Change the size of the specified file tree. This is called by truncate() implementations on regular files,
+ * aside from updating the inode. If the file has become smaller, the out-of-range pages are uncached.
+ * Returns 0 on success; -1 if the tree is read-only.
+ */
+int ftTruncate(FileTree *ft, size_t size);
+
 #endif
