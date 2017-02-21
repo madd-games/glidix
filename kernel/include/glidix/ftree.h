@@ -158,4 +158,10 @@ ssize_t ftWrite(FileTree *ft, const void *buffer, size_t size, off_t pos);
  */
 int ftTruncate(FileTree *ft, size_t size);
 
+/**
+ * Uncache the file tree. This removes it from the global list of file trees and converts it to anonymouse. It must
+ * have at least one reference! If a subsequent ftDown() decreases the refcount to 0, the tree is deleted.
+ */
+void ftUncache(FileTree *ft);
+
 #endif

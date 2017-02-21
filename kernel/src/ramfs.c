@@ -73,6 +73,7 @@ static void nodeDown(RamfsInode *inode)
 	{
 		if ((inode->meta.st_mode & 0xF000) == 0)
 		{
+			ftUncache((FileTree*) inode->data);
 			ftDown((FileTree*) inode->data);
 		}
 		else

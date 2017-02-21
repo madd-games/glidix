@@ -325,3 +325,15 @@ int ftTruncate(FileTree *ft, size_t size)
 	semSignal(&ft->lock);
 	return 0;
 };
+
+void ftUncache(FileTree *ft)
+{
+	mutexLock(&ftMtx);
+	if (ft->prev != NULL) ft->prev->next = ft->next;
+	if (ftFirst == ft) ftFirst = ft->next;
+	if (ft->next != NULL) ft->next->prev = ft->prev;
+	if (ftLast == ft) ftLast = ft->prev;
+	mutexUnlock(&ftMtx);
+	
+	ft->flags |= FT_ANON;
+};
