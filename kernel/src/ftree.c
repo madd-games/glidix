@@ -102,6 +102,32 @@ static void deleteTree(int level, FileNode *node)
 	};
 };
 
+static void flushTree(FileTree *ft, int level, FileNode *node, uint64_t base)
+{
+	int i;
+	for (i=0; i<16; i++)
+	{
+		uint64_t pos = (base << 4) | (uint64_t)i;
+		if (level == 12)
+		{
+			if (ft->flush != NULL)
+			{
+				uint8_t pagebuf[0x1000];
+				frameRead(node->entries[i], pagebuf);
+				ft->flush(ft, pos << 12, pagebuf);
+			};
+		}
+		else
+		{
+			FileNode *subnode = node->nodes[i];
+			if (subnode != NULL)
+			{
+				flushTree(ft, level, subnode, pos);
+			};
+		};
+	};
+};
+
 void ftDown(FileTree *ft)
 {
 	if (__sync_add_and_fetch(&ft->refcount, -1) == 0)
@@ -111,6 +137,10 @@ void ftDown(FileTree *ft)
 			// uncache all pages
 			deleteTree(0, &ft->top);
 			kfree(ft);
+		}
+		else
+		{
+			flushTree(ft, 0, &ft->top, 0);
 		};
 	};
 };
