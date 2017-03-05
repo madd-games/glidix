@@ -60,6 +60,7 @@
 #define	htonl			__builtin_bswap32
 #define	ntohs			__builtin_bswap16
 #define	ntohl			__builtin_bswap32
+#define	PAGE_SIZE		0x1000
 
 /**
  * Special traps. If a userspace process jumps to one of these, it will trigger

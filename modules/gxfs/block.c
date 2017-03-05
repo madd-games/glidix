@@ -44,11 +44,11 @@ uint64_t gxfsAllocBlock(GXFS *gxfs)
 	{
 		uint64_t newBlock = gxfs->sb.sbFreeHead;
 		uint64_t nextBlock;
-		gxfs->fp->pread(gxfs->fp, &nextBlock, 8, 0x200000 + 512 * newBlock);
+		vfsPRead(gxfs->fp, &nextBlock, 8, 0x200000 + 512 * newBlock);
 		gxfs->sb.sbFreeHead = nextBlock;
 		
 		gxfs->sb.sbUsedBlocks++;
-		gxfs->fp->pwrite(gxfs->fp, &gxfs->sb, 512, 0x200000);
+		vfsPWrite(gxfs->fp, &gxfs->sb, 512, 0x200000);
 		semSignal(&gxfs->semAlloc);
 		
 		return newBlock;
@@ -61,7 +61,7 @@ uint64_t gxfsAllocBlock(GXFS *gxfs)
 	};
 	
 	uint64_t block = gxfs->sb.sbUsedBlocks++;
-	gxfs->fp->pwrite(gxfs->fp, &gxfs->sb, 512, 0x200000);
+	vfsPWrite(gxfs->fp, &gxfs->sb, 512, 0x200000);
 	semSignal(&gxfs->semAlloc);
 	
 	return block;
@@ -76,10 +76,10 @@ void gxfsFreeBlock(GXFS *gxfs, uint64_t block)
 	};
 	
 	semWait(&gxfs->semAlloc);
-	gxfs->fp->pwrite(gxfs->fp, &gxfs->sb.sbFreeHead, 8, 0x200000 + 512 * block);
+	vfsPWrite(gxfs->fp, &gxfs->sb.sbFreeHead, 8, 0x200000 + 512 * block);
 	gxfs->sb.sbFreeHead = block;
 	gxfs->sb.sbUsedBlocks--;
-	gxfs->fp->pwrite(gxfs->fp, &gxfs->sb, 512, 0x200000);
+	vfsPWrite(gxfs->fp, &gxfs->sb, 512, 0x200000);
 	semSignal(&gxfs->semAlloc);
 };
 
@@ -88,5 +88,5 @@ void gxfsZeroBlock(GXFS *gxfs, uint64_t block)
 	char zeroes[512];
 	memset(zeroes, 0, 512);
 	
-	gxfs->fp->pwrite(gxfs->fp, zeroes, 512, 0x200000 + (block << 9));
+	vfsPWrite(gxfs->fp, zeroes, 512, 0x200000 + (block << 9));
 };

@@ -167,6 +167,11 @@ typedef struct InodeInfo_
 	Semaphore			semDir;
 	int				dirDirty;
 	DirentInfo*			dir;
+	
+	/**
+	 * File tree if this is a file.
+	 */
+	FileTree*			ft;
 } InodeInfo;
 
 typedef struct GXFS_
@@ -180,6 +185,7 @@ typedef struct GXFS_
 	Semaphore			semInodes;
 	InodeInfo*			firstIno;
 	InodeInfo*			lastIno;
+	int				numOpenInodes;
 	
 	/**
 	 * Mutex for the allocator.

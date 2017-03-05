@@ -78,7 +78,7 @@ FileTree* ftCreate(int flags)
 
 void ftUp(FileTree *ft)
 {
-	__sync_fetch_and_add(&ft->refcount, 1);
+	__sync_add_and_fetch(&ft->refcount, 1);
 };
 
 static void deleteTree(int level, FileNode *node)
@@ -112,9 +112,15 @@ static void flushTree(FileTree *ft, int level, FileNode *node, uint64_t base)
 		{
 			if (ft->flush != NULL)
 			{
-				uint8_t pagebuf[0x1000];
-				frameRead(node->entries[i], pagebuf);
-				ft->flush(ft, pos << 12, pagebuf);
+				if (node->entries[i] != 0)
+				{
+					if (piCheckFlush(node->entries[i]))
+					{
+						uint8_t pagebuf[0x1000];
+						frameRead(node->entries[i], pagebuf);
+						ft->flush(ft, pos << 12, pagebuf);
+					};
+				};
 			};
 		}
 		else
@@ -122,7 +128,7 @@ static void flushTree(FileTree *ft, int level, FileNode *node, uint64_t base)
 			FileNode *subnode = node->nodes[i];
 			if (subnode != NULL)
 			{
-				flushTree(ft, level, subnode, pos);
+				flushTree(ft, level+1, subnode, pos);
 			};
 		};
 	};
@@ -130,7 +136,8 @@ static void flushTree(FileTree *ft, int level, FileNode *node, uint64_t base)
 
 void ftDown(FileTree *ft)
 {
-	if (__sync_add_and_fetch(&ft->refcount, -1) == 0)
+	int newRef = __sync_add_and_fetch(&ft->refcount, -1);
+	if (newRef == 0)
 	{
 		if (ft->flags & FT_ANON)
 		{
@@ -363,6 +370,9 @@ void ftUncache(FileTree *ft)
 	if (ftFirst == ft) ftFirst = ft->next;
 	if (ft->next != NULL) ft->next->prev = ft->prev;
 	if (ftLast == ft) ftLast = ft->prev;
+	ft->load = NULL;
+	ft->flush = NULL;
+	ft->update = NULL;
 	mutexUnlock(&ftMtx);
 	
 	ft->flags |= FT_ANON;

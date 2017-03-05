@@ -431,7 +431,7 @@ void isrHandler(Regs *regs)
 		sendCPUErrorSignal(regs, SIGFPE, FPE_INTDIV, (void*) regs->rip);
 		break;
 	case I_NMI:
-		dumpRunqueue();
+		stackTraceHere();
 		break;
 	case I_UNDEF_OPCODE:
 		sendCPUErrorSignal(regs, SIGILL, ILL_ILLOPC, (void*) regs->rip);

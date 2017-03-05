@@ -34,36 +34,22 @@
 #include <glidix/memory.h>
 #include <glidix/vfs.h>
 #include <glidix/time.h>
+#include <glidix/ftree.h>
 
 #include "gxfs.h"
-
-#define	PREFETCH_SIZE				1024
 
 typedef struct
 {
 	InodeInfo *info;
 	off_t pos;
-	
-	/**
-	 * Currently-prefetched block offset, the current size of the buffer
-	 * and whether it is dirty.
-	 */
-	Semaphore lock;
-	uint64_t prefetchOff;
-	uint8_t prefetchBuf[PREFETCH_SIZE];
-	uint64_t prefetchSize;
-	int prefetchDirty;
 } FileData;
 
 static void gxfs_close(File *fp)
 {
 	FileData *data = (FileData*) fp->fsdata;
-	if (data->prefetchDirty)
-	{
-		gxfsWriteInode(data->info, data->prefetchBuf, data->prefetchSize, data->prefetchOff);
-	};
 	__sync_fetch_and_add(&data->info->data.inoLinks, -1);
 	data->info->dirty = 1;
+	ftDown(data->info->ft);
 	gxfsDownrefInode(data->info);
 	kfree(data);
 };
@@ -75,6 +61,7 @@ static int gxfs_dup(File *me, File *fp, size_t filesz)
 	
 	FileData *newData = NEW(FileData);
 	__sync_fetch_and_add(&data->info->refcount, 1);
+	ftUp(data->info->ft);
 	
 	memcpy(newData, data, sizeof(FileData));
 	fp->fsdata = newData;
@@ -126,95 +113,12 @@ static int gxfs_fchown(File *fp, uid_t uid, gid_t gid)
 	return 0;
 };
 
-static void gxfs_prefetch(FileData *data, uint64_t off)
-{
-	if (data->prefetchDirty)
-	{
-		gxfsWriteInode(data->info, data->prefetchBuf, data->prefetchSize, data->prefetchOff);
-		data->prefetchDirty = 0;
-	};
-	
-	memset(data->prefetchBuf, 0, PREFETCH_SIZE);
-	data->prefetchSize = gxfsReadInode(data->info, data->prefetchBuf, PREFETCH_SIZE, off);
-	data->prefetchOff = off;
-};
-
 static void gxfs_truncate(File *fp, off_t len)
 {
 	FileData *data = (FileData*) fp->fsdata;
+
 	gxfsResize(data->info, (uint64_t) len);
-};
-
-static ssize_t gxfs_pread(File *fp, void *buffer, size_t size, off_t pos)
-{
-	FileData *data = (FileData*) fp->fsdata;
-	semWait(&data->lock);
-	
-	ssize_t result = 0;
-	char *put = (char*) buffer;
-	while (size > 0)
-	{
-		if ((pos < data->prefetchOff) || ((pos+size) >= (data->prefetchOff+data->prefetchSize)))
-		{
-			gxfs_prefetch(data, pos);
-			
-			if (data->prefetchSize == 0)
-			{
-				break;
-			};
-		};
-		
-		size_t maxRead = data->prefetchSize - (pos - data->prefetchOff);
-		size_t readNow = size;
-		if (readNow > maxRead) readNow = maxRead;
-		
-		memcpy(put, &data->prefetchBuf[pos - data->prefetchOff], readNow);
-		put += readNow;
-		size -= readNow;
-		pos += readNow;
-		result += readNow;
-	};
-	
-	semSignal(&data->lock);
-	return result;
-	
-	//return gxfsReadInode(data->info, buffer, size, pos);
-};
-
-static ssize_t gxfs_pwrite(File *fp, const void *buffer, size_t size, off_t pos)
-{
-	FileData *data = (FileData*) fp->fsdata;
-	semWait(&data->lock);
-	
-	ssize_t result = 0;
-	const char *scan = (const char*) buffer;
-	while (size > 0)
-	{
-		if ((pos < data->prefetchOff) || (pos >= (data->prefetchOff + data->prefetchSize)))
-		{
-			gxfs_prefetch(data, pos);
-		};
-		
-		size_t maxWrite = PREFETCH_SIZE - (pos - data->prefetchOff);
-		size_t writeNow = size;
-		if (writeNow > maxWrite) writeNow = maxWrite;
-		
-		size_t sizeNeeded = pos + writeNow - data->prefetchOff;
-		if (data->prefetchSize < sizeNeeded) data->prefetchSize = sizeNeeded;
-		
-		memcpy(&data->prefetchBuf[pos - data->prefetchOff], scan, writeNow);
-		data->prefetchDirty = 1;
-		
-		scan += writeNow;
-		size -= writeNow;
-		pos += writeNow;
-		result += writeNow;
-	};
-	
-	semSignal(&data->lock);
-	return result;
-	
-	//return gxfsWriteInode(data->info, buffer, size, pos);
+	ftTruncate(data->info->ft, (size_t) len);
 };
 
 static off_t gxfs_seek(File *fp, off_t offset, int whence)
@@ -243,35 +147,20 @@ static off_t gxfs_seek(File *fp, off_t offset, int whence)
 	return pos;
 };
 
-static ssize_t gxfs_read(File *fp, void *buffer, size_t size)
-{
-	FileData *data = (FileData*) fp->fsdata;
-	ssize_t ret = fp->pread(fp, buffer, size, data->pos);
-	if (ret == -1) return -1;
-	data->pos += ret;
-	return ret;
-};
-
-static ssize_t gxfs_write(File *fp, const void *buffer, size_t size)
-{
-	FileData *data = (FileData*) fp->fsdata;
-	ssize_t ret = fp->pwrite(fp, buffer, size, data->pos);
-	if (ret == -1) return -1;
-	data->pos += ret;
-	return ret;
-};
-
 static void gxfs_fsync(File *fp)
 {
 	FileData *data = (FileData*) fp->fsdata;
-	if (data->prefetchDirty)
-	{
-		gxfsWriteInode(data->info, data->prefetchBuf, data->prefetchSize, data->prefetchOff);
-	};
 	gxfsFlushInode(data->info);
 	
 	GXFS *gxfs = data->info->fs;
 	if (gxfs->fp->fsync != NULL) gxfs->fp->fsync(gxfs->fp);
+};
+
+static FileTree* gxfs_tree(File *fp)
+{
+	FileData *data = (FileData*) fp->fsdata;
+	ftUp(data->info->ft);
+	return data->info->ft;
 };
 
 int gxfsOpenFile(GXFS *gxfs, uint64_t ino, File *fp, size_t filesz)
@@ -284,15 +173,9 @@ int gxfsOpenFile(GXFS *gxfs, uint64_t ino, File *fp, size_t filesz)
 	FileData *data = NEW(FileData);
 	data->info = info;
 	data->pos = 0;
-	semInit(&data->lock);
-	data->prefetchSize = 0;
-	data->prefetchDirty = 0;
-	data->prefetchOff = 0;
-	memset(data->prefetchBuf, 0, PREFETCH_SIZE);
+	ftUp(info->ft);
 	
 	fp->fsdata = data;
-	fp->read = gxfs_read;
-	fp->write = gxfs_write;
 	fp->seek = gxfs_seek;
 	fp->close = gxfs_close;
 	fp->dup = gxfs_dup;
@@ -300,9 +183,8 @@ int gxfsOpenFile(GXFS *gxfs, uint64_t ino, File *fp, size_t filesz)
 	fp->fchmod = gxfs_fchmod;
 	fp->fchown = gxfs_fchown;
 	fp->truncate = gxfs_truncate;
-	fp->pread = gxfs_pread;
-	fp->pwrite = gxfs_pwrite;
 	fp->fsync = gxfs_fsync;
+	fp->tree = gxfs_tree;
 	
 	return 0;
 };

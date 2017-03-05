@@ -237,6 +237,7 @@ MODULE_INIT()
 
 MODULE_FINI()
 {
+	// TODO: unregister
 	spinlockAcquire(&isoMountLock);
 	if (isoMountCount > 0)
 	{

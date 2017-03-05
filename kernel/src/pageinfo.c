@@ -134,3 +134,10 @@ void piUncache(uint64_t frame)
 		phmFreeFrame(frame);
 	};
 };
+
+int piCheckFlush(uint64_t frame)
+{
+	uint64_t val = __sync_fetch_and_and(&piRoot.branches[(frame>>27)&0x1FF]->branches[(frame>>18)&0x1FF]->branches[(frame>>9)&0x1FF]->entries[frame&0x1FF], ~PI_DIRTY);
+	
+	return !!(val & PI_DIRTY);
+};

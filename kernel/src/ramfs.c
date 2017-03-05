@@ -177,6 +177,15 @@ static int ramdir_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 static int ramtree_load(FileTree *ft, off_t off, void *buffer)
 {
 	// load no data (all zeroes)
+	RamfsInode *inode = (RamfsInode*) ft->data;
+	inode->meta.st_atime = time();
+	return 0;
+};
+
+static int ramtree_flush(FileTree *ft, off_t off, const void *buffer)
+{
+	RamfsInode *inode = (RamfsInode*) ft->data;
+	inode->meta.st_atime = inode->meta.st_mtime = time();
 	return 0;
 };
 
@@ -212,6 +221,7 @@ static int ramdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	FileTree *ft = ftCreate(0);
 	ft->data = newInode;
 	ft->load = ramtree_load;
+	ft->flush = ramtree_flush;
 	ft->update = ramtree_update;
 	
 	newInode->data = ft;

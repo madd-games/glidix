@@ -37,6 +37,34 @@
 
 #include "gxfs.h"
 
+static int tree_load(FileTree *ft, off_t pos, void *buffer)
+{
+	InodeInfo *info = (InodeInfo*) ft->data;
+	gxfsReadInode(info, buffer, PAGE_SIZE, pos);
+	return 0;
+};
+
+static int tree_flush(FileTree *ft, off_t pos, const void *buffer)
+{
+	InodeInfo *info = (InodeInfo*) ft->data;
+	
+	size_t sz = PAGE_SIZE;
+	if ((pos + sz) > ft->size)
+	{
+		sz = ft->size - pos;
+	};
+
+	gxfsWriteInode(info, buffer, sz, pos);
+	return 0;
+};
+
+static void tree_update(FileTree *ft)
+{
+	InodeInfo *info = (InodeInfo*) ft->data;
+	info->data.inoSize = ft->size;
+	info->dirty = 1;
+};
+
 InodeInfo* gxfsGetInode(GXFS *gxfs, uint64_t ino)
 {
 	semWait(&gxfs->semInodes);
@@ -46,24 +74,43 @@ InodeInfo* gxfsGetInode(GXFS *gxfs, uint64_t ino)
 	{
 		if (info->index == ino)
 		{
+			if (info->refcount == 0)
+			{
+				__sync_fetch_and_add(&gxfs->numOpenInodes, 1);
+			};
+			
 			__sync_fetch_and_add(&info->refcount, 1);
 			semSignal(&gxfs->semInodes);
 			return info;
 		};
 	};
 	
+	__sync_fetch_and_add(&gxfs->numOpenInodes, 1);
 	info = NEW(InodeInfo);
 	info->fs = gxfs;
 	info->refcount = 1;
 	info->index = ino;
 	info->dirty = 0;
-
-	if (gxfs->fp->pread(gxfs->fp, &info->data, 512, 0x200000 + (ino << 9)) != 512)
+	info->ft = NULL;
+	
+	if (vfsPRead(gxfs->fp, &info->data, 512, 0x200000 + (ino << 9)) != 512)
 	{
 		kfree(info);
+		semSignal(&gxfs->semInodes);
 		return NULL;
 	};
-	
+
+	if ((info->data.inoMode & 0xF000) == 0)
+	{
+		info->ft = ftCreate(0);
+		info->ft->data = info;
+		info->ft->load = tree_load;
+		info->ft->flush = tree_flush;
+		info->ft->update = tree_update;
+		info->ft->size = info->data.inoSize;
+		ftDown(info->ft);			// make the refcount 0 (otherwise it won't flush)
+	};
+
 	semInit(&info->lock);
 	
 	semInit(&info->semDir);
@@ -92,7 +139,7 @@ void gxfsDeleteTree(GXFS *gxfs, uint16_t depth, uint64_t root)
 	if (depth != 0)
 	{
 		GXFS_Indirection ind;
-		if (gxfs->fp->pread(gxfs->fp, &ind, 512, 0x200000 + (root << 9)) == 512)
+		if (vfsPRead(gxfs->fp, &ind, 512, 0x200000 + (root << 9)) == 512)
 		{
 			int i;
 			for (i=0; i<64; i++)
@@ -112,6 +159,8 @@ void gxfsDownrefInode(InodeInfo *info)
 {
 	if (__sync_add_and_fetch(&info->refcount, -1) == 0)
 	{
+		GXFS *gxfs = info->fs;
+		
 		if (info->data.inoLinks == 0)
 		{
 			if ((info->data.inoMode & 0xF000) != 0x5000)
@@ -122,6 +171,37 @@ void gxfsDownrefInode(InodeInfo *info)
 			};
 			
 			gxfsFreeBlock(info->fs, info->index);
+
+			if (info->ft != NULL)
+			{
+				ftUp(info->ft);
+				ftUncache(info->ft);
+				ftDown(info->ft);
+			};
+
+			GXFS *gxfs = info->fs;
+			semWait(&gxfs->semInodes);
+			
+			if (info->prev == NULL)
+			{
+				gxfs->firstIno = info->next;
+			}
+			else
+			{
+				info->prev->next = info->next;
+			};
+		
+			if (info->next != NULL)
+			{
+				info->next->prev = info->prev;
+			}
+			else
+			{
+				gxfs->lastIno = info->prev;
+			};
+
+			semSignal(&gxfs->semInodes);
+			kfree(info);
 		}
 		else
 		{
@@ -135,33 +215,11 @@ void gxfsDownrefInode(InodeInfo *info)
 
 			if (info->dirty)
 			{
-				info->fs->fp->pwrite(info->fs->fp, &info->data, 512, 0x200000 + (info->index << 9));
+				vfsPWrite(info->fs->fp, &info->data, 512, 0x200000 + (info->index << 9));
 			};
 		};
 		
-		GXFS *gxfs = info->fs;
-		semWait(&gxfs->semInodes);
-		
-		if (info->prev == NULL)
-		{
-			gxfs->firstIno = info->next;
-		}
-		else
-		{
-			info->prev->next = info->next;
-		};
-		
-		if (info->next != NULL)
-		{
-			info->next->prev = info->prev;
-		}
-		else
-		{
-			gxfs->lastIno = info->prev;
-		};
-		
-		semSignal(&gxfs->semInodes);
-		kfree(info);
+		__sync_fetch_and_add(&gxfs->numOpenInodes, -1);
 	};
 };
 
@@ -169,7 +227,7 @@ void gxfsFlushInode(InodeInfo *info)
 {
 	if (info->dirty)
 	{
-		info->fs->fp->pwrite(info->fs->fp, &info->data, 512, 0x200000 + (info->index << 9));
+		vfsPWrite(info->fs->fp, &info->data, 512, 0x200000 + (info->index << 9));
 	};
 };
 
@@ -186,7 +244,7 @@ static int gxfsExpandTree(InodeInfo *info)
 	memset(&ind, 0, 512);
 	ind.ptrTable[0] = info->data.inoRoot;
 	
-	info->fs->fp->pwrite(info->fs->fp, &ind, 512, 0x200000 + (newBlock << 9));
+	vfsPWrite(info->fs->fp, &ind, 512, 0x200000 + (newBlock << 9));
 	info->data.inoRoot = newBlock;
 	info->data.inoTreeDepth++;
 	info->dirty = 1;
@@ -232,7 +290,7 @@ static uint64_t gxfsGetBlockFromOffset(InodeInfo *info, uint64_t offset, int mak
 		uint64_t index = (offset >> bitpos) & 0x3F;
 		
 		GXFS_Indirection ind;
-		if (info->fs->fp->pread(info->fs->fp, &ind, 512, 0x200000 + (block << 9)) != 512)
+		if (vfsPRead(info->fs->fp, &ind, 512, 0x200000 + (block << 9)) != 512)
 		{
 			return 0;
 		};
@@ -249,7 +307,7 @@ static uint64_t gxfsGetBlockFromOffset(InodeInfo *info, uint64_t offset, int mak
 				
 				gxfsZeroBlock(info->fs, newBlock);
 				ind.ptrTable[index] = newBlock;
-				info->fs->fp->pwrite(info->fs->fp, &ind, 512, 0x200000 + (block << 9));
+				vfsPWrite(info->fs->fp, &ind, 512, 0x200000 + (block << 9));
 			}
 			else
 			{
@@ -294,7 +352,7 @@ ssize_t gxfsReadInode(InodeInfo *info, void *buffer, size_t size, off_t pos)
 			readNow = size;
 		};
 		
-		ssize_t okNow = info->fs->fp->pread(info->fs->fp, put, readNow, 0x200000 + (block << 9) + offset);
+		ssize_t okNow = vfsPRead(info->fs->fp, put, readNow, 0x200000 + (block << 9) + offset);
 		if (okNow == -1)
 		{
 			semSignal(&info->lock);
@@ -309,6 +367,8 @@ ssize_t gxfsReadInode(InodeInfo *info, void *buffer, size_t size, off_t pos)
 		sizeRead += okNow;
 	};
 	
+	info->data.inoAccessTime = time();
+	info->dirty = 1;
 	semSignal(&info->lock);
 	return sizeRead;
 };
@@ -320,7 +380,7 @@ void gxfsDeleteBranches(GXFS *gxfs, uint16_t depth, uint64_t block, uint64_t off
 	uint64_t indEntryScope = (1 << (9 + 6 * (depth-1)));
 	
 	GXFS_Indirection ind;
-	if (gxfs->fp->pread(gxfs->fp, &ind, 512, 0x200000 + (block << 9)) == 512)
+	if (vfsPRead(gxfs->fp, &ind, 512, 0x200000 + (block << 9)) == 512)
 	{
 		int i;
 		for (i=0; i<64; i++)
@@ -343,7 +403,7 @@ void gxfsDeleteBranches(GXFS *gxfs, uint16_t depth, uint64_t block, uint64_t off
 			};
 		};
 		
-		gxfs->fp->pwrite(gxfs->fp, &ind, 512, 0x200000 + (block << 9));
+		vfsPWrite(gxfs->fp, &ind, 512, 0x200000 + (block << 9));
 	};
 };
 
@@ -367,7 +427,7 @@ static int gxfsResizeUnlocked(InodeInfo *info, size_t newSize)
 			char zeroes[512];
 			memset(zeroes, 0, 512);
 			
-			info->fs->fp->pwrite(info->fs->fp, zeroes, size, 0x200000 + (block << 9) + offset);
+			vfsPWrite(info->fs->fp, zeroes, size, 0x200000 + (block << 9) + offset);
 		};
 	};
 
@@ -426,7 +486,7 @@ ssize_t gxfsWriteInode(InodeInfo *info, const void *buffer, size_t size, off_t p
 			writeNow = size;
 		};
 		
-		ssize_t okNow = info->fs->fp->pwrite(info->fs->fp, scan, writeNow, 0x200000 + (block << 9) + offset);
+		ssize_t okNow = vfsPWrite(info->fs->fp, scan, writeNow, 0x200000 + (block << 9) + offset);
 		if (okNow == -1)
 		{
 			semSignal(&info->lock);
@@ -440,6 +500,8 @@ ssize_t gxfsWriteInode(InodeInfo *info, const void *buffer, size_t size, off_t p
 		sizeWritten += okNow;
 	};
 	
+	info->data.inoAccessTime = info->data.inoModTime = time();
+	info->dirty = 1;
 	semSignal(&info->lock);
 	return sizeWritten;
 };

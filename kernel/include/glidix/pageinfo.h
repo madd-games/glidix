@@ -90,8 +90,7 @@ void piIncref(uint64_t frame);
 
 /**
  * Decrease the reference count of a page. If the reference count reaches 0 as a result of this call, and
- * the page is not used for caching (PI_CACHE), it will be freed. Otherwise, it will be available for
- * reclamation by the memory exchange protocol.
+ * the page is not used for caching (PI_CACHE), it will be freed.
  */
 void piDecref(uint64_t frame);
 
@@ -115,5 +114,10 @@ int piNeedsCopyOnWrite(uint64_t frame);
  * Uncache the specified page, declaring it is now useless except when mapped somewhere.
  */
 void piUncache(uint64_t frame);
+
+/**
+ * Mark a page clean (not dirty), and return true if it was dirty.
+ */
+int piCheckFlush(uint64_t frame);
 
 #endif

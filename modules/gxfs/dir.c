@@ -72,6 +72,7 @@ static int gxfs_next(Dir *dir)
 		return -1;
 	};
 	
+	//kprintf("ENTRY %p (%s)\n", scanner->current, scanner->current->ent.d_name);
 	memcpy(&dir->dirent, &scanner->current->ent, sizeof(struct dirent));
 	return 0;
 };
@@ -229,7 +230,7 @@ static int gxfs_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t 
 	inode.inoAccessTime = now;
 	inode.inoRoot = blkData;
 	
-	scanner->dir->fs->fp->pwrite(scanner->dir->fs->fp, &inode, 512, 0x200000 + (blkInode << 9));
+	vfsPWrite(scanner->dir->fs->fp, &inode, 512, 0x200000 + (blkInode << 9));
 	
 	DirentInfo *endptr = NEW(DirentInfo);
 	endptr->next = NULL;
@@ -283,7 +284,7 @@ static int gxfs_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t 
 	inode.inoAccessTime = now;
 	inode.inoRoot = blkData;
 	
-	scanner->dir->fs->fp->pwrite(scanner->dir->fs->fp, &inode, 512, 0x200000 + (blkInode << 9));
+	vfsPWrite(scanner->dir->fs->fp, &inode, 512, 0x200000 + (blkInode << 9));
 	
 	DirentInfo *endptr = NEW(DirentInfo);
 	endptr->next = NULL;
@@ -385,7 +386,7 @@ static int gxfs_symlink(Dir *dir, const char *name, const char *path)
 	inode.inoAccessTime = now;
 	strcpy(inode.inoPath, path);
 	
-	scanner->dir->fs->fp->pwrite(scanner->dir->fs->fp, &inode, 512, 0x200000 + (blkInode << 9));
+	vfsPWrite(scanner->dir->fs->fp, &inode, 512, 0x200000 + (blkInode << 9));
 	
 	DirentInfo *endptr = NEW(DirentInfo);
 	endptr->next = NULL;
@@ -531,9 +532,7 @@ void gxfsFlushDir(InodeInfo *info)
 			};
 		};
 		
-		DirentInfo *next = dirent->next;
-		kfree(dirent);
-		dirent = next;
+		dirent = dirent->next;
 	};
 	
 	gxfsResize(info, pos);

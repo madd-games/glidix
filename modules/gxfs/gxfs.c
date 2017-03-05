@@ -63,10 +63,35 @@ static void gxfs_getinfo(FileSystem *fs, FSInfo *info)
 static int gxfs_unmount(FileSystem *fs)
 {
 	GXFS *gxfs = (GXFS*) fs->fsdata;
-	if (gxfs->firstIno != NULL)
+	
+	semWait(&gxfs->semInodes);
+	if (gxfs->numOpenInodes != 0)
 	{
-		kprintf("gxfs: cannot unmount because some inodes are open\n");
+		kprintf("gxfs: cannot unmount because some inodes are open (%d)\n", gxfs->numOpenInodes);
+		semSignal(&gxfs->semInodes);
 		return -1;
+	};
+	
+	while (gxfs->firstIno != NULL)
+	{
+		InodeInfo *info = gxfs->firstIno;
+		gxfs->firstIno = info->next;
+		
+		if (info->ft != NULL)
+		{
+			ftUp(info->ft);
+			ftUncache(info->ft);
+			ftDown(info->ft);
+		};
+		
+		while (info->dir != NULL)
+		{
+			DirentInfo *dirent = info->dir;
+			info->dir = dirent->next;
+			kfree(dirent);
+		};
+		
+		kfree(info);
 	};
 	
 	vfsClose(gxfs->fp);
@@ -90,15 +115,8 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 		return -1;
 	};
 	
-	if ((fp->pread == NULL) || (fp->pwrite == NULL))
-	{
-		kprintf("gxfs: image file does not support pread/pwrite\n");
-		vfsClose(fp);
-		return -1;
-	};
-	
 	GXFS_Superblock sb;
-	if (fp->pread(fp, &sb, 512, 0x200000) != 512)
+	if (vfsPRead(fp, &sb, 512, 0x200000) != 512)
 	{
 		kprintf("gxfs: failed to read the superblock\n");
 		vfsClose(fp);
@@ -128,6 +146,7 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	semInit(&gxfs->semInodes);
 	gxfs->firstIno = NULL;
 	gxfs->lastIno = NULL;
+	gxfs->numOpenInodes = 0;
 	
 	semInit(&gxfs->semAlloc);
 	

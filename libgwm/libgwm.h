@@ -503,8 +503,8 @@ typedef struct GWMWindow_
 	uint64_t				shmemSize;
 	DDISurface*				canvas;
 	int					currentBuffer;
-	GWMHandlerInfo				*handlerInfo;
-	void					*data;
+	GWMHandlerInfo*				handlerInfo;
+	void*					data;
 	
 	// location and time of last left click; used to detect double-clicks.
 	int					lastClickX;

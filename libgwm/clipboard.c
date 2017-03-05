@@ -36,8 +36,10 @@
 
 static int openClipboard()
 {
+	// we want to use the REAL user ID - SUID applications should still access the correct
+	// user's clipboard!
 	char cbPath[256];
-	sprintf(cbPath, "/run/clipboard/%lu", geteuid());
+	sprintf(cbPath, "/run/clipboard/%lu", getuid());
 	
 	int fd = open(cbPath, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
 	if (fd == -1) return -1;
