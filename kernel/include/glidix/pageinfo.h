@@ -120,4 +120,10 @@ void piUncache(uint64_t frame);
  */
 int piCheckFlush(uint64_t frame);
 
+/**
+ * Mark a page as cached, with a reference count of 0xFFFFFF. The page must not have been accessed before.
+ * This is used for things like mapping video memory.
+ */
+void piStaticFrame(uint64_t frame);
+
 #endif

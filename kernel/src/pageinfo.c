@@ -141,3 +141,30 @@ int piCheckFlush(uint64_t frame)
 	
 	return !!(val & PI_DIRTY);
 };
+
+void piStaticFrame(uint64_t frame)
+{
+	mutexLock(&piLock);
+	uint64_t i;
+	PageInfoNode *node = &piRoot;
+	for (i=0; i<3; i++)
+	{
+		uint64_t index = (frame >> (9 * (3-i))) & 0x1FF;
+		if (node->entries[index] == 0)
+		{
+			PageInfoNode *newNode = NEW(PageInfoNode);
+			memset(newNode, 0, sizeof(PageInfoNode));
+			
+			node->entries[index] = (uint64_t) newNode;
+			node = newNode;
+		}
+		else
+		{
+			node = (PageInfoNode*) node->entries[index];
+		};
+	};
+	
+	uint64_t index = frame & 0x1FF;
+	node->entries[index] = 0xFFFFFF | PI_CACHE;
+	mutexUnlock(&piLock);
+};

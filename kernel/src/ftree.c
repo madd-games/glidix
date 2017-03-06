@@ -141,8 +141,12 @@ void ftDown(FileTree *ft)
 	{
 		if (ft->flags & FT_ANON)
 		{
-			// uncache all pages
-			deleteTree(0, &ft->top);
+			if (ft->getpage == NULL)
+			{
+				// uncache all pages
+				deleteTree(0, &ft->top);
+			};
+
 			kfree(ft);
 		}
 		else
@@ -154,6 +158,13 @@ void ftDown(FileTree *ft)
 
 static uint64_t getPageUnlocked(FileTree *ft, off_t pos)
 {
+	if (ft->getpage != NULL)
+	{
+		uint64_t frame = ft->getpage(ft, pos & ~0xFFF);
+		piStaticFrame(frame);
+		return frame;
+	};
+	
 	FileNode *node = &ft->top;
 	int i;
 	for (i=0; i<12; i++)

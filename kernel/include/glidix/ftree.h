@@ -102,6 +102,13 @@ typedef struct FileTree_
 	void (*update)(struct FileTree_ *ft);
 	
 	/**
+	 * Return a frame number for the specified position. If this is not NULL, it overrides the
+	 * normal behaviour, and no tree is actually in use. 'pos' is page-aligned. The returned page
+	 * will be marked as cached in pageinfo, and will never be uncached or freed.
+	 */
+	uint64_t (*getpage)(struct FileTree_ *ft, off_t pos);
+	
+	/**
 	 * Top-level node.
 	 */
 	FileNode				top;
