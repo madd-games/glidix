@@ -111,11 +111,11 @@ void dumpRunqueue()
 		printThreadFlags(th->flags);
 		if (th->regs.cs == 8)
 		{
-			kprintf("\x02" "K");
+			kprintf("K");
 		}
 		else
 		{
-			kprintf("\x04" "K");
+			kprintf("k");
 		};
 		kprintf("\t%d\t%d\n", euid, egid);
 		th = th->next;

@@ -56,6 +56,7 @@ FileTree* ftCreate(int flags)
 	ft->load = NULL;
 	ft->flush = NULL;
 	ft->update = NULL;
+	ft->getpage = NULL;
 	ft->size = 0;
 	
 	mutexLock(&ftMtx);
