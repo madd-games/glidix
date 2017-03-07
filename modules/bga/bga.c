@@ -131,6 +131,15 @@ static int bga_setmode(VideoDisplay *disp, VideoModeRequest *req)
 	bgaWriteRegister(VBE_DISPI_INDEX_YRES, height);
 	bgaWriteRegister(VBE_DISPI_INDEX_ENABLE, VBE_DISPI_ENABLED | VBE_DISPI_LFB_ENABLED);
 	
+	req->format.bpp = 4;
+	req->format.redMask = 0xFF0000;
+	req->format.greenMask = 0x00FF00;
+	req->format.blueMask = 0x0000FF;
+	req->format.alphaMask = 0xFF000000;
+	req->format.pixelSpacing = 0;
+	req->format.scanlineSpacing = 0;
+	req->res = VIDEO_RES_SPECIFIC((uint64_t)width, (uint64_t)height);
+	
 	return 0;
 };
 

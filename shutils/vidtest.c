@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,15 +26,19 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_video_h
-#define __glidix_video_h
+#include <sys/glidix.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+#include <errno.h>
+#include <fcntl.h>
 
-#include <glidix/common.h>
-#include <glidix/ioctl.h>
-#include <glidix/devfs.h>
-
-#define	IOCTL_VIDEO_MODESET			IOCTL_ARG(VideoModeRequest, IOCTL_INT_VIDEO, 1)
-#define	IOCTL_VIDEO_GETFLAGS			IOCTL_NOARG(IOCTL_INT_VIDEO, 2)
+#define	IOCTL_VIDEO_MODESET			_GLIDIX_IOCTL_ARG(VideoModeRequest, _GLIDIX_IOCTL_INT_VIDEO, 1)
+#define	IOCTL_VIDEO_GETFLAGS			_GLIDIX_IOCTL_NOARG(_GLIDIX_IOCTL_INT_VIDEO, 2)
 
 /**
  * Resolution specifications (bottom 8 bits are the setting type).
@@ -71,7 +75,6 @@ typedef struct
 {
 	/**
 	 * (In) Requested resolution (see VIDEO_RES_* macros above).
-	 * (Out) Actual resolution set (use VIDEO_RES_WIDTH() and VIDEO_RES_HEIGHT() to extract values)
 	 */
 	uint64_t				res;
 	
@@ -81,84 +84,41 @@ typedef struct
 	VideoPixelFormat			format;
 } VideoModeRequest;
 
-/**
- * Driver operations.
- */
-struct VideoDisplay_;
-typedef struct
+int main(int argc, char *argv[])
 {
-	/**
-	 * Video mode setting. Returns 0 on success, -1 on error (invalid options).
-	 */
-	int (*setmode)(struct VideoDisplay_ *display, VideoModeRequest *req);
+	if (argc != 2)
+	{
+		fprintf(stderr, "USAGE:\t%s <display-device>\n", argv[0]);
+		fprintf(stderr, "\tTests the specified display device.\n");
+		return 1;
+	};
 	
-	/**
-	 * Get device flags (return 0 for now).
-	 */
-	int (*getflags)(struct VideoDisplay_ *display);
+	int fd = open(argv[1], O_RDWR);
+	if (fd == -1)
+	{
+		fprintf(stderr, "%s: cannot open %s: %s\n", argv[0], argv[1], strerror(errno));
+		return 1;
+	};
 	
-	/**
-	 * Return the physical base address of the framebuffer in current video mode, and store
-	 * the size in *sizeOut.
-	 */
-	uint64_t (*getfbuf)(struct VideoDisplay_ *display, size_t *sizeOut);
-} VideoOps;
-
-/**
- * Describes a display.
- */
-typedef struct VideoDisplay_
-{
-	/**
-	 * Driver-specific data.
-	 */
-	void*					data;
+	VideoModeRequest req;
+	req.res = VIDEO_RES_SPECIFIC(640UL, 480UL);
 	
-	/**
-	 * Operations.
-	 */
-	VideoOps*				ops;
+	if (ioctl(fd, IOCTL_VIDEO_MODESET, &req) != 0)
+	{
+		fprintf(stderr, "%s: cannot set video mode: %s\n", argv[0], strerror(errno));
+		return 1;
+	};
 	
-	/**
-	 * The device file representing this display.
-	 */
-	Device					dev;
+	void *fbuf = mmap(NULL, 640 * 480 * req.format.bpp, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	if (fbuf == MAP_FAILED)
+	{
+		fprintf(stderr, "%s: cannot map framebuffer: %s\n", argv[0], strerror(errno));
+		return 1;
+	};
 	
-	/**
-	 * Reference count.
-	 */
-	int					refcount;
-} VideoDisplay;
-
-/**
- * Describes a driver. Used mainly for display numbering.
- */
-typedef struct
-{
-	const char*				name;
-	int					nextNum;
-} VideoDriver;
-
-/**
- * Create a video driver object.
- */
-VideoDriver *videoCreateDriver(const char *name);
-
-/**
- * Delete a video driver object. This does NOT delete the displays associated with it, and you may
- * delete them later.
- */
-void videoDeleteDriver(VideoDriver *drv);
-
-/**
- * Create a new display object. 'data' is an arbitrary pointer set by the driver, and 'ops' points to a filled-in
- * VideoOps structure. 'dr'v is the video driver to which this display is attached.
- */
-VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops);
-
-/**
- * Delete a display object.
- */
-void videoDeleteDisplay(VideoDisplay *disp);
-
-#endif
+	fprintf(stderr, "WIDTH: %lu, HEIGHT: %lu, BPP: %d\n", VIDEO_RES_WIDTH(req.res), VIDEO_RES_HEIGHT(req.res), req.format.bpp);
+	memset(fbuf, 0xFF, 640 * 240 * req.format.bpp);
+	close(fd);
+	
+	return 0;
+};

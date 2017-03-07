@@ -1807,8 +1807,9 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	// make sure the clipboard directory actually exists
+	// make sure the clipboard and shared surface directories actually exists
 	mkdir("/run/clipboard", 0777);
+	mkdir("/run/shsurf", 0777);
 	
 	if (displayDevice == NULL)
 	{

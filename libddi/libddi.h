@@ -32,10 +32,17 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#ifdef __glidix__
+#	include	<sys/glidix.h>
+#endif
+
 /**
  * Surface flags.
  */
 #define	DDI_STATIC_FRAMEBUFFER			(1 << 0)
+#ifdef __glidix__
+#define	DDI_SHARED				(1 << 1)
+#endif
 
 /**
  * Types of expandable bitmaps.
@@ -62,6 +69,28 @@
  * Length (in pixels) of a tab.
  */
 #define	DDI_TAB_LEN				64
+
+/**
+ * Display device IOCTLs for Glidix.
+ */
+#ifdef __glidix__
+#define	DDI_IOCTL_VIDEO_MODESET			_GLIDIX_IOCTL_ARG(DDIModeRequest, _GLIDIX_IOCTL_INT_VIDEO, 1)
+#define	DDI_IOCTL_VIDEO_GETFLAGS		_GLIDIX_IOCTL_NOARG(_GLIDIX_IOCTL_INT_VIDEO, 2)
+#endif
+
+/**
+ * Resolution specifications (bottom 8 bits are the setting type).
+ */
+#define DDI_RES_AUTO				0		/* best resolution for screen (or safe if not detected) */
+#define	DDI_RES_SAFE				1		/* safe resolution (any availabe safe resolution, e.g. 720x480) */
+#define	DDI_RES_SPECIFIC(w, h)			(2 | ((w) << 8) | ((h) << 32))
+
+/**
+ * Macros to detect exact resolution specification, and extract width and height.
+ */
+#define	DDI_RES_IS_EXACT(s)			(((s) & 0xFF) == 2)
+#define	DDI_RES_WIDTH(s)			(((s) >> 8) & 0xFFFF)
+#define	DDI_RES_HEIGHT(s)			(((s) >> 32) & 0xFFFF)
 
 /**
  * Describes the pixel format of a surface.
@@ -91,6 +120,23 @@ typedef struct
 } DDIPixelFormat;
 
 /**
+ * Request for video mode setting (IOCTL).
+ */
+typedef struct
+{
+	/**
+	 * (In) Requested resolution (see VIDEO_RES_* macros above).
+	 * (Out) Actual resolution set (use VIDEO_RES_WIDTH() and VIDEO_RES_HEIGHT() to extract values)
+	 */
+	uint64_t				res;
+	
+	/**
+	 * (Out) The pixel format of the display. The framebuffer is placed at virtual offset 0.
+	 */
+	DDIPixelFormat				format;
+} DDIModeRequest;
+
+/**
  * Describes a surface.
  */
 typedef struct
@@ -111,6 +157,11 @@ typedef struct
 	 * Points to the pixel data; may be NULL for hardware surfaces.
 	 */
 	uint8_t*				data;
+	
+	/**
+	 * Surface ID, for shared surfaces.
+	 */
+	uint32_t				id;
 } DDISurface;
 
 /**
@@ -135,6 +186,30 @@ typedef struct
 } DDIColor;
 
 /**
+ * Initialize the DDI library, opening the specified display device, with the specified oflag.
+ * The oflag must be O_RDONLY (for normal uses) or O_RDWR (for the GUI).
+ *
+ * Returns 0 on success, or -1 on error; in which case, 'errno' is set appropriately by the
+ * failing system call.
+ */
+int ddiInit(const char *display, int oflag);
+
+/**
+ * Quit the DDI library. This closes the display device.
+ */
+void ddiQuit();
+
+/**
+ * Set the video mode. The 'res' parameter specifies the desired resolution, and shall be defined using
+ * the DDI_RES_* macros. Only root is allowed to set video modes, and DDI must be initialized with
+ * O_RDWR. Returns a surface representing the screen on success, or NULL on error, in which case 'errno'
+ * is set by the failing system call.
+ *
+ * Only available when compiled for Glidix.
+ */
+DDISurface* ddiSetVideoMode(uint64_t res);
+
+/**
  * Returns the amount of data required to represent an image of a certain size in the given format.
  */
 size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned int height);
@@ -148,6 +223,14 @@ size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned
  *		specified location; so blitting to it will overwrite your data etc.
  */
 DDISurface* ddiCreateSurface(DDIPixelFormat *format, unsigned int width, unsigned int height, char *data, unsigned int flags);
+
+/**
+ * Open a previously created shared surface. Returns a surface on success, or NULL on error
+ * (shared surface does not exist).
+ *
+ * Only available when compiled for Glidix.
+ */
+DDISurface* ddiOpenSurface(uint32_t id);
 
 /**
  * Deletes a surface.

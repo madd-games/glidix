@@ -72,7 +72,7 @@ void video_close(File *fp)
 uint64_t video_getpage(FileTree *ft, off_t pos)
 {
 	uint64_t base = (uint64_t) ft->data;
-	if ((base + pos) > ft->size) return 0;
+	if (pos > ft->size) return 0;
 	return (base + pos) >> 12;
 };
 
@@ -93,6 +93,11 @@ int video_ioctl(File *fp, uint64_t cmd, void *argp)
 	switch (cmd)
 	{
 	case IOCTL_VIDEO_MODESET:
+		if (!havePerm(XP_DISPCONF))
+		{
+			ERRNO = EPERM;
+			return -1;
+		};
 		return disp->ops->setmode(disp, (VideoModeRequest*)argp);
 	case IOCTL_VIDEO_GETFLAGS:
 		return disp->ops->getflags(disp);

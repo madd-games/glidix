@@ -26,6 +26,15 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifdef __glidix__
+#include <sys/glidix.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -155,20 +164,31 @@ struct DDIPen_
 	PenLine *firstLine;
 };
 
-size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned int height)
+typedef struct
 {
-	size_t scanlineLen = format->scanlineSpacing
-		+ (format->bpp + format->pixelSpacing) * width;
-	size_t size = scanlineLen * height;
-	
-	// make sure the size is a multiple of 4 bytes as that helps with certain operations
-	if (size & 3)
+	int width, height;
+	DDIPixelFormat format;
+} SharedSurfaceMeta;
+
+static int ddiFD;
+
+int ddiInit(const char *display, int oflag)
+{
+#ifdef __glidix__
+	ddiFD = open(display, oflag | O_CLOEXEC);
+	if (ddiFD == -1)
 	{
-		size &= ~((size_t)3);
-		size += 4;
+		return -1;
 	};
-	
-	return size;
+#endif
+	return 0;
+};
+
+void ddiQuit()
+{
+#ifdef __glidix__
+	close(ddiFD);
+#endif
 };
 
 static size_t ddiGetSurfaceDataSize(DDISurface *surface)
@@ -187,6 +207,100 @@ static size_t ddiGetSurfaceDataSize(DDISurface *surface)
 	return size;
 };
 
+#ifdef __glidix__
+DDISurface* ddiSetVideoMode(uint64_t res)
+{
+	DDIModeRequest req;
+	req.res = res;
+	
+	if (ioctl(ddiFD, DDI_IOCTL_VIDEO_MODESET, &req) != 0)
+	{
+		return NULL;
+	};
+	
+	DDISurface *surface = (DDISurface*) malloc(sizeof(DDISurface));
+	memcpy(&surface->format, &req.format, sizeof(DDIPixelFormat));
+	
+	surface->width = (int) DDI_RES_WIDTH(req.res);
+	surface->height = (int) DDI_RES_HEIGHT(req.res);
+	surface->flags = 0;
+	surface->id = 0;
+	surface->data = (uint8_t*) mmap(NULL, ddiGetSurfaceDataSize(surface),
+					PROT_READ | PROT_WRITE, MAP_SHARED, ddiFD, 0);
+	
+	if (surface->data == MAP_FAILED)
+	{
+		int errnum = errno;
+		free(surface);
+		errno = errnum;
+		return NULL;
+	};
+	
+	return surface;
+};
+#endif
+
+size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned int height)
+{
+	size_t scanlineLen = format->scanlineSpacing
+		+ (format->bpp + format->pixelSpacing) * width;
+	size_t size = scanlineLen * height;
+	
+	// make sure the size is a multiple of 4 bytes as that helps with certain operations
+	if (size & 3)
+	{
+		size &= ~((size_t)3);
+		size += 4;
+	};
+	
+	return size;
+};
+
+#ifdef __glidix__
+static uint8_t* ddiCreateSharedFile(uint32_t *idOut, DDISurface *target)
+{	
+	while (1)
+	{
+		uint32_t val = _glidix_unique();
+		if (val == 0) continue;
+		
+		char shpath[256];
+		sprintf(shpath, "/run/shsurf/%08X", val);
+		
+		int fd = open(shpath, O_RDWR | O_CREAT | O_EXCL, 0600);
+		if (fd == -1)
+		{
+			if (errno == EEXIST)
+			{
+				continue;
+			}
+			else
+			{
+				return NULL;
+			};
+		};
+		
+		SharedSurfaceMeta meta;
+		meta.width = target->width;
+		meta.height = target->height;
+		memcpy(&meta.format, &target->format, sizeof(DDIPixelFormat));
+		
+		ftruncate(fd, ddiGetSurfaceDataSize(target) + 0x1000);
+		pwrite(fd, &meta, sizeof(SharedSurfaceMeta), 0);
+		
+		void *result = mmap(NULL, ddiGetSurfaceDataSize(target), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x1000);
+		close(fd);
+		
+		if (result == MAP_FAILED)
+		{
+			return NULL;
+		};
+		
+		return (uint8_t*) result;
+	};
+};
+#endif
+
 DDISurface* ddiCreateSurface(DDIPixelFormat *format, unsigned int width, unsigned int height, char *data, unsigned int flags)
 {
 	DDISurface *surface = (DDISurface*) malloc(sizeof(DDISurface));
@@ -195,10 +309,28 @@ DDISurface* ddiCreateSurface(DDIPixelFormat *format, unsigned int width, unsigne
 	surface->width = width;
 	surface->height = height;
 	surface->flags = flags;
+	surface->id = 0;
 	
 	if ((flags & DDI_STATIC_FRAMEBUFFER) == 0)
 	{
+#ifdef __glidix__
+		if (flags & DDI_SHARED)
+		{
+			surface->data = ddiCreateSharedFile(&surface->id, surface);
+			if (surface->data == NULL)
+			{
+				free(surface);
+				return NULL;
+			};
+		}
+		else
+		{
+			surface->data = (uint8_t*) mmap(NULL, ddiGetSurfaceDataSize(surface), PROT_READ | PROT_WRITE,
+							MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		};
+#else
 		surface->data = (uint8_t*) malloc(ddiGetSurfaceDataSize(surface));
+#endif
 		if (data != NULL) memcpy(surface->data, data, ddiGetSurfaceDataSize(surface));
 	}
 	else
@@ -209,11 +341,44 @@ DDISurface* ddiCreateSurface(DDIPixelFormat *format, unsigned int width, unsigne
 	return surface;
 };
 
+#ifdef __glidix__
+DDISurface *ddiOpenSurface(uint32_t id)
+{
+	char pathname[256];
+	sprintf(pathname, "/run/shsurf/%08X", id);
+	
+	int fd = open(pathname, O_RDWR);
+	if (fd == -1)
+	{
+		return NULL;
+	};
+	
+	SharedSurfaceMeta meta;
+	pread(fd, &meta, sizeof(SharedSurfaceMeta), 0);
+	DDISurface *surface = (DDISurface*) malloc(sizeof(DDISurface));
+	memcpy(&surface->format, &meta.format, sizeof(DDIPixelFormat));
+	
+	surface->width = meta.width;
+	surface->height = meta.height;
+	surface->flags = DDI_SHARED;
+	surface->id = id;
+	surface->data = (uint8_t*) mmap(NULL, ddiGetSurfaceDataSize(surface),
+					PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x1000);
+	close(fd);
+	
+	return surface;
+};
+#endif
+
 void ddiDeleteSurface(DDISurface *surface)
 {
 	if ((surface->flags & DDI_STATIC_FRAMEBUFFER) == 0)
 	{
+#if __glidix__
+		munmap(surface->data, ddiGetSurfaceDataSize(surface));
+#else
 		free(surface->data);
+#endif
 	};
 	
 	free(surface);

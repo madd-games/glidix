@@ -50,6 +50,7 @@ PermName perms[] = {
 	{"mount",				XP_MOUNT},
 	{"chxperm",				XP_CHXPERM},
 	{"nice",				XP_NICE},
+	{"dispconf",				XP_DISPCONF},
 	{NULL,					0}
 };
 
