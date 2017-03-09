@@ -263,8 +263,6 @@ int		_glidix_mqserver();
 int		_glidix_mqclient(int pid, int fd);
 int		_glidix_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgsize);
 ssize_t		_glidix_mqrecv(int fd, _glidix_msginfo *info, void *buffer, size_t bufsize);
-uint64_t	_glidix_shmalloc(uint64_t addr, uint64_t size, int assocPid, int protAssoc, int protWorld);
-int		_glidix_shmap(uint64_t addr, uint64_t size, uint64_t id, int prot);
 int		_glidix_kopt(int option, int value);
 int		_glidix_sigwait(uint64_t sigset, struct __siginfo *info, uint64_t nanotimeout);
 int		_glidix_sigsuspend(uint64_t mask);

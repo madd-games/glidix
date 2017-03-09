@@ -367,8 +367,7 @@ typedef union
 		uint64_t			seq;
 		int				status;	// 0 = success, everything else = error
 		DDIPixelFormat			format;
-		uint64_t			shmemID;
-		uint64_t			shmemSize;
+		uint32_t			clientID[2];
 		unsigned int			width;
 		unsigned int			height;
 	} createWindowResp;
@@ -451,8 +450,7 @@ typedef union
 		int				type;	// GWM_MSG_RESIZE_RESP
 		uint64_t			seq;
 		int				status;
-		uint64_t			shmemID;
-		uint64_t			shmemSize;
+		uint32_t			clientID[2];
 		unsigned int			width;
 		unsigned int			height;
 	} resizeResp;
@@ -501,7 +499,7 @@ typedef struct GWMWindow_
 	uint64_t				id;
 	uint64_t				shmemAddr;
 	uint64_t				shmemSize;
-	DDISurface*				canvas;
+	DDISurface*				canvases[2];
 	int					currentBuffer;
 	GWMHandlerInfo*				handlerInfo;
 	void*					data;

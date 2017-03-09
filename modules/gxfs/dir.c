@@ -64,17 +64,25 @@ static void gxfs_closedir(Dir *dir)
 
 static int gxfs_next(Dir *dir)
 {
-	DirScanner *scanner = (DirScanner*) dir->fsdata;
-	scanner->current = scanner->current->next;
-	
-	if (scanner->current->next == NULL)
+	while (1)
 	{
-		return -1;
-	};
+		DirScanner *scanner = (DirScanner*) dir->fsdata;
+		scanner->current = scanner->current->next;
 	
-	//kprintf("ENTRY %p (%s)\n", scanner->current, scanner->current->ent.d_name);
-	memcpy(&dir->dirent, &scanner->current->ent, sizeof(struct dirent));
-	return 0;
+		if (scanner->current->next == NULL)
+		{
+			return -1;
+		};
+		
+		if (scanner->current->ent.d_ino == 0)
+		{
+			continue;
+		};
+		
+		//kprintf("ENTRY %p (%s)\n", scanner->current, scanner->current->ent.d_name);
+		memcpy(&dir->dirent, &scanner->current->ent, sizeof(struct dirent));
+		return 0;
+	};
 };
 
 static int gxfs_chmod(Dir *dir, mode_t mode)

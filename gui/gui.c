@@ -177,9 +177,7 @@ typedef struct Window_
 	uint64_t				id;
 	int					pid;
 	int					fd;
-	uint64_t				shmemID;
-	uint64_t				shmemAddr;
-	uint64_t				shmemSize;
+	uint32_t				clientID[2];
 	int					cursor;
 } Window;
 
@@ -246,14 +244,6 @@ int guiQueue = -1;
 int mouseLeftDown = 0;
 
 void PostDesktopUpdate();
-
-uint64_t pagesPlacement = 0x2000000000;
-uint64_t __alloc_pages(uint64_t sz)
-{
-	uint64_t ret = pagesPlacement;
-	pagesPlacement += sz;
-	return ret;
-};
 
 int isWindowFocused(Window *win)
 {
@@ -478,7 +468,6 @@ void DeleteWindow(Window *win)
 	};
 	
 	if (win->icon != NULL) ddiDeleteSurface(win->icon);
-	munmap((void*)win->shmemAddr, win->shmemSize);
 	ddiDeleteSurface(win->clientArea[0]);
 	ddiDeleteSurface(win->clientArea[1]);
 	ddiDeleteSurface(win->titleBar);
@@ -488,7 +477,6 @@ void DeleteWindow(Window *win)
 
 void ResizeWindow(Window *win, unsigned int width, unsigned int height)
 {
-	munmap((void*)win->shmemAddr, win->shmemSize);
 	ddiDeleteSurface(win->clientArea[0]);
 	ddiDeleteSurface(win->clientArea[1]);
 	ddiDeleteSurface(win->titleBar);
@@ -496,7 +484,8 @@ void ResizeWindow(Window *win, unsigned int width, unsigned int height)
 	
 	win->params.width = width;
 	win->params.height = height;
-	
+
+#if 0
 	uint64_t offset = ddiGetFormatDataSize(&screen->format, win->params.width, win->params.height);
 	uint64_t memoryNeeded = ddiGetFormatDataSize(&screen->format, win->params.width, win->params.height)*2;
 	if (memoryNeeded & 0xFFF)
@@ -504,7 +493,7 @@ void ResizeWindow(Window *win, unsigned int width, unsigned int height)
 		memoryNeeded &= ~0xFFF;
 		memoryNeeded += 0x1000;
 	};
-	
+
 	win->shmemAddr = __alloc_pages(memoryNeeded);
 	win->shmemSize = memoryNeeded;
 	win->shmemID = _glidix_shmalloc(win->shmemAddr, win->shmemSize, win->pid, PROT_READ|PROT_WRITE, 0);
@@ -515,6 +504,13 @@ void ResizeWindow(Window *win, unsigned int width, unsigned int height)
 	
 	win->clientArea[0] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
 	win->clientArea[1] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, (void*)(win->shmemAddr+offset), DDI_STATIC_FRAMEBUFFER);
+#endif
+
+	win->clientArea[0] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, NULL, DDI_SHARED);
+	win->clientArea[1] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, NULL, DDI_SHARED);
+	win->clientID[0] = win->clientArea[0]->id;
+	win->clientID[1] = win->clientArea[1]->id;
+	
 	win->frontBufferIndex = 0;
 	win->display = ddiCreateSurface(&screen->format, win->params.width, win->params.height, NULL, 0);
 	ddiFillRect(win->clientArea[0], 0, 0, win->params.width, win->params.height, &winBackColor);
@@ -582,7 +578,8 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	win->parent = parent;
 	win->cursor = GWM_CURSOR_NORMAL;
 	memcpy(&win->params, pars, sizeof(GWMWindowParams));
-	
+
+#if 0
 	uint64_t secondBufferOffset = ddiGetFormatDataSize(&screen->format, pars->width, pars->height);
 	uint64_t memoryNeeded = ddiGetFormatDataSize(&screen->format, pars->width, pars->height)*2;
 	if (memoryNeeded & 0xFFF)
@@ -604,6 +601,13 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	win->clientArea[0] = ddiCreateSurface(&screen->format, pars->width, pars->height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
 	win->clientArea[1] = ddiCreateSurface(&screen->format, pars->width, pars->height,
 				(void*)(win->shmemAddr + secondBufferOffset), DDI_STATIC_FRAMEBUFFER);
+#endif
+
+	win->clientArea[0] = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, DDI_SHARED);
+	win->clientArea[1] = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, DDI_SHARED);
+	win->clientID[0] = win->clientArea[0]->id;
+	win->clientID[1] = win->clientArea[1]->id;
+
 	win->frontBufferIndex = 0;
 	win->display = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, 0);
 	ddiFillRect(win->clientArea[0], 0, 0, pars->width, pars->height, &winBackColor);
@@ -1414,8 +1418,8 @@ void *msgThreadFunc(void *ignore)
 				else
 				{
 					memcpy(&msg.createWindowResp.format, &screen->format, sizeof(DDIPixelFormat));
-					msg.createWindowResp.shmemID = win->shmemID;
-					msg.createWindowResp.shmemSize = win->shmemSize;
+					msg.createWindowResp.clientID[0] = win->clientID[0];
+					msg.createWindowResp.clientID[1] = win->clientID[1];
 					msg.createWindowResp.width = win->params.width;
 					msg.createWindowResp.height = win->params.height;
 					
@@ -1536,7 +1540,7 @@ void *msgThreadFunc(void *ignore)
 				if (win != NULL)
 				{
 					if (win->icon != NULL) ddiDeleteSurface(win->icon);
-					win->icon = ddiCreateSurface(&screenFormat, 16, 16, cmd->setIcon.data, 0);
+					win->icon = ddiCreateSurface(&screen->format, 16, 16, cmd->setIcon.data, 0);
 					msg.setIconResp.status = 0;
 				}
 				else
@@ -1553,7 +1557,7 @@ void *msgThreadFunc(void *ignore)
 				GWMMessage msg;
 				msg.getFormatResp.type = GWM_MSG_GET_FORMAT_RESP;
 				msg.getFormatResp.seq = cmd->getFormat.seq;
-				memcpy(&msg.getFormatResp.format, &screenFormat, sizeof(DDIPixelFormat));
+				memcpy(&msg.getFormatResp.format, &screen->format, sizeof(DDIPixelFormat));
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 			}
 			else if (cmd->cmd == GWM_CMD_GET_WINDOW_LIST)
@@ -1671,8 +1675,8 @@ void *msgThreadFunc(void *ignore)
 				{
 					ResizeWindow(win, cmd->resize.width, cmd->resize.height);
 					msg.resizeResp.status = 0;
-					msg.resizeResp.shmemID = win->shmemID;
-					msg.resizeResp.shmemSize = win->shmemSize;
+					msg.resizeResp.clientID[0] = win->clientID[0];
+					msg.resizeResp.clientID[1] = win->clientID[1];
 					msg.resizeResp.width = win->params.width;
 					msg.resizeResp.height = win->params.height;
 				}
@@ -1744,12 +1748,11 @@ void onTerm(int signo, siginfo_t *si, void *context)
 
 int main(int argc, char *argv[])
 {
+	char dispdev[1024];
+	uint64_t requestRes;
+	char linebuf[1024];
 	srand(time(NULL));
 
-#if 0	
-	const char *displayDevice = NULL;
-	int modeSelected = -1;
-	
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(struct sigaction));
 	sa.sa_sigaction = onTerm;
@@ -1760,185 +1763,174 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	int i;
-	for (i=1; i<argc; i++)
+	if (geteuid() != 0)
 	{
-		if (strStartsWith(argv[i], "--display="))
+		fprintf(stderr, "you need to be root to start the window manager\n");
+		return 1;
+	};
+
+	// make sure the clipboard and shared surface directories actually exist
+	mkdir("/run/clipboard", 0777);
+	mkdir("/run/shsurf", 0777);
+
+	FILE *fp = fopen("/etc/gwm.conf", "r");
+	if (fp == NULL)
+	{
+		fprintf(stderr, "could not open /etc/gwm.conf: %s\n", strerror(errno));
+		return 1;
+	};
+	
+	requestRes = DDI_RES_AUTO;
+	dispdev[0] = 0;
+	
+	char *line;
+	int lineno = 0;
+	while ((line = fgets(linebuf, 1024, fp)) != NULL)
+	{
+		lineno++;
+		
+		char *endline = strchr(line, '\n');
+		if (endline != NULL)
 		{
-			if (strlen(argv[i]) < 11)
-			{
-				fprintf(stderr, "The --display option expects a parameter\n");
-				return 1;
-			};
-			
-			displayDevice = &argv[i][10];
-		}
-		else if (strStartsWith(argv[i], "--mode="))
+			*endline = 0;
+		};
+		
+		if (strlen(line) >= 1023)
 		{
-			if (sscanf(&argv[i][7], "%d", &modeSelected) != 1)
-			{
-				fprintf(stderr, "The --mode option expects a number\n");
-				return 1;
-			};
-			
-			if (modeSelected < 0)
-			{
-				fprintf(stderr, "The --mode option expects a positive number\n");
-				return 1;
-			};
-		}
-		else if (strcmp(argv[i], "--usage") == 0)
-		{
-			fprintf(stderr, "USAGE:\t%s --display=<filename> --mode=<mode-number>\n", argv[0]);
-			fprintf(stderr, "\tStarts the window manager on the specified display\n");
-			fprintf(stderr, "\tdevice and in the given video mode.\n");
+			fprintf(stderr, "/etc/gwm.conf:%d: buffer overflow\n", lineno);
 			return 1;
+		};
+		
+		if ((line[0] == 0) || (line[0] == '#'))
+		{
+			continue;
 		}
 		else
 		{
-			fprintf(stderr, "Unknown command-line parameter: %s\n", argv[i]);
-			return 1;
+			char *cmd = strtok(line, " \t");
+			if (cmd == NULL)
+			{
+				continue;
+			};
+			
+			if (strcmp(cmd, "display") == 0)
+			{
+				char *name = strtok(NULL, " \t");
+				if (name == NULL)
+				{
+					fprintf(stderr, "/etc/gwm.conf:%d: 'display' needs a parameter\n", lineno);
+					return 1;
+				};
+				
+				strcpy(dispdev, name);
+			}
+			else if (strcmp(cmd, "resolution") == 0)
+			{
+				char *res = strtok(NULL, " \t");
+				if (res == NULL)
+				{
+					fprintf(stderr, "/etc/gwm.conf:%d: 'resolution' needs a parameter\n", lineno);
+					return 1;
+				};
+				
+				uint64_t reqWidth, reqHeight;
+				if (strcmp(res, "auto") == 0)
+				{
+					requestRes = DDI_RES_AUTO;
+				}
+				else if (strcmp(res, "safe") == 0)
+				{
+					requestRes = DDI_RES_SAFE;
+				}
+				else if (sscanf(res, "%lux%lu", &reqWidth, &reqHeight) == 2)
+				{
+					requestRes = DDI_RES_SPECIFIC(reqWidth, reqHeight);
+				}
+				else
+				{
+					fprintf(stderr, "/etc/gwm.conf:%d: invalid resolution: %s\n", lineno, res);
+					return 1;
+				};
+			}
+			else
+			{
+				fprintf(stderr, "/etc/gwm.conf:%d: invalid directive: %s\n", lineno, cmd);
+				return 1;
+			};
 		};
 	};
+	fclose(fp);
 	
-	if (geteuid() != 0)
+	if (dispdev[0] == 0)
 	{
-		fprintf(stderr, "You need to be root to start the window manager\n");
+		fprintf(stderr, "/etc/gwm.conf: no display device specified!\n");
 		return 1;
 	};
-	
-	// make sure the clipboard and shared surface directories actually exists
-	mkdir("/run/clipboard", 0777);
-	mkdir("/run/shsurf", 0777);
-	
-	if (displayDevice == NULL)
+
+	if (ddiInit(dispdev, O_RDWR) != 0)
 	{
-		fprintf(stderr, "Please specify a display device using the --display option\n");
+		fprintf(stderr, "ddiInit: %s: %s\n", dispdev, strerror(errno));
 		return 1;
 	};
-	
+
 	pthread_mutex_init(&windowLock, NULL);
 	pthread_mutex_init(&mouseLock, NULL);
 	sem_init(&semRedraw, 0, 0);
-	
-	int fd = open(displayDevice, O_RDWR);
-	if (fd == -1)
-	{
-		fprintf(stderr, "Cannot open display device '%s': %s\n", displayDevice, strerror(errno));
-		return 1;
-	};
-
-	LGIDisplayDeviceStat	dstat;
-	LGIDisplayMode		mode;
-
-	if (ioctl(fd, IOCTL_VIDEO_DEVSTAT, &dstat) != 0)
-	{
-		perror("devstat failed");
-		close(fd);
-		return 1;
-	};
-
-	if (modeSelected == -1)
-	{
-		modeSelected = dstat.numModes - 1;
-	};
-	
-	mode.index = modeSelected;
-	ioctl(fd, IOCTL_VIDEO_MODSTAT, &mode);
-
-	printf("Switching to: %dx%d\n", mode.width, mode.height);
-	ioctl(fd, IOCTL_VIDEO_SETMODE, &mode);
-
-	size_t size = mode.width * mode.height * 4;
-
-	printf("Trying to map video memory\n");
-	char *videoram = (char*) mmap(NULL, size, PROT_WRITE, MAP_SHARED, fd, 0);
-	if (videoram == ((char*)-1))
-	{
-		perror("failed to map video memory");
-		close(fd);
-		return 1;
-	};
-
 	_glidix_kopt(_GLIDIX_KOPT_GFXTERM, 0);
 	
-	screenFormat.bpp = 4;
-	screenFormat.redMask = 0xFF0000;
-	screenFormat.greenMask = 0x00FF00;
-	screenFormat.blueMask = 0x0000FF;
-	screenFormat.alphaMask = 0xFF000000;
-	screenFormat.pixelSpacing = 0;
-	screenFormat.scanlineSpacing = 0;
+	frontBuffer = ddiSetVideoMode(requestRes);
+	screenWidth = frontBuffer->width;
+	screenHeight = frontBuffer->height;
 	
-	screenWidth = mode.width;
-	screenHeight = mode.height;
+	screen = ddiCreateSurface(&frontBuffer->format, screenWidth, screenHeight, NULL, 0);
 	
-	const char *fontError;
-	captionFont = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_BOLD, &fontError);
-	if (captionFont == NULL)
-	{
-		fprintf(stderr, "Failed to load caption font: %s\n", fontError);
-		return 1;
-	};
-	
-	frontBuffer = ddiCreateSurface(&screenFormat, mode.width, mode.height, videoram, DDI_STATIC_FRAMEBUFFER);
-	screen = ddiCreateSurface(&screenFormat, mode.width, mode.height, NULL, 0);
-	
-	//DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};
-	//ddiDrawText(frontBuffer, 5, 5, "GUI loading, please wait...", &white, NULL);
+	DDIColor backgroundColor = {0, 0, 0x77, 0xFF};
+	desktopBackground = ddiCreateSurface(&screen->format, screenWidth, screenHeight, NULL, DDI_SHARED);
+	ddiFillRect(desktopBackground, 0, 0, screenWidth, screenHeight, &backgroundColor);
 
-	DDIColor backgroundColor = {0, 0, 0xDD, 0xFF};
-	const char *errmsg;
-	desktopBackground = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/wallpaper.png", &errmsg);
-	if (desktopBackground == NULL)
-	{
-		printf("Failed to load wallpaper: %s\n", errmsg);
-		desktopBackground = ddiCreateSurface(&screenFormat, mode.width, mode.height, NULL, 0);
-		ddiFillRect(desktopBackground, 0, 0, mode.width, mode.height, &backgroundColor);
-	};
-	
 	// initialize mouse cursor
 	DDIColor mouseColor = {0xEE, 0xEE, 0xEE, 0xFF};
 
+	int i;
 	for (i=0; i<GWM_CURSOR_COUNT; i++)
 	{
-		cursors[i].image = ddiLoadAndConvertPNG(&screenFormat, cursors[i].src, NULL);
+		cursors[i].image = ddiLoadAndConvertPNG(&screen->format, cursors[i].src, NULL);
 		if (cursors[i].image == NULL)
 		{
-			cursors[i].image = ddiCreateSurface(&screenFormat, 16, 16, NULL, 0);
+			cursors[i].image = ddiCreateSurface(&screen->format, 16, 16, NULL, 0);
 			ddiFillRect(cursors[i].image, 0, 0, 16, 16, &mouseColor);
 		};
 	};
 	
-	mouseX = mode.width / 2 - 8;
-	mouseY = mode.height / 2 - 8;
+	mouseX = screenWidth / 2 - 8;
+	mouseY = screenHeight / 2 - 8;
 	
 	// system images
-	defWinIcon = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/defwinicon.png", NULL);
+	defWinIcon = ddiLoadAndConvertPNG(&screen->format, "/usr/share/images/defwinicon.png", NULL);
 	if (defWinIcon == NULL)
 	{
-		defWinIcon = ddiCreateSurface(&screenFormat, 16, 16, NULL, 0);
+		defWinIcon = ddiCreateSurface(&screen->format, 16, 16, NULL, 0);
 		ddiFillRect(defWinIcon, 0, 0, 16, 16, &mouseColor);
 	};
 	
-	winButtons = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/winbuttons.png", NULL);
+	winButtons = ddiLoadAndConvertPNG(&screen->format, "/usr/share/images/winbuttons.png", NULL);
 	if (winButtons == NULL)
 	{
-		winButtons = ddiCreateSurface(&screenFormat, 48, 64, NULL, 0);
+		winButtons = ddiCreateSurface(&screen->format, 48, 64, NULL, 0);
 		ddiFillRect(winButtons, 0, 0, 48, 64, &mouseColor);
 	};
 
-	winCap = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/wincap.png", NULL);
+	winCap = ddiLoadAndConvertPNG(&screen->format, "/usr/share/images/wincap.png", NULL);
 	if (winCap == NULL)
 	{
-		winCap = ddiCreateSurface(&screenFormat, 3, GUI_CAPTION_HEIGHT, NULL, 0);
+		winCap = ddiCreateSurface(&screen->format, 3, GUI_CAPTION_HEIGHT, NULL, 0);
 		ddiFillRect(winButtons, 0, 0, 3, GUI_CAPTION_HEIGHT, &winDecoColor);
 	};
 	
 	// for window borders
-	winDeco = ddiCreateSurface(&screenFormat, screenWidth, screenHeight, NULL, 0);
+	winDeco = ddiCreateSurface(&screen->format, screenWidth, screenHeight, NULL, 0);
 	ddiFillRect(winDeco, 0, 0, screenWidth, screenHeight, &winDecoColor);
-	winUnfoc = ddiCreateSurface(&screenFormat, screenWidth, screenHeight, NULL, 0);
+	winUnfoc = ddiCreateSurface(&screen->format, screenWidth, screenHeight, NULL, 0);
 	ddiFillRect(winUnfoc, 0, 0, screenWidth, screenHeight, &winUnfocColor);
 	
 	if (pthread_create(&inputThread, NULL, inputThreadFunc, NULL) != 0)
@@ -1996,7 +1988,6 @@ int main(int argc, char *argv[])
 			sem_wait(&semRedraw);
 		};
 	};
-#endif
 
 	return 0;
 };

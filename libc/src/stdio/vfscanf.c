@@ -53,10 +53,8 @@ static void __instr_initf(struct __instr *_is, FILE *_fp)
 
 static int __instr_getc(struct __instr *_is)
 {
-	//printf("{__instr_getc}\n");
 	if (_is->_maxget == 0)
 	{
-		//printf("_maxget=0\n");
 		return EOF;
 	}
 	else if (_is->_maxget != -1)
@@ -66,12 +64,10 @@ static int __instr_getc(struct __instr *_is)
 
 	if (_is->_fp != NULL)
 	{
-		//printf("_fp not null\n");
 		return fgetc(_is->_fp);
 	}
 	else
 	{
-		//printf("{getc returning %c}\n", *_is->_s);
 		if (*_is->_s == 0) return EOF;
 		else return *_is->_s++;
 	};
@@ -165,9 +161,14 @@ int _FUNCNAME(struct __instr *_is, int base, _TYPE *outp)\
 		{\
 			digit = 10 + c - 'a';\
 		}\
-		else\
+		else if ((c >= 'A') && (c <= 'Z'))\
 		{\
 			digit = 10 + c - 'A';\
+		}\
+		else\
+		{\
+			__instr_ungetc(_is, c);\
+			goto finished;\
 		};\
 \
 		if (digit >= llbase)\
@@ -251,9 +252,14 @@ int _FUNCNAME(struct __instr *_is, int base, _TYPE *outp)\
 		{\
 			digit = 10 + c - 'a';\
 		}\
-		else\
+		else if ((c >= 'A') && (c <= 'Z'))\
 		{\
 			digit = 10 + c - 'A';\
+		}\
+		else\
+		{\
+			__instr_ungetc(_is, c);\
+			goto finished;\
 		};\
 \
 		if (digit >= llbase)\
@@ -264,8 +270,8 @@ int _FUNCNAME(struct __instr *_is, int base, _TYPE *outp)\
 \
 		if (out > ((_LIMIT-digit)/llbase))\
 		{\
-			__instr_ungetc(_is, c);\
 			out = _LIMIT;\
+			__instr_ungetc(_is, c);\
 			goto finished;\
 		};\
 \
@@ -516,7 +522,6 @@ int __scanf_conv_n(struct __instr *_is, int lenmod, int count, void *outp)
 
 int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 {
-	//printf("fscan called with: '%s'\n", format);
 	int suppress=0, maxwidth=-1, lenmod=_LM_NONE, matchcount=0, c;
 
 	while (*format != 0)
@@ -649,7 +654,6 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 
 			// read the convertion specifier
 			char convspec = *format++;
-			//printf("{spec:  %c}\n", convspec);
 			switch (convspec)
 			{
 			case 'd':
@@ -685,6 +689,8 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 			case 'n':
 				__scanf_conv_n(_is, lenmod, matchcount, outp);
 				break;
+			default:
+				goto finish;
 			};
 
 			matchcount++;

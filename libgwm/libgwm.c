@@ -36,6 +36,7 @@
 #include <signal.h>
 #include <libgwm.h>
 #include <errno.h>
+#include <fcntl.h>
 
 static int guiPid;
 static int guiFD;
@@ -45,14 +46,6 @@ static uint64_t nextWindowID;
 static uint64_t nextSeq;
 static pthread_t listenThread;
 static DDIFont *defaultFont;
-
-uint64_t pagesPlacement = 0x2000000000;
-uint64_t __alloc_pages(uint64_t sz)
-{
-	uint64_t ret = pagesPlacement;
-	pagesPlacement += sz;
-	return ret;
-};
 
 typedef struct GWMWaiter_
 {
@@ -187,9 +180,15 @@ static void* listenThreadFunc(void *ignore)
 int gwmInit()
 {
 	FILE *fp = fopen("/run/gui.pid", "rb");
-	if (fp == NULL) return -1;
+	if (fp == NULL)
+	{
+		fprintf(stderr, "gwm: failed to open /run/gui.pid: %s\n", strerror(errno));
+		return -1;
+	};
 	if (fscanf(fp, "%d.%d", &guiPid, &guiFD) != 2)
 	{
+		fprintf(stderr, "gwm: failed to parse /run/gui.pid\n");
+		fclose(fp);
 		return -1;
 	};
 	fclose(fp);
@@ -201,11 +200,82 @@ int gwmInit()
 	pthread_mutex_init(&waiterLock, NULL);
 	pthread_mutex_init(&eventLock, NULL);
 	
+	char dispdev[1024];
+	char linebuf[1024];
+	dispdev[0] = 0;
+	
+	fp = fopen("/etc/gwm.conf", "r");
+	if (fp == NULL)
+	{
+		fprintf(stderr, "gwm: failed to open configuration file /etc/gwm.conf: %s\n", strerror(errno));
+		return -1;
+	};
+	
+	char *saveptr;
+	char *line;
+	int lineno = 0;
+	while ((line = fgets(linebuf, 1024, fp)) != NULL)
+	{
+		lineno++;
+		
+		char *endline = strchr(line, '\n');
+		if (endline != NULL)
+		{
+			*endline = 0;
+		};
+		
+		if (strlen(line) >= 1023)
+		{
+			fprintf(stderr, "/etc/gwm.conf:%d: buffer overflow\n", lineno);
+			fclose(fp);
+			return -1;
+		};
+		
+		if ((line[0] == 0) || (line[0] == '#'))
+		{
+			continue;
+		}
+		else
+		{
+			char *cmd = strtok_r(line, " \t", &saveptr);
+			if (cmd == NULL)
+			{
+				continue;
+			};
+			
+			if (strcmp(cmd, "display") == 0)
+			{
+				char *name = strtok_r(NULL, " \t", &saveptr);
+				if (name == NULL)
+				{
+					fprintf(stderr, "/etc/gwm.conf:%d: 'display' needs a parameter\n", lineno);
+					fclose(fp);
+					return -1;
+				};
+				
+				strcpy(dispdev, name);
+			};
+		};
+	};
+	fclose(fp);
+	
+	if (dispdev[0] == 0)
+	{
+		fprintf(stderr, "gwm: display device not found\n");
+		return -1;
+	};
+	
+	if (ddiInit(dispdev, O_RDONLY) != 0)
+	{
+		fprintf(stderr, "GWM: failed to initialize DDI: %s\n", strerror(errno));
+		return -1;
+	};
+
 	if (pthread_create(&listenThread, NULL, listenThreadFunc, NULL) != 0)
 	{
 		return -1;
 	};
-	
+
 	while (!initFinished) __sync_synchronize();
 	const char *errmsg;
 	defaultFont = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_REGULAR, &errmsg);
@@ -222,6 +292,7 @@ void gwmQuit()
 {
 	close(eventCounterFD);
 	close(queueFD);
+	ddiQuit();
 };
 
 GWMWindow* gwmCreateWindow(
@@ -255,7 +326,8 @@ GWMWindow* gwmCreateWindow(
 	{
 		GWMWindow *win = (GWMWindow*) malloc(sizeof(GWMWindow));
 		win->id = id;
-		
+
+#if 0
 		uint64_t canvasBase = __alloc_pages(resp.createWindowResp.shmemSize);
 		if (_glidix_shmap(canvasBase, resp.createWindowResp.shmemSize, resp.createWindowResp.shmemID, PROT_READ|PROT_WRITE) != 0)
 		{
@@ -269,6 +341,21 @@ GWMWindow* gwmCreateWindow(
 		uint64_t offset = ddiGetFormatDataSize(&resp.createWindowResp.format, resp.createWindowResp.width, resp.createWindowResp.height);
 		win->canvas = ddiCreateSurface(&resp.createWindowResp.format, resp.createWindowResp.width,
 						resp.createWindowResp.height, (char*)(canvasBase+offset), DDI_STATIC_FRAMEBUFFER);
+#endif
+
+		win->canvases[0] = ddiOpenSurface(resp.createWindowResp.clientID[0]);
+		win->canvases[1] = ddiOpenSurface(resp.createWindowResp.clientID[1]);
+		
+		if (win->canvases[0] == NULL)
+		{
+			fprintf(stderr, "CANVAS 0 FAILED TO OPEN (ID=0x%08X)\n", resp.createWindowResp.clientID[0]);
+		};
+
+		if (win->canvases[1] == NULL)
+		{
+			fprintf(stderr, "CANVAS 1 FAILED TO OPEN (ID=0x%08X)\n", resp.createWindowResp.clientID[1]);
+		};
+		
 		win->handlerInfo = NULL;
 		win->currentBuffer = 1;
 		win->lastClickTime = 0;
@@ -283,16 +370,13 @@ GWMWindow* gwmCreateWindow(
 
 DDISurface* gwmGetWindowCanvas(GWMWindow *win)
 {
-	return win->canvas;
+	return win->canvases[win->currentBuffer];
 };
 
 void gwmDestroyWindow(GWMWindow *win)
 {
-	if (win->canvas != NULL)
-	{
-		munmap((void*)win->shmemAddr, win->shmemSize);
-		ddiDeleteSurface(win->canvas);
-	};
+	ddiDeleteSurface(win->canvases[0]);
+	ddiDeleteSurface(win->canvases[1]);
 	
 	GWMCommand cmd;
 	cmd.destroyWindow.cmd = GWM_CMD_DESTROY_WINDOW;
@@ -301,6 +385,7 @@ void gwmDestroyWindow(GWMWindow *win)
 	if (_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand)) != 0)
 	{
 		perror("_glidix_mqsend");
+		return;
 	};
 	
 	if (win->handlerInfo != NULL)
@@ -331,11 +416,13 @@ void gwmPostDirty(GWMWindow *win)
 	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	
 	win->currentBuffer ^= 1;
+#if 0
 	DDISurface *oldCanvas = win->canvas;
 	uint64_t offset = ddiGetFormatDataSize(&oldCanvas->format, oldCanvas->width, oldCanvas->height);
 	win->canvas = ddiCreateSurface(&oldCanvas->format, oldCanvas->width,
 				oldCanvas->height, (char*)(win->shmemAddr + offset*win->currentBuffer), DDI_STATIC_FRAMEBUFFER);
 	ddiDeleteSurface(oldCanvas);
+#endif
 };
 
 void gwmWaitEvent(GWMEvent *ev)
@@ -638,7 +725,7 @@ void gwmSetListenWindow(GWMWindow *win)
 void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
 {
 	DDIPixelFormat format;
-	memcpy(&format, &win->canvas->format, sizeof(DDIPixelFormat));
+	memcpy(&format, &win->canvases[0]->format, sizeof(DDIPixelFormat));
 	
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
 	
@@ -654,6 +741,7 @@ void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
 	
 	if (resp.resizeResp.status == 0)
 	{
+#if 0
 		munmap((void*)win->shmemAddr, win->shmemSize);
 		ddiDeleteSurface(win->canvas);
 
@@ -669,6 +757,14 @@ void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
 		uint64_t offset = ddiGetFormatDataSize(&format, resp.resizeResp.width, resp.resizeResp.height);
 		win->canvas = ddiCreateSurface(&format, resp.resizeResp.width,
 						resp.resizeResp.height, (char*)(canvasBase+offset), DDI_STATIC_FRAMEBUFFER);
+#endif
+		
+		ddiDeleteSurface(win->canvases[0]);
+		ddiDeleteSurface(win->canvases[1]);
+		
+		win->canvases[0] = ddiOpenSurface(resp.resizeResp.clientID[0]);
+		win->canvases[1] = ddiOpenSurface(resp.resizeResp.clientID[1]);
+		
 		win->currentBuffer = 1;
 	}
 	else

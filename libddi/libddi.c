@@ -267,7 +267,10 @@ static uint8_t* ddiCreateSharedFile(uint32_t *idOut, DDISurface *target)
 		char shpath[256];
 		sprintf(shpath, "/run/shsurf/%08X", val);
 		
-		int fd = open(shpath, O_RDWR | O_CREAT | O_EXCL, 0600);
+		// TODO: we should probably think about how to manage the permissions better!
+		// this must be accessible to other users because the GUI runs as root while
+		// other applications do not.
+		int fd = open(shpath, O_RDWR | O_CREAT | O_EXCL, 0666);
 		if (fd == -1)
 		{
 			if (errno == EEXIST)
@@ -296,6 +299,7 @@ static uint8_t* ddiCreateSharedFile(uint32_t *idOut, DDISurface *target)
 			return NULL;
 		};
 		
+		*idOut = val;
 		return (uint8_t*) result;
 	};
 };

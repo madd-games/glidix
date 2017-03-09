@@ -132,7 +132,7 @@ echo \"logout\"\n\
 static const char *startupConf = "\
 # /etc/init/startup.conf\n\
 # Startup configuration file. See startup(3) for more info.\n\
-logmgr=\"gui --display=/dev/bga\"\n\
+logmgr=\"%s\"\n\
 ";
 
 Partition *splitArea(Partition *area, size_t offMB, size_t sizeMB)
@@ -1318,9 +1318,47 @@ void partFlush()
 	fprintf(fp, "%s", loginScript);
 	fclose(fp);
 	
+	// configure GWM
+	const char *logmgr = "gui";
+	pid = fork();
+	if (pid == -1)
+	{
+		msgbox("ERROR", "fork() failed for dispconf");
+		return;
+	};
+	
+	if (pid == 0)
+	{
+		close(0);
+		close(1);
+		close(2);
+		open("/dev/null", O_RDWR);
+		dup(0);
+		dup(1);
+		
+		execl("/usr/bin/dispconf", "dispconf", "/mnt/etc/gwm.conf", NULL);
+		exit(1);
+	};
+	
+	waitpid(pid, &status, 0);
+	if (!WIFEXITED(status))
+	{
+		logmgr = "logmgr";
+	};
+	
+	if (WEXITSTATUS(status) != 0)
+	{
+		logmgr = "logmgr";
+	};
+	
+	if (strcmp(logmgr, "gui") != 0)
+	{
+		msgbox("NOTICE", "Display configuration failed, disabling GUI.");
+	};
+	
 	// create the /etc/init/startup.conf file
 	fp = fopen("/mnt/etc/init/startup.conf", "w");
-	fprintf(fp, "%s", startupConf);
+	fprintf(fp, startupConf, logmgr);
 	fclose(fp);
 	
 	// now onto setting up the initrd

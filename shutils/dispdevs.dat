@@ -1,0 +1,10 @@
+# /etc/dispdevs.dat
+# A list of display devices recognised by dispconf(1)
+# The fields are: VENDOR, DEVICE, NAME
+# VENDOR - PCI vendor ID of a display device.
+# DEVICE - PCI device ID of a display device.
+# NAME - the 'driver name', prefixed to the device names under /dev.
+
+# Bochs Graphics Adapter (BGA), used in VirtualBox too
+1234:1111 bga
+80EE:BEEF bga

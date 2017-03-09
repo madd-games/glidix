@@ -660,7 +660,12 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 
 int main(int argc, char *argv[])
 {	
-	gwmInit();
+	if (gwmInit() != 0)
+	{
+		fprintf(stderr, "Failed to initialize GWM!\n");
+		return 1;
+	};
+	
 	GWMWindow *top = gwmCreateWindow(NULL, "Terminal", 10, 10, 720, 400, GWM_WINDOW_MKFOCUSED);
 	GWMWindow *wnd = gwmCreateWindow(top, "body", 0, 0, 720, 400, 0);
 	termWindow = wnd;

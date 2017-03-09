@@ -34,12 +34,17 @@
 #include <libddi.h>
 #include <libgwm.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 int main()
 {
 	pid_t pid = fork();
 	if (pid == 0)
 	{
+		close(1);
+		close(2);
+		dup(open("/var/log/gui.log", O_WRONLY | O_TRUNC | O_CREAT, 0644));
+		
 		execl("/usr/bin/gui-login", "gui-login", NULL);
 		perror("exec gui-login");
 		return 1;
@@ -55,6 +60,7 @@ int main()
 		waitpid(pid, &status, 0);
 		
 		printf("gui-login exited with status: %d\n", status);
+		sync();
 	};
 	
 	return 0;

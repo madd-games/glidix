@@ -524,6 +524,26 @@ int cmdRun(char *cmd)
 				};
 			};
 			
+			if (WIFSIGNALLED(status))
+			{
+				int sig = WTERMSIG(status);
+				switch (sig)
+				{
+				case SIGILL:
+					fprintf(stderr, "Illegal instruction\n");
+					break;
+				case SIGSTOP:
+					fprintf(stderr, "Stopped\n");
+					break;
+				case SIGBUS:
+					fprintf(stderr, "Bus error\n");
+					break;
+				case SIGSEGV:
+					fprintf(stderr, "Invalid memory access\n");
+					break;
+				};
+			};
+			
 			if (success != group->mustSucceed)
 			{
 				break;

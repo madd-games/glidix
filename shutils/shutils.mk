@@ -13,5 +13,7 @@ out/%: $(SRCDIR)/%.c
 install:
 	@mkdir -p $(DESTDIR)/usr/bin
 	@mkdir -p $(DESTDIR)/usr/libexec
+	@mkdir -p $(DESTDIR)/etc
 	export DESTDIR=$(DESTDIR) && sh $(SRCDIR)/install.sh $(OUT)
 	cp $(SRCDIR)/shutils-setup.sh $(DESTDIR)/usr/libexec/shutils-setup.sh
+	cp $(SRCDIR)/dispdevs.dat $(DESTDIR)/etc/dispdevs.dat

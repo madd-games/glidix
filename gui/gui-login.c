@@ -212,6 +212,7 @@ int logInCallback(void *ignore)
 			};
 
 			execl("/usr/bin/sysbar", "sysbar", NULL);
+			perror("exec");
 			exit(1);
 		};
 		
