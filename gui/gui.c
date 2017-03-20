@@ -241,6 +241,11 @@ sem_t semRedraw;
  */
 int guiQueue = -1;
 
+/**
+ * GWM information.
+ */
+GWMInfo *gwminfo;
+
 int mouseLeftDown = 0;
 
 void PostDesktopUpdate();
@@ -326,6 +331,7 @@ void PaintWindows(Window *win, DDISurface *target)
 						}
 						else
 						{
+							printf("drawing caption: %s\n", win->params.caption);
 							ddiSetPenColor(pen, &winCaptionColor);
 							ddiWritePen(pen, win->params.caption);
 							ddiExecutePen(pen, win->titleBar);
@@ -344,7 +350,7 @@ void PaintWindows(Window *win, DDISurface *target)
 					{
 						ddiBlit(defWinIcon, 0, 0, target, win->params.x+2, win->params.y+2, 16, 16);
 					};
-
+					
 					int btnIndex = ((mouseX - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/14;
 					if ((mouseY < (int)win->params.y+GUI_WINDOW_BORDER) || (mouseY > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
 					{
@@ -485,27 +491,6 @@ void ResizeWindow(Window *win, unsigned int width, unsigned int height)
 	win->params.width = width;
 	win->params.height = height;
 
-#if 0
-	uint64_t offset = ddiGetFormatDataSize(&screen->format, win->params.width, win->params.height);
-	uint64_t memoryNeeded = ddiGetFormatDataSize(&screen->format, win->params.width, win->params.height)*2;
-	if (memoryNeeded & 0xFFF)
-	{
-		memoryNeeded &= ~0xFFF;
-		memoryNeeded += 0x1000;
-	};
-
-	win->shmemAddr = __alloc_pages(memoryNeeded);
-	win->shmemSize = memoryNeeded;
-	win->shmemID = _glidix_shmalloc(win->shmemAddr, win->shmemSize, win->pid, PROT_READ|PROT_WRITE, 0);
-	if (win->shmemID == 0)
-	{
-		abort();
-	};
-	
-	win->clientArea[0] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
-	win->clientArea[1] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, (void*)(win->shmemAddr+offset), DDI_STATIC_FRAMEBUFFER);
-#endif
-
 	win->clientArea[0] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, NULL, DDI_SHARED);
 	win->clientArea[1] = ddiCreateSurface(&screen->format, win->params.width, win->params.height, NULL, DDI_SHARED);
 	win->clientID[0] = win->clientArea[0]->id;
@@ -578,30 +563,6 @@ Window* CreateWindow(uint64_t parentID, GWMWindowParams *pars, uint64_t myID, in
 	win->parent = parent;
 	win->cursor = GWM_CURSOR_NORMAL;
 	memcpy(&win->params, pars, sizeof(GWMWindowParams));
-
-#if 0
-	uint64_t secondBufferOffset = ddiGetFormatDataSize(&screen->format, pars->width, pars->height);
-	uint64_t memoryNeeded = ddiGetFormatDataSize(&screen->format, pars->width, pars->height)*2;
-	if (memoryNeeded & 0xFFF)
-	{
-		memoryNeeded &= ~0xFFF;
-		memoryNeeded += 0x1000;
-	};
-	
-	win->shmemAddr = __alloc_pages(memoryNeeded);
-	win->shmemSize = memoryNeeded;
-	win->shmemID = _glidix_shmalloc(win->shmemAddr, win->shmemSize, painterPid, PROT_READ|PROT_WRITE, 0);
-	if (win->shmemID == 0)
-	{
-		printf("Shared memory allocation failed!\n");
-		free(win);
-		return NULL;
-	};
-	
-	win->clientArea[0] = ddiCreateSurface(&screen->format, pars->width, pars->height, (void*)win->shmemAddr, DDI_STATIC_FRAMEBUFFER);
-	win->clientArea[1] = ddiCreateSurface(&screen->format, pars->width, pars->height,
-				(void*)(win->shmemAddr + secondBufferOffset), DDI_STATIC_FRAMEBUFFER);
-#endif
 
 	win->clientArea[0] = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, DDI_SHARED);
 	win->clientArea[1] = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, DDI_SHARED);
@@ -1368,22 +1329,9 @@ void PostWindowDirty(Window *win)
 	};
 };
 
-volatile int msgReady = 0;
 void *msgThreadFunc(void *ignore)
 {
 	static char msgbuf[65536];
-
-	guiQueue = _glidix_mqserver();
-	if (guiQueue == -1)
-	{
-		fprintf(stderr, "Failed to open GUI server!\n");
-		return NULL;
-	};
-	
-	FILE *fp = fopen("/run/gui.pid", "wb");
-	fprintf(fp, "%d.%d", getpid(), guiQueue);
-	fclose(fp);
-	msgReady = 1;
 	
 	while (1)
 	{
@@ -1718,6 +1666,10 @@ void *msgThreadFunc(void *ignore)
 				
 				pthread_mutex_unlock(&windowLock);
 				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+			}
+			else if (cmd->cmd == GWM_CMD_REDRAW_SCREEN)
+			{
+				sem_post(&semRedraw);
 			};
 		}
 		else if (info.type == _GLIDIX_MQ_HANGUP)
@@ -1740,10 +1692,18 @@ int strStartsWith(const char *str, const char *prefix)
 	return memcmp(str, prefix, strlen(prefix)) == 0;
 };
 
-void onTerm(int signo, siginfo_t *si, void *context)
+void onSig(int signo, siginfo_t *si, void *context)
 {
-	_glidix_kopt(_GLIDIX_KOPT_GFXTERM, 1);
-	exit(1);
+	if (signo == SIGTERM)
+	{
+		_glidix_kopt(_GLIDIX_KOPT_GFXTERM, 1);
+		exit(1);
+	}
+	else if (signo == SIGSEGV)
+	{
+		fprintf(stderr, "[GUI] ERROR! SIGSEGV caught!\n");
+		exit(1);
+	};
 };
 
 int main(int argc, char *argv[])
@@ -1755,11 +1715,16 @@ int main(int argc, char *argv[])
 
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(struct sigaction));
-	sa.sa_sigaction = onTerm;
+	sa.sa_sigaction = onSig;
 	sa.sa_flags = SA_SIGINFO;
 	if (sigaction(SIGTERM, &sa, NULL) != 0)
 	{
 		fprintf(stderr, "sigaction SIGTERM failed: %s\n", strerror(errno));
+		return 1;
+	};
+	if (sigaction(SIGSEGV, &sa, NULL) != 0)
+	{
+		fprintf(stderr, "sigaction SIGSEGV failed: %s\n", strerror(errno));
 		return 1;
 	};
 	
@@ -1873,6 +1838,14 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 
+	const char *fontError;
+	captionFont = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_BOLD, &fontError);
+	if (captionFont == NULL)
+	{
+		fprintf(stderr, "Failed to load caption font: %s\n", fontError);
+		return 1;
+	};
+	
 	pthread_mutex_init(&windowLock, NULL);
 	pthread_mutex_init(&mouseLock, NULL);
 	sem_init(&semRedraw, 0, 0);
@@ -1924,7 +1897,7 @@ int main(int argc, char *argv[])
 	if (winCap == NULL)
 	{
 		winCap = ddiCreateSurface(&screen->format, 3, GUI_CAPTION_HEIGHT, NULL, 0);
-		ddiFillRect(winButtons, 0, 0, 3, GUI_CAPTION_HEIGHT, &winDecoColor);
+		ddiFillRect(winCap, 0, 0, 3, GUI_CAPTION_HEIGHT, &winDecoColor);
 	};
 	
 	// for window borders
@@ -1932,7 +1905,30 @@ int main(int argc, char *argv[])
 	ddiFillRect(winDeco, 0, 0, screenWidth, screenHeight, &winDecoColor);
 	winUnfoc = ddiCreateSurface(&screen->format, screenWidth, screenHeight, NULL, 0);
 	ddiFillRect(winUnfoc, 0, 0, screenWidth, screenHeight, &winUnfocColor);
+
+	// message queue
+	guiQueue = _glidix_mqserver();
+	if (guiQueue == -1)
+	{
+		fprintf(stderr, "Failed to open GUI server!\n");
+		return 1;
+	};
+
+	// GWM information
+	int fd = open("/run/gwminfo", O_RDWR | O_CREAT | O_TRUNC, 0644);
+	if (fd == -1)
+	{
+		fprintf(stderr, "Failed to opne /run/gwminfo! %s\n", strerror(errno));
+		return 1;
+	};
 	
+	ftruncate(fd, sizeof(GWMInfo));
+	gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	gwminfo->pid = getpid();
+	gwminfo->fd = guiQueue;
+	gwminfo->backgroundID = desktopBackground->id;
+
+	// threads
 	if (pthread_create(&inputThread, NULL, inputThreadFunc, NULL) != 0)
 	{
 		fprintf(stderr, "failed to create input thread!\n");
@@ -1950,8 +1946,6 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "failed to create server thread!\n");
 		return 1;
 	};
-	
-	while (!msgReady) __sync_synchronize();
 	
 	pid_t child = fork();
 	if (child == -1)
@@ -1973,11 +1967,8 @@ int main(int argc, char *argv[])
 	redrawThread = pthread_self();
 	while (1)
 	{
-		//clock_t start = clock();
 		PaintDesktop();
-		//clock_t end = clock();
 		
-		//printf("render ms: %d\n", (int)((end-start)*1000/CLOCKS_PER_SEC));
 		while (sem_wait(&semRedraw) != 0);
 		
 		// ignore multiple simultaneous redraw requests

@@ -67,7 +67,7 @@ static void tree_update(FileTree *ft)
 
 InodeInfo* gxfsGetInode(GXFS *gxfs, uint64_t ino)
 {
-	semWait(&gxfs->semInodes);
+	mutexLock(&gxfs->mtxInodes);
 	
 	InodeInfo *info;
 	for (info=gxfs->firstIno; info!=NULL; info=info->next)
@@ -80,7 +80,7 @@ InodeInfo* gxfsGetInode(GXFS *gxfs, uint64_t ino)
 			};
 			
 			__sync_fetch_and_add(&info->refcount, 1);
-			semSignal(&gxfs->semInodes);
+			mutexUnlock(&gxfs->mtxInodes);
 			return info;
 		};
 	};
@@ -96,7 +96,7 @@ InodeInfo* gxfsGetInode(GXFS *gxfs, uint64_t ino)
 	if (vfsPRead(gxfs->fp, &info->data, 512, 0x200000 + (ino << 9)) != 512)
 	{
 		kfree(info);
-		semSignal(&gxfs->semInodes);
+		mutexUnlock(&gxfs->mtxInodes);
 		return NULL;
 	};
 
@@ -111,9 +111,9 @@ InodeInfo* gxfsGetInode(GXFS *gxfs, uint64_t ino)
 		ftDown(info->ft);			// make the refcount 0 (otherwise it won't flush)
 	};
 
-	semInit(&info->lock);
+	mutexInit(&info->lock);
 	
-	semInit(&info->semDir);
+	mutexInit(&info->mtxDir);
 	info->dirDirty = 0;
 	info->dir = NULL;
 	
@@ -130,7 +130,7 @@ InodeInfo* gxfsGetInode(GXFS *gxfs, uint64_t ino)
 		gxfs->lastIno = info;
 	};
 	
-	semSignal(&gxfs->semInodes);
+	mutexUnlock(&gxfs->mtxInodes);
 	return info;
 };
 
@@ -180,7 +180,7 @@ void gxfsDownrefInode(InodeInfo *info)
 			};
 
 			GXFS *gxfs = info->fs;
-			semWait(&gxfs->semInodes);
+			mutexLock(&gxfs->mtxInodes);
 			
 			if (info->prev == NULL)
 			{
@@ -200,7 +200,7 @@ void gxfsDownrefInode(InodeInfo *info)
 				gxfs->lastIno = info->prev;
 			};
 
-			semSignal(&gxfs->semInodes);
+			mutexUnlock(&gxfs->mtxInodes);
 			kfree(info);
 		}
 		else
@@ -323,12 +323,12 @@ static uint64_t gxfsGetBlockFromOffset(InodeInfo *info, uint64_t offset, int mak
 
 ssize_t gxfsReadInode(InodeInfo *info, void *buffer, size_t size, off_t pos)
 {
-	semWait(&info->lock);
+	mutexLock(&info->lock);
 	ssize_t sizeRead = 0;
 	
 	if (pos >= info->data.inoSize)
 	{
-		semSignal(&info->lock);
+		mutexUnlock(&info->lock);
 		return 0;
 	};
 	
@@ -355,7 +355,7 @@ ssize_t gxfsReadInode(InodeInfo *info, void *buffer, size_t size, off_t pos)
 		ssize_t okNow = vfsPRead(info->fs->fp, put, readNow, 0x200000 + (block << 9) + offset);
 		if (okNow == -1)
 		{
-			semSignal(&info->lock);
+			mutexUnlock(&info->lock);
 			if (sizeRead != 0) return sizeRead;
 			ERRNO = EIO;
 			return -1;
@@ -369,7 +369,7 @@ ssize_t gxfsReadInode(InodeInfo *info, void *buffer, size_t size, off_t pos)
 	
 	info->data.inoAccessTime = time();
 	info->dirty = 1;
-	semSignal(&info->lock);
+	mutexUnlock(&info->lock);
 	return sizeRead;
 };
 
@@ -443,23 +443,23 @@ int gxfsResize(InodeInfo *info, size_t newSize)
 		return -1;
 	};
 	
-	semWait(&info->lock);
+	mutexLock(&info->lock);
 	int result = gxfsResizeUnlocked(info, newSize);
-	semSignal(&info->lock);
+	mutexUnlock(&info->lock);
 	
 	return result;
 };
 
 ssize_t gxfsWriteInode(InodeInfo *info, const void *buffer, size_t size, off_t pos)
 {
-	semWait(&info->lock);
+	mutexLock(&info->lock);
 	ssize_t sizeWritten = 0;
 	
 	if ((pos+size) > info->data.inoSize)
 	{
 		if (gxfsResizeUnlocked(info, pos+size) != 0)
 		{
-			semSignal(&info->lock);
+			mutexUnlock(&info->lock);
 			ERRNO = EIO;
 			return -1;
 		};
@@ -474,7 +474,7 @@ ssize_t gxfsWriteInode(InodeInfo *info, const void *buffer, size_t size, off_t p
 		uint64_t block = gxfsGetBlockFromOffset(info, relblock, 1);
 		if (block == 0)
 		{
-			semSignal(&info->lock);
+			mutexUnlock(&info->lock);
 			if (sizeWritten != 0) return sizeWritten;
 			ERRNO = ENOSPC;
 			return -1;
@@ -489,7 +489,7 @@ ssize_t gxfsWriteInode(InodeInfo *info, const void *buffer, size_t size, off_t p
 		ssize_t okNow = vfsPWrite(info->fs->fp, scan, writeNow, 0x200000 + (block << 9) + offset);
 		if (okNow == -1)
 		{
-			semSignal(&info->lock);
+			mutexUnlock(&info->lock);
 			if (sizeWritten != 0) return sizeWritten;
 			return -1;
 		};
@@ -502,6 +502,6 @@ ssize_t gxfsWriteInode(InodeInfo *info, const void *buffer, size_t size, off_t p
 	
 	info->data.inoAccessTime = info->data.inoModTime = time();
 	info->dirty = 1;
-	semSignal(&info->lock);
+	mutexUnlock(&info->lock);
 	return sizeWritten;
 };

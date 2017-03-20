@@ -61,6 +61,11 @@
 #define	SD_BLOCK_DIRTY				(1UL << 48)
 
 /**
+ * Command flags.
+ */
+#define	SD_CMD_NOFREE				(1 << 0)		/* no not free structure after completion */
+
+/**
  * Command types.
  */
 enum SDCommandType
@@ -116,6 +121,11 @@ typedef struct _SDCommand
 	 * a command. If NULL, the driver should ignore errors.
 	 */
 	int*					status;
+	
+	/**
+	 * Flags.
+	 */
+	int					flags;
 	
 	/**
 	 * For queues.

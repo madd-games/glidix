@@ -168,3 +168,8 @@ void piStaticFrame(uint64_t frame)
 	node->entries[index] = 0xFFFFFF | PI_CACHE;
 	mutexUnlock(&piLock);
 };
+
+uint64_t piGetInfo(uint64_t frame)
+{
+	return piRoot.branches[(frame>>27)&0x1FF]->branches[(frame>>18)&0x1FF]->branches[(frame>>9)&0x1FF]->entries[frame&0x1FF];
+};

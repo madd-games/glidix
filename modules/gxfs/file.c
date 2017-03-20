@@ -73,7 +73,7 @@ static int gxfs_fstat(File *fp, struct stat *st)
 {
 	FileData *data = (FileData*) fp->fsdata;
 	
-	semWait(&data->info->lock);
+	mutexLock(&data->info->lock);
 	st->st_ino = data->info->index;
 	st->st_mode = data->info->data.inoMode;
 	st->st_nlink = data->info->data.inoLinks;
@@ -89,7 +89,7 @@ static int gxfs_fstat(File *fp, struct stat *st)
 	st->st_oxperm = data->info->data.inoOXPerm;
 	st->st_dxperm = data->info->data.inoDXPerm;
 	st->st_btime = data->info->data.inoBirthTime;
-	semSignal(&data->info->lock);
+	mutexUnlock(&data->info->lock);
 	
 	return 0;
 };
@@ -125,7 +125,7 @@ static off_t gxfs_seek(File *fp, off_t offset, int whence)
 {
 	FileData *data = (FileData*) fp->fsdata;
 	
-	semWait(&data->info->lock);
+	mutexLock(&data->info->lock);
 	off_t pos = data->pos;
 	
 	switch (whence)
@@ -142,7 +142,7 @@ static off_t gxfs_seek(File *fp, off_t offset, int whence)
 	};
 	
 	data->pos = pos;
-	semSignal(&data->info->lock);
+	mutexUnlock(&data->info->lock);
 	
 	return pos;
 };

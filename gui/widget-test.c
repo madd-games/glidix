@@ -123,19 +123,19 @@ int main()
 	gwmMenuAddEntry(menuTest, "Exit", menuExit, NULL);
 	
 	gwmMenuAddEntry(menuSub, "Submenu Item", menuCallback, (void*) "Submenu Item");
-	
+
 	GWMMenu *menuEmpty = gwmCreateMenu();
 	gwmMenubarAdd(menubar, "Test", menuTest);
 	gwmMenubarAdd(menubar, "Empty", menuEmpty);
 	gwmMenubarAdjust(menubar);
-	
+
 	gwmCreateButton(win, "Sample button", 2, 22, 100, 0);
 	gwmCreateButton(win, "Disabled button", 2, 54, 100, GWM_BUTTON_DISABLED);
 	gwmCreateTextField(win, "Type here :)", 2, 86, 100, 0);
 	gwmCreateTextField(win, "Disabled text field", 2, 108, 100, GWM_TXT_DISABLED);
 	gwmCreateTextField(win, "Masked", 2, 130, 100, GWM_TXT_MASKED);
 	gwmCreateTextField(win, "Disabled, masked", 2, 152, 100, GWM_TXT_MASKED | GWM_TXT_DISABLED);
-	
+
 	gwmCreateCheckbox(win, 104, 27, GWM_CB_TRI, 0);
 	
 	int i;
@@ -149,34 +149,42 @@ int main()
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
 	sbar = gwmCreateScrollbar(win, 104, 91, 100, 50, 66, 500, GWM_SCROLLBAR_HORIZ | GWM_SCROLLBAR_DISABLED);
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
-	
+
 	sbar = gwmCreateScrollbar(win, 206, 27, 100, 20, 100, 500, 0);
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
 	sbar = gwmCreateScrollbar(win, 216, 27, 100, 10, 100, 500, GWM_SCROLLBAR_DISABLED);
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
 
+	GWMRadioGroup *group = gwmCreateRadioGroup(0);
+	for (i=0; i<4; i++)
+	{
+		int flags = 0;
+		if (i == 0) flags = GWM_RADIO_DISABLED;
+		gwmCreateRadioButton(win, 104+32*i, 130, group, i, flags);
+	};
+	
 	GWMWindow *notebook = gwmCreateNotebook(win, 2, 174, 300, 200, 0);
 	GWMWindow *tab1 = gwmNotebookAdd(notebook, "Tab 1");
-	GWMWindow *tab2 = gwmNotebookAdd(notebook, "Filesystem");
+	/*GWMWindow *tab2 =*/ gwmNotebookAdd(notebook, "Filesystem");
 	/*GWMWindow *tab3 =*/ gwmNotebookAdd(notebook, "Yet another tab");
 	gwmNotebookSetTab(notebook, 0);
-	
+
 	int pageWidth, pageHeight;
 	gwmNotebookGetDisplaySize(notebook, &pageWidth, &pageHeight);
-	
+
 	DDISurface *canvas = gwmGetWindowCanvas(tab1);
 	fntExample = ddiLoadFont("DejaVu Sans", 15, DDI_STYLE_ITALIC, NULL);
-	
+
 	DDIPen *pen = ddiCreatePen(&canvas->format, fntExample, 2, 2, pageWidth-4, pageHeight-4, 0, 0, NULL);
 	ddiWritePen(pen, "This is some text on the first page.");
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
-	/*GWMWindow *treeview =*/ gwmCreateTreeView(tab2, 2, 2, 250, 150, GWM_TREE_FILESYSTEM, GWM_FS_ROOT, 0);
+	///*GWMWindow *treeview =*/ gwmCreateTreeView(tab2, 2, 2, 250, 150, GWM_TREE_FILESYSTEM, GWM_FS_ROOT, 0);
 	
 	gwmPostDirty(tab1);
 	redraw();
-	
+
 	gwmSetEventHandler(win, myEventHandler);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	gwmMainLoop();

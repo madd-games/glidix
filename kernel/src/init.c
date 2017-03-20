@@ -481,7 +481,7 @@ static UINT32 onPowerButton(void *ignore)
 	info.si_status = 0;
 	info.si_band = 0;
 	info.si_value.sival_int = 0;
-	signalPidEx(1, &info);
+	signalPidEx(1, &info, SP_NOPERM);
 	return 0;
 };
 

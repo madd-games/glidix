@@ -64,11 +64,11 @@ static int gxfs_unmount(FileSystem *fs)
 {
 	GXFS *gxfs = (GXFS*) fs->fsdata;
 	
-	semWait(&gxfs->semInodes);
+	mutexLock(&gxfs->mtxInodes);
 	if (gxfs->numOpenInodes != 0)
 	{
 		kprintf("gxfs: cannot unmount because some inodes are open (%d)\n", gxfs->numOpenInodes);
-		semSignal(&gxfs->semInodes);
+		mutexUnlock(&gxfs->mtxInodes);
 		return -1;
 	};
 	
@@ -143,12 +143,12 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 	gxfs->fp = fp;
 	memcpy(&gxfs->sb, &sb, 512);
 	
-	semInit(&gxfs->semInodes);
+	mutexInit(&gxfs->mtxInodes);
 	gxfs->firstIno = NULL;
 	gxfs->lastIno = NULL;
 	gxfs->numOpenInodes = 0;
 	
-	semInit(&gxfs->semAlloc);
+	mutexInit(&gxfs->mtxAlloc);
 	
 	fs->fsdata = gxfs;
 	fs->fsname = "gxfs";

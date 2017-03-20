@@ -38,7 +38,7 @@
 
 uint64_t gxfsAllocBlock(GXFS *gxfs)
 {
-	semWait(&gxfs->semAlloc);
+	mutexLock(&gxfs->mtxAlloc);
 	
 	if (gxfs->sb.sbFreeHead != 0)
 	{
@@ -49,20 +49,20 @@ uint64_t gxfsAllocBlock(GXFS *gxfs)
 		
 		gxfs->sb.sbUsedBlocks++;
 		vfsPWrite(gxfs->fp, &gxfs->sb, 512, 0x200000);
-		semSignal(&gxfs->semAlloc);
+		mutexUnlock(&gxfs->mtxAlloc);
 		
 		return newBlock;
 	};
 	
 	if (gxfs->sb.sbUsedBlocks == gxfs->sb.sbTotalBlocks)
 	{
-		semSignal(&gxfs->semAlloc);
+		mutexUnlock(&gxfs->mtxAlloc);
 		return 0;
 	};
 	
 	uint64_t block = gxfs->sb.sbUsedBlocks++;
 	vfsPWrite(gxfs->fp, &gxfs->sb, 512, 0x200000);
-	semSignal(&gxfs->semAlloc);
+	mutexUnlock(&gxfs->mtxAlloc);
 	
 	return block;
 };
@@ -75,12 +75,12 @@ void gxfsFreeBlock(GXFS *gxfs, uint64_t block)
 		panic("attempting to free the superblock!");
 	};
 	
-	semWait(&gxfs->semAlloc);
+	mutexLock(&gxfs->mtxAlloc);
 	vfsPWrite(gxfs->fp, &gxfs->sb.sbFreeHead, 8, 0x200000 + 512 * block);
 	gxfs->sb.sbFreeHead = block;
 	gxfs->sb.sbUsedBlocks--;
 	vfsPWrite(gxfs->fp, &gxfs->sb, 512, 0x200000);
-	semSignal(&gxfs->semAlloc);
+	mutexUnlock(&gxfs->mtxAlloc);
 };
 
 void gxfsZeroBlock(GXFS *gxfs, uint64_t block)

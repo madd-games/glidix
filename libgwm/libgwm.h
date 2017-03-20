@@ -80,6 +80,11 @@ extern DDIColor gwmColorSelection;
 #define	GWM_CB_TRI				2
 
 /**
+ * Radio button flags.
+ */
+#define	GWM_RADIO_DISABLED			(1 << 0)
+
+/**
  * Scrollbar flags. Note that GWM_SCROLLBAR_HORIZ and GWM_SCROLLBAR_VERT are to be
  * considered mutually exclusive, and GWM_SCROLLBAR_VERT is the default.
  */
@@ -132,6 +137,40 @@ extern DDIColor gwmColorSelection;
 #define	GWM_CURSOR_NORMAL			0
 #define	GWM_CURSOR_TEXT				1
 #define	GWM_CURSOR_COUNT			2
+
+/**
+ * Window manager information structure, located in the shared file /run/gwminfo.
+ * Described how to connect to the window manager.
+ */
+typedef struct
+{
+	/**
+	 * Process ID of the window manager.
+	 */
+	int					pid;
+	
+	/**
+	 * Message queue descriptor.
+	 */
+	int					fd;
+	
+	/**
+	 * ID of the background surface.
+	 */
+	uint32_t				backgroundID;
+} GWMInfo;
+
+/**
+ * A radio group. Specifies the currently-selected value from a list of radio buttons.
+ * Also lists the buttons for redraw purposes.
+ */
+struct GWMRadioData_;
+typedef struct
+{
+	int					value;
+	struct GWMRadioData_*			first;
+	struct GWMRadioData_*			last;
+} GWMRadioGroup;
 
 /**
  * Window parameter structure, as passed by clients to the window manager.
@@ -213,6 +252,7 @@ typedef struct
 #define	GWM_CMD_RESIZE				13
 #define	GWM_CMD_MOVE				14
 #define	GWM_CMD_REL_TO_ABS			15
+#define	GWM_CMD_REDRAW_SCREEN			16
 typedef union
 {
 	int					cmd;
@@ -1055,5 +1095,36 @@ void gwmRunModal(GWMWindow *modal, int flags);
  * free() on it.
  */
 char* gwmGetInput(const char *caption, const char *prompt, const char *initialText);
+
+/**
+ * Return a pointer to the GWM information structure.
+ */
+GWMInfo *gwmGetInfo();
+
+/**
+ * Tell the window manager to redraw the whole screen.
+ */
+void gwmRedrawScreen();
+
+/**
+ * Creates a radio group, with the specified initial value.
+ */
+GWMRadioGroup* gwmCreateRadioGroup(int value);
+
+/**
+ * Destroy a radio group. Note that you must first destroy all its component radio buttons!
+ */
+void gwmDestroyRadioGroup(GWMRadioGroup *group);
+
+/**
+ * Create a radio button, which will join the specified group, and when selected by the user, sets the value
+ * of the radio group to 'value'.
+ */
+GWMWindow* gwmCreateRadioButton(GWMWindow *parent, int x, int y, GWMRadioGroup *group, int value, int flags);
+
+/**
+ * Destroy a radio button.
+ */
+void gwmDestroyRadioButton(GWMWindow *radio);
 
 #endif

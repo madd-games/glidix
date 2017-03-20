@@ -562,11 +562,6 @@ void *ctrlThreadFunc(void *context)
 	return NULL;
 };
 
-void onSigChld(int sig)
-{
-	running = 0;
-};
-
 static int getPositionFromCoords(int cx, int cy)
 {
 	int tx = cx / 9;
@@ -615,6 +610,22 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 			pthread_spin_lock(&consoleLock);
 			renderConsole(surface);
 			pthread_spin_unlock(&consoleLock);
+		}
+		else if (ev->keycode == GWM_KC_LEFT)
+		{
+			write(fdMaster, "\x8D", 1);
+		}
+		else if (ev->keycode == GWM_KC_RIGHT)
+		{
+			write(fdMaster, "\x8E", 1);
+		}
+		else if (ev->keycode == GWM_KC_UP)
+		{
+			write(fdMaster, "\x8B", 1);
+		}
+		else if (ev->keycode == GWM_KC_DOWN)
+		{
+			write(fdMaster, "\x8C", 1);
 		}
 		else
 		{
@@ -705,7 +716,6 @@ int main(int argc, char *argv[])
 	sigfillset(&sigset);
 	pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 	
-	signal(SIGCHLD, onSigChld);
 	pthread_create(&ctrlThread, NULL, ctrlThreadFunc, argv);
 	
 	gwmSetEventHandler(top, terminalHandler);

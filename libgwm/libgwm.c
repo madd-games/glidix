@@ -70,6 +70,7 @@ static pthread_mutex_t eventLock;
 static EventBuffer *firstEvent;
 static EventBuffer *lastEvent;
 static GWMHandlerInfo *firstHandler = NULL;
+static GWMInfo *gwminfo = NULL;
 
 DDIColor gwmColorSelection = {0, 0xAA, 0, 0xFF};
 
@@ -179,19 +180,15 @@ static void* listenThreadFunc(void *ignore)
 
 int gwmInit()
 {
-	FILE *fp = fopen("/run/gui.pid", "rb");
-	if (fp == NULL)
+	int fd = open("/run/gwminfo", O_RDONLY);
+	if (fd == -1)
 	{
-		fprintf(stderr, "gwm: failed to open /run/gui.pid: %s\n", strerror(errno));
 		return -1;
 	};
-	if (fscanf(fp, "%d.%d", &guiPid, &guiFD) != 2)
-	{
-		fprintf(stderr, "gwm: failed to parse /run/gui.pid\n");
-		fclose(fp);
-		return -1;
-	};
-	fclose(fp);
+	
+	gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), PROT_READ, MAP_SHARED, fd, 0);
+	guiPid = gwminfo->pid;
+	guiFD = gwminfo->fd;
 	
 	nextWindowID = 1;
 	nextSeq = 1;
@@ -204,7 +201,7 @@ int gwmInit()
 	char linebuf[1024];
 	dispdev[0] = 0;
 	
-	fp = fopen("/etc/gwm.conf", "r");
+	FILE *fp = fopen("/etc/gwm.conf", "r");
 	if (fp == NULL)
 	{
 		fprintf(stderr, "gwm: failed to open configuration file /etc/gwm.conf: %s\n", strerror(errno));
@@ -327,34 +324,8 @@ GWMWindow* gwmCreateWindow(
 		GWMWindow *win = (GWMWindow*) malloc(sizeof(GWMWindow));
 		win->id = id;
 
-#if 0
-		uint64_t canvasBase = __alloc_pages(resp.createWindowResp.shmemSize);
-		if (_glidix_shmap(canvasBase, resp.createWindowResp.shmemSize, resp.createWindowResp.shmemID, PROT_READ|PROT_WRITE) != 0)
-		{
-			perror("_glidix_shmap");
-			free(win);
-			return NULL;
-		};
-
-		win->shmemAddr = canvasBase;
-		win->shmemSize = resp.createWindowResp.shmemSize;
-		uint64_t offset = ddiGetFormatDataSize(&resp.createWindowResp.format, resp.createWindowResp.width, resp.createWindowResp.height);
-		win->canvas = ddiCreateSurface(&resp.createWindowResp.format, resp.createWindowResp.width,
-						resp.createWindowResp.height, (char*)(canvasBase+offset), DDI_STATIC_FRAMEBUFFER);
-#endif
-
 		win->canvases[0] = ddiOpenSurface(resp.createWindowResp.clientID[0]);
 		win->canvases[1] = ddiOpenSurface(resp.createWindowResp.clientID[1]);
-		
-		if (win->canvases[0] == NULL)
-		{
-			fprintf(stderr, "CANVAS 0 FAILED TO OPEN (ID=0x%08X)\n", resp.createWindowResp.clientID[0]);
-		};
-
-		if (win->canvases[1] == NULL)
-		{
-			fprintf(stderr, "CANVAS 1 FAILED TO OPEN (ID=0x%08X)\n", resp.createWindowResp.clientID[1]);
-		};
 		
 		win->handlerInfo = NULL;
 		win->currentBuffer = 1;
@@ -416,13 +387,6 @@ void gwmPostDirty(GWMWindow *win)
 	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	
 	win->currentBuffer ^= 1;
-#if 0
-	DDISurface *oldCanvas = win->canvas;
-	uint64_t offset = ddiGetFormatDataSize(&oldCanvas->format, oldCanvas->width, oldCanvas->height);
-	win->canvas = ddiCreateSurface(&oldCanvas->format, oldCanvas->width,
-				oldCanvas->height, (char*)(win->shmemAddr + offset*win->currentBuffer), DDI_STATIC_FRAMEBUFFER);
-	ddiDeleteSurface(oldCanvas);
-#endif
 };
 
 void gwmWaitEvent(GWMEvent *ev)
@@ -741,24 +705,6 @@ void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
 	
 	if (resp.resizeResp.status == 0)
 	{
-#if 0
-		munmap((void*)win->shmemAddr, win->shmemSize);
-		ddiDeleteSurface(win->canvas);
-
-		uint64_t canvasBase = __alloc_pages(resp.resizeResp.shmemSize);
-		if (_glidix_shmap(canvasBase, resp.resizeResp.shmemSize, resp.resizeResp.shmemID, PROT_READ|PROT_WRITE) != 0)
-		{
-			perror("_glidix_shmap");
-			abort();
-		};
-
-		win->shmemAddr = canvasBase;
-		win->shmemSize = resp.resizeResp.shmemSize;
-		uint64_t offset = ddiGetFormatDataSize(&format, resp.resizeResp.width, resp.resizeResp.height);
-		win->canvas = ddiCreateSurface(&format, resp.resizeResp.width,
-						resp.resizeResp.height, (char*)(canvasBase+offset), DDI_STATIC_FRAMEBUFFER);
-#endif
-		
 		ddiDeleteSurface(win->canvases[0]);
 		ddiDeleteSurface(win->canvases[1]);
 		
@@ -827,4 +773,17 @@ void gwmRunModal(GWMWindow *modal, int flags)
 {
 	gwmSetWindowFlags(modal, flags);
 	gwmModalLoop(modal->modalID);
+};
+
+GWMInfo *gwmGetInfo()
+{
+	return gwminfo;
+};
+
+void gwmRedrawScreen()
+{
+	GWMCommand cmd;
+	cmd.cmd = GWM_CMD_REDRAW_SCREEN;
+	
+	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 };

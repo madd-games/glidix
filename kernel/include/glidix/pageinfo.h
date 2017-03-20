@@ -126,4 +126,9 @@ int piCheckFlush(uint64_t frame);
  */
 void piStaticFrame(uint64_t frame);
 
+/**
+ * Return the value of a page.
+ */
+uint64_t piGetInfo(uint64_t frame);
+
 #endif

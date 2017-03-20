@@ -171,4 +171,10 @@ int ftTruncate(FileTree *ft, size_t size);
  */
 void ftUncache(FileTree *ft);
 
+/**
+ * Flush one of the pages in of a file tree, and return the frame number, which can now be reused (but is not freed).
+ * Return 0 if finding a spare page was unsuccessful.
+ */
+uint64_t ftGetFreePage();
+
 #endif

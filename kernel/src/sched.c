@@ -242,7 +242,7 @@ void credsDownref(Creds *creds)
 		siginfo.si_pid = creds->pid;
 		siginfo.si_status = creds->status;
 		siginfo.si_uid = creds->ruid;
-		signalPidEx(parentPid, &siginfo);
+		signalPidEx(parentPid, &siginfo, SP_NOPERM);
 		
 		// wake the parent
 		wakeProcess(parentPid);
@@ -1176,7 +1176,7 @@ int processWait(int pid, int *stat_loc, int flags)
 	};
 };
 
-static int canSendSignal(Thread *src, Thread *dst, int signo)
+static int canSendSignal(Thread *src, Thread *dst, int signo, int flags)
 {
 	switch (signo)
 	{
@@ -1208,6 +1208,11 @@ static int canSendSignal(Thread *src, Thread *dst, int signo)
 		return 1;
 	};
 
+	if (flags & SP_NOPERM)
+	{
+		return 1;
+	};
+	
 	if ((dst->creds->pid == 1) && ((signo == SIGKILL) || (signo == SIGSTOP)))
 	{
 		return 0;
@@ -1231,7 +1236,7 @@ static int canSendSignal(Thread *src, Thread *dst, int signo)
 	return 0;
 };
 
-int signalPidEx(int pid, siginfo_t *si)
+int signalPidEx(int pid, siginfo_t *si, int flags)
 {
 	// keep track of which pids we've already successfully delivered signals to
 	// in this call.
@@ -1271,7 +1276,7 @@ int signalPidEx(int pid, siginfo_t *si)
 			
 				if (!found)
 				{
-					if (!canSendSignal(currentThread, thread, si->si_signo))
+					if (!canSendSignal(currentThread, thread, si->si_signo, flags))
 					{
 						ERRNO = EPERM;
 						thread = thread->next;
@@ -1325,13 +1330,20 @@ int signalPid(int pid, int sig)
 {
 	if (sig == 0)
 	{
-		return signalPidEx(pid, NULL);
+		return signalPidEx(pid, NULL, 0);
 	};
 	
 	siginfo_t si;
 	memset(&si, 0, sizeof(siginfo_t));
 	si.si_signo = sig;
-	return signalPidEx(pid, &si);
+	
+	if (currentThread->creds != NULL)
+	{
+		si.si_pid = currentThread->creds->pid;
+		si.si_uid = currentThread->creds->ruid;
+	};
+	
+	return signalPidEx(pid, &si, 0);
 };
 
 void switchTaskToIndex(int index)

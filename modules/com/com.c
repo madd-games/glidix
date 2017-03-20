@@ -34,6 +34,7 @@
 #include <glidix/common.h>
 #include <glidix/module.h>
 #include <glidix/port.h>
+#include <glidix/memory.h>
 
 uint16_t comPorts[4] = {0x3F8, 0x2F8, 0x3E8, 0x2E8};
 const char *comNames[4] = {"com1", "com2", "com3", "com4"};
@@ -99,7 +100,10 @@ MODULE_INIT()
 	
 	for (i=0; i<4; i++)
 	{
-		comDevs[i] = AddDevice(comNames[i], &comPorts[i], com_open, 0666);
+		// because devfs frees the 'data' pointer...
+		uint16_t *ptr = NEW(uint16_t);
+		*ptr = comPorts[i];
+		comDevs[i] = AddDevice(comNames[i], ptr, com_open, 0666);
 	};
 	
 	return MODINIT_OK;

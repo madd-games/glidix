@@ -1658,3 +1658,80 @@ DDISurface* ddiRenderText(DDIPixelFormat *format, DDIFont *font, const char *tex
 	
 	return surface;
 };
+
+typedef struct
+{
+	const char *name;
+	uint8_t red, green, blue;
+} DDIColorName;
+
+int ddiParseColor(const char *str, DDIColor *out)
+{
+	static DDIColorName colors[] = {
+		{"black",	0x00, 0x00, 0x00},
+		{"white",	0xFF, 0xFF, 0xFF},
+		{"red",		0xFF, 0x00, 0x00},
+		{"green",	0x00, 0xFF, 0x00},
+		{"blue",	0x00, 0x00, 0xFF},
+		{"yellow",	0xFF, 0xFF, 0x00},
+		{"cyan",	0x00, 0xFF, 0xFF},
+		{"magenta",	0xFF, 0x00, 0xFF},
+		{"gray",	0x7F, 0x7F, 0x7F},
+		{"pink",	0xFF, 0x7F, 0xFF},
+		{"orange",	0x7F, 0x7F, 0x00},
+		{NULL, 0, 0, 0}
+	};
+	
+	out->alpha = 255;
+	
+	if (str[0] == '#')
+	{
+		if (strlen(str) == 4)
+		{
+			uint8_t r, g, b;
+			if (sscanf(str, "#%1hhx%1hhx%1hhx", &r, &g, &b) != 3)
+			{
+				return -1;
+			};
+			
+			out->red = (r << 4) | r;
+			out->green = (g << 4) | g;
+			out->blue = (b << 4) | b;
+			return 0;
+		}
+		else if (strlen(str) == 7)
+		{
+			if (sscanf(str, "#%2hhx%2hhx%2hhx", &out->red, &out->green, &out->blue) != 3)
+			{
+				return -1;
+			};
+			
+			return 0;
+		}
+		else
+		{
+			return -1;
+		};
+	}
+	else
+	{
+		DDIColorName *name;
+		for (name=colors; name->name!=NULL; name++)
+		{
+			if (strcmp(name->name, str) == 0)
+			{
+				out->red = name->red;
+				out->green = name->green;
+				out->blue = name->blue;
+				return 0;
+			};
+		};
+		
+		return -1;
+	};
+};
+
+void ddiColorToString(const DDIColor *col, char *buffer)
+{
+	sprintf(buffer, "#%02hhx%02hhx%02hhx", col->red, col->green, col->blue);
+};

@@ -29,7 +29,7 @@
 #include <glidix/devfs.h>
 #include <glidix/common.h>
 #include <glidix/memory.h>
-#include <glidix/spinlock.h>
+#include <glidix/mutex.h>
 #include <glidix/string.h>
 #include <glidix/vfs.h>
 #include <glidix/random.h>
@@ -48,7 +48,7 @@ typedef struct _DeviceFile
 } DeviceFile;
 
 static FileSystem *devfs;
-static Spinlock devfsLock;
+static Mutex devfsLock;
 static DeviceFile nullDevice;
 
 static ssize_t nullWrite(File *file, const void *buffer, size_t size)
@@ -95,16 +95,16 @@ static DeviceFile* getDeviceByInode(ino_t inode)
 
 static int openfile(Dir *dir, File *file, size_t szFile)
 {
-	spinlockAcquire(&devfsLock);
+	mutexLock(&devfsLock);
 	DeviceFile *dev = getDeviceByInode(dir->dirent.d_ino);
 	if (dev == NULL)
 	{
-		spinlockRelease(&devfsLock);
+		mutexUnlock(&devfsLock);
 		return VFS_BUSY;
 	};
-	
+
 	int status = dev->open(dev->data, file, szFile);
-	spinlockRelease(&devfsLock);
+	mutexUnlock(&devfsLock);
 	return status;
 };
 
@@ -112,37 +112,37 @@ static int loadDeviceInfo(Dir *dir, ino_t inode);
 
 static int next(Dir *dir)
 {
-	spinlockAcquire(&devfsLock);
+	mutexLock(&devfsLock);
 	
 	DeviceFile *current = getDeviceByInode(dir->dirent.d_ino);
 	if (current == NULL)
 	{
-		spinlockRelease(&devfsLock);
+		mutexUnlock(&devfsLock);
 		return -1;
 	};
 	
 	DeviceFile *next = current->next;
 	if (next == NULL)
 	{
-		spinlockRelease(&devfsLock);
+		mutexUnlock(&devfsLock);
 		return -1;
 	};
 	
 	ino_t inode = next->inode;
-	spinlockRelease(&devfsLock);
+	mutexUnlock(&devfsLock);
 	
 	return loadDeviceInfo(dir, inode);
 };
 
 static int loadDeviceInfo(Dir *dir, ino_t inode)
 {
-	spinlockAcquire(&devfsLock);
+	mutexLock(&devfsLock);
 	dir->dirent.d_ino = inode;
 	
 	DeviceFile *dev = getDeviceByInode(inode);
 	if (dev == NULL)
 	{
-		spinlockRelease(&devfsLock);
+		mutexUnlock(&devfsLock);
 		return -1;
 	};
 	
@@ -163,7 +163,7 @@ static int loadDeviceInfo(Dir *dir, ino_t inode)
 
 	dir->openfile = openfile;
 	dir->next = next;
-	spinlockRelease(&devfsLock);
+	mutexUnlock(&devfsLock);
 	return 0;
 };
 
@@ -255,7 +255,7 @@ static int openRandom(void *data, File *file, size_t szFile)
 
 void initDevfs()
 {
-	spinlockRelease(&devfsLock);
+	mutexInit(&devfsLock);
 	devfs = (FileSystem*) kmalloc(sizeof(FileSystem));
 	memset(devfs, 0, sizeof(FileSystem));
 	devfs->fsname = "devfs";
@@ -321,33 +321,33 @@ Device AddDevice(const char *name, void *data, int (*open)(void*, File*, size_t)
 
 	dev->inode = __sync_fetch_and_add(&nextDevIno, 1);
 	
-	spinlockAcquire(&devfsLock);
+	mutexLock(&devfsLock);
 	DeviceFile *last = &nullDevice;
 	while (last->next != NULL) last = last->next;
 	last->next = dev;
 	dev->prev = last;
-	spinlockRelease(&devfsLock);
+	mutexUnlock(&devfsLock);
 
 	return dev;
 };
 
 void DeleteDevice(Device ptr)
 {
-	spinlockAcquire(&devfsLock);
+	mutexLock(&devfsLock);
 	DeviceFile *dev = (DeviceFile*) ptr;
 	if (dev->prev != NULL) dev->prev->next = dev->next;
 	if (dev->next != NULL) dev->next->prev = dev->prev;
 	if (dev->data != NULL) kfree(dev->data);
-	spinlockRelease(&devfsLock);
+	mutexUnlock(&devfsLock);
 
 	kfree(dev);
 };
 
 void SetDeviceCreds(Device ptr, uid_t uid, gid_t gid)
 {
-	spinlockAcquire(&devfsLock);
+	mutexLock(&devfsLock);
 	DeviceFile *dev = (DeviceFile*) ptr;
 	dev->st.st_uid = uid;
 	dev->st.st_gid = gid;
-	spinlockRelease(&devfsLock);
+	mutexUnlock(&devfsLock);
 };

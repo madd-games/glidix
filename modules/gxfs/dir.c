@@ -172,7 +172,7 @@ static void gxfs_getstat(Dir *dir)
 		return;	// ???
 	};
 	
-	semWait(&targetInfo->lock);
+	mutexLock(&targetInfo->lock);
 	dir->stat.st_ino = ino;
 	dir->stat.st_mode = targetInfo->data.inoMode;
 	dir->stat.st_nlink = targetInfo->data.inoLinks;
@@ -188,7 +188,7 @@ static void gxfs_getstat(Dir *dir)
 	dir->stat.st_oxperm = targetInfo->data.inoOXPerm;
 	dir->stat.st_dxperm = targetInfo->data.inoDXPerm;
 	dir->stat.st_btime = targetInfo->data.inoBirthTime;
-	semSignal(&targetInfo->lock);
+	mutexUnlock(&targetInfo->lock);
 	
 	gxfsDownrefInode(targetInfo);
 };
@@ -432,7 +432,7 @@ int gxfsOpenDir(GXFS *gxfs, uint64_t ino, Dir *dir, size_t szdir)
 	InodeInfo *info = gxfsGetInode(gxfs, ino);
 	if (info == NULL) return VFS_IO_ERROR;
 	
-	semWait(&info->semDir);
+	mutexLock(&info->mtxDir);
 	
 	if (info->dir == NULL)
 	{
@@ -475,7 +475,7 @@ int gxfsOpenDir(GXFS *gxfs, uint64_t ino, Dir *dir, size_t szdir)
 		*putNext = end;
 	};
 	
-	semSignal(&info->semDir);
+	mutexUnlock(&info->mtxDir);
 	
 	DirScanner *scanner = NEW(DirScanner);
 	scanner->dir = info;

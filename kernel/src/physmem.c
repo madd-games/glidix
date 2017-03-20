@@ -35,6 +35,7 @@
 #include <glidix/isp.h>
 #include <glidix/storage.h>
 #include <glidix/pagetab.h>
+#include <glidix/ftree.h>
 
 /**
  * The next frame to return if we are allocating using placement. This is done before
@@ -132,6 +133,18 @@ static int phmTryFrame(uint64_t frame)
 	return atomic_test_and_set8(&frameBitmap[byte], bit);
 };
 
+static int tryFreeMemory()
+{
+	uint64_t frame = ftGetFreePage();
+	if (frame == 0)
+	{
+		return sdFreeMemory();
+	};
+	
+	phmFreeFrame(frame);
+	return 0;
+};
+
 static uint64_t phmAllocSingle()
 {
 	while (1)
@@ -153,7 +166,7 @@ static uint64_t phmAllocSingle()
 	
 		if (startAt == 0)
 		{
-			if (sdFreeMemory() == -1)
+			if (tryFreeMemory() == -1)
 			{
 				// that didn't work
 				panic("out of physical memory!");
@@ -170,7 +183,7 @@ static uint64_t phmAllocSingle()
 			};
 		};
 		
-		if (sdFreeMemory() == -1)
+		if (tryFreeMemory() == -1)
 		{
 			// that didn't work
 			panic("out of physical memory!");
@@ -196,7 +209,7 @@ static uint64_t phmAlloc8()
 		};
 		
 		// try freeing some more memory
-		if (sdFreeMemory() == -1)
+		if (tryFreeMemory() == -1)
 		{
 			// that didn't work
 			panic("out of physical memory!");
@@ -222,7 +235,7 @@ static uint64_t phmAlloc16()
 		};
 
 		// try freeing some more memory
-		if (sdFreeMemory() == -1)
+		if (tryFreeMemory() == -1)
 		{
 			// that didn't work
 			panic("out of physical memory!");
@@ -248,7 +261,7 @@ static uint64_t phmAlloc32()
 		};
 
 		// try freeing some more memory
-		if (sdFreeMemory() == -1)
+		if (tryFreeMemory() == -1)
 		{
 			// that didn't work
 			panic("out of physical memory!");
@@ -274,7 +287,7 @@ static uint64_t phmAlloc64()
 		};
 		
 		// try freeing some more memory
-		if (sdFreeMemory() == -1)
+		if (tryFreeMemory() == -1)
 		{
 			// that didn't work
 			panic("out of physical memory!");

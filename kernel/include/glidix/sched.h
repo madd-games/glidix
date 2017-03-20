@@ -107,6 +107,11 @@ typedef struct
 #define	THREAD_NOSCHED			(THREAD_WAITING | THREAD_TERMINATED)
 
 /**
+ * Flags for signalPidEx().
+ */
+#define	SP_NOPERM			(1 << 0)		/* no permission checking */
+
+/**
  * Flags for pollThread().
  */
 #define	WNOHANG				(1 << 0)
@@ -558,7 +563,7 @@ int processWait(int pid, int *stat_loc, int flags);
 /**
  * Send a signal to a specific pid.
  */
-int signalPidEx(int pid, siginfo_t *si);
+int signalPidEx(int pid, siginfo_t *si, int flags);
 int signalPid(int pid, int signal);
 
 /**

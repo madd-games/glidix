@@ -266,13 +266,19 @@ static ssize_t ptm_write(File *fp, const void *buffer, size_t size)
 			{
 				sigChar = 'C';
 				ptty->lineSize = 0;
-				signalPid(-ptty->pgid, SIGINT);
+				siginfo_t si;
+				memset(&si, 0, sizeof(siginfo_t));
+				si.si_signo = SIGINT;
+				signalPidEx(-ptty->pgid, &si, SP_NOPERM);
 			}
 			else if ((unsigned char)c == CC_VKILL)
 			{
 				sigChar = 'K';
 				ptty->lineSize = 0;
-				signalPid(-ptty->pgid, SIGKILL);
+				siginfo_t si;
+				memset(&si, 0, sizeof(siginfo_t));
+				si.si_signo = SIGKILL;
+				signalPidEx(-ptty->pgid, &si, SP_NOPERM);
 			};
 			
 			if (sigChar != 0)

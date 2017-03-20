@@ -1351,7 +1351,7 @@ void partFlush()
 		logmgr = "logmgr";
 	};
 	
-	if (strcmp(logmgr, "gui") != 0)
+	if (strcmp(logmgr, "logmgr") == 0)
 	{
 		msgbox("NOTICE", "Display configuration failed, disabling GUI.");
 	};

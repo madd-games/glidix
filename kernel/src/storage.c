@@ -142,6 +142,7 @@ static int sdfile_ioctl(File *fp, uint64_t cmd, void *params)
 		cmd->type = SD_CMD_EJECT;
 		cmd->block = NULL;
 		cmd->cmdlock = &lock;
+		cmd->flags = 0;
 
 		sdPush(data->sd, cmd);
 		semWait(&lock);				// wait for the eject operation to finish
@@ -181,6 +182,7 @@ int sdfile_fstat(File *fp, struct stat *st)
 		cmd->type = SD_CMD_GET_SIZE;
 		cmd->block = &st->st_size;
 		cmd->cmdlock = &lock;
+		cmd->flags = 0;
 
 		sdPush(data->sd, cmd);
 		mutexUnlock(&data->sd->lock);
@@ -217,6 +219,7 @@ static void sdFlushTree(StorageDevice *sd, BlockTreeNode *node, int level, uint6
 				cmd->pos = ((pos << 7) | i) << 15;
 				cmd->cmdlock = &semCmd;
 				cmd->status = NULL;
+				cmd->flags = 0;
 				sdPush(sd, cmd);
 				
 				semWait(&semCmd);
@@ -357,6 +360,7 @@ static ssize_t sdRead(StorageDevice *sd, uint64_t pos, void *buf, size_t size)
 			cmd->pos = pos & ~0x7FFFUL;
 			cmd->cmdlock = &semCmd;
 			cmd->status = &status;
+			cmd->flags = 0;
 			sdPush(sd, cmd);
 			
 			semWait(&semCmd);
@@ -485,6 +489,7 @@ static ssize_t sdWrite(StorageDevice *sd, uint64_t pos, const void *buf, size_t 
 			cmd->pos = pos & ~0x7FFFUL;
 			cmd->cmdlock = &semCmd;
 			cmd->status = &status;
+			cmd->flags = 0;
 			sdPush(sd, cmd);
 			
 			semWait(&semCmd);
@@ -893,8 +898,15 @@ SDCommand* sdPop(StorageDevice *sd)
 
 void sdPostComplete(SDCommand *cmd)
 {
-	if (cmd->cmdlock != NULL) semSignal(cmd->cmdlock);
-	kfree(cmd);
+	if (cmd->flags & SD_CMD_NOFREE)
+	{
+		if (cmd->cmdlock != NULL) semSignal(cmd->cmdlock);
+	}
+	else
+	{
+		if (cmd->cmdlock != NULL) semSignal(cmd->cmdlock);
+		kfree(cmd);
+	};
 };
 
 void sdSignal(StorageDevice *dev)
@@ -902,6 +914,7 @@ void sdSignal(StorageDevice *dev)
 	SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
 	cmd->type = SD_CMD_SIGNAL;
 	cmd->cmdlock = NULL;
+	cmd->flags = 0;
 	
 	sdPush(dev, cmd);
 };
@@ -970,13 +983,14 @@ static int sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t
 				Semaphore semCmd;
 				semInit2(&semCmd, 0);
 			
-				SDCommand *cmd = NEW(SDCommand);
-				cmd->type = SD_CMD_WRITE_TRACK;
-				cmd->block = (void*) phys;
-				cmd->pos = ((addr << 7) | lowestIndex) << 15;
-				cmd->cmdlock = &semCmd;
-				cmd->status = NULL;
-				sdPush(sd, cmd);
+				SDCommand cmd;
+				cmd.type = SD_CMD_WRITE_TRACK;
+				cmd.block = (void*) phys;
+				cmd.pos = ((addr << 7) | lowestIndex) << 15;
+				cmd.cmdlock = &semCmd;
+				cmd.status = NULL;
+				cmd.flags = SD_CMD_NOFREE;
+				sdPush(sd, &cmd);
 			
 				semWait(&semCmd);
 			};

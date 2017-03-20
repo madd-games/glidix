@@ -93,6 +93,11 @@
 #define	DDI_RES_HEIGHT(s)			(((s) >> 32) & 0xFFFF)
 
 /**
+ * Size of a color string.
+ */
+#define	DDI_COLOR_STRING_SIZE			8
+
+/**
  * Describes the pixel format of a surface.
  */
 typedef struct
@@ -376,5 +381,18 @@ void ddiPenSetMask(DDIPen *pen, long mask);
  * Renders text to a new surface, as small as possible, and returns that new surface.
  */
 DDISurface* ddiRenderText(DDIPixelFormat *format, DDIFont *font, const char *text, const char **error);
+
+/**
+ * Parse a color string. This is either a HTML color specification (#RGB or #RRGGBB), or a HTML color name.
+ * The resulting color is stored in 'out' on success, and 0 is returned. If the string is invalid, -1 is
+ * returned. The alpha channel is always set to 255.
+ */
+int ddiParseColor(const char *str, DDIColor *out);
+
+/**
+ * Convert a color to a string. 'buffer' must have at least size DDI_COLOR_STRING_SIZE. Always succeeds.
+ * The alpha channel is ignored.
+ */
+void ddiColorToString(const DDIColor *col, char *buffer);
 
 #endif

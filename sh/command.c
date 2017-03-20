@@ -529,17 +529,41 @@ int cmdRun(char *cmd)
 				int sig = WTERMSIG(status);
 				switch (sig)
 				{
-				case SIGILL:
-					fprintf(stderr, "Illegal instruction\n");
+				case SIGABRT:
+					fprintf(stderr, "Aborted\n");
 					break;
-				case SIGSTOP:
-					fprintf(stderr, "Stopped\n");
+				case SIGALRM:
+					fprintf(stderr, "Alarm\n");
 					break;
 				case SIGBUS:
 					fprintf(stderr, "Bus error\n");
 					break;
+				case SIGFPE:
+					fprintf(stderr, "Arithmetic error\n");
+					break;
+				case SIGHUP:
+					fprintf(stderr, "Hangup\n");
+					break;
+				case SIGILL:
+					fprintf(stderr, "Illegal instruction\n");
+					break;
+				case SIGKILL:
+					fprintf(stderr, "Killed\n");
+					break;
+				case SIGPIPE:
+					fprintf(stderr, "Broken pipe\n");
+					break;
 				case SIGSEGV:
 					fprintf(stderr, "Invalid memory access\n");
+					break;
+				case SIGSTOP:
+					fprintf(stderr, "Stopped\n");
+					break;
+				case SIGTERM:
+					fprintf(stderr, "Terminated\n");
+					break;
+				case SIGSYS:
+					fprintf(stderr, "Bad system call\n");
 					break;
 				};
 			};

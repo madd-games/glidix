@@ -30,7 +30,7 @@
 #define GXFS_H_
 
 #include <glidix/common.h>
-#include <glidix/semaphore.h>
+#include <glidix/mutex.h>
 #include <glidix/vfs.h>
 
 #define	GXFS_MAGIC			(*((const uint64_t*)"GLIDIXFS"))
@@ -157,14 +157,14 @@ typedef struct InodeInfo_
 	 *  - updating refcount (use atomic operations for that)
 	 *  - updating recorded times
 	 */
-	Semaphore			lock;
+	Mutex				lock;
 	
 	/**
 	 * Head of dirent list (or NULL if not a directory), and directory lock. The lock shall be used
 	 * to initialize the list (lock, check if NULL and if so load, unlock) and for no other reason.
 	 * The writing is performed when refcount is 0.
 	 */
-	Semaphore			semDir;
+	Mutex				mtxDir;
 	int				dirDirty;
 	DirentInfo*			dir;
 	
@@ -182,7 +182,7 @@ typedef struct GXFS_
 	/**
 	 * Inode list.
 	 */
-	Semaphore			semInodes;
+	Mutex				mtxInodes;
 	InodeInfo*			firstIno;
 	InodeInfo*			lastIno;
 	int				numOpenInodes;
@@ -190,7 +190,7 @@ typedef struct GXFS_
 	/**
 	 * Mutex for the allocator.
 	 */
-	Semaphore			semAlloc;
+	Mutex				mtxAlloc;
 } GXFS;
 
 /* === block.c === */

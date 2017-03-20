@@ -389,3 +389,90 @@ void ftUncache(FileTree *ft)
 	
 	ft->flags |= FT_ANON;
 };
+
+static uint64_t tryFreeFrame(FileTree *ft, int level, FileNode *node, uint64_t base)
+{
+	int i;
+	for (i=0; i<16; i++)
+	{
+		uint64_t pos = (base << 4) | (uint64_t)i;
+		if (level == 12)
+		{
+			if (node->entries[i] != 0)
+			{
+				uint64_t flags = piGetInfo(node->entries[i]);
+				if ((flags & 0xFFFFFFFF) == 0)
+				{
+					if (flags & PI_DIRTY)
+					{
+						if (ft->flush != NULL)
+						{
+							uint8_t pagebuf[0x1000];
+							frameRead(node->entries[i], pagebuf);
+							ft->flush(ft, pos << 12, pagebuf);
+						};
+					};
+					
+					uint64_t ent = node->entries[i];
+					node->entries[i] = 0;
+					return ent;
+				};
+			};
+		}
+		else
+		{
+			FileNode *subnode = node->nodes[i];
+			if (subnode != NULL)
+			{
+				uint64_t val = tryFreeFrame(ft, level+1, subnode, pos);
+				if (val != 0) return val;
+			};
+		};
+	};
+	
+	return 0;
+};
+
+static int currentlyInFreePage = 0;
+uint64_t ftGetFreePage()
+{
+	mutexLock(&ftMtx);
+	
+	if (currentlyInFreePage)
+	{
+		mutexUnlock(&ftMtx);
+		return 0;
+	};
+	
+	currentlyInFreePage = 1;
+	
+	FileTree *ft;
+	for (ft=ftFirst; ft!=NULL; ft=ft->next)
+	{
+		if (ft->getpage == NULL)
+		{
+			uint64_t maybeFrame = tryFreeFrame(ft, 0, &ft->top, 0);
+			if (maybeFrame != 0)
+			{
+				// move this FileTree to the end of the list, so that we don't
+				// always free from the same one
+				if (ftFirst != ftLast)
+				{
+					if (ftFirst == ft) ftFirst = ft->next;
+					ftLast->next = ft;
+					ft->next = NULL;
+					ft->prev = ftLast;
+					ftLast = ft;
+				};
+
+				currentlyInFreePage = 0;
+				mutexUnlock(&ftMtx);
+				return maybeFrame;
+			};
+		};
+	};
+	
+	currentlyInFreePage = 0;
+	mutexUnlock(&ftMtx);
+	return 0;
+};
