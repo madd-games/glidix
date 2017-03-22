@@ -42,6 +42,7 @@ extern "C" {
 #define	S_IFIFO				040000
 #define	S_IFREG				0
 #define	S_IFLNK				050000
+#define	S_IFSOCK			060000
 
 #define	S_ISBLK(m)			((m & 0xF000) == 030000)
 #define	S_ISCHR(m)			((m & 0xF000) == 020000)
@@ -49,6 +50,7 @@ extern "C" {
 #define	S_ISFIFO(m)			((m & 0xF000) == 040000)
 #define	S_ISREG(m)			((m & 0xF000) == 0)
 #define	S_ISLNK(m)			((m & 0xF000) == 050000)
+#define	S_ISSOCK(m)			((m & 0xF000) == 060000)
 
 #define	S_TYPEISMQ(m)			(0)
 #define	S_TYPEISSEM(m)			(0)

@@ -904,6 +904,21 @@ GWMWindow *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int fla
 void gwmDestroyCheckbox(GWMWindow *checkbox);
 
 /**
+ * Set checkbox flags.
+ */
+void gwmSetCheckboxFlags(GWMWindow *checkbox, int flags);
+
+/**
+ * Return the current state of a checkbox (GWM_CB_OFF, GWM_CB_ON, or GWM_CB_TRI).
+ */
+int gwmGetCheckboxState(GWMWindow *checkbox);
+
+/**
+ * Set the state of a checkbox (GWM_CB_OFF, GWM_CB_ON or GWM_CB_TRI).
+ */
+void gwmSetCheckboxState(GWMWindow *checkbox, int state);
+
+/**
  * Create a scrollbar.
  */
 GWMWindow *gwmCreateScrollbar(GWMWindow *parent, int x, int y, int len, int viewOffset, int viewSize, int viewTotal, int flags);
@@ -1115,6 +1130,16 @@ GWMRadioGroup* gwmCreateRadioGroup(int value);
  * Destroy a radio group. Note that you must first destroy all its component radio buttons!
  */
 void gwmDestroyRadioGroup(GWMRadioGroup *group);
+
+/**
+ * Get the current value of a radio group, indicating the selected radio button.
+ */
+int gwmGetRadioGroupValue(GWMRadioGroup *group);
+
+/**
+ * Set the value of a radio group to the given value.
+ */
+void gwmSetRadioGroupValue(GWMRadioGroup *group, int value);
 
 /**
  * Create a radio button, which will join the specified group, and when selected by the user, sets the value

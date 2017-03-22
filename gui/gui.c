@@ -133,7 +133,6 @@ static int keymapShift[128] =
 		0,	/* All other keys are undefined */
 };
 
-DDIPixelFormat screenFormat;
 DDISurface *desktopBackground;
 DDISurface *screen;
 DDISurface *frontBuffer;
@@ -322,7 +321,7 @@ void PaintWindows(Window *win, DDISurface *target)
 							GUI_CAPTION_HEIGHT, &col);
 
 						const char *penError;
-						DDIPen *pen = ddiCreatePen(&screenFormat, captionFont, 20, 3,
+						DDIPen *pen = ddiCreatePen(&screen->format, captionFont, 20, 3,
 							win->params.width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT,
 							0, 0, &penError);
 						if (pen == NULL)
@@ -331,7 +330,6 @@ void PaintWindows(Window *win, DDISurface *target)
 						}
 						else
 						{
-							printf("drawing caption: %s\n", win->params.caption);
 							ddiSetPenColor(pen, &winCaptionColor);
 							ddiWritePen(pen, win->params.caption);
 							ddiExecutePen(pen, win->titleBar);
@@ -1918,7 +1916,7 @@ int main(int argc, char *argv[])
 	int fd = open("/run/gwminfo", O_RDWR | O_CREAT | O_TRUNC, 0644);
 	if (fd == -1)
 	{
-		fprintf(stderr, "Failed to opne /run/gwminfo! %s\n", strerror(errno));
+		fprintf(stderr, "Failed to open /run/gwminfo! %s\n", strerror(errno));
 		return 1;
 	};
 	

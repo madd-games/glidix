@@ -147,3 +147,22 @@ void gwmDestroyCheckbox(GWMWindow *checkbox)
 	free(data);
 	gwmDestroyWindow(checkbox);
 };
+
+void gwmSetCheckboxFlags(GWMWindow *checkbox, int flags)
+{
+	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
+	data->flags = flags;
+	gwmRedrawCheckbox(checkbox);
+};
+
+int gwmGetCheckboxState(GWMWindow *checkbox)
+{
+	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
+	return data->state;
+};
+
+void gwmSetCheckboxState(GWMWindow *checkbox, int state)
+{
+	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
+	data->state = state;
+};

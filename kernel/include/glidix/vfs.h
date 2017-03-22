@@ -55,7 +55,7 @@
 #define	VFS_MODE_BLKDEV			030000
 #define	VFS_MODE_FIFO			040000
 #define	VFS_MODE_LINK			050000		/* soft link */
-
+#define	VFS_MODE_SOCKET			060000
 /**
  * Errors.
  */

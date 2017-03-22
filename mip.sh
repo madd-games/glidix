@@ -107,3 +107,10 @@ cd gui || exit 1
 make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/gui.mip
+
+# fstools
+rm -rf mipdir || exit 1
+cd fstools
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/fstools.mip

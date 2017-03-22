@@ -115,6 +115,17 @@ static void gwmRedrawRadioGroup(GWMRadioGroup *group)
 	};
 };
 
+int gwmGetRadioGroupValue(GWMRadioGroup *group)
+{
+	return group->value;
+};
+
+void gwmSetRadioGroupValue(GWMRadioGroup *group, int value)
+{
+	group->value = value;
+	gwmRedrawRadioGroup(group);
+};
+
 static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio)
 {
 	GWMRadioData *data = (GWMRadioData*) radio->data;
@@ -211,5 +222,6 @@ void gwmDestroyRadioButton(GWMWindow *radio)
 		data->next->prev = data->prev;
 	};
 	
+	free(data);
 	gwmDestroyWindow(radio);
 };
