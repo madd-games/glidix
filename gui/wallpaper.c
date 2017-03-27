@@ -32,6 +32,12 @@
 #include <libddi.h>
 #include <string.h>
 
+enum
+{
+	OP_CENTER,
+	OP_SCALE,
+};
+
 int startsWith(const char *str, const char *prefix)
 {
 	if (strlen(str) < strlen(prefix))
@@ -44,6 +50,7 @@ int startsWith(const char *str, const char *prefix)
 
 int main(int argc, char *argv[])
 {
+	int layoutOp = OP_CENTER;
 	char *imagePath = NULL;
 	DDIColor color = {0, 0, 0x77, 0xFF};
 	
@@ -61,6 +68,10 @@ int main(int argc, char *argv[])
 		else if (startsWith(argv[i], "--image="))
 		{
 			imagePath = &argv[i][8];
+		}
+		else if (strcmp(argv[i], "--scale") == 0)
+		{
+			layoutOp = OP_SCALE;
 		}
 		else
 		{
@@ -92,7 +103,16 @@ int main(int argc, char *argv[])
 		};
 		
 		ddiFillRect(background, 0, 0, background->width, background->height, &color);
-		ddiBlit(image, 0, 0, background, 0, 0, background->width, background->height);
+		
+		if (layoutOp == OP_CENTER)
+		{
+			ddiBlit(image, 0, 0, background, (background->width-image->width)/2, (background->height-image->height)/2, background->width, background->height);
+		}
+		else if (layoutOp == OP_SCALE)
+		{
+			DDISurface *scaled = ddiScale(image, background->width, background->height, DDI_SCALE_BEST);
+			ddiBlit(scaled, 0, 0, background, 0, 0, background->width, background->height);
+		};
 	}
 	else
 	{

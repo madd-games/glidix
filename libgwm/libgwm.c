@@ -787,3 +787,42 @@ void gwmRedrawScreen()
 	
 	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 };
+
+void gwmGetGlobRef(GWMWindow *win, GWMGlobWinRef *ref)
+{
+	ref->id = win->id;
+	ref->fd = queueFD;
+	ref->pid = getpid();
+};
+
+GWMWindow *gwmScreenshotWindow(GWMGlobWinRef *ref)
+{
+	uint64_t id = __sync_fetch_and_add(&nextWindowID, 1);
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.screenshotWindow.cmd = GWM_CMD_SCREENSHOT_WINDOW;
+	cmd.screenshotWindow.id = id;
+	cmd.screenshotWindow.seq = seq;
+	memcpy(&cmd.screenshotWindow.ref, ref, sizeof(GWMGlobWinRef));
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	if (resp.screenshotWindowResp.status == 0)
+	{
+		GWMWindow *win = (GWMWindow*) malloc(sizeof(GWMWindow));
+		win->id = id;
+
+		win->canvases[0] = ddiOpenSurface(resp.screenshotWindowResp.clientID[0]);
+		win->canvases[1] = ddiOpenSurface(resp.screenshotWindowResp.clientID[1]);
+		
+		win->handlerInfo = NULL;
+		win->currentBuffer = 0;
+		win->lastClickTime = 0;
+		
+		win->modalID = 0;
+		return win;
+	};
+	
+	return NULL;
+};

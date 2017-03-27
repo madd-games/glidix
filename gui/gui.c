@@ -225,6 +225,11 @@ int resizingAnchorHeight;
 Window *hoveringWindow = NULL;
 
 /**
+ * The window that is currently active (clicked on).
+ */
+Window *activeWindow = NULL;
+
+/**
  * The "listening window", to which an event is reported when the desktop is updated. This is usually
  * the system bar.
  */
@@ -265,140 +270,162 @@ int isWindowFocused(Window *win)
 	return 0;
 };
 
-void PaintWindows(Window *win, DDISurface *target)
+void PaintWindows(Window *win, DDISurface *target);
+
+void PaintWindow(Window *win, DDISurface *target)
 {
-	for (; win!=NULL; win=win->next)
+	if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
 	{
-		if ((win->params.flags & GWM_WINDOW_HIDDEN) == 0)
+		DDISurface *display = win->display;
+		if (win->displayDirty)
 		{
-			DDISurface *display = win->display;
-			if (win->displayDirty)
+			ddiOverlay(win->clientArea[win->frontBufferIndex], 0, 0, display, 0, 0, win->params.width, win->params.height);
+			PaintWindows(win->children, display);
+			win->displayDirty = 0;
+		};
+		
+		if (win->parent == NULL)
+		{
+			if ((win->params.flags & GWM_WINDOW_NODECORATE) == 0)
 			{
-				ddiOverlay(win->clientArea[win->frontBufferIndex], 0, 0, display, 0, 0, win->params.width, win->params.height);
-				PaintWindows(win->children, display);
-				win->displayDirty = 0;
-			};
-			
-			if (win->parent == NULL)
-			{
-				if ((win->params.flags & GWM_WINDOW_NODECORATE) == 0)
+				DDISurface *borderSurface = winUnfoc;
+				if (isWindowFocused(win))
 				{
-					DDISurface *borderSurface = winUnfoc;
-					if (isWindowFocused(win))
+					borderSurface = winDeco;
+				};
+				
+				ddiBlit(borderSurface, 0, 0, target, win->params.x, win->params.y+GUI_CAPTION_HEIGHT,
+					win->params.width+2*GUI_WINDOW_BORDER,
+					win->params.height+GUI_WINDOW_BORDER);
+
+				// the caption graphic
+				int yoff = 0;
+				if (!isWindowFocused(win))
+				{
+					yoff = GUI_CAPTION_HEIGHT;
+				};
+
+				ddiBlit(winCap, 0, yoff, target, win->params.x, win->params.y,
+					winCap->width/2, GUI_CAPTION_HEIGHT);
+				int end = win->params.width + 2*GUI_WINDOW_BORDER - winCap->width/2;
+				ddiBlit(winCap, winCap->width/2+1, yoff, target, win->params.x+end, win->params.y,
+					winCap->width/2, GUI_CAPTION_HEIGHT);
+				
+				int xoff;
+				for (xoff=winCap->width/2; xoff<end; xoff++)
+				{
+					ddiBlit(winCap, winCap->width/2, yoff, target, win->params.x+xoff, win->params.y,
+						1, GUI_CAPTION_HEIGHT);
+				};
+
+				if (win->titleBarDirty)
+				{
+					win->titleBarDirty = 0;
+					DDIColor col = {0, 0, 0, 0};
+					ddiFillRect(win->titleBar, 0, 0, win->params.width+2*GUI_WINDOW_BORDER,
+						GUI_CAPTION_HEIGHT, &col);
+
+					int textX = 30;
+					if (win->params.flags & GWM_WINDOW_NOICON)
 					{
-						borderSurface = winDeco;
+						textX = 12;
 					};
 					
-					ddiBlit(borderSurface, 0, 0, target, win->params.x, win->params.y+GUI_CAPTION_HEIGHT,
-						win->params.width+2*GUI_WINDOW_BORDER,
-						win->params.height+2*GUI_WINDOW_BORDER);
-
-					// the caption graphic
-					int yoff = 0;
-					if (!isWindowFocused(win))
+					const char *penError;
+					DDIPen *pen = ddiCreatePen(&screen->format, captionFont, textX, 15,
+						win->params.width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT,
+						0, 0, &penError);
+					if (pen == NULL)
 					{
-						yoff = GUI_CAPTION_HEIGHT;
-					};
-
-					ddiBlit(winCap, 0, yoff, target, win->params.x, win->params.y,
-						winCap->width/2, GUI_CAPTION_HEIGHT);
-					int end = win->params.width + 2*GUI_WINDOW_BORDER - winCap->width/2;
-					ddiBlit(winCap, winCap->width/2+1, yoff, target, win->params.x+end, win->params.y,
-						winCap->width/2, GUI_CAPTION_HEIGHT);
-					
-					int xoff;
-					for (xoff=winCap->width/2; xoff<end; xoff++)
-					{
-						ddiBlit(winCap, winCap->width/2, yoff, target, win->params.x+xoff, win->params.y,
-							1, GUI_CAPTION_HEIGHT);
-					};
-
-					if (win->titleBarDirty)
-					{
-						win->titleBarDirty = 0;
-						DDIColor col = {0, 0, 0, 0};
-						ddiFillRect(win->titleBar, 0, 0, win->params.width+2*GUI_WINDOW_BORDER,
-							GUI_CAPTION_HEIGHT, &col);
-
-						const char *penError;
-						DDIPen *pen = ddiCreatePen(&screen->format, captionFont, 20, 3,
-							win->params.width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT,
-							0, 0, &penError);
-						if (pen == NULL)
-						{
-							printf("cannot create pen: %s\n", penError);
-						}
-						else
-						{
-							ddiSetPenColor(pen, &winCaptionColor);
-							ddiWritePen(pen, win->params.caption);
-							ddiExecutePen(pen, win->titleBar);
-							ddiDeletePen(pen);
-						};
-					};
-					
-					ddiBlit(win->titleBar, 0, 0, target, win->params.x, win->params.y,
-						win->params.width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT);
-
-					if (win->icon != NULL)
-					{
-						ddiBlit(win->icon, 0, 0, target, win->params.x+2, win->params.y+2, 16, 16);
+						printf("cannot create pen: %s\n", penError);
 					}
 					else
 					{
-						ddiBlit(defWinIcon, 0, 0, target, win->params.x+2, win->params.y+2, 16, 16);
+						ddiSetPenColor(pen, &winCaptionColor);
+						ddiWritePen(pen, win->params.caption);
+						ddiExecutePen2(pen, win->titleBar, DDI_POSITION_BASELINE);
+						ddiDeletePen(pen);
 					};
-					
-					int btnIndex = ((mouseX - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/14;
-					if ((mouseY < (int)win->params.y+GUI_WINDOW_BORDER) || (mouseY > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
-					{
-						btnIndex = -1;
-					};
-					
-					if ((win->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
-					{
-						int i;
-						for (i=0; i<3; i++)
-						{
-							int yi = 0;
-							if (i == btnIndex)
-							{
-								yi = 1;
-								if (mouseLeftDown)
-								{
-									yi = 2;
-								};
-							};
-							
-							if (i == 1)
-							{
-								if ((win->params.flags & GWM_WINDOW_RESIZEABLE) == 0)
-								{
-									yi = 3;
-								};
-							};
-							
-							ddiBlit(winButtons, 14*i, 16*yi, target, win->params.x+(win->params.width-48)+14*i, win->params.y+GUI_WINDOW_BORDER, 16, 16);
-						};
-					};
-					
-					ddiOverlay(display, 0, 0, target,
-						win->params.x+GUI_WINDOW_BORDER,
-						win->params.y+GUI_WINDOW_BORDER+GUI_CAPTION_HEIGHT,
-						win->params.width, win->params.height);
-				}
-				else
-				{
-					ddiBlit(display, 0, 0, target,
-						win->params.x, win->params.y, win->params.width, win->params.height);
 				};
+				
+				ddiBlit(win->titleBar, 0, 0, target, win->params.x, win->params.y,
+					win->params.width+2*GUI_WINDOW_BORDER, GUI_CAPTION_HEIGHT);
+
+				if ((win->params.flags & GWM_WINDOW_NOICON) == 0)
+				{
+					if (win->icon != NULL)
+					{
+						ddiBlit(win->icon, 0, 0, target, win->params.x+12, win->params.y+2, 16, 16);
+					}
+					else
+					{
+						ddiBlit(defWinIcon, 0, 0, target, win->params.x+12, win->params.y+2, 16, 16);
+					};
+				};
+				
+				int btnIndex = ((mouseX - (int)win->params.x) - ((int)win->params.width-70))/20;
+				if ((mouseX >= (win->params.x + win->params.width + GUI_WINDOW_BORDER - 30)) && (mouseX < (win->params.x + win->params.width)))
+				{
+					btnIndex = 2;
+				};
+				if ((mouseY < (int)win->params.y) || (mouseY > (int)win->params.y+GUI_CAPTION_HEIGHT) || (mouseX < (win->params.x + win->params.width + GUI_WINDOW_BORDER - 70)))
+				{
+					btnIndex = -1;
+				};
+				
+				if ((win->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
+				{
+					int i;
+					for (i=0; i<3; i++)
+					{
+						int yi = 0;
+						if (i == btnIndex)
+						{
+							yi = 1;
+							if (mouseLeftDown)
+							{
+								yi = 2;
+							};
+						};
+						
+						if (i == 1)
+						{
+							if ((win->params.flags & GWM_WINDOW_RESIZEABLE) == 0)
+							{
+								yi = 3;
+							};
+						};
+						
+						int width = 20;
+						if (i == 2) width = 30;
+						ddiBlit(winButtons, 20*i, 20*yi, target, win->params.x+(win->params.width-70+2*GUI_WINDOW_BORDER)+20*i, win->params.y, width, 20);
+					};
+				};
+				
+				ddiOverlay(display, 0, 0, target,
+					win->params.x+GUI_WINDOW_BORDER,
+					win->params.y+GUI_CAPTION_HEIGHT,
+					win->params.width, win->params.height);
 			}
 			else
 			{
 				ddiBlit(display, 0, 0, target,
 					win->params.x, win->params.y, win->params.width, win->params.height);
 			};
+		}
+		else
+		{
+			ddiBlit(display, 0, 0, target,
+				win->params.x, win->params.y, win->params.width, win->params.height);
 		};
+	};
+};
+
+void PaintWindows(Window *win, DDISurface *target)
+{
+	for (; win!=NULL; win=win->next)
+	{
+		PaintWindow(win, target);
 	};
 };
 
@@ -434,6 +461,7 @@ void DeleteWindow(Window *win)
 	if (focusedWindow == win) focusedWindow = NULL;
 	if (movingWindow == win) movingWindow = NULL;
 	if (hoveringWindow == win) hoveringWindow = NULL;
+	if (activeWindow == win) activeWindow = NULL;
 	if (listenWindow == win) listenWindow = NULL;
 	if (resizingWindow == win) resizingWindow = NULL;
 	
@@ -905,11 +933,13 @@ void onMouseLeft()
 		};
 	};
 	
+	activeWindow = focusedWindow;
 	pthread_mutex_unlock(&windowLock);
 };
 
 void onMouseLeftRelease()
 {
+	activeWindow = NULL;
 	mouseLeftDown = 0;
 	
 	pthread_mutex_lock(&mouseLock);
@@ -928,8 +958,12 @@ void onMouseLeftRelease()
 		{
 			if ((win->params.flags & (GWM_WINDOW_NODECORATE | GWM_WINDOW_NOSYSMENU)) == 0)
 			{
-				int btnIndex = ((x - (int)win->params.x) - ((int)win->params.width-GUI_WINDOW_BORDER-48))/14;
-				if ((y < (int)win->params.y+GUI_WINDOW_BORDER) || (y > (int)win->params.y+GUI_CAPTION_HEIGHT+GUI_WINDOW_BORDER))
+				int btnIndex = ((mouseX - (int)win->params.x) - ((int)win->params.width-70))/20;
+				if ((mouseX >= (win->params.x + win->params.width + GUI_WINDOW_BORDER - 30)) && (mouseX < (win->params.x + win->params.width)))
+				{
+					btnIndex = 2;
+				};
+				if ((y < (int)win->params.y) || (y > (int)win->params.y+GUI_CAPTION_HEIGHT) || (x < (win->params.x + win->params.width + GUI_WINDOW_BORDER - 70)))
 				{
 					btnIndex = -1;
 				};
@@ -1062,8 +1096,6 @@ void onMouseMoved()
 	{
 		int newX = x - movingOffX;
 		int newY = y - movingOffY;
-		if (newX < 0) newX = 0;
-		if (newY < 0) newY = 0;
 		
 		movingWindow->params.x = newX;
 		movingWindow->params.y = newY;
@@ -1097,35 +1129,46 @@ void onMouseMoved()
 		PostWindowEvent(resizingWindow, &event);
 	};
 	
-	Window *win = FindWindowAt(x, y);
-	if (win != hoveringWindow)
-	{
-		if (hoveringWindow != NULL)
-		{
-			GWMEvent ev;
-			ev.type = GWM_EVENT_LEAVE;
-			ev.win = hoveringWindow->id;
-			PostWindowEvent(hoveringWindow, &ev);
-		};
-		
-		if (win != NULL)
-		{
-			GWMEvent ev;
-			ev.type = GWM_EVENT_ENTER;
-			ev.win = win->id;
-			AbsoluteToRelativeCoords(win, x, y, &ev.x, &ev.y);
-			PostWindowEvent(win, &ev);
-		};
-		
-		hoveringWindow = win;
-	}
-	else if (hoveringWindow != NULL)
+	if (activeWindow != NULL)
 	{
 		GWMEvent ev;
 		ev.type = GWM_EVENT_MOTION;
-		ev.win = hoveringWindow->id;
-		AbsoluteToRelativeCoords(hoveringWindow, x, y, &ev.x, &ev.y);
-		PostWindowEvent(win, &ev);
+		ev.win = activeWindow->id;
+		AbsoluteToRelativeCoords(activeWindow, x, y, &ev.x, &ev.y);
+		PostWindowEvent(activeWindow, &ev);
+	}
+	else
+	{
+		Window *win = FindWindowAt(x, y);
+		if (win != hoveringWindow)
+		{
+			if (hoveringWindow != NULL)
+			{
+				GWMEvent ev;
+				ev.type = GWM_EVENT_LEAVE;
+				ev.win = hoveringWindow->id;
+				PostWindowEvent(hoveringWindow, &ev);
+			};
+		
+			if (win != NULL)
+			{
+				GWMEvent ev;
+				ev.type = GWM_EVENT_ENTER;
+				ev.win = win->id;
+				AbsoluteToRelativeCoords(win, x, y, &ev.x, &ev.y);
+				PostWindowEvent(win, &ev);
+			};
+		
+			hoveringWindow = win;
+		}
+		else if (hoveringWindow != NULL)
+		{
+			GWMEvent ev;
+			ev.type = GWM_EVENT_MOTION;
+			ev.win = hoveringWindow->id;
+			AbsoluteToRelativeCoords(hoveringWindow, x, y, &ev.x, &ev.y);
+			PostWindowEvent(hoveringWindow, &ev);
+		};
 	};
 	
 	pthread_mutex_unlock(&windowLock);
@@ -1352,7 +1395,7 @@ void *msgThreadFunc(void *ignore)
 			if (cmd->cmd == GWM_CMD_CREATE_WINDOW)
 			{
 				pthread_mutex_lock(&windowLock);
-				Window * win = CreateWindow(cmd->createWindow.parent,
+				Window *win = CreateWindow(cmd->createWindow.parent,
 						&cmd->createWindow.pars, cmd->createWindow.id,
 						info.pid, info.fd, cmd->createWindow.painterPid);
 				
@@ -1668,6 +1711,92 @@ void *msgThreadFunc(void *ignore)
 			else if (cmd->cmd == GWM_CMD_REDRAW_SCREEN)
 			{
 				sem_post(&semRedraw);
+			}
+			else if (cmd->cmd == GWM_CMD_SCREENSHOT_WINDOW)
+			{
+				pthread_mutex_lock(&windowLock);
+				Window *subject = GetWindowByID(cmd->screenshotWindow.ref.id, cmd->screenshotWindow.ref.pid, cmd->screenshotWindow.ref.fd);
+				if (subject == NULL)
+				{
+					GWMMessage msg;
+					msg.screenshotWindowResp.type = GWM_MSG_SCREENSHOT_WINDOW_RESP;
+					msg.screenshotWindowResp.status = -1;
+					msg.screenshotWindowResp.seq = cmd->screenshotWindow.seq;
+					pthread_mutex_unlock(&windowLock);
+					_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+					continue;
+				};
+
+				if (subject->parent != NULL)
+				{
+					GWMMessage msg;
+					msg.screenshotWindowResp.type = GWM_MSG_SCREENSHOT_WINDOW_RESP;
+					msg.screenshotWindowResp.status = -1;
+					msg.screenshotWindowResp.seq = cmd->screenshotWindow.seq;
+					pthread_mutex_unlock(&windowLock);
+					_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+					continue;
+				};
+
+				if (subject->params.flags & GWM_WINDOW_HIDDEN)
+				{
+					GWMMessage msg;
+					msg.screenshotWindowResp.type = GWM_MSG_SCREENSHOT_WINDOW_RESP;
+					msg.screenshotWindowResp.status = -1;
+					msg.screenshotWindowResp.seq = cmd->screenshotWindow.seq;
+					pthread_mutex_unlock(&windowLock);
+					_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
+					continue;
+				};
+
+				GWMWindowParams pars;
+				strcpy(pars.caption, "<screenshot>");
+				strcpy(pars.iconName, "<screenshot>");
+				pars.flags = GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR;
+				
+				if (subject->params.flags & GWM_WINDOW_NODECORATE)
+				{
+					pars.width = subject->params.width;
+					pars.height = subject->params.height;
+				}
+				else
+				{
+					pars.width = subject->params.width + 2 * GUI_WINDOW_BORDER;
+					pars.height = subject->params.height + GUI_WINDOW_BORDER + GUI_CAPTION_HEIGHT;
+				};
+
+				Window *win = CreateWindow(0,
+						&pars, cmd->screenshotWindow.id,
+						info.pid, info.fd, info.pid);
+				
+				GWMMessage msg;
+				msg.screenshotWindowResp.type = GWM_MSG_SCREENSHOT_WINDOW_RESP;
+				msg.screenshotWindowResp.seq = cmd->screenshotWindow.seq;
+				msg.screenshotWindowResp.status = 0;
+				if (win == NULL) msg.screenshotWindowResp.status = 1;
+				else
+				{
+					memcpy(&msg.screenshotWindowResp.format, &screen->format, sizeof(DDIPixelFormat));
+					msg.screenshotWindowResp.clientID[0] = win->clientID[0];
+					msg.screenshotWindowResp.clientID[1] = win->clientID[1];
+					msg.screenshotWindowResp.width = win->params.width;
+					msg.screenshotWindowResp.height = win->params.height;
+					
+					DDIColor transp = {0, 0, 0, 0};
+					ddiFillRect(win->clientArea[0], 0, 0,
+						win->clientArea[0]->width, win->clientArea[0]->height,
+						&transp);
+
+					int x = subject->params.x;
+					int y = subject->params.y;
+					subject->params.x = 0;
+					subject->params.y = 0;
+					PaintWindow(subject, win->clientArea[0]);
+					subject->params.x = x;
+					subject->params.y = y;
+				};
+				pthread_mutex_unlock(&windowLock);
+				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 			};
 		}
 		else if (info.type == _GLIDIX_MQ_HANGUP)

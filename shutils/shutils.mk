@@ -1,7 +1,7 @@
 SRC := $(shell find $(SRCDIR) -name '*.c')
 OUT := $(patsubst $(SRCDIR)/%.c, out/%, $(SRC))
 CFLAGS := -Wall -Werror
-LDFLAGS := -lcrypt -L../libc
+LDFLAGS := -L../libc -lcrypt -ldl
 
 .PHONY: all install
 all: $(OUT)

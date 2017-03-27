@@ -91,6 +91,10 @@ static void gwmRedrawRadio(GWMWindow *radio)
 	int ix = (data->value == data->group->value);
 	
 	DDISurface *canvas = gwmGetWindowCanvas(radio);
+
+	static DDIColor transparent = {0, 0, 0, 0};
+	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
+
 	if (imgRadio == NULL)
 	{
 		const char *error;

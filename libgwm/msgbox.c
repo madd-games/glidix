@@ -132,7 +132,7 @@ int gwmMessageBox(GWMWindow *parent, const char *caption, const char *text, int 
 	};
 	
 	gwmPostDirty(dialog);
-	gwmSetWindowFlags(dialog, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU);
+	gwmSetWindowFlags(dialog, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_NOICON);
 	
 	while (1)
 	{

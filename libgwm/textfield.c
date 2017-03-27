@@ -97,7 +97,7 @@ void gwmRedrawTextField(GWMWindow *field)
 	ddiFillRect(canvas, 1, 1, canvas->width-2, canvas->height-2, background);
 
 	if (data->pen != NULL) ddiDeletePen(data->pen);
-	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 3, 3, canvas->width-3, canvas->height-3, 0, 0, NULL);
+	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 3, canvas->height-6, canvas->width-3, canvas->height-3, 0, 0, NULL);
 	if (data->pen != NULL)
 	{
 		ddiSetPenWrap(data->pen, 0);
@@ -129,7 +129,7 @@ void gwmRedrawTextField(GWMWindow *field)
 		};
 		
 		free(buffer);
-		ddiExecutePen(data->pen, canvas);
+		ddiExecutePen2(data->pen, canvas, DDI_POSITION_BASELINE);
 	};
 	
 	gwmPostDirty(field);

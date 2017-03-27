@@ -35,8 +35,24 @@
 #include <string.h>
 #include <fcntl.h>
 
-//static FSMimeType *firstType = NULL;
-//static FSMimeType *lastType = NULL;
+static FSMimeType *firstType = NULL;
+static FSMimeType *lastType = NULL;
+
+/**
+ * List of MIME categories.
+ */
+static const char *mimeCats[] = {
+	"application",
+	"audio",
+	"font",
+	"image",
+	"message",
+	"model",
+	"multipart",
+	"text",
+	"video",
+	NULL			/* end of list marker */
+};
 
 static FSMimeType *textPlain;
 static FSMimeType *octetStream;
@@ -60,11 +76,110 @@ static FSMimeType *specialType(const char *name)
 	return type;
 };
 
+static void loadMimeInfo(const char *cat, const char *type)
+{
+	char path[PATH_MAX];
+	snprintf(path, PATH_MAX, "/usr/share/mime/%s/%s", cat, type);
+	
+	FSMimeType *info = (FSMimeType*) malloc(sizeof(FSMimeType));
+	info->next = NULL;
+	sprintf(info->mimename, "%s/%s", cat, type);
+	
+	info->filenames = NULL;
+	info->numFilenames = 0;
+	
+	info->magics = NULL;
+	info->numMagics = 0;
+	
+	if (lastType == NULL)
+	{
+		firstType = lastType = info;
+	}
+	else
+	{
+		lastType->next = info;
+		lastType = info;
+	};
+	
+	FILE *fp = fopen(path, "r");
+	if (fp == NULL)
+	{
+		fprintf(stderr, "libfstools: cannot read %s: %s\n", path, strerror(errno));
+		free(info);
+	};
+	
+	char linebuf[1024];
+	char *line;
+	
+	while ((line = fgets(linebuf, 1024, fp)) != NULL)
+	{
+		char *endline = strchr(line, '\n');
+		if (endline != NULL) *endline = 0;
+		
+		if (line[0] == '#')
+		{
+			continue;
+		}
+		else if (strlen(line) == 0)
+		{
+			continue;
+		}
+		else
+		{
+			char *saveptr;
+			char *cmd = strtok_r(line, " \t", &saveptr);
+			
+			if (cmd == NULL)
+			{
+				continue;
+			}
+			else if (strcmp(cmd, "filename") == 0)
+			{
+				char *pat;
+				for (pat=strtok_r(NULL, " \t", &saveptr); pat!=NULL; pat=strtok_r(NULL, " \t", &saveptr))
+				{
+					size_t index = info->numFilenames++;
+					info->filenames = realloc(info->filenames, sizeof(char*)*info->numFilenames);
+					info->filenames[index] = strdup(pat);
+				};
+			}
+			else
+			{
+				fprintf(stderr, "fstools: invalid command in %s: %s\n", path, cmd);
+			};
+		};
+	};
+	
+	fclose(fp);
+};
+
+static void loadCategory(const char *cat)
+{
+	char dirname[PATH_MAX];
+	snprintf(dirname, PATH_MAX, "/usr/share/mime/%s", cat);
+	
+	DIR *dirp = opendir(dirname);
+	if (dirp == NULL)
+	{
+		fprintf(stderr, "libfstools: cannot scan %s: ignoring category\n", dirname);
+		return;
+	};
+	
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		if (ent->d_name[0] != '.')
+		{
+			loadMimeInfo(cat, ent->d_name);
+		};
+	};
+	
+	closedir(dirp);
+};
+
 void fsInit()
 {
-	/**
-	 * Some special types.
-	 */
+	// some special types
 	textPlain = specialType("text/plain");
 	octetStream = specialType("application/octet-stream");
 	inodeDir = specialType("inode/directory");
@@ -73,11 +188,34 @@ void fsInit()
 	inodeFifo = specialType("inode/fifo");
 	inodeSocket = specialType("inode/socket");
 	
-	// TODO: actually load the database
+	// now load the MIME database (/usr/share/mime).
+	const char **scan;
+	for (scan=mimeCats; *scan!=NULL; scan++)
+	{
+		loadCategory(*scan);
+	};
 };
 
 void fsQuit()
 {
+	FSMimeType *type = firstType;
+	while (type != NULL)
+	{
+		size_t i;
+		for (i=0; i<type->numFilenames; i++)
+		{
+			free(type->filenames[i]);
+		};
+		
+		free(type->filenames);
+		free(type->magics);
+		
+		FSMimeType *next = type->next;
+		free(type);
+		type = next;
+	};
+	
+	firstType = lastType = NULL;
 };
 
 static int isTextFile(const char *path, struct stat *st)
@@ -119,14 +257,35 @@ static int isTextFile(const char *path, struct stat *st)
 	return 1;
 };
 
+static int isMatch(const char *str, const char *pattern)
+{
+	size_t len = strlen(str);
+	
+	while (*pattern != 0)
+	{
+		if (*pattern == '*')
+		{
+			const char *suffix = pattern + 1;
+			const char *ending = str + len - strlen(suffix);
+			return strcmp(suffix, ending) == 0;
+		}
+		else
+		{
+			if (*pattern++ != *str++) return 0;
+		};
+	};
+	
+	return (*str == 0);
+};
+
 FSMimeType* fsGetType(const char *filename)
 {
-	//const char *basename = filename;
-	//const char *slashPos = strrchr(filename, '/');
-	//if (slashPos != NULL)
-	//{
-	//	basename = slashPos + 1;
-	//};
+	const char *basename = filename;
+	const char *slashPos = strrchr(filename, '/');
+	if (slashPos != NULL)
+	{
+		basename = slashPos + 1;
+	};
 	
 	struct stat st;
 	if (stat(filename, &st) != 0)
@@ -156,8 +315,23 @@ FSMimeType* fsGetType(const char *filename)
 	}
 	else
 	{
-		// TODO: look up patterns etc
+		// check filename patterns
+		FSMimeType *type;
+		for (type=firstType; type!=NULL; type=type->next)
+		{
+			size_t i;
+			for (i=0; i<type->numFilenames; i++)
+			{
+				if (isMatch(basename, type->filenames[i]))
+				{
+					return type;
+				};
+			};
+		};
 		
+		// TODO: magic values searches
+		
+		// matches nothing, check if it's plain text or binary
 		if (isTextFile(filename, &st))
 		{
 			return textPlain;

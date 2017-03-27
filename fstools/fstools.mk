@@ -11,7 +11,7 @@ all: $(BIN_OUT) libfstools.so
 
 bin/%: $(SRCDIR)/bin/%.c
 	@mkdir -p bin
-	$(HOST_GCC) $< -o $@ -Wall -Werror -I$(SRCDIR)/lib -L. -lfstools
+	$(HOST_GCC) $< -o $@ -Wall -Werror -I$(SRCDIR)/lib -Llib -lfstools
 
 libfstools.so: $(OBJ)
 	$(HOST_GCC) -shared -o $@ $^

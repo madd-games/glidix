@@ -71,9 +71,105 @@ void* dynld_libsym(Library *lib, const char *symname, unsigned char binding)
 	return NULL;
 };
 
+Library* dynld_dlopen(const char *soname, int mode)
+{
+	Library *dep = dynld_getlib(soname);
+	if (dep == NULL)
+	{
+		int depfd = dynld_open(soname, "", libraryPath, "", "/usr/local/lib:/usr/lib:/lib", NULL);
+		if (depfd == -1)
+		{
+			strcpy(dynld_errmsg, soname);
+			strcpy(&dynld_errmsg[strlen(soname)], ": library not found");
+			
+			return NULL;
+		};
+		
+		dep = mmap(NULL, 0x1000, PROT_READ | PROT_WRITE,
+				MAP_PRIVATE | MAP_ANON, -1, 0);
+		if (dep == MAP_FAILED)
+		{
+			close(depfd);
+			
+			strcpy(dynld_errmsg, soname);
+			strcpy(&dynld_errmsg[strlen(soname)], ": cannot create library description");
+			
+			return NULL;
+		};
+
+		if (mode & RTLD_GLOBAL)
+		{
+			Library *last = &chainHead;
+			while (last->next != NULL) last = last->next;
+			
+			dep->next = NULL;
+			last->next = dep;
+			dep->prev = last;
+		}
+		else
+		{
+			dep->prev = dep->next = NULL;
+		};
+		
+		if (dynld_mapobj(dep, depfd, addrPlacement, soname, RTLD_LAZY | RTLD_GLOBAL) == 0)
+		{
+			// leave dynld_errmsg as is; we forward the error from the recursive
+			// invocation
+			close(depfd);
+			
+			if (dep->prev != NULL)
+			{
+				dep->prev->next = NULL;
+			};
+			
+			munmap(dep, 0x1000);
+			
+			return NULL;
+		};
+		
+		dynld_initlib(dep);
+		close(depfd);
+	};
+	
+	return dep;
+};
+
+void* dynld_dlsym(Library *lib, const char *symname)
+{
+	void *val = dynld_libsym(lib, symname, STB_GLOBAL);
+	if (val != NULL) return val;
+	
+	return dynld_libsym(lib, symname, STB_WEAK);
+};
+
+char* dynld_dlerror()
+{
+	return dynld_errmsg;
+};
+
 void* dynld_globsym(const char *symname)
 {
 	Library *lib;
+	
+	if (strcmp(symname, "dlopen") == 0)
+	{
+		return dynld_dlopen;
+	};
+	
+	if (strcmp(symname, "dlsym") == 0)
+	{
+		return dynld_dlsym;
+	};
+	
+	if (strcmp(symname, "dlclose") == 0)
+	{
+		return dynld_libclose;
+	};
+	
+	if (strcmp(symname, "dlerror") == 0)
+	{
+		return dynld_dlerror;
+	};
 	
 	// try global symbols first
 	for (lib=&chainHead; lib!=NULL; lib=lib->next)
@@ -688,11 +784,10 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 	return topAddr;
 };
 
-void dynld_libclose(Library *lib)
+int dynld_libclose(Library *lib)
 {
 	if ((--lib->refcount) == 0)
 	{
-		
 		// call destructors
 		if (lib->finiFunc != NULL) lib->finiFunc();
 		size_t i;
@@ -723,4 +818,6 @@ void dynld_libclose(Library *lib)
 		
 		munmap(lib, 0x1000);
 	};
+	
+	return 0;
 };

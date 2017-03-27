@@ -776,6 +776,85 @@ DDISurface* ddiLoadAndConvertPNG(DDIPixelFormat *format, const char *filename, c
 	return surface;
 };
 
+int ddiSavePNG(DDISurface *surface, const char *filename, const char **error)
+{
+	DDIPixelFormat format;
+	format.bpp = 4;
+	format.redMask = 0x0000FF;
+	format.greenMask = 0x00FF00;
+	format.blueMask = 0xFF0000;
+	format.alphaMask = 0xFF000000;
+	format.pixelSpacing = 0;
+	format.scanlineSpacing = 0;
+	
+	DDISurface *working = ddiConvertSurface(&format, surface, error);
+	if (working == NULL) return -1;
+	
+	FILE *fp = fopen(filename, "wb");
+	if (fp == NULL)
+	{
+		DDI_ERROR("I/O error");
+		ddiDeleteSurface(working);
+		return -1;
+	};
+	
+	png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (!png_ptr)
+	{
+		DDI_ERROR("png_create_write_struct failed");
+		ddiDeleteSurface(working);
+		return -1;
+	};
+	
+	png_infop info_ptr = png_create_info_struct(png_ptr);
+	if (!info_ptr)
+	{
+		DDI_ERROR("png_create_info_struct failed");
+		ddiDeleteSurface(working);
+		png_destroy_write_struct(&png_ptr, NULL);
+		return -1;
+	};
+
+	if (setjmp(png_jmpbuf(png_ptr)))
+	{
+		DDI_ERROR("png_init_io failed");
+		ddiDeleteSurface(working);
+		png_destroy_write_struct(&png_ptr, &info_ptr);
+		return -1;
+	};
+	
+	png_init_io(png_ptr, fp);
+	
+	if (setjmp(png_jmpbuf(png_ptr)))
+	{
+		DDI_ERROR("writing failed");
+		ddiDeleteSurface(working);
+		png_destroy_write_struct(&png_ptr, &info_ptr);
+		return -1;
+	};
+	
+	png_set_IHDR(png_ptr, info_ptr, working->width, working->height,
+			8, PNG_COLOR_TYPE_RGBA, PNG_INTERLACE_NONE,
+			PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+	
+	
+	png_write_info(png_ptr, info_ptr);
+	
+	png_bytep *rowPointers = (png_bytep*) malloc(sizeof(png_bytep) * working->height);
+	size_t y;
+	for (y=0; y<working->height; y++)
+	{
+		rowPointers[y] = &working->data[4 * y * working->width];
+	};
+	
+	png_write_image(png_ptr, rowPointers);
+	png_write_end(png_ptr, NULL);
+	free(rowPointers);
+	fclose(fp);
+	
+	return 0;
+};
+
 /**
  * Don't question the use of the "register" keyword here. It causes the function to be approximately
  * 2 times faster, when compiling with GCC.
@@ -1475,13 +1554,14 @@ void ddiWritePen(DDIPen *pen, const char *text)
 	};
 };
 
-void ddiExecutePen(DDIPen *pen, DDISurface *surface)
+void ddiExecutePen2(DDIPen *pen, DDISurface *surface, int flags)
 {
 	PenLine *line;
 	PenSegment *seg;
 	
 	int drawY = pen->y;
 	int lastDrawY = drawY;
+	if (flags & DDI_POSITION_BASELINE) lastDrawY -= 12;
 	int lastDrawX = pen->x;
 	int lastHeight = 12;
 	for (line=pen->firstLine; line!=NULL; line=line->next)
@@ -1504,6 +1584,7 @@ void ddiExecutePen(DDIPen *pen, DDISurface *surface)
 
 		lastDrawY = drawY;
 		int baselineY = drawY + line->maxHeight - line->baselineY;
+		if (flags & DDI_POSITION_BASELINE) baselineY = drawY;
 		for (seg=line->firstSegment; seg!=NULL; seg=seg->next)
 		{
 			int plotY = baselineY - seg->baselineY;
@@ -1513,7 +1594,7 @@ void ddiExecutePen(DDIPen *pen, DDISurface *surface)
 			
 			if (seg->background.alpha != 0)
 			{
-				ddiFillRect(surface, drawX, drawY, seg->surface->width, line->maxHeight, &seg->background);
+				ddiFillRect(surface, drawX, plotY, seg->surface->width, line->maxHeight, &seg->background);
 			};
 			
 			ddiBlit(seg->surface, 0, 0, surface, drawX, plotY, seg->surface->width, seg->surface->height);
@@ -1530,6 +1611,11 @@ void ddiExecutePen(DDIPen *pen, DDISurface *surface)
 		DDIColor color = {0, 0, 0, 0xFF};
 		ddiFillRect(surface, lastDrawX, lastDrawY, 1, lastHeight, &color);
 	};
+};
+
+void ddiExecutePen(DDIPen *pen, DDISurface *surface)
+{
+	ddiExecutePen2(pen, surface, 0);
 };
 
 void ddiSetPenBackground(DDIPen *pen, DDIColor *bg)
@@ -1734,4 +1820,41 @@ int ddiParseColor(const char *str, DDIColor *out)
 void ddiColorToString(const DDIColor *col, char *buffer)
 {
 	sprintf(buffer, "#%02hhx%02hhx%02hhx", col->red, col->green, col->blue);
+};
+
+static DDISurface* ddiScaleLinear(DDISurface *surface, unsigned int newWidth, unsigned int newHeight)
+{
+	DDISurface *out = ddiCreateSurface(&surface->format, newWidth, newHeight, NULL, 0);
+	if (out == NULL) return NULL;
+	
+	unsigned int x, y;
+	for (y=0; y<newHeight; y++)
+	{
+		uint8_t *row = &out->data[((out->format.bpp + out->format.pixelSpacing) * newWidth + out->format.scanlineSpacing) * y];
+		
+		for (x=0; x<newWidth; x++)
+		{
+			unsigned int srcX = x * surface->width / newWidth;
+			unsigned int srcY = y * surface->height / newHeight;
+			
+			uint8_t *src = &surface->data[((surface->format.bpp + surface->format.pixelSpacing) * surface->width + surface->format.scanlineSpacing) * srcY + (surface->format.bpp + surface->format.pixelSpacing) * srcX];
+			
+			ddiCopy(&row[(out->format.bpp + out->format.pixelSpacing) * x], src, out->format.bpp);
+		};
+	};
+	
+	return out;
+};
+
+DDISurface* ddiScale(DDISurface *surface, unsigned int newWidth, unsigned int newHeight, int algorithm)
+{
+	switch (algorithm)
+	{
+	case DDI_SCALE_BEST:
+	case DDI_SCALE_FASTEST:
+	case DDI_SCALE_LINEAR:
+		return ddiScaleLinear(surface, newWidth, newHeight);
+	default:
+		return NULL;
+	};
 };

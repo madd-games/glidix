@@ -98,6 +98,18 @@
 #define	DDI_COLOR_STRING_SIZE			8
 
 /**
+ * Pen flags.
+ */
+#define	DDI_POSITION_BASELINE			(1 << 0)
+
+/**
+ * Scaling algorithms.
+ */
+#define	DDI_SCALE_BEST				0
+#define	DDI_SCALE_FASTEST			1
+#define	DDI_SCALE_LINEAR			2
+
+/**
  * Describes the pixel format of a surface.
  */
 typedef struct
@@ -280,6 +292,11 @@ DDISurface* ddiConvertSurface(DDIPixelFormat *format, DDISurface *surface, const
 DDISurface* ddiLoadAndConvertPNG(DDIPixelFormat *format, const char *filename, const char **error);
 
 /**
+ * Save a surface to a PNG image. Returns 0 on success, -1 on error.
+ */
+int ddiSavePNG(DDISurface *surface, const char *filename, const char **error);
+
+/**
  * Expand a bitmap into a surface. 'type' indicates a type of bitmap (DDI_BITMAP_*). 'color' is the foreground
  * color; the background will be transparent. 'bitmap' points to the actual bitmap data. 'surface' specifies
  * the target surface, and (x, y) specifies the coordinates where the bitmap is to be expanded.
@@ -339,6 +356,13 @@ void ddiWritePen(DDIPen *pen, const char *text);
 void ddiExecutePen(DDIPen *pen, DDISurface *surface);
 
 /**
+ * Execute a pen, and allow the specification of some flags.
+ *
+ * DDI_POSITION_BASELINE	Treat Y coordinates of the pen as indicating the baseline, not the top of text.
+ */
+void ddiExecutePen2(DDIPen *pen, DDISurface *surface, int flags);
+
+/**
  * Set a pen's background color.
  */
 void ddiSetPenBackground(DDIPen *pen, DDIColor *bg);
@@ -394,5 +418,14 @@ int ddiParseColor(const char *str, DDIColor *out);
  * The alpha channel is ignored.
  */
 void ddiColorToString(const DDIColor *col, char *buffer);
+
+/**
+ * Scale a surface to the specifies size, using the specified algorithm.
+ * DDI_SCALE_BEST	Highest-quality algorithm available.
+ * DDI_SCALE_FASTEST	Fastest algorithm available.
+ * DDI_SCALE_LINEAR	Linear scaling algorithm.
+ * Returns a new surface on success, NULL on error.
+ */
+DDISurface* ddiScale(DDISurface *surface, unsigned int newWidth, unsigned int newHeight, int algorithm);
 
 #endif

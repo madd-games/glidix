@@ -84,7 +84,7 @@ char* gwmGetInput(const char *caption, const char *prompt, const char *initialTe
 	dialog->data = txtInput;
 	gwmSetWindowFlags(txtInput, GWM_WINDOW_MKFOCUSED);
 	gwmPostDirty(dialog);
-	gwmRunModal(dialog, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU);
+	gwmRunModal(dialog, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_NOICON);
 	
 	gwmDestroyTextField(txtInput);
 	gwmDestroyButton(btnOK);

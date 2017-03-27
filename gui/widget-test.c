@@ -97,6 +97,53 @@ int menuExit(void *context)
 	return -1;
 };
 
+int testMessageBoxes(void *ignore)
+{
+	(void)ignore;
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_NONE | GWM_MBUT_OK", GWM_MBICON_NONE | GWM_MBUT_OK);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_NONE | GWM_MBUT_YESNO", GWM_MBICON_NONE | GWM_MBUT_YESNO);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_NONE | GWM_MBUT_OKCANCEL", GWM_MBICON_NONE | GWM_MBUT_OKCANCEL);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_NONE | GWM_MBUT_YESNOCANCEL", GWM_MBICON_NONE | GWM_MBUT_YESNOCANCEL);
+
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_INFO | GWM_MBUT_OK", GWM_MBICON_INFO | GWM_MBUT_OK);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_INFO | GWM_MBUT_YESNO", GWM_MBICON_INFO | GWM_MBUT_YESNO);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_INFO | GWM_MBUT_OKCANCEL", GWM_MBICON_INFO | GWM_MBUT_OKCANCEL);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_INFO | GWM_MBUT_YESNOCANCEL", GWM_MBICON_INFO | GWM_MBUT_YESNOCANCEL);
+
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_QUEST | GWM_MBUT_OK", GWM_MBICON_QUEST | GWM_MBUT_OK);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_QUEST | GWM_MBUT_YESNO", GWM_MBICON_QUEST | GWM_MBUT_YESNO);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_QUEST | GWM_MBUT_OKCANCEL", GWM_MBICON_QUEST | GWM_MBUT_OKCANCEL);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_QUEST | GWM_MBUT_YESNOCANCEL", GWM_MBICON_QUEST | GWM_MBUT_YESNOCANCEL);
+
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_WARN | GWM_MBUT_OK", GWM_MBICON_WARN | GWM_MBUT_OK);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_WARN | GWM_MBUT_YESNO", GWM_MBICON_WARN | GWM_MBUT_YESNO);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_WARN | GWM_MBUT_OKCANCEL", GWM_MBICON_WARN | GWM_MBUT_OKCANCEL);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_WARN | GWM_MBUT_YESNOCANCEL", GWM_MBICON_WARN | GWM_MBUT_YESNOCANCEL);
+
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_ERROR | GWM_MBUT_OK", GWM_MBICON_ERROR | GWM_MBUT_OK);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_ERROR | GWM_MBUT_YESNO", GWM_MBICON_ERROR | GWM_MBUT_YESNO);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_ERROR | GWM_MBUT_OKCANCEL", GWM_MBICON_ERROR | GWM_MBUT_OKCANCEL);
+	gwmMessageBox(win, "Widget Test", "GWM_MBICON_ERROR | GWM_MBUT_YESNOCANCEL", GWM_MBICON_ERROR | GWM_MBUT_YESNOCANCEL);
+	return 0;
+};
+
+int testInputDialog(void *ignore)
+{
+	(void)ignore;
+	char *text = gwmGetInput("Widget Test", "Enter some text:", "Hello world");
+	if (text == NULL)
+	{
+		gwmMessageBox(win, "Widget Test", "You clicked cancel.", GWM_MBICON_ERROR | GWM_MBUT_OK);
+	}
+	else
+	{
+		gwmMessageBox(win, "Widget Test", text, GWM_MBICON_INFO | GWM_MBUT_OK);
+		free(text);
+	};
+	
+	return 0;
+};
+
 int main()
 {
 	if (gwmInit() != 0)
@@ -125,8 +172,14 @@ int main()
 	gwmMenuAddEntry(menuSub, "Submenu Item", menuCallback, (void*) "Submenu Item");
 
 	GWMMenu *menuEmpty = gwmCreateMenu();
+	
+	GWMMenu *menuDialogs = gwmCreateMenu();
+	gwmMenuAddEntry(menuDialogs, "Message Boxes", testMessageBoxes, NULL);
+	gwmMenuAddEntry(menuDialogs, "Input Dialog", testInputDialog, NULL);
+	
 	gwmMenubarAdd(menubar, "Test", menuTest);
 	gwmMenubarAdd(menubar, "Empty", menuEmpty);
+	gwmMenubarAdd(menubar, "Dialogs", menuDialogs);
 	gwmMenubarAdjust(menubar);
 
 	gwmCreateButton(win, "Sample button", 2, 22, 100, 0);
@@ -149,18 +202,22 @@ int main()
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
 	sbar = gwmCreateScrollbar(win, 104, 91, 100, 50, 66, 500, GWM_SCROLLBAR_HORIZ | GWM_SCROLLBAR_DISABLED);
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
-
+	gwmCreateSlider(win, 104, 101, 100, 30, 100, GWM_SLIDER_HORIZ);
+	gwmCreateSlider(win, 104, 131, 100, 30, 100, GWM_SLIDER_HORIZ | GWM_SLIDER_DISABLED);
+	
 	sbar = gwmCreateScrollbar(win, 206, 27, 100, 20, 100, 500, 0);
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
 	sbar = gwmCreateScrollbar(win, 216, 27, 100, 10, 100, 500, GWM_SCROLLBAR_DISABLED);
 	gwmSetScrollbarCallback(sbar, sbarCallback, sbar);
-
+	gwmCreateSlider(win, 226, 27, 100, 40, 100, GWM_SLIDER_VERT);
+	gwmCreateSlider(win, 256, 27, 100, 40, 100, GWM_SLIDER_VERT | GWM_SLIDER_DISABLED);
+	
 	GWMRadioGroup *group = gwmCreateRadioGroup(0);
 	for (i=0; i<4; i++)
 	{
 		int flags = 0;
 		if (i == 0) flags = GWM_RADIO_DISABLED;
-		gwmCreateRadioButton(win, 104+32*i, 130, group, i, flags);
+		gwmCreateRadioButton(win, 104+32*i, 150, group, i, flags);
 	};
 	
 	GWMWindow *notebook = gwmCreateNotebook(win, 2, 174, 300, 200, 0);
@@ -180,7 +237,7 @@ int main()
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
-	///*GWMWindow *treeview =*/ gwmCreateTreeView(tab2, 2, 2, 250, 150, GWM_TREE_FILESYSTEM, GWM_FS_ROOT, 0);
+	//gwmCreateTreeView(tab2, 2, 2, 250, 150, GWM_TREE_FILESYSTEM, GWM_FS_ROOT, 0);
 	
 	gwmPostDirty(tab1);
 	redraw();

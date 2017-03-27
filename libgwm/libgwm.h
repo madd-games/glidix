@@ -39,6 +39,7 @@
 #define	GWM_WINDOW_NOTASKBAR			(1 << 3)
 #define	GWM_WINDOW_NOSYSMENU			(1 << 4)
 #define	GWM_WINDOW_RESIZEABLE			(1 << 5)
+#define	GWM_WINDOW_NOICON			(1 << 6)
 
 /**
  * Colors.
@@ -137,6 +138,13 @@ extern DDIColor gwmColorSelection;
 #define	GWM_CURSOR_NORMAL			0
 #define	GWM_CURSOR_TEXT				1
 #define	GWM_CURSOR_COUNT			2
+
+/**
+ * Slider flags.
+ */
+#define	GWM_SLIDER_VERT				0
+#define	GWM_SLIDER_HORIZ			(1 << 0)
+#define	GWM_SLIDER_DISABLED			(1 << 1)
 
 /**
  * Window manager information structure, located in the shared file /run/gwminfo.
@@ -253,6 +261,7 @@ typedef struct
 #define	GWM_CMD_MOVE				14
 #define	GWM_CMD_REL_TO_ABS			15
 #define	GWM_CMD_REDRAW_SCREEN			16
+#define	GWM_CMD_SCREENSHOT_WINDOW		17
 typedef union
 {
 	int					cmd;
@@ -375,6 +384,14 @@ typedef union
 		int				relX;
 		int				relY;
 	} relToAbs;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_SCREENSHOT_WINDOW
+		uint64_t			seq;
+		uint64_t			id;
+		GWMGlobWinRef			ref;	// of the window being screenshotted
+	} screenshotWindow;
 } GWMCommand;
 
 /**
@@ -393,6 +410,7 @@ typedef union
 #define	GWM_MSG_TOGGLE_WINDOW_RESP		10
 #define	GWM_MSG_RESIZE_RESP			11
 #define	GWM_MSG_REL_TO_ABS_RESP			12
+#define	GWM_MSG_SCREENSHOT_WINDOW_RESP		13
 typedef union
 {
 	struct
@@ -502,6 +520,17 @@ typedef union
 		int				absX;
 		int				absY;
 	} relToAbsResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_SCREENSHOT_WINDOW_RESP
+		uint64_t			seq;
+		int				status;	// 0 = success
+		DDIPixelFormat			format;
+		uint32_t			clientID[2];
+		unsigned int			width;
+		unsigned int			height;
+	} screenshotWindowResp;
 } GWMMessage;
 
 struct GWMWindow_;
@@ -1151,5 +1180,37 @@ GWMWindow* gwmCreateRadioButton(GWMWindow *parent, int x, int y, GWMRadioGroup *
  * Destroy a radio button.
  */
 void gwmDestroyRadioButton(GWMWindow *radio);
+
+/**
+ * Create a slider.
+ */
+GWMWindow* gwmCreateSlider(GWMWindow *parent, int x, int y, int len, int value, int max, int flags);
+
+/**
+ * Destroy a slider.
+ */
+void gwmDestroySlider(GWMWindow *slider);
+
+/**
+ * Set slider parameters. The orientation is ignored in 'flags'.
+ */
+void gwmSetSliderParams(GWMWindow *slider, int value, int max, int flags);
+
+/**
+ * Get the current value of the slider.
+ */
+int gwmGetSliderValue(GWMWindow *slider);
+
+/**
+ * Turn a window handle into a global window reference.
+ */
+void gwmGetGlobRef(GWMWindow *win, GWMGlobWinRef *ref);
+
+/**
+ * Take a screenshot of the specified window (must be top-level and not hidden). On success, returns a hidden
+ * window handle where the currently-selected canvas contains a screenshot of the selected window. On error
+ * (non-exiting or hidden window), returns NULL.
+ */
+GWMWindow *gwmScreenshotWindow(GWMGlobWinRef *ref);
 
 #endif

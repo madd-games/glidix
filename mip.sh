@@ -114,3 +114,10 @@ cd fstools
 make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/fstools.mip
+
+# netman
+rm -rf mipdir || exit 1
+cd netman
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/netman.mip

@@ -234,7 +234,7 @@ int dynld_open(const char *soname, ...);
 /**
  * Close a library. This may result in unmapping all its segments if it is no longer in use.
  */
-void dynld_libclose(Library *lib);
+int dynld_libclose(Library *lib);
 
 /**
  * Initialize a library (and all its dependencies).
