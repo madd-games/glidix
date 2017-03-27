@@ -14,7 +14,7 @@ bin/%: $(SRCDIR)/bin/%.c libfstools.so
 	$(HOST_GCC) $< -o $@ -Wall -Werror -I$(SRCDIR)/lib -L. -lfstools
 
 libfstools.so: $(OBJ)
-	$(HOST_GCC) -shared -o $@ $^
+	$(HOST_GCC) -fPIC -shared -o $@ $^
 
 -include $(DEP)
 
