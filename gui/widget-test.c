@@ -222,7 +222,7 @@ int main()
 	
 	GWMWindow *notebook = gwmCreateNotebook(win, 2, 174, 300, 200, 0);
 	GWMWindow *tab1 = gwmNotebookAdd(notebook, "Tab 1");
-	/*GWMWindow *tab2 =*/ gwmNotebookAdd(notebook, "Filesystem");
+	GWMWindow *tab2 = gwmNotebookAdd(notebook, "Filesystem");
 	/*GWMWindow *tab3 =*/ gwmNotebookAdd(notebook, "Yet another tab");
 	gwmNotebookSetTab(notebook, 0);
 
@@ -237,7 +237,7 @@ int main()
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
-	//gwmCreateTreeView(tab2, 2, 2, 250, 150, GWM_TREE_FILESYSTEM, GWM_FS_ROOT, 0);
+	gwmCreateTreeView(tab2, 2, 2, 250, 150, GWM_TREE_FILESYSTEM, GWM_FS_ROOT, 0);
 	
 	gwmPostDirty(tab1);
 	redraw();

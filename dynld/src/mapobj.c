@@ -215,29 +215,19 @@ void* dynld_globdat(const char *name)
 void* dynld_globdef(const char *name)
 {
 	Library *lib;
-	for (lib=&chainHead; lib!=NULL; lib=lib->next)
+	
+	// try global symbols first
+	for (lib=chainHead.next; lib!=NULL; lib=lib->next)
 	{
-		size_t i;
-		for (i=0; i<lib->numRela; i++)
-		{
-			Elf64_Rela *rela = &lib->rela[i];
-			Elf64_Xword type = ELF64_R_TYPE(rela->r_info);
-			Elf64_Xword symidx = ELF64_R_SYM(rela->r_info);
-			
-			if (type == R_X86_64_GLOB_DAT)
-			{
-				Elf64_Sym *sym = &lib->symtab[symidx];
-				char *symname = &lib->strtab[sym->st_name];
-				
-				if (sym->st_shndx != 0)
-				{
-					if (strcmp(symname, name) == 0)
-					{
-						return (void*) (lib->base + sym->st_value);
-					};
-				};
-			};
-		};
+		void *val = dynld_libsym(lib, name, STB_GLOBAL);
+		if (val != NULL) return val;
+	};
+	
+	// now try the weak symbols
+	for (lib=chainHead.next; lib!=NULL; lib=lib->next)
+	{
+		void *val = dynld_libsym(lib, name, STB_WEAK);
+		if (val != NULL) return val;
 	};
 	
 	return NULL;
@@ -708,7 +698,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				// if no libraries define the symbol, we leave 'symaddr' as-is, it will point
 				// to the data in the executable. otherwise, we must point 'symaddr' to the
 				// location to copy from. to find this location, we search all libraries for
-				// a R_X86_64_GLOB_DAT against a defined symbol.
+				// for a symbol definition, but not the executable.
 				
 				void *srcaddr = dynld_globdef(symname);
 				if (srcaddr != NULL)
