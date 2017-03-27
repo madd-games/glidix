@@ -9,9 +9,9 @@ BIN_OUT := $(patsubst $(SRCDIR)/bin/%.c, bin/%, $(BIN_SRC))
 .PHONY: all
 all: $(BIN_OUT) libfstools.so
 
-bin/%: $(SRCDIR)/bin/%.c
+bin/%: $(SRCDIR)/bin/%.c libfstools.so
 	@mkdir -p bin
-	$(HOST_GCC) $< -o $@ -Wall -Werror -I$(SRCDIR)/lib -Llib -lfstools
+	$(HOST_GCC) $< -o $@ -Wall -Werror -I$(SRCDIR)/lib -L -lfstools
 
 libfstools.so: $(OBJ)
 	$(HOST_GCC) -shared -o $@ $^
