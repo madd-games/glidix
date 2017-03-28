@@ -36,6 +36,7 @@ struct __instr
 	const char *_s;
 	FILE *_fp;
 	int _maxget;
+	int _count;
 };
 
 static void __instr_inits(struct __instr *_is, const char *_s)
@@ -64,17 +65,26 @@ static int __instr_getc(struct __instr *_is)
 
 	if (_is->_fp != NULL)
 	{
-		return fgetc(_is->_fp);
+		int ret = fgetc(_is->_fp);
+		if (ret != EOF) _is->_count++;
+		return ret;
 	}
 	else
 	{
 		if (*_is->_s == 0) return EOF;
-		else return *_is->_s++;
+		else
+		{
+			_is->_count++;
+			return *_is->_s++;
+		};
 	};
 };
 
 static void __instr_ungetc(struct __instr *_is, int prev)
 {
+	if (prev == EOF) return;
+	
+	_is->_count--;
 	if (_is->_fp != NULL)
 	{
 		ungetc(prev, _is->_fp);
@@ -687,7 +697,7 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 				if (__scanf_conv_chars(_is, maxwidth, (char*)outp) != 0) goto finish;
 				break;
 			case 'n':
-				__scanf_conv_n(_is, lenmod, matchcount, outp);
+				__scanf_conv_n(_is, lenmod, _is->_count, outp);
 				break;
 			default:
 				goto finish;

@@ -105,7 +105,6 @@ extern dynld_abort
 global dynld_lazybind
 dynld_lazybind:
 	; entry point to the lazy binder
-	xchg bx, bx
 	xchg rdi, [rsp]			; library handle
 	xchg rsi, [rsp+8]		; index
 	
