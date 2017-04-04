@@ -278,6 +278,24 @@ int main(int argc, char *argv[])
 	GWMWindow *btnLogIn = gwmCreateButton(win, "Log in", 2, 46, 50, 0);
 	gwmSetButtonCallback(btnLogIn, logInCallback, NULL);
 	
+	DDISurface *wallpaper = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/wallpaper.png", NULL);
+	if (wallpaper != NULL)
+	{
+		DDISurface *background = ddiOpenSurface(gwmGetInfo()->backgroundID);
+		if (background != NULL)
+		{
+			DDISurface *scaledWallpaper = ddiScale(wallpaper, background->width, background->height, DDI_SCALE_BEST);
+			if (scaledWallpaper != NULL)
+			{
+				ddiBlit(scaledWallpaper, 0, 0, background, 0, 0, background->width, background->height);
+			};
+			
+			ddiDeleteSurface(scaledWallpaper);
+		};
+		
+		ddiDeleteSurface(wallpaper);
+	};
+	
 	gwmPostDirty(win);
 	gwmMainLoop();
 	gwmQuit();

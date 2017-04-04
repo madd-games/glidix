@@ -221,9 +221,55 @@ static char* preprocBackticks(char *line)
 	return result;
 };
 
+char *preprocAutospace(char *line)
+{
+	// insert automatic spaces in things like "echo>test" -> "echo > test"
+	char *out = (char*) malloc(strlen(line) * 3 + 1);
+	char *put = out;
+	char *scan = line;
+	
+	char quote = 0;
+	while (*scan != 0)
+	{
+		if (quote != 0)
+		{
+			*put++ = *scan;
+			if (quote == *scan) quote = 0;
+			scan++;
+		}
+		else if (*scan == '>')
+		{
+			if (scan != line)
+			{
+				if ((scan[-1] < '0') || (scan[-1] > '9'))
+				{
+					*put++ = ' ';
+				};
+			};
+			
+			*put++ = *scan++;
+			*put++ = ' ';
+		}
+		else
+		{
+			char c = *scan++;
+			*put++ = c;
+			
+			if ((c == '\'') || (c == '"'))
+			{
+				quote = c;
+			};
+		};
+	};
+	
+	*put = 0;
+	return out;
+};
+
 char *preprocLine(char *line)
 {
 	line = preprocVars(line);
 	line = preprocBackticks(line);
+	line = preprocAutospace(line);
 	return line;
 };
