@@ -1,3 +1,4 @@
 # Only use LF endings.
 * text=auto eol=lf
 *.png -text
+*.ttf -text
