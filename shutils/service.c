@@ -38,12 +38,14 @@
 #include <dirent.h>
 #include <errno.h>
 
+#define	NUM_LEVELS				3
+
 char *progName;
 
 int startService(const char *name)
 {
 	int state;
-	for (state=1; state<=3; state++)
+	for (state=1; state<=NUM_LEVELS; state++)
 	{
 		char startPath[PATH_MAX];
 		sprintf(startPath, "/etc/services/%d/%s.start", state, name);
@@ -65,7 +67,7 @@ int startService(const char *name)
 int stopService(const char *name)
 {
 	int state;
-	for (state=1; state<=3; state++)
+	for (state=1; state<=NUM_LEVELS; state++)
 	{
 		char stopPath[PATH_MAX];
 		sprintf(stopPath, "/etc/services/%d/%s.stop", state, name);
@@ -86,55 +88,77 @@ int stopService(const char *name)
 
 int serviceState(const char *val)
 {
-	char dirname[PATH_MAX];
-	snprintf(dirname, PATH_MAX, "/etc/services/%s", val);
-	
-	DIR *dirp = opendir(dirname);
-	if (dirp == NULL)
+	int level;
+	if (sscanf(val, "%d", &level) != 1)
 	{
-		fprintf(stderr, "%s: could not scan %s: %s\n", progName, dirname, strerror(errno));
+		fprintf(stderr, "%s: invalid system state: %s\n", progName, val);
 		return 1;
 	};
 	
-	pid_t *pidList = NULL;
-	int numPids = 0;
-	
-	struct dirent *ent;
-	while ((ent = readdir(dirp)) != NULL)
+	int state;
+	for (state=0; state<NUM_LEVELS; state++)
 	{
-		if (ent->d_name[0] != '.')
+		char dirname[PATH_MAX];
+		snprintf(dirname, PATH_MAX, "/etc/services/%d", state);
+	
+		DIR *dirp = opendir(dirname);
+		if (dirp == NULL)
 		{
-			if (strlen(ent->d_name) > strlen(".start"))
+			fprintf(stderr, "%s: could not scan %s: %s\n", progName, dirname, strerror(errno));
+			continue;
+		};
+		
+		const char *op;
+		if (state <= level)
+		{
+			op = ".start";
+		}
+		else
+		{
+			op = ".stop";
+		};
+		
+		pid_t *pidList = NULL;
+		int numPids = 0;
+	
+		struct dirent *ent;
+		while ((ent = readdir(dirp)) != NULL)
+		{
+			if (ent->d_name[0] != '.')
 			{
-				if (strcmp(&ent->d_name[strlen(ent->d_name)-6], ".start") == 0)
+				if (strlen(ent->d_name) > strlen(op))
 				{
-					pid_t pid = fork();
-					if (pid == 0)
+					if (strcmp(&ent->d_name[strlen(ent->d_name)-strlen(op)], op) == 0)
 					{
-						char fullpath[PATH_MAX];
-						sprintf(fullpath, "/etc/services/%s/%s", val, ent->d_name);
-						execl(fullpath, fullpath, NULL);
-						perror("execl");
-						_exit(1);
-					}
-					else
-					{
-						int index = numPids++;
-						pidList = (pid_t*) realloc(pidList, sizeof(pid_t)*numPids);
-						pidList[index] = pid;
+						pid_t pid = fork();
+						if (pid == 0)
+						{
+							char fullpath[PATH_MAX];
+							sprintf(fullpath, "/etc/services/%d/%s", state, ent->d_name);
+							execl(fullpath, fullpath, NULL);
+							perror("execl");
+							_exit(1);
+						}
+						else
+						{
+							int index = numPids++;
+							pidList = (pid_t*) realloc(pidList, sizeof(pid_t)*numPids);
+							pidList[index] = pid;
+						};
 					};
 				};
 			};
 		};
-	};
 	
-	int i;
-	for (i=0; i<numPids; i++)
-	{
-		waitpid(pidList[i], NULL, 0);
-	};
+		int i;
+		for (i=0; i<numPids; i++)
+		{
+			waitpid(pidList[i], NULL, 0);
+		};
 	
-	closedir(dirp);
+		closedir(dirp);
+	};
+
 	return 0;
 };
 

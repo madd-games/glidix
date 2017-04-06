@@ -1,0 +1,4 @@
+#! /bin/sh
+# netman.stop
+# Stop the "network manager" service
+ifshut

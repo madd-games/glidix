@@ -196,7 +196,10 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		fd = open(&pathname[1], O_RDWR | O_CREAT | O_TRUNC | O_EXCL, 0644);
+		const char *name = &pathname[1];
+		char *slashpos = strrchr(name, '/');
+		if (slashpos != NULL) name = slashpos + 1;
+		fd = open(name, O_RDWR | O_CREAT | O_TRUNC | O_EXCL, 0644);
 	};
 	
 	if (fd == -1)

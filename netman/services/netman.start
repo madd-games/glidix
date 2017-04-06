@@ -1,0 +1,4 @@
+#! /bin/sh
+# netman.start
+# Start the "network manager" service
+ifinit

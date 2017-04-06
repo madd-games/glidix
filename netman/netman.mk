@@ -10,6 +10,8 @@ IPV4_OUT := $(patsubst $(SRCDIR)/ipv4/%.c, ipv4/%.so, $(IPV4_SRC))
 IPV6_SRC := $(shell find $(SRCDIR)/ipv6 -name '*.c')
 IPV6_OUT := $(patsubst $(SRCDIR)/ipv6/%.c, ipv6/%.so, $(IPV6_SRC))
 
+SERVICE_LEVEL ?= 2
+
 .PHONY: all install
 all: $(TOOLS_OUT) $(IPV4_OUT) $(IPV6_OUT)
 
@@ -30,7 +32,11 @@ install:
 	@mkdir -p $(DESTDIR)/usr/include
 	@mkdir -p $(DESTDIR)/usr/libexec/netman/ipv4
 	@mkdir -p $(DESTDIR)/usr/libexec/netman/ipv6
+	@mkdir -p $(DESTDIR)/etc/services/$(SERVICE_LEVEL)
 	cp -RT $(SRCDIR)/include $(DESTDIR)/usr/include
 	cp -RT tools $(DESTDIR)/usr/bin
 	cp -RT ipv4 $(DESTDIR)/usr/libexec/netman/ipv4
 	cp -RT ipv6 $(DESTDIR)/usr/libexec/netman/ipv6
+	cp -RT $(SRCDIR)/services $(DESTDIR)/etc/services/$(SERVICE_LEVEL)
+	chmod -R +x $(DESTDIR)/etc/services/$(SERVICE_LEVEL)
+

@@ -121,3 +121,10 @@ cd netman
 make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/netman.mip
+
+# sysinfo
+rm -rf mipdir || exit 1
+cd sysinfo
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/sysinfo.mip

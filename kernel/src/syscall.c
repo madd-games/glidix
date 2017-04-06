@@ -1317,7 +1317,7 @@ int sys_unlink(const char *upath)
 			if (dir->close != NULL) dir->close(dir);
 			kfree(dir);
 			vfsUnlockCreation();
-			getCurrentThread()->therrno = EPERM;
+			getCurrentThread()->therrno = EACCES;
 			return -1;
 		};
 	};
@@ -1327,7 +1327,7 @@ int sys_unlink(const char *upath)
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EPERM;
+		getCurrentThread()->therrno = EACCES;
 		return -1;
 	};
 

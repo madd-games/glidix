@@ -97,7 +97,7 @@ void bringUp(const char *ifname, int pass)
 			{
 				if (pass == 0)
 				{
-					fprintf(stderr, "%s: interface %s not configured: attempting defualt configuration\n",
+					fprintf(stderr, "%s: interface %s not configured: attempting default configuration\n",
 						progName, ifname);
 					
 					doAutoConf(ifname);
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
 			};
 			
 			fprintf(fp, "# Network interface configuration used by ifup(1) and ifdown(1).\n");
-			fprintf(fp, "# See if.conf(3) for more information.\n");
+			fprintf(fp, "# See ifconf(3) for more information.\n");
 			fclose(fp);
 			
 			fprintf(stderr, "%s: /etc/if.conf created successfully\n", argv[0]);
