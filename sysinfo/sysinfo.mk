@@ -1,12 +1,12 @@
 SRC := $(shell find $(SRCDIR)/src -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror
+CFLAGS := -Wall -Werror -I$(SRCDIR)/libgwm -I$(SRCDIR)/libddi
 
 .PHONY: install
 
 sysinfo: $(OBJ)
-	$(HOST_GCC) $^ -o $@ -lddi -lgwm
+	$(HOST_GCC) $^ -o $@ -L../libgwm -L../libddi -lddi -lgwm
 
 -include $(DEP)
 
