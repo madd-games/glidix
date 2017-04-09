@@ -63,7 +63,7 @@ static FSMimeType *inodeChardev;
 static FSMimeType *inodeFifo;
 static FSMimeType *inodeSocket;
 
-static FSMimeType *specialType(const char *name)
+static FSMimeType *specialType(const char *name, const char *label)
 {
 	FSMimeType *type = (FSMimeType*) malloc(sizeof(FSMimeType));
 	type->next = NULL;
@@ -72,6 +72,7 @@ static FSMimeType *specialType(const char *name)
 	type->numFilenames = 0;
 	type->magics = NULL;
 	type->numMagics = 0;
+	type->label = strdup(label);
 	
 	return type;
 };
@@ -90,6 +91,8 @@ static void loadMimeInfo(const char *cat, const char *type)
 	
 	info->magics = NULL;
 	info->numMagics = 0;
+	
+	info->label = info->mimename;
 	
 	if (lastType == NULL)
 	{
@@ -127,6 +130,7 @@ static void loadMimeInfo(const char *cat, const char *type)
 		else
 		{
 			char *saveptr;
+			size_t linesz = strlen(line);
 			char *cmd = strtok_r(line, " \t", &saveptr);
 			
 			if (cmd == NULL)
@@ -141,6 +145,24 @@ static void loadMimeInfo(const char *cat, const char *type)
 					size_t index = info->numFilenames++;
 					info->filenames = realloc(info->filenames, sizeof(char*)*info->numFilenames);
 					info->filenames[index] = strdup(pat);
+				};
+			}
+			else if (strcmp(cmd, "label") == 0)
+			{
+				char *newLabel = NULL;
+				if (linesz > 5)
+				{
+					newLabel = &line[6];
+				};
+				
+				if (newLabel == NULL)
+				{
+					fprintf(stderr, "fstools: 'label' without parameter\n");
+				}
+				else
+				{
+					if (info->label != info->mimename) free(info->label);
+					info->label = strdup(newLabel);
 				};
 			}
 			else
@@ -180,13 +202,13 @@ static void loadCategory(const char *cat)
 void fsInit()
 {
 	// some special types
-	textPlain = specialType("text/plain");
-	octetStream = specialType("application/octet-stream");
-	inodeDir = specialType("inode/directory");
-	inodeBlockdev = specialType("inode/blockdevice");
-	inodeChardev = specialType("inode/chardevice");
-	inodeFifo = specialType("inode/fifo");
-	inodeSocket = specialType("inode/socket");
+	textPlain = specialType("text/plain", "Text file");
+	octetStream = specialType("application/octet-stream", "Binary file");
+	inodeDir = specialType("inode/directory", "Directory");
+	inodeBlockdev = specialType("inode/blockdevice", "Block device");
+	inodeChardev = specialType("inode/chardevice", "Character device");
+	inodeFifo = specialType("inode/fifo", "Named pipe");
+	inodeSocket = specialType("inode/socket", "Socket");
 	
 	// now load the MIME database (/usr/share/mime).
 	const char **scan;
@@ -209,6 +231,8 @@ void fsQuit()
 		
 		free(type->filenames);
 		free(type->magics);
+		
+		if (type->label != type->mimename) free(type->label);
 		
 		FSMimeType *next = type->next;
 		free(type);

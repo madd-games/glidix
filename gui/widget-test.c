@@ -152,7 +152,7 @@ int main()
 		return 1;
 	};
 
-	win = gwmCreateWindow(NULL, "Widgets Demo", 10, 10, 500, 500, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
+	win = gwmCreateWindow(NULL, "Widgets Demo", 10, 10, 304, 464, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
 	if (win == NULL)
 	{
 		fprintf(stderr, "Failed to create window!\n");
@@ -188,7 +188,17 @@ int main()
 	gwmCreateTextField(win, "Disabled text field", 2, 108, 100, GWM_TXT_DISABLED);
 	gwmCreateTextField(win, "Masked", 2, 130, 100, GWM_TXT_MASKED);
 	gwmCreateTextField(win, "Disabled, masked", 2, 152, 100, GWM_TXT_MASKED | GWM_TXT_DISABLED);
-
+	GWMWindow *combo = gwmCreateCombo(win, "Combo box!!", 2, 174, 100, 0);
+	gwmAddComboOption(combo, "Some option");
+	gwmAddComboOption(combo, "Hello world!");
+	gwmAddComboOption(combo, "Option 3");
+	gwmCreateCombo(win, "Disable combo!!", 2, 196, 100, GWM_COMBO_DISABLED);
+	GWMWindow *optmenu = gwmCreateOptionMenu(win, 0, "Option menu", 2, 218, 100, 0);
+	gwmAddOptionMenu(optmenu, 1, "Cucumber");
+	gwmAddOptionMenu(optmenu, 2, "Tomato");
+	gwmAddOptionMenu(optmenu, 3, "Banana");
+	gwmCreateOptionMenu(win, 0, "Disabled menu", 2, 240, 100, GWM_OPTMENU_DISABLED);
+	
 	gwmCreateCheckbox(win, 104, 27, GWM_CB_TRI, 0);
 	
 	int i;
@@ -220,7 +230,9 @@ int main()
 		gwmCreateRadioButton(win, 104+32*i, 150, group, i, flags);
 	};
 	
-	GWMWindow *notebook = gwmCreateNotebook(win, 2, 174, 300, 200, 0);
+	gwmCreateFrame(win, "Frame example", 104, 175, 200, 80);
+	
+	GWMWindow *notebook = gwmCreateNotebook(win, 2, 262, 300, 200, 0);
 	GWMWindow *tab1 = gwmNotebookAdd(notebook, "Tab 1");
 	GWMWindow *tab2 = gwmNotebookAdd(notebook, "Filesystem");
 	/*GWMWindow *tab3 =*/ gwmNotebookAdd(notebook, "Yet another tab");

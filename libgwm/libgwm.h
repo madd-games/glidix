@@ -147,6 +147,22 @@ extern DDIColor gwmColorSelection;
 #define	GWM_SLIDER_DISABLED			(1 << 1)
 
 /**
+ * Combo box flags; make them consistent with text field flags!
+ */
+#define	GWM_COMBO_DISABLED			(1 << 1)
+#define	GWM_COMBO_MASKED			(1 << 2)
+
+/**
+ * Option menu flags.
+ */
+#define	GWM_OPTMENU_DISABLED			(1 << 0)
+
+/**
+ * Text area flags.
+ */
+#define	GWM_TEXTAREA_DISABLED			(1 << 0)
+
+/**
  * Window manager information structure, located in the shared file /run/gwminfo.
  * Described how to connect to the window manager.
  */
@@ -860,7 +876,7 @@ size_t gwmGetTextFieldSize(GWMWindow *field);
 size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t endPos);
 
 /**
- * Set the length of a text field.
+ * Set the width of a text field.
  */
 void gwmResizeTextField(GWMWindow *field, int width);
 
@@ -868,6 +884,11 @@ void gwmResizeTextField(GWMWindow *field, int width);
  * Change the text in a text field.
  */
 void gwmWriteTextField(GWMWindow *field, const char *newText);
+
+/**
+ * Select the entire contents of the text field.
+ */
+void gwmTextFieldSelectAll(GWMWindow *field);
 
 /**
  * Sets the callback for when the user pressed ENTER while typing in a text field.
@@ -1051,7 +1072,7 @@ GWMWindow *gwmCreateMenubar(GWMWindow *parent);
 void gwmMenubarAdjust(GWMWindow *menubar);
 
 /**
- * Add a new menu to a menubar. The menubar takes ownership of the menu; you must now call gwmOpenMenu(), gwmCloseMenu()
+ * Add a new menu to a menubar. The menubar takes ownership of the menu; you must not call gwmOpenMenu(), gwmCloseMenu()
  * or gwmDestroyMenu() on it (gwmDestroyMenu() will be automatically called when you call gwmDestroyMenubar()).
  */
 void gwmMenubarAdd(GWMWindow *menubar, const char *label, GWMMenu *menu);
@@ -1212,5 +1233,84 @@ void gwmGetGlobRef(GWMWindow *win, GWMGlobWinRef *ref);
  * (non-exiting or hidden window), returns NULL.
  */
 GWMWindow *gwmScreenshotWindow(GWMGlobWinRef *ref);
+
+/**
+ * Create a combo box. A combo box contains a text field which the user may edit, and a dropdown menu which
+ * allows the selection of some suggested options.
+ */
+GWMWindow* gwmCreateCombo(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
+
+/**
+ * Destroy a combo box.
+ */
+void gwmDestroyCombo(GWMWindow *combo);
+
+/**
+ * Return the text field inside the combo box. This can be used to retrieve the text etc. Do NOT destroy the field
+ * manually! It is owned by the combo box and is destroyed when gwmDestroyCombo() is called.
+ */
+GWMWindow* gwmGetComboTextField(GWMWindow *combo);
+
+/**
+ * Clear the list of options in a combo box.
+ */
+void gwmClearComboOptions(GWMWindow *combo);
+
+/**
+ * Add a new option to the list of combo box options. The string passed in is copied, so you may free the buffer after
+ * use.
+ */
+void gwmAddComboOption(GWMWindow *combo, const char *opt);
+
+/**
+ * Create an option menu widget.
+ */
+GWMWindow* gwmCreateOptionMenu(GWMWindow *parent, uint64_t id, const char *text, int x, int y, int width, int flags);
+
+/**
+ * Destroy an option menu.
+ */
+void gwmDestroyOptionMenu(GWMWindow *optmenu);
+
+/**
+ * Clear an option menu.
+ */
+void gwmClearOptionMenu(GWMWindow *optmenu);
+
+/**
+ * Change the value in an option menu.
+ */
+void gwmSetOptionMenu(GWMWindow *optmenu, uint64_t id, const char *text);
+
+/**
+ * Add an option to an option menu.
+ */
+void gwmAddOptionMenu(GWMWindow *optmenu, uint64_t id, const char *text);
+
+/**
+ * Get the ID of the currently-selected option in the menu.
+ */
+uint64_t gwmReadOptionMenu(GWMWindow *optmenu);
+
+/**
+ * Create a frame widget with the specified caption.
+ */
+GWMWindow* gwmCreateFrame(GWMWindow *parent, const char *caption, int x, int y, int width, int height);
+
+/**
+ * Destroy a frame widget.
+ */
+void gwmDestroyFrame(GWMWindow *frame);
+
+/**
+ * Get the panel of the specified frame, into which children may be placed to put them in the frame.
+ * The panel is owned by the frame; do not delete it. It will be deleted when the frame is deleted.
+ */
+GWMWindow* gwmGetFramePanel(GWMWindow *frame);
+
+/**
+ * Create a text area widget, initially containing no text.
+ */
+GWMWindow* gwmCreateTextArea(GWMWindow *parent, int x, int y, int width, int height, int flags);
 
 #endif

@@ -561,12 +561,15 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			vmMap(segments[i].loadAddr, segments[i].fileSize, segments[i].flags,
 				MAP_PRIVATE | MAP_FIXED, fp, segments[i].fileOffset);
 			
-			uint64_t toZero = (segments[i].memorySize - segments[i].fileSize) & 0xFFF;
 			uint64_t zeroPos = segments[i].loadAddr + segments[i].fileSize;
+			uint64_t toZero = (0x1000 - (zeroPos & 0xFFF)) & 0xFFF;
 			
-			if (toZero != 0)
+			if (segments[i].flags & PROT_WRITE)
 			{
-				memcpy_k2u((void*)zeroPos, zeroPage, toZero);
+				if (toZero != 0)
+				{
+					memcpy_k2u((void*)zeroPos, zeroPage, toZero);
+				};
 			};
 		};
 	};

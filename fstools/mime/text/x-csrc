@@ -1,3 +1,4 @@
 # text/x-csrc
 # C Source File
 filename *.c
+label C source file

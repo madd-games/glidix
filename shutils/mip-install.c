@@ -159,12 +159,6 @@ int installPackage(const char *path)
 		char *endslash = strrchr(dirname, '/');
 		*endslash = 0;
 		
-		if (chdir(dirname) != 0)
-		{
-			fprintf(stderr, "failed to switch directory to %s\n", dirname);
-			return 1;
-		};
-		
 		pid_t pid = fork();
 		if (pid == -1)
 		{
@@ -173,8 +167,15 @@ int installPackage(const char *path)
 		}
 		else if (pid == 0)
 		{
+			if (chdir(dirname) != 0)
+			{
+				fprintf(stderr, "failed to switch directory to %s\n", dirname);
+				_exit(1);
+			};
+			
 			execl("/bin/sh", "sh", fullpath, NULL);
 			perror("exec");
+			_exit(1);
 		}
 		else
 		{

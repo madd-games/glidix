@@ -670,7 +670,7 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 };
 
 int main(int argc, char *argv[])
-{	
+{
 	if (gwmInit() != 0)
 	{
 		fprintf(stderr, "Failed to initialize GWM!\n");

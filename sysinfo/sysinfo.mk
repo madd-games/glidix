@@ -1,7 +1,7 @@
 SRC := $(shell find $(SRCDIR)/src -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -I$(SRCDIR)/libgwm -I$(SRCDIR)/libddi
+CFLAGS := -Wall -Werror -I$(SRCDIR)/../libgwm -I$(SRCDIR)/../libddi
 
 .PHONY: install
 
@@ -21,5 +21,7 @@ obj/%.o: $(SRCDIR)/%.c
 install:
 	@mkdir -p $(DESTDIR)/usr/bin
 	@mkdir -p $(DESTDIR)/usr/share/apps
+	@mkdir -p $(DESTDIR)/usr/share/images
 	cp sysinfo $(DESTDIR)/usr/bin/sysinfo
 	cp -RT $(SRCDIR)/apps $(DESTDIR)/usr/share/apps
+	cp -RT $(SRCDIR)/images $(DESTDIR)/usr/share/images

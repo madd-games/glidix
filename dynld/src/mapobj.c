@@ -449,10 +449,14 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 			};
 			
 			uint64_t zeroAddr = (uint64_t) lib->segs[index].base + lib->segs[index].size;
-			uint64_t toZero = (phdr.p_memsz - phdr.p_filesz) & 0xFFF;
-			if (toZero != 0)
+			uint64_t toZero = (0x1000 - (zeroAddr & 0xFFF)) & 0xFFF;
+			
+			if (prot & PROT_WRITE)
 			{
-				memset((void*)zeroAddr, 0, toZero);
+				if (toZero != 0)
+				{
+					memset((void*)zeroAddr, 0, toZero);
+				};
 			};
 			
 			// calculate the top page-aligned address based on file and memory

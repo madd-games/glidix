@@ -26,46 +26,19 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
 #include <libgwm.h>
-#include <time.h>
-#include <sys/time.h>
+#include <libddi.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
-#include <signal.h>
-#include <unistd.h>
-#include <dirent.h>
-#include <pthread.h>
-#include <poll.h>
 
-void initPCITab(GWMWindow *notebook);
+/**
+ * Flags describing which properties of the pen are changed when moving onto a segment.
+ */
+#define	ATTR_SETCOLOR			(1 << 0)
+#define	ATTR_SETBG			(1 << 1)
 
-int main()
+typedef struct
 {
-	if (gwmInit() != 0)
-	{
-		fprintf(stderr, "gwmInit() failed!\n");
-		return 1;
-	};
-	
-	GWMWindow *win = gwmCreateWindow(NULL, "System Information", GWM_POS_UNSPEC, GWM_POS_UNSPEC,
-						500, 300, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
-	
-	DDISurface *canvas = gwmGetWindowCanvas(win);
-	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/sysinfo.png", NULL);
-	if (icon != NULL)
-	{
-		gwmSetWindowIcon(win, icon);
-		ddiDeleteSurface(icon);
-	};
-	
-	GWMWindow *notebook = gwmCreateNotebook(win, 0, 0, 500, 300, 0);
-	initPCITab(notebook);
-	
-	gwmNotebookSetTab(notebook, 0);
-	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
-	gwmSetEventHandler(win, gwmDefaultHandler);
-	gwmMainLoop();
-	gwmQuit();
-	return 0;
-};
+	int				flags;
+} TextSegment;

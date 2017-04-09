@@ -139,7 +139,12 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win)
 				{
 					selected = menu->selectedSub;
 					menu->selectedSub = -1;
-					gwmCloseMenu(menu->entries[selected].submenu);
+					
+					if (menu->entries[selected].submenu != NULL)
+					{
+						gwmCloseMenu(menu->entries[selected].submenu);
+					};
+					
 					gwmSetWindowFlags(win,
 						GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NODECORATE);
 				};
@@ -150,6 +155,10 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win)
 					gwmOpenMenu(menu->entries[i].submenu, win, MENU_WIDTH-1, MENU_ENTRY_HEIGHT*i);
 				};
 			};
+		}
+		else
+		{
+			menu->selectedSub = -1;
 		};
 		return 0;
 	case GWM_EVENT_LEAVE:
@@ -222,7 +231,7 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 		gwmCloseMenu(menu);
 	};
 	
-	if (menu->numEntries == 0) return;
+	if (menu->numEntries == 0) menuHeight = 10;
 	
 	menu->win = gwmCreateWindow(NULL, "GWMMenu", x, y, MENU_WIDTH, menuHeight, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	if (menu->win == NULL)
@@ -258,13 +267,14 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 			ddiBlit(menu->entries[i].icon, 0, 0, menu->overlay, 2, MENU_ENTRY_HEIGHT*i+2, 16, 16);
 		};
 		
-		DDIPen *pen = ddiCreatePen(&menu->overlay->format, gwmGetDefaultFont(), 20, MENU_ENTRY_HEIGHT*i+2,
+		DDIPen *pen = ddiCreatePen(&menu->overlay->format, gwmGetDefaultFont(), 20,
+						MENU_ENTRY_HEIGHT*i+MENU_ENTRY_HEIGHT-6,
 						MENU_WIDTH-4, MENU_ENTRY_HEIGHT-4, 0, 0, NULL);
 		if (pen != NULL)
 		{
 			ddiSetPenWrap(pen, 0);
 			ddiWritePen(pen, menu->entries[i].label);
-			ddiExecutePen(pen, menu->overlay);
+			ddiExecutePen2(pen, menu->overlay, DDI_POSITION_BASELINE);
 			ddiDeletePen(pen);
 		};
 	};

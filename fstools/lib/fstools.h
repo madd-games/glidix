@@ -92,6 +92,12 @@ typedef struct FSMimeType_
 	 */
 	FSMagic*				magics;
 	size_t					numMagics;
+	
+	/**
+	 * Label attached to the file type (a human-readable string). By default, it's just
+	 * the mimetype itself.
+	 */
+	char*					label;
 } FSMimeType;
 
 /**

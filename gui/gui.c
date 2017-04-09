@@ -684,7 +684,7 @@ void GetClientOffset(Window *win, int *offX, int *offY)
 		if ((win->params.flags & GWM_WINDOW_NODECORATE) == 0)
 		{
 			*offX = GUI_WINDOW_BORDER;
-			*offY = GUI_WINDOW_BORDER + GUI_CAPTION_HEIGHT;
+			*offY = GUI_CAPTION_HEIGHT;
 			return;
 		};
 	};
@@ -1833,11 +1833,12 @@ void onSig(int signo, siginfo_t *si, void *context)
 	};
 };
 
+char dispdev[1024];
+uint64_t requestRes;
+char linebuf[1024];
+
 int main(int argc, char *argv[])
 {
-	char dispdev[1024];
-	uint64_t requestRes;
-	char linebuf[1024];
 	srand(time(NULL));
 
 	struct sigaction sa;

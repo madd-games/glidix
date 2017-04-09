@@ -511,3 +511,12 @@ void gwmSetTextFieldAcceptCallback(GWMWindow *field, GWMTextFieldCallback callba
 	data->acceptCallback = callback;
 	data->acceptParam = param;
 };
+
+void gwmTextFieldSelectAll(GWMWindow *field)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	data->selectStart = 0;
+	data->selectEnd = data->textSize;
+	data->cursorPos = data->textSize;
+	gwmRedrawTextField(field);
+};
