@@ -211,6 +211,11 @@ void pciInterrupt(int intNo);
 void pciWaitInt(PCIDevice *dev);
 
 /**
+ * Acknowledge that an interrupt came from the specified device.
+ */
+void pciAckInt(PCIDevice *dev);
+
+/**
  * Enable or disable bus mastering for the given device.
  */
 void pciSetBusMastering(PCIDevice *dev, int enable);

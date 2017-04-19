@@ -408,6 +408,7 @@ static void onGPF(Regs *regs)
 void isrHandler(Regs *regs)
 {
 	// ignore spurious IRQs
+	//kprintf("IRQ %lu\n", regs->intNo);
 	if (regs->intNo == IRQ7)
 	{
 		apic->eoi = 0;
@@ -417,12 +418,18 @@ void isrHandler(Regs *regs)
 	if ((regs->intNo >= IRQ0) && (regs->intNo <= I_APIC_TIMER))
 	{
 		// IRQ
+		if (regs->intNo != I_APIC_TIMER)
+		{
+			irqMask(regs->intNo);
+		};
+		
 		apic->eoi = 0;
 	};
 
 	switch (regs->intNo)
 	{
 	case IRQ0:
+		irqUnmask(IRQ0);
 		__sync_fetch_and_add(&uptime, 1);
 		cli();
 		onTick();
@@ -433,6 +440,7 @@ void isrHandler(Regs *regs)
 	case I_NMI:
 		dumpRunqueue();
 		stackTraceHere();
+		kdumpregs(regs);
 		break;
 	case I_UNDEF_OPCODE:
 		sendCPUErrorSignal(regs, SIGILL, ILL_ILLOPC, (void*) regs->rip);
@@ -490,6 +498,7 @@ void isrHandler(Regs *regs)
 		if ((regs->intNo >= IRQ0) && (regs->intNo <= IRQ15))
 		{
 			if (irqHandlers[regs->intNo-IRQ0] != NULL) irqHandlers[regs->intNo-IRQ0](regs->intNo-IRQ0);
+			else irqUnmask(regs->intNo);
 			break;
 		};
 		//heapDump();
@@ -510,4 +519,75 @@ IRQHandler registerIRQHandler(int irq, IRQHandler handler)
 	IRQHandler old = irqHandlers[irq];
 	irqHandlers[irq] = handler;
 	return old;
+};
+
+void irqMask(uint8_t intNo)
+{
+	uint64_t flags = getFlagsRegister();
+	cli();
+	
+	uint32_t volatile* regsel = (uint32_t volatile*) 0xFFFF808000002000;
+	uint32_t volatile* iowin = (uint32_t volatile*) 0xFFFF808000002010;
+	
+	int i;
+	for (i=0; i<24; i++)
+	{
+		*regsel = (0x10+i*2);
+		__sync_synchronize();
+		uint64_t entry = (uint64_t) (*iowin);
+		__sync_synchronize();
+		*regsel = (0x10+i*2+1);
+		__sync_synchronize();
+		entry |= ((uint64_t)(*iowin) << 32);
+		
+		uint32_t apicID = (entry >> 56) & 0xF;
+		uint8_t intvec = (entry & 0xFF);
+		if ((intvec == intNo) && (apicID == apic->id))
+		{
+			// that's the one; mask it!
+			*regsel = (0x10+i*2);
+			__sync_synchronize();
+			*iowin = ((*iowin) | (1 << 16)) & ~(1 << 12);
+			__sync_synchronize();
+			setFlagsRegister(flags);
+			return;
+		};
+	};
+	
+	panic("irqMask(0x%02hhX) failed!", intNo);
+};
+
+void irqUnmask(uint8_t intNo)
+{
+	uint64_t flags = getFlagsRegister();
+	cli();
+	uint32_t volatile* regsel = (uint32_t volatile*) 0xFFFF808000002000;
+	uint32_t volatile* iowin = (uint32_t volatile*) 0xFFFF808000002010;
+	
+	int i;
+	for (i=0; i<24; i++)
+	{
+		*regsel = (0x10+i*2);
+		__sync_synchronize();
+		uint64_t entry = (uint64_t) (*iowin);
+		__sync_synchronize();
+		*regsel = (0x10+i*2+1);
+		__sync_synchronize();
+		entry |= ((uint64_t)(*iowin) << 32);
+		
+		uint32_t apicID = (entry >> 56) & 0xF;
+		uint8_t intvec = (entry & 0xFF);
+		if ((intvec == intNo) && (apicID == apic->id))
+		{
+			// that's the one; mask it!
+			*regsel = (0x10+i*2);
+			__sync_synchronize();
+			*iowin &= ~((1 << 16) | (1 << 12));
+			__sync_synchronize();
+			setFlagsRegister(flags);
+			return;
+		};
+	};
+	
+	panic("irqUnmask(0x%02hhX) failed!", intNo);
 };

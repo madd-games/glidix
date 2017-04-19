@@ -536,6 +536,11 @@ void pciWaitInt(PCIDevice *dev)
 	wcDown(&dev->wcInt);
 };
 
+void pciAckInt(PCIDevice *dev)
+{
+	irqUnmask(dev->intNo);
+};
+
 void pciSetBusMastering(PCIDevice *dev, int enable)
 {
 	spinlockAcquire(&pciLock);

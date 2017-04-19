@@ -128,4 +128,10 @@ void initIDT();
 void idtReboot();
 IRQHandler registerIRQHandler(int irq, IRQHandler handler);
 
+/**
+ * Mask/unmask an interrupt on the current CPU.
+ */
+void irqMask(uint8_t intNo);
+void irqUnmask(uint8_t intNo);
+
 #endif

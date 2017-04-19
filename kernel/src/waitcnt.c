@@ -38,21 +38,21 @@ void wcInit(WaitCounter *wc)
 void wcUp(WaitCounter *wc)
 {
 	// we must disable interrupts to make sure the locking is interrupt-safe.
+	uint64_t flags = getFlagsRegister();
 	cli();
 	spinlockAcquire(&wc->lock);
 	wc->count++;
-	int doResched = 0;
 	if (wc->server != NULL)
 	{
-		doResched = signalThread(wc->server);
+		/*doResched =*/ signalThread(wc->server);
 	};
 	spinlockRelease(&wc->lock);
-	if (doResched) kyield();
-	sti();
+	setFlagsRegister(flags);
 };
 
 void wcDown(WaitCounter *wc)
 {
+	uint64_t flags = getFlagsRegister();
 	cli();
 	spinlockAcquire(&wc->lock);
 	wc->server = getCurrentThread();
@@ -68,5 +68,5 @@ void wcDown(WaitCounter *wc)
 
 	wc->count--;
 	spinlockRelease(&wc->lock);
-	sti();
+	setFlagsRegister(flags);
 };
