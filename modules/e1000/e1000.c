@@ -236,6 +236,7 @@ static void e1000_thread(void *context)
 {
 	thnice(NICE_NETRECV);
 	EInterface *nif = (EInterface*) context;
+	pciAckInt(nif->pcidev);				// unmask interrupts from this device
 	
 	// NOTE: we do not need to hold the lock, since we only receive; something that no other thread does,
 	// and we do not work on data outside of that. also locking causes onEtherFrame() to fail if we receive

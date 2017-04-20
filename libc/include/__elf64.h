@@ -148,9 +148,15 @@ typedef	int64_t				Elf64_Sxword;
 				   pre-initialization functions. */
 
 /**
- * Please remember that all the structures here are NOT packed, because ELF64 has all the
- * types aligned.
+ * Glidix annotations (in .glidix.annot section).
  */
+#define	GAT_APPTYPE		0x01	/* application type */
+
+/**
+ * Applications types (values for GAT_APPTYPE).
+ */
+#define	APT_CONSOLE		0x00	/* console (default) */
+#define	APT_GUI			0x01	/* GUI */
 
 typedef struct
 {
@@ -223,4 +229,12 @@ typedef struct
 	} d_un;
 } Elf64_Dyn;
 
+/**
+ * Glidix annotation (in the ".glidix.annot" section).
+ */
+typedef struct
+{
+	unsigned char			gan_type;
+	unsigned char			gan_val;
+} Elf64_GlidixAnnot;
 #endif

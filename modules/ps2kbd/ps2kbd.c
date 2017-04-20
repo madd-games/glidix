@@ -77,6 +77,8 @@ static uint8_t mouseStateWas = 0;
 static void kbdThread(void *data)
 {
 	thnice(NICE_UIN);
+	irqUnmask(IRQ1);
+	irqUnmask(IRQ12);
 	
 	while (1)
 	{
@@ -239,8 +241,6 @@ MODULE_INIT()
 	kprintf("Initializing the PS/2 keyboard\n");
 	oldHandler = registerIRQHandler(1, onKeyboardIRQ);
 	oldHandler12 = registerIRQHandler(12, onMouseIRQ);
-	irqUnmask(IRQ1);
-	irqUnmask(IRQ12);
 	hups = huminCreateDevice("PS/2 Keyboard and Mouse");
 	ptrps = ptrCreate();
 	

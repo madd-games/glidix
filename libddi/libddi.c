@@ -1688,14 +1688,13 @@ int ddiPenCoordsToPos(DDIPen *pen, int x, int y)
 				{
 					if ((size_t)i == seg->numChars)
 					{
-						fprintf(stderr, "DDI WARNING: Assertion failed in ddiPenCoordsToPen!");
-						return -1;
+						break;
 					};
 					
 					offX -= seg->widths[i];
 				};
 				
-				if (seg->widths[i]/2 <= offX)
+				if ((seg->widths[i]/2 <= offX) && ((size_t)i != seg->numChars))
 				{
 					i++;
 				};

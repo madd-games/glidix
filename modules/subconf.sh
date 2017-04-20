@@ -58,3 +58,8 @@ do
 		echo >>Makefile "	cp $modname.gkm \$(DESTDIR)/etc/modules/$modname.gkm"
 	fi
 done
+
+echo >>Makefile "	mkdir -p \$(DESTDIR)/lib"
+echo >>Makefile "	cp ../kernel/module_start.o \$(DESTDIR)/lib/module_start.o"
+echo >>Makefile "	cp ../kernel/module_end.o \$(DESTDIR)/lib/module_end.o"
+echo >>Makefile "	cp $srcdir/../kernel/module/module.ld \$(DESTDIR)/lib/module.ld"

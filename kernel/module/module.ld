@@ -11,5 +11,6 @@ SECTIONS
 		*(.rodata)
 		*(.data)
 		*(.bss)
+		__modend = .;
 	}
 }

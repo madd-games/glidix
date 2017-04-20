@@ -408,7 +408,7 @@ static void onGPF(Regs *regs)
 void isrHandler(Regs *regs)
 {
 	// ignore spurious IRQs
-	//kprintf("IRQ %lu\n", regs->intNo);
+	//if ((regs->intNo != IRQ0) && (regs->intNo != I_APIC_TIMER)) kprintf("IRQ %lu\n", regs->intNo);
 	if (regs->intNo == IRQ7)
 	{
 		apic->eoi = 0;
@@ -549,12 +549,11 @@ void irqMask(uint8_t intNo)
 			__sync_synchronize();
 			*iowin = ((*iowin) | (1 << 16)) & ~(1 << 12);
 			__sync_synchronize();
-			setFlagsRegister(flags);
-			return;
 		};
 	};
 	
-	panic("irqMask(0x%02hhX) failed!", intNo);
+	setFlagsRegister(flags);
+	return;
 };
 
 void irqUnmask(uint8_t intNo)
@@ -584,10 +583,9 @@ void irqUnmask(uint8_t intNo)
 			__sync_synchronize();
 			*iowin &= ~((1 << 16) | (1 << 12));
 			__sync_synchronize();
-			setFlagsRegister(flags);
-			return;
 		};
 	};
 	
-	panic("irqUnmask(0x%02hhX) failed!", intNo);
+	setFlagsRegister(flags);
+	return;
 };

@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
 		ddiDeleteSurface(icon);
 	};
 	
-	DDIFont *font = ddiLoadFont("DejaVu Sans Mono", 15, 0, NULL);
+	DDIFont *font = ddiLoadFont("DejaVu Sans Mono", 14, 0, NULL);
 	textArea = gwmCreateTextArea(topWindow, 0, 20, DEFAULT_WIDTH, DEFAULT_HEIGHT-20, 0);
 	if (font == NULL)
 	{
