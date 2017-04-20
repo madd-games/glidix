@@ -163,6 +163,13 @@ extern DDIColor gwmColorSelection;
 #define	GWM_TEXTAREA_DISABLED			(1 << 0)
 
 /**
+ * Stacking options (above or below).
+ */
+#define	GWM_STACK_ABOVE				0
+#define	GWM_STACK_BELOW				1
+#define	GWM_STACK_REMOVE			2
+
+/**
  * Window manager information structure, located in the shared file /run/gwminfo.
  * Described how to connect to the window manager.
  */
@@ -296,6 +303,7 @@ typedef union
 	{
 		int				cmd;	// GWM_CMD_POST_DIRTY
 		uint64_t			id;
+		uint64_t			seq;
 	} postDirty;
 	
 	struct
@@ -427,6 +435,7 @@ typedef union
 #define	GWM_MSG_RESIZE_RESP			11
 #define	GWM_MSG_REL_TO_ABS_RESP			12
 #define	GWM_MSG_SCREENSHOT_WINDOW_RESP		13
+#define	GWM_MSG_POST_DIRTY_RESP			14
 typedef union
 {
 	struct
@@ -547,6 +556,12 @@ typedef union
 		unsigned int			width;
 		unsigned int			height;
 	} screenshotWindowResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_POST_DIRTY_RESP
+		uint64_t			seq;
+	} postDirtyResp;
 } GWMMessage;
 
 struct GWMWindow_;
@@ -751,6 +766,18 @@ typedef struct
 	uint16_t				cbType;
 	char					cbPad[60];		/* pad to 64 bytes */
 } GWMClipboardHeader;
+
+/**
+ * Describes a tag.
+ */
+typedef struct
+{
+	int					flags;			// which fields are set
+	DDIColor				fg;
+	DDIColor				bg;
+} GWMTag;
+extern GWMTag gwmTagSelection;
+#define	GWM_TAG_SELECTION			(&gwmTagSelection)
 
 /**
  * Initialises the GWM library. This must be called before using any other functions.
@@ -1309,8 +1336,79 @@ void gwmDestroyFrame(GWMWindow *frame);
 GWMWindow* gwmGetFramePanel(GWMWindow *frame);
 
 /**
+ * Create a new text area tag.
+ */
+GWMTag* gwmCreateTag();
+
+/**
+ * Destroy a text area tag.
+ */
+void gwmDestroyTag(GWMTag *tag);
+
+/**
+ * Set the foreground color of a tag. Setting to NULL removes the foreground.
+ */
+void gwmSetTagForeground(GWMTag *tag, DDIColor *fg);
+
+/**
+ * Set the background color of a tag. Setting to NULL removed the background.
+ */
+void gwmSetTagBackground(GWMTag *tag, DDIColor *bg);
+
+/**
  * Create a text area widget, initially containing no text.
  */
 GWMWindow* gwmCreateTextArea(GWMWindow *parent, int x, int y, int width, int height, int flags);
+
+/**
+ * Destroy a text area widget.
+ */
+void gwmDestroyTextArea(GWMWindow *area);
+
+/**
+ * Append text to the end of a text area.
+ */
+void gwmAppendTextArea(GWMWindow *area, const char *text);
+
+/**
+ * Insert a tag at the given offset in the text area, with the specified length in bytes.
+ */
+void gwmTagTextArea(GWMWindow *area, GWMTag *tag, size_t pos, size_t len, int stacking);
+
+/**
+ * Insert text in a specified position in the text area.
+ */
+void gwmTextAreaInsert(GWMWindow *area, off_t pos, const char *text);
+
+/**
+ * Remove text from a text area.
+ */
+void gwmTextAreaErase(GWMWindow *area, off_t pos, size_t len);
+
+/**
+ * Return the first range of a tag occuring after, or on, the specified offset, in the specified pointers.
+ * The "size" will be 0 if none was found.
+ */
+void gwmGetTextAreaTagRange(GWMWindow *area, GWMTag *tag, off_t after, off_t *outPos, size_t *outLen);
+
+/**
+ * Change the default style in a text area (and redraw).
+ */
+void gwmSetTextAreaStyle(GWMWindow *area, DDIFont *font, DDIColor *background, DDIColor *txtbg, DDIColor *txtfg);
+
+/**
+ * Change the text area flags.
+ */
+void gwmSetTextAreaFlags(GWMWindow *area, int flags);
+
+/**
+ * Get the size of text in a text area.
+ */
+size_t gwmGetTextAreaLen(GWMWindow *area);
+
+/**
+ * Read text from the text area and return it into the specified buffer. NOTE: A NUL character is added at the end!
+ */
+void gwmReadTextArea(GWMWindow *area, off_t pos, size_t len, char *buffer);
 
 #endif

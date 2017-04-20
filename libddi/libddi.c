@@ -1423,9 +1423,9 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		fillColor.alpha = 0;
 		ddiFillRect(surface, 0, 0, width, height, &fillColor);
 		
-		if (height > pen->currentLine->maxHeight)
+		if (pen->font->face->size->metrics.height/64 > pen->currentLine->maxHeight)
 		{
-			pen->currentLine->maxHeight = height;
+			pen->currentLine->maxHeight = pen->font->face->size->metrics.height/64;
 		};
 		
 		int penX = 0, penY = 0;
@@ -1493,12 +1493,6 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		
 		pen->currentLine->currentWidth += width;
 		
-		//DDISurface *finalSurface = ddiCreateSurface(&surface->format, width, height, NULL, 0);
-		//fillColor.alpha = 0;
-		//ddiFillRect(finalSurface, 0, 0, width, height, &fillColor);
-		//ddiBlit(surface, 0, 0, finalSurface, 0, 0, width, height);
-		//ddiDeleteSurface(surface);
-		
 		PenSegment *seg = (PenSegment*) malloc(sizeof(PenSegment));
 		seg->surface = surface;
 		seg->next = NULL;
@@ -1508,9 +1502,9 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		seg->baselineY = offsetY;
 		memcpy(&seg->background, &pen->background, sizeof(DDIColor));
 		
-		if ((surface->height-offsetY) > pen->currentLine->baselineY)
+		if ((-pen->font->face->size->metrics.descender/64) > pen->currentLine->baselineY)
 		{
-			pen->currentLine->baselineY = surface->height - offsetY;
+			pen->currentLine->baselineY = -pen->font->face->size->metrics.descender / 64;
 		};
 		
 		// add the segment to the end of the list for the current line
@@ -1544,7 +1538,7 @@ void ddiWritePen(DDIPen *pen, const char *text)
 			text = nextEl+1;
 			PenLine *line = (PenLine*) malloc(sizeof(PenLine));
 			line->firstSegment = NULL;
-			line->maxHeight = pen->font->size;
+			line->maxHeight = pen->font->face->size->metrics.height/64;
 			line->currentWidth = 0;
 			line->baselineY = 0;
 			line->next = NULL;
@@ -1594,7 +1588,7 @@ void ddiExecutePen2(DDIPen *pen, DDISurface *surface, int flags)
 			
 			if (seg->background.alpha != 0)
 			{
-				ddiFillRect(surface, drawX, plotY, seg->surface->width, line->maxHeight, &seg->background);
+				ddiFillRect(surface, drawX, drawY, seg->surface->width, line->maxHeight, &seg->background);
 			};
 			
 			ddiBlit(seg->surface, 0, 0, surface, drawX, plotY, seg->surface->width, seg->surface->height);

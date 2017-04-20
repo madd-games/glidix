@@ -160,7 +160,7 @@ done
 
 # targets
 # NOTE: Those need to be in order; a target must come AFTER all the targets that it depends on.
-TARGETS="kernel build-tools libc dynld shutils init modules mbload sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libz libpng freetype libddi libgwm gui fstools netman sysinfo"
+TARGETS="kernel build-tools libc dynld shutils init modules mbload sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libz libpng freetype libddi libgwm gui fstools netman sysinfo minipad"
 
 # determine build parameters
 export GLIDIX_SYSROOT="$sysroot"

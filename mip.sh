@@ -128,3 +128,10 @@ cd sysinfo
 make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/sysinfo.mip
+
+# minipad
+rm -rf mipdir || exit 1
+cd minipad
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/minipad.mip

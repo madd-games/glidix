@@ -37,6 +37,7 @@
 #include <libgwm.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <semaphore.h>
 
 static int guiPid;
 static int guiFD;
@@ -53,7 +54,7 @@ typedef struct GWMWaiter_
 	struct GWMWaiter_*		next;
 	uint64_t			seq;
 	GWMMessage			resp;
-	pthread_spinlock_t		lock;
+	sem_t				lock;
 } GWMWaiter;
 
 typedef struct EventBuffer_
@@ -80,8 +81,7 @@ static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 	waiter->prev = NULL;
 	waiter->next = NULL;
 	waiter->seq = seq;
-	pthread_spin_unlock(&waiter->lock);
-	pthread_spin_lock(&waiter->lock);
+	sem_init(&waiter->lock, 0, 0);
 	
 	pthread_mutex_lock(&waiterLock);
 	if (_glidix_mqsend(queueFD, guiPid, guiFD, cmd, sizeof(GWMCommand)) != 0)
@@ -95,7 +95,7 @@ static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 	pthread_mutex_unlock(&waiterLock);
 	
 	// wait for response
-	pthread_spin_lock(&waiter->lock);
+	sem_wait(&waiter->lock);
 	memcpy(resp, &waiter->resp, sizeof(GWMMessage));
 	free(waiter);
 };
@@ -144,7 +144,7 @@ static void* listenThreadFunc(void *ignore)
 						if (waiter->prev != NULL) waiter->prev->next = waiter->next;
 						if (waiter->next != NULL) waiter->next->prev = waiter->prev;
 						if (waiter->prev == NULL) waiters = waiter->next;
-						pthread_spin_unlock(&waiter->lock);
+						sem_post(&waiter->lock);
 						break;
 					};
 				};
@@ -381,12 +381,20 @@ void gwmDestroyWindow(GWMWindow *win)
 
 void gwmPostDirty(GWMWindow *win)
 {
+	//printf("gwmPostDirty\n");
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
 	GWMCommand cmd;
 	cmd.postDirty.cmd = GWM_CMD_POST_DIRTY;
 	cmd.postDirty.id = win->id;
+	cmd.postDirty.seq = seq;
 	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+
+	//GWMMessage resp;
+	//gwmPostWaiter(seq, &resp, &cmd);
 	
 	win->currentBuffer ^= 1;
+	//printf("buffer: %d\n", win->currentBuffer);
 };
 
 void gwmWaitEvent(GWMEvent *ev)

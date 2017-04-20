@@ -1429,6 +1429,10 @@ void *msgThreadFunc(void *ignore)
 				Window *win = GetWindowByID(cmd->postDirty.id, info.pid, info.fd);
 				if (win != NULL) PostWindowDirty(win);
 				win->frontBufferIndex ^= 1;
+				GWMMessage msg;
+				msg.postDirtyResp.type = GWM_MSG_POST_DIRTY_RESP;
+				msg.postDirtyResp.seq = cmd->postDirty.seq;
+				_glidix_mqsend(guiQueue, info.pid, info.fd, &msg, sizeof(GWMMessage));
 				pthread_mutex_unlock(&windowLock);
 			}
 			else if (cmd->cmd == GWM_CMD_DESTROY_WINDOW)

@@ -62,11 +62,13 @@ static WaitCounter wcKeyboard = WC_INIT;
 
 static void onKeyboardIRQ(int irq)
 {
+	irqUnmask(IRQ1);
 	wcUp(&wcKeyboard);
 };
 
 static void onMouseIRQ(int irq)
 {
+	irqUnmask(IRQ12);
 	wcUp(&wcKeyboard);
 };
 
@@ -237,6 +239,8 @@ MODULE_INIT()
 	kprintf("Initializing the PS/2 keyboard\n");
 	oldHandler = registerIRQHandler(1, onKeyboardIRQ);
 	oldHandler12 = registerIRQHandler(12, onMouseIRQ);
+	irqUnmask(IRQ1);
+	irqUnmask(IRQ12);
 	hups = huminCreateDevice("PS/2 Keyboard and Mouse");
 	ptrps = ptrCreate();
 	

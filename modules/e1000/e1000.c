@@ -234,6 +234,7 @@ static uint16_t e1000_eeprom_read(EInterface *nif, uint8_t addr)
 
 static void e1000_thread(void *context)
 {
+	thnice(NICE_NETRECV);
 	EInterface *nif = (EInterface*) context;
 	
 	// NOTE: we do not need to hold the lock, since we only receive; something that no other thread does,
@@ -245,6 +246,10 @@ static void e1000_thread(void *context)
 		
 		volatile uint32_t *regICR = (volatile uint32_t*) (nif->mmioAddr + 0x00C0);
 		uint32_t icr = *regICR;
+		if (icr != 0)
+		{
+			pciAckInt(nif->pcidev);
+		};
 		
 		if (icr & (1 << 0))
 		{

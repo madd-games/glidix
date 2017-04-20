@@ -235,7 +235,7 @@ int main()
 	GWMWindow *notebook = gwmCreateNotebook(win, 2, 262, 300, 200, 0);
 	GWMWindow *tab1 = gwmNotebookAdd(notebook, "Tab 1");
 	GWMWindow *tab2 = gwmNotebookAdd(notebook, "Filesystem");
-	/*GWMWindow *tab3 =*/ gwmNotebookAdd(notebook, "Yet another tab");
+	GWMWindow *tab3 = gwmNotebookAdd(notebook, "Text area test");
 	gwmNotebookSetTab(notebook, 0);
 
 	int pageWidth, pageHeight;
@@ -250,6 +250,19 @@ int main()
 	ddiDeletePen(pen);
 	
 	gwmCreateTreeView(tab2, 2, 2, 250, 150, GWM_TREE_FILESYSTEM, GWM_FS_ROOT, 0);
+	
+	GWMWindow *area = gwmCreateTextArea(tab3, 2, 2, 250, 150, 0);
+	gwmAppendTextArea(area, "Hello world!\nThis is sample text in a text area widget :)");
+	GWMTag *tagBlue = gwmCreateTag();
+	DDIColor tagBlueFG = {0x00, 0x00, 0xFF, 0xFF};
+	gwmSetTagForeground(tagBlue, &tagBlueFG);
+	gwmTagTextArea(area, tagBlue, 6, 5, GWM_STACK_ABOVE);
+	GWMTag *tagGreen = gwmCreateTag();
+	DDIColor tagGreenBG = {0x00, 0xFF, 0x00, 0xFF};
+	gwmSetTagBackground(tagGreen, &tagGreenBG);
+	gwmTagTextArea(area, tagGreen, 8, 10, GWM_STACK_ABOVE);
+	gwmTextAreaInsert(area, 5, " test");
+	gwmTextAreaErase(area, 1, 3);
 	
 	gwmPostDirty(tab1);
 	redraw();

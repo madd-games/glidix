@@ -193,6 +193,11 @@ static void ne2k_thread(void *context)
 		
 		spinlockAcquire(&nif->lock);
 		uint8_t isr = readRegister(nif, 0, 0x07);
+		if (isr != 0)
+		{
+			pciAckInt(nif->pcidev);
+		};
+		
 		if (isr & 1)
 		{
 			// received a frame!
