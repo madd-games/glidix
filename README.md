@@ -11,7 +11,7 @@ Glidix is an experimental UNIX-clone OS, designed to run on x86_64. It is made m
 ## Hardware Support
 
  * Basic hardware: PCI, VGA text mode, PIT, APIC (including timer). This is implemented in the kernel itself; all the things below are implemented as separate modules.
- * Storage devices: IDE and AHCI; IDE seems to break when writing.
+ * Storage devices: IDE and AHCI; IDE is incomplete.
  * Graphics: BGA. Hardware acceleration for various cards is planned.
  * Input devices: PS/2 mouse and keyboard
  * Ethernet cards: NE2000 (promiscous only), Intel 8254x (*PRO/1000 MT Desktop*, and *T/MT Server*), and broken support for VirtIO net.
@@ -24,6 +24,14 @@ Glidix is an experimental UNIX-clone OS, designed to run on x86_64. It is made m
  * Supports the ISO 9660 filesystem, plus a custom filesystem called Glidix File System (GXFS), which can store Glidix-specific metadata such as application permissions. Support for variants of FAT is planned.
  * Implements the POSIX API using a custom C library.
  * The GNU toolchain (binutils and GCC) can run natively on Glidix (the source code must be patched to support the `x86_64-glidix` target).
+
+## GCC
+
+The source comes with GCC and binutils patches, and allows a cross-compiler to be built, targetting Glidix. A native compiler can also be compiled from this. The Glidix target for GCC (`x86_64-glidix`) supports some additional command-line options:
+
+ * `-mconsole` - link an executable as a console application (the default; really a no-op).
+ * `-mgui` - link an executable as a GUI application. This is done by linking against `crtgui.o`, which adds the appropriate annotation to the `.glidix.annot` section.
+ * `-module` - link as a Glidix kernel module. This avoids linking with `libc` and other system libraries, and outputs an object file (typically with `.gkm` extension), which can be loaded by the Glidix kernel.
 
 ## Planned features
 
