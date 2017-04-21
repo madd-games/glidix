@@ -29,73 +29,102 @@ bits 64
 
 [global outb]
 outb:
+	push rbp
+	mov rbp, rsp
 	mov dx,		di
 	mov ax,		si
 	out dx,		al
+	pop rbp
 	ret
 
 [global inb]
 inb:
+	push rbp
+	mov rbp, rsp
 	mov dx,		di
 	xor rax,	rax
 	in  al,		dx
+	pop rbp
 	ret
 
 [global outw]
 outw:
+	push rbp
+	mov rbp, rsp
 	mov dx,		di
 	mov ax,		si
 	out dx,		ax
+	pop rbp
 	ret
 
 [global inw]
 inw:
+	push rbp
+	mov rbp, rsp
 	mov dx,		di
 	xor rax,	rax
 	in  ax,		dx
+	pop rbp
 	ret
 
 [global outd]
 outd:
+	push rbp
+	mov rbp, rsp
 	mov dx,		di
 	mov eax,	esi
 	out dx,		eax
+	pop rbp
 	ret
 
 [global ind]
 ind:
+	push rbp
+	mov rbp, rsp
 	mov dx,		di
 	xor rax,	rax
 	in  eax,	dx
+	pop rbp
 	ret
 
 [global insw]
 insw:
+	push rbp
+	mov rbp, rsp
 	mov rcx,	rdx
 	mov dx,		di
 	mov rdi,	rsi
 	rep insw
+	pop rbp
 	ret
 
 [global outsw]
 outsw:
+	push rbp
+	mov rbp, rsp
 	mov rcx,	rdx
 	mov dx,		di
 	rep outsw
+	pop rbp
 	ret
 
 [global outsb]
 outsb:
+	push rbp
+	mov rbp, rsp
 	mov rcx,	rdx
 	mov dx,		di
 	rep outsb
+	pop rbp
 	ret
-
 
 [global insd]
 insd:
+	push rbp
+	mov rbp, rsp
 	mov rcx,	rdx
 	mov dx,		di
 	mov rdi,	rsi
 	rep insd
+	pop rbp
 	ret

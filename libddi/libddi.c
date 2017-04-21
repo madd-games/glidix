@@ -1194,7 +1194,7 @@ DDIPen* ddiCreatePen(DDIPixelFormat *format, DDIFont *font, int x, int y, int wi
 
 	pen->currentLine = (PenLine*) malloc(sizeof(PenLine));
 	pen->currentLine->firstSegment = NULL;
-	pen->currentLine->maxHeight = font->size;
+	pen->currentLine->maxHeight = pen->font->face->size->metrics.height/64;
 	pen->currentLine->currentWidth = 0;
 	pen->currentLine->baselineY = 0;
 	pen->currentLine->next = NULL;
@@ -1461,11 +1461,11 @@ void ddiWritePen(DDIPen *pen, const char *text)
 			
 				FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
 			
-				if (pen->writePos == pen->cursorPos)
-				{
-					fillColor.alpha = 255;
-					ddiFillRect(surface, penX+offsetX, 0, 1, surface->height, &fillColor);
-				};
+				//if (pen->writePos == pen->cursorPos)
+				//{
+				//	fillColor.alpha = 255;
+				//	ddiFillRect(surface, penX+offsetX, 0, 1, surface->height, &fillColor);
+				//};
 			
 				pen->writePos++;
 			
@@ -1490,7 +1490,13 @@ void ddiWritePen(DDIPen *pen, const char *text)
 				penY += pen->font->face->glyph->advance.y >> 6;
 			};
 		};
-		
+
+		//if (pen->writePos == pen->cursorPos)
+		//{
+		//	fillColor.alpha = 255;
+		//	ddiFillRect(surface, penX, 0, 1, surface->height, &fillColor);
+		//};
+
 		pen->currentLine->currentWidth += width;
 		
 		PenSegment *seg = (PenSegment*) malloc(sizeof(PenSegment));
@@ -1552,12 +1558,33 @@ void ddiExecutePen2(DDIPen *pen, DDISurface *surface, int flags)
 {
 	PenLine *line;
 	PenSegment *seg;
+
+	//PenSegment *dseg = (PenSegment*) malloc(sizeof(PenSegment));
+	//dseg->surface = NULL;
+	//dseg->next = NULL;
+	//dseg->numChars = 1;
+	//dseg->widths = (int*) malloc(sizeof(int));
+	//dseg->widths[0] = 0;
+	//dseg->firstCharPos = pen->writePos;
+	//dseg->baselineY = 0;
+	//memcpy(&dseg->background, &pen->background, sizeof(DDIColor));
+
+	//if (pen->currentLine->firstSegment == NULL)
+	//{
+	//	pen->currentLine->firstSegment = dseg;
+	//}
+	//else
+	//{
+	//	PenSegment *last = pen->currentLine->firstSegment;
+	//	while (last->next != NULL) last = last->next;
+	//	last->next = dseg;
+	//};
+
+	static DDIColor cursorColor = {0, 0, 0, 0xFF};
 	
 	int drawY = pen->y;
 	int lastDrawY = drawY;
 	if (flags & DDI_POSITION_BASELINE) lastDrawY -= 12;
-	int lastDrawX = pen->x;
-	int lastHeight = 12;
 	for (line=pen->firstLine; line!=NULL; line=line->next)
 	{
 		line->drawY = drawY;
@@ -1588,22 +1615,34 @@ void ddiExecutePen2(DDIPen *pen, DDISurface *surface, int flags)
 			
 			if (seg->background.alpha != 0)
 			{
-				ddiFillRect(surface, drawX, drawY, seg->surface->width, line->maxHeight, &seg->background);
+				if (seg->surface != NULL)
+				{
+					ddiFillRect(surface, drawX, drawY, seg->surface->width, line->maxHeight, &seg->background);
+				};
 			};
 			
-			ddiBlit(seg->surface, 0, 0, surface, drawX, plotY, seg->surface->width, seg->surface->height);
-			drawX += seg->surface->width;
-			lastHeight = seg->surface->height;
+			if (seg->surface != NULL)
+			{
+				ddiBlit(seg->surface, 0, 0, surface, drawX, plotY, seg->surface->width, seg->surface->height);
+			};
+			
+			if ((pen->cursorPos >= seg->firstCharPos) && (pen->cursorPos < (seg->firstCharPos + seg->numChars)))
+			{
+				int pos = pen->cursorPos - seg->firstCharPos;
+				int cursorX = 0;
+				
+				int i;
+				for (i=0; i<pos; i++)
+				{
+					cursorX += seg->widths[i];
+				};
+				
+				ddiFillRect(surface, drawX + cursorX, drawY, 1, line->maxHeight, &cursorColor);
+			};
+			if (seg->surface != NULL) drawX += seg->surface->width;
 		};
 		
-		lastDrawX = drawX;
 		drawY += line->maxHeight * line->lineHeight / 100;
-	};
-	
-	if (pen->writePos == pen->cursorPos)
-	{
-		DDIColor color = {0, 0, 0, 0xFF};
-		ddiFillRect(surface, lastDrawX, lastDrawY, 1, lastHeight, &color);
 	};
 };
 

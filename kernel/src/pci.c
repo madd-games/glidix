@@ -501,6 +501,7 @@ void pciEnumDevices(Module *module, int (*enumerator)(PCIDevice *dev, void *para
 			{
 				dev->driver = module;
 				strcpy(dev->driverName, module->name);
+				irqUnmask(dev->intNo);
 			};
 		};
 	};

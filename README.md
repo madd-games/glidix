@@ -30,8 +30,9 @@ Glidix is an experimental UNIX-clone OS, designed to run on x86_64. It is made m
 The source comes with GCC and binutils patches, and allows a cross-compiler to be built, targetting Glidix. A native compiler can also be compiled from this. The Glidix target for GCC (`x86_64-glidix`) supports some additional command-line options:
 
  * `-mconsole` - link an executable as a console application (the default; really a no-op).
- * `-mgui` - link an executable as a GUI application. This is done by linking against `crtgui.o`, which adds the appropriate annotation to the `.glidix.annot` section.
+ * `-mgui` - link an executable as a GUI application. This is done by linking against `crtgui.o`, which adds the appropriate annotation to the `.glidix.annot` section. By default, it also links against `libgwm` and `libddi`; to prevent this, use `-mnoguilibs`.
  * `-module` - link as a Glidix kernel module. This avoids linking with `libc` and other system libraries, and outputs an object file (typically with `.gkm` extension), which can be loaded by the Glidix kernel. Note that source files must be compiled with `-mcmodel=large`.
+ * `-mnoguilibs` - when used with `-mgui`, do not link against GUI libraries.
 
 ## Planned features
 

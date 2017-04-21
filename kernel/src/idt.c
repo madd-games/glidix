@@ -528,9 +528,13 @@ void irqMask(uint8_t intNo)
 	
 	uint32_t volatile* regsel = (uint32_t volatile*) 0xFFFF808000002000;
 	uint32_t volatile* iowin = (uint32_t volatile*) 0xFFFF808000002010;
-	
+
+	*regsel = 1;
+	__sync_synchronize();
+	int numInts = (int) (((*iowin) >> 16) & 0xFF) + 1;
+
 	int i;
-	for (i=0; i<24; i++)
+	for (i=0; i<numInts; i++)
 	{
 		*regsel = (0x10+i*2);
 		__sync_synchronize();
@@ -544,11 +548,15 @@ void irqMask(uint8_t intNo)
 		uint8_t intvec = (entry & 0xFF);
 		if ((intvec == intNo) && (apicID == apic->id))
 		{
-			// that's the one; mask it!
-			*regsel = (0x10+i*2);
-			__sync_synchronize();
-			*iowin = ((*iowin) | (1 << 16)) & ~(1 << 12);
-			__sync_synchronize();
+			// only mask/unmask level-triggered
+			if (entry & (1 << 15))
+			{
+				// that's the one; mask it!
+				*regsel = (0x10+i*2);
+				__sync_synchronize();
+				*iowin = ((*iowin) | (1 << 16)) & ~(1 << 12);
+				__sync_synchronize();
+			};
 		};
 	};
 	
@@ -563,8 +571,12 @@ void irqUnmask(uint8_t intNo)
 	uint32_t volatile* regsel = (uint32_t volatile*) 0xFFFF808000002000;
 	uint32_t volatile* iowin = (uint32_t volatile*) 0xFFFF808000002010;
 	
+	*regsel = 1;
+	__sync_synchronize();
+	int numInts = (int) (((*iowin) >> 16) & 0xFF) + 1;
+	
 	int i;
-	for (i=0; i<24; i++)
+	for (i=0; i<numInts; i++)
 	{
 		*regsel = (0x10+i*2);
 		__sync_synchronize();
@@ -578,11 +590,15 @@ void irqUnmask(uint8_t intNo)
 		uint8_t intvec = (entry & 0xFF);
 		if ((intvec == intNo) && (apicID == apic->id))
 		{
-			// that's the one; mask it!
-			*regsel = (0x10+i*2);
-			__sync_synchronize();
-			*iowin &= ~((1 << 16) | (1 << 12));
-			__sync_synchronize();
+			// only mask/unmask level-triggered
+			if (entry & (1 << 15))
+			{
+				// that's the one; unmask it!
+				*regsel = (0x10+i*2);
+				__sync_synchronize();
+				*iowin &= ~((1 << 16) | (1 << 12));
+				__sync_synchronize();
+			};
 		};
 	};
 	

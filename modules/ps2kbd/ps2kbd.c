@@ -244,6 +244,9 @@ MODULE_INIT()
 	hups = huminCreateDevice("PS/2 Keyboard and Mouse");
 	ptrps = ptrCreate();
 	
+	irqMask(IRQ1);
+	irqMask(IRQ12);
+	
 	// initialize the mouse
 	mouse_install();
 
@@ -254,6 +257,9 @@ MODULE_INIT()
 	mouse_read();
 	
 	while (inb(0x64) & 1) inb(0x60);
+	
+	irqUnmask(IRQ1);
+	irqUnmask(IRQ12);
 	
 	KernelThreadParams kbdPars;
 	memset(&kbdPars, 0, sizeof(KernelThreadParams));

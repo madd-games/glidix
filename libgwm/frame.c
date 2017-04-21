@@ -52,14 +52,14 @@ static void redrawFrame(GWMWindow *frame)
 	ddiFillRect(canvas, canvas->width-1, 10, 1, canvas->height-10, &frameColor);
 	ddiFillRect(canvas, 0, canvas->height-1, canvas->width, 1, &frameColor);
 	
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 15, 14, canvas->width-19, 20, 0, 0, NULL);
+	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 15, 2, canvas->width-19, 20, 0, 0, NULL);
 	if (pen != NULL)
 	{
 		ddiSetPenBackground(pen, &backColor);
 		ddiSetPenColor(pen, &frameColor);
 		ddiSetPenWrap(pen, 0);
 		ddiWritePen(pen, data->caption);
-		ddiExecutePen2(pen, canvas, DDI_POSITION_BASELINE);
+		ddiExecutePen(pen, canvas);
 		ddiDeletePen(pen);
 	};
 	
