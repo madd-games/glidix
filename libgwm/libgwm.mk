@@ -1,11 +1,11 @@
 C_SRC := $(shell find $(SRCDIR) -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, %.o, $(C_SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -fPIC -I$(SRCDIR)/../libddi -I$(SRCDIR)
+CFLAGS := -Wall -Werror -fPIC -I$(SRCDIR)/../libddi -I$(SRCDIR) -I$(SRCDIR)/../fstools/lib
 
 libgwm.so: $(OBJ)
 	@mkdir -p out
-	$(HOST_GCC) -shared -o $@ $^ -L../libddi -lddi
+	$(HOST_GCC) -shared -o $@ $^ -L../libddi -lddi -L../fstools -lfstools
 
 -include $(DEP)
 

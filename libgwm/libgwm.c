@@ -38,6 +38,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <semaphore.h>
+#include <fstools.h>
 
 static int guiPid;
 static int guiFD;
@@ -64,6 +65,14 @@ typedef struct EventBuffer_
 	GWMEvent			payload;
 } EventBuffer;
 
+typedef struct FileIconCache_
+{
+	struct FileIconCache_*		next;
+	char*				name;
+	DDISurface*			small;
+	DDISurface*			large;
+} FileIconCache;
+
 static pthread_mutex_t waiterLock;
 static GWMWaiter* waiters = NULL;
 static int eventCounterFD;
@@ -72,6 +81,7 @@ static EventBuffer *firstEvent;
 static EventBuffer *lastEvent;
 static GWMHandlerInfo *firstHandler = NULL;
 static GWMInfo *gwminfo = NULL;
+static FileIconCache *fileIconCache = NULL;
 
 DDIColor gwmColorSelection = {0, 0xAA, 0, 0xFF};
 
@@ -180,6 +190,8 @@ static void* listenThreadFunc(void *ignore)
 
 int gwmInit()
 {
+	fsInit();
+	
 	int fd = open("/run/gwminfo", O_RDONLY);
 	if (fd == -1)
 	{
@@ -290,6 +302,7 @@ void gwmQuit()
 	close(eventCounterFD);
 	close(queueFD);
 	ddiQuit();
+	fsQuit();
 };
 
 GWMWindow* gwmCreateWindow(
@@ -833,4 +846,70 @@ GWMWindow *gwmScreenshotWindow(GWMGlobWinRef *ref)
 	};
 	
 	return NULL;
+};
+
+DDISurface* gwmGetFileIcon(const char *iconName, int size)
+{
+	FileIconCache *scan;
+	for (scan=fileIconCache; scan!=NULL; scan=scan->next)
+	{
+		if (strcmp(scan->name, iconName) == 0)
+		{
+			if (size == GWM_FICON_SMALL)
+			{
+				return scan->small;
+			}
+			else
+			{
+				return scan->large;
+			};
+		};
+	};
+	
+	// cache miss; load the icon or make a dummy one
+	FileIconCache *cache = (FileIconCache*) malloc(sizeof(FileIconCache));
+	cache->name = strdup(iconName);
+	
+	char pathname[PATH_MAX];
+	sprintf(pathname, "/usr/share/mime/icons/%s.png", iconName);
+	
+	DDIPixelFormat format;
+	gwmGetScreenFormat(&format);
+	
+	cache->large = ddiLoadAndConvertPNG(&format, pathname, NULL);
+	if (cache->large == NULL)
+	{
+		cache->large = ddiCreateSurface(&format, 64, 64, NULL, 0);
+		if (cache->large == NULL)
+		{
+			fprintf(stderr, "libgwm: ddiCreateSurface failed unexpectedly!");
+			abort();
+		};
+		
+		static DDIColor purple = {0x77, 0x00, 0x77, 0xFF};
+		static DDIColor black = {0x00, 0x00, 0x00, 0xFF};
+		
+		ddiFillRect(cache->large, 0, 0, 64, 64, &purple);
+		ddiFillRect(cache->large, 32, 0, 32, 32, &black);
+		ddiFillRect(cache->large, 0, 32, 32, 32, &black);
+	};
+	
+	cache->small = ddiScale(cache->large, 16, 16, DDI_SCALE_BEST);
+	if (cache->small == NULL)
+	{
+		fprintf(stderr, "libgwm: unexpected scaling fialure!");
+		abort();
+	};
+
+	cache->next = fileIconCache;
+	fileIconCache = cache;
+	
+	if (size == GWM_FICON_SMALL)
+	{
+		return cache->small;
+	}
+	else
+	{
+		return cache->large;
+	};
 };

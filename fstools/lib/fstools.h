@@ -98,6 +98,12 @@ typedef struct FSMimeType_
 	 * the mimetype itself.
 	 */
 	char*					label;
+	
+	/**
+	 * Name of the icon attached to the file. The icon is a 64x64 image, which is sometimes
+	 * scaled to 16x16 by GWM.
+	 */
+	char*					iconName;
 } FSMimeType;
 
 /**

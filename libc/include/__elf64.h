@@ -237,4 +237,5 @@ typedef struct
 	unsigned char			gan_type;
 	unsigned char			gan_val;
 } Elf64_GlidixAnnot;
+
 #endif

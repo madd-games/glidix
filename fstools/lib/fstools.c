@@ -63,7 +63,7 @@ static FSMimeType *inodeChardev;
 static FSMimeType *inodeFifo;
 static FSMimeType *inodeSocket;
 
-static FSMimeType *specialType(const char *name, const char *label)
+static FSMimeType *specialType(const char *name, const char *label, const char *icon)
 {
 	FSMimeType *type = (FSMimeType*) malloc(sizeof(FSMimeType));
 	type->next = NULL;
@@ -73,6 +73,7 @@ static FSMimeType *specialType(const char *name, const char *label)
 	type->magics = NULL;
 	type->numMagics = 0;
 	type->label = strdup(label);
+	type->iconName = strdup(icon);
 	
 	return type;
 };
@@ -93,6 +94,7 @@ static void loadMimeInfo(const char *cat, const char *type)
 	info->numMagics = 0;
 	
 	info->label = info->mimename;
+	info->iconName = strdup("unknown");
 	
 	if (lastType == NULL)
 	{
@@ -165,6 +167,24 @@ static void loadMimeInfo(const char *cat, const char *type)
 					info->label = strdup(newLabel);
 				};
 			}
+			else if (strcmp(cmd, "icon") == 0)
+			{
+				char *newIcon = NULL;
+				if (linesz > 4)
+				{
+					newIcon = &line[5];
+				};
+				
+				if (newIcon == NULL)
+				{
+					fprintf(stderr, "fstools: 'icon' without parameter\n");
+				}
+				else
+				{
+					free(info->iconName);
+					info->iconName = strdup(newIcon);
+				};
+			}
 			else
 			{
 				fprintf(stderr, "fstools: invalid command in %s: %s\n", path, cmd);
@@ -202,13 +222,13 @@ static void loadCategory(const char *cat)
 void fsInit()
 {
 	// some special types
-	textPlain = specialType("text/plain", "Text file");
-	octetStream = specialType("application/octet-stream", "Binary file");
-	inodeDir = specialType("inode/directory", "Directory");
-	inodeBlockdev = specialType("inode/blockdevice", "Block device");
-	inodeChardev = specialType("inode/chardevice", "Character device");
-	inodeFifo = specialType("inode/fifo", "Named pipe");
-	inodeSocket = specialType("inode/socket", "Socket");
+	textPlain = specialType("text/plain", "Text file", "textfile");
+	octetStream = specialType("application/octet-stream", "Binary file", "binfile");
+	inodeDir = specialType("inode/directory", "Directory", "dir");
+	inodeBlockdev = specialType("inode/blockdevice", "Block device", "device");
+	inodeChardev = specialType("inode/chardevice", "Character device", "device");
+	inodeFifo = specialType("inode/fifo", "Named pipe", "device");
+	inodeSocket = specialType("inode/socket", "Socket", "device");
 	
 	// now load the MIME database (/usr/share/mime).
 	const char **scan;

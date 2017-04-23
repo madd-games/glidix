@@ -1,7 +1,7 @@
 SRC := $(shell find $(SRCDIR) -name '*.c')
 OUT := $(patsubst $(SRCDIR)/%.c, out/%, $(SRC))
 CFLAGS := -Wall -Werror -I$(SRCDIR)/../libddi -I$(SRCDIR)/../libgwm -I$(SRCDIR)/../kernel/include
-LDFLAGS := -L../libddi -L../libc -L../libgwm -lgwm -lddi -lcrypt
+LDFLAGS := -L../libddi -L../libc -L../libgwm -mgui -lcrypt
 
 .PHONY: all install
 all: $(OUT)

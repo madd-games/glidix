@@ -144,6 +144,26 @@ int testInputDialog(void *ignore)
 	return 0;
 };
 
+int testFileChooser(void *modep)
+{
+	int mode = (int) (uint64_t) modep;
+	
+	GWMWindow *fc = gwmCreateFileChooser(NULL, "File Chooser Example!", mode);
+	char *path = gwmRunFileChooser(fc);
+	
+	if (path == NULL)
+	{
+		gwmMessageBox(win, "File Chooser Test", "You clicked cancel.", GWM_MBICON_ERROR | GWM_MBUT_OK);
+	}
+	else
+	{
+		gwmMessageBox(win, "Chosen File:", path, GWM_MBICON_INFO | GWM_MBUT_OK);
+		free(path);
+	};
+	
+	return 0;
+};
+
 int main()
 {
 	if (gwmInit() != 0)
@@ -176,6 +196,8 @@ int main()
 	GWMMenu *menuDialogs = gwmCreateMenu();
 	gwmMenuAddEntry(menuDialogs, "Message Boxes", testMessageBoxes, NULL);
 	gwmMenuAddEntry(menuDialogs, "Input Dialog", testInputDialog, NULL);
+	gwmMenuAddEntry(menuDialogs, "Open File Dialog", testFileChooser, (void*) GWM_FILE_OPEN);
+	gwmMenuAddEntry(menuDialogs, "Save File Dialog", testFileChooser, (void*) GWM_FILE_SAVE);
 	
 	gwmMenubarAdd(menubar, "Test", menuTest);
 	gwmMenubarAdd(menubar, "Empty", menuEmpty);

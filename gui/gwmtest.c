@@ -51,15 +51,23 @@ int main()
 		return 1;
 	};
 	
-	gwmCreateButton(win, "Normal button", 20, 63, 210, 0);
-	gwmCreateButton(win, "Disabled button", 20, 156, 210, GWM_BUTTON_DISABLED);
+	//gwmCreateButton(win, "Normal button", 20, 63, 210, 0);
+	//gwmCreateButton(win, "Disabled button", 20, 156, 210, GWM_BUTTON_DISABLED);
 	
-	GWMGlobWinRef ref;
-	gwmGetGlobRef(win, &ref);
-	GWMWindow *shot = gwmScreenshotWindow(&ref);
+	//GWMGlobWinRef ref;
+	//gwmGetGlobRef(win, &ref);
+	//GWMWindow *shot = gwmScreenshotWindow(&ref);
 	
-	DDISurface *canvas = gwmGetWindowCanvas(shot);
-	ddiSavePNG(canvas, "shot.png", NULL);
+	//DDISurface *canvas = gwmGetWindowCanvas(shot);
+	//ddiSavePNG(canvas, "shot.png", NULL);
+	
+	printf("getting icon\n");
+	DDISurface *icon = gwmGetFileIcon("dir", GWM_FICON_LARGE);
+	printf("got icon.\n");
+	
+	ddiBlit(icon, 0, 0, gwmGetWindowCanvas(win), 0, 0, 64, 64);
+	gwmPostDirty(win);
+	gwmMainLoop();
 	
 	gwmQuit();
 	return 0;

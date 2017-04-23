@@ -109,7 +109,7 @@ static void ioapicInit(uint64_t ioapicbasephys)
 		{
 			entry |= (1 << 13);		// active low
 		};
-		if ((irqFlags[i] & 0x30) == 0x30)
+		if ((irqFlags[i] & 0x0C) == 0x0C)
 		{
 			entry |= (1 << 15);
 		};

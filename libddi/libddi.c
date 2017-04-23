@@ -1196,6 +1196,7 @@ DDIPen* ddiCreatePen(DDIPixelFormat *format, DDIFont *font, int x, int y, int wi
 	pen->currentLine->firstSegment = NULL;
 	pen->currentLine->maxHeight = pen->font->face->size->metrics.height/64;
 	pen->currentLine->currentWidth = 0;
+	pen->currentLine->alignment = DDI_ALIGN_LEFT;
 	pen->currentLine->baselineY = 0;
 	pen->currentLine->next = NULL;
 	pen->firstLine = pen->currentLine;
@@ -1219,7 +1220,7 @@ void ddiDeletePen(DDIPen *pen)
 		while (seg != NULL)
 		{
 			PenSegment *nextSeg = seg->next;
-			ddiDeleteSurface(seg->surface);
+			if (seg->surface != NULL) ddiDeleteSurface(seg->surface);
 			free(seg->widths);
 			free(seg);
 			seg = nextSeg;
@@ -1460,13 +1461,6 @@ void ddiWritePen(DDIPen *pen, const char *text)
 				if (error != 0) break;
 			
 				FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
-			
-				//if (pen->writePos == pen->cursorPos)
-				//{
-				//	fillColor.alpha = 255;
-				//	ddiFillRect(surface, penX+offsetX, 0, 1, surface->height, &fillColor);
-				//};
-			
 				pen->writePos++;
 			
 				int x, y;
@@ -1490,12 +1484,6 @@ void ddiWritePen(DDIPen *pen, const char *text)
 				penY += pen->font->face->glyph->advance.y >> 6;
 			};
 		};
-
-		//if (pen->writePos == pen->cursorPos)
-		//{
-		//	fillColor.alpha = 255;
-		//	ddiFillRect(surface, penX, 0, 1, surface->height, &fillColor);
-		//};
 
 		pen->currentLine->currentWidth += width;
 		
@@ -1546,6 +1534,7 @@ void ddiWritePen(DDIPen *pen, const char *text)
 			line->firstSegment = NULL;
 			line->maxHeight = pen->font->face->size->metrics.height/64;
 			line->currentWidth = 0;
+			line->alignment = pen->align;
 			line->baselineY = 0;
 			line->next = NULL;
 			pen->currentLine->next = line;
@@ -1559,26 +1548,26 @@ void ddiExecutePen2(DDIPen *pen, DDISurface *surface, int flags)
 	PenLine *line;
 	PenSegment *seg;
 
-	//PenSegment *dseg = (PenSegment*) malloc(sizeof(PenSegment));
-	//dseg->surface = NULL;
-	//dseg->next = NULL;
-	//dseg->numChars = 1;
-	//dseg->widths = (int*) malloc(sizeof(int));
-	//dseg->widths[0] = 0;
-	//dseg->firstCharPos = pen->writePos;
-	//dseg->baselineY = 0;
-	//memcpy(&dseg->background, &pen->background, sizeof(DDIColor));
+	PenSegment *dseg = (PenSegment*) malloc(sizeof(PenSegment));
+	dseg->surface = NULL;
+	dseg->next = NULL;
+	dseg->numChars = 1;
+	dseg->widths = (int*) malloc(sizeof(int));
+	dseg->widths[0] = 0;
+	dseg->firstCharPos = pen->writePos;
+	dseg->baselineY = 0;
+	memcpy(&dseg->background, &pen->background, sizeof(DDIColor));
 
-	//if (pen->currentLine->firstSegment == NULL)
-	//{
-	//	pen->currentLine->firstSegment = dseg;
-	//}
-	//else
-	//{
-	//	PenSegment *last = pen->currentLine->firstSegment;
-	//	while (last->next != NULL) last = last->next;
-	//	last->next = dseg;
-	//};
+	if (pen->currentLine->firstSegment == NULL)
+	{
+		pen->currentLine->firstSegment = dseg;
+	}
+	else
+	{
+		PenSegment *last = pen->currentLine->firstSegment;
+		while (last->next != NULL) last = last->next;
+		last->next = dseg;
+	};
 
 	static DDIColor cursorColor = {0, 0, 0, 0xFF};
 	
@@ -1714,31 +1703,34 @@ int ddiPenCoordsToPos(DDIPen *pen, int x, int y)
 		int bestBet = pen->writePos;
 		for (seg=line->firstSegment; seg!=NULL; seg=seg->next)
 		{
-			int endX = seg->drawX + seg->surface->width;
-			bestBet = seg->firstCharPos + (int)seg->numChars;
-			
-			if ((x >= seg->drawX) && (x < endX))
+			if (seg->surface != NULL)
 			{
-				// it's in this segment!
-				int offX = x - seg->drawX;
-				
-				int i;
-				for (i=0; seg->widths[i]<offX; i++)
+				int endX = seg->drawX + seg->surface->width;
+				bestBet = seg->firstCharPos + (int)seg->numChars;
+			
+				if ((x >= seg->drawX) && (x < endX))
 				{
-					if ((size_t)i == seg->numChars)
+					// it's in this segment!
+					int offX = x - seg->drawX;
+				
+					int i;
+					for (i=0; seg->widths[i]<offX; i++)
 					{
-						break;
-					};
+						if ((size_t)i == seg->numChars)
+						{
+							break;
+						};
 					
-					offX -= seg->widths[i];
-				};
+						offX -= seg->widths[i];
+					};
 				
-				if ((seg->widths[i]/2 <= offX) && ((size_t)i != seg->numChars))
-				{
-					i++;
-				};
+					if ((seg->widths[i]/2 <= offX) && ((size_t)i != seg->numChars))
+					{
+						i++;
+					};
 				
-				return seg->firstCharPos + i;
+					return seg->firstCharPos + i;
+				};
 			};
 		};
 		

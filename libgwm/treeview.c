@@ -48,6 +48,7 @@ typedef struct GWMTreeEntry_
 	DDISurface**					labels;
 	int						state;		// only if has children; 0 = closed, 1 = open
 	int						flags;
+	DDISurface*					icon;
 	struct GWMTreeEntry_*				next;
 	struct GWMTreeEntry_*				down;
 	char						path[];
@@ -74,6 +75,8 @@ typedef struct
 	int						oldColSize;
 	GWMTreeViewActivateCallback			actCallback;
 	void*						actParam;
+	GWMTreeViewSelectCallback			selCallback;
+	void*						selParam;
 	char						pathBuffer[];
 } GWMTreeViewData;
 
@@ -105,6 +108,7 @@ static GWMTreeEntry *readTree(GWMWindow *treeview, const void *path)
 		entry->flags = info.niFlags;
 		entry->next = NULL;
 		entry->down = NULL;
+		entry->icon = info.niIcon;
 		
 		int i;
 		for (i=0; i<data->tree->teNumCols; i++)
@@ -182,6 +186,11 @@ static int renderTree(GWMWindow *treeview, GWMTreeEntry *entry, int indent, int 
 				{
 					memcpy(data->pathBuffer, entry->path, data->tree->tePathSize);
 					data->selectedPath = data->pathBuffer;
+					
+					if (data->selCallback != NULL)
+					{
+						data->selCallback(data->selParam);
+					};
 				};
 			};
 		};
@@ -229,11 +238,18 @@ static int renderTree(GWMWindow *treeview, GWMTreeEntry *entry, int indent, int 
 		};
 		
 		int i;
-		int x = 12 + indent;
+		int x = 30 + indent;
 		for (i=0; i<data->tree->teNumCols; i++)
 		{
 			int margin = 0;
-			if (i == 0) margin = 12 + indent;
+			if (i == 0)
+			{
+				if (entry->icon != NULL)
+				{
+					ddiBlit(entry->icon, 0, 0, canvas, indent+12, y+ymargin-data->scroll+(ROW_HEIGHT/2-8), 16, 16);
+				};
+				margin = 30 + indent;
+			};
 			
 			ddiBlit(entry->labels[i], 0, 0,
 					canvas, x, y+ymargin-data->scroll+(ROW_HEIGHT/2)-(entry->labels[i]->height/2),
@@ -428,7 +444,8 @@ GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int hei
 	data->selectedPath = NULL;
 	data->colResizing = -1;
 	data->actCallback = NULL;
-		
+	data->selCallback = NULL;
+	
 	int scrollbarY = 1;
 	int scrollbarLen = height-2;
 	
@@ -475,10 +492,28 @@ void gwmTreeViewSetActivateCallback(GWMWindow *treeview, GWMTreeViewActivateCall
 	data->actParam = param;
 };
 
+void gwmTreeViewSetSelectCallback(GWMWindow *treeview, GWMTreeViewSelectCallback cb, void *param)
+{
+	GWMTreeViewData *data = (GWMTreeViewData*) treeview->data;
+	data->selCallback = cb;
+	data->selParam = param;
+};
+
 int gwmTreeViewGetSelection(GWMWindow *treeview, void *buffer)
 {
 	GWMTreeViewData *data = (GWMTreeViewData*) treeview->data;
 	if (data->selectedPath == NULL) return -1;
 	memcpy(buffer, data->selectedPath, data->tree->tePathSize);
 	return 0;
+};
+
+void gwmTreeViewUpdate(GWMWindow *treeview, const void *root)
+{
+	GWMTreeViewData *data = (GWMTreeViewData*) treeview->data;
+	releaseTree(data, data->head);
+	data->selectedPath = NULL;
+	memcpy(data->root, root, data->tree->tePathSize);
+	data->head = readTree(treeview, root);
+	gwmRedrawTreeView(treeview);
+	adjustScrollbar(treeview);
 };

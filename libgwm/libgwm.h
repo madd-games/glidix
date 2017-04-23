@@ -170,6 +170,12 @@ extern DDIColor gwmColorSelection;
 #define	GWM_STACK_REMOVE			2
 
 /**
+ * Icon sizes.
+ */
+#define	GWM_FICON_SMALL				0
+#define	GWM_FICON_LARGE				1
+
+/**
  * Window manager information structure, located in the shared file /run/gwminfo.
  * Described how to connect to the window manager.
  */
@@ -746,6 +752,12 @@ extern char gwmFSRoot[PATH_MAX];
 #define	GWM_TV_NOHEADS				(1 << 0)
 
 /**
+ * File chooser modes.
+ */
+#define	GWM_FILE_OPEN				0
+#define	GWM_FILE_SAVE				1
+
+/**
  * Clipboard magic number.
  */
 #define	GWM_CB_MAGIC				0xC1B0
@@ -1164,10 +1176,21 @@ typedef int (*GWMTreeViewActivateCallback)(void *param);
 void gwmTreeViewSetActivateCallback(GWMWindow *treeview, GWMTreeViewActivateCallback handler, void *param);
 
 /**
+ * Set a TreeView selection handler.
+ */
+typedef void (*GWMTreeViewSelectCallback)(void *param);
+void gwmTreeViewSetSelectCallback(GWMWindow *treeview, GWMTreeViewSelectCallback handler, void *param);
+
+/**
  * Store the currently-selected path on a TreeView in the given buffer. Returns 0 if something actually was
  * selected; otherwise returns -1 and the buffer is untouched.
  */
 int gwmTreeViewGetSelection(GWMWindow *treeview, void *buffer);
+
+/**
+ * Change the tree in a TreeView and refresh.
+ */
+void gwmTreeViewUpdate(GWMWindow *treeview, const void *root);
 
 /**
  * Create a modal dialog. You may place children in it, and then run it using gwmRunModal(). You can set an
@@ -1410,5 +1433,31 @@ size_t gwmGetTextAreaLen(GWMWindow *area);
  * Read text from the text area and return it into the specified buffer. NOTE: A NUL character is added at the end!
  */
 void gwmReadTextArea(GWMWindow *area, off_t pos, size_t len, char *buffer);
+
+/**
+ * Set the callback for when text in a textarea changes.
+ */
+typedef void (*GWMTextAreaUpdateCallback)(void *param);
+void gwmSetTextAreaUpdateCallback(GWMWindow *area, GWMTextAreaUpdateCallback cb, void *param);
+
+/**
+ * Create a file chooser dialog. 'mode' is either GWM_FILE_OPEN or GWM_FILE_SAVE. You can set other settings then call
+ * gwmRunFileChooser() to run it.
+ */
+GWMWindow* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int mode);
+
+/**
+ * Run a file chooser dialog. If the user clicks Cancel, NULL is returned; otherwise, the absolute path of the selected
+ * file is returned, as a string on the heap; you must call free() on it later.
+ *
+ * NOTE: The file chooser is destroyed after running!
+ */
+char* gwmRunFileChooser(GWMWindow *fc);
+
+/**
+ * Get an file icon with the given name, in the given size (GWM_FICON_SMALL being 16x16 and GWM_FICON_LARGE being 64x64).
+ * Always returns something; it may be a dummy icon.
+ */
+DDISurface* gwmGetFileIcon(const char *iconName, int size);
 
 #endif

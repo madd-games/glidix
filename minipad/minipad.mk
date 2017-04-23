@@ -6,7 +6,7 @@ CFLAGS := -Wall -Werror -I$(SRCDIR)/../libgwm -I$(SRCDIR)/../libddi
 .PHONY: install
 
 minipad: $(OBJ)
-	$(HOST_GCC) $^ -o $@ -L../libgwm -L../libddi -lddi -lgwm
+	$(HOST_GCC) $^ -o $@ -L../libgwm -L../libddi -mgui
 
 -include $(DEP)
 

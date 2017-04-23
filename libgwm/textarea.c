@@ -66,6 +66,8 @@ typedef struct
 	TextSegment*			segLast;
 	off_t				cursorPos;
 	off_t				clickPos;
+	GWMTextAreaUpdateCallback	updateCB;
+	void*				updateParam;
 } TextAreaData;
 
 GWMTag* gwmCreateTag()
@@ -314,6 +316,7 @@ GWMWindow* gwmCreateTextArea(GWMWindow *parent, int x, int y, int width, int hei
 	data->segFirst = data->segLast = seg;
 	data->cursorPos = 0;
 	data->clickPos = -1;
+	data->updateCB = NULL;
 	
 	area->data = data;
 	gwmSetEventHandler(area, areaHandler);
@@ -480,6 +483,7 @@ void gwmTextAreaInsert(GWMWindow *area, off_t pos, const char *text)
 	
 	scan->size += strlen(text);
 	
+	if (data->updateCB != NULL) data->updateCB(data->updateParam);
 	redrawTextArea(area);
 };
 
@@ -576,6 +580,7 @@ void gwmTextAreaErase(GWMWindow *area, off_t pos, size_t len)
 		scan = next;
 	};
 	
+	if (data->updateCB != NULL) data->updateCB(data->updateParam);
 	redrawTextArea(area);
 };
 
@@ -658,4 +663,11 @@ void gwmReadTextArea(GWMWindow *area, off_t pos, size_t len, char *buffer)
 	if ((pos + len) > data->textSize) len = data->textSize - pos;
 	memcpy(buffer, &data->text[pos], len);
 	buffer[len] = 0;
+};
+
+void gwmSetTextAreaUpdateCallback(GWMWindow *area, GWMTextAreaUpdateCallback cb, void *param)
+{
+	TextAreaData *data = (TextAreaData*) area->data;
+	data->updateCB = cb;
+	data->updateParam = param;
 };
