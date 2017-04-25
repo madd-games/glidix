@@ -105,9 +105,6 @@ typedef struct
 	uint64_t addr;
 } PACKED IDTPointer;
 
-/**
- * I think the person at Intel designing this was high on something.
- */
 typedef struct
 {
 	uint16_t offsetLow;
@@ -127,11 +124,5 @@ typedef void (*IRQHandler)(int);
 void initIDT();
 void idtReboot();
 IRQHandler registerIRQHandler(int irq, IRQHandler handler);
-
-/**
- * Mask/unmask an interrupt on the current CPU.
- */
-void irqMask(uint8_t intNo);
-void irqUnmask(uint8_t intNo);
 
 #endif

@@ -30,7 +30,7 @@
 #include <glidix/port.h>
 #include <glidix/devfs.h>
 #include <glidix/vfs.h>
-#include <glidix/spinlock.h>
+#include <glidix/mutex.h>
 #include <glidix/string.h>
 #include <glidix/sched.h>
 #include <glidix/errno.h>
@@ -41,7 +41,7 @@
 #include <glidix/idt.h>
 #include <glidix/syscall.h>
 
-static Spinlock pciLock;
+static Mutex pciLock;
 
 static PCIDevice *pciDevices = NULL;
 static PCIDevice *lastDevice = NULL;
@@ -160,7 +160,7 @@ static void checkSlot(uint8_t bus, uint8_t slot, PCIBridge *bridge)
 				};
 				
 				dev->intNo = 0;
-				wcInit(&dev->wcInt);
+				dev->irqHandler = NULL;
 				
 				findRootPin(dev, dev->slot, dev->intpin, bridge);
 				if (lastDevice == NULL)
@@ -392,7 +392,7 @@ static ACPI_STATUS pciWalkCallback(ACPI_HANDLE object, UINT32 nestingLevel, void
 
 void pciInit()
 {
-	spinlockRelease(&pciLock);
+	mutexInit(&pciLock);
 	checkBus(0, NULL);
 };
 
@@ -439,7 +439,7 @@ void pciInitACPI()
 
 void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig *config)
 {
-	spinlockAcquire(&pciLock);
+	mutexLock(&pciLock);
 	uint32_t addr = 0;
 	uint32_t lbus = (uint32_t) bus;
 	uint32_t lslot = (uint32_t) slot;
@@ -455,12 +455,12 @@ void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig
 		*put++ = ind(PCI_CONFIG_DATA);
 		addr += 4;
 	};
-	spinlockRelease(&pciLock);
+	mutexUnlock(&pciLock);
 };
 
 ssize_t sys_pcistat(int id, PCIDevice *buffer, size_t bufsize)
 {	
-	spinlockAcquire(&pciLock);
+	mutexLock(&pciLock);
 	PCIDevice *dev;
 	
 	for (dev=pciDevices; dev!=NULL; dev=dev->next)
@@ -474,23 +474,23 @@ ssize_t sys_pcistat(int id, PCIDevice *buffer, size_t bufsize)
 			
 			if (memcpy_k2u(buffer, dev, bufsize) != 0)
 			{
-				spinlockRelease(&pciLock);
+				mutexUnlock(&pciLock);
 				ERRNO = EFAULT;
 				return -1;
 			};
-			spinlockRelease(&pciLock);
+			mutexUnlock(&pciLock);
 			return (ssize_t) bufsize;
 		};
 	};
 	
-	spinlockRelease(&pciLock);
+	mutexUnlock(&pciLock);
 	ERRNO = ENOENT;
 	return -1;
 };
 
 void pciEnumDevices(Module *module, int (*enumerator)(PCIDevice *dev, void *param), void *param)
 {
-	spinlockAcquire(&pciLock);
+	mutexLock(&pciLock);
 	PCIDevice *dev;
 	
 	for (dev=pciDevices; dev!=NULL; dev=dev->next)
@@ -501,21 +501,21 @@ void pciEnumDevices(Module *module, int (*enumerator)(PCIDevice *dev, void *para
 			{
 				dev->driver = module;
 				strcpy(dev->driverName, module->name);
-				irqUnmask(dev->intNo);
 			};
 		};
 	};
 	
-	spinlockRelease(&pciLock);
+	mutexUnlock(&pciLock);
 };
 
 void pciReleaseDevice(PCIDevice *dev)
 {
-	spinlockAcquire(&pciLock);
+	mutexLock(&pciLock);
+	dev->irqHandler = NULL;
 	dev->driver = NULL;
 	strcpy(dev->driverName, "null");
 	strcpy(dev->deviceName, "Unknown");
-	spinlockRelease(&pciLock);
+	mutexUnlock(&pciLock);
 };
 
 void pciInterrupt(int intNo)
@@ -527,24 +527,24 @@ void pciInterrupt(int intNo)
 	{
 		if (dev->intNo == intNo)
 		{
-			wcUp(&dev->wcInt);
+			if (dev->irqHandler != NULL)
+			{
+				if (dev->irqHandler(dev->irqParam) == 0)
+				{
+					apic->eoi = 0;
+					return;
+				};
+			};
 		};
 	};
-};
-
-void pciWaitInt(PCIDevice *dev)
-{
-	wcDown(&dev->wcInt);
-};
-
-void pciAckInt(PCIDevice *dev)
-{
-	irqUnmask(dev->intNo);
+	
+	// interrupt unhandled
+	panic("unhandled PCI interrupt %d", intNo);
 };
 
 void pciSetBusMastering(PCIDevice *dev, int enable)
 {
-	spinlockAcquire(&pciLock);
+	mutexLock(&pciLock);
 	uint32_t addr = 0;
 	uint32_t lbus = (uint32_t) dev->bus;
 	uint32_t lslot = (uint32_t) dev->slot;
@@ -565,5 +565,12 @@ void pciSetBusMastering(PCIDevice *dev, int enable)
 	
 	outd(PCI_CONFIG_ADDR, addr);
 	outd(PCI_CONFIG_DATA, statcmd);
-	spinlockRelease(&pciLock);
+	mutexUnlock(&pciLock);
+};
+
+void pciSetIrqHandler(PCIDevice *dev, int (*handler)(void *param), void *param)
+{
+	// set param FIRST! atomicity.
+	dev->irqParam = param;
+	dev->irqHandler = handler;
 };

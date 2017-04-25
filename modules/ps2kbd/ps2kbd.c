@@ -62,13 +62,11 @@ static WaitCounter wcKeyboard = WC_INIT;
 
 static void onKeyboardIRQ(int irq)
 {
-	irqUnmask(IRQ1);
 	wcUp(&wcKeyboard);
 };
 
 static void onMouseIRQ(int irq)
 {
-	irqUnmask(IRQ12);
 	wcUp(&wcKeyboard);
 };
 
@@ -77,8 +75,6 @@ static uint8_t mouseStateWas = 0;
 static void kbdThread(void *data)
 {
 	thnice(NICE_UIN);
-	irqUnmask(IRQ1);
-	irqUnmask(IRQ12);
 	
 	while (1)
 	{
@@ -244,9 +240,6 @@ MODULE_INIT()
 	hups = huminCreateDevice("PS/2 Keyboard and Mouse");
 	ptrps = ptrCreate();
 	
-	irqMask(IRQ1);
-	irqMask(IRQ12);
-	
 	// initialize the mouse
 	mouse_install();
 
@@ -257,9 +250,6 @@ MODULE_INIT()
 	mouse_read();
 	
 	while (inb(0x64) & 1) inb(0x60);
-	
-	irqUnmask(IRQ1);
-	irqUnmask(IRQ12);
 	
 	KernelThreadParams kbdPars;
 	memset(&kbdPars, 0, sizeof(KernelThreadParams));

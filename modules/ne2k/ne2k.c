@@ -37,6 +37,7 @@
 #include <glidix/sched.h>
 #include <glidix/idt.h>
 #include <glidix/ethernet.h>
+#include <glidix/waitcnt.h>
 
 #define	RX_BUFFER_START			((16*1024)/256+6)
 #define	RX_BUFFER_END			((32*1024)/256)
@@ -78,6 +79,8 @@ typedef struct NeInterface_
 	Spinlock			lock;
 	int				running;
 	Thread*				thread;
+	int				numIntRX;
+	WaitCounter			wcInts;
 } NeInterface;
 
 static NeInterface *interfaces = NULL;
@@ -90,6 +93,24 @@ static uint8_t readRegister(NeInterface *nif, uint8_t page, uint8_t index)
 	
 	// read the register
 	return inb(nif->iobase + index);
+};
+
+static int ne2k_int(void *context)
+{
+	NeInterface *nif = (NeInterface*) context;
+	uint8_t isr = readRegister(nif, 0, 0x07);
+	if (isr == 0)
+	{
+		return -1;
+	};
+	
+	if (isr & 1)
+	{
+		__sync_fetch_and_add(&nif->numIntRX, 1);
+		wcUp(&nif->wcInts);
+	};
+	
+	return 0;
 };
 
 static void writeRegister(NeInterface *nif, uint8_t page, uint8_t index, uint8_t value)
@@ -189,17 +210,14 @@ static void ne2k_thread(void *context)
 	
 	while (nif->running)
 	{
-		pciWaitInt(nif->pcidev);
+		//pciWaitInt(nif->pcidev);
+		wcDown(&nif->wcInts);
 		
 		spinlockAcquire(&nif->lock);
-		uint8_t isr = readRegister(nif, 0, 0x07);
-		if (isr != 0)
+		if (nif->numIntRX)
 		{
-			pciAckInt(nif->pcidev);
-		};
-		
-		if (isr & 1)
-		{
+			__sync_fetch_and_add(&nif->numIntRX, -1);
+			
 			// received a frame!
 			uint32_t addr = readRegister(nif, 0, 0x03) * 256;	// get address using boundary register
 			ne2k_read(nif, addr, &packetHeader, sizeof(NePacketHeader));
@@ -268,6 +286,7 @@ MODULE_INIT(const char *opt)
 	NeInterface *nif;
 	for (nif=interfaces; nif!=NULL; nif=nif->next)
 	{
+		pciSetIrqHandler(nif->pcidev, ne2k_int, nif);
 		nif->iobase = nif->pcidev->bar[0] & ~0x3;
 		
 		outb(nif->iobase + 0x1F, inb(nif->iobase + 0x1F));
@@ -323,6 +342,8 @@ MODULE_INIT(const char *opt)
 		};
 		
 		nif->running = 1;
+		nif->numIntRX = 0;
+		wcInit(&nif->wcInts);
 		
 		KernelThreadParams pars;
 		memset(&pars, 0, sizeof(KernelThreadParams));
@@ -364,10 +385,11 @@ MODULE_FINI()
 	NeInterface *next;
 	while (nif != NULL)
 	{
+		// TODO: properly disable the device!
 		// mark the device as not running, then interrupt the thread so that it exits,
 		// then release it. after this, we are safe to release the device itself.
 		nif->running = 0;
-		wcUp(&nif->pcidev->wcInt);
+		wcUp(&nif->wcInts);
 		ReleaseKernelThread(nif->thread);
 		
 		pciReleaseDevice(nif->pcidev);

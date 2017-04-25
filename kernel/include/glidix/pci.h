@@ -32,7 +32,6 @@
 #include <glidix/common.h>
 #include <glidix/ioctl.h>
 #include <glidix/module.h>
-#include <glidix/waitcnt.h>
 
 #define	PCI_CONFIG_ADDR					0xCF8
 #define	PCI_CONFIG_DATA					0xCFC
@@ -134,9 +133,14 @@ typedef struct PCIDevice_
 	uint8_t						progif;
 
 	// -- END OF USER AREA --
-	
 	int						intNo;			// which interrupt the device was mapped to
-	WaitCounter					wcInt;			// interrupt wait counter
+	
+	/**
+	 * IRQ handler. Return 0 if the interrupt actually came from this device,
+	 * -1 otherwise.
+	 */
+	int (*irqHandler)(void *param);
+	void *irqParam;
 	
 	// slot and interrupt pin on the root bridge
 	int						rootSlot;
@@ -202,22 +206,14 @@ void pciInitACPI();
 void pciInterrupt(int intNo);
 
 /**
- * Called by a driver's interrupt-waiting thread to sleep until an interrupt arrives.
- * WARNING: If this function returns, it means we have received an interrupt on the device's
- *          interrupt line - by that line might be shared with other devices! So make sure that
- *          it was actually the device in question sending the interrupt (you can do this by
- *          reading certain device-specific registers usually).
- */
-void pciWaitInt(PCIDevice *dev);
-
-/**
- * Acknowledge that an interrupt came from the specified device.
- */
-void pciAckInt(PCIDevice *dev);
-
-/**
  * Enable or disable bus mastering for the given device.
  */
 void pciSetBusMastering(PCIDevice *dev, int enable);
+
+/**
+ * Set the IRQ handler for a device. Setting to NULL removes the handler; however, this is done automatically
+ * when calling pciReleaseDevice().
+ */
+void pciSetIrqHandler(PCIDevice *dev, int (*handler)(void *param), void *param);
 
 #endif

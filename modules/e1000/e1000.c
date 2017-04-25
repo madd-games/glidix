@@ -40,6 +40,7 @@
 #include <glidix/semaphore.h>
 #include <glidix/sched.h>
 #include <glidix/dma.h>
+#include <glidix/waitcnt.h>
 
 #define	E1000_MMIO_SIZE			0x10000		// 16KB
 
@@ -118,6 +119,9 @@ typedef struct EInterface_
 	Semaphore			semQueueCount;
 	EPacket*			qfirst;
 	EPacket*			qlast;
+	uint64_t			numIntTX;
+	uint64_t			numIntRX;
+	WaitCounter			wcInts;
 } EInterface;
 
 static EInterface *interfaces = NULL;
@@ -128,6 +132,35 @@ static EDevice knownDevices[] = {
 	{0x8086, 0x100E, "Intel PRO/1000 MT Desktop (82540EM) NIC"},
 	{0x8086, 0x100F, "Intel PRO/1000 MT Server (82545EM) NIC"},
 	{0, 0, NULL}
+};
+
+static int e1000_int(void *context)
+{
+	EInterface *nif = (EInterface*) context;
+	volatile uint32_t *regICR = (volatile uint32_t*) (nif->mmioAddr + 0x00C0);
+	uint32_t icr = *regICR;
+	
+	if (icr == 0)
+	{
+		return -1;
+	}
+	else
+	{
+		if (icr & (1 << 0))
+		{
+			// transmit descriptor written back
+			__sync_fetch_and_add(&nif->numIntTX, 1);
+		};
+		
+		if ((icr & (1 << 7)) || (icr & (1 << 6)) || (icr & (1 << 4)))
+		{
+			// packet received
+			__sync_fetch_and_add(&nif->numIntRX, 1);
+		};
+		
+		wcUp(&nif->wcInts);
+		return 0;
+	};
 };
 
 static void e1000_qthread(void *context)
@@ -236,25 +269,18 @@ static void e1000_thread(void *context)
 {
 	thnice(NICE_NETRECV);
 	EInterface *nif = (EInterface*) context;
-	pciAckInt(nif->pcidev);				// unmask interrupts from this device
 	
 	// NOTE: we do not need to hold the lock, since we only receive; something that no other thread does,
 	// and we do not work on data outside of that. also locking causes onEtherFrame() to fail if we receive
 	// an ARP request, since it immediately calls e1000_send().
 	while (nif->running)
 	{
-		pciWaitInt(nif->pcidev);
+		wcDown(&nif->wcInts);
 		
-		volatile uint32_t *regICR = (volatile uint32_t*) (nif->mmioAddr + 0x00C0);
-		uint32_t icr = *regICR;
-		if (icr != 0)
-		{
-			pciAckInt(nif->pcidev);
-		};
-		
-		if (icr & (1 << 0))
+		if (nif->numIntTX > 0)
 		{
 			// transmit descriptor written back
+			__sync_fetch_and_add(&nif->numIntTX, -1);
 			ESharedArea *sha = (ESharedArea*) dmaGetPtr(&nif->dmaSharedArea);
 			if (sha->txdesc[nif->nextWaitingTX].sta & 1)
 			{
@@ -275,9 +301,10 @@ static void e1000_thread(void *context)
 			};
 		};
 		
-		if ((icr & (1 << 7)) || (icr & (1 << 6)) || (icr & (1 << 4)))
+		if (nif->numIntRX > 0)
 		{
 			// packet received
+			__sync_fetch_and_add(&nif->numIntRX, -1);
 			ESharedArea *sha = (ESharedArea*) dmaGetPtr(&nif->dmaSharedArea);
 			int index = nif->nextRX & (NUM_RX_DESC-1);
 			
@@ -357,6 +384,7 @@ MODULE_INIT(const char *opt)
 	EInterface *nif;
 	for (nif=interfaces; nif!=NULL; nif=nif->next)
 	{
+		pciSetIrqHandler(nif->pcidev, e1000_int, nif);
 		nif->mmioAddr = (uint64_t) mapPhysMemory((uint64_t) nif->pcidev->bar[0] & ~0xF, E1000_MMIO_SIZE);
 		
 		NetIfConfig ifconfig;
@@ -444,6 +472,11 @@ MODULE_INIT(const char *opt)
 		semInit2(&nif->semQueueCount, 0);
 		nif->qfirst = nif->qlast = NULL;
 		
+		// initialize interrupt counters
+		nif->numIntTX = 0;
+		nif->numIntRX = 0;
+		wcInit(&nif->wcInts);
+		
 		// next TX descriptor is zero (the first one)
 		nif->nextTX = 0;
 		
@@ -501,6 +534,7 @@ MODULE_INIT(const char *opt)
 		pars.name = "E1000 Interrupt Handler";
 		pars.stackSize = DEFAULT_STACK_SIZE;
 		nif->thread = CreateKernelThread(e1000_thread, &pars, nif);
+		pciSetBusMastering(nif->pcidev, 0);
 		
 		memset(&pars, 0, sizeof(KernelThreadParams));
 		pars.name = "E1000 Queue Thread";
@@ -523,13 +557,15 @@ MODULE_FINI()
 	EInterface *nif = interfaces;
 	while (nif != NULL)
 	{
+		// TODO: we should really disable the device properly
 		nif->running = 0;
-		wcUp(&nif->pcidev->wcInt);
+		wcUp(&nif->wcInts);
 		semSignal(&nif->semQueueCount);
 		ReleaseKernelThread(nif->thread);
 		ReleaseKernelThread(nif->qthread);
 		DeleteNetworkInterface(nif->netif);
 		
+		pciSetBusMastering(nif->pcidev, 0);
 		pciReleaseDevice(nif->pcidev);
 		unmapPhysMemory((void*)nif->mmioAddr, E1000_MMIO_SIZE);
 		dmaReleaseBuffer(&nif->dmaSharedArea);

@@ -408,7 +408,6 @@ static void onGPF(Regs *regs)
 void isrHandler(Regs *regs)
 {
 	// ignore spurious IRQs
-	//if ((regs->intNo != IRQ0) && (regs->intNo != I_APIC_TIMER)) kprintf("IRQ %lu\n", regs->intNo);
 	if (regs->intNo == IRQ7)
 	{
 		apic->eoi = 0;
@@ -418,18 +417,16 @@ void isrHandler(Regs *regs)
 	if ((regs->intNo >= IRQ0) && (regs->intNo <= I_APIC_TIMER))
 	{
 		// IRQ
-		if (regs->intNo != I_APIC_TIMER)
+		if ((regs->intNo < I_PCI0) || (regs->intNo > I_PCI15))
 		{
-			irqMask(regs->intNo);
+			// only EOI non-PCI interrupts (pciInterrupt() will send EOI for everything else)
+			apic->eoi = 0;
 		};
-		
-		apic->eoi = 0;
 	};
 
 	switch (regs->intNo)
 	{
 	case IRQ0:
-		irqUnmask(IRQ0);
 		__sync_fetch_and_add(&uptime, 1);
 		cli();
 		onTick();
@@ -484,6 +481,7 @@ void isrHandler(Regs *regs)
 	case I_PCI14:
 	case I_PCI15:
 		pciInterrupt(regs->intNo);
+		switchTask(regs);
 		break;
 	case I_IPI_HALT:
 		while (1) {cli(); hlt();};
@@ -498,7 +496,6 @@ void isrHandler(Regs *regs)
 		if ((regs->intNo >= IRQ0) && (regs->intNo <= IRQ15))
 		{
 			if (irqHandlers[regs->intNo-IRQ0] != NULL) irqHandlers[regs->intNo-IRQ0](regs->intNo-IRQ0);
-			else irqUnmask(regs->intNo);
 			break;
 		};
 		//heapDump();
@@ -519,89 +516,4 @@ IRQHandler registerIRQHandler(int irq, IRQHandler handler)
 	IRQHandler old = irqHandlers[irq];
 	irqHandlers[irq] = handler;
 	return old;
-};
-
-void irqMask(uint8_t intNo)
-{
-	uint64_t flags = getFlagsRegister();
-	cli();
-	
-	uint32_t volatile* regsel = (uint32_t volatile*) 0xFFFF808000002000;
-	uint32_t volatile* iowin = (uint32_t volatile*) 0xFFFF808000002010;
-
-	*regsel = 1;
-	__sync_synchronize();
-	int numInts = (int) (((*iowin) >> 16) & 0xFF) + 1;
-
-	int i;
-	for (i=0; i<numInts; i++)
-	{
-		*regsel = (0x10+i*2);
-		__sync_synchronize();
-		uint64_t entry = (uint64_t) (*iowin);
-		__sync_synchronize();
-		*regsel = (0x10+i*2+1);
-		__sync_synchronize();
-		entry |= ((uint64_t)(*iowin) << 32);
-		
-		uint32_t apicID = (entry >> 56) & 0xF;
-		uint8_t intvec = (entry & 0xFF);
-		if ((intvec == intNo) && (apicID == apic->id))
-		{
-			// only mask/unmask level-triggered
-			if (entry & (1 << 15))
-			{
-				// that's the one; mask it!
-				*regsel = (0x10+i*2);
-				__sync_synchronize();
-				*iowin = ((*iowin) | (1 << 16)) & ~(1 << 12);
-				__sync_synchronize();
-			};
-		};
-	};
-	
-	setFlagsRegister(flags);
-	return;
-};
-
-void irqUnmask(uint8_t intNo)
-{
-	uint64_t flags = getFlagsRegister();
-	cli();
-	uint32_t volatile* regsel = (uint32_t volatile*) 0xFFFF808000002000;
-	uint32_t volatile* iowin = (uint32_t volatile*) 0xFFFF808000002010;
-	
-	*regsel = 1;
-	__sync_synchronize();
-	int numInts = (int) (((*iowin) >> 16) & 0xFF) + 1;
-	
-	int i;
-	for (i=0; i<numInts; i++)
-	{
-		*regsel = (0x10+i*2);
-		__sync_synchronize();
-		uint64_t entry = (uint64_t) (*iowin);
-		__sync_synchronize();
-		*regsel = (0x10+i*2+1);
-		__sync_synchronize();
-		entry |= ((uint64_t)(*iowin) << 32);
-		
-		uint32_t apicID = (entry >> 56) & 0xF;
-		uint8_t intvec = (entry & 0xFF);
-		if ((intvec == intNo) && (apicID == apic->id))
-		{
-			// only mask/unmask level-triggered
-			if (entry & (1 << 15))
-			{
-				// that's the one; unmask it!
-				*regsel = (0x10+i*2);
-				__sync_synchronize();
-				*iowin &= ~((1 << 16) | (1 << 12));
-				__sync_synchronize();
-			};
-		};
-	};
-	
-	setFlagsRegister(flags);
-	return;
 };
