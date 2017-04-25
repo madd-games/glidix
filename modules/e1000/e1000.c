@@ -150,15 +150,16 @@ static int e1000_int(void *context)
 		{
 			// transmit descriptor written back
 			__sync_fetch_and_add(&nif->numIntTX, 1);
+			wcUp(&nif->wcInts);
 		};
 		
-		if ((icr & (1 << 7)) || (icr & (1 << 6)) || (icr & (1 << 4)))
+		if ((icr & (1 << 7))/* || (icr & (1 << 6)) || (icr & (1 << 4))*/)
 		{
 			// packet received
 			__sync_fetch_and_add(&nif->numIntRX, 1);
+			wcUp(&nif->wcInts);
 		};
 		
-		wcUp(&nif->wcInts);
 		return 0;
 	};
 };
@@ -276,7 +277,6 @@ static void e1000_thread(void *context)
 	while (nif->running)
 	{
 		wcDown(&nif->wcInts);
-		
 		if (nif->numIntTX > 0)
 		{
 			// transmit descriptor written back
@@ -384,7 +384,6 @@ MODULE_INIT(const char *opt)
 	EInterface *nif;
 	for (nif=interfaces; nif!=NULL; nif=nif->next)
 	{
-		pciSetIrqHandler(nif->pcidev, e1000_int, nif);
 		nif->mmioAddr = (uint64_t) mapPhysMemory((uint64_t) nif->pcidev->bar[0] & ~0xF, E1000_MMIO_SIZE);
 		
 		NetIfConfig ifconfig;
@@ -489,7 +488,11 @@ MODULE_INIT(const char *opt)
 			sha->rxdesc[i].phaddr = (uint64_t) physShared->rxbufs[i].data;
 			sha->rxdesc[i].status = 0;
 		};
-		
+
+		// next RX descriptor is zero
+		nif->nextRX = 0;
+		pciSetIrqHandler(nif->pcidev, e1000_int, nif);
+
 		// set up receive base and size
 		volatile uint32_t *regRDB = (volatile uint32_t*) (nif->mmioAddr + 0x2800);
 		uint64_t rxBase = (uint64_t) physShared->rxdesc;
@@ -513,9 +516,6 @@ MODULE_INIT(const char *opt)
 			| (1 << 26)				// discard CRC
 		;
 		
-		// next RX descriptor is zero
-		nif->nextRX = 0;
-		
 		// create the network interface for glidix
 		nif->netif = CreateNetworkInterface(nif, &ifconfig);
 		if (nif->netif == NULL)
@@ -534,7 +534,7 @@ MODULE_INIT(const char *opt)
 		pars.name = "E1000 Interrupt Handler";
 		pars.stackSize = DEFAULT_STACK_SIZE;
 		nif->thread = CreateKernelThread(e1000_thread, &pars, nif);
-		pciSetBusMastering(nif->pcidev, 0);
+		pciSetBusMastering(nif->pcidev, 1);
 		
 		memset(&pars, 0, sizeof(KernelThreadParams));
 		pars.name = "E1000 Queue Thread";
