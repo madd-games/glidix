@@ -30,28 +30,6 @@ section .text
 [extern switchTask]
 [extern stackTrace]
 
-[global msrWrite]
-msrWrite:
-	mov	ecx,		edi
-	mov	rdx,		rsi
-	shr	rdx,		32
-	mov	eax,		esi
-	wrmsr
-	ret
-
-[global msrRead]
-msrRead:
-	mov	ecx,		edi
-	rdmsr
-	rol	rax,		32
-	mov	rdi,		0xFFFFFFFF00000000
-	and	rax,		rdi
-	mov	rdi,		0x00000000FFFFFFFF
-	and	rdx,		rdi
-	or	rax,		rdx
-	rol	rax,		32
-	ret
-
 [global getDebugInput]
 getDebugInput:
 	xor	rax,		rax

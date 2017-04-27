@@ -140,7 +140,7 @@ usup_sigret:
 ;; resettable system calls
 ;; kernel passes return RIP in R9, sets up all registers for system calls (RAX, arguments) and transfers
 ;; control to this code. we invoke the system call and then jump back to the return RIP. note that system
-;; calls preserve R9 (just for this purpose). this is used when a signal is dispatached during a system call
+;; calls preserve R9 (just for this purpose). this is used when a signal is dispatched during a system call
 ;; which cannot return EINTR, and is instead automatically re-tried.
 usup_syscall_reset:
 	syscall

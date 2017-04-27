@@ -108,6 +108,12 @@ typedef struct
 void initPerCPU();
 
 /**
+ * Second stage of per-CPU initialization; done on ALL CPUs (including the BSP),
+ * initializes system calls and stuff.
+ */
+void initPerCPU2();
+
+/**
  * Boot up other CPUs. This must be called after the scheduler is initialised.
  */
 void initMultiProc();

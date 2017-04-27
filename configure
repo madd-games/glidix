@@ -8,6 +8,7 @@ build="`gcc -dumpmachine`"
 if [ "$srcdir" = "." ]
 then
 	echo >&2 "$0: error: cannot build in the source directory"
+	exit 1
 fi
 
 echo >config.log "configure command: $0 $@"
@@ -155,6 +156,7 @@ case $i in
 	*)
 		echo >&2 "$0: unrecognised command-line option '$i'"
 		echo >&2 "run '$0 --help' for more information"
+		exit 1
 esac
 done
 

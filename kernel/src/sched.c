@@ -37,6 +37,7 @@
 #include <glidix/syscall.h>
 #include <glidix/cpu.h>
 #include <glidix/pagetab.h>
+#include <glidix/msr.h>
 
 static Thread firstThread;
 PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
@@ -472,7 +473,8 @@ static void jumpToTask()
 	cli();
 	localTSSPtr->rsp0 = ((uint64_t) currentThread->stack + currentThread->stackSize) & ~0xFUL;
 	currentThread->syscallStackPointer = ((uint64_t) currentThread->stack + currentThread->stackSize) & ~0xFUL;
-
+	msrWrite(MSR_KERNEL_GS_BASE, (uint64_t) currentThread);
+	
 	// reload the TSS
 	reloadTR();
 

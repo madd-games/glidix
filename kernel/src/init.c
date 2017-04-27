@@ -62,6 +62,7 @@
 #include <glidix/usb.h>
 #include <glidix/pageinfo.h>
 #include <glidix/ftree.h>
+#include <glidix/msr.h>
 
 #define ACPI_OSC_QUERY_INDEX				0
 #define ACPI_OSC_SUPPORT_INDEX				1
@@ -353,7 +354,7 @@ void kmain(KernelBootInfo *info)
 
 	kprintf("Getting ACPI info... ");
 	acpiInit();
-	msrWrite(0x1B, 0xFEE00000 | (1 << 11) /*| (1 << 8)*/ );
+	msrWrite(0x1B, 0xFEE00000 | (1 << 11));
 	apic->sivr = 0x1FF;
 
 	kprintf("Initializing the FPU... ");
@@ -410,11 +411,7 @@ void kmain(KernelBootInfo *info)
 	DONE();
 
 	kprintf("Initializing the scheduler and syscalls... ");
-	msrWrite(0xC0000081, ((uint64_t)8 << 32) | ((uint64_t)0x1b << 48));
-	msrWrite(0xC0000082, (uint64_t)(&_syscall_entry));
-	msrWrite(0xC0000083, (uint64_t)(&_syscall_entry));		// we don't actually use compat mode
-	msrWrite(0xC0000084, (1 << 9) | (1 << 10));			// disable interrupts on syscall and set DF=0
-	msrWrite(0xC0000080, msrRead(0xC0000080) | 1);
+	initPerCPU2();
 	initSched();
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
 };
@@ -431,34 +428,6 @@ static void spawnProc(void *stack)
 	
 	getCurrentThread()->creds->sid = 1;
 	getCurrentThread()->creds->pgid = 1;
-
-#if 0
-	// TEST
-	// dynld
-	vmMap(0x0000000100000000, 0x0000000000004900, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	vmMap(0x0000000100000000, 0x0000000000003d9c, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	
-	// stack
-	vmMap(0x200000, 0x200000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	
-	// mount
-	vmMap(0x0000000000400000, 0x0000000000001234, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	vmMap(0x0000000000400000, 0x0000000000001234, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	vmMap(0x0000000000601000, 0x0000000000000538, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	vmMap(0x0000000000601000, 0x00000000000004a8, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	
-	// libcrypt
-	vmMap(0x0000000200000000, 0x1000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	vmMap(0x0000000200001000, 0x0000000000000c68, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	vmMap(0x0000000200001000, 0x0000000000000c68, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	vmMap(0x0000000200001000, 0x0000000000000f28, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	vmMap(0x0000000200001000, 0x0000000000000ec8, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-	
-	// libc
-	
-	vmDump(getCurrentThread()->pm, 0);
-	panic("stop");
-#endif
 	
 	static char initExecpars[] = "init\0\0USERNAME=root\0SHELL=/bin/sh\0\0";
 	kyield();

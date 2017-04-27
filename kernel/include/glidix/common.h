@@ -156,10 +156,6 @@ extern KernelBootInfo *bootInfo;
 uint64_t	getFlagsRegister();
 void		setFlagsRegister(uint64_t flags);
 
-/* common.asm */
-uint64_t	msrRead(uint32_t msr);
-void		msrWrite(uint32_t msr, uint64_t value);
-
 /**
  * Print a stack trace from the specified stack frame.
  */

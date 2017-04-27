@@ -491,11 +491,8 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 
 	if (!vfsCanCurrentThread(&st, neededPerms))
 	{
-		if ((oflag & O_CREAT) == 0)
-		{
-			vfsUnlockCreation();
-			return sysOpenErrno(VFS_PERM);
-		};
+		vfsUnlockCreation();
+		return sysOpenErrno(VFS_PERM);
 	};
 
 	FileTable *ftab = getCurrentThread()->ftab;

@@ -40,6 +40,7 @@
 #include <glidix/sched.h>
 #include <glidix/idt.h>
 #include <glidix/fpu.h>
+#include <glidix/msr.h>
 
 /**
  * Uncomment this to enable SMP.
@@ -109,12 +110,16 @@ void initPerCPU()
 	uint64_t per_cpu_size = (uint64_t) &_per_cpu_end - (uint64_t) &_per_cpu_start;
 	memset(&_per_cpu_start, 0, per_cpu_size);
 
-	// system calls
-	msrWrite(0xC0000081, ((uint64_t)8 << 32) | ((uint64_t)0x1b << 48));
-	msrWrite(0xC0000082, (uint64_t)(&_syscall_entry));
-	msrWrite(0xC0000083, (uint64_t)(&_syscall_entry));		// we don't actually use compat mode
-	msrWrite(0xC0000084, (1 << 9) | (1 << 10));			// disable interrupts on syscall and set DF=0
-	msrWrite(0xC0000080, msrRead(0xC0000080) | 1);
+	initPerCPU2();
+};
+
+void initPerCPU2()
+{
+	msrWrite(MSR_STAR, ((uint64_t)8 << 32) | ((uint64_t)0x1b << 48));
+	msrWrite(MSR_LSTAR, (uint64_t)(&_syscall_entry));
+	msrWrite(MSR_CSTAR, (uint64_t)(&_syscall_entry));		// we don't actually use compat mode
+	msrWrite(MSR_SFMASK, (1 << 9) | (1 << 10));			// disable interrupts on syscall and set DF=0
+	msrWrite(MSR_EFER, msrRead(MSR_EFER) | EFER_SCE);
 };
 
 extern char trampoline_start;

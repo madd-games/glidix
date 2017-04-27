@@ -122,15 +122,15 @@ int vfsCanCurrentThread(struct stat *st, mode_t mask)
 
 	if (thread->creds->euid == st->st_uid)
 	{
-		return ((st->st_mode >> 6) & mask) != 0;
+		return ((st->st_mode >> 6) & mask) == mask;
 	}
 	else if (thread->creds->egid == st->st_gid)
 	{
-		return ((st->st_mode >> 3) & mask) != 0;
+		return ((st->st_mode >> 3) & mask) == mask;
 	}
 	else
 	{
-		return (st->st_mode & mask) != 0;
+		return (st->st_mode & mask) == mask;
 	};
 };
 
