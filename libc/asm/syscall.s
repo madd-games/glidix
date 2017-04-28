@@ -143,3 +143,4 @@ GLIDIX_SYSCALL	130,	_glidix_haveperm
 GLIDIX_SYSCALL	131,	sync
 GLIDIX_SYSCALL	132,	nice
 GLIDIX_SYSCALL	133,	_glidix_procstat
+GLIDIX_SYSCALL	134,	_glidix_cpuno

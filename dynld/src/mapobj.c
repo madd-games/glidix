@@ -509,7 +509,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 	
 	// get the symbol table, string table and relocation table
 	Elf64_Dyn *dyn;
-	size_t numPltRela;
+	size_t numPltRela = 0;
 	for (dyn=lib->dyn; dyn->d_tag!=DT_NULL; dyn++)
 	{
 		switch (dyn->d_tag)
@@ -754,7 +754,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 			return 0;
 		};
 	};
-	
+
 	// PLT resolution or lazy binding time
 	if (lib->pltRela != NULL)
 	{
@@ -764,6 +764,11 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 		if ((flags & RTLD_NOW) || (bindNow))
 		{
 			// we must do all bindings immediately
+			if (debugMode)
+			{
+				dynld_printf("dynld: performing PLT on object `%s' (0x%p relocations)\n", name, numPltRela);
+			};
+
 			for (i=0; i<numPltRela; i++)
 			{
 				if (dynld_pltreloc(lib, i) == NULL)

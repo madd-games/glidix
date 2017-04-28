@@ -52,6 +52,7 @@
 #include <glidix/message.h>
 #include <glidix/catch.h>
 #include <glidix/storage.h>
+#include <glidix/cpu.h>
 
 /**
  * Options for _glidix_kopt().
@@ -2804,24 +2805,6 @@ int sys_store_and_sleep(uint8_t *ptr, uint8_t value)
 	return 0;
 };
 
-void signalOnBadPointer(Regs *regs, uint64_t ptr)
-{
-	siginfo_t siginfo;
-	siginfo.si_signo = SIGSEGV;
-	siginfo.si_code = SEGV_ACCERR;
-	siginfo.si_addr = (void*) ptr;
-	(void)siginfo;
-
-	ERRNO = EINTR;
-	*((int64_t*)&regs->rax) = -1;
-	
-	cli();
-	lockSched();
-	sendSignal(getCurrentThread(), &siginfo);
-	unlockSched();
-	kyield();
-};
-
 void sysInvalid()
 {
 	siginfo_t si;
@@ -4125,10 +4108,15 @@ ssize_t sys_procstat(int pid, ProcStat *buf, size_t bufsz)
 	return result;
 };
 
+int sys_cpuno()
+{
+	return getCurrentCPU()->id;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  */
-#define SYSCALL_NUMBER 134
+#define SYSCALL_NUMBER 135
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -4264,6 +4252,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_sync,				// 131
 	&sys_nice,				// 132
 	&sys_procstat,				// 133
+	&sys_cpuno,				// 134
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

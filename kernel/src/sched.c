@@ -41,7 +41,7 @@
 
 static Thread firstThread;
 PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
-static PER_CPU Thread idleThread;
+static PER_CPU Thread *idleThread;
 
 static Spinlock schedLock;		// for PID and stuff
 static int nextPid;
@@ -429,32 +429,28 @@ void initSched2()
 	
 	// the idle thread needs 2 things: the registers and flags indicating
 	// it is always waiting. everthing else can be uninitialized
-	idleThread.regs.cs = 0x08;
-	idleThread.regs.ds = 0x10;
-	idleThread.regs.ss = 0;
-	idleThread.regs.rsp = (uint64_t) kmalloc(0x4000) + 0x4000 - 8;
-	idleThread.regs.rip = (uint64_t) &idleThreadFunc;
-	idleThread.regs.rbp = 0;
-	idleThread.flags = THREAD_WAITING;
+	idleThread = NEW(Thread);
+	idleThread->regs.cs = 0x08;
+	idleThread->regs.ds = 0x10;
+	idleThread->regs.ss = 0;
+	idleThread->regs.rsp = (uint64_t) kmalloc(0x4000) + 0x4000 - 8;
+	idleThread->regs.rip = (uint64_t) &idleThreadFunc;
+	idleThread->regs.rbp = 0;
+	idleThread->flags = THREAD_WAITING;
 };
 
 void initSchedAP()
 {
-	// create a thread just like the first thread, that will be constantly sleeping,
-	// and is assigned to this CPU
-	Thread *idleThread = NEW(Thread);
-	memcpy(idleThread, &firstThread, sizeof(Thread));
+	// the idle thread needs 2 things: the registers and flags indicating
+	// it is always waiting. everthing else can be uninitialized
+	idleThread = NEW(Thread);
+	idleThread->regs.cs = 0x08;
+	idleThread->regs.ds = 0x10;
+	idleThread->regs.ss = 0;
+	idleThread->regs.rsp = (uint64_t) kmalloc(0x4000) + 0x4000 - 8;
+	idleThread->regs.rip = (uint64_t) &idleThreadFunc;
+	idleThread->regs.rbp = 0;
 	idleThread->flags = THREAD_WAITING;
-	strformat(idleThread->name, 256, "CPU %d idle thread", getCurrentCPU()->id);
-		
-	// interrupts are already disabled
-	// link the idle thread into the runqueue
-	lockSched();
-	idleThread->prev = &firstThread;
-	idleThread->next = firstThread.next;
-	firstThread.next->prev = idleThread;
-	firstThread.next = idleThread;
-	unlockSched();
 	
 	// set up any valid register set for the initial task switch
 	Regs regs;
@@ -572,7 +568,7 @@ void switchTaskUnlocked(Regs *regs)
 	if (i == NUM_PRIO_Q)
 	{
 		// no thread waiting; go idle
-		currentThread = &idleThread;
+		currentThread = idleThread;
 	}
 	else
 	{	

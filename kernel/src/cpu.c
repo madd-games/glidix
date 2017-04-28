@@ -47,7 +47,7 @@
  * Currently there is a bug where the page fault handler causes a page fault
  * while attempting to get the procmem spinlock.
  */
-//#define	ENABLE_SMP
+#define	ENABLE_SMP
 
 static PER_CPU CPU *currentCPU;
 PER_CPU char localGDT[64];
@@ -137,7 +137,6 @@ void initMultiProc()
 	
 	cpuList[0].id = 0;
 	cpuList[0].apicID = (apic->id >> 24);
-	cpuList[0].numTasks = 1;		// the startup task
 	currentCPU = &cpuList[0];
 
 #ifdef ENABLE_SMP
@@ -149,7 +148,6 @@ void initMultiProc()
 		{
 			cpuList[cpuno].id = cpuno;
 			cpuList[cpuno].apicID = apicList[i];
-			cpuList[cpuno].numTasks = 0;
 			cpuno++;
 		};
 	};
@@ -311,31 +309,6 @@ CPU *getCurrentCPU()
 	return currentCPU;
 };
 
-int allocCPU()
-{
-	int i;
-	int currentLowest = 0;
-	int withTasks = cpuList[0].numTasks;
-	
-	for (i=1; i<numCPU; i++)
-	{
-		int count = cpuList[i].numTasks;
-		if (count < withTasks)
-		{
-			currentLowest = i;
-			withTasks = count;
-		};
-	};
-	
-	__sync_fetch_and_add(&cpuList[currentLowest].numTasks, 1);
-	return currentLowest;
-};
-
-void downrefCPU(int cpuno)
-{
-	__sync_fetch_and_add(&cpuList[cpuno].numTasks, -1);
-};
-
 void sendHintToCPU(int cpuID)
 {
 	uint64_t retflags = getFlagsRegister();
@@ -432,6 +405,6 @@ void apEntry()
 	// initialize the FPU
 	fpuInit();
 	
-	// go the the scheduler
+	// go to the scheduler
 	initSchedAP();
 };

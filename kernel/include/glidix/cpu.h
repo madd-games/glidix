@@ -47,12 +47,6 @@ typedef struct
 	 * The CPU's APIC ID.
 	 */
 	uint32_t apicID;
-	
-	/**
-	 * Number of tasks this CPU is currently executing. This does NOT include the idle
-	 * task.
-	 */
-	int numTasks;
 } CPU;
 
 /**
@@ -129,11 +123,6 @@ void haltAllCPU();
 CPU* getCurrentCPU();
 
 /**
- * Allocates a CPU to run a task on.
- */
-int allocCPU();
-
-/**
  * Decrease a CPU's task count.
  */
 void downrefCPU(int cpuno);
@@ -144,7 +133,7 @@ void downrefCPU(int cpuno);
 void sendHintToCPU(int id);
 
 /**
- * Send the scheduler hitn to all CPUs.
+ * Send the scheduler hint to all CPUs.
  */
 void sendHintToEveryCPU();
 

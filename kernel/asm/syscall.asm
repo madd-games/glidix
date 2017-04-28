@@ -36,7 +36,6 @@ global _syscall_entry
 _syscall_entry:
 	; the fourth argument, that is normally in RCX, is passed in R10 in this context
 	; as RCX contains the return address
-	xchg bx, bx
 	swapgs				; GS.base = currentThread
 	mov [gs:0x208], rbx
 	mov [gs:0x210], rsp

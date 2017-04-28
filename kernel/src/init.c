@@ -522,12 +522,12 @@ void kmain2()
 	{
 		panic("AcpiInstallAddressSpaceHandler failed");
 	};
+
+	initSched2();
 	
 	// this must come after AcpiInitializeSubsystem() because ACPI calls
 	// AcpiOsInitialize() which maps more stuff into the PML4
 	initMultiProc();
-
-	initSched2();
 	
 	kprintf("Initializing SDI... ");
 	sdInit();
