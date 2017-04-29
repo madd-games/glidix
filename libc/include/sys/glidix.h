@@ -147,6 +147,8 @@ typedef struct
 	char				deviceName[128];
 	uint32_t			bar[6];
 	uint32_t			barsz[6];
+	uint8_t				progif;
+	int				intNo;
 } _glidix_pcidev;
 
 struct sockaddr_cap

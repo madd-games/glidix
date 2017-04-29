@@ -407,7 +407,12 @@ static void idleThreadFunc()
 {
 	while (1)
 	{
-		hlt();
+		while (cpuSleeping())
+		{
+			hlt();
+		};
+		
+		kyield();
 	};
 };
 
@@ -525,6 +530,9 @@ void switchTaskUnlocked(Regs *regs)
 	currentThread->ps.ps_ticks += ticks;
 	currentThread->ps.ps_entries++;
 	
+	// wake up
+	cpuBusy();
+	
 	// update process statistics if attached
 	if (currentThread->creds != NULL)
 	{
@@ -551,6 +559,7 @@ void switchTaskUnlocked(Regs *regs)
 			{
 				runqLast[getPrio(currentThread)]->next = &currentThread->runq;
 				runqLast[getPrio(currentThread)] = &currentThread->runq;
+				cpuDispatch();
 			};
 		};
 	};
@@ -568,6 +577,7 @@ void switchTaskUnlocked(Regs *regs)
 	if (i == NUM_PRIO_Q)
 	{
 		// no thread waiting; go idle
+		cpuReady();
 		currentThread = idleThread;
 	}
 	else
@@ -833,6 +843,8 @@ int signalThread(Thread *thread)
 				runqLast[getPrio(thread)] = &thread->runq;
 			};
 		};
+		
+		cpuDispatch();
 	}
 	else
 	{

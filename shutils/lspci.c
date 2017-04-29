@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 			return 0;
 		};
 		
-		printf("#%d: %u/%u/%u 0x%x:0x%x (type 0x%x): %s\n", i, (unsigned int) dev.bus, (unsigned int) dev.slot, (unsigned int) dev.func, (unsigned int) dev.vendor, (unsigned int) dev.device, (unsigned int) dev.type, dev.deviceName);
+		printf("#%d: %u/%u/%u 0x%x:0x%x [INT %d] (type 0x%x): %s\n", i, (unsigned int) dev.bus, (unsigned int) dev.slot, (unsigned int) dev.func, (unsigned int) dev.vendor, (unsigned int) dev.device, dev.intNo, (unsigned int) dev.type, dev.deviceName);
 		printf("\tDriver: %s\n\n", dev.driverName);
 	};
 	

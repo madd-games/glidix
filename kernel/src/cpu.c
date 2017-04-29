@@ -59,6 +59,8 @@ extern char _per_cpu_start;
 extern char _per_cpu_end;
 void _syscall_entry();
 
+static uint16_t cpuReadyBitmap;
+
 void initPerCPU()
 {
 	PML4 *pml4 = getPML4();
@@ -133,6 +135,7 @@ CPU cpuList[16];
 int numCPU = 1;
 void initMultiProc()
 {
+	cpuReadyBitmap = 0;
 	memset(cpuList, 0, sizeof(CPU)*16);
 	
 	cpuList[0].id = 0;
@@ -407,4 +410,39 @@ void apEntry()
 	
 	// go to the scheduler
 	initSchedAP();
+};
+
+void cpuReady()
+{
+	if (getCurrentCPU() == NULL) return;
+	__sync_fetch_and_or(&cpuReadyBitmap, (1 << getCurrentCPU()->id));
+};
+
+void cpuBusy()
+{
+	if (getCurrentCPU() == NULL) return;
+	__sync_fetch_and_and(&cpuReadyBitmap, ~(1 << getCurrentCPU()->id));
+};
+
+void cpuDispatch()
+{
+	if (getCurrentCPU() == NULL) return;
+	if (numCPU == 1) return;
+
+	int i;
+	for (i=0; i<numCPU; i++)
+	{
+		uint16_t mask = 1 << i;
+		if (__sync_fetch_and_and(&cpuReadyBitmap, ~mask) & mask)
+		{
+			if (i != getCurrentCPU()->id) sendHintToCPU(i);
+			return;
+		};
+	};
+};
+
+int cpuSleeping()
+{
+	if (getCurrentCPU() == NULL) return 1;
+	return cpuReadyBitmap & (1 << getCurrentCPU()->id);
 };

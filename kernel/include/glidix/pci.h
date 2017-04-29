@@ -131,9 +131,9 @@ typedef struct PCIDevice_
 	uint32_t					bar[6];			// base address registers (BARs)
 	uint32_t					barsz[6];		// size of each BAR
 	uint8_t						progif;
+	int						intNo;			// which interrupt the device was mapped to
 
 	// -- END OF USER AREA --
-	int						intNo;			// which interrupt the device was mapped to
 	
 	/**
 	 * IRQ handler. Return 0 if the interrupt actually came from this device,

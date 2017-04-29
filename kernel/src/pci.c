@@ -40,8 +40,10 @@
 #include <glidix/apic.h>
 #include <glidix/idt.h>
 #include <glidix/syscall.h>
+#include <glidix/spinlock.h>
 
 static Mutex pciLock;
+static Spinlock confLock;
 
 static PCIDevice *pciDevices = NULL;
 static PCIDevice *lastDevice = NULL;
@@ -55,6 +57,33 @@ typedef struct PCIBridge_
 	uint8_t					masterSlot;
 } PCIBridge;
 
+/**
+ * We need those 2 functions to access configuration registers in an async-safe,
+ * SMP-safe manner.
+ */
+static uint32_t pciConfRead(uint32_t addr)
+{
+	uint64_t flags = getFlagsRegister();
+	cli();
+	spinlockAcquire(&confLock);
+	outd(PCI_CONFIG_ADDR, addr);
+	uint32_t result = ind(PCI_CONFIG_DATA);
+	spinlockRelease(&confLock);
+	setFlagsRegister(flags);
+	return result;
+};
+
+static void pciConfWrite(uint32_t addr, uint32_t value)
+{
+	uint64_t flags = getFlagsRegister();
+	cli();
+	spinlockAcquire(&confLock);
+	outd(PCI_CONFIG_ADDR, addr);
+	outd(PCI_CONFIG_DATA, value);
+	spinlockRelease(&confLock);
+	setFlagsRegister(flags);
+};
+
 static uint32_t pciGetBarSize(PCIDevice *dev, uint32_t i)
 {
 	uint32_t addr = 0;
@@ -63,17 +92,21 @@ static uint32_t pciGetBarSize(PCIDevice *dev, uint32_t i)
 	uint32_t lfunc = (uint32_t) dev->func;
 	addr = (lbus << 16) | (lslot << 11) | (lfunc << 8) | (1 << 31) | (0x10 + 4 * i);
 	
-	outd(PCI_CONFIG_ADDR, addr);
-	uint32_t bar = ind(PCI_CONFIG_DATA);
+	//outd(PCI_CONFIG_ADDR, addr);
+	//uint32_t bar = ind(PCI_CONFIG_DATA);
+	uint32_t bar = pciConfRead(addr);
 	
-	outd(PCI_CONFIG_ADDR, addr);
-	outd(PCI_CONFIG_DATA, 0xFFFFFFFF);
+	//outd(PCI_CONFIG_ADDR, addr);
+	//outd(PCI_CONFIG_DATA, 0xFFFFFFFF);
+	pciConfWrite(addr, 0xFFFFFFFF);
 	
-	outd(PCI_CONFIG_ADDR, addr);
-	uint32_t barsz = ind(PCI_CONFIG_DATA);
+	//outd(PCI_CONFIG_ADDR, addr);
+	//uint32_t barsz = ind(PCI_CONFIG_DATA);
+	uint32_t barsz = pciConfRead(addr);
 	
-	outd(PCI_CONFIG_ADDR, addr);
-	outd(PCI_CONFIG_DATA, bar);
+	//outd(PCI_CONFIG_ADDR, addr);
+	//outd(PCI_CONFIG_DATA, bar);
+	pciConfWrite(addr, bar);
 	
 	if (barsz & 1)
 	{
@@ -393,6 +426,7 @@ static ACPI_STATUS pciWalkCallback(ACPI_HANDLE object, UINT32 nestingLevel, void
 void pciInit()
 {
 	mutexInit(&pciLock);
+	spinlockRelease(&confLock);
 	checkBus(0, NULL);
 };
 
@@ -451,8 +485,9 @@ void pciGetDeviceConfig(uint8_t bus, uint8_t slot, uint8_t func, PCIDeviceConfig
 
 	while (count--)
 	{
-		outd(PCI_CONFIG_ADDR, addr);
-		*put++ = ind(PCI_CONFIG_DATA);
+		//outd(PCI_CONFIG_ADDR, addr);
+		//*put++ = ind(PCI_CONFIG_DATA);
+		*put++ = pciConfRead(addr);
 		addr += 4;
 	};
 	mutexUnlock(&pciLock);
@@ -538,8 +573,8 @@ void pciInterrupt(int intNo)
 		};
 	};
 	
-	// interrupt unhandled
-	panic("unhandled PCI interrupt %d", intNo);
+	// spurious interrupts sometimes happen
+	apic->eoi = 0;
 };
 
 void pciSetBusMastering(PCIDevice *dev, int enable)
@@ -551,8 +586,9 @@ void pciSetBusMastering(PCIDevice *dev, int enable)
 	uint32_t lfunc = (uint32_t) dev->func;
 	addr = (lbus << 16) | (lslot << 11) | (lfunc << 8) | (1 << 31) | 0x4;
 	
-	outd(PCI_CONFIG_ADDR, addr);
-	uint32_t statcmd = ind(PCI_CONFIG_DATA);
+	//outd(PCI_CONFIG_ADDR, addr);
+	//uint32_t statcmd = ind(PCI_CONFIG_DATA);
+	uint32_t statcmd = pciConfRead(addr);
 	
 	if (enable)
 	{
@@ -563,8 +599,10 @@ void pciSetBusMastering(PCIDevice *dev, int enable)
 		statcmd &= ~(1 << 2);
 	};
 	
-	outd(PCI_CONFIG_ADDR, addr);
-	outd(PCI_CONFIG_DATA, statcmd);
+	//outd(PCI_CONFIG_ADDR, addr);
+	//outd(PCI_CONFIG_DATA, statcmd);
+	pciConfWrite(addr, statcmd);
+	
 	mutexUnlock(&pciLock);
 };
 

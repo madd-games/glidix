@@ -123,11 +123,6 @@ void haltAllCPU();
 CPU* getCurrentCPU();
 
 /**
- * Decrease a CPU's task count.
- */
-void downrefCPU(int cpuno);
-
-/**
  * Send the scheduler hint to a CPU.
  */
 void sendHintToCPU(int id);
@@ -136,5 +131,25 @@ void sendHintToCPU(int id);
  * Send the scheduler hint to all CPUs.
  */
 void sendHintToEveryCPU();
+
+/**
+ * Mark the calling CPU as ready to dispatch threads.
+ */
+void cpuReady();
+
+/**
+ * Mark the calling CPU as busy.
+ */
+void cpuBusy();
+
+/**
+ * Wake up the first ready CPU.
+ */
+void cpuDispatch();
+
+/**
+ * Return nonzero if the CPU should continue sleeping.
+ */
+int cpuSleeping();
 
 #endif
