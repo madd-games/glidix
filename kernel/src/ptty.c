@@ -358,6 +358,22 @@ static ssize_t ptm_write(File *fp, const void *buffer, size_t size)
 			ptty->slaveBuffer[ptty->slavePut] = c;
 			ptty->slavePut = (ptty->slavePut + 1) % TERM_BUFFER_SIZE;
 			numPutSlave++;
+			
+			if (c == '\n')
+			{
+				if (ptty->state.c_lflag & ECHONL)
+				{
+					ptty->masterBuffer[ptty->masterPut] = c;
+					ptty->masterPut = (ptty->masterPut + 1) % TERM_BUFFER_SIZE;
+					numPutMaster++;
+				};
+			}
+			else if (ptty->state.c_lflag & ECHO)
+			{
+				ptty->masterBuffer[ptty->masterPut] = c;
+				ptty->masterPut = (ptty->masterPut + 1) % TERM_BUFFER_SIZE;
+				numPutMaster++;
+			};
 		};
 	};
 	

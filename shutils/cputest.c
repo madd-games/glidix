@@ -34,15 +34,17 @@
 
 pthread_t threads[NUM_THREADS];
 
+volatile int *currentTimers;
+int realTimers[16];
+int falseTimers[16];
+
 void* test_thread(void *ignore)
 {
 	(void)ignore;
 	
-	char msgbuf[2048];
 	while (1)
 	{
-		sprintf(msgbuf, "pid=%d\t thid=%d\t cpuno=%d\n", getpid(), pthread_self(), _glidix_cpuno());
-		write(1, msgbuf, strlen(msgbuf));
+		__sync_fetch_and_add(&currentTimers[_glidix_cpuno()], 1);
 	};
 	
 	return NULL;
@@ -51,11 +53,20 @@ void* test_thread(void *ignore)
 int main()
 {
 	int i;
+	currentTimers = realTimers;
+	
 	for (i=0; i<NUM_THREADS; i++)
 	{
 		pthread_create(&threads[i], NULL, test_thread, NULL);
 	};
 	
-	while (1) pause();
+	sleep(10);
+	currentTimers = falseTimers;
+	
+	for (i=0; i<16; i++)
+	{
+		printf("Timer %d: %d\n", i, realTimers[i]);
+	};
+	
 	return 0;
 };
