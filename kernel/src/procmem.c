@@ -670,6 +670,7 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 			pte->rw = 1;
 		};
 		
+		if (!pte->gx_x) pte->xd = 1;
 		if (pte->gx_r) pte->present = 1;
 		pte->user = 1;
 		pte->gx_loaded = 1;
@@ -800,6 +801,11 @@ int vmProtect(uint64_t base, size_t len, int prot)
 			if (!pte->gx_w)
 			{
 				pte->rw = 0;
+			};
+			
+			if (!pte->gx_x)
+			{
+				pte->xd = 1;
 			};
 		};
 		

@@ -405,6 +405,7 @@ static void onGPF(Regs *regs)
 	};
 };
 
+extern int panicking;	/* panic.c */
 void isrHandler(Regs *regs)
 {
 	// ignore spurious IRQs
@@ -435,9 +436,17 @@ void isrHandler(Regs *regs)
 		sendCPUErrorSignal(regs, SIGFPE, FPE_INTDIV, (void*) regs->rip);
 		break;
 	case I_NMI:
+		if (panicking)
+		{
+			while (1)
+			{
+				cli();
+				hlt();
+			};
+		};
+		
 		dumpRunqueue();
 		stackTraceHere();
-		kdumpregs(regs);
 		break;
 	case I_UNDEF_OPCODE:
 		sendCPUErrorSignal(regs, SIGILL, ILL_ILLOPC, (void*) regs->rip);

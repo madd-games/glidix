@@ -45,6 +45,7 @@
  * EFER bits.
  */
 #define	EFER_SCE			(1 << 0)		/* system call extensions */
+#define	EFER_NXE			(1 << 11)		/* NX enable */
 
 /* msr.asm */
 uint64_t	msrRead(uint32_t msr);

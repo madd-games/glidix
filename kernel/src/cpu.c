@@ -121,7 +121,7 @@ void initPerCPU2()
 	msrWrite(MSR_LSTAR, (uint64_t)(&_syscall_entry));
 	msrWrite(MSR_CSTAR, (uint64_t)(&_syscall_entry));		// we don't actually use compat mode
 	msrWrite(MSR_SFMASK, (1 << 9) | (1 << 10));			// disable interrupts on syscall and set DF=0
-	msrWrite(MSR_EFER, msrRead(MSR_EFER) | EFER_SCE);
+	msrWrite(MSR_EFER, msrRead(MSR_EFER) | EFER_SCE | EFER_NXE);
 };
 
 extern char trampoline_start;
@@ -294,7 +294,7 @@ void haltAllCPU()
 		{
 			apic->icrHigh = cpuList[i].apicID << 24;
 			__sync_synchronize();
-			apic->icrLow = 0x00004070;	// I_IPI_HALT
+			apic->icrLow = 0x00004400;	// NMI
 			__sync_synchronize();
 			
 			while (apic->icrLow & (1 << 12))

@@ -31,15 +31,24 @@
 #include <glidix/cpu.h>
 #include <stdarg.h>
 
+int panicking = 0;
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
 
-	ASM ("cli");
+	cli();
+	if (__sync_fetch_and_add(&panicking, 1) != 0)
+	{
+		while (1)
+		{
+			cli();
+			hlt();
+		};
+	};
+	
 	haltAllCPU();
-	//unlockConsole();
-	stackTraceHere();
+	unlockConsole();
 	kprintf("In function %s at %s:%d\n", funcname, filename, lineno);
 	kprintf("Kernel panic: ");
 	kvprintf(fmt, ap);
