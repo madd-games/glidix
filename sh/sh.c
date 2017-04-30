@@ -36,6 +36,7 @@
 #include <pwd.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <termios.h>
 
 #include "strops.h"
 #include "dict.h"
@@ -64,6 +65,15 @@ typedef struct
 	FILE *inputFile;
 } StackFrame;
 
+typedef struct CmdHistory_ 
+{
+	char *line;
+	struct CmdHistory_ *next;
+	struct CmdHistory_ *prev;
+} CmdHistory;
+
+struct CmdHistory_ *cmdHead;
+		
 static StackFrame stack[MAX_STACK_DEPTH];
 static int stackIndex = 0;
 
@@ -135,6 +145,112 @@ static char *shGetLine(int cont)
 			printf("%s%s%s:%s%s%s%c%s ",
 				"\e\"\x09", username, "\e\"\x07", "\e\"\x06", cwd, promptColor, prompt, "\e\"\x07");
 		};
+		
+		struct termios tc;
+		tcgetattr(0, &tc);
+		struct termios old_tc = tc;
+		tc.c_lflag &= ~(ECHO);
+		tc.c_lflag &= ~ICANON;
+		tcsetattr(0, TCSANOW, &tc);
+		
+		char linbuff [1024];
+		char pendbuff [1024];
+		char c;
+		size_t numChars = 0;
+		CmdHistory *currCmd = NULL;
+		
+		while(1)
+		{	
+			ssize_t retval = read(0, &c, 1);
+			
+			if(retval == -1)
+			{
+				if (errno == EINTR)
+				{
+					printf("\n");
+					return strdup("");
+				}
+				else return NULL;
+			}
+			
+			if(retval == 0) return NULL;
+			else
+			{
+				if(c == '\n')
+				{
+					if(numChars != 0)
+					{
+						CmdHistory *cmd = (CmdHistory*) malloc(sizeof(CmdHistory));
+						cmd->prev = cmdHead;
+						cmd->next = NULL;
+						if (cmdHead != NULL) cmdHead->next = cmd;
+						cmdHead = cmd;
+						linbuff[numChars] = 0;
+						cmd->line = strdup(linbuff);
+					}
+					linbuff[numChars] = 0;
+					tcsetattr(0, TCSANOW, &old_tc);
+					return strdup(linbuff);
+				}
+				else if((uint8_t)c == 0x8B)
+				{
+					if((currCmd == NULL) && (cmdHead != NULL))
+					{
+						currCmd = cmdHead;
+						linbuff[numChars] = 0;
+						strcpy(pendbuff, linbuff);
+						while (numChars--) printf("\b");
+						numChars = strlen(currCmd->line);
+						strcpy(linbuff, currCmd->line);
+						printf("%s", linbuff);
+					}
+					else if(currCmd != NULL)
+					{
+						if(currCmd->prev != NULL)
+						{
+							currCmd = currCmd->prev;
+							while (numChars--) printf("\b");
+							numChars = strlen(currCmd->line);
+							strcpy(linbuff, currCmd->line);
+							printf("%s", linbuff);
+						}
+					}
+				}
+				else if((uint8_t)c == 0x8C)
+				{
+					if(currCmd != NULL)
+					{
+						currCmd = currCmd->next;
+						while (numChars--) printf("\b");
+						if(currCmd == NULL)
+						{
+							strcpy(linbuff, pendbuff);
+							numChars = strlen(linbuff);
+							printf("%s", linbuff);
+						}
+						else
+						{
+							numChars = strlen(currCmd->line);
+							strcpy(linbuff, currCmd->line);
+							printf("%s", linbuff);
+						}
+					}
+				}
+				else if(c == '\b')
+				{
+					if(numChars > 0)
+					{
+						numChars--;
+						printf("\b");
+					}
+				}
+				else if(numChars < 1023) 
+				{
+					linbuff[numChars++] = c;
+					write(1, &c, 1);
+				} 
+			}
+		}
 	};
 
 	char *line = (char*) malloc(1);
