@@ -299,7 +299,12 @@ static int executeGroup(CmdGroup *group)
 			}
 			else
 			{
-				close(pipefd[0]);
+				if (member->next != NULL)
+				{
+					// (only then did we create a pipe)
+					close(pipefd[0]);
+				};
+				
 				if (member->prev != NULL)
 				{
 					close(prevInput);

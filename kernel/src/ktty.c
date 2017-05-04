@@ -265,19 +265,16 @@ void setupTerminal(FileTable *ftab)
 	termin->ioctl = &termIoctl;
 	termin->refcount = 1;
 
-	//ftab->entries[0] = termin;
-	//ftab->entries[1] = termout;
 	File *termerr = (File*) kmalloc(sizeof(File));
 	termDup(termout, termerr, sizeof(File));
-	//ftab->entries[2] = termerr;
 	
 	if (ftabAlloc(ftab) != 0) panic("ftabAlloc did not return 0!");
 	if (ftabAlloc(ftab) != 1) panic("ftabAlloc did not return 1!");
 	if (ftabAlloc(ftab) != 2) panic("ftabAlloc did not return 2!");
 
-	ftabSet(ftab, 0, termin);
-	ftabSet(ftab, 1, termout);
-	ftabSet(ftab, 2, termerr);
+	ftabSet(ftab, 0, termin, 0);
+	ftabSet(ftab, 1, termout, 0);
+	ftabSet(ftab, 2, termerr, 0);
 
 	termState.c_iflag = ICRNL;
 	termState.c_oflag = 0;

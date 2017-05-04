@@ -119,7 +119,7 @@ int sys_fdopendir(const char *udirname)
 	fp->read = readdir;
 	fp->close = closedir;
 	fp->refcount = 1;
-	ftabSet(getCurrentThread()->ftab, fd, fp);
+	ftabSet(getCurrentThread()->ftab, fd, fp, 0);
 	
 	while (dir->dirent.d_ino == 0)
 	{

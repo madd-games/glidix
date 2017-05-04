@@ -562,7 +562,7 @@ int sysRouteTable(uint64_t family)
 		head = getRoutes6();
 	};
 
-	ftabSet(getCurrentThread()->ftab, i, qfileCreate(head));
+	ftabSet(getCurrentThread()->ftab, i, qfileCreate(head), FD_CLOEXEC);
 	return i;
 };
 

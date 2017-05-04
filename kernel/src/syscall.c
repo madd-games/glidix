@@ -448,7 +448,7 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 	if (fp == NULL)
 	{
 		vfsUnlockCreation();
-		ftabSet(getCurrentThread()->ftab, i, NULL);
+		ftabSet(getCurrentThread()->ftab, i, NULL, 0);
 		return sysOpenErrno(error);
 	};
 
@@ -466,7 +466,7 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 
 	fp->oflag |= oflag;
 	fp->refcount = 1;
-	ftabSet(getCurrentThread()->ftab, i, fp);
+	ftabSet(getCurrentThread()->ftab, i, fp, oflag & O_CLOEXEC);	/* O_CLOEXEC = FD_CLOEXEC */
 
 	return i;
 };
@@ -1195,7 +1195,7 @@ int sys_dup(int fd)
 		return -1;
 	};
 	
-	ftabSet(getCurrentThread()->ftab, i, fp);
+	ftabSet(getCurrentThread()->ftab, i, fp, 0);
 	return i;
 };
 
@@ -1935,13 +1935,13 @@ int sys_socket(int domain, int type, int proto)
 	File *fp = CreateSocket(domain, type, proto);
 	if (fp == NULL)
 	{
-		ftabSet(getCurrentThread()->ftab, i, NULL);
+		ftabSet(getCurrentThread()->ftab, i, NULL, 0);
 		// errno set by CreateSocket()
 		return -1;
 	};
 	
 	fp->refcount = 1;
-	ftabSet(getCurrentThread()->ftab, i, fp);
+	ftabSet(getCurrentThread()->ftab, i, fp, 0);
 	return i;
 };
 
@@ -2209,6 +2209,7 @@ int sys_uname(struct utsname *ubuf)
 
 int fcntl_getfd(int fd)
 {
+#if 0
 	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
@@ -2219,10 +2220,21 @@ int fcntl_getfd(int fd)
 	int flags = fp->oflag;
 	vfsClose(fp);
 	return flags & FD_ALL;
+#endif
+
+	int flags = ftabGetFlags(getCurrentThread()->ftab, fd);
+	if (flags == -1)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	return flags;
 };
 
 int fcntl_setfd(int fd, int flags)
 {
+#if 0
 	if ((flags & ~FD_ALL) != 0)
 	{
 		ERRNO = EINVAL;
@@ -2238,6 +2250,20 @@ int fcntl_setfd(int fd, int flags)
 	
 	fp->oflag = (fp->oflag & ~FD_ALL) | flags;
 	vfsClose(fp);
+#endif
+	if ((flags & ~FD_ALL) != 0)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+
+	int error = ftabSetFlags(getCurrentThread()->ftab, fd, flags);
+	if (error != 0)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
 	return 0;
 };
 

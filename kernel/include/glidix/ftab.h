@@ -38,15 +38,19 @@
 #include <glidix/semaphore.h>
 
 /**
- * Maximum number of files that can be opened per file table. Some threads may share
- * a single table.
+ * Maximum number of files that can be opened per file table. A file table is per-process,
+ * and all threads in one process share the table.
  */
 #define	MAX_OPEN_FILES					256
 
 typedef struct
 {
 	int						refcount;			// number of threads using this table.
-	File*						fps[MAX_OPEN_FILES];
+	struct
+	{
+		File*					fp;
+		int					flags;
+	}						list[MAX_OPEN_FILES];
 	Semaphore					lock;
 } FileTable;
 
@@ -68,9 +72,10 @@ int ftabAlloc(FileTable *ftab);
 
 /**
  * Set a file descriptor. It MUST have been just allocated with ftabAlloc(). The reference count of the file
- * will not be changed (so it should be 1 right now if it will be only on this list).
+ * will not be changed (so it should be 1 right now if it will be only on this list). The flags are 0 or
+ * FD_CLOEXEC for now.
  */
-void ftabSet(FileTable *ftab, int fd, File *fp);
+void ftabSet(FileTable *ftab, int fd, File *fp, int flags);
 
 /**
  * Close a file descriptor. Nothing happens if the descriptor is NULL. If the descriptor is reserved and not
@@ -90,5 +95,15 @@ int ftabPut(FileTable *ftab, int fd, File *fp);
  * Close all files marked with close-on-exec.
  */
 void ftabCloseOnExec(FileTable *ftab);
+
+/**
+ * Get descriptor flags. Return -1 if EBADF.
+ */
+int ftabGetFlags(FileTable *ftab, int fd);
+
+/**
+ * Set descriptor flags. Return 0 on success, error number on error.
+ */
+int ftabSetFlags(FileTable *ftab, int fd, int flags);
 
 #endif

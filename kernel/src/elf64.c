@@ -500,7 +500,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			};
 			
 			execfp->oflag = O_RDONLY;
-			ftabSet(getCurrentThread()->ftab, i, execfp);
+			ftabSet(getCurrentThread()->ftab, i, execfp, 0);
 			auxv[0].a_type = AT_EXECFD;
 			auxv[0].a_un.a_val = i;
 

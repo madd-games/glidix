@@ -27,5 +27,29 @@
 */
 
 #include <pthread.h>
+#include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
+#include <string.h>
 
+#define	NUM_THREADS			16
 
+void* thread_func(void *arg)
+{
+	(void)arg;
+	while (1) write(1, "test message\n", strlen("test message\n"));
+};
+
+int main()
+{
+	pthread_t thread;
+	
+	int i;
+	for (i=0; i<NUM_THREADS; i++)
+	{
+		pthread_create(&thread, NULL, thread_func, NULL);
+	};
+	
+	while (1) pause();
+	return 0;
+};

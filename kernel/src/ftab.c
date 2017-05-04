@@ -31,6 +31,7 @@
 #include <glidix/string.h>
 #include <glidix/console.h>
 #include <glidix/common.h>
+#include <glidix/sched.h>
 
 #define	FILE_RESERVE				((File*)1)
 
@@ -38,7 +39,7 @@ FileTable *ftabCreate()
 {
 	FileTable *ftab = (FileTable*) kmalloc(sizeof(FileTable));
 	ftab->refcount = 1;
-	memset(ftab->fps, 0, sizeof(void*)*MAX_OPEN_FILES);		// all description pointers start as NULL
+	memset(ftab->list, 0, sizeof(ftab->list));		// all description pointers start as NULL
 	semInit(&ftab->lock);
 
 	return ftab;
@@ -56,7 +57,7 @@ void ftabDownref(FileTable *ftab)
 		int i;
 		for (i=0; i<MAX_OPEN_FILES; i++)
 		{
-			File *fp = ftab->fps[i];
+			File *fp = ftab->list[i].fp;
 			if (fp != NULL)
 			{
 				vfsClose(fp);
@@ -75,11 +76,12 @@ FileTable *ftabDup(FileTable *old)
 	int i;
 	for (i=0; i<MAX_OPEN_FILES; i++)
 	{
-		File *fold = old->fps[i];
+		File *fold = old->list[i].fp;
 		if (fold != NULL)
 		{
 			vfsDup(fold);
-			new->fps[i] = fold;
+			new->list[i].fp = fold;
+			new->list[i].flags = old->list[i].flags;
 		};
 	};
 	semSignal(&old->lock);
@@ -95,7 +97,7 @@ File* ftabGet(FileTable *ftab, int fd)
 	};
 	
 	semWait(&ftab->lock);
-	File *fp = ftab->fps[fd];
+	File *fp = ftab->list[fd].fp;
 	if ((fp == NULL) || (fp == FILE_RESERVE))
 	{
 		semSignal(&ftab->lock);
@@ -115,9 +117,9 @@ int ftabAlloc(FileTable *ftab)
 	int fd;
 	for (fd=0; fd<MAX_OPEN_FILES; fd++)
 	{
-		if (ftab->fps[fd] == NULL)
+		if (ftab->list[fd].fp == NULL)
 		{
-			ftab->fps[fd] = FILE_RESERVE;
+			ftab->list[fd].fp = FILE_RESERVE;
 			semSignal(&ftab->lock);
 			return fd;
 		};
@@ -127,15 +129,16 @@ int ftabAlloc(FileTable *ftab)
 	return -1;
 };
 
-void ftabSet(FileTable *ftab, int fd, File *fp)
+void ftabSet(FileTable *ftab, int fd, File *fp, int flags)
 {
 	semWait(&ftab->lock);
-	if (ftab->fps[fd] != FILE_RESERVE)
+	if (ftab->list[fd].fp != FILE_RESERVE)
 	{
 		panic("ftabSet called on a non-reserved descriptor");
 	};
 	
-	ftab->fps[fd] = fp;
+	ftab->list[fd].fp = fp;
+	ftab->list[fd].flags = flags;
 	semSignal(&ftab->lock);
 };
 
@@ -147,14 +150,14 @@ int ftabClose(FileTable *ftab, int fd)
 	};
 	
 	semWait(&ftab->lock);
-	if (ftab->fps[fd] == FILE_RESERVE)
+	if (ftab->list[fd].fp == FILE_RESERVE)
 	{
 		semSignal(&ftab->lock);
 		return EBADF;
 	};
 	
-	File *old = ftab->fps[fd];
-	ftab->fps[fd] = NULL;
+	File *old = ftab->list[fd].fp;
+	ftab->list[fd].fp = NULL;
 	semSignal(&ftab->lock);
 	
 	if (old != NULL) vfsClose(old);
@@ -171,14 +174,15 @@ int ftabPut(FileTable *ftab, int fd, File *fp)
 	};
 	
 	semWait(&ftab->lock);
-	File *old = ftab->fps[fd];
+	File *old = ftab->list[fd].fp;
 	if (old == FILE_RESERVE)
 	{
 		semSignal(&ftab->lock);
 		return EBUSY;
 	};
 	
-	ftab->fps[fd] = fp;
+	ftab->list[fd].fp = fp;
+	ftab->list[fd].flags = 0;
 	semSignal(&ftab->lock);
 	
 	if (old != NULL) vfsClose(old);
@@ -192,16 +196,44 @@ void ftabCloseOnExec(FileTable *ftab)
 	int i;
 	for (i=0; i<MAX_OPEN_FILES; i++)
 	{
-		File *fp = ftab->fps[i];
+		File *fp = ftab->list[i].fp;
 		if (fp != NULL)
 		{
-			if (fp->oflag & O_CLOEXEC)
+			if (ftab->list[i].flags & FD_CLOEXEC)
 			{
-				ftab->fps[i] = NULL;
+				ftab->list[i].fp = NULL;
 				vfsClose(fp);
 			};
 		};
 	};
 	
 	semSignal(&ftab->lock);
+};
+
+int ftabGetFlags(FileTable *ftab, int fd)
+{
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	{
+		return -1;
+	};
+
+	semWait(&ftab->lock);
+	int flags = ftab->list[fd].flags;
+	semSignal(&ftab->lock);
+	
+	return flags;
+};
+
+int ftabSetFlags(FileTable *ftab, int fd, int flags)
+{
+	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
+	{
+		return EBADF;
+	};
+	
+	semWait(&ftab->lock);
+	ftab->list[fd].flags = flags;
+	semSignal(&ftab->lock);
+	
+	return 0;
 };

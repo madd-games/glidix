@@ -240,7 +240,7 @@ void initIDT()
 
 void idtReboot()
 {
-	ASM("cli");
+	cli();
 	idtPtr.addr = 0;
 	idtPtr.limit = 0;
 	loadIDT();

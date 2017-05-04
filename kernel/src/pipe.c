@@ -212,7 +212,7 @@ int sys_pipe(int *upipefd)
 	int wfd = ftabAlloc(getCurrentThread()->ftab);
 	if (wfd == -1)
 	{
-		ftabSet(getCurrentThread()->ftab, rfd, NULL);
+		ftabSet(getCurrentThread()->ftab, rfd, NULL, 0);
 		ERRNO = EMFILE;
 		return -1;
 	};
@@ -225,8 +225,8 @@ int sys_pipe(int *upipefd)
 	pipe->woff = 0;
 	pipe->sides = SIDE_READ | SIDE_WRITE;
 
-	ftabSet(getCurrentThread()->ftab, rfd, openPipe(pipe, O_RDONLY));
-	ftabSet(getCurrentThread()->ftab, wfd, openPipe(pipe, O_WRONLY));
+	ftabSet(getCurrentThread()->ftab, rfd, openPipe(pipe, O_RDONLY), 0);
+	ftabSet(getCurrentThread()->ftab, wfd, openPipe(pipe, O_WRONLY), 0);
 	
 	pipefd[0] = rfd;
 	pipefd[1] = wfd;
