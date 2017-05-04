@@ -226,7 +226,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	if (!vfsCanCurrentThread(&st, 1))
 	{
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EACCES;
 		return -1;
 	};
 
@@ -288,7 +288,6 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	memset(segments, 0, sizeof(ProgramSegment) * elfHeader.e_phnum);
 
 	unsigned int i;
-	int execfd = -1;
 	for (i=0; i<elfHeader.e_phnum; i++)
 	{
 		fp->seek(fp, elfHeader.e_phoff + i * elfHeader.e_phentsize, SEEK_SET);
@@ -315,7 +314,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			{
 				vfsClose(fp);
 				kfree(segments);
-				getCurrentThread()->therrno = ENOEXEC;
+				ERRNO = ENOEXEC;
 				return -1;
 			};
 
@@ -323,6 +322,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			{
 				vfsClose(fp);
 				kfree(segments);
+				ERRNO = ENOEXEC;
 				return -1;
 			};
 
@@ -438,7 +438,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 					{
 						vfsClose(fp);
 						kfree(segments);
-						getCurrentThread()->therrno = ENOEXEC;
+						ERRNO = ENOEXEC;
 						return -1;
 					};
 
@@ -446,6 +446,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 					{
 						vfsClose(fp);
 						kfree(segments);
+						ERRNO = ENOEXEC;
 						return -1;
 					};
 
@@ -487,20 +488,9 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 					return -1;
 				};
 			};
-			
-			FileTable *ftab = getCurrentThread()->ftab;
-			spinlockAcquire(&ftab->spinlock);
 
-			size_t i;
-			for (i=0; i<MAX_OPEN_FILES; i++)
-			{
-				if (ftab->entries[i] == NULL)
-				{
-					break;
-				};
-			};
-
-			if (i == MAX_OPEN_FILES)
+			int i = ftabAlloc(getCurrentThread()->ftab);
+			if (i == -1)
 			{
 				kfree(segments);
 				vfsClose(fp);
@@ -510,12 +500,9 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			};
 			
 			execfp->oflag = O_RDONLY;
-			ftab->entries[i] = execfp;
-			spinlockRelease(&ftab->spinlock);
-			
+			ftabSet(getCurrentThread()->ftab, i, execfp);
 			auxv[0].a_type = AT_EXECFD;
 			auxv[0].a_un.a_val = i;
-			execfd = (int) i;
 
 			break;
 		}
@@ -590,23 +577,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	killOtherThreads();
 	
 	// close all files marked with O_CLOEXEC (on glidix a.k.a. FD_CLOEXEC)
-	spinlockAcquire(&getCurrentThread()->ftab->spinlock);
-	for (i=0; i<MAX_OPEN_FILES; i++)
-	{
-		if (i != execfd)
-		{
-			File *fp = getCurrentThread()->ftab->entries[i];
-			if (fp != NULL)
-			{
-				if (fp->oflag & O_CLOEXEC)
-				{
-					getCurrentThread()->ftab->entries[i] = NULL;
-					vfsClose(fp);
-				};
-			};
-		};
-	};
-	spinlockRelease(&getCurrentThread()->ftab->spinlock);
+	ftabCloseOnExec(getCurrentThread()->ftab);
 	
 	// suid/sgid stuff
 	if (st.st_mode & VFS_MODE_SETUID)

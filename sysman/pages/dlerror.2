@@ -1,0 +1,27 @@
+>NAME
+
+dlerror - get error message from dynamic linker
+
+>SYNOPSIS
+
+	#include <dlfcn.h>
+	
+	char* dlerror();
+	
+	/* Link with '-ldl' */
+
+>DESCRIPTION
+
+This function returns an error message created by a failed call to [dlopen.2], [dlsym.2] or [dlclose.2]. It is not reentrant.
+
+>RETURN VALUE
+
+Returns the error message, as a string.
+
+>ERRORS
+
+This function is always successful, and returns an error message.
+
+>SEE ALSO
+
+[dynld.1], [dlopen.2], [dlsym.2], [dlclose.2]

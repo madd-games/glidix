@@ -248,17 +248,6 @@ void idtReboot()
 	while (1) ASM("cli; hlt");
 };
 
-#if 0
-static void printbyte(uint8_t byte)
-{
-	uint8_t high = (byte >> 4) & 0xF;
-	uint8_t low =  byte & 0xF;
-
-	const char *hexd = "0123456789ABCDEF";
-	kprintf("%c%c ", hexd[high], hexd[low]);
-};
-#endif
-
 static void onPageFault(Regs *regs)
 {
 	uint64_t faultAddr;

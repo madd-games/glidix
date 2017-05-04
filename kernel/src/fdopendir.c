@@ -103,26 +103,15 @@ int sys_fdopendir(const char *udirname)
 		return -1;
 	};
 
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-	int fd;
-	for (fd=0; fd<MAX_OPEN_FILES; fd++)
+	int fd = ftabAlloc(getCurrentThread()->ftab);
+	if (fd == -1)
 	{
-		if (ftab->entries[fd] == NULL)
-		{
-			break;
-		};
-	};
-
-	if (fd == MAX_OPEN_FILES)
-	{
-		spinlockRelease(&ftab->spinlock);
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
-		getCurrentThread()->therrno = EMFILE;
+		ERRNO = EMFILE;
 		return -1;
 	};
-
+	
 	File *fp = (File*) kmalloc(sizeof(File));
 	memset(fp, 0, sizeof(File));
 	fp->oflag = O_RDONLY;
@@ -130,8 +119,8 @@ int sys_fdopendir(const char *udirname)
 	fp->read = readdir;
 	fp->close = closedir;
 	fp->refcount = 1;
-	ftab->entries[fd] = fp;
-
+	ftabSet(getCurrentThread()->ftab, fd, fp);
+	
 	while (dir->dirent.d_ino == 0)
 	{
 		if (dir->next(dir) != 0)
@@ -143,6 +132,6 @@ int sys_fdopendir(const char *udirname)
 		};
 	};
 
-	spinlockRelease(&ftab->spinlock);
+	//spinlockRelease(&ftab->spinlock);
 	return fd;
 };

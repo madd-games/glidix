@@ -248,19 +248,6 @@ static void heapSplitBlock(HeapHeader *head, size_t size)
 	newFooter->size = size;
 };
 
-#if 0
-static HeapHeader *findFreeHeader(HeapHeader *head)
-{
-	while (head->flags & HEAP_BLOCK_TAKEN)
-	{
-		head = heapWalkRight(head);
-		if (head == NULL) return (HeapHeader*) HEAP_BASE_ADDR;
-	};
-
-	return head;
-};
-#endif
-
 static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno)
 {
 	// TODO: don't ignore the flags!

@@ -147,10 +147,18 @@ char* dynld_dlerror()
 	return dynld_errmsg;
 };
 
-void* dynld_globsym(const char *symname)
+void* dynld_globsym(const char *symname, Library *lastLib)
 {
 	Library *lib;
 	
+	// try global symbols first
+	for (lib=&chainHead; lib!=NULL; lib=lib->next)
+	{
+		void *val = dynld_libsym(lib, symname, STB_GLOBAL);
+		if (val != NULL) return val;
+	};
+
+	// now internal symbols
 	if (strcmp(symname, "dlopen") == 0)
 	{
 		return dynld_dlopen;
@@ -170,14 +178,7 @@ void* dynld_globsym(const char *symname)
 	{
 		return dynld_dlerror;
 	};
-	
-	// try global symbols first
-	for (lib=&chainHead; lib!=NULL; lib=lib->next)
-	{
-		void *val = dynld_libsym(lib, symname, STB_GLOBAL);
-		if (val != NULL) return val;
-	};
-	
+
 	// now try the weak symbols
 	for (lib=&chainHead; lib!=NULL; lib=lib->next)
 	{
@@ -185,6 +186,13 @@ void* dynld_globsym(const char *symname)
 		if (val != NULL) return val;
 	};
 	
+	// now the library itself (in case it was RTLD_LOCAL)
+	void *val = dynld_libsym(lastLib, symname, STB_GLOBAL);
+	if (val != NULL) return val;
+
+	val = dynld_libsym(lastLib, symname, STB_WEAK);
+	if (val != NULL) return val;
+
 	return NULL;
 };
 
@@ -243,7 +251,7 @@ void* dynld_pltreloc(Library *lib, uint64_t index)
 	Elf64_Sym *symbol = &lib->symtab[symidx];
 	const char *symname = &lib->strtab[symbol->st_name];
 	
-	void *symaddr = dynld_globsym(symname);
+	void *symaddr = dynld_globsym(symname, lib);
 	if (symaddr == NULL)
 	{
 		strcpy(dynld_errmsg, lib->soname);
@@ -682,7 +690,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 		void *symaddr = NULL;
 		if (((symbol->st_shndx == 0) && (type != R_X86_64_RELATIVE)) && (type != R_X86_64_COPY))
 		{
-			symaddr = dynld_globsym(symname);
+			symaddr = dynld_globsym(symname, lib);
 			if (symaddr == NULL)
 			{
 				strcpy(dynld_errmsg, name);

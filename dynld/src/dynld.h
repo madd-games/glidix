@@ -211,9 +211,10 @@ Library* dynld_getlib(const char *soname);
 void* dynld_libsym(Library *lib, const char *symname, unsigned char binding);
 
 /**
- * Search for the named symbol in the global namespace. Returns NULL if not found.
+ * Search for the named symbol in the global namespace, and if not found, then in 'lib' (makes a difference
+ * when the library was loaded with RTLD_LOCAL). Returns NULL if not found.
  */
-void* dynld_globsym(const char *symname);
+void* dynld_globsym(const char *symname, Library *lib);
 
 /**
  * Map an object from a file into memory. Returns the amount of bytes to advance the load address

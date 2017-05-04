@@ -202,35 +202,21 @@ int sys_pipe(int *upipefd)
 {
 	int pipefd[2];
 
-	int rfd=-1, wfd=-1;
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	int i;
-	for (i=0; i<MAX_OPEN_FILES; i++)
+	int rfd = ftabAlloc(getCurrentThread()->ftab);
+	if (rfd == -1)
 	{
-		if (ftab->entries[i] == NULL)
-		{
-			if (rfd == -1)
-			{
-				rfd = i;
-			}
-			else if (wfd == -1)
-			{
-				wfd = i;
-				break;
-			};
-		};
-	};
-
-	if ((rfd == -1) || (wfd == -1))
-	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EMFILE;
+		ERRNO = EMFILE;
 		return -1;
 	};
-
+	
+	int wfd = ftabAlloc(getCurrentThread()->ftab);
+	if (wfd == -1)
+	{
+		ftabSet(getCurrentThread()->ftab, rfd, NULL);
+		ERRNO = EMFILE;
+		return -1;
+	};
+	
 	Pipe *pipe = (Pipe*) kmalloc(sizeof(Pipe));
 	semInit(&pipe->sem);
 	semInit2(&pipe->counter, 0);
@@ -239,14 +225,12 @@ int sys_pipe(int *upipefd)
 	pipe->woff = 0;
 	pipe->sides = SIDE_READ | SIDE_WRITE;
 
-	ftab->entries[rfd] = openPipe(pipe, O_RDONLY);
-	ftab->entries[wfd] = openPipe(pipe, O_WRONLY);
-
+	ftabSet(getCurrentThread()->ftab, rfd, openPipe(pipe, O_RDONLY));
+	ftabSet(getCurrentThread()->ftab, wfd, openPipe(pipe, O_WRONLY));
+	
 	pipefd[0] = rfd;
 	pipefd[1] = wfd;
 
-	spinlockRelease(&ftab->spinlock);
-	
 	if (memcpy_k2u(upipefd, pipefd, sizeof(int)*2) != 0)
 	{
 		ERRNO = EFAULT;

@@ -1,0 +1,45 @@
+>NAME
+
+dlopen - load dynamic library
+
+>SYNOPSIS
+
+	#include <dlfcn.h>
+	
+	void *dlopen(const char *'soname', int 'mode');
+	
+	/* Link with '-ldl' */
+
+>DESCRIPTION
+
+This function links a shared library named by 'soname' into the calling process image. If 'soname' is *NULL*, then 'mode' is ignored, and this function returns a library handle which represents the executable (the 'main object'). If 'soname' contains a slash ('/'), then it is interpreted as the (relative or absolute) path to a shared library image (a '.so' file). Otherwise, it is a library name (typically with '.so' extension) and is searched for in the following order:
+
+\* The ':'-separated list of library search directories specified by the *LD_LIBRARY_PATH* environment variable.
+
+\* The following directories, in this order: '/usr/local/lib', '/usr/lib', '/lib'.
+
+The 'mode' argument is a bitwise-OR of flags defined in '<dlfcn.h>', dictating the behavior of this function. It must include one of the following flags:
+
+\* *RTLD_LAZY* - allow the dynamic linker to perform lazy binding. References to functions made by this library will only be resolved when those functions are actually called by library code; if a function is never called, it is never resolved. The program will abort upon a failed resolution attempt. If the environment variable *LD_BIND_NOW* was set to '1' at the time the current executable was ran, then this flag is ignored, and symbol resolutions are immediate.
+
+\* *RTLD_NOW* - resolve all references immediately, including function references. Unresolved references cause this function to fail and return *NULL*, setting an error message (indicating the unresolved symbol) which may be obtained with [dlerror.2].
+
+It may in addition to this include zero or more of the following flags:
+
+\* *RTLD_LOCAL* - the symbols from this shared library will not be used in resolving references from other libraries. This is the default behavior when *RTLD_GLOBAL* is not specified.
+
+\* *RTLD_GLOBAL* - the symbols from this shared library will be used in resolving references from other libraries.
+
+If the specified library has already been loaded, it is not linked in again; instead, its reference count is incremented, and the handle to it is returned. Calling [dlclose.2] on a library handle will only unload the library once the reference count reached zero. When a library is first loaded, the reference count is initially 1. Hence, to unload the library, the number of [dlclose.2] calls must match the number of 'dlopen' calls.
+
+>RETURN VALUE
+
+On success, this function returns a pointer to a transparent structure, which may be used to read the library symbols with [dlsym.2], and subsequently closed with [dlclose.2]. On error, *NULL* is returned; an error message may be obtained with a call to [dlerror.2].
+
+>ERRORS
+
+Errors from this function are reported by [dlerror.2].
+
+>SEE ALSO
+
+[dynld.1], [dlsym.2], [dlclose.2], [dlerror.2]

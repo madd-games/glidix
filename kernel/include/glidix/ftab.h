@@ -30,29 +30,65 @@
 #define __glidix_ftab_h
 
 /**
- * A structure that describes a process table.
+ * A structure that describes a file table.
  */
 
 #include <glidix/common.h>
 #include <glidix/vfs.h>
-#include <glidix/spinlock.h>
+#include <glidix/semaphore.h>
 
 /**
  * Maximum number of files that can be opened per file table. Some threads may share
- * a single table. We should probably adjust this value later.
+ * a single table.
  */
-#define	MAX_OPEN_FILES					64
+#define	MAX_OPEN_FILES					256
 
 typedef struct
 {
 	int						refcount;			// number of threads using this table.
-	File*						entries[MAX_OPEN_FILES];
-	Spinlock					spinlock;
+	File*						fps[MAX_OPEN_FILES];
+	Semaphore					lock;
 } FileTable;
 
 FileTable *ftabCreate();
 void ftabUpref(FileTable *ftab);
 void ftabDownref(FileTable *ftab);
 FileTable *ftabDup(FileTable *ftab);
+
+/**
+ * Get the File pointer in the given position and upref it. Returns NULL if the descriptor is invalid.
+ */
+File* ftabGet(FileTable *ftab, int fd);
+
+/**
+ * Allocate a new file descriptor. Returns -1 if no more descriptors are available. The descriptor becomes
+ * reserved and you MUST set it with ftabSet() (perhaps to NULL).
+ */
+int ftabAlloc(FileTable *ftab);
+
+/**
+ * Set a file descriptor. It MUST have been just allocated with ftabAlloc(). The reference count of the file
+ * will not be changed (so it should be 1 right now if it will be only on this list).
+ */
+void ftabSet(FileTable *ftab, int fd, File *fp);
+
+/**
+ * Close a file descriptor. Nothing happens if the descriptor is NULL. If the descriptor is reserved and not
+ * set, also nothing happens. If the descriptor is set, then vfsClose() is called on the description.
+ * 0 is returned on success, errno on error.
+ */
+int ftabClose(FileTable *ftab, int fd);
+
+/**
+ * Try placing a file in a slot. This is used by dup2(). Returns 0 on success, or an error number on error.
+ * The error may be EBADF if the descriptor is out of range, or EBUSY if there was a race condtition with
+ * a file-opening function such as open() or socket().
+ */
+int ftabPut(FileTable *ftab, int fd, File *fp);
+
+/**
+ * Close all files marked with close-on-exec.
+ */
+void ftabCloseOnExec(FileTable *ftab);
 
 #endif

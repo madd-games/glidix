@@ -1,0 +1,27 @@
+>NAME
+
+dlsym - get library symbol
+
+>SYNOPSIS
+
+	#include <dlfcn.h>
+	
+	void* dlsym(void *'handle', const char *'name');
+	
+	/* Link with '-ldl' */
+
+>DESCRIPTION
+
+This function searched for a symbol with the given 'name', beginning with the library indicated by 'handle', previously returned by [dlopen.2]. The library itself is searched for the symbol first. If the library was loaded with the *RTLD_GLOBAL* flag, then all libraries loaded after it, including its dependencies, are searched too. If the handle refers to the main executable, as returned by [dlopen.2] with the 'soname' specified as *NULL*, then all symbols available for resolution in the current process image (including in libraries loaded with *RTLD_GLOBAL*) are searched.
+
+>RETURN VALUE
+
+On success (the symbol was found), the value of that symbol is returned (for example, the pointer to the function 'name', or a pointer to global variable 'name'). On error, *NULL* is returned; an error message may be obtained with [dlerror.2].
+
+>ERRORS
+
+Errors from this function are reported by [dlerror.2].
+
+>SEE ALSO
+
+[dynld.1], [dlopen.2], [dlclose.2], [dlerror.2]

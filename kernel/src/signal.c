@@ -190,15 +190,6 @@ void dispatchSignal()
 		return;
 	};
 
-#if 0
-	if (siginfo->si_signo == SIGSEGV)
-	{
-		vmDump(getCurrentThread()->pm, (uint64_t) siginfo->si_addr);
-		//kdumpregs(&getCurrentThread()->regs);
-		panic("SIGSEGV at 0x%016lX by %s (rip=0x%016lX)\n", (uint64_t) siginfo->si_addr, getCurrentThread()->name, getCurrentThread()->regs.rip);
-	};
-#endif
-
 	// what action do we take?
 	SigAction *action = &thread->sigdisp->actions[siginfo->si_signo];
 	uint64_t handler;

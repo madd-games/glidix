@@ -1,0 +1,27 @@
+>NAME
+
+dlclose - release dynamic library handle
+
+>SYNOPSIS
+
+	#include <dlfcn.h>
+	
+	int dlclose(void *'handle');
+	
+	/* Link with '-ldl' */
+
+>DESCRIPTION
+
+This function releases a shared object handle previously returned by [dlopen.2]. This decrements the reference count of the object the handle refers to, and if the reference count reaches zero (no valid handles left, and no objects depend on it) then it is unloaded. When an object is unloaded, the reference counts of all its dependencies are also decremented. Using 'handle' after a call to this function (successful or otherwise) results in undefined behavior.
+
+>RETURN VALUE
+
+On success, this function returns '0'. On error it returns a nonzero integer; however, this can only happen if 'handle' is invalid, and therefore the application is broken, and so in such conditions the behavior is undefined, and the application should abort. An error message may be obtained with [dlerror.2].
+
+>ERRORS
+
+Errors from this function are reported by [dlerror.2].
+
+>SEE ALSO
+
+[dynld.1], [dlopen.2], [dlsym.2], [dlerror.2]

@@ -268,7 +268,7 @@ static int executeGroup(CmdGroup *group)
 				
 				CmdRedir *redir;
 				for (redir=member->redir; redir!=NULL; redir=redir->next)
-				{
+				{	
 					if (redir->targetName[0] == '&')
 					{
 						int fd = 1;

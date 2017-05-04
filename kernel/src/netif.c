@@ -545,25 +545,13 @@ int sysRouteTable(uint64_t family)
 		return -1;
 	};
 	
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	int i;
-	for (i=0; i<MAX_OPEN_FILES; i++)
+	int i = ftabAlloc(getCurrentThread()->ftab);
+	if (i == -1)
 	{
-		if (ftab->entries[i] == NULL)
-		{
-			break;
-		};
-	};
-
-	if (i == MAX_OPEN_FILES)
-	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EMFILE;
+		ERRNO = EMFILE;
 		return -1;
 	};
-	
+
 	QFileEntry *head;
 	if (family == AF_INET)
 	{
@@ -573,10 +561,8 @@ int sysRouteTable(uint64_t family)
 	{
 		head = getRoutes6();
 	};
-	
-	ftab->entries[i] = qfileCreate(head);
-	spinlockRelease(&ftab->spinlock);
-	
+
+	ftabSet(getCurrentThread()->ftab, i, qfileCreate(head));
 	return i;
 };
 

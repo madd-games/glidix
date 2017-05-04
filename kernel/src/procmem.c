@@ -598,6 +598,11 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 		throw(EX_PAGE_FAULT);
 		semSignal(&pm->lock);
 		
+		if ((regs->cs & 3) == 0)
+		{
+			panic("page fault in kernel, address 0x%08lX", faultAddr);
+		};
+		
 		siginfo_t si;
 		memset(&si, 0, sizeof(siginfo_t));
 		si.si_signo = SIGSEGV;

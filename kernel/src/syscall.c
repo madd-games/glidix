@@ -48,8 +48,6 @@
 #include <glidix/socket.h>
 #include <glidix/pci.h>
 #include <glidix/utsname.h>
-#include <glidix/thsync.h>
-#include <glidix/message.h>
 #include <glidix/catch.h>
 #include <glidix/storage.h>
 #include <glidix/cpu.h>
@@ -161,230 +159,167 @@ void sys_exit(int status)
 };
 
 ssize_t sys_write(int fd, const void *buf, size_t size)
-{	
-	ssize_t out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+{
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	if ((fp->oflag & O_WRONLY) == 0)
+	{
+		vfsClose(fp);
+		ERRNO = EACCES;
+		return -1;
 	}
 	else
 	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
+		void *tmpbuf = kmalloc(size);
+		if (tmpbuf == NULL)
 		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
+			vfsClose(fp);
+			ERRNO = ENOBUFS;
+			return -1;
+		}
+		else if (memcpy_u2k(tmpbuf, buf, size) != 0)
+		{
+			vfsClose(fp);
+			kfree(tmpbuf);
+			ERRNO = EFAULT;
+			return -1;
 		}
 		else
 		{
-			if ((fp->oflag & O_WRONLY) == 0)
-			{
-				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EACCES;
-				out = -1;
-			}
-			else
-			{
-				vfsDup(fp);
-				spinlockRelease(&ftab->spinlock);
-				void *tmpbuf = kmalloc(size);
-				if (tmpbuf == NULL)
-				{
-					vfsClose(fp);
-					ERRNO = ENOBUFS;
-					out = -1;
-				}
-				else if (memcpy_u2k(tmpbuf, buf, size) != 0)
-				{
-					vfsClose(fp);
-					kfree(tmpbuf);
-					ERRNO = EFAULT;
-					out = -1;
-				}
-				else
-				{
-					out = vfsWrite(fp, tmpbuf, size);
-					vfsClose(fp);
-					kfree(tmpbuf);
-				};
-			};
+			ssize_t out = vfsWrite(fp, tmpbuf, size);
+			vfsClose(fp);
+			kfree(tmpbuf);
+			return out;
 		};
 	};
-
-	return out;
 };
 
 uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
-{	
-	ssize_t out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+{
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	if ((fp->oflag & O_WRONLY) == 0)
+	{
+		vfsClose(fp);
+		ERRNO = EACCES;
+		return -1;
 	}
 	else
 	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
+		void *tmpbuf = kmalloc(size);
+		if (tmpbuf == NULL)
 		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
+			vfsClose(fp);
+			ERRNO = ENOBUFS;
+			return -1;
+		}
+		else if (memcpy_u2k(tmpbuf, buf, size) != 0)
+		{
+			vfsClose(fp);
+			kfree(tmpbuf);
+			ERRNO = EFAULT;
+			return -1;
 		}
 		else
 		{
-			if ((fp->oflag & O_WRONLY) == 0)
-			{
-				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EACCES;
-				out = -1;
-			}
-			else
-			{
-				vfsDup(fp);
-				spinlockRelease(&ftab->spinlock);
-				void *tmpbuf = kmalloc(size);
-				if (tmpbuf == NULL)
-				{
-					vfsClose(fp);
-					ERRNO = ENOBUFS;
-					return -1;
-				};
-				
-				if (memcpy_u2k(tmpbuf, buf, size) != 0)
-				{
-					vfsClose(fp);
-					kfree(tmpbuf);
-					ERRNO = EFAULT;
-					return -1;
-				}
-				else
-				{
-					out = vfsPWrite(fp, tmpbuf, size, offset);
-					vfsClose(fp);
-					kfree(tmpbuf);
-				};
-			};
+			ssize_t out = vfsPWrite(fp, tmpbuf, size, offset);
+			vfsClose(fp);
+			kfree(tmpbuf);
+			return out;
 		};
 	};
-
-	return *((uint64_t*)&out);
 };
 
 ssize_t sys_read(int fd, void *buf, size_t size)
 {
-	ssize_t out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	if ((fp->oflag & O_RDONLY) == 0)
+	{
+		vfsClose(fp);
+		ERRNO = EACCES;
+		return -1;
 	}
 	else
 	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
+		void *tmpbuf = kmalloc(size);
+		if (tmpbuf == NULL)
 		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			if ((fp->oflag & O_RDONLY) == 0)
-			{
-				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EACCES;
-				out = -1;
-			}
-			else
-			{
-				vfsDup(fp);
-				spinlockRelease(&ftab->spinlock);
-				void *tmpbuf = kmalloc(size);
-				if (tmpbuf == NULL)
-				{
-					vfsClose(fp);
-					ERRNO = ENOBUFS;
-					return -1;
-				};
-				
-				out = vfsRead(fp, tmpbuf, size);
-				size_t toCopy = (size_t) out;
-				if (out == -1) toCopy = 0;
-				vfsClose(fp);
-				if (memcpy_k2u(buf, tmpbuf, toCopy) != 0)
-				{
-					ERRNO = EFAULT;
-					out = -1;
-				};
-				kfree(tmpbuf);
-			};
+			vfsClose(fp);
+			ERRNO = ENOBUFS;
+			return -1;
 		};
+		
+		ssize_t out = vfsRead(fp, tmpbuf, size);
+		size_t toCopy = (size_t) out;
+		if (out == -1) toCopy = 0;
+		vfsClose(fp);
+		if (memcpy_k2u(buf, tmpbuf, toCopy) != 0)
+		{
+			ERRNO = EFAULT;
+			kfree(tmpbuf);
+			return -1;
+		};
+		kfree(tmpbuf);
+		
+		return out;
 	};
-
-	return out;
 };
 
 ssize_t sys_pread(int fd, void *buf, size_t size, off_t offset)
 {
-	ssize_t out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	if ((fp->oflag & O_RDONLY) == 0)
+	{
+		vfsClose(fp);
+		ERRNO = EACCES;
+		return -1;
 	}
 	else
 	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
+		void *tmpbuf = kmalloc(size);
+		if (tmpbuf == NULL)
 		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			if ((fp->oflag & O_RDONLY) == 0)
-			{
-				spinlockRelease(&ftab->spinlock);
-				getCurrentThread()->therrno = EACCES;
-				out = -1;
-			}
-			else
-			{
-				vfsDup(fp);
-				spinlockRelease(&ftab->spinlock);
-				void *tmpbuf = kmalloc(size);
-				if (tmpbuf == NULL)
-				{
-					vfsClose(fp);
-					ERRNO = ENOBUFS;
-					return -1;
-				};
-				
-				out = vfsPRead(fp, tmpbuf, size, offset);
-				vfsClose(fp);
-				if (memcpy_k2u(buf, tmpbuf, size) != 0)
-				{
-					ERRNO = EFAULT;
-					out = -1;
-				};
-				kfree(tmpbuf);
-			};
+			vfsClose(fp);
+			ERRNO = ENOBUFS;
+			return -1;
 		};
+		
+		ssize_t out = vfsPRead(fp, tmpbuf, size, offset);
+		size_t toCopy = (size_t) out;
+		if (out == -1) toCopy = 0;
+		vfsClose(fp);
+		if (memcpy_k2u(buf, tmpbuf, toCopy) != 0)
+		{
+			ERRNO = EFAULT;
+			kfree(tmpbuf);
+			return -1;
+		};
+		kfree(tmpbuf);
+		
+		return out;
 	};
-
-	return out;
 };
 
 int sysOpenErrno(int vfsError)
@@ -495,26 +430,14 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 		vfsUnlockCreation();
 		return sysOpenErrno(VFS_PERM);
 	};
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	int i;
-	for (i=0; i<MAX_OPEN_FILES; i++)
-	{
-		if (ftab->entries[i] == NULL)
-		{
-			break;
-		};
-	};
-
-	if (i == MAX_OPEN_FILES)
+	
+	int i = ftabAlloc(getCurrentThread()->ftab);
+	if (i == -1)
 	{
 		vfsUnlockCreation();
-		spinlockRelease(&ftab->spinlock);
 		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
 	};
-
+	
 	int flags = VFS_CHECK_ACCESS;
 	if (oflag & O_CREAT)
 	{
@@ -525,7 +448,7 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 	if (fp == NULL)
 	{
 		vfsUnlockCreation();
-		spinlockRelease(&ftab->spinlock);
+		ftabSet(getCurrentThread()->ftab, i, NULL);
 		return sysOpenErrno(error);
 	};
 
@@ -543,65 +466,38 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 
 	fp->oflag |= oflag;
 	fp->refcount = 1;
-	
-	ftab->entries[i] = fp;
-	spinlockRelease(&ftab->spinlock);
+	ftabSet(getCurrentThread()->ftab, i, fp);
 
 	return i;
 };
 
 int sys_close(int fd)
 {
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	int error = ftabClose(getCurrentThread()->ftab, fd);
+	if (error == 0) return 0;
+	else
 	{
-		return 0;
+		ERRNO = error;
+		return -1;
 	};
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	if (ftab->entries[fd] != NULL)
-	{
-		File *fp = ftab->entries[fd];
-		ftab->entries[fd] = NULL;
-		spinlockRelease(&ftab->spinlock);
-		vfsClose(fp);
-		return 0;
-	};
-
-	spinlockRelease(&ftab->spinlock);
-	return 0;
 };
 
 int sys_ioctl(int fd, uint64_t cmd, void *argp)
 {
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
+		ERRNO = EBADF;
 		return -1;
 	};
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	if (ftab->entries[fd] == NULL)
-	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EBADF;
-		return -1;
-	};
-
-	File *fp = ftab->entries[fd];
+	
 	if (fp->ioctl == NULL)
 	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EBADF;
+		vfsClose(fp);
+		ERRNO = ENODEV;
 		return -1;
 	};
 
-	vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
-	
 	size_t argsize = (cmd >> 32) & 0xFFFF;
 	void *argbuf = kmalloc(argsize);
 	if (memcpy_u2k(argbuf, argp, argsize) != 0)
@@ -621,43 +517,30 @@ int sys_ioctl(int fd, uint64_t cmd, void *argp)
 
 off_t sys_lseek(int fd, off_t offset, int whence)
 {
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
-	{
-		getCurrentThread()->therrno = EBADF;
-		return (off_t)-1;
-	};
-
 	if ((whence != SEEK_SET) && (whence != SEEK_CUR) && (whence != SEEK_END))
 	{
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return (off_t)-1;
 	};
 
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	File *fp = ftab->entries[fd];
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		spinlockRelease(&ftab->spinlock);
+		ERRNO = EBADF;
 		return (off_t)-1;
 	};
 
 	if (fp->seek == NULL)
 	{
-		getCurrentThread()->therrno = ESPIPE;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
+		ERRNO = ESPIPE;
 		return (off_t)-1;
 	};
 
-	vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
-	
 	off_t ret = fp->seek(fp, offset, whence);
 	if (ret == (off_t)-1)
 	{
-		getCurrentThread()->therrno = EOVERFLOW;
+		ERRNO = EOVERFLOW;
 	};
 
 	vfsClose(fp);
@@ -673,6 +556,7 @@ int sys_raise(int sig)
 	};
 
 	siginfo_t siginfo;
+	memset(&siginfo, 0, sizeof(siginfo_t));
 	siginfo.si_signo = sig;
 	siginfo.si_code = 0;
 
@@ -753,7 +637,7 @@ int sys_pause()
 {
 	cli();
 	lockSched();
-	getCurrentThread()->therrno = EINTR;
+	ERRNO = EINTR;
 	waitThread(getCurrentThread());
 	unlockSched();
 	kyield();
@@ -768,40 +652,28 @@ int sys_fstat(int fd, struct stat *buf, size_t bufsz)
 	{
 		bufsz = sizeof(struct stat);
 	};
-	
-	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
-	{
-		getCurrentThread()->therrno = EBADF;
-		return -1;
-	};
 
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	File *fp = ftab->entries[fd];
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		spinlockRelease(&ftab->spinlock);
+		ERRNO = EBADF;
 		return -1;
 	};
 
 	if (fp->fstat == NULL)
 	{
-		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
+		ERRNO = EIO;
 		return -1;
 	};
 
-	vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
 	memset(&kbuf, 0, sizeof(struct stat));
 	int status = fp->fstat(fp, &kbuf);
 	vfsClose(fp);
 	
 	if (status == -1)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 	};
 	
 	if (memcpy_k2u(buf, &kbuf, bufsz) != 0)
@@ -857,53 +729,41 @@ int sys_chmod(const char *upath, mode_t mode)
 int sys_fchmod(int fd, mode_t mode)
 {
 	// fstat first.
-	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
-	{
-		getCurrentThread()->therrno = EBADF;
-		return -1;
-	};
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	File *fp = ftab->entries[fd];
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		spinlockRelease(&ftab->spinlock);
+		ERRNO = EBADF;
 		return -1;
 	};
 
 	if (fp->fstat == NULL)
 	{
-		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
+		ERRNO = EIO;
 		return -1;
 	};
 
 	if (fp->fchmod == NULL)
 	{
-		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
+		ERRNO = EIO;
 		return -1;
 	};
 
 	struct stat st;
-	vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
 	int status = fp->fstat(fp, &st);
 	
 	if (status == -1)
 	{
-		getCurrentThread()->therrno = EIO;
 		vfsClose(fp);
+		ERRNO = EIO;
 		return -1;
 	};
 
 	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != st.st_uid))
 	{
-		getCurrentThread()->therrno = EPERM;
 		vfsClose(fp);
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -911,7 +771,7 @@ int sys_fchmod(int fd, mode_t mode)
 	vfsClose(fp);
 	if (status == -1)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
@@ -920,25 +780,13 @@ int sys_fchmod(int fd, mode_t mode)
 
 static int sys_fsync(int fd)
 {
-	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
-	{
-		getCurrentThread()->therrno = EBADF;
-		return -1;
-	};
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	File *fp = ftab->entries[fd];
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		spinlockRelease(&ftab->spinlock);
+		ERRNO = EBADF;
 		return -1;
 	};
 
-	vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
 	if (fp->fsync != NULL)
 	{
 		fp->fsync(fp);
@@ -1021,52 +869,40 @@ int sys_chown(const char *upath, uid_t uid, gid_t gid)
 int sys_fchown(int fd, uid_t uid, gid_t gid)
 {
 	// fstat first.
-	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
-	{
-		getCurrentThread()->therrno = EBADF;
-		return -1;
-	};
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	File *fp = ftab->entries[fd];
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		spinlockRelease(&ftab->spinlock);
+		ERRNO = EBADF;
 		return -1;
 	};
 
 	if (fp->fstat == NULL)
 	{
-		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
+		ERRNO = EIO;
 		return -1;
 	};
 
 	if (fp->fchown == NULL)
 	{
-		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
+		ERRNO = EIO;
 		return -1;
 	};
 
 	struct stat st;
-	vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
 	int status = fp->fstat(fp, &st);
 
 	if (status == -1)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		vfsClose(fp);
 		return -1;
 	};
 
 	if (!canChangeOwner(&st, uid, gid))
 	{
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EPERM;
 		vfsClose(fp);
 		return -1;
 	};
@@ -1075,7 +911,7 @@ int sys_fchown(int fd, uid_t uid, gid_t gid)
 	vfsClose(fp);
 	if (status == -1)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
@@ -1197,39 +1033,27 @@ int sys_mkdir(const char *upath, mode_t mode)
 
 int sys_ftruncate(int fd, off_t length)
 {
-	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
-	{
-		getCurrentThread()->therrno = EBADF;
-		return -1;
-	};
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	File *fp = ftab->entries[fd];
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		spinlockRelease(&ftab->spinlock);
+		ERRNO = EBADF;
 		return -1;
 	};
 
 	if ((fp->oflag & O_WRONLY) == 0)
 	{
-		getCurrentThread()->therrno = EPERM;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
+		ERRNO = EPERM;
 		return -1;
 	};
 
 	if (fp->truncate == NULL)
 	{
-		getCurrentThread()->therrno = EIO;
-		spinlockRelease(&ftab->spinlock);
+		vfsClose(fp);
+		ERRNO = EIO;
 		return -1;
 	};
 
-	vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
 	fp->truncate(fp, length);
 	vfsClose(fp);
 	
@@ -1356,84 +1180,44 @@ int sys_unlink(const char *upath)
 
 int sys_dup(int fd)
 {
-	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
-	{
-		getCurrentThread()->therrno = EBADF;
-		return -1;
-	};
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	File *fp = ftab->entries[fd];
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EBADF;
+		ERRNO = EBADF;
 		return -1;
 	};
-
-	int i;
-	for (i=0; i<MAX_OPEN_FILES; i++)
+	
+	int i = ftabAlloc(getCurrentThread()->ftab);
+	if (i == -1)
 	{
-		if (ftab->entries[i] == NULL)
-		{
-			break;
-		};
+		vfsClose(fp);
+		ERRNO = EMFILE;
+		return -1;
 	};
-
-	if (i == MAX_OPEN_FILES)
-	{
-		spinlockRelease(&ftab->spinlock);
-		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
-	};
-
-	vfsDup(fp);
-	ftab->entries[i] = fp;
-	spinlockRelease(&ftab->spinlock);
-
+	
+	ftabSet(getCurrentThread()->ftab, i, fp);
 	return i;
 };
 
 int sys_dup2(int oldfd, int newfd)
 {
-	if ((oldfd < 0) || (oldfd >= MAX_OPEN_FILES))
-	{
-		getCurrentThread()->therrno = EBADF;
-		return -1;
-	};
-
-	if ((newfd < 0) || (newfd >= MAX_OPEN_FILES))
-	{
-		getCurrentThread()->therrno = EBADF;
-		return -1;
-	};
-
-	if (newfd == oldfd)
-	{
-		return newfd;
-	};
-
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	File *fp = ftab->entries[oldfd];
+	if (newfd == oldfd) return newfd;
+	
+	File *fp = ftabGet(getCurrentThread()->ftab, oldfd);
 	if (fp == NULL)
 	{
-		spinlockRelease(&ftab->spinlock);
-		getCurrentThread()->therrno = EBADF;
+		ERRNO = EBADF;
 		return -1;
 	};
-
-	if (ftab->entries[newfd] != NULL)
+	
+	int error = ftabPut(getCurrentThread()->ftab, newfd, fp);
+	if (error != 0)
 	{
-		File *toclose = ftab->entries[newfd];
-		vfsClose(toclose);
+		vfsClose(fp);
+		ERRNO = error;
+		return -1;
 	};
-	vfsDup(fp);
-	ftab->entries[newfd] = fp;
-	spinlockRelease(&ftab->spinlock);
-
+	
 	return newfd;
 };
 
@@ -1544,34 +1328,18 @@ uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t 
 		ERRNO = EINVAL;
 		return MAP_FAILED;
 	};
-	
-	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
-	{
-		if (fd != -1)
-		{
-			ERRNO = EBADF;
-			return MAP_FAILED;
-		};
-	};
-	
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-	
+
 	File *fp = NULL;
 	if (fd != -1)
 	{
-		fp = ftab->entries[fd];
+		fp = ftabGet(getCurrentThread()->ftab, fd);
 		if (fp == NULL)
 		{
-			spinlockRelease(&ftab->spinlock);
 			ERRNO = EBADF;
 			return MAP_FAILED;
 		};
 	};
-	
-	if (fp != NULL) vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
-	
+
 	uint64_t result = vmMap(addr, len, prot, flags, fp, offset);
 	if (fp != NULL) vfsClose(fp);
 	
@@ -2061,27 +1829,6 @@ unsigned sys_sleep(unsigned seconds)
 {
 	if (seconds == 0) return 0;
 
-	//cli();
-	//uint64_t sleepStart = (uint64_t) getTicks();
-	//uint64_t wakeTime = ((uint64_t) getTicks() + (uint64_t) seconds * (uint64_t) 1000);
-	//getCurrentThread()->wakeTime = wakeTime;
-	//getCurrentThread()->flags |= THREAD_WAITING;
-	//waitThread(getCurrentThread());
-	//kyield();
-#if 0
-	uint64_t timeDelta = (uint64_t) getTicks() - sleepStart;
-	unsigned secondsSlept = (unsigned) timeDelta / 1000;
-
-	if (secondsSlept >= seconds)
-	{
-		return 0;
-	}
-	else
-	{
-		return seconds-secondsSlept;
-	};
-#endif
-
 	cli();
 	lockSched();
 	
@@ -2171,42 +1918,30 @@ int sys_utime(const char *upath, time_t atime, time_t mtime)
 
 mode_t sys_umask(mode_t cmask)
 {
-	mode_t old = getCurrentThread()->creds->umask;
-	getCurrentThread()->creds->umask = (cmask & 0777);
+	cmask &= 0777;
+	mode_t old = __sync_lock_test_and_set(&getCurrentThread()->creds->umask, cmask);
 	return old;
 };
 
 int sys_socket(int domain, int type, int proto)
 {
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	int i;
-	for (i=0; i<MAX_OPEN_FILES; i++)
+	int i = ftabAlloc(getCurrentThread()->ftab);
+	if (i == -1)
 	{
-		if (ftab->entries[i] == NULL)
-		{
-			break;
-		};
-	};
-
-	if (i == MAX_OPEN_FILES)
-	{
-		spinlockRelease(&ftab->spinlock);
-		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
+		ERRNO = EMFILE;
+		return -1;
 	};
 	
 	File *fp = CreateSocket(domain, type, proto);
 	if (fp == NULL)
 	{
-		spinlockRelease(&ftab->spinlock);
+		ftabSet(getCurrentThread()->ftab, i, NULL);
 		// errno set by CreateSocket()
 		return -1;
 	};
 	
 	fp->refcount = 1;
-	ftab->entries[i] = fp;
-	spinlockRelease(&ftab->spinlock);
+	ftabSet(getCurrentThread()->ftab, i, fp);
 	return i;
 };
 
@@ -2220,33 +1955,16 @@ int sys_bind(int fd, const struct sockaddr *uaddr, size_t addrlen)
 		ERRNO = EFAULT;
 		return -1;
 	};
-	
-	int out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
-	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = BindSocket(fp, &addr, addrlen);
-			vfsClose(fp);
-		};
-	};
 
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	int out = BindSocket(fp, &addr, addrlen);
+	vfsClose(fp);
 	return out;
 };
 
@@ -2269,33 +1987,17 @@ ssize_t sys_sendto(int fd, const void *umessage, size_t len, int flags, const st
 		ERRNO = EFAULT;
 		return -1;
 	};
-	
-	int out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
-	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = SendtoSocket(fp, message, len, flags, &addr, addrlen);
-			vfsClose(fp);
-		};
-	};
 
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		kfree(message);
+		return -1;
+	};
+	
+	int out = SendtoSocket(fp, message, len, flags, &addr, addrlen);
+	vfsClose(fp);
 	kfree(message);
 	return out;
 };
@@ -2329,33 +2031,20 @@ ssize_t sys_recvfrom(int fd, void *umessage, size_t len, int flags, struct socka
 		
 		addrlen = &kaddrlen;
 	};
-	
+
 	ssize_t out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
+		ERRNO = EBADF;
 		out = -1;
 	}
 	else
 	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = RecvfromSocket(fp, message, len, flags, addr, addrlen);
-			vfsClose(fp);
-		};
+		out = RecvfromSocket(fp, message, len, flags, addr, addrlen);
+		vfsClose(fp);
 	};
-
+	
 	if (umessage != NULL) memcpy_k2u(umessage, message, len);
 	if (uaddr != NULL)
 	{
@@ -2383,29 +2072,16 @@ int sys_getsockname(int fd, struct sockaddr *uaddr, size_t *uaddrlenptr)
 	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
 	
 	int out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
 		out = -1;
+		ERRNO = EBADF;
 	}
 	else
 	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = SocketGetsockname(fp, &addr, &addrlen);
-			vfsClose(fp);
-		};
+		out = SocketGetsockname(fp, &addr, &addrlen);
+		vfsClose(fp);
 	};
 
 	memcpy_k2u(uaddr, &addr, addrlen);
@@ -2417,36 +2093,19 @@ int sys_shutdown(int fd, int how)
 {
 	if ((how & ~SHUT_RDWR) != 0)
 	{
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 
-	int out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = ShutdownSocket(fp, how);
-			vfsClose(fp);
-		};
+		ERRNO = EBADF;
+		return -1;
 	};
-
+	
+	int out = ShutdownSocket(fp, how);
+	vfsClose(fp);
 	return out;
 };
 
@@ -2459,33 +2118,16 @@ int sys_connect(int fd, struct sockaddr *uaddr, size_t addrlen)
 		ERRNO = EFAULT;
 		return -1;
 	};
-	
-	int out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
-	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = ConnectSocket(fp, &kaddr, addrlen);
-			vfsClose(fp);
-		};
-	};
 
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	int out = ConnectSocket(fp, &kaddr, addrlen);
+	vfsClose(fp);
 	return out;
 };
 
@@ -2501,32 +2143,16 @@ int sys_getpeername(int fd, struct sockaddr *uaddr, size_t *uaddrlenptr)
 	};
 	
 	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
-		
-	int out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = SocketGetpeername(fp, &addr, &addrlen);
-			vfsClose(fp);
-		};
+		ERRNO = EBADF;
+		return -1;
 	};
+	
+	int out = SocketGetpeername(fp, &addr, &addrlen);
+	vfsClose(fp);
 
 	memcpy_k2u(uaddr, &addr, addrlen);
 	memcpy_k2u(uaddrlenptr, &addrlen, sizeof(size_t));
@@ -2536,63 +2162,30 @@ int sys_getpeername(int fd, struct sockaddr *uaddr, size_t *uaddrlenptr)
 
 int sys_setsockopt(int fd, int proto, int option, uint64_t value)
 {
-	int out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = SetSocketOption(fp, proto, option, value);
-			vfsClose(fp);
-		};
+		ERRNO = EBADF;
+		return -1;
 	};
-
+	
+	int out = SetSocketOption(fp, proto, option, value);
+	vfsClose(fp);
+	
 	return out;
 };
 
 uint64_t sys_getsockopt(int fd, int proto, int option)
 {
-	uint64_t out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = GetSocketOption(fp, proto, option);
-			vfsClose(fp);
-		};
+		ERRNO = EBADF;
+		return -1;
 	};
-
+	
+	uint64_t out = GetSocketOption(fp, proto, option);
+	vfsClose(fp);
 	return out;
 };
 
@@ -2616,29 +2209,16 @@ int sys_uname(struct utsname *ubuf)
 
 int fcntl_getfd(int fd)
 {
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
+		ERRNO = EBADF;
 		return -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			return -1;
-		}
-		else
-		{
-			int flags = fp->oflag;
-			spinlockRelease(&ftab->spinlock);
-			return flags & FD_ALL;
-		};
 	};
+	
+	int flags = fp->oflag;
+	vfsClose(fp);
+	return flags & FD_ALL;
 };
 
 int fcntl_setfd(int fd, int flags)
@@ -2648,58 +2228,31 @@ int fcntl_setfd(int fd, int flags)
 		getCurrentThread()->therrno = EINVAL;
 		return -1;
 	};
-	
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
+		ERRNO = EBADF;
 		return -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			return -1;
-		}
-		else
-		{
-			fp->oflag = (fp->oflag & ~FD_ALL) | flags;
-			spinlockRelease(&ftab->spinlock);
-			return 0;
-		};
 	};
+	
+	fp->oflag = (fp->oflag & ~FD_ALL) | flags;
+	vfsClose(fp);
+	return 0;
 };
 
 int sys_isatty(int fd)
 {
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		getCurrentThread()->therrno = EBADF;
-		return 0;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			return 0;
-		}
-		else
-		{
-			ERRNO = ENOTTY;
-			int result = !!(fp->oflag & O_TERMINAL);
-			spinlockRelease(&ftab->spinlock);
-			return result;
-		};
+		ERRNO = EBADF;
+		return -1;
 	};
+	
+	int result = !!(fp->oflag & O_TERMINAL);
+	vfsClose(fp);
+	return result;
 };
 
 int sys_bindif(int fd, const char *uifname)
@@ -2710,67 +2263,17 @@ int sys_bindif(int fd, const char *uifname)
 		ERRNO = EFAULT;
 		return -1;
 	};
-	
-	int out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
-	{
-		getCurrentThread()->therrno = EBADF;
-		out = -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			getCurrentThread()->therrno = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = SocketBindif(fp, ifname);
-			vfsClose(fp);
-		};
-	};
 
-	return out;
-};
-
-int sys_thsync(int type, int par)
-{
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-
-	int i;
-	for (i=0; i<MAX_OPEN_FILES; i++)
-	{
-		if (ftab->entries[i] == NULL)
-		{
-			break;
-		};
-	};
-
-	if (i == MAX_OPEN_FILES)
-	{
-		spinlockRelease(&ftab->spinlock);
-		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
-	};
-	
-	File *fp = thsync(type, par);
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
-		spinlockRelease(&ftab->spinlock);
-		// errno set by thsync()
+		ERRNO = EBADF;
 		return -1;
 	};
-	
-	ftab->entries[i] = fp;
-	spinlockRelease(&ftab->spinlock);
-	return i;
+
+	int out = SocketBindif(fp, ifname);
+	vfsClose(fp);
+	return out;
 };
 
 int sys_store_and_sleep(uint8_t *ptr, uint8_t value)
@@ -3504,16 +3007,6 @@ int sys_pthread_create(int *thidOut, const ThreadAttr *uattr, uint64_t entry, ui
 	
 	if (attr.stack == NULL)
 	{
-#if 0
-		uint64_t stackBase = vmMap(0, attr.stacksize, PROT_READ | PROT_WRITE,
-						MAP_PRIVATE | MAP_ANON | MAP_THREAD, NULL, -1);
-		if (stackBase < ADDR_MIN)
-		{
-			return EAGAIN;
-		};
-		
-		regs.rsp = stackBase + attr.stacksize;
-#endif
 		regs.r13 = attr.stacksize;
 	}
 	else
@@ -3587,7 +3080,7 @@ int sys_pthread_join(int thid, uint64_t *retval)
 		regs.rflags = getFlagsRegister();
 		regs.rdi = 0;
 		
-		// make sure we retry using the same argumets
+		// make sure we retry using the same arguments
 		*((int*)&regs.rdi) = thid;
 		regs.rsi = (uint64_t) retval;		// the retval POINTER
 		regs.rip = (uint64_t)(&usup_syscall_reset) - (uint64_t)(&usup_start) + 0xFFFF808000003000UL;
@@ -3734,24 +3227,12 @@ int sys_sigsuspend(uint64_t mask)
 
 int sys_lockf(int fd, int cmd, off_t len)
 {
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
-	{
-		ERRNO = EBADF;
-		return -1;
-	};
-	
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-	File *fp = ftab->entries[fd];
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
-		spinlockRelease(&ftab->spinlock);
 		ERRNO = EBADF;
 		return -1;
 	};
-	
-	vfsDup(fp);
-	spinlockRelease(&ftab->spinlock);
 	
 	if ((cmd == F_LOCK) || (cmd == F_TLOCK))
 	{
@@ -3812,33 +3293,16 @@ int sys_mcast(int fd, int op, uint32_t scope, uint64_t addr0, uint64_t addr1)
 		ERRNO = EINVAL;
 		return -1;
 	};
-	
-	int out;
-	if ((fd >= MAX_OPEN_FILES) || (fd < 0))
+
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
 		ERRNO = EBADF;
-		out = -1;
-	}
-	else
-	{
-		FileTable *ftab = getCurrentThread()->ftab;
-		spinlockAcquire(&ftab->spinlock);
-		File *fp = ftab->entries[fd];
-		if (fp == NULL)
-		{
-			spinlockRelease(&ftab->spinlock);
-			ERRNO = EBADF;
-			out = -1;
-		}
-		else
-		{
-			vfsDup(fp);
-			spinlockRelease(&ftab->spinlock);
-			out = SocketMulticast(fp, op, &addr, scope);
-			vfsClose(fp);
-		};
+		return -1;
 	};
-
+	
+	int out = SocketMulticast(fp, op, &addr, scope);
+	vfsClose(fp);
 	return out;
 };
 
@@ -3862,29 +3326,25 @@ int sys_fpoll(const uint8_t *ubitmapReq, uint8_t *ubitmapRes, int flags, uint64_
 	memset(workingFiles, 0, MAX_OPEN_FILES*sizeof(File*));
 	
 	// get the file handles
-	FileTable *ftab = getCurrentThread()->ftab;
-	spinlockAcquire(&ftab->spinlock);
-	
 	int i;
 	for (i=0; i<MAX_OPEN_FILES; i++)
 	{
 		if (bitmapReq[i] != 0)
 		{
-			File *fp = ftab->entries[i];
+			//File *fp = ftab->entries[i];
+			File *fp = ftabGet(getCurrentThread()->ftab, i);
 			if (fp == NULL)
 			{
 				sems[8*i+PEI_INVALID] = vfsGetConstSem();
 			}
 			else
 			{
-				vfsDup(fp);
+				//vfsDup(fp);
 				workingFiles[i] = fp;
 			};
 		};
 	};
-	
-	spinlockRelease(&ftab->spinlock);
-	
+
 	// ask all files for their poll information.
 	for (i=0; i<MAX_OPEN_FILES; i++)
 	{
@@ -4218,14 +3678,14 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_bindif,				// 97
 	&sys_route_clear,			// 98
 	&sys_munmap,				// 99
-	&sys_thsync,				// 100
+	NULL,					// 100	[was thsync]
 	&sys_getppid,				// 101
 	&sys_alarm,				// 102
 	&sys_store_and_sleep,			// 103
-	&sys_mqserver,				// 104
-	&sys_mqclient,				// 105
-	&sys_mqsend,				// 106
-	&sys_mqrecv,				// 107
+	NULL,					// 104	[was mqserver]
+	NULL,					// 105	[was mqclient]
+	NULL,					// 106	[was mqsend]
+	NULL,					// 107	[was mqrecv]
 	NULL,					// 108	[was shmalloc]
 	NULL,					// 109  [was shmap]
 	&sys_setsid,				// 110
