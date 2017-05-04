@@ -88,13 +88,13 @@ static int rawsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 {
 	if ((addr->sa_family != AF_INET) && (addr->sa_family != AF_INET6) && (addr->sa_family != AF_UNSPEC))
 	{
-		getCurrentThread()->therrno = EAFNOSUPPORT;
+		ERRNO = EAFNOSUPPORT;
 		return -1;
 	};
 	
 	if (addrlen > sizeof(struct sockaddr))
 	{
-		getCurrentThread()->therrno = EAFNOSUPPORT;
+		ERRNO = EAFNOSUPPORT;
 		return -1;
 	};
 	
@@ -109,13 +109,13 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 	
 	if (flags != 0)
 	{
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 	
 	if (addrlen < 2)
 	{
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 	
@@ -123,7 +123,7 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 	{
 		if (addrlen < sizeof(struct sockaddr_in))
 		{
-			getCurrentThread()->therrno = EINVAL;
+			ERRNO = EINVAL;
 			return -1;
 		};
 	}
@@ -131,13 +131,13 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 	{
 		if (addrlen < sizeof(struct sockaddr_in6))
 		{
-			getCurrentThread()->therrno = EINVAL;
+			ERRNO = EINVAL;
 			return -1;
 		};
 	}
 	else
 	{
-		getCurrentThread()->therrno = EAFNOSUPPORT;
+		ERRNO = EAFNOSUPPORT;
 		return -1;
 	};
 	

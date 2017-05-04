@@ -178,7 +178,7 @@ int termIoctl(File *fp, uint64_t cmd, void *argp)
 		termGroup = pgid;
 		return 0;
 	default:
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 };

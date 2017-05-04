@@ -117,13 +117,13 @@ File* CreateSocket(int domain, int type, int proto)
 {
 	if ((domain != AF_INET) && (domain != AF_INET6) && (domain != AF_CAPTURE))
 	{
-		getCurrentThread()->therrno = EAFNOSUPPORT;
+		ERRNO = EAFNOSUPPORT;
 		return NULL;
 	};
 
 	if ((proto < 0) || (proto > 255))
 	{
-		getCurrentThread()->therrno = EPROTONOSUPPORT;
+		ERRNO = EPROTONOSUPPORT;
 		return NULL;
 	};
 	
@@ -145,7 +145,7 @@ File* CreateSocket(int domain, int type, int proto)
 		{
 			if (!havePerm(XP_RAWSOCK))
 			{
-				getCurrentThread()->therrno = EPERM;
+				ERRNO = EPERM;
 				return NULL;
 			};
 		
@@ -160,7 +160,7 @@ File* CreateSocket(int domain, int type, int proto)
 				sock = CreateUDPSocket();
 				break;
 			default:
-				getCurrentThread()->therrno = EPROTONOSUPPORT;
+				ERRNO = EPROTONOSUPPORT;
 				return NULL;
 			};
 		}
@@ -179,7 +179,7 @@ File* CreateSocket(int domain, int type, int proto)
 		}
 		else
 		{
-			getCurrentThread()->therrno = EPROTONOSUPPORT;
+			ERRNO = EPROTONOSUPPORT;
 			return NULL;
 		};
 	};
@@ -217,20 +217,20 @@ int BindSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
 {
 	if (addrlen < 2)
 	{
-		getCurrentThread()->therrno = EAFNOSUPPORT;
+		ERRNO = EAFNOSUPPORT;
 		return -1;
 	};
 	
 	if ((fp->oflag & O_SOCKET) == 0)
 	{
-		getCurrentThread()->therrno = ENOTSOCK;
+		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
 	Socket *sock = (Socket*) fp->fsdata;
 	if (sock->bind == NULL)
 	{
-		getCurrentThread()->therrno = EOPNOTSUPP;
+		ERRNO = EOPNOTSUPP;
 		return -1;
 	};
 	
@@ -242,14 +242,14 @@ ssize_t SendtoSocket(File *fp, const void *message, size_t len, int flags, const
 {
 	if ((fp->oflag & O_SOCKET) == 0)
 	{
-		getCurrentThread()->therrno = ENOTSOCK;
+		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
 	Socket *sock = (Socket*) fp->fsdata;
 	if (sock->sendto == NULL)
 	{
-		getCurrentThread()->therrno = EOPNOTSUPP;
+		ERRNO = EOPNOTSUPP;
 		return -1;
 	};
 	
@@ -262,14 +262,14 @@ ssize_t RecvfromSocket(File *fp, void *message, size_t len, int flags, struct so
 {
 	if ((fp->oflag & O_SOCKET) == 0)
 	{
-		getCurrentThread()->therrno = ENOTSOCK;
+		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
 	Socket *sock = (Socket*) fp->fsdata;
 	if (sock->recvfrom == NULL)
 	{
-		getCurrentThread()->therrno = EOPNOTSUPP;
+		ERRNO = EOPNOTSUPP;
 		return -1;
 	};
 	
@@ -282,14 +282,14 @@ int SocketGetsockname(File *fp, struct sockaddr *addr, size_t *addrlen)
 {
 	if ((fp->oflag & O_SOCKET) == 0)
 	{
-		getCurrentThread()->therrno = ENOTSOCK;
+		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
 	Socket *sock = (Socket*) fp->fsdata;
 	if (sock->getsockname == NULL)
 	{
-		getCurrentThread()->therrno = EOPNOTSUPP;
+		ERRNO = EOPNOTSUPP;
 		return -1;
 	};
 	
@@ -300,14 +300,14 @@ int ShutdownSocket(File *fp, int how)
 {
 	if ((fp->oflag & O_SOCKET) == 0)
 	{
-		getCurrentThread()->therrno = ENOTSOCK;
+		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
 	Socket *sock = (Socket*) fp->fsdata;
 	if (sock->shutdown == NULL)
 	{
-		getCurrentThread()->therrno = EOPNOTSUPP;
+		ERRNO = EOPNOTSUPP;
 		return -1;
 	};
 	
@@ -319,14 +319,14 @@ int ConnectSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
 {
 	if ((fp->oflag & O_SOCKET) == 0)
 	{
-		getCurrentThread()->therrno = ENOTSOCK;
+		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
 	Socket *sock = (Socket*) fp->fsdata;
 	if (sock->connect == NULL)
 	{
-		getCurrentThread()->therrno = EOPNOTSUPP;
+		ERRNO = EOPNOTSUPP;
 		return -1;
 	};
 	
@@ -337,14 +337,14 @@ int SocketGetpeername(File *fp, struct sockaddr *addr, size_t *addrlen)
 {
 	if ((fp->oflag & O_SOCKET) == 0)
 	{
-		getCurrentThread()->therrno = ENOTSOCK;
+		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
 	Socket *sock = (Socket*) fp->fsdata;
 	if (sock->getpeername == NULL)
 	{
-		getCurrentThread()->therrno = EOPNOTSUPP;
+		ERRNO = EOPNOTSUPP;
 		return -1;
 	};
 	
@@ -364,7 +364,7 @@ int SocketBindif(File *fp, const char *ifname)
 	
 	if ((fp->oflag & O_SOCKET) == 0)
 	{
-		getCurrentThread()->therrno = ENOTSOCK;
+		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	

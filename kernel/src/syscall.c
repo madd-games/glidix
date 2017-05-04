@@ -327,22 +327,22 @@ int sysOpenErrno(int vfsError)
 	switch (vfsError)
 	{
 	case VFS_PERM:
-		getCurrentThread()->therrno = EACCES;
+		ERRNO = EACCES;
 		break;
 	case VFS_NO_FILE:
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		break;
 	case VFS_FILE_LIMIT_EXCEEDED:
-		getCurrentThread()->therrno = EMFILE;
+		ERRNO = EMFILE;
 		break;
 	case VFS_BUSY:
-		getCurrentThread()->therrno = EBUSY;
+		ERRNO = EBUSY;
 		break;
 	case VFS_NOT_DIR:
-		getCurrentThread()->therrno = ENOTDIR;
+		ERRNO = ENOTDIR;
 		break;
 	case VFS_LINK_LOOP:
-		getCurrentThread()->therrno = ELOOP;
+		ERRNO = ELOOP;
 		break;
 	case VFS_NO_MEMORY:
 		ERRNO = ENOMEM;
@@ -355,7 +355,7 @@ int sysOpenErrno(int vfsError)
 		break;
 	default:
 		/* fallback in case there are some unhandled errors */
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		break;
 	};
 	return -1;
@@ -376,7 +376,7 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 	if ((oflag & O_ALL) != oflag)
 	{
 		/* unrecognised bits were set */
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -403,7 +403,7 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 	{
 		// file exists
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EEXIST;
+		ERRNO = EEXIST;
 		return -1;
 	};
 
@@ -411,7 +411,7 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 	{
 		// directory, do not open.
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EISDIR;
+		ERRNO = EISDIR;
 		return -1;
 	};
 
@@ -706,7 +706,7 @@ int sys_chmod(const char *upath, mode_t mode)
 	{
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
@@ -714,7 +714,7 @@ int sys_chmod(const char *upath, mode_t mode)
 	{
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -722,7 +722,7 @@ int sys_chmod(const char *upath, mode_t mode)
 	if (dir->close != NULL) dir->close(dir);
 	kfree(dir);
 
-	if (status != 0) getCurrentThread()->therrno = EIO;
+	if (status != 0) ERRNO = EIO;
 	return status;
 };
 
@@ -832,7 +832,7 @@ int sys_chown(const char *upath, uid_t uid, gid_t gid)
 	{
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
@@ -850,7 +850,7 @@ int sys_chown(const char *upath, uid_t uid, gid_t gid)
 	{
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -860,7 +860,7 @@ int sys_chown(const char *upath, uid_t uid, gid_t gid)
 
 	if (status == -1)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 	};
 
 	return status;
@@ -933,7 +933,7 @@ int sys_mkdir(const char *upath, mode_t mode)
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
@@ -956,13 +956,13 @@ int sys_mkdir(const char *upath, mode_t mode)
 	strcpy(newdir, &rpath[sz+1]);
 	if (strlen(newdir) >= 128)
 	{
-		getCurrentThread()->therrno = ENAMETOOLONG;
+		ERRNO = ENAMETOOLONG;
 		return -1;
 	};
 
 	if (newdir[0] == 0)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
@@ -979,7 +979,7 @@ int sys_mkdir(const char *upath, mode_t mode)
 	if (!vfsCanCurrentThread(&st, 2))
 	{
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -1007,7 +1007,7 @@ int sys_mkdir(const char *upath, mode_t mode)
 			if (dir->close != NULL) dir->close(dir);
 			kfree(dir);
 			vfsUnlockCreation();
-			getCurrentThread()->therrno = EEXIST;
+			ERRNO = EEXIST;
 			return -1;
 		};
 
@@ -1025,7 +1025,7 @@ int sys_mkdir(const char *upath, mode_t mode)
 
 	if (status != 0)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 	};
 
 	return status;
@@ -1072,7 +1072,7 @@ int sys_unlink(const char *upath)
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
@@ -1095,13 +1095,13 @@ int sys_unlink(const char *upath)
 	strcpy(child, &rpath[sz+1]);
 	if (strlen(child) >= 128)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
 	if (child[0] == 0)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
@@ -1127,7 +1127,7 @@ int sys_unlink(const char *upath)
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = ENOTEMPTY;
+		ERRNO = ENOTEMPTY;
 		return -1;
 	};
 
@@ -1139,7 +1139,7 @@ int sys_unlink(const char *upath)
 			if (dir->close != NULL) dir->close(dir);
 			kfree(dir);
 			vfsUnlockCreation();
-			getCurrentThread()->therrno = EACCES;
+			ERRNO = EACCES;
 			return -1;
 		};
 	};
@@ -1149,7 +1149,7 @@ int sys_unlink(const char *upath)
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EACCES;
+		ERRNO = EACCES;
 		return -1;
 	};
 
@@ -1158,7 +1158,7 @@ int sys_unlink(const char *upath)
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
@@ -1167,7 +1167,7 @@ int sys_unlink(const char *upath)
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
@@ -1258,7 +1258,7 @@ int sys_insmod(const char *umodname, const char *upath, const char *uopt, int fl
 	if (getCurrentThread()->creds->euid != 0)
 	{
 		// only root can load modules.
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -1284,19 +1284,19 @@ int sys_chdir(const char *upath)
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{
-		getCurrentThread()->therrno = EACCES;
+		ERRNO = EACCES;
 		return -1;
 	};
 
 	if ((st.st_mode & VFS_MODE_DIRECTORY) == 0)
 	{
-		getCurrentThread()->therrno = ENOTDIR;
+		ERRNO = ENOTDIR;
 		return -1;
 	};
 
 	if (!vfsCanCurrentThread(&st, 1))
 	{
-		getCurrentThread()->therrno = EACCES;
+		ERRNO = EACCES;
 		return -1;
 	};
 
@@ -1357,7 +1357,7 @@ int setuid(uid_t uid)
 	Thread *me = getCurrentThread();
 	if ((me->creds->euid != 0) && (uid != me->creds->euid) && (uid != me->creds->ruid))
 	{
-		me->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -1376,7 +1376,7 @@ int setgid(gid_t gid)
 	Thread *me = getCurrentThread();
 	if ((me->creds->egid != 0) && (gid != me->creds->egid) && (gid != me->creds->rgid))
 	{
-		me->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -1398,7 +1398,7 @@ int setreuid(uid_t ruid, uid_t euid)
 	{
 		if (me->creds->euid != 0)
 		{
-			me->therrno = EPERM;
+			ERRNO = EPERM;
 			return -1;
 		};
 
@@ -1411,7 +1411,7 @@ int setreuid(uid_t ruid, uid_t euid)
 		{
 			if (me->creds->euid != 0)
 			{
-				me->therrno = EPERM;
+				ERRNO = EPERM;
 				return -1;
 			};
 
@@ -1432,7 +1432,7 @@ int setregid(gid_t rgid, gid_t egid)
 	{
 		if (me->creds->egid != 0)
 		{
-			me->therrno = EPERM;
+			ERRNO = EPERM;
 			return -1;
 		};
 
@@ -1445,7 +1445,7 @@ int setregid(gid_t rgid, gid_t egid)
 		{
 			if (me->creds->egid != 0)
 			{
-				me->therrno = EPERM;
+				ERRNO = EPERM;
 				return -1;
 			};
 
@@ -1465,7 +1465,7 @@ int seteuid(uid_t euid)
 	{
 		if ((euid != me->creds->euid) && (euid != me->creds->ruid) && (euid != me->creds->suid))
 		{
-			me->therrno = EPERM;
+			ERRNO = EPERM;
 			return -1;
 		};
 	};
@@ -1481,7 +1481,7 @@ int setegid(gid_t egid)
 	{
 		if ((egid != me->creds->egid) && (egid != me->creds->rgid) && (egid != me->creds->sgid))
 		{
-			me->therrno = EPERM;
+			ERRNO = EPERM;
 			return -1;
 		};
 	};
@@ -1502,7 +1502,7 @@ int sys_rmmod(const char *umodname, int flags)
 	// only root can remove modules!
 	if (getCurrentThread()->creds->euid != 0)
 	{
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -1528,7 +1528,7 @@ int sys_link(const char *uoldname, const char *unewname)
 	char rpath[256];
 	if (realpath(newname, rpath) == NULL)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
@@ -1551,13 +1551,13 @@ int sys_link(const char *uoldname, const char *unewname)
 	strcpy(child, &rpath[sz+1]);
 	if (strlen(child) >= 128)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
 	if (child[0] == 0)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
@@ -1581,14 +1581,14 @@ int sys_link(const char *uoldname, const char *unewname)
 	if ((stold.st_mode & 0xF000) == VFS_MODE_DIRECTORY)
 	{
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
 	if (stold.st_dev != stdir.st_dev)
 	{
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EXDEV;
+		ERRNO = EXDEV;
 		return -1;
 	};
 
@@ -1596,7 +1596,7 @@ int sys_link(const char *uoldname, const char *unewname)
 	if (!vfsCanCurrentThread(&stold, 2))
 	{
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EACCES;
+		ERRNO = EACCES;
 		return -1;
 	};
 
@@ -1624,7 +1624,7 @@ int sys_link(const char *uoldname, const char *unewname)
 				if (dir->close != NULL) dir->close(dir);
 				kfree(dir);
 				vfsUnlockCreation();
-				getCurrentThread()->therrno = EEXIST;
+				ERRNO = EEXIST;
 				return -1;
 			};
 		} while (dir->next(dir) != -1);
@@ -1635,7 +1635,7 @@ int sys_link(const char *uoldname, const char *unewname)
 		vfsUnlockCreation();
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
-		getCurrentThread()->therrno = EMLINK;
+		ERRNO = EMLINK;
 		return -1;
 	};
 
@@ -1647,7 +1647,7 @@ int sys_link(const char *uoldname, const char *unewname)
 
 	if (status != 0)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 	};
 
 	return status;
@@ -1671,14 +1671,14 @@ int sys_symlink(const char *utarget, const char *upath)
 	
 	if (strlen(target) > PATH_MAX)
 	{
-		getCurrentThread()->therrno = ENAMETOOLONG;
+		ERRNO = ENAMETOOLONG;
 		return -1;
 	};
 
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
@@ -1701,13 +1701,13 @@ int sys_symlink(const char *utarget, const char *upath)
 	strcpy(newlink, &rpath[sz+1]);
 	if (strlen(newlink) >= 128)
 	{
-		getCurrentThread()->therrno = ENAMETOOLONG;
+		ERRNO = ENAMETOOLONG;
 		return -1;
 	};
 
 	if (newlink[0] == 0)
 	{
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
@@ -1724,7 +1724,7 @@ int sys_symlink(const char *utarget, const char *upath)
 	if (!vfsCanCurrentThread(&st, 2))
 	{
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -1735,7 +1735,7 @@ int sys_symlink(const char *utarget, const char *upath)
 	if (dir->mkdir == NULL)
 	{
 		vfsUnlockCreation();
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
@@ -1746,7 +1746,7 @@ int sys_symlink(const char *utarget, const char *upath)
 			if (dir->close != NULL) dir->close(dir);
 			kfree(dir);
 			vfsUnlockCreation();
-			getCurrentThread()->therrno = EEXIST;
+			ERRNO = EEXIST;
 			return -1;
 		};
 
@@ -1764,7 +1764,7 @@ int sys_symlink(const char *utarget, const char *upath)
 
 	if (status != 0)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 	};
 
 	return status;
@@ -1791,7 +1791,7 @@ ssize_t sys_readlink(const char *upath, char *buf, size_t bufsize)
 	{
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -1801,7 +1801,7 @@ ssize_t sys_readlink(const char *upath, char *buf, size_t bufsize)
 
 	if (out == -1)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
@@ -1812,7 +1812,7 @@ ssize_t sys_readlink(const char *upath, char *buf, size_t bufsize)
 
 	if (bufsize > PATH_MAX)
 	{
-		getCurrentThread()->therrno = ENAMETOOLONG;
+		ERRNO = ENAMETOOLONG;
 		return -1;
 	};
 
@@ -1885,7 +1885,7 @@ int sys_utime(const char *upath, time_t atime, time_t mtime)
 	{
 		if (!vfsCanCurrentThread(&dirp->stat, 2))
 		{
-			getCurrentThread()->therrno = EACCES;
+			ERRNO = EACCES;
 			return -1;
 		};
 
@@ -1896,20 +1896,20 @@ int sys_utime(const char *upath, time_t atime, time_t mtime)
 	{
 		if (dirp->stat.st_uid != getCurrentThread()->creds->euid)
 		{
-			getCurrentThread()->therrno = EACCES;
+			ERRNO = EACCES;
 			return -1;
 		};
 	};
 
 	if (dirp->utime == NULL)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
 	if (dirp->utime(dirp, atime, mtime) != 0)
 	{
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 
@@ -2225,7 +2225,7 @@ int fcntl_setfd(int fd, int flags)
 {
 	if ((flags & ~FD_ALL) != 0)
 	{
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -3724,7 +3724,7 @@ uint64_t sysEpilog(uint64_t retval)
 		{
 			if (catch() == 0)
 			{
-				*(getCurrentThread()->errnoptr) = getCurrentThread()->therrno;
+				*(getCurrentThread()->errnoptr) = ERRNO;
 				uncatch();
 			};
 		};

@@ -740,7 +740,7 @@ int rmmod(const char *modname, int flags)
 	if (firstModule == NULL)
 	{
 		spinlockRelease(&modLock);
-		getCurrentThread()->therrno = ENOENT;
+		ERRNO = ENOENT;
 		return -1;
 	};
 
@@ -752,7 +752,7 @@ int rmmod(const char *modname, int flags)
 		if (mod->next == NULL)
 		{
 			spinlockRelease(&modLock);
-			getCurrentThread()->therrno = ENOENT;
+			ERRNO = ENOENT;
 			return -1;
 		};
 
@@ -779,7 +779,7 @@ int rmmod(const char *modname, int flags)
 			{
 				kprintf("rmmod(%s): module refused to unlink\n", modname);
 				spinlockRelease(&modLock);
-				getCurrentThread()->therrno = EPERM;
+				ERRNO = EPERM;
 				return -1;
 			};
 		};
@@ -794,7 +794,7 @@ int rmmod(const char *modname, int flags)
 		{
 			kprintf("rmmod(%s): no module fini event (use RMMOD_FORCE to unload anyway)\n", modname);
 			spinlockRelease(&modLock);
-			getCurrentThread()->therrno = EPERM;
+			ERRNO = EPERM;
 			return -1;
 		};
 	};

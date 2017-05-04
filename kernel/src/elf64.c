@@ -242,7 +242,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	if (fp->seek == NULL)
 	{
 		vfsClose(fp);
-		getCurrentThread()->therrno = EIO;
+		ERRNO = EIO;
 		return -1;
 	};
 	
@@ -273,7 +273,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	if (vfsRead(fp, &elfHeader, sizeof(Elf64_Ehdr)) < sizeof(Elf64_Ehdr))
 	{
 		vfsClose(fp);
-		getCurrentThread()->therrno = ENOEXEC;
+		ERRNO = ENOEXEC;
 		return -1;
 	};
 
@@ -296,7 +296,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		{
 			kfree(segments);
 			vfsClose(fp);
-			getCurrentThread()->therrno = ENOEXEC;
+			ERRNO = ENOEXEC;
 			return -1;
 		};
 
@@ -514,7 +514,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		{
 			vfsClose(fp);
 			kfree(segments);
-			getCurrentThread()->therrno = ENOEXEC;
+			ERRNO = ENOEXEC;
 			return -1;
 		};
 	};

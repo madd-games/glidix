@@ -102,19 +102,19 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 	Thread *ct = getCurrentThread();
 	if (ct->creds->euid != 0)
 	{
-		ct->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
 	if (flags != 0)
 	{
-		ct->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 
 	if (mountpoint[strlen(mountpoint)-1] != '/')
 	{
-		ct->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -122,7 +122,7 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 	if (firstDriver == NULL)
 	{
 		semSignal(&semFS);
-		ct->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -132,7 +132,7 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 		if (scan->next == NULL)
 		{
 			semSignal(&semFS);
-			ct->therrno = EINVAL;
+			ERRNO = EINVAL;
 			return -1;
 		};
 		scan = scan->next;

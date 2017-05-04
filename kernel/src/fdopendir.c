@@ -85,19 +85,19 @@ int sys_fdopendir(const char *udirname)
 		switch (error)
 		{
 		case VFS_NO_FILE:
-			getCurrentThread()->therrno = ENOENT;
+			ERRNO = ENOENT;
 			break;
 		case VFS_PERM:
-			getCurrentThread()->therrno = EACCES;
+			ERRNO = EACCES;
 			break;
 		case VFS_NOT_DIR:
-			getCurrentThread()->therrno = ENOTDIR;
+			ERRNO = ENOTDIR;
 			break;
 		case VFS_EMPTY_DIRECTORY:
 			return -2;
 			break;
 		default:
-			getCurrentThread()->therrno = EACCES;
+			ERRNO = EACCES;
 			break;
 		};
 		return -1;

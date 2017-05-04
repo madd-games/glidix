@@ -160,7 +160,7 @@ int unmount(const char *prefix)
 {
 	if (getCurrentThread()->creds->euid != 0)
 	{
-		getCurrentThread()->therrno = EPERM;
+		ERRNO = EPERM;
 		return -1;
 	};
 
@@ -177,14 +177,14 @@ int unmount(const char *prefix)
 			{
 				if (mp->fs->unmount(mp->fs) != 0)
 				{
-					getCurrentThread()->therrno = EBUSY;
+					ERRNO = EBUSY;
 					mutexUnlock(&mountLock);
 					return -1;
 				};
 			}
 			else
 			{
-				getCurrentThread()->therrno = EINVAL;
+				ERRNO = EINVAL;
 				mutexUnlock(&mountLock);
 				return -1;
 			};
@@ -210,7 +210,7 @@ int unmount(const char *prefix)
 
 	if (status == -1)
 	{
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 	};
 
 	return status;

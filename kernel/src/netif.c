@@ -541,7 +541,7 @@ int sysRouteTable(uint64_t family)
 	case AF_INET6:
 		break;
 	default:
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 	
@@ -1219,13 +1219,13 @@ int route_add(int family, int pos, gen_route *route)
 {
 	if ((family != AF_INET) && (family != AF_INET6))
 	{
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 	
 	if (getCurrentThread()->creds->euid != 0)
 	{
-		getCurrentThread()->therrno = EACCES;
+		ERRNO = EACCES;
 		return -1;
 	};
 	
@@ -1294,7 +1294,7 @@ int route_add(int family, int pos, gen_route *route)
 	mutexUnlock(&iflistLock);
 	
 	// the interface was not found!
-	getCurrentThread()->therrno = ENOENT;
+	ERRNO = ENOENT;
 	return -1;
 };
 
@@ -1302,13 +1302,13 @@ int route_clear(int family, const char *ifname)
 {
 	if ((family != AF_INET) && (family != AF_INET6))
 	{
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 	
 	if (getCurrentThread()->creds->euid != 0)
 	{
-		getCurrentThread()->therrno = EACCES;
+		ERRNO = EACCES;
 		return -1;
 	};
 	
@@ -1351,7 +1351,7 @@ int route_clear(int family, const char *ifname)
 	mutexUnlock(&iflistLock);
 	
 	// the interface was not found!
-	getCurrentThread()->therrno = ENOENT;
+	ERRNO = ENOENT;
 	return -1;
 };
 
@@ -1391,7 +1391,7 @@ ssize_t netconf_stat(const char *ifname, NetStat *buffer, size_t size)
 	mutexUnlock(&iflistLock);
 	
 	// the interface was not found!
-	getCurrentThread()->therrno = ENOENT;
+	ERRNO = ENOENT;
 	return -1;
 };
 
@@ -1430,7 +1430,7 @@ ssize_t netconf_statidx(unsigned int index, NetStat *buffer, size_t size)
 	mutexUnlock(&iflistLock);
 	
 	// the interface was not found!
-	getCurrentThread()->therrno = ENOENT;
+	ERRNO = ENOENT;
 	return -1;
 };
 
@@ -1438,7 +1438,7 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
 {
 	if ((family != AF_INET) && (family != AF_INET6))
 	{
-		getCurrentThread()->therrno = EINVAL;
+		ERRNO = EINVAL;
 		return -1;
 	};
 	
@@ -1472,7 +1472,7 @@ ssize_t netconf_getaddrs(const char *ifname, int family, void *buffer, size_t bu
 	mutexUnlock(&iflistLock);
 	
 	// the interface was not found!
-	getCurrentThread()->therrno = ENOENT;
+	ERRNO = ENOENT;
 	return -1;
 };
 
