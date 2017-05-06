@@ -703,6 +703,7 @@ File *vfsOpen(const char *path, int flags, int *error)
 	Dir *dir = parsePath(path, flags, error);
 	if (dir == NULL)
 	{
+		*error = VFS_NO_FILE;
 		return NULL;
 	};
 
@@ -710,6 +711,7 @@ File *vfsOpen(const char *path, int flags, int *error)
 	{
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
+		*error = VFS_IO_ERROR;
 		return NULL;
 	};
 
@@ -720,6 +722,7 @@ File *vfsOpen(const char *path, int flags, int *error)
 	{
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
+		*error = VFS_IO_ERROR;
 		return NULL;
 	};
 
@@ -1016,4 +1019,154 @@ int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len)
 Semaphore *vfsGetConstSem()
 {
 	return &semConst;
+};
+
+SysObject* vfsSysCreate()
+{
+	SysObject *sysobj = NEW(SysObject);
+	sysobj->data = NULL;
+	sysobj->remove = NULL;
+	sysobj->mode = 0;
+	sysobj->refcount = 1;
+	return sysobj;
+};
+
+void vfsSysIncref(SysObject *sysobj)
+{
+	__sync_fetch_and_add(&sysobj->refcount, 1);
+};
+
+void vfsSysDecref(SysObject *sysobj)
+{
+	if (__sync_add_and_fetch(&sysobj->refcount, -1) == 0)
+	{
+		if (sysobj->remove != NULL) sysobj->remove(sysobj);
+		kfree(sysobj);
+	};
+};
+
+int vfsSysLink(const char *path, SysObject *sysobj)
+{
+	char rpath[VFS_PATH_MAX];
+	if (realpath(path, rpath) == NULL)
+	{
+		return VFS_NO_FILE;
+	};
+
+	char parent[VFS_PATH_MAX];
+	char name[VFS_PATH_MAX];
+
+	size_t sz = strlen(rpath);
+	while (rpath[sz] != '/')
+	{
+		sz--;
+	};
+
+	memcpy(parent, rpath, sz);
+	parent[sz] = 0;
+	if (parent[0] == 0)
+	{
+		strcpy(parent, "/");
+	};
+
+	strcpy(name, &rpath[sz+1]);
+	if (strlen(name) >= 128)
+	{
+		return VFS_LONGNAME;
+	};
+
+	if (name[0] == 0)
+	{
+		return VFS_NO_FILE;
+	};
+	
+	vfsLockCreation();
+
+	struct stat st;
+	int error;
+	if ((error = vfsStat(parent, &st)) != 0)
+	{
+		vfsUnlockCreation();
+		return error;
+	};
+
+	if (!vfsCanCurrentThread(&st, 2))
+	{
+		vfsUnlockCreation();
+		return VFS_PERM;
+	};
+
+	if (strcmp(parent, "/") != 0) strcat(parent, "/");
+
+	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
+	if (dir == NULL)
+	{
+		vfsUnlockCreation();
+		return error;
+	};
+	
+	int endYet = (error == VFS_EMPTY_DIRECTORY);
+	if (dir->linksys == NULL)
+	{
+		vfsUnlockCreation();
+		return VFS_IO_ERROR;
+	};
+
+	while (!endYet)
+	{
+		if (strcmp(dir->dirent.d_name, name) == 0)
+		{
+			if (dir->close != NULL) dir->close(dir);
+			kfree(dir);
+			vfsUnlockCreation();
+			return VFS_EXISTS;
+		};
+
+		if (dir->next(dir) == -1)
+		{
+			endYet = 1;
+		};
+	};
+
+	int status = dir->linksys(dir, sysobj);
+
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+	vfsUnlockCreation();
+
+	if (status != 0)
+	{
+		return VFS_IO_ERROR;
+	};
+
+	return 0;
+};
+
+SysObject* vfsSysGet(const char *path)
+{
+	if (path[strlen(path)-1] == '/')
+	{
+		return NULL;
+	};
+
+	int error;
+	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
+	if (dir == NULL)
+	{
+		return NULL;
+	};
+	
+	if (dir->getsys == NULL)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		return NULL;
+	};
+	
+	// getsys() increfs it
+	SysObject *obj = dir->getsys(dir);
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+	
+	return obj;
 };

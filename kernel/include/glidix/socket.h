@@ -37,6 +37,12 @@
 #define	SOCK_STREAM			1
 #define	SOCK_DGRAM			2
 #define	SOCK_RAW			3
+#define	SOCK_SEQPACKET			4
+
+#define	SOCK_TYPEMASK			0xF
+#define	SOCK_CLOEXEC			(1 << 4)
+#define	SOCK_ALLFLAGS			(SOCK_TYPEMASK | SOCK_CLOEXEC)
+#define	SOCK_BITFLAGS			(SOCK_CLOEXEC)
 
 #define	SHUT_RD				1
 #define	SHUT_WR				2
@@ -137,6 +143,17 @@ typedef struct Socket_
 	 * Get polling information; see vfs.h.
 	 */
 	void (*pollinfo)(struct Socket_ *sock, Semaphore **sems);
+	
+	/**
+	 * Called to handle listen() on this socket.
+	 */
+	int (*listen)(struct Socket_ *sock, int backlog);
+	
+	/**
+	 * Called to handle accept() on this socket. Returns NULL on error (and sets ERRNO), otherwise
+	 * returns the new socket.
+	 */
+	struct Socket_* (*accept)(struct Socket_ *sock, struct sockaddr *addr, size_t *addrlenptr);
 } Socket;
 
 typedef struct
@@ -248,5 +265,15 @@ uint64_t GetSocketOption(File *fp, int proto, int option);
  * Multicast configuration. 'op' is either MCAST_JOIN_GROUP or MCAST_LEAVE_GROUP.
  */
 int SocketMulticast(File *fp, int op, const struct in6_addr *addr, uint32_t scope);
+
+/**
+ * Implements listen().
+ */
+int SocketListen(File *fp, int backlog);
+
+/**
+ * Implements accept().
+ */
+File* SocketAccept(File *fp, struct sockaddr *addr, size_t *addrlenptr);
 
 #endif

@@ -116,6 +116,7 @@ int		unlink(const char *path);
 int		dup(int fd);
 int		dup2(int oldfd, int newfd);
 int		pipe(int pipefd[2]);
+int		pipe2(int pipefd[2], int flags);
 uid_t		geteuid();
 uid_t		getuid();
 gid_t		getegid();

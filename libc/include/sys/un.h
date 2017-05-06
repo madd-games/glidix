@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Runtime
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,49 +26,15 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_pipe_h
-#define __glidix_pipe_h
+#ifndef _SYS_UN_H
+#define _SYS_UN_H
 
-#include <glidix/common.h>
-#include <glidix/vfs.h>
-#include <glidix/semaphore.h>
+#include <sys/socket.h>
 
-#define	SIDE_READ			1
-#define	SIDE_WRITE			2
-
-#define	PIPE_BUFFER_SIZE		1024
-
-typedef struct
+struct sockaddr_un
 {
-	/**
-	 * The semaphore which protects the pipe.
-	 */
-	Semaphore			sem;
-	
-	/**
-	 * The semaphore which counts the number of bytes in the pipe.
-	 */
-	Semaphore			counter;
-	
-	/**
-	 * This semaphore gets signalled when the pipe is terminated.
-	 */
-	Semaphore			semHangup;
-	
-	/**
-	 * Buffer and read/write pointers.
-	 */
-	char				buffer[PIPE_BUFFER_SIZE];
-	off_t				roff;
-	off_t				woff;
-	
-	/**
-	 * Which sides are open (OR of SIDE_READ and/or SIDE_WRITE or 0).
-	 */
-	int				sides;
-} Pipe;
-
-int sys_pipe(int *pipefd);
-int sys_pipe2(int *pipefd, int flags);
+	sa_family_t			sun_family;		/* AF_UNIX/AF_LOCAL */
+	char				sun_path[108];
+};
 
 #endif

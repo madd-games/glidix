@@ -56,6 +56,7 @@
 #define	VFS_MODE_FIFO			040000
 #define	VFS_MODE_LINK			050000		/* soft link */
 #define	VFS_MODE_SOCKET			060000
+
 /**
  * Errors.
  */
@@ -71,6 +72,8 @@
 #define	VFS_NO_MEMORY			-10		/* not enough memory */
 #define	VFS_NO_SPACE			-11		/* insufficient storage space */
 #define	VFS_READ_ONLY			-12		/* read-only filesystem */
+#define	VFS_EXISTS			-13		/* name already exists */
+#define	VFS_LONGNAME			-14		/* name too long */
 
 /**
  * Flags to parsePath()/vfsOpen().
@@ -152,6 +155,9 @@
 #define	VFS_MAX_LINK_DEPTH		8
 #define	VFS_MAX_LOCKS_PER_FILE		32
 
+#define	VFS_NAME_MAX			128
+#define	VFS_PATH_MAX			256
+
 #ifndef _SYS_STAT_H
 struct stat
 {
@@ -203,6 +209,44 @@ typedef struct FileLock_
 	struct Semaphore_*		sem;
 	int				__end;
 } FileLock;
+
+/**
+ * Describes a "system object". It's an object with a name in the filesystem, which may be
+ * retrieved and stored by the kernel, and keeps a reference count and a value. This is used
+ * for example for local (UNIX) sockets.
+ *
+ * The reference count shall be incremented when link() is called on the object, and decremented
+ * when unlink() is called. When linksys() is called, it also increases the refcount. When the
+ * refcount is decremented and reaches 0, the remove() pointer below is called, indicating the
+ * value can be safely deleted. The structure itself is deleted by vfsSysDecref().
+ *
+ * The 'data' and 'remove' fields belong to the creator; everything else must be manipulated with
+ * the VFS functions specified later in this file. The 'mode' field is read-only, and shall be
+ * used to determine the type of object.
+ */
+typedef struct SysObject_
+{
+	/**
+	 * Arbitrary data.
+	 */
+	void*				data;
+	
+	/**
+	 * Called when refcount reaches zero, just before freeing this object.
+	 */
+	void (*remove)(struct SysObject_ *sysobj);
+	
+	/**
+	 * Mode; including the type (used to determine what this object is, and hence the meaning
+	 * of 'data'!)
+	 */
+	mode_t				mode;
+	
+	/**
+	 * Reference count.
+	 */
+	int				refcount;
+} SysObject;
 
 /**
  * Describes an open file. All of its member functions may be NULL.
@@ -454,6 +498,19 @@ typedef struct _Dir
 	 * not be set. Return 0 on success, -1 on I/O error.
 	 */
 	int (*chxperm)(struct _Dir *dir, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm);
+	
+	/**
+	 * Link a system object into the specified name in this directory. The owner and group are set according
+	 * to the EUID and EGID. This function increments the reference count of the object. Return 0 on success,
+	 * -1 on error (which then gets reported as EIO). System objects do not persist after reboot or unmount.
+	 */
+	int (*linksys)(struct _Dir *dir, SysObject *sysobj);
+	
+	/**
+	 * If the current entry is a system object, increment the reference count and return it. Otherwise, return
+	 * NULL.
+	 */
+	SysObject* (*getsys)(struct _Dir *dir);
 } Dir;
 
 struct fsinfo;
@@ -559,5 +616,40 @@ int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len);
  * Returns a pointer to a semaphore which always has value 1.
  */
 struct Semaphore_* vfsGetConstSem();
+
+/**
+ * Create a system object, reference count 1.
+ */
+SysObject* vfsSysCreate();
+
+/**
+ * Increment the reference count of a system object.
+ */
+void vfsSysIncref(SysObject *sysobj);
+
+/**
+ * Decrement the reference count of a system object, and delete it if it becomes zero.
+ */
+void vfsSysDecref(SysObject *sysobj);
+
+/**
+ * Link a system object into the filesystem under the given name. Returns 0 on success,
+ * and increments the refcount. On error, returns one of the following errors (they may
+ * be translated to different errno numbers depending on context):
+ *
+ * VFS_EXISTS - This file name already exists.
+ * VFS_IO_ERROR - Operation not supported on the target filesystem.
+ * VFS_PERM - Access to the directory was denied.
+ * VFS_NO_FILE - Parent directory does not exist.
+ * VFS_LONGNAME - Name is too long.
+ * Other errors may come from parsePath().
+ */
+int vfsSysLink(const char *path, SysObject *sysobj);
+
+/**
+ * Get a system object at the specified location. Returns NULL if the specified path does
+ * not refer to a system object. This also increments the refcount.
+ */
+SysObject* vfsSysGet(const char *path);
 
 #endif

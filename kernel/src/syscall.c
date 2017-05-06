@@ -57,6 +57,11 @@
  */
 #define	_GLIDIX_KOPT_GFXTERM		0		/* whether the graphics terminal is enabled */
 
+/**
+ * A macro to use in the system call table for unused numbers.
+ */
+#define	SYS_NULL					&sysInvalid
+
 int memcpy_u2k(void *dst_, const void *src_, size_t size)
 {
 	// user to kernel: src is in userspace
@@ -930,15 +935,15 @@ int sys_mkdir(const char *upath, mode_t mode)
 	mode &= 0xFFF;
 	mode &= ~(getCurrentThread()->creds->umask);
 
-	char rpath[256];
+	char rpath[VFS_PATH_MAX];
 	if (realpath(path, rpath) == NULL)
 	{
 		ERRNO = ENOENT;
 		return -1;
 	};
 
-	char parent[256];
-	char newdir[256];
+	char parent[VFS_PATH_MAX];
+	char newdir[VFS_PATH_MAX];
 
 	size_t sz = strlen(rpath);
 	while (rpath[sz] != '/')
@@ -1925,6 +1930,12 @@ mode_t sys_umask(mode_t cmask)
 
 int sys_socket(int domain, int type, int proto)
 {
+	if ((type & ~SOCK_ALLFLAGS) != 0)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
 	int i = ftabAlloc(getCurrentThread()->ftab);
 	if (i == -1)
 	{
@@ -1932,7 +1943,10 @@ int sys_socket(int domain, int type, int proto)
 		return -1;
 	};
 	
-	File *fp = CreateSocket(domain, type, proto);
+	int fdflags = 0;
+	if (type & SOCK_CLOEXEC) fdflags |= FD_CLOEXEC;
+	
+	File *fp = CreateSocket(domain, type & SOCK_TYPEMASK, proto);
 	if (fp == NULL)
 	{
 		ftabSet(getCurrentThread()->ftab, i, NULL, 0);
@@ -1941,7 +1955,7 @@ int sys_socket(int domain, int type, int proto)
 	};
 	
 	fp->refcount = 1;
-	ftabSet(getCurrentThread()->ftab, i, fp, 0);
+	ftabSet(getCurrentThread()->ftab, i, fp, fdflags);
 	return i;
 };
 
@@ -2109,6 +2123,20 @@ int sys_shutdown(int fd, int how)
 	return out;
 };
 
+int sys_listen(int fd, int backlog)
+{
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	int out = SocketListen(fp, backlog);
+	vfsClose(fp);
+	return out;
+};
+
 int sys_connect(int fd, struct sockaddr *uaddr, size_t addrlen)
 {
 	struct sockaddr kaddr;
@@ -2160,6 +2188,65 @@ int sys_getpeername(int fd, struct sockaddr *uaddr, size_t *uaddrlenptr)
 	return out;
 };
 
+int sys_accept4(int fd, struct sockaddr *uaddr, size_t *uaddrlenptr, int flags)
+{
+	if ((flags & ~SOCK_BITFLAGS) != 0)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	struct sockaddr addr;
+	size_t addrlen;
+	
+	if (memcpy_u2k(&addrlen, uaddrlenptr, sizeof(size_t)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
+
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	int newfd = ftabAlloc(getCurrentThread()->ftab);
+	if (newfd == -1)
+	{
+		vfsClose(fp);
+		ERRNO = EMFILE;
+		return -1;
+	};
+	
+	File *newfp = SocketAccept(fp, &addr, &addrlen);
+	vfsClose(fp);
+
+	if (newfp == NULL)
+	{
+		// errno set by SocketAccept()
+		ftabSet(getCurrentThread()->ftab, newfd, NULL, 0);
+		return -1;
+	};
+	
+	memcpy_k2u(uaddr, &addr, addrlen);
+	memcpy_k2u(uaddrlenptr, &addrlen, sizeof(size_t));
+	
+	int fdflags = 0;
+	if (flags & SOCK_CLOEXEC) fdflags |= FD_CLOEXEC;
+	ftabSet(getCurrentThread()->ftab, newfd, newfp, fdflags);
+	
+	return newfd;
+};
+
+int sys_accept(int fd, struct sockaddr *addr, size_t *addrlenptr)
+{
+	return sys_accept4(fd, addr, addrlenptr, 0);
+};
+
 int sys_setsockopt(int fd, int proto, int option, uint64_t value)
 {
 	File *fp = ftabGet(getCurrentThread()->ftab, fd);
@@ -2209,19 +2296,6 @@ int sys_uname(struct utsname *ubuf)
 
 int fcntl_getfd(int fd)
 {
-#if 0
-	File *fp = ftabGet(getCurrentThread()->ftab, fd);
-	if (fp == NULL)
-	{
-		ERRNO = EBADF;
-		return -1;
-	};
-	
-	int flags = fp->oflag;
-	vfsClose(fp);
-	return flags & FD_ALL;
-#endif
-
 	int flags = ftabGetFlags(getCurrentThread()->ftab, fd);
 	if (flags == -1)
 	{
@@ -2234,23 +2308,6 @@ int fcntl_getfd(int fd)
 
 int fcntl_setfd(int fd, int flags)
 {
-#if 0
-	if ((flags & ~FD_ALL) != 0)
-	{
-		ERRNO = EINVAL;
-		return -1;
-	};
-
-	File *fp = ftabGet(getCurrentThread()->ftab, fd);
-	if (fp == NULL)
-	{
-		ERRNO = EBADF;
-		return -1;
-	};
-	
-	fp->oflag = (fp->oflag & ~FD_ALL) | flags;
-	vfsClose(fp);
-#endif
 	if ((flags & ~FD_ALL) != 0)
 	{
 		ERRNO = EINVAL;
@@ -3601,8 +3658,9 @@ int sys_cpuno()
 
 /**
  * System call table for fast syscalls, and the number of system calls.
+ * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 135
+#define SYSCALL_NUMBER 136
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3634,7 +3692,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_insmod,				// 27
 	&sys_ioctl,				// 28
 	&sys_fdopendir,				// 29
-	NULL,					// 30 (_glidix_diag())
+	SYS_NULL,				// 30 (_glidix_diag())
 	&sys_mount,				// 31
 	&sys_yield,				// 32
 	&time,					// 33
@@ -3704,16 +3762,16 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_bindif,				// 97
 	&sys_route_clear,			// 98
 	&sys_munmap,				// 99
-	NULL,					// 100	[was thsync]
+	&sys_pipe2,				// 100
 	&sys_getppid,				// 101
 	&sys_alarm,				// 102
 	&sys_store_and_sleep,			// 103
-	NULL,					// 104	[was mqserver]
-	NULL,					// 105	[was mqclient]
-	NULL,					// 106	[was mqsend]
-	NULL,					// 107	[was mqrecv]
-	NULL,					// 108	[was shmalloc]
-	NULL,					// 109  [was shmap]
+	SYS_NULL,				// 104	[was mqserver]
+	SYS_NULL,				// 105	[was mqclient]
+	SYS_NULL,				// 106	[was mqsend]
+	&sys_listen,				// 107
+	&sys_accept,				// 108
+	&sys_accept4,				// 109
 	&sys_setsid,				// 110
 	&sys_setpgid,				// 111
 	&sys_getsid,				// 112
@@ -3739,6 +3797,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_nice,				// 132
 	&sys_procstat,				// 133
 	&sys_cpuno,				// 134
+	&sysInvalid,				// 135 [guaranteed to always be unused!]
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

@@ -46,6 +46,9 @@ extern "C" {
 #define	SOCK_STREAM			1
 #define	SOCK_DGRAM			2
 #define	SOCK_RAW			3
+#define	SOCK_SEQPACKET			4
+
+#define	SOCK_CLOEXEC			(1 << 4)
 
 #define	SHUT_RD				1
 #define	SHUT_WR				2
@@ -86,6 +89,9 @@ int shutdown(int socket, int how);
 int connect(int socket, const struct sockaddr *addr, socklen_t addrlen);
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
 int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen);
+int listen(int sockfd, int backlog);
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+int accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
 
 #ifdef __cplusplus
 };	/* extern "C" */

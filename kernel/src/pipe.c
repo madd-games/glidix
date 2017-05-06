@@ -200,6 +200,18 @@ static File *openPipe(Pipe *pipe, int mode)
 
 int sys_pipe(int *upipefd)
 {
+	return sys_pipe2(upipefd, 0);
+};
+
+int sys_pipe2(int *upipefd, int flags)
+{
+	int allFlags = O_CLOEXEC;
+	if ((flags & ~allFlags) != 0)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
 	int pipefd[2];
 
 	int rfd = ftabAlloc(getCurrentThread()->ftab);
@@ -225,8 +237,9 @@ int sys_pipe(int *upipefd)
 	pipe->woff = 0;
 	pipe->sides = SIDE_READ | SIDE_WRITE;
 
-	ftabSet(getCurrentThread()->ftab, rfd, openPipe(pipe, O_RDONLY), 0);
-	ftabSet(getCurrentThread()->ftab, wfd, openPipe(pipe, O_WRONLY), 0);
+	// O_CLOEXEC == FD_CLOEXEC
+	ftabSet(getCurrentThread()->ftab, rfd, openPipe(pipe, O_RDONLY), flags);
+	ftabSet(getCurrentThread()->ftab, wfd, openPipe(pipe, O_WRONLY), flags);
 	
 	pipefd[0] = rfd;
 	pipefd[1] = wfd;

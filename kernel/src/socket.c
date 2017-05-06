@@ -42,6 +42,7 @@ Socket* CreateRawSocket();				/* rawsock.c */
 Socket* CreateUDPSocket();				/* udpsock.c */
 Socket* CreateTCPSocket();				/* tcpsock.c */
 Socket* CreateCaptureSocket(int type, int proto);	/* capsock.c */
+Socket* CreateUnixSocket(int type);			/* unixsock.c */
 
 static Semaphore sockLock;
 static Socket sockList;
@@ -113,9 +114,24 @@ static void sock_pollinfo(File *fp, Semaphore **sems)
 	sock->pollinfo(sock, sems);
 };
 
+File* MakeSocketFile(Socket *sock)
+{
+	File *fp = (File*) kmalloc(sizeof(File));
+	memset(fp, 0, sizeof(File));
+	fp->refcount = 1;
+	fp->fsdata = sock;
+	fp->oflag = O_RDWR | O_SOCKET;
+	fp->close = sock_close;
+	fp->write = sock_write;
+	fp->read = sock_read;
+	fp->pollinfo = sock_pollinfo;
+	
+	return fp;
+};
+
 File* CreateSocket(int domain, int type, int proto)
 {
-	if ((domain != AF_INET) && (domain != AF_INET6) && (domain != AF_CAPTURE))
+	if ((domain != AF_INET) && (domain != AF_INET6) && (domain != AF_CAPTURE) && (domain != AF_UNIX))
 	{
 		ERRNO = EAFNOSUPPORT;
 		return NULL;
@@ -137,6 +153,17 @@ File* CreateSocket(int domain, int type, int proto)
 		};
 		
 		sock = CreateCaptureSocket(type, proto);
+		if (sock == NULL) return NULL;
+	}
+	else if (domain == AF_UNIX)
+	{
+		if (proto != 0)
+		{
+			ERRNO = EPROTONOSUPPORT;
+			return NULL;
+		};
+		
+		sock = CreateUnixSocket(type);
 		if (sock == NULL) return NULL;
 	}
 	else
@@ -190,24 +217,19 @@ File* CreateSocket(int domain, int type, int proto)
 	
 	memset(sock->options, 0, 8*GSO_COUNT);
 	
-	// append the socket to the beginning of the socket list.
-	// (the order does not acutally matter but adding to the beginning is faster).
-	semWait(&sockLock);
-	sock->prev = &sockList;
-	sock->next = sockList.next;
-	if (sock->next != NULL) sock->next->prev = sock;
-	sockList.next = sock;
-	semSignal(&sockLock);
+	if (domain != AF_UNIX)
+	{
+		// append the socket to the beginning of the socket list.
+		// (the order does not acutally matter but adding to the beginning is faster).
+		semWait(&sockLock);
+		sock->prev = &sockList;
+		sock->next = sockList.next;
+		if (sock->next != NULL) sock->next->prev = sock;
+		sockList.next = sock;
+		semSignal(&sockLock);
+	};
 	
-	File *fp = (File*) kmalloc(sizeof(File));
-	memset(fp, 0, sizeof(File));
-	fp->refcount = 1;
-	fp->fsdata = sock;
-	fp->oflag = O_RDWR | O_SOCKET;
-	fp->close = sock_close;
-	fp->write = sock_write;
-	fp->read = sock_read;
-	fp->pollinfo = sock_pollinfo;
+	File *fp = MakeSocketFile(sock);
 	
 	sock->fp = fp;
 	return fp;
@@ -236,6 +258,59 @@ int BindSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
 	
 	int result = sock->bind(sock, addr, addrlen);
 	return result;
+};
+
+int SocketListen(File *fp, int backlog)
+{
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		ERRNO = ENOTSOCK;
+		return -1;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (sock->listen == NULL)
+	{
+		ERRNO = EOPNOTSUPP;
+		return -1;
+	};
+	
+	int result = sock->listen(sock, backlog);
+	return result;
+};
+
+File* SocketAccept(File *fp, struct sockaddr *addr, size_t *addrlenptr)
+{
+	if (*addrlenptr < 2)
+	{
+		ERRNO = EAFNOSUPPORT;
+		return NULL;
+	};
+	
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		ERRNO = ENOTSOCK;
+		return NULL;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (sock->accept == NULL)
+	{
+		ERRNO = EOPNOTSUPP;
+		return NULL;
+	};
+	
+	Socket *newsock = sock->accept(sock, addr, addrlenptr);
+	if (newsock == NULL)
+	{
+		// ERRNO set by sock->accept()
+		return NULL;
+	};
+	
+	File *newfp = MakeSocketFile(newsock);
+	newsock->fp = newfp;
+	
+	return newfp;
 };
 
 ssize_t SendtoSocket(File *fp, const void *message, size_t len, int flags, const struct sockaddr *addr, size_t addrlen)

@@ -7,10 +7,13 @@ pipe - create a unidirectional communication stream
 	#include <unistd.h>
 	
 	int pipe(int *'pipefd');
-
+	int pipe2(int *'pipefd', int 'flags');
+	
 >DESCRIPTION
 
 This function creates a pipe - a unidirectional communication stream, which has a read end and a write end. The argument 'pipefd' points to an array of two 'int's, where upon success, the first one (index 0) is set to the file descriptor of the read end of the pipe, and the second (index 1) is set to the file descriptor of the write end of the pipe. Bytes written to the write end of the pipe using [write.2] are read out from the read end of the pipe using [read.2], in a first-in-first-out fashion. when no more data is available, a [read.2] blocks until data is written to the write end. When all references to the write end are closed, a [read.2] on a read end returns EOF. If all references to the read side are closed, an attempt to [write.2] to the write side returns an error and the *SIGPIPE* signal is delivered. This is typically used for communicating between child and parent after a [fork.2].
+
+The close-on-exec flag is clear for the 2 new file descriptors created by 'pipe()'. The 'pipe2()' function is equivalent to 'pipe()' when 'flags' is zero; but if 'flags' is *O_CLOEXEC*, then the close-on-exec flag is set on both descriptors.
 
 >RETURN VALUE
 

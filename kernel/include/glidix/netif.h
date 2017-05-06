@@ -159,6 +159,15 @@ struct sockaddr
 };
 
 /**
+ * AF_LOCAL/AF_UNIX (local sockets)
+ */
+struct sockaddr_un
+{
+	uint16_t			sun_family;		/* AF_UNIX/AF_LOCAL */
+	char				sun_path[108];
+};
+
+/**
  * AF_CAPTURE (capture sockets)
  */
 struct sockaddr_cap

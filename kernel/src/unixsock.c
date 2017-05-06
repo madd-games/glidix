@@ -26,60 +26,37 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_mp_h
-#define __glidix_mp_h
-
-/**
- * MP Tables. Those are a simpler way of getting PCI routing info - perhaps until we fully implement ACPI?
- */
-
-#include <glidix/common.h>
-
-typedef struct
-{
-	char		sig[4];		/* "_MP_" */
-	uint32_t	conftabPhys;
-	uint8_t		length;		/* in 16-bytes */
-	uint8_t		rev;
-	uint8_t		checksum;
-	uint8_t		features1;
-	uint32_t	features;
-} PACKED MPFloatPtr;
+#include <glidix/socket.h>
+#include <glidix/memory.h>
+#include <glidix/string.h>
+#include <glidix/sched.h>
+#include <glidix/errno.h>
+#include <glidix/semaphore.h>
+#include <glidix/netif.h>
+#include <glidix/console.h>
 
 typedef struct
 {
-	char		sig[4];		/* "PCMP" */
-	uint16_t	length;
-	uint8_t		specrev;
-	uint8_t		checksum;
-	char		oemProduct[20];
-	uint32_t	oemtabPhys;
-	uint16_t	oemSize;
-	uint16_t	entryCount;
-	uint32_t	lapicPhys;
-	uint16_t	extabLen;
-	uint8_t		extabChecksum;
-	uint8_t		rsv;
-} PACKED MPConfigHeader;
+	Socket					header_;
+	
+	/**
+	 * The socket type (SOCK_*).
+	 */
+	int					type;
+} UnixSocket;
 
-typedef struct
+UnixSocket* CreateUnixSocket(int type)
 {
-	uint8_t		type;		/* 3 - I/O Interrupt Assignment Entry */
-	uint8_t		inttype;
-	uint16_t	flags;
-	uint8_t		bus;
-	uint8_t		irq;
-	uint8_t		dstapic;
-	uint8_t		intpin;
-} PACKED MPIntAssignment;
-
-typedef struct
-{
-	uint8_t		type;		/* 1 - Bus Entry */
-	uint8_t		busid;
-	char		bustype[6];
-} PACKED MPBusEntry;
-
-void mpInit();
-
-#endif
+	if (type != SOCK_SEQPACKET)
+	{
+		ERRNO = EPROTONOSUPPORT;
+		return NULL;
+	};
+	
+	UnixSocket *unixsock = NEW(UnixSocket);
+	memset(unixsock, 0, sizeof(UnixSocket));
+	
+	//Socket *sock = (Socket*) unixsock;
+	// TODO
+	return NULL;
+};

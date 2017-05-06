@@ -36,7 +36,7 @@ global _syscall_entry
 _syscall_entry:
 	; the fourth argument, that is normally in RCX, is passed in R10 in this context
 	; as RCX contains the return address
-	swapgs				; GS.base = currentThread
+	swapgs					; GS.base = currentThread
 	mov [gs:0x208], rbx
 	mov [gs:0x210], rsp
 	mov [gs:0x218], rbp
@@ -72,14 +72,10 @@ _syscall_entry:
 	cmp rax, r10
 	jae .invalid
 	
-	; find the system call pointer
+	; find the system call pointer (it is never NULL; unused slots map to
+	; sysInvalid now!)
 	mov r10, sysTable
-	mov rax, [r10+8*rax]
-	test rax, rax
-	jz .invalid				; enter is NULL
-	
-	; call it
-	call rax
+	call [r10+8*rax]
 
 	; we must always perform the epilog
 	mov rdi, rax
