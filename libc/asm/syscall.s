@@ -113,7 +113,9 @@ GLIDIX_SYSCALL	100,	pipe2
 GLIDIX_SYSCALL	101,	getppid
 GLIDIX_SYSCALL	102,	alarm
 GLIDIX_SYSCALL	103,	_glidix_store_and_sleep
-GLIDIX_SYSCALL	135,	_glidix_mqserver	
+GLIDIX_SYSCALL	135,	_glidix_mqrecv
+GLIDIX_SYSCALL	135,	_glidix_thsync
+GLIDIX_SYSCALL	135,	_glidix_mqserver
 GLIDIX_SYSCALL	135,	_glidix_mqclient
 GLIDIX_SYSCALL	135,	_glidix_mqsend
 GLIDIX_SYSCALL	107,	listen
