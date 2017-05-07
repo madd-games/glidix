@@ -84,18 +84,28 @@
 #define	IF_TUNNEL			2		/* software tunnel */
 
 /* system-defined address/route domains; numbers 0-15 are reserved for the system; 16+ may be used by user */
-#define	DOM_GLOBAL			0	/* global (internet) */
-#define	DOM_LINK			1	/* link-local (LAN only) */
-#define	DOM_LOOPBACK			2	/* loopback (host only) */
-#define	DOM_SITE			3	/* site-local (organization scope only) */
-#define	DOM_MULTICAST			4	/* multicast (used for addresses and NEVER routes) */
-#define	DOM_NODEFAULT			5	/* non-default address (never selected for any route) */
+#define	DOM_GLOBAL			0		/* global (internet) */
+#define	DOM_LINK			1		/* link-local (LAN only) */
+#define	DOM_LOOPBACK			2		/* loopback (host only) */
+#define	DOM_SITE			3		/* site-local (organization scope only) */
+#define	DOM_MULTICAST			4		/* multicast (used for addresses and NEVER routes) */
+#define	DOM_NODEFAULT			5		/* non-default address (never selected for any route) */
 
 /**
  * Default hop limits for unicast and multicast packets.
  */
 #define	DEFAULT_UNICAST_HOPS		64
 #define	DEFAULT_MULTICAST_HOPS		1
+
+/**
+ * The size of an internet-domain socket address (struct sockaddr_in and struct sockaddr_in6).
+ * This can be fixed at 28 because it will not change due to ABI compatiblity. This is here so
+ * that bind(), connect(), etc interfaces on internet sockets can check 'addrlen' against this,
+ * without making it look like it's checking for IPv4 or IPv6 specifically; previously,
+ * sizeof(struct sockaddr) was used for this, but now it is expanded above 28 bytes because of
+ * UNIX sockets and stuff, so we have this convenient macro instead.
+ */
+#define	INET_SOCKADDR_LEN		28
 
 /**
  * Type-specific network interface options.

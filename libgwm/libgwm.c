@@ -295,7 +295,7 @@ int gwmInit()
 	defaultFont = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_REGULAR, &errmsg);
 	if (defaultFont == NULL)
 	{
-		fprintf(stderr, "failed to load default font (DejaVu Sans 12): %s\n", errmsg);
+		fprintf(stderr, "gwm: failed to load default font (DejaVu Sans 12): %s\n", errmsg);
 		ddiQuit();
 		return -1;
 	};

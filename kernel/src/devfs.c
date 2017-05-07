@@ -267,6 +267,8 @@ void initDevfs()
 	nullDevice.prev = NULL;
 	nullDevice.next = NULL;
 	nullDevice.inode = 7;
+	nullDevice.st.st_mode = 0666 | VFS_MODE_CHARDEV;
+	nullDevice.st.st_nlink = 1;
 	
 	if (AddDevice("zero", NULL, openZero, 0666 | VFS_MODE_CHARDEV) == NULL)
 	{

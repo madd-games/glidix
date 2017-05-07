@@ -207,7 +207,7 @@ typedef struct
 static int tcpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrlen)
 {
 	TCPSocket *tcpsock = (TCPSocket*) sock;
-	if (addrlen < sizeof(struct sockaddr))
+	if (addrlen < INET_SOCKADDR_LEN)
 	{
 		ERRNO = EAFNOSUPPORT;
 		return -1;
@@ -574,7 +574,7 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 		return -1;
 	};
 	
-	if (size != sizeof(struct sockaddr))
+	if (size != INET_SOCKADDR_LEN)
 	{
 		ERRNO = EAFNOSUPPORT;
 		return -1;
@@ -610,7 +610,7 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 		dstport = inaddr->sin6_port;
 	};
 	
-	memcpy(&tcpsock->peername, addr, sizeof(struct sockaddr));
+	memcpy(&tcpsock->peername, addr, INET_SOCKADDR_LEN);
 	tcpsock->state = TCP_CONNECTING;
 	
 	tcpsock->nextSeqNo = (uint32_t) getRandom();
@@ -968,8 +968,8 @@ static ssize_t tcpsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	};
 	
 	TCPSocket *tcpsock = (TCPSocket*) sock;
-	if (addrlen != NULL) *addrlen = sizeof(struct sockaddr);
-	if (addr != NULL) memcpy(addr, &tcpsock->peername, sizeof(struct sockaddr));
+	if (addrlen != NULL) *addrlen = INET_SOCKADDR_LEN;
+	if (addr != NULL) memcpy(addr, &tcpsock->peername, INET_SOCKADDR_LEN);
 	
 	int size = semWaitGen(&tcpsock->semRecvFetch, (int)len, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
 	if (size < 0)
@@ -1053,9 +1053,9 @@ static void tcpsock_pollinfo(Socket *sock, Semaphore **sems)
 static int tcpsock_getsockname(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 {
 	size_t addrlen = *addrlenptr;
-	if (addrlen > sizeof(struct sockaddr))
+	if (addrlen > INET_SOCKADDR_LEN)
 	{
-		addrlen = (*addrlenptr) = sizeof(struct sockaddr);
+		addrlen = (*addrlenptr) = INET_SOCKADDR_LEN;
 	};
 	
 	TCPSocket *tcpsock = (TCPSocket*) sock;
@@ -1066,9 +1066,9 @@ static int tcpsock_getsockname(Socket *sock, struct sockaddr *addr, size_t *addr
 static int tcpsock_getpeername(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 {
 	size_t addrlen = *addrlenptr;
-	if (addrlen > sizeof(struct sockaddr))
+	if (addrlen > INET_SOCKADDR_LEN)
 	{
-		addrlen = (*addrlenptr) = sizeof(struct sockaddr);
+		addrlen = (*addrlenptr) = INET_SOCKADDR_LEN;
 	};
 	
 	TCPSocket *tcpsock = (TCPSocket*) sock;

@@ -105,7 +105,7 @@ typedef struct
 static int udpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrlen)
 {
 	UDPSocket *udpsock = (UDPSocket*) sock;
-	if (addrlen < sizeof(struct sockaddr))
+	if (addrlen < INET_SOCKADDR_LEN)
 	{
 		ERRNO = EAFNOSUPPORT;
 		return -1;
@@ -171,7 +171,7 @@ static int udpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 	else
 	{
 		struct sockaddr chaddr;
-		memcpy(&chaddr, addr, sizeof(struct sockaddr));
+		memcpy(&chaddr, addr, INET_SOCKADDR_LEN);
 		
 		if (chaddr.sa_family == AF_INET)
 		{
@@ -195,9 +195,9 @@ static int udpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 static int udpsock_getsockname(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 {
 	size_t addrlen = *addrlenptr;
-	if (addrlen > sizeof(struct sockaddr))
+	if (addrlen > INET_SOCKADDR_LEN)
 	{
-		addrlen = (*addrlenptr) = sizeof(struct sockaddr);
+		addrlen = (*addrlenptr) = INET_SOCKADDR_LEN;
 	};
 	
 	UDPSocket *udpsock = (UDPSocket*) sock;
@@ -208,7 +208,7 @@ static int udpsock_getsockname(Socket *sock, struct sockaddr *addr, size_t *addr
 static int udpsock_connect(Socket *sock, const struct sockaddr *addr, size_t addrlen)
 {
 	UDPSocket *udpsock = (UDPSocket*) sock;
-	if (addrlen < sizeof(struct sockaddr))
+	if (addrlen < INET_SOCKADDR_LEN)
 	{
 		ERRNO = EAFNOSUPPORT;
 		return -1;
@@ -238,16 +238,16 @@ static int udpsock_connect(Socket *sock, const struct sockaddr *addr, size_t add
 		};
 	};
 	
-	memcpy(&udpsock->peername, addr, sizeof(struct sockaddr));
+	memcpy(&udpsock->peername, addr, INET_SOCKADDR_LEN);
 	return 0;
 };
 
 static int udpsock_getpeername(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 {
 	size_t addrlen = *addrlenptr;
-	if (addrlen > sizeof(struct sockaddr))
+	if (addrlen > INET_SOCKADDR_LEN)
 	{
-		addrlen = (*addrlenptr) = sizeof(struct sockaddr);
+		addrlen = (*addrlenptr) = INET_SOCKADDR_LEN;
 	};
 	
 	UDPSocket *udpsock = (UDPSocket*) sock;
@@ -358,7 +358,7 @@ static ssize_t udpsock_sendto(Socket *sock, const void *message, size_t msgsize,
 
 	if (addr != NULL)
 	{
-		if (addrlen < sizeof(struct sockaddr))
+		if (addrlen < INET_SOCKADDR_LEN)
 		{
 			ERRNO = EAFNOSUPPORT;
 			return -1;
@@ -370,7 +370,7 @@ static ssize_t udpsock_sendto(Socket *sock, const void *message, size_t msgsize,
 			return -1;
 		};
 		
-		memcpy(&destaddr, addr, sizeof(struct sockaddr));
+		memcpy(&destaddr, addr, INET_SOCKADDR_LEN);
 	}
 	else
 	{
@@ -380,7 +380,7 @@ static ssize_t udpsock_sendto(Socket *sock, const void *message, size_t msgsize,
 			return -1;
 		};
 		
-		memcpy(&destaddr, &udpsock->peername, sizeof(struct sockaddr));
+		memcpy(&destaddr, &udpsock->peername, INET_SOCKADDR_LEN);
 	};
 	
 	if (destaddr.sa_family != sock->domain)
@@ -588,7 +588,7 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 	inbound->next = NULL;
 	
 	// copy the source address into the inbound desription but also place the port number in
-	memcpy(&inbound->srcaddr, src, sizeof(struct sockaddr));
+	memcpy(&inbound->srcaddr, src, INET_SOCKADDR_LEN);
 	if (src->sa_family == AF_INET)
 	{
 		((struct sockaddr_in*)&inbound->srcaddr)->sin_port = udp->srcport;

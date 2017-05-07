@@ -92,7 +92,7 @@ static int rawsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 		return -1;
 	};
 	
-	if (addrlen > sizeof(struct sockaddr))
+	if (addrlen > INET_SOCKADDR_LEN)
 	{
 		ERRNO = EAFNOSUPPORT;
 		return -1;
@@ -320,9 +320,9 @@ static void rawsock_close(Socket *sock)
 
 static int rawsock_getsockname(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 {
-	if ((*addrlenptr) > sizeof(struct sockaddr))
+	if ((*addrlenptr) > INET_SOCKADDR_LEN)
 	{
-		*addrlenptr = sizeof(struct sockaddr);
+		*addrlenptr = INET_SOCKADDR_LEN;
 	};
 	
 	size_t len = *addrlenptr;
