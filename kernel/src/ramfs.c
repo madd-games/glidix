@@ -76,9 +76,14 @@ static void nodeDown(RamfsInode *inode)
 			ftUncache((FileTree*) inode->data);
 			ftDown((FileTree*) inode->data);
 		}
-		else
+		else if ((inode->meta.st_mode & 0xF000) == VFS_MODE_DIRECTORY)
 		{
 			kfree(inode->data);
+		}
+		else
+		{
+			SysObject *sysobj = (SysObject*) inode->data;
+			vfsSysDecref(sysobj);
 		};
 		
 		kfree(inode);
@@ -204,7 +209,6 @@ static int ramdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	if (data->currentEntry->dent.d_ino == 1)
 	{
 		semSignal(&data->ramfs->lock);
-		kprintf("mkreg: inode 1 memes\n");
 		return -1;
 	};
 	
@@ -226,6 +230,47 @@ static int ramdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	
 	newInode->data = ft;
 	
+	RamfsDirent *newEnt = NEW(RamfsDirent);
+	strcpy(newEnt->dent.d_name, name);
+	newEnt->dent.d_ino = (ino_t) newInode;
+	newEnt->prev = data->currentEntry->prev;
+	newEnt->next = data->currentEntry;
+	data->currentEntry->prev->next = newEnt;
+	data->currentEntry->prev = newEnt;
+	data->currentEntry = newEnt;
+	
+	data->dirInode->meta.st_size++;
+	data->dirInode->meta.st_mtime = time();
+	
+	semSignal(&data->ramfs->lock);
+	return 0;
+};
+
+static int ramdir_linksys(Dir *dir, const char *name, SysObject *sysobj)
+{
+	DirData *data = (DirData*) dir->fsdata;
+	
+	semWait(&data->ramfs->lock);
+	
+	if (data->currentEntry->dent.d_ino == 1)
+	{
+		semSignal(&data->ramfs->lock);
+		return -1;
+	};
+	
+	vfsSysIncref(sysobj);
+	
+	RamfsInode *newInode = NEW(RamfsInode);
+	memset(newInode, 0, sizeof(RamfsInode));
+	newInode->meta.st_ino = (ino_t) newInode;
+	newInode->meta.st_mode = sysobj->mode;
+	newInode->meta.st_nlink = 1;
+	newInode->meta.st_uid = getCurrentThread()->creds->euid;
+	newInode->meta.st_gid = getCurrentThread()->creds->egid;
+	newInode->meta.st_blksize = 512;
+	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = time();
+	newInode->data = sysobj;
+
 	RamfsDirent *newEnt = NEW(RamfsDirent);
 	strcpy(newEnt->dent.d_name, name);
 	newEnt->dent.d_ino = (ino_t) newInode;
@@ -431,6 +476,27 @@ static int ramdir_link(Dir *dir, const char *name, ino_t ino)
 	return 0;
 };
 
+static SysObject* ramdir_getsys(Dir *dir)
+{
+	DirData *data = (DirData*) dir->fsdata;
+	semWait(&data->ramfs->lock);
+	
+	RamfsInode *inode = (RamfsInode*) data->currentEntry->dent.d_ino;
+	int type = inode->meta.st_mode & 0xF000;
+	
+	if ((type == 0) || (type == VFS_MODE_DIRECTORY))
+	{
+		semSignal(&data->ramfs->lock);
+		return NULL;
+	};
+	
+	SysObject *sysobj = (SysObject*) inode->data;
+	vfsSysIncref(sysobj);
+	
+	semSignal(&data->ramfs->lock);
+	return sysobj;
+};
+
 static void ramfile_close(File *fp)
 {
 	FileData *data = (FileData*) fp->fsdata;
@@ -569,9 +635,16 @@ static int ramdir_openfile(Dir *dir, File *fp, size_t szfile)
 		return -1;
 	};
 	
+	RamfsInode *inode = (RamfsInode*) data->currentEntry->dent.d_ino;
+	if ((inode->meta.st_mode & 0xF000) != 0)
+	{
+		semSignal(&data->ramfs->lock);
+		return -1;
+	};
+	
 	FileData *fdata = NEW(FileData);
 	fdata->ramfs = data->ramfs;
-	fdata->inode = (RamfsInode*) data->currentEntry->dent.d_ino;
+	fdata->inode = inode;
 	fdata->pos = 0;
 	
 	__sync_fetch_and_add(&fdata->inode->meta.st_nlink, 1);
@@ -618,6 +691,8 @@ static int ramfs_opendir(Ramfs *ramfs, RamfsInode *inode, Dir *dir, size_t szdir
 	dir->mkreg = ramdir_mkreg;
 	dir->openfile = ramdir_openfile;
 	dir->chxperm = ramdir_chxperm;
+	dir->linksys = ramdir_linksys;
+	dir->getsys = ramdir_getsys;
 	
 	RamfsInode *entNode = (RamfsInode*) data->currentEntry->dent.d_ino;
 	if (entNode != NULL)

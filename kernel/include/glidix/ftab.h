@@ -87,9 +87,10 @@ int ftabClose(FileTable *ftab, int fd);
 /**
  * Try placing a file in a slot. This is used by dup2(). Returns 0 on success, or an error number on error.
  * The error may be EBADF if the descriptor is out of range, or EBUSY if there was a race condtition with
- * a file-opening function such as open() or socket().
+ * a file-opening function such as open() or socket(). 'flags' are the new descriptor flags (may be set
+ * by dup3()).
  */
-int ftabPut(FileTable *ftab, int fd, File *fp);
+int ftabPut(FileTable *ftab, int fd, File *fp, int flags);
 
 /**
  * Close all files marked with close-on-exec.

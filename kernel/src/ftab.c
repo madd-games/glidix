@@ -166,7 +166,7 @@ int ftabClose(FileTable *ftab, int fd)
 	return 0;
 };
 
-int ftabPut(FileTable *ftab, int fd, File *fp)
+int ftabPut(FileTable *ftab, int fd, File *fp, int flags)
 {
 	if ((fd < 0) || (fd >= MAX_OPEN_FILES))
 	{
@@ -182,7 +182,7 @@ int ftabPut(FileTable *ftab, int fd, File *fp)
 	};
 	
 	ftab->list[fd].fp = fp;
-	ftab->list[fd].flags = 0;
+	ftab->list[fd].flags = flags;
 	semSignal(&ftab->lock);
 	
 	if (old != NULL) vfsClose(old);

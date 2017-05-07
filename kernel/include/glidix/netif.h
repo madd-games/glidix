@@ -155,7 +155,7 @@ typedef union
 struct sockaddr
 {
 	uint16_t			sa_family;		/* AF_* */
-	char				sa_data[26];
+	char				sa_data[108];
 };
 
 /**

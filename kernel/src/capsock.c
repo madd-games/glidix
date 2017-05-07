@@ -253,7 +253,7 @@ Socket *CreateCaptureSocket(int type, int proto)
 	sock->packet = capsock_packet;
 	sock->recvfrom = capsock_recvfrom;
 	sock->shutdown = capsock_shutdown;
-
+	
 	semInit(&capsock->queueLock);
 	semInit2(&capsock->counter, 0);
 	

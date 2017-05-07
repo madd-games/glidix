@@ -504,7 +504,7 @@ typedef struct _Dir
 	 * to the EUID and EGID. This function increments the reference count of the object. Return 0 on success,
 	 * -1 on error (which then gets reported as EIO). System objects do not persist after reboot or unmount.
 	 */
-	int (*linksys)(struct _Dir *dir, SysObject *sysobj);
+	int (*linksys)(struct _Dir *dir, const char *name, SysObject *sysobj);
 	
 	/**
 	 * If the current entry is a system object, increment the reference count and return it. Otherwise, return

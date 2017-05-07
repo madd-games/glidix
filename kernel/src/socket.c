@@ -88,9 +88,11 @@ static void sock_close(File *fp)
 	if (sock->close != NULL)
 	{
 		sock->close(sock);
+	}
+	else
+	{
+		kfree(sock);
 	};
-	
-	kfree(sock);
 };
 
 static ssize_t sock_write(File *fp, const void *buffer, size_t len)

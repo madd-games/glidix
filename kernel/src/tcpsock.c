@@ -698,6 +698,8 @@ static void tcpsock_close(Socket *sock)
 		
 		FreePort(srcport);
 	};
+	
+	kfree(sock);
 };
 
 static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,

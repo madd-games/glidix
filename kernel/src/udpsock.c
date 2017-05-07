@@ -291,6 +291,7 @@ static void udpsock_close(Socket *sock)
 	udpsock->numGroups = 0;
 	
 	semSignal(&udpsock->queueLock);
+	kfree(sock);
 };
 
 static uint16_t udpChecksum4(const struct sockaddr_in *src, const struct sockaddr_in *dest, const void *msg, size_t size)

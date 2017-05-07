@@ -73,7 +73,7 @@ struct sockaddr
 struct sockaddr_storage
 {
 	sa_family_t			ss_family;
-	char				ss_data[26];
+	char				ss_data[256];
 };
 
 /* implemented by libglidix directly */

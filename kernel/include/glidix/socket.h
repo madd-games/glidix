@@ -106,7 +106,8 @@ typedef struct Socket_
 	
 	/**
 	 * This is called by close() after calling shutdown(). This function is responsible for freeing any resources
-	 * used by the socket. Do not free the Socket structure itself! close() does that after this call.
+	 * used by the socket. You are also repsonsible for freeing the socket itself. If this function is NULL, the
+	 * socket is freed by close() itself.
 	 */
 	void (*close)(struct Socket_ *sock);
 

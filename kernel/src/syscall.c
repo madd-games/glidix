@@ -1215,7 +1215,36 @@ int sys_dup2(int oldfd, int newfd)
 		return -1;
 	};
 	
-	int error = ftabPut(getCurrentThread()->ftab, newfd, fp);
+	int error = ftabPut(getCurrentThread()->ftab, newfd, fp, 0);
+	if (error != 0)
+	{
+		vfsClose(fp);
+		ERRNO = error;
+		return -1;
+	};
+	
+	return newfd;
+};
+
+int sys_dup3(int oldfd, int newfd, int fdflags)
+{
+	int allFlags = FD_CLOEXEC;
+	if ((fdflags & ~allFlags) != 0)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (newfd == oldfd) return newfd;
+	
+	File *fp = ftabGet(getCurrentThread()->ftab, oldfd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	int error = ftabPut(getCurrentThread()->ftab, newfd, fp, fdflags);
 	if (error != 0)
 	{
 		vfsClose(fp);
@@ -3766,7 +3795,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_getppid,				// 101
 	&sys_alarm,				// 102
 	&sys_store_and_sleep,			// 103
-	SYS_NULL,				// 104	[was mqserver]
+	&sys_dup3,				// 104
 	SYS_NULL,				// 105	[was mqclient]
 	SYS_NULL,				// 106	[was mqsend]
 	&sys_listen,				// 107

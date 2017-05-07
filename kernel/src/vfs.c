@@ -1128,7 +1128,7 @@ int vfsSysLink(const char *path, SysObject *sysobj)
 		};
 	};
 
-	int status = dir->linksys(dir, sysobj);
+	int status = dir->linksys(dir, name, sysobj);
 
 	if (dir->close != NULL) dir->close(dir);
 	kfree(dir);

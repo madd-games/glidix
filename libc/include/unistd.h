@@ -115,6 +115,7 @@ int		ftruncate(int fd, off_t length);
 int		unlink(const char *path);
 int		dup(int fd);
 int		dup2(int oldfd, int newfd);
+int		dup3(int oldfd, int newfd, int flags);
 int		pipe(int pipefd[2]);
 int		pipe2(int pipefd[2], int flags);
 uid_t		geteuid();
