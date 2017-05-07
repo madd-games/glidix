@@ -101,12 +101,19 @@ make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/libgwm.mip
 
-# gui
+# gwmserver
 rm -rf mipdir || exit 1
-cd gui || exit 1
+cd gwmserver || exit 1
 make install || exit 1
 cd ..
-build-tools/mkmip mipdir $1/gui.mip
+build-tools/mkmip mipdir $1/gwmserver.mip
+
+# guiapps
+rm -rf mipdir || exit 1
+cd guiapps || exit 1
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/guiapps.mip
 
 # fstools
 rm -rf mipdir || exit 1

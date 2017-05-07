@@ -76,6 +76,9 @@ const char *getFileType(mode_t mode)
 	case S_IFLNK:
 		return "Symbolic link";
 		break;
+	case S_IFSOCK:
+		return "Socket";
+		break;
 	default:
 		return "???";
 		break;

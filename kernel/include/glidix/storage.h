@@ -63,7 +63,7 @@
 /**
  * Command flags.
  */
-#define	SD_CMD_NOFREE				(1 << 0)		/* no not free structure after completion */
+#define	SD_CMD_NOFREE				(1 << 0)		/* do not free structure after completion */
 
 /**
  * Command types.

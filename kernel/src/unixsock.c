@@ -587,7 +587,13 @@ Socket* unixsock_accept(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 			unaddr->sun_path[0] = 0;
 		};
 		
-		semWait(&unixsock->seq.semConnWaiting);
+		int status = semWaitGen(&unixsock->seq.semConnWaiting, 1, SEM_W_FILE(sock->fp->oflag),
+						sock->options[GSO_RCVTIMEO]);
+		if (status < 0)
+		{
+			ERRNO = -status;
+			return NULL;
+		};
 		
 		semWait(&unixsock->seq.lock);
 		ConnWaiting *conn = unixsock->seq.connFirst;

@@ -155,7 +155,7 @@ static int ramdir_mkdir(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	newInode->meta.st_uid = uid;
 	newInode->meta.st_gid = gid;
 	newInode->meta.st_blksize = 512;
-	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = time();
+	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = newInode->meta.st_btime = time();
 	
 	RamfsDirent *borderEnts = (RamfsDirent*) kmalloc(sizeof(RamfsDirent)*2);
 	memset(borderEnts, 0, sizeof(RamfsDirent)*2);
@@ -220,7 +220,7 @@ static int ramdir_mkreg(Dir *dir, const char *name, mode_t mode, uid_t uid, gid_
 	newInode->meta.st_uid = uid;
 	newInode->meta.st_gid = gid;
 	newInode->meta.st_blksize = 512;
-	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = time();
+	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = newInode->meta.st_btime = time();
 	
 	FileTree *ft = ftCreate(0);
 	ft->data = newInode;
@@ -268,7 +268,7 @@ static int ramdir_linksys(Dir *dir, const char *name, SysObject *sysobj)
 	newInode->meta.st_uid = getCurrentThread()->creds->euid;
 	newInode->meta.st_gid = getCurrentThread()->creds->egid;
 	newInode->meta.st_blksize = 512;
-	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = time();
+	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = newInode->meta.st_btime = time();
 	newInode->data = sysobj;
 
 	RamfsDirent *newEnt = NEW(RamfsDirent);
@@ -416,7 +416,7 @@ static int ramdir_symlink(Dir *dir, const char *name, const char *path)
 	newInode->meta.st_uid = getCurrentThread()->creds->euid;
 	newInode->meta.st_gid = getCurrentThread()->creds->egid;
 	newInode->meta.st_blksize = 512;
-	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = time();
+	newInode->meta.st_atime = newInode->meta.st_ctime = newInode->meta.st_mtime = newInode->meta.st_btime = time();
 	
 	newInode->data = kmalloc(strlen(path)+1);
 	strcpy((char*)newInode->data, path);

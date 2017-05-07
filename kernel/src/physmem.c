@@ -196,7 +196,7 @@ static uint64_t phmAlloc8()
 	while (1)
 	{
 		uint64_t i;
-		uint64_t numGroups = numSystemFrames/8;
+		uint64_t numGroups = numSystemFrames;
 	
 		uint8_t *bitmap8 = frameBitmap;
 		for (i=(lowestFreeFrame>>3); i<(numGroups>>3); i++)
@@ -222,7 +222,7 @@ static uint64_t phmAlloc16()
 	while (1)
 	{
 		uint64_t i;
-		uint64_t numGroups = numSystemFrames/16;
+		uint64_t numGroups = numSystemFrames;
 	
 		uint16_t *bitmap16 = (uint16_t*) frameBitmap;
 		for (i=(lowestFreeFrame>>4); i<(numGroups>>4); i++)
@@ -248,7 +248,7 @@ static uint64_t phmAlloc32()
 	while (1)
 	{
 		uint64_t i;
-		uint64_t numGroups = numSystemFrames/32;
+		uint64_t numGroups = numSystemFrames;
 	
 		uint32_t *bitmap32 = (uint32_t*) frameBitmap;
 		for (i=(lowestFreeFrame>>5); i<(numGroups>>5); i++)
@@ -274,7 +274,7 @@ static uint64_t phmAlloc64()
 	while (1)
 	{
 		uint64_t i;
-		uint64_t numGroups = numSystemFrames/64;
+		uint64_t numGroups = numSystemFrames;
 	
 		uint64_t *bitmap64 = (uint64_t*) frameBitmap;
 		for (i=(lowestFreeFrame>>6); i<(numGroups>>6); i++)

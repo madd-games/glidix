@@ -74,15 +74,6 @@ typedef struct
 	uint64_t			flags;
 } _glidix_gen_route;
 
-typedef struct
-{
-	int				type;
-	int				pid;
-	int				fd;
-	uid_t				uid;
-	gid_t				gid;
-} _glidix_msginfo;
-
 typedef union
 {
 	int				type;	
@@ -201,16 +192,10 @@ extern "C" {
 #define	_GLIDIX_IOCTL_INT_VIDEO				0x0003
 #define	_GLIDIX_IOCTL_INT_GPU				0x0004
 #define	_GLIDIX_IOCTL_INT_TERM				0x0005
-#define	_GLIDIX_IOCTL_INT_THSYNC			0x0006
 
 #define	_GLIDIX_MQ_CONNECT				0
 #define	_GLIDIX_MQ_INCOMING				1
 #define	_GLIDIX_MQ_HANGUP				2
-
-#define	_GLIDIX_IOCTL_MUTEX_LOCK			_GLIDIX_IOCTL_NOARG(_GLIDIX_IOCTL_INT_THSYNC, 0)
-#define	_GLIDIX_IOCTL_MUTEX_UNLOCK			_GLIDIX_IOCTL_NOARG(_GLIDIX_IOCTL_INT_THSYNC, 1)
-#define	_GLIDIX_IOCTL_SEMA_WAIT				_GLIDIX_IOCTL_ARG(int, _GLIDIX_IOCTL_INT_THSYNC, 2)
-#define	_GLIDIX_IOCTL_SEMA_SIGNAL			_GLIDIX_IOCTL_ARG(int, _GLIDIX_IOCTL_INT_THSYNC, 3)
 
 #define	_GLIDIX_KOPT_GFXTERM				0
 
@@ -259,12 +244,7 @@ int		_glidix_fcntl_setfd(int fd, int flags);
 uint32_t	_glidix_unique();
 int		_glidix_bindif(int fd, const char *ifname);
 int		_glidix_route_clear(int family, const char *ifname);
-int		_glidix_thsync(int type, int par);
 int		_glidix_store_and_sleep(void *ptr, char val);
-int		_glidix_mqserver();
-int		_glidix_mqclient(int pid, int fd);
-int		_glidix_mqsend(int fd, int targetPid, int targetFD, const void *msg, size_t msgsize);
-ssize_t		_glidix_mqrecv(int fd, _glidix_msginfo *info, void *buffer, size_t bufsize);
 int		_glidix_kopt(int option, int value);
 int		_glidix_sigwait(uint64_t sigset, struct __siginfo *info, uint64_t nanotimeout);
 int		_glidix_sigsuspend(uint64_t mask);

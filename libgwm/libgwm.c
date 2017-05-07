@@ -27,6 +27,8 @@
 */
 
 #include <sys/glidix.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,7 +77,7 @@ typedef struct FileIconCache_
 
 static pthread_mutex_t waiterLock;
 static GWMWaiter* waiters = NULL;
-static int eventCounterFD;
+static sem_t semEventCounter;
 static pthread_mutex_t eventLock;
 static EventBuffer *firstEvent;
 static EventBuffer *lastEvent;
@@ -94,11 +96,17 @@ static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 	sem_init(&waiter->lock, 0, 0);
 	
 	pthread_mutex_lock(&waiterLock);
-	if (_glidix_mqsend(queueFD, guiPid, guiFD, cmd, sizeof(GWMCommand)) != 0)
+	//if (_glidix_mqsend(queueFD, guiPid, guiFD, cmd, sizeof(GWMCommand)) != 0)
+	//{
+	//	pthread_mutex_unlock(&waiterLock);
+	//	perror("_glidix_mqsend");
+	//};
+	if (write(queueFD, cmd, sizeof(GWMCommand)) != sizeof(GWMCommand))
 	{
 		pthread_mutex_unlock(&waiterLock);
-		perror("_glidix_mqsend");
+		perror("write(queueFD)");
 	};
+	
 	waiter->next = waiters;
 	waiter->prev = NULL;
 	waiters = waiter;
@@ -113,7 +121,7 @@ static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 static void* listenThreadFunc(void *ignore)
 {
 	(void)ignore;
-	queueFD = _glidix_mqclient(guiPid, guiFD);
+	//queueFD = _glidix_mqclient(guiPid, guiFD);
 	char msgbuf[65536];
 	
 	// block all signals. we don't want signal handlers to be invoked in the GWM
@@ -126,15 +134,17 @@ static void* listenThreadFunc(void *ignore)
 	initFinished = 1;
 	while (1)
 	{
-		_glidix_msginfo info;
-		ssize_t size = _glidix_mqrecv(queueFD, &info, msgbuf, 65536);
+		//_glidix_msginfo info;
+		//ssize_t size = _glidix_mqrecv(queueFD, &info, msgbuf, 65536);
+		ssize_t size = read(queueFD, msgbuf, 65536);
 		if (size == -1)
 		{
 			if (errno == EINTR) continue;
 			else break;
 		};
 
-		if (info.type == _GLIDIX_MQ_INCOMING)
+		//if (info.type == _GLIDIX_MQ_INCOMING)
+		if (size > 0)
 		{
 			if (size < sizeof(GWMMessage))
 			{
@@ -179,8 +189,9 @@ static void* listenThreadFunc(void *ignore)
 					lastEvent = buf;
 				};
 				pthread_mutex_unlock(&eventLock);
-				int one = 1;
-				ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
+				//int one = 1;
+				//ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
+				sem_post(&semEventCounter);
 			};
 		};
 	};
@@ -204,7 +215,7 @@ int gwmInit()
 	
 	nextWindowID = 1;
 	nextSeq = 1;
-	eventCounterFD = _glidix_thsync(1, 0);	// semaphore, start at zero
+	sem_init(&semEventCounter, 0, 1);
 	
 	pthread_mutex_init(&waiterLock, NULL);
 	pthread_mutex_init(&eventLock, NULL);
@@ -276,21 +287,43 @@ int gwmInit()
 	
 	if (ddiInit(dispdev, O_RDONLY) != 0)
 	{
-		fprintf(stderr, "GWM: failed to initialize DDI: %s\n", strerror(errno));
+		fprintf(stderr, "gwm: failed to initialize DDI: %s\n", strerror(errno));
 		return -1;
 	};
 
-	if (pthread_create(&listenThread, NULL, listenThreadFunc, NULL) != 0)
-	{
-		return -1;
-	};
-
-	while (!initFinished) __sync_synchronize();
 	const char *errmsg;
 	defaultFont = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_REGULAR, &errmsg);
 	if (defaultFont == NULL)
 	{
 		fprintf(stderr, "failed to load default font (DejaVu Sans 12): %s\n", errmsg);
+		ddiQuit();
+		return -1;
+	};
+
+	queueFD = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+	if (queueFD == -1)
+	{
+		fprintf(stderr, "gwm: could not create socket: %s\n", strerror(errno));
+		ddiQuit();
+		return -1;
+	};
+	
+	struct sockaddr_un srvaddr;
+	srvaddr.sun_family = AF_UNIX;
+	strcpy(srvaddr.sun_path, "/run/gwmserver");
+	
+	if (connect(queueFD, (struct sockaddr*) &srvaddr, sizeof(struct sockaddr_un)) != 0)
+	{
+		fprintf(stderr, "gwm: cannot connect to /run/gwmserver: %s\n", strerror(errno));
+		ddiQuit();
+		close(queueFD);
+		return -1;
+	};
+	
+	if (pthread_create(&listenThread, NULL, listenThreadFunc, NULL) != 0)
+	{
+		close(queueFD);
+		ddiQuit();
 		return -1;
 	};
 	
@@ -299,7 +332,6 @@ int gwmInit()
 
 void gwmQuit()
 {
-	close(eventCounterFD);
 	close(queueFD);
 	ddiQuit();
 	fsQuit();
@@ -366,9 +398,14 @@ void gwmDestroyWindow(GWMWindow *win)
 	cmd.destroyWindow.cmd = GWM_CMD_DESTROY_WINDOW;
 	cmd.destroyWindow.id = win->id;
 	
-	if (_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand)) != 0)
+	//if (_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand)) != 0)
+	//{
+	//	perror("_glidix_mqsend");
+	//	return;
+	//};
+	if (write(queueFD, &cmd, sizeof(GWMCommand)) != sizeof(GWMCommand))
 	{
-		perror("_glidix_mqsend");
+		perror("write(queueFD)");
 		return;
 	};
 	
@@ -401,8 +438,9 @@ void gwmPostDirty(GWMWindow *win)
 	cmd.postDirty.cmd = GWM_CMD_POST_DIRTY;
 	cmd.postDirty.id = win->id;
 	cmd.postDirty.seq = seq;
-	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
-
+	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+	write(queueFD, &cmd, sizeof(GWMCommand));
+	
 	//GWMMessage resp;
 	//gwmPostWaiter(seq, &resp, &cmd);
 	
@@ -412,9 +450,10 @@ void gwmPostDirty(GWMWindow *win)
 
 void gwmWaitEvent(GWMEvent *ev)
 {
-	int one = 1;
-	while (ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_WAIT, &one) == -1);
-
+	//int one = 1;
+	//while (ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_WAIT, &one) == -1);
+	while (sem_wait(&semEventCounter) != 0);
+	
 	pthread_mutex_lock(&eventLock);
 	memcpy(ev, &firstEvent->payload, sizeof(GWMEvent));
 	firstEvent = firstEvent->next;
@@ -459,8 +498,9 @@ void gwmPostUpdate(GWMWindow *win)
 		lastEvent = buf;
 	};
 	pthread_mutex_unlock(&eventLock);
-	int one = 1;
-	ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
+	//int one = 1;
+	//ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
+	sem_post(&semEventCounter);
 };
 
 void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler)
@@ -704,7 +744,8 @@ void gwmSetListenWindow(GWMWindow *win)
 	cmd.setListenWindow.seq = seq;
 	cmd.setListenWindow.win = win->id;
 	
-	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
 void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
@@ -751,7 +792,8 @@ void gwmMoveWindow(GWMWindow *win, int x, int y)
 	cmd.move.x = x;
 	cmd.move.y = y;
 	
-	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
 void gwmRelToAbs(GWMWindow *win, int relX, int relY, int *absX, int *absY)
@@ -806,7 +848,8 @@ void gwmRedrawScreen()
 	GWMCommand cmd;
 	cmd.cmd = GWM_CMD_REDRAW_SCREEN;
 	
-	_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
+	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
 void gwmGetGlobRef(GWMWindow *win, GWMGlobWinRef *ref)
