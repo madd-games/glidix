@@ -49,7 +49,7 @@ extern const unsigned char __font_8x16_bitmap__[];
 ConsoleCell grid[80*25];
 int cursorX=0, cursorY=0;
 uint8_t currentAttr = 0x07;
-pthread_spinlock_t consoleLock;
+pthread_mutex_t consoleLock = PTHREAD_MUTEX_INITIALIZER;
 pthread_t ctrlThread;
 extern const char font[16*256];
 volatile int running = 1;
@@ -545,9 +545,9 @@ void *ctrlThreadFunc(void *context)
 		ssize_t sz = read(fdMaster, buffer, 4096);
 		if (sz > 0L)
 		{
-			pthread_spin_lock(&consoleLock);
+			pthread_mutex_lock(&consoleLock);
 			writeConsole(buffer, sz);
-			pthread_spin_unlock(&consoleLock);
+			pthread_mutex_unlock(&consoleLock);
 			gwmPostUpdate(termWindow);
 		};
 		
@@ -579,9 +579,9 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 	}
 	else if (ev->type == GWM_EVENT_UPDATE)
 	{
-		pthread_spin_lock(&consoleLock);
+		pthread_mutex_lock(&consoleLock);
 		renderConsole(surface);
-		pthread_spin_unlock(&consoleLock);
+		pthread_mutex_unlock(&consoleLock);
 		
 		if (!running) return -1;
 	}
@@ -607,9 +607,9 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 		else if (ev->scancode == GWM_SC_MOUSE_LEFT)
 		{
 			selectStart = selectEnd = selectAnchor = getPositionFromCoords(ev->x, ev->y);
-			pthread_spin_lock(&consoleLock);
+			pthread_mutex_lock(&consoleLock);
 			renderConsole(surface);
-			pthread_spin_unlock(&consoleLock);
+			pthread_mutex_unlock(&consoleLock);
 		}
 		else if (ev->keycode == GWM_KC_LEFT)
 		{
@@ -653,9 +653,9 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 				selectEnd = nowAt;
 			};
 
-			pthread_spin_lock(&consoleLock);
+			pthread_mutex_lock(&consoleLock);
 			renderConsole(surface);
-			pthread_spin_unlock(&consoleLock);
+			pthread_mutex_unlock(&consoleLock);
 		};
 	}
 	else if (ev->type == GWM_EVENT_UP)
