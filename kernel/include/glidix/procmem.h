@@ -196,4 +196,17 @@ void vmSwitch(ProcMem *pm);
  */
 void vmDump(ProcMem *pm, uint64_t addr);
 
+/**
+ * Translate the specified virtual address to physical, increment the reference count of the page, and
+ * return the physical frame number. You must call piDecref() on it later. Returns 0 if the translation
+ * failed.
+ *
+ * Zero is also returned if the page does not have 'requiredPerms'; a bitwise-OR of expected permissions
+ * (PROT_*).
+ *
+ * For shared mappings, this returns the actual shared page; for private mappings, it will perform
+ * copy-on-write at this moment.
+ */
+uint64_t vmGetPhys(uint64_t addr, int requiredPerms);
+
 #endif

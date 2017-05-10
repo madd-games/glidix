@@ -58,7 +58,7 @@ typedef struct
 #define	CLONE_DETACHED			(1 << 1)
 
 /**
- * Stanard priorities.
+ * Standard priorities.
  */
 #define	NICE_NORMAL			0		/* normal priority */
 #define	NICE_NETRECV			-2		/* network receiver */
@@ -435,6 +435,12 @@ typedef struct _Thread
 	ProcStat			ps;
 	
 	/**
+	 * The physical address on which this thread is blocking. When sys_unblock() is called on
+	 * an address which maps to this, the thread will be woken up.
+	 */
+	uint64_t			blockPhys;
+	
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;
@@ -620,7 +626,7 @@ int thnice(int incr);
 
 /**
  * Map a different frame into the "temporary page", and return the previous frame number. You MUST map the old
- * page number by in before the calling function returns. Most importantly, since the temporary page is at the
+ * page number in before the calling function returns. Most importantly, since the temporary page is at the
  * top of the kernel stack, and that area is used by signal dispatching, it MUST be returned to normal before
  * returning to userspace.
  */

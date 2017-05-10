@@ -1,5 +1,5 @@
 /*
-	Glidix Runtime
+	Glidix GUI
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,33 +26,13 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _SEMAPHORE_H
-#define _SEMAPHORE_H
+#ifndef SCREEN_H
+#define SCREEN_H
 
-#include <sys/types.h>
-#include <pthread.h>
+#include <libddi.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-typedef struct
-{
-	/**
-	 * Current value of the semaphore.
-	 */
-	volatile int64_t					__value;
-} sem_t;
-
-/* implemented by the runtime */
-int	sem_init(sem_t *sem, int pshared, unsigned value);
-int	sem_destroy(sem_t *sem);
-int	sem_wait(sem_t *sem);
-int	sem_post(sem_t *sem);
-int	sem_getvalue(sem_t *sem, int *valptr);
-
-#ifdef __cplusplus
-};	/* extern "C" */
-#endif
+extern DDISurface *frontBuffer;
+extern DDISurface *screen;
+extern DDISurface *desktopBackground;
 
 #endif

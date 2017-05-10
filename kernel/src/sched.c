@@ -754,6 +754,9 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	thread->ps.ps_entries = 0;
 	thread->ps.ps_quantum = quantumTicks;
 	
+	// doesn't block on anything
+	thread->blockPhys = 0;
+	
 	// link into the runqueue
 	cli();
 	lockSched();
@@ -1036,6 +1039,9 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	thread->ps.ps_ticks = 0;
 	thread->ps.ps_entries = 0;
 	thread->ps.ps_quantum = quantumTicks;
+	
+	// initialize block address
+	thread->blockPhys = 0;
 	
 	// link into the runqueue
 	cli();

@@ -42,8 +42,6 @@
 #include <semaphore.h>
 #include <fstools.h>
 
-static int guiPid;
-static int guiFD;
 static int queueFD;
 static volatile int initFinished = 0;
 static uint64_t nextWindowID;
@@ -210,8 +208,6 @@ int gwmInit()
 	};
 	
 	gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), PROT_READ, MAP_SHARED, fd, 0);
-	guiPid = gwminfo->pid;
-	guiFD = gwminfo->fd;
 	
 	nextWindowID = 1;
 	nextSeq = 1;

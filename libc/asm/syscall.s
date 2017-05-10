@@ -9,6 +9,20 @@
 .size \name, .-\name
 .endm
 
+.globl __syscall
+.type __syscall, @function
+__syscall:
+	mov %rdi,	%rax
+	mov %rsi,	%rdi
+	mov %rdx,	%rsi
+	mov %rcx,	%rdx
+	mov %r8,	%r10
+	mov %r9,	%r8
+	mov 8(%rsp),	%r9
+	syscall
+	ret
+.size __syscall, .-__syscall
+
 GLIDIX_SYSCALL	0,	_exit
 GLIDIX_SYSCALL	1,	write
 GLIDIX_SYSCALL	2,	_glidix_exec
@@ -112,9 +126,7 @@ GLIDIX_SYSCALL	99,	munmap
 GLIDIX_SYSCALL	100,	pipe2
 GLIDIX_SYSCALL	101,	getppid
 GLIDIX_SYSCALL	102,	alarm
-GLIDIX_SYSCALL	103,	_glidix_store_and_sleep
 GLIDIX_SYSCALL	104,	dup3
-
 GLIDIX_SYSCALL	107,	listen
 GLIDIX_SYSCALL	108,	accept
 GLIDIX_SYSCALL	109,	accept4

@@ -30,6 +30,7 @@
 #define _PTHREAD_H
 
 #include <sys/types.h>
+#include <inttypes.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,51 +54,39 @@ extern "C" {
 
 #define	PTHREAD_PRIO_NONE				0
 
-#define	PTHREAD_MUTEX_INITIALIZER			{0, 0, 0, 0, NULL, NULL}
+#define	PTHREAD_MUTEX_INITIALIZER			{0, 0, 0, 0, 0}
 
 typedef struct
 {
-	int						type;
-	int						protocol;
-	int						prioceiling;
+	int						__type;
+	int						__protocol;
+	int						__prioceiling;
+	int						__resv[13];
 } pthread_mutexattr_t;
-
-typedef struct __pthread_mutex_waiter_tag
-{
-	pthread_t					thread;
-	struct __pthread_mutex_waiter_tag*		next;
-} __pthread_mutex_waiter;
 
 typedef struct
 {
 	/**
-	 * The spinlock which protects the mutex.
+	 * Used to implement the bakery algorithm.
 	 */
-	pthread_spinlock_t				spinlock;
-	
+	volatile uint64_t				__tickets;
+	volatile uint64_t				__cakes;
+
 	/**
 	 * Type of mutex.
 	 */
-	int						type;
+	volatile int					__type;
 	
 	/**
 	 * The thread which currently holds the mutex; invalid if released.
 	 */
-	pthread_t					owner;
+	volatile pthread_t				__owner;
 	
 	/**
 	 * Number of times this mutex is held. May be larger than 1 if recursive.
 	 * 0 means it is released.
 	 */
-	int						count;
-	
-	/**
-	 * Queue of waiting threads. Each struct is allocated on a waiting thread's
-	 * stack, and after being removed from the linked list by the releasing thread,
-	 * they are cleaned up by the waiting thread.
-	 */
-	__pthread_mutex_waiter*				firstWaiter;
-	__pthread_mutex_waiter*				lastWaiter;
+	volatile int					__count;
 } pthread_mutex_t;
 
 /* implemented by libglidix directly */
@@ -108,11 +97,6 @@ int		pthread_detach(pthread_t thread);
 int		pthread_kill(pthread_t thread, int sig);
 
 /* implemented by the runtime */
-int		pthread_spin_init(pthread_spinlock_t *sl);
-int		pthread_spin_destroy(pthread_spinlock_t *sl);
-int		pthread_spin_lock(pthread_spinlock_t *lock);
-int		pthread_spin_trylock(pthread_spinlock_t *lock);
-int		pthread_spin_unlock(pthread_spinlock_t *lock);
 int		pthread_attr_init(pthread_attr_t *attr);
 int		pthread_attr_destroy(pthread_attr_t *attr);
 int		pthread_attr_setscope(pthread_attr_t *attr, int scope);

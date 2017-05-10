@@ -26,23 +26,14 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <sys/call.h>
 #include <semaphore.h>
 #include <errno.h>
-#include <stdlib.h>		/* abort */
 
 int sem_init(sem_t *sem, int pshared, unsigned value)
 {
-	if (pshared)
-	{
-		errno = ENOSYS;
-		return -1;
-	};
-	
-	pthread_spin_unlock(&sem->spinlock);
-	sem->value = value;
-	sem->firstWaiter = NULL;
-	sem->lastWaiter = NULL;
-	
+	(void)pshared;			/* semaphores are always suitable for sharing */
+	sem->__value = (int64_t) value;
 	return 0;
 };
 
@@ -53,75 +44,88 @@ int sem_destroy(sem_t *sem)
 
 int sem_wait(sem_t *sem)
 {
-	pthread_spin_lock(&sem->spinlock);
-	
-	if (sem->value > 0)
+	while (1)
 	{
-		sem->value--;
-		pthread_spin_unlock(&sem->spinlock);
-		return 0;
-	};
-	
-	// nothing currently available, put us on the waiters list
-	__sem_waiter_t waiter;
-	waiter.thread = pthread_self();
-	waiter.complete = 0;			// waiting not finished
-	waiter.next = NULL;
-	
-	if (sem->firstWaiter == NULL)
-	{
-		sem->firstWaiter = sem->lastWaiter = &waiter;
-	}
-	else
-	{
-		sem->lastWaiter->next = &waiter;
-		sem->lastWaiter = &waiter;
-	};
-
-	while (!waiter.complete)
-	{
-		int status = _glidix_store_and_sleep(&sem->spinlock, 0);
-		if (status != 0)
+		int64_t value = sem->__value;
+		if (value == -1)
 		{
-			abort();
+			// block
+			if (__syscall(__SYS_block_on, &sem->__value, value) != 0)
+			{
+				errno = EINVAL;
+				return -1;
+			};
+			
+			continue;
+		}
+		else if (value == 0)
+		{
+			// indicate that we are blocking
+			if (__sync_val_compare_and_swap(&sem->__value, 0, -1) != 0)
+			{
+				// atomic compare-and-swap failed, try again
+				continue;
+			};
+			
+			// block
+			if (__syscall(__SYS_block_on, &sem->__value, value) != 0)
+			{
+				errno = EINVAL;
+				return -1;
+			};
+			
+			continue;
+		}
+		else
+		{
+			if (__sync_val_compare_and_swap(&sem->__value, value, value-1) == value)
+			{
+				// yay! successfully got 1 resource
+				return 0;
+			};
 		};
-		
-		pthread_spin_lock(&sem->spinlock);
-		__sync_synchronize();
 	};
-	
-	// count remains set to 0, but we now own a single resource
-	pthread_spin_unlock(&sem->spinlock);
-	return 0;
 };
 
 int sem_post(sem_t *sem)
 {
-	pthread_spin_lock(&sem->spinlock);
-	
-	if (sem->firstWaiter != NULL)
+	while (1)
 	{
-		pthread_t thread = sem->firstWaiter->thread;
-		sem->firstWaiter->complete = 1;
-		sem->firstWaiter = sem->firstWaiter->next;
-		__sync_synchronize();
-		pthread_spin_unlock(&sem->spinlock);
-		
-		pthread_kill(thread, 36);		// SIGTHWAKE
-	}
-	else
-	{
-		sem->value++;
+		int64_t value = sem->__value;
+		if (value == 0)
+		{
+			// nobody to wake up; just increment atomically
+			if (__sync_val_compare_and_swap(&sem->__value, value, value+1) == value)
+			{
+				return 0;
+			};
+		}
+		else if (value == -1)
+		{
+			// set to 1, and wake up any waiters if successful
+			if (__sync_val_compare_and_swap(&sem->__value, value, 1) == value)
+			{
+				if (__syscall(__SYS_unblock, &sem->__value) != 0)
+				{
+					errno = EINVAL;
+					return -1;
+				};
+				
+				return 0;
+			};
+		}
+		else
+		{
+			if (__sync_val_compare_and_swap(&sem->__value, value, value+1) == value)
+			{
+				return 0;
+			};
+		};
 	};
-	
-	pthread_spin_unlock(&sem->spinlock);
-	return 0;
 };
 
 int sem_getvalue(sem_t *sem, int *valptr)
 {
-	pthread_spin_lock(&sem->spinlock);
-	*valptr = (int) sem->value;
-	pthread_spin_unlock(&sem->spinlock);
+	*valptr = (int) sem->__value;
 	return 0;
 };

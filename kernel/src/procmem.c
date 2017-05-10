@@ -533,8 +533,8 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 	// if unmapped, send the SIGSEGV signal
 	if (seg->flags == 0)
 	{
-		throw(EX_PAGE_FAULT);
 		semSignal(&pm->lock);
+		throw(EX_PAGE_FAULT);
 		
 		siginfo_t si;
 		memset(&si, 0, sizeof(siginfo_t));
@@ -595,8 +595,8 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 	
 	if (!allowed)
 	{
-		throw(EX_PAGE_FAULT);
 		semSignal(&pm->lock);
+		throw(EX_PAGE_FAULT);
 		
 		if ((regs->cs & 3) == 0)
 		{
@@ -625,8 +625,8 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 			
 			if (frame == 0)
 			{
-				throw(EX_PAGE_FAULT);
 				semSignal(&pm->lock);
+				throw(EX_PAGE_FAULT);
 
 				siginfo_t si;
 				memset(&si, 0, sizeof(siginfo_t));
@@ -646,8 +646,8 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 			uint64_t frame = piNew(0);
 			if (frame == 0)
 			{
-				throw(EX_PAGE_FAULT);
 				semSignal(&pm->lock);
+				throw(EX_PAGE_FAULT);
 
 				siginfo_t si;
 				memset(&si, 0, sizeof(siginfo_t));
@@ -695,8 +695,8 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 				uint64_t frame = piNew(0);
 				if (frame == 0)
 				{
-					throw(EX_PAGE_FAULT);
 					semSignal(&pm->lock);
+					throw(EX_PAGE_FAULT);
 
 					siginfo_t si;
 					memset(&si, 0, sizeof(siginfo_t));
@@ -1105,4 +1105,163 @@ void vmDump(ProcMem *pm, uint64_t addr)
 		
 		pos += seg->numPages << 12;
 	};
+};
+
+uint64_t vmGetPhys(uint64_t faultAddr, int requiredPerms)
+{
+	if ((faultAddr < ADDR_MIN) || (faultAddr >= ADDR_MAX))
+	{
+		return 0;
+	};
+	
+	ProcMem *pm = getCurrentThread()->pm;
+	semWait(&pm->lock);
+	
+	// try finding the segment in question
+	uint64_t pos = 0;
+	Segment *seg = pm->segs;
+	
+	while ((pos+(seg->numPages<<12)) <= faultAddr)
+	{
+		pos += seg->numPages << 12;
+		seg = seg->next;
+	};
+	
+	if (seg->flags == 0)
+	{
+		semSignal(&pm->lock);
+		return 0;
+	};
+	
+	// set permission if currently unset
+	PTe *pte = getPage(faultAddr, 1);
+	if (!pte->gx_perm_ovr)
+	{
+		pte->gx_perm_ovr = 1;
+		if (seg->prot & PROT_READ)
+		{
+			pte->gx_r = 1;
+		};
+		
+		if (seg->prot & PROT_WRITE)
+		{
+			pte->gx_w = 1;
+		};
+		
+		if (seg->prot & PROT_EXEC)
+		{
+			pte->gx_x = 1;
+		};
+	};
+	
+	// check permissions
+	int allowed = 1;
+	
+	if (requiredPerms & PROT_WRITE)
+	{
+		if (!pte->gx_w)
+		{
+			allowed = 0;
+		};
+	};
+	
+	if (!pte->gx_r)
+	{
+		allowed = 0;
+	};
+	
+	if (requiredPerms & PROT_EXEC)
+	{
+		if (!pte->gx_x)
+		{
+			allowed = 0;
+		};
+	};
+	
+	if (!allowed)
+	{
+		semSignal(&pm->lock);
+		return 0;
+	};
+	
+	// if the page is not yet loaded, load it
+	if (!pte->gx_loaded)
+	{
+		if (seg->ft != NULL)
+		{
+			off_t offset = seg->offset + ((faultAddr & ~0xFFF) - pos);
+			uint64_t frame = ftGetPage(seg->ft, offset);
+			
+			if (frame == 0)
+			{
+				semSignal(&pm->lock);
+				return 0;
+			};
+			
+			pte->framePhysAddr = frame;
+		}
+		else
+		{
+			uint64_t frame = piNew(0);
+			if (frame == 0)
+			{
+				semSignal(&pm->lock);
+				return 0;
+			};
+			
+			pte->framePhysAddr = frame;
+		};
+
+		pte->gx_shared = !!(seg->flags & MAP_SHARED);
+		pte->gx_cow = 0;
+		if (seg->flags & MAP_PRIVATE)
+		{
+			pte->gx_cow = 1;
+			pte->rw = 0;
+		}
+		else if (pte->gx_w)
+		{
+			pte->rw = 1;
+		};
+		
+		if (!pte->gx_x) pte->xd = 1;
+		if (pte->gx_r) pte->present = 1;
+		pte->user = 1;
+		pte->gx_loaded = 1;
+		
+		// invalidate the page on the CURRENT CPU, in case we need copy-on-write
+		// below
+		invlpg((void*)faultAddr);
+	};
+	
+	// check for copy-on-write faults
+	if (pte->gx_cow)
+	{
+		if (piNeedsCopyOnWrite(pte->framePhysAddr))
+		{
+			uint64_t frame = piNew(0);
+			if (frame == 0)
+			{
+				semSignal(&pm->lock);
+				return 0;
+			};
+		
+			frameWrite(frame, (void*)(faultAddr & ~0xFFF));
+		
+			uint64_t old = pte->framePhysAddr;
+			pte->framePhysAddr = frame;
+			piDecref(old);
+		};
+		
+		pte->gx_cow = 0;
+		pte->rw = 1;
+	};
+	
+	// finally we must invalidate the page
+	invalidatePage(faultAddr);
+	uint64_t result = pte->framePhysAddr;
+	piIncref(result);
+	semSignal(&pm->lock);
+	
+	return result;
 };

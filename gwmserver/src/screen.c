@@ -1,5 +1,5 @@
 /*
-	Glidix Runtime
+	Glidix GUI
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,39 +26,8 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <pthread.h>
-#include <errno.h>
-#include <sys/glidix.h>
+#include "screen.h"
 
-int pthread_spin_init(pthread_spinlock_t *sl)
-{
-	*sl = 0;
-	return 0;
-};
-
-int pthread_spin_destroy(pthread_spinlock_t *sl)
-{
-	return 0;
-};
-
-int pthread_spin_lock(pthread_spinlock_t *lock)
-{
-	while (__sync_lock_test_and_set(lock, 1) != 0) _glidix_yield();
-	return 0;
-};
-
-int pthread_spin_trylock(pthread_spinlock_t *lock)
-{
-	if (__sync_lock_test_and_set(lock, 1) == 0)
-	{
-		return 0;
-	};
-	
-	return EBUSY;
-};
-
-int pthread_spin_unlock(pthread_spinlock_t *lock)
-{
-	__sync_lock_release(lock);
-	return 0;
-};
+DDISurface *frontBuffer;
+DDISurface *screen;
+DDISurface *desktopBackground;

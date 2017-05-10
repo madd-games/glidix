@@ -177,19 +177,18 @@ extern DDIColor gwmColorSelection;
 
 /**
  * Window manager information structure, located in the shared file /run/gwminfo.
- * Described how to connect to the window manager.
  */
 typedef struct
 {
 	/**
-	 * Process ID of the window manager.
+	 * Reserved.
 	 */
-	int					pid;
+	int					rsv0;
 	
 	/**
-	 * Message queue descriptor.
+	 * Reserved.
 	 */
-	int					fd;
+	int					rsv1;
 	
 	/**
 	 * ID of the background surface.

@@ -33,7 +33,7 @@
 typedef void (*__atexit_func)(void);
 static __atexit_func *atexit_array = NULL;
 static int atexit_count = 0;
-static pthread_spinlock_t atexit_lock;
+static pthread_mutex_t atexit_lock = PTHREAD_MUTEX_INITIALIZER;
 
 typedef void (*__cxa_atexit_func)(void*);
 typedef struct
@@ -46,11 +46,11 @@ static int cxa_atexit_count = 0;
 
 int atexit(__atexit_func func)
 {
-	pthread_spin_lock(&atexit_lock);
+	pthread_mutex_lock(&atexit_lock);
 	atexit_count++;
 	atexit_array = realloc(atexit_array, sizeof(__atexit_func)*(atexit_count));
 	atexit_array[atexit_count-1] = func;
-	pthread_spin_unlock(&atexit_lock);
+	pthread_mutex_unlock(&atexit_lock);
 	return 0;
 };
 
@@ -78,12 +78,12 @@ void _Exit(int status)
 
 int __cxa_atexit(void (*func) (void *), void *arg, void *d)
 {
-	pthread_spin_lock(&atexit_lock);
+	pthread_mutex_lock(&atexit_lock);
 	cxa_atexit_count++;
 	cxa_atexit_array = realloc(cxa_atexit_array, sizeof(__cxa_atexit_info)*cxa_atexit_count);
 	cxa_atexit_array[cxa_atexit_count-1].func = func;
 	cxa_atexit_array[cxa_atexit_count-1].arg = arg;
-	pthread_spin_unlock(&atexit_lock);
+	pthread_mutex_unlock(&atexit_lock);
 	return 0;
 };
 

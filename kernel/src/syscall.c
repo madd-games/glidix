@@ -51,6 +51,7 @@
 #include <glidix/catch.h>
 #include <glidix/storage.h>
 #include <glidix/cpu.h>
+#include <glidix/pageinfo.h>
 
 /**
  * Options for _glidix_kopt().
@@ -1386,7 +1387,7 @@ uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t 
 	return result;
 };
 
-int setuid(uid_t uid)
+int sys_setuid(uid_t uid)
 {
 	Thread *me = getCurrentThread();
 	if ((me->creds->euid != 0) && (uid != me->creds->euid) && (uid != me->creds->ruid))
@@ -1405,7 +1406,7 @@ int setuid(uid_t uid)
 	return 0;
 };
 
-int setgid(gid_t gid)
+int sys_setgid(gid_t gid)
 {
 	Thread *me = getCurrentThread();
 	if ((me->creds->egid != 0) && (gid != me->creds->egid) && (gid != me->creds->rgid))
@@ -1424,7 +1425,7 @@ int setgid(gid_t gid)
 	return 0;
 };
 
-int setreuid(uid_t ruid, uid_t euid)
+int sys_setreuid(uid_t ruid, uid_t euid)
 {
 	Thread *me = getCurrentThread();
 	uid_t ruidPrev = me->creds->ruid;
@@ -1458,7 +1459,7 @@ int setreuid(uid_t ruid, uid_t euid)
 	return 0;
 };
 
-int setregid(gid_t rgid, gid_t egid)
+int sys_setregid(gid_t rgid, gid_t egid)
 {
 	Thread *me = getCurrentThread();
 	gid_t rgidPrev = me->creds->rgid;
@@ -1492,7 +1493,7 @@ int setregid(gid_t rgid, gid_t egid)
 	return 0;
 };
 
-int seteuid(uid_t euid)
+int sys_seteuid(uid_t euid)
 {
 	Thread *me = getCurrentThread();
 	if (me->creds->euid != 0)
@@ -1508,7 +1509,7 @@ int seteuid(uid_t euid)
 	return 0;
 };
 
-int setegid(gid_t egid)
+int sys_setegid(gid_t egid)
 {
 	Thread *me = getCurrentThread();
 	if (me->creds->egid != 0)
@@ -2323,7 +2324,7 @@ int sys_uname(struct utsname *ubuf)
 	return 0;
 };
 
-int fcntl_getfd(int fd)
+int sys_fcntl_getfd(int fd)
 {
 	int flags = ftabGetFlags(getCurrentThread()->ftab, fd);
 	if (flags == -1)
@@ -2335,7 +2336,7 @@ int fcntl_getfd(int fd)
 	return flags;
 };
 
-int fcntl_setfd(int fd, int flags)
+int sys_fcntl_setfd(int fd, int flags)
 {
 	if ((flags & ~FD_ALL) != 0)
 	{
@@ -2388,35 +2389,90 @@ int sys_bindif(int fd, const char *uifname)
 	return out;
 };
 
-int sys_store_and_sleep(uint8_t *ptr, uint8_t value)
+uint64_t sys_block_on(uint64_t addr, uint64_t expectedVal)
 {
-	uint64_t ptrAddr = (uint64_t) ptr;
-	if (ptrAddr >= 0x7FC0000000)
+	// check alignment
+	if (addr & 0x7)
+	{
+		// not 8-byte-aligned
+		return EINVAL;
+	};
+	
+	uint64_t frame = vmGetPhys(addr, PROT_READ);
+	if (frame == 0)
 	{
 		return EFAULT;
 	};
+	
+	uint64_t offset = addr & 0xFFF;
+	uint64_t oldFrame = mapTempFrame(frame);
+	
+	uint64_t physAddr = (frame << 12) | offset;
+	uint64_t *ptr = (uint64_t*) tmpframe() + (offset >> 3);
 	
 	cli();
 	lockSched();
 	
+	if ((*ptr) != expectedVal)
+	{
+		unlockSched();
+		sti();
+		mapTempFrame(oldFrame);
+		piDecref(frame);
+		return 0;
+	};
+	
+	getCurrentThread()->blockPhys = physAddr;
 	waitThread(getCurrentThread());
 	unlockSched();
+	kyield();
+
+	getCurrentThread()->blockPhys = 0;
+	mapTempFrame(oldFrame);
+	piDecref(frame);
+	return 0;
+};
+
+uint64_t sys_unblock(uint64_t addr)
+{
+	// check alignment
+	if (addr & 0x7)
+	{
+		// not 8-byte-aligned
+		return EINVAL;
+	};
 	
-	// interrupts are still disabled, so we can't be preempted before doing the store,
-	// even if another CPU has already woken us up, and since the scheduler is unlocked,
-	// we can safely access userland memory.
-	if (catch() == 0)
+	uint64_t frame = vmGetPhys(addr, PROT_READ);
+	if (frame == 0)
 	{
-		*ptr = value;
-		__sync_synchronize();
-	}
-	else
-	{
-		sti();
 		return EFAULT;
 	};
 	
-	kyield();
+	uint64_t offset = addr & 0xFFF;	
+	uint64_t physAddr = (frame << 12) | offset;
+	
+	cli();
+	lockSched();
+	
+	Thread *ct = getCurrentThread();
+	Thread *thread = ct;
+	int shouldResched = 0;
+	do
+	{
+		if (thread->blockPhys == physAddr)
+		{
+			thread->blockPhys = 0;
+			shouldResched |= signalThread(thread);
+		};
+		
+		thread = thread->next;
+	} while (thread != ct);
+	
+	unlockSched();
+	if (shouldResched) kyield();
+	sti();
+
+	piDecref(frame);
 	return 0;
 };
 
@@ -3685,6 +3741,31 @@ int sys_cpuno()
 	return getCurrentCPU()->id;
 };
 
+int sys_kill(int pid, int sig)
+{
+	return signalPid(pid, sig);
+};
+
+time_t sys_time()
+{
+	return time();
+};
+
+uint64_t sys_nanotime()
+{
+	return getNanotime();
+};
+
+int sys_down(int action)
+{
+	return systemDown(action);
+};
+
+int sys_routetable(uint64_t family)
+{
+	return sysRouteTable(family);
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
@@ -3717,14 +3798,14 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_fork,				// 23
 	&sys_pause,				// 24
 	&sys_waitpid,				// 25
-	&signalPid,				// 26
+	&sys_kill,				// 26
 	&sys_insmod,				// 27
 	&sys_ioctl,				// 28
 	&sys_fdopendir,				// 29
 	SYS_NULL,				// 30 (_glidix_diag())
 	&sys_mount,				// 31
 	&sys_yield,				// 32
-	&time,					// 33
+	&sys_time,				// 33
 	&sys_realpath,				// 34
 	&sys_chdir,				// 35
 	&sys_getcwd,				// 36
@@ -3742,27 +3823,27 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_pipe,				// 48
 	&sys_seterrnoptr,			// 49
 	&sys_geterrnoptr,			// 50
-	&getNanotime,				// 51
+	&sys_nanotime,				// 51
 	&sys_pread,				// 52
 	&sys_pwrite,				// 53
 	&sys_mmap,				// 54
-	&setuid,				// 55
-	&setgid,				// 56
-	&seteuid,				// 57
-	&setegid,				// 58
-	&setreuid,				// 59
-	&setregid,				// 60
+	&sys_setuid,				// 55
+	&sys_setgid,				// 56
+	&sys_seteuid,				// 57
+	&sys_setegid,				// 58
+	&sys_setreuid,				// 59
+	&sys_setregid,				// 60
 	&sys_rmmod,				// 61
 	&sys_link,				// 62
 	&sys_unmount,				// 63
 	&sys_lstat,				// 64
 	&sys_symlink,				// 65
 	&sys_readlink,				// 66
-	&systemDown,				// 67
+	&sys_down,				// 67
 	&sys_sleep,				// 68
 	&sys_utime,				// 69
 	&sys_umask,				// 70
-	&sysRouteTable,				// 71
+	&sys_routetable,			// 71
 	&sys_socket,				// 72
 	&sys_bind,				// 73
 	&sys_sendto,				// 74
@@ -3784,8 +3865,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_setgroups,				// 90
 	&sys_uname,				// 91
 	&sys_netconf_addr,			// 92
-	&fcntl_getfd,				// 93
-	&fcntl_setfd,				// 94
+	&sys_fcntl_getfd,			// 93
+	&sys_fcntl_setfd,			// 94
 	&sys_unique,				// 95
 	&sys_isatty,				// 96
 	&sys_bindif,				// 97
@@ -3794,9 +3875,9 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_pipe2,				// 100
 	&sys_getppid,				// 101
 	&sys_alarm,				// 102
-	&sys_store_and_sleep,			// 103
+	&sys_block_on,				// 103
 	&sys_dup3,				// 104
-	SYS_NULL,				// 105	[was mqclient]
+	&sys_unblock,				// 105
 	SYS_NULL,				// 106	[was mqsend]
 	&sys_listen,				// 107
 	&sys_accept,				// 108

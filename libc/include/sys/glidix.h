@@ -244,7 +244,6 @@ int		_glidix_fcntl_setfd(int fd, int flags);
 uint32_t	_glidix_unique();
 int		_glidix_bindif(int fd, const char *ifname);
 int		_glidix_route_clear(int family, const char *ifname);
-int		_glidix_store_and_sleep(void *ptr, char val);
 int		_glidix_kopt(int option, int value);
 int		_glidix_sigwait(uint64_t sigset, struct __siginfo *info, uint64_t nanotimeout);
 int		_glidix_sigsuspend(uint64_t mask);

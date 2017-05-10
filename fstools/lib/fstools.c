@@ -228,7 +228,7 @@ void fsInit()
 	inodeBlockdev = specialType("inode/blockdevice", "Block device", "device");
 	inodeChardev = specialType("inode/chardevice", "Character device", "device");
 	inodeFifo = specialType("inode/fifo", "Named pipe", "device");
-	inodeSocket = specialType("inode/socket", "Socket", "device");
+	inodeSocket = specialType("inode/socket", "Socket", "socket");
 	
 	// now load the MIME database (/usr/share/mime).
 	const char **scan;

@@ -1,0 +1,27 @@
+>NAME
+
+block - low-level synchronisation primitive
+
+>SYNOPSIS
+
+	#include <sys/call.h>
+	
+	uint64_t __syscall(__SYS_block_on, uint64_t *'addr', uint64_t 'expectedValue');
+	uint64_t __syscall(__SYS_unblock, uint64_t *'addr');
+
+>DESCRIPTION
+
+These functions are used to establish a low-level synchronisation mechanism, which is used to implement more high-level synchronization primitives, such as mutexes and semaphores. The *__SYS_block_on* call blocks if the value at 'addr' is equal to 'expectedValue', atomically. The *__SYS_unblock* call wakes up any threads currently blocking on 'addr'. The address is translated to physical to implement the lock, and so it is safe to use this function for synchronisation between multiple processes, if used on an address in a shared memory region mapped at different virtual addresses in each process. The address must be 8-byte-aligned so as to guarantee atomicity.
+
+>RETURN VALUE
+
+Both of these functions return 0 on success; that is, *__SYS_block_on* returns 0 when it either successfully blocked, or 'expectedValue' was not contained in 'addr' (meaning no need to block), or a signal was received. You must always check the value again after *__SYS_block_on* returns. *__SYS_unblock* returns 0 if the address was correct (and it may or may not have woken some threads, depending on if any are blocking at that address).
+
+On error, both functions return the error number, as defined in [errno.6], but do not actually store it in the 'errno' variable.
+
+>ERRORS
+
+These functions may return the following error numbers:
+
+\* *EINVAL* - 'addr' is not 8-byte-aligned.
+\* *EFAULT* - 'addr' is not placed on a readable page.
