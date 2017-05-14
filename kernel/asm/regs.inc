@@ -34,16 +34,12 @@
 	rdmsr
 	shl	rdx,	32
 	or	rdx,	rax
-	test	rdx,	rdx
-	jnz __bad_one
 	push	rdx
 %endmacro
 
 ; pop the value of an MSR.
 %macro popMSR 1
 	pop	rax
-	test	rax,	rax
-	jnz __bad_one_pop
 	mov	rdx,	rax
 	shr	rdx,	32
 	mov	rcx,	%1
@@ -96,23 +92,3 @@
 	pop	r14
 	pop	r15
 %endmacro
-
-[extern _panic]
-__bad_one:
-	mov rdi, __le_format
-	mov rsi, 0
-	mov r8, rdx
-	mov rdx, __le_format
-	mov rcx, __le_format
-	call _panic
-
-__bad_one_pop:
-	mov rdi, __le_format2
-	mov rsi, 0
-	mov r8, rax
-	mov rdx, __le_format2
-	mov rcx, __le_format2
-	call _panic
-	
-__le_format db '0x%016lX', 0
-__le_format2 db 'POP 0x%016lX', 0

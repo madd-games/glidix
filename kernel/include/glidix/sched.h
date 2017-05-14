@@ -92,9 +92,15 @@
 #define	THREAD_REBEL			(1 << 4)
 
 /**
+ * If this flag is set, the thread is traced (stopped for debugging purposes). Rebels are never
+ * traced.
+ */
+#define	THREAD_TRACED			(1 << 5)
+
+/**
  * A bitwise-OR of all flags which stop the process from being scheduled.
  */
-#define	THREAD_NOSCHED			(THREAD_WAITING | THREAD_TERMINATED)
+#define	THREAD_NOSCHED			(THREAD_WAITING | THREAD_TERMINATED | THREAD_TRACED)
 
 /**
  * Flags for signalPidEx().
