@@ -49,8 +49,8 @@
 #define __SYS_getparsz				16
 #define __SYS_getpars				17
 #define __SYS_raise				18
-#define __SYS_geterrno				19
-#define __SYS_seterrno				20
+#define __SYS_fsbase				19
+#define __SYS_gsbase				20
 #define __SYS_mprotect				21
 #define __SYS_lseek				22
 #define __SYS_fork				23

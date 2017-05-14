@@ -51,7 +51,7 @@ static const char *inet_ntop4(const uint8_t *src, char *dst, socklen_t size)
 {
 	if (size < INET_ADDRSTRLEN)
 	{
-		_glidix_seterrno(ENOSPC);
+		errno = ENOSPC;
 		return NULL;
 	};
 	
@@ -63,7 +63,7 @@ static const char *inet_ntop6(const uint16_t *src, char *dst, socklen_t size)
 {
 	if (size < INET6_ADDRSTRLEN)
 	{
-		_glidix_seterrno(ENOSPC);
+		errno = ENOSPC;
 		return NULL;
 	};
 	
@@ -147,7 +147,7 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)
 		return inet_ntop6((const uint16_t*)src, dst, size);
 		break;
 	default:
-		_glidix_seterrno(EAFNOSUPPORT);
+		errno = EAFNOSUPPORT;
 		return NULL;
 	};
 };
@@ -168,7 +168,7 @@ static int inet_pton4(const char *src, uint8_t *dst)
 		{
 			if (nextNum > 255)
 			{
-				_glidix_seterrno(EAFNOSUPPORT);
+				errno = EAFNOSUPPORT;
 				return 0;
 			};
 			
@@ -179,7 +179,7 @@ static int inet_pton4(const char *src, uint8_t *dst)
 			{
 				if (*src != 0)
 				{
-					_glidix_seterrno(EAFNOSUPPORT);
+					errno = EAFNOSUPPORT;
 					return 0;
 				};
 				
@@ -189,7 +189,7 @@ static int inet_pton4(const char *src, uint8_t *dst)
 			{
 				if (*src != '.')
 				{
-					_glidix_seterrno(EAFNOSUPPORT);
+					errno = EAFNOSUPPORT;
 					return 0;
 				};
 				
@@ -312,7 +312,7 @@ static int inet_pton6(const char *src, uint16_t *dst)
 		
 		if (endptr == NULL)
 		{
-			_glidix_seterrno(EAFNOSUPPORT);
+			errno = EAFNOSUPPORT;
 			return 0;
 		};
 
@@ -320,7 +320,7 @@ static int inet_pton6(const char *src, uint16_t *dst)
 		{
 			if (numStartGroups == 8)
 			{
-				_glidix_seterrno(EAFNOSUPPORT);
+				errno = EAFNOSUPPORT;
 				return 0;
 			};
 			
@@ -330,7 +330,7 @@ static int inet_pton6(const char *src, uint16_t *dst)
 		{
 			if (numEndGroups == 8)
 			{
-				_glidix_seterrno(EAFNOSUPPORT);
+				errno = EAFNOSUPPORT;
 				return 0;
 			};
 			
@@ -352,7 +352,7 @@ static int inet_pton6(const char *src, uint16_t *dst)
 			}
 			else
 			{
-				_glidix_seterrno(EAFNOSUPPORT);
+				errno = EAFNOSUPPORT;
 				return 0;
 			};
 			
@@ -363,7 +363,7 @@ static int inet_pton6(const char *src, uint16_t *dst)
 		
 		if (*src != ':')
 		{
-			_glidix_seterrno(EAFNOSUPPORT);
+			errno = EAFNOSUPPORT;
 			return 0;
 		};
 		
@@ -372,7 +372,7 @@ static int inet_pton6(const char *src, uint16_t *dst)
 	
 	if ((numStartGroups+numEndGroups) > 8)
 	{
-		_glidix_seterrno(EAFNOSUPPORT);
+		errno = EAFNOSUPPORT;
 		return 0;
 	};
 	
@@ -396,7 +396,7 @@ int inet_pton(int af, const char *src, void *dst)
 		return inet_pton6(src, (uint16_t*)dst);
 		break;
 	default:
-		_glidix_seterrno(EAFNOSUPPORT);
+		errno = EAFNOSUPPORT;
 		return 0;
 	};
 };

@@ -58,7 +58,7 @@ FILE *__fopen_strm(FILE *fp, const char *path, const char *mode)
 	}
 	else
 	{
-		_glidix_seterrno(EINVAL);
+		errno = EINVAL;
 		return NULL;
 	};
 

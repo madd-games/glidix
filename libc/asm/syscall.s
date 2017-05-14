@@ -42,8 +42,6 @@ GLIDIX_SYSCALL	15,	_glidix_stat
 GLIDIX_SYSCALL	16,	_glidix_getparsz
 GLIDIX_SYSCALL	17,	_glidix_getpars
 GLIDIX_SYSCALL	18,	raise
-GLIDIX_SYSCALL	19,	_glidix_geterrno
-GLIDIX_SYSCALL	20,	_glidix_seterrno
 GLIDIX_SYSCALL	21,	mprotect
 GLIDIX_SYSCALL	22,	lseek
 GLIDIX_SYSCALL	23,	fork

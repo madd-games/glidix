@@ -69,7 +69,7 @@ int readdir_r(DIR *dirp, struct dirent *entry, struct dirent **result)
 	if (ret == 0)
 	{
 		*result = NULL;
-		_glidix_seterrno(ENOENT);
+		errno = ENOENT;
 		return -1;
 	};
 

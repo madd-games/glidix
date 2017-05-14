@@ -277,6 +277,8 @@ void initSched()
 	// also the startup function should never return.
 	memset(&firstThread.fpuRegs, 0, 512);
 	memset(&firstThread.regs, 0, sizeof(Regs));
+	firstThread.regs.fsbase = 0;
+	firstThread.regs.gsbase = 0;
 	firstThread.regs.rip = (uint64_t) &startupThread;
 	firstThread.regs.rsp = (uint64_t) firstThread.stack + firstThread.stackSize;
 	firstThread.regs.cs = 8;
@@ -435,6 +437,8 @@ void initSched2()
 	// the idle thread needs 2 things: the registers and flags indicating
 	// it is always waiting. everthing else can be uninitialized
 	idleThread = NEW(Thread);
+	idleThread->regs.fsbase = 0;
+	idleThread->regs.gsbase = 0;
 	idleThread->regs.cs = 0x08;
 	idleThread->regs.ds = 0x10;
 	idleThread->regs.ss = 0;
@@ -449,6 +453,8 @@ void initSchedAP()
 	// the idle thread needs 2 things: the registers and flags indicating
 	// it is always waiting. everthing else can be uninitialized
 	idleThread = NEW(Thread);
+	idleThread->regs.fsbase = 0;
+	idleThread->regs.gsbase = 0;
 	idleThread->regs.cs = 0x08;
 	idleThread->regs.ds = 0x10;
 	idleThread->regs.ss = 0;
@@ -756,7 +762,7 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	
 	// doesn't block on anything
 	thread->blockPhys = 0;
-	
+
 	// link into the runqueue
 	cli();
 	lockSched();
@@ -867,6 +873,8 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	if (state != NULL)
 	{
 		memcpy(&thread->fpuRegs, &state->fpuRegs, 512);
+		thread->regs.fsbase = state->fsbase;
+		thread->regs.gsbase = state->gsbase;
 		thread->regs.rdi = state->rdi;
 		thread->regs.rsi = state->rsi;
 		thread->regs.rbp = state->rbp;

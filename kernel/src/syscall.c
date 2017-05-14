@@ -52,6 +52,7 @@
 #include <glidix/storage.h>
 #include <glidix/cpu.h>
 #include <glidix/pageinfo.h>
+#include <glidix/msr.h>
 
 /**
  * Options for _glidix_kopt().
@@ -2498,6 +2499,8 @@ void sysInvalid()
 	regs.r14 = me->ur14;
 	regs.r15 = me->ur15;
 	regs.rip = me->urip;
+	regs.fsbase = msrRead(MSR_FS_BASE);
+	regs.gsbase = msrRead(MSR_GS_BASE);
 	regs.rflags = getFlagsRegister(); 
 	cli();
 	switchTask(&regs);
@@ -2698,14 +2701,30 @@ void sys_getpars(void *buffer, size_t size)
 	memcpy_k2u(buffer, getCurrentThread()->execPars, size);
 };
 
-int sys_geterrno()
+uint64_t sys_fsbase(uint64_t base)
 {
-	return ERRNO;
+	// check if canonical
+	uint64_t masked = base & CANON_MASK;
+	if ((masked != 0) && (masked != CANON_MASK))
+	{
+		return EINVAL;
+	};
+	
+	msrWrite(MSR_FS_BASE, base);
+	return 0;
 };
 
-void sys_seterrno(int num)
+uint64_t sys_gsbase(uint64_t base)
 {
-	ERRNO = num;
+	// check if canonical
+	uint64_t masked = base & CANON_MASK;
+	if ((masked != 0) && (masked != CANON_MASK))
+	{
+		return EINVAL;
+	};
+	
+	msrWrite(MSR_GS_BASE, base);
+	return 0;
 };
 
 int sys_mprotect(uint64_t base, size_t len, int prot)
@@ -2736,6 +2755,8 @@ int sys_fork()
 	regs.r15 = me->ur15;
 	regs.rip = me->urip;
 	regs.rflags = getFlagsRegister();
+	regs.fsbase = msrRead(MSR_FS_BASE);
+	regs.gsbase = msrRead(MSR_GS_BASE);
 	return threadClone(&regs, 0, NULL);
 };
 
@@ -3246,6 +3267,8 @@ int sys_pthread_join(int thid, uint64_t *retval)
 		regs.r15 = me->ur15;
 		regs.r9 = me->urip;			// usup_syscall_reset() wants return RIP in R9
 		regs.rflags = getFlagsRegister();
+		regs.fsbase = msrRead(MSR_FS_BASE);
+		regs.gsbase = msrRead(MSR_GS_BASE);
 		regs.rdi = 0;
 		
 		// make sure we retry using the same arguments
@@ -3791,8 +3814,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_getparsz,				// 16
 	&sys_getpars,				// 17
 	&sys_raise,				// 18
-	&sys_geterrno,				// 19
-	&sys_seterrno,				// 20
+	&sys_fsbase,				// 19
+	&sys_gsbase,				// 20
 	&sys_mprotect,				// 21
 	&sys_lseek,				// 22
 	&sys_fork,				// 23
@@ -3939,7 +3962,9 @@ uint64_t sysEpilog(uint64_t retval)
 		regs.r14 = me->ur14;
 		regs.r15 = me->ur15;
 		regs.rip = me->urip;
-		regs.rflags = getFlagsRegister(); 
+		regs.rflags = getFlagsRegister();
+		regs.fsbase = msrRead(MSR_FS_BASE);
+		regs.gsbase = msrRead(MSR_GS_BASE);
 		cli();
 		switchTask(&regs);
 	};

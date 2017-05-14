@@ -71,7 +71,7 @@ int setenv(const char *name, const char *value, int update)
 {
 	if (name == NULL)
 	{
-		_glidix_seterrno(EINVAL);
+		errno = EINVAL;
 		return -1;
 	};
 
@@ -80,7 +80,7 @@ int setenv(const char *name, const char *value, int update)
 	{
 		if (*namecheck++ == '=')
 		{
-			_glidix_seterrno(EINVAL);
+			errno = EINVAL;
 			return -1;
 		};
 	};

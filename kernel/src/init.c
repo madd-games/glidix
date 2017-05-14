@@ -640,6 +640,8 @@ void kmain2()
 	MachineState state;
 	memset(&state.fpuRegs, 0, 512);
 	void *spawnStack = kmalloc(0x200000);
+	state.fsbase = 0;
+	state.gsbase = 0;
 	state.rip = (uint64_t) &spawnProc;
 	state.rsp = (uint64_t) spawnStack + 0x200000 - 16 - 8;
 	((uint64_t*)state.rsp)[0] = 0;
@@ -647,6 +649,7 @@ void kmain2()
 	state.rdi = (uint64_t) spawnStack;
 	state.rbp = 0;
 	Regs regs;
+	memset(&regs, 0, sizeof(Regs));
 	regs.cs = 8;
 	regs.ds = 16;
 	regs.rflags = getFlagsRegister() | (1 << 9);

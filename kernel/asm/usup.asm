@@ -134,8 +134,9 @@ usup_sigret:
 	; RSP and it wouldn't work anyway
 	; there are 16 GPRs to pop off now that they're restored, plus the red zone (128 bytes),
 	; each GPR is 8 bytes long.
-	; 128 + 16 * 8 = 256
-	ret	256
+	; also we ignore the "fsbase" and "gsbase" (we don't expect them to be modifed asynchronously).
+	; 128 + 16 * 8 + 16 = 272
+	ret	272
 
 ;; resettable system calls
 ;; kernel passes return RIP in R9, sets up all registers for system calls (RAX, arguments) and transfers

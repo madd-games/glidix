@@ -43,16 +43,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-typedef struct
-{
-	FPURegs		fpuRegs;
-	uint64_t	rflags;
-	uint64_t	rip;
-	uint64_t	rdi, rsi, rbp, rbx, rdx, rcx, rax;
-	uint64_t	r8, r9, r10, r11, r12, r13, r14, r15;
-	uint64_t	rsp;
-} MachineState;
-
 #define	DEFAULT_STACK_SIZE		0x200000
 #define	CLONE_THREAD			(1 << 0)
 #define	CLONE_DETACHED			(1 << 1)
@@ -124,6 +114,17 @@ typedef struct
  * -(NUM_PRIO_Q/2) < n < (NUM_PRIO_Q/2)
  */
 #define	NUM_PRIO_Q			16
+
+typedef struct
+{
+	FPURegs		fpuRegs;
+	uint64_t	rflags;
+	uint64_t	rip;
+	uint64_t	rdi, rsi, rbp, rbx, rdx, rcx, rax;
+	uint64_t	r8, r9, r10, r11, r12, r13, r14, r15;
+	uint64_t	rsp;
+	uint64_t	fsbase, gsbase;
+} MachineState;
 
 /**
  * Describes the state of a running process. Used by _glidix_procstat().
@@ -309,7 +310,7 @@ typedef struct _Thread
 	 * If RIP != 0, then we are catching exceptions.
 	 */
 	uint64_t			catchRegs[8];				// 0x250
-	
+
 	// --- END OF ASSEMBLY REGION --- //
 	
 	/**

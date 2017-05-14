@@ -24,59 +24,95 @@
 ;	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ;	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-section .text
-bits 64
+; macros for manipulating the Regs struct.
+%define	MSR_FS_BASE		0xC0000100
+%define	MSR_GS_BASE		0xC0000101
 
-%include "regs.inc"
+; push the value of an MSR. Trashes RCX, RDX and RAX.
+%macro pushMSR 1
+	mov	rcx,	%1
+	rdmsr
+	shl	rdx,	32
+	or	rdx,	rax
+	test	rdx,	rdx
+	jnz __bad_one
+	push	rdx
+%endmacro
 
-[global getFlagsRegister]
-getFlagsRegister:
-	pushfq
-	pop rax
-	ret
+; pop the value of an MSR.
+%macro popMSR 1
+	pop	rax
+	test	rax,	rax
+	jnz __bad_one_pop
+	mov	rdx,	rax
+	shr	rdx,	32
+	mov	rcx,	%1
+	wrmsr
+%endmacro
 
-[global setFlagsRegister]
-setFlagsRegister:
-	push rdi
-	popfq
-	ret
+; push all regs (except the ones pushed by IRET, and intNo/errCode)
+%macro pushAll 0
+	push	r15
+	push	r14
+	push	r13
+	push	r12
+	push	r11
+	push	r10
+	push	r9
+	push	r8
+	push	rax
+	push	rcx
+	push	rdx
+	push	rbx
+	push	rbp
+	push	rsi
+	push	rdi
+	mov	ax,	ds
+	push	rax
+	pushMSR	MSR_GS_BASE
+	pushMSR	MSR_FS_BASE
+%endmacro
 
-[global switchContext]
-switchContext:
-	; The argument is stored in RDI, and is the address of a Regs structure.
-	; If we move the stack there, we can easily do a context switch with a
-	; bunch of pops.
-	cli
-	mov	rsp,		rdi
+; same but reverse
+%macro popAll 0
+	popMSR	MSR_FS_BASE
+	popMSR	MSR_GS_BASE
+	pop	rax
+	mov	ds,	ax
+	mov	es,	ax
+	pop	rdi
+	pop	rsi
+	pop	rbp
+	pop	rbx
+	pop	rdx
+	pop	rcx
+	pop	rax
+	pop	r8
+	pop	r9
+	pop	r10
+	pop	r11
+	pop	r12
+	pop	r13
+	pop	r14
+	pop	r15
+%endmacro
 
-	popAll
+[extern _panic]
+__bad_one:
+	mov rdi, __le_format
+	mov rsi, 0
+	mov r8, rdx
+	mov rdx, __le_format
+	mov rcx, __le_format
+	call _panic
 
-	; ignore "intNo" and "errCode"
-	add	rsp,		16
-
-	; the rest is popped by an interrupt return
-	iretq
-
-[global enterDebugContext]
-enterDebugContext:
-	; essentially the same as switchContext, but we trap into the Bochs debugger
-	; so that we can see why stuff is breaking in the context.
-	cli
-	mov	rsp,		rdi
-
-	popAll
-
-	; ignore "intNo" and "errCode"
-	add	rsp,		16
-
-	; the rest is popped by an interrupt return, but obviously trap first.
-	xchg	bx,		bx
-	iretq
-
-[global reloadTR]
-[extern _tss_reload_access]
-reloadTR:
-	call	_tss_reload_access
-	mov	rax,		0x33
-	ltr	ax
-	ret
+__bad_one_pop:
+	mov rdi, __le_format2
+	mov rsi, 0
+	mov r8, rax
+	mov rdx, __le_format2
+	mov rcx, __le_format2
+	call _panic
+	
+__le_format db '0x%016lX', 0
+__le_format2 db 'POP 0x%016lX', 0

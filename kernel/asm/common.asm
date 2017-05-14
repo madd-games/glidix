@@ -26,6 +26,8 @@
 
 bits 64
 
+%include "regs.inc"
+
 section .text
 [extern switchTask]
 [extern stackTrace]
@@ -75,6 +77,8 @@ trapKernel:
 	push	rdi
 	mov	ax,		ds
 	push	rax
+	push	rax			; gsbase
+	push	rax			; fsbase
 
 	; mark the kernel dead
 	mov	rdi,		qword kernelDead
@@ -162,40 +166,49 @@ atomic_test_and_set8:
 [global _preempt]
 _preempt:
 	; allocate a Regs structure on the stack.
-	sub rsp, 0xC0
+	sub rsp, 0xD0
 	mov rdi, rsp
+	
+	mov rcx, MSR_FS_BASE
+	rdmsr
+	mov [rdi+0x00], eax
+	mov [rdi+0x04], edx
+	mov rcx, MSR_GS_BASE
+	rdmsr
+	mov [rdi+0x08], eax
+	mov [rdi+0x0C], edx
 	
 	; segment registers; DS=0x10, CS=0x08, SS=0
 	mov rax, 0x10
-	mov [rdi+0x00], rax
+	mov [rdi+0x10], rax
 	xor rax, rax
-	mov [rdi+0xB0], rax
+	mov [rdi+0xC0], rax
 	mov rax, 0x08
-	mov [rdi+0x98], rax
+	mov [rdi+0xA8], rax
 	
 	; callee-save registers
-	mov [rdi+0x20], rbx
-	mov [rdi+0x18], rbp
-	mov [rdi+0x60], r12
-	mov [rdi+0x68], r13
-	mov [rdi+0x70], r14
-	mov [rdi+0x78], r15
+	mov [rdi+0x30], rbx
+	mov [rdi+0x28], rbp
+	mov [rdi+0x70], r12
+	mov [rdi+0x78], r13
+	mov [rdi+0x80], r14
+	mov [rdi+0x88], r15
 	
 	; store the return RSP in the appropriate field. the return RSP is
-	; 0xC0+8 bytes below the current stack, as we've got the Regs and
+	; 0xD0+8 bytes below the current stack, as we've got the Regs and
 	; return RIP pushed
 	mov rax, rsp
-	add rax, 0xC8
-	mov [rdi+0xA8], rax
-	mov rax, [rsp+0xC0]
-	mov [rdi+0x90], rax		; return RIP
+	add rax, 0xD8
+	mov [rdi+0xB8], rax
+	mov rax, [rsp+0xD0]
+	mov [rdi+0xA0], rax		; return RIP
 	pushf
 	pop rax
-	mov [rdi+0xA0], rax
+	mov [rdi+0xB0], rax
 	
 	; to enable proper unwinding of this, push the return RIP onto the stack,
 	; followed by RBP and then set RBP to RSP
-	push qword [rdi+0x90]
+	push qword [rdi+0xA0]
 	push rbp
 	mov rbp, rsp
 	

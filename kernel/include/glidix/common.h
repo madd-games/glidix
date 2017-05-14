@@ -61,6 +61,7 @@
 #define	ntohs			__builtin_bswap16
 #define	ntohl			__builtin_bswap32
 #define	PAGE_SIZE		0x1000
+#define	CANON_MASK		0xFFFF800000000000
 
 /**
  * Special traps. If a userspace process jumps to one of these, it will trigger
@@ -73,29 +74,31 @@ void _panic(const char *filename, int lineno, const char *funcname, const char *
 
 typedef struct
 {
-	uint64_t ds;			// 0x00
-	uint64_t rdi;			// 0x08
-	uint64_t rsi;			// 0x10
-	uint64_t rbp;			// 0x18
-	uint64_t rbx;			// 0x20
-	uint64_t rdx;			// 0x28
-	uint64_t rcx;			// 0x30
-	uint64_t rax;			// 0x38
-	uint64_t r8;			// 0x40
-	uint64_t r9;			// 0x48
-	uint64_t r10;			// 0x50
-	uint64_t r11;			// 0x58
-	uint64_t r12;			// 0x60
-	uint64_t r13;			// 0x68
-	uint64_t r14;			// 0x70
-	uint64_t r15;			// 0x78
-	uint64_t intNo;			// 0x80
-	uint64_t errCode;		// 0x88
-	uint64_t rip;			// 0x90
-	uint64_t cs;			// 0x98
-	uint64_t rflags;		// 0xA0
-	uint64_t rsp;			// 0xA8
-	uint64_t ss;			// 0xB0
+	uint64_t fsbase;
+	uint64_t gsbase;
+	uint64_t ds;
+	uint64_t rdi;
+	uint64_t rsi;
+	uint64_t rbp;
+	uint64_t rbx;
+	uint64_t rdx;
+	uint64_t rcx;
+	uint64_t rax;
+	uint64_t r8;
+	uint64_t r9;
+	uint64_t r10;
+	uint64_t r11;
+	uint64_t r12;
+	uint64_t r13;
+	uint64_t r14;
+	uint64_t r15;
+	uint64_t intNo;
+	uint64_t errCode;
+	uint64_t rip;
+	uint64_t cs;
+	uint64_t rflags;
+	uint64_t rsp;
+	uint64_t ss;
 } PACKED Regs;
 
 typedef struct

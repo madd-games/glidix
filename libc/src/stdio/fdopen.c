@@ -53,7 +53,7 @@ FILE *fdopen(int fd, const char *mode)
 	}
 	else
 	{
-		_glidix_seterrno(EINVAL);
+		errno = EINVAL;
 		return NULL;
 	};
 

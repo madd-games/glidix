@@ -214,8 +214,6 @@ uid_t		_glidix_getsuid();
 gid_t		_glidix_getsgid();
 size_t		_glidix_getparsz();
 void		_glidix_getpars(char *buffer, size_t size);
-int		_glidix_geterrno();
-void		_glidix_seterrno(int _errno);
 int		_glidix_insmod(const char *modname, const char *path, const char *opt, int flags);
 int		_glidix_ioctl(int fd, unsigned long cmd, void *argp);
 int		_glidix_fdopendir(const char *dirname);

@@ -27,6 +27,8 @@
 section .text
 bits 64
 
+%include "regs.inc"
+
 [global _intCounter]
 _intCounter dq 0
 
@@ -39,55 +41,14 @@ loadIDT:
 	lidt [rax]
 	ret
 
-%macro pushAll 0
-	push	 r15
-	push	 r14
-	push	 r13
-	push	 r12
-	push	 r11
-	push	 r10
-	push	 r9
-	push	 r8
-	push	 rax
-	push	 rcx
-	push	 rdx
-	push	 rbx
-	push	 rbp
-	push	 rsi
-	push	 rdi
-%endmacro
-
-%macro popAll 0
-	pop	rdi
-	pop	rsi
-	pop	rbp
-	pop	rbx
-	pop	rdx
-	pop	rcx
-	pop	rax
-	pop	r8
-	pop	r9
-	pop	r10
-	pop	r11
-	pop	r12
-	pop	r13
-	pop	r14
-	pop	r15
-%endmacro
-
 [extern isrHandler]
 
 isrCommon:
 	pushAll
 
-	mov			ax, ds
-	push			rax
-
 	mov			ax, 0x10
 	mov			ds, ax
 	mov			es, ax
-	mov			fs, ax
-	mov			gs, ax
 
 	mov			rdi, rsp		; pass a pointer to registers as argument to isrHandler
 	mov			rbx, rsp		; save the RSP (RBX is preserved, remember).
@@ -97,19 +58,13 @@ isrCommon:
 	; so we must push the return RIP onto the stack, and then push RBP,
 	; and finally set RBP to the new stack pointer, making it look like
 	; isrCommon was called directly by the interrupted state.
-	push			qword [rdi+0x90]
+	push			qword [rdi+0xA0]
 	push			rbp
 	mov			rbp, rsp
 	
 	cld						; clear direction flag as it's undefined
 	call	 		isrHandler
 	mov			rsp, rbx		; restore the real stack
-
-	pop			rbx
-	mov			ds, bx
-	mov			es, bx
-	mov			fs, bx
-	mov			gs, bx
 
 	popAll
 	add			rsp, 16

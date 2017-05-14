@@ -31,7 +31,6 @@
 #include <glidix/ticket.h>
 #include <glidix/string.h>
 #include <stdint.h>
-//#include <glidix/video.h>
 #include <glidix/mutex.h>
 
 /**
@@ -793,6 +792,7 @@ static void printFlags(uint64_t flags)
 
 void kdumpregs(Regs *regs)
 {
+	kprintf("FS:  0x%016lX\tGS:  0x%016lX\n", regs->fsbase, regs->gsbase);
 	kprintf("DS:  0x%016lX\tSS:  0x%016lX\n", regs->ds, regs->ss);
 	kprintf("RDI: 0x%016lX\tRSI: 0x%016lX\n", regs->rdi, regs->rsi);
 	kprintf("RBP: 0x%016lX\tRSP: 0x%016lX\n", regs->rbp, regs->rsp);

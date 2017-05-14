@@ -34,6 +34,7 @@
 #include <glidix/console.h>
 #include <glidix/procmem.h>
 #include <glidix/syscall.h>
+#include <glidix/msr.h>
 
 /**
  * OR of all flags that userspace should be allowed to set.
@@ -103,6 +104,8 @@ void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
 	regs.rbx = addrFPU;
 	regs.r12 = addrGPR;
 	regs.r13 = frame->sigmask;
+	regs.fsbase = msrRead(MSR_FS_BASE);
+	regs.gsbase = msrRead(MSR_GS_BASE);
 	switchContext(&regs);
 };
 
@@ -190,6 +193,13 @@ void dispatchSignal()
 		return;
 	};
 
+#if 0
+	if ((siginfo->si_signo == SIGSEGV) && (thread->creds->pid == 1))
+	{
+		panic("SIGSEGV in init, address=%p, rip=%p", siginfo->si_addr, thread->regs.rip);
+	};
+#endif
+
 	// what action do we take?
 	SigAction *action = &thread->sigdisp->actions[siginfo->si_signo];
 	uint64_t handler;
@@ -253,6 +263,9 @@ void dispatchSignal()
 	frame->mstate.rip = thread->regs.rip;
 	frame->mstate.rsp = thread->regs.rsp;
 	frame->mstate.rflags = thread->regs.rflags;
+	/* do not preserve fsbase and gsbase; those are expected not to change since they should
+	   be per-thread and not modified by signal handlers. */
+	frame->mstate.fsbase = frame->mstate.gsbase = 0;
 	memcpy(&frame->si, siginfo, sizeof(siginfo_t));
 
 	thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
@@ -287,6 +300,8 @@ int sendSignalEx(Thread *thread, siginfo_t *siginfo, int flags)
 		//      is there any reason for this to be specially handled? if so, we must
 		//      get rid of that reason and ensure that this signal is treated normally
 		//      (except it wakes up from a SIGSTOP).
+		// XXX: it appears that the reason is that it was used for waking in the bad
+		//      old synchronisation API or something.
 		
 		// wake up the thread but do not dispatch any signal
 		// also we return -1 so that signalPid() wakes up all

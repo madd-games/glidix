@@ -21,9 +21,9 @@ obj/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(dir $@)
 	$(HOST_GCC) -c $< -o $@ $(CFLAGS)
 
-asm/%.o: $(SRCDIR)/asm/%.asm
+asm/%.o: $(SRCDIR)/asm/%.asm $(SRCDIR)/asm/regs.inc
 	@mkdir -p asm
-	nasm -felf64 -o $@ $<
+	nasm -i$(SRCDIR)/asm/ -felf64 -o $@ $<
 
 module_start.o: $(SRCDIR)/module/module_start.asm
 	nasm -felf64 -o $@ $<
