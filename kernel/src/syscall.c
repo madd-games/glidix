@@ -53,6 +53,7 @@
 #include <glidix/cpu.h>
 #include <glidix/pageinfo.h>
 #include <glidix/msr.h>
+#include <glidix/trace.h>
 
 /**
  * Options for _glidix_kopt().
@@ -3901,7 +3902,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_block_on,				// 103
 	&sys_dup3,				// 104
 	&sys_unblock,				// 105
-	SYS_NULL,				// 106	[was mqsend]
+	&sys_trace,				// 106
 	&sys_listen,				// 107
 	&sys_accept,				// 108
 	&sys_accept4,				// 109

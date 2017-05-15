@@ -69,7 +69,7 @@
 #define	SIGAIO		34
 #define	SIGTHKILL	35		/* kill a single thread */
 #define	SIGTHWAKE	36		/* wake a thread without dispatching a signal */
-#define	SIGMXULK	37		/* mutex unlock signal */
+#define	SIGTRACE	37		/* debugger notification */
 #endif
 #define	SIG_NUM		38
 #ifndef _SIGNAL_H

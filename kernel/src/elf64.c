@@ -34,6 +34,7 @@
 #include <glidix/memory.h>
 #include <glidix/errno.h>
 #include <glidix/syscall.h>
+#include <glidix/trace.h>
 
 typedef struct
 {
@@ -582,12 +583,14 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	// suid/sgid stuff
 	if (st.st_mode & VFS_MODE_SETUID)
 	{
+		thread->debugFlags = 0;
 		thread->creds->euid = st.st_uid;
 		thread->flags |= THREAD_REBEL;
 	};
 
 	if (st.st_mode & VFS_MODE_SETGID)
 	{
+		thread->debugFlags = 0;
 		thread->creds->egid = st.st_gid;
 		thread->flags |= THREAD_REBEL;
 	};
@@ -644,6 +647,12 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	
 	// do not block any signals in a new executable by default
 	getCurrentThread()->sigmask = 0;
+	
+	if (getCurrentThread()->debugFlags & DBG_STOP_ON_EXEC)
+	{
+		traceTrap(&regs, TR_EXEC);
+	};
+	
 	switchContext(&regs);
 	return 0;
 };

@@ -72,7 +72,7 @@
 #define	SIGAIO		34
 #define	SIGTHKILL	35			/* kill a single thread */
 #define	SIGTHWAKE	36			/* wake a thread without dispatching a signal */
-#define	SIGMXULK	37			/* mutex unlock signal */
+#define	SIGTRACE	37			/* debugger notification */
 #define	__SIG_COUNT	38
 
 #define	SIG_DFL		((void (*)(int)) 1)
@@ -180,6 +180,9 @@ int raise(int sig);
 int kill(pid_t pid, int sig);
 int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
 #define	pthread_sigmask sigprocmask
+
+extern const char *sys_signame[];
+extern const char *sys_siglist[];
 
 #ifdef __cplusplus
 };	/* extern "C" */

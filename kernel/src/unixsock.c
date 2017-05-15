@@ -201,7 +201,6 @@ static ssize_t unixsock_sendto(Socket *sock, const void *message, size_t size, i
 			return -1;
 		};
 		
-		// 'peer' is never NULL if the state is STATE_CONNECTED
 		SysObject *sysobj = unixsock->seq.peer;
 		vfsSysIncref(sysobj);
 		
@@ -339,6 +338,24 @@ static void unixsock_close(Socket *sock)
 	UnixSocket *unixsock = (UnixSocket*) sock;
 	if (sock->type == SOCK_SEQPACKET)
 	{
+		if (unixsock->seq.state == STATE_CONNECTED)
+		{
+			semWait(&unixsock->seq.lock);
+			unixsock->seq.state = STATE_CLOSED;
+			
+			SysObject *sysobj = unixsock->seq.peer;
+			// don't incref: we're destroying the refrence
+			
+			semSignal(&unixsock->seq.lock);
+			
+			UnixSocket *peer = (UnixSocket*) sysobj->data;
+			semWait(&peer->seq.lock);
+			semTerminate(&peer->seq.semMsgIn);
+			semSignal(&peer->seq.lock);
+			
+			vfsSysDecref(sysobj);
+		};
+		
 		vfsSysDecref(unixsock->seq.sysobj);
 	};
 };

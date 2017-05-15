@@ -38,6 +38,8 @@
 #include <glidix/cpu.h>
 #include <glidix/pagetab.h>
 #include <glidix/msr.h>
+#include <glidix/signal.h>
+#include <glidix/trace.h>
 
 static Thread firstThread;
 PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
@@ -181,6 +183,16 @@ void credsDownref(Creds *creds)
 				if (thread->creds->ppid == creds->pid)
 				{
 					thread->creds->ppid = 1;
+
+					// get our children out of debugging mode
+					if (thread->flags & THREAD_TRACED)
+					{
+						thread->debugFlags = 0;
+						thread->flags &= ~THREAD_TRACED;
+						thread->flags |= THREAD_WAITING;	// to force signalThread to queue it
+						signalThread(thread);
+					};
+			
 				};
 				
 				if (thread->creds->pid == creds->ppid)
@@ -762,6 +774,9 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	
 	// doesn't block on anything
 	thread->blockPhys = 0;
+	
+	// no debugging
+	thread->debugFlags = 0;
 
 	// link into the runqueue
 	cli();
@@ -837,7 +852,7 @@ int signalThread(Thread *thread)
 	if (thread->flags & THREAD_WAITING)
 	{
 		thread->flags &= ~THREAD_WAITING;
-		
+
 		if (thread->runq.thread == NULL)
 		{
 			thread->runq.thread = thread;
@@ -859,7 +874,7 @@ int signalThread(Thread *thread)
 	{
 		thread->wakeCounter++;
 	};
-	
+
 	return thread->niceVal < currentThread->niceVal;
 };
 
@@ -1050,10 +1065,18 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	
 	// initialize block address
 	thread->blockPhys = 0;
-	
+
+	// stop-on-exec if we are being spawned by a debugger
+	thread->debugFlags = 0;
+	if (currentThread->debugFlags & DBG_DEBUGGER)
+	{
+		thread->debugFlags = DBG_STOP_ON_EXEC | DBG_DEBUG_MODE;
+	};
+
 	// link into the runqueue
 	cli();
 	spinlockAcquire(&schedLock);
+
 	currentThread->next->prev = thread;
 	thread->next = currentThread->next;
 	thread->prev = currentThread;
@@ -1091,6 +1114,16 @@ void threadExitEx(uint64_t retval)
 		panic("a kernel thread called threadExitEx()");
 	};
 
+	if (currentThread->debugFlags & DBG_DEBUG_MODE)
+	{
+		siginfo_t si;
+		memset(&si, 0, sizeof(siginfo_t));
+		si.si_signo = SIGTRACE;
+		si.si_pid = currentThread->thid;
+		si.si_code = TR_EXIT;
+		signalPidEx(currentThread->creds->ppid, &si, SP_NOPERM);
+	};
+	
 	vmUnmapThread();
 	
 	spinlockAcquire(&notifLock);
@@ -1202,6 +1235,8 @@ int processWait(int pid, int *stat_loc, int flags)
 
 static int canSendSignal(Thread *src, Thread *dst, int signo, int flags)
 {
+	if ((signo == SIGTRACE) && (flags & SP_NOPERM)) return 1;
+
 	switch (signo)
 	{
 	// list all signals that can be sent at all
@@ -1260,15 +1295,12 @@ static int canSendSignal(Thread *src, Thread *dst, int signo, int flags)
 	return 0;
 };
 
-int signalPidEx(int pid, siginfo_t *si, int flags)
+static int signalPidUnlocked(int pid, siginfo_t *si, int flags)
 {
 	// keep track of which pids we've already successfully delivered signals to
 	// in this call.
 	int pidsDelivered[100];
 	int pidDelivIndex = 0;
-	
-	cli();
-	lockSched();
 	
 	int result = -1;
 	ERRNO = ESRCH;
@@ -1328,9 +1360,19 @@ int signalPidEx(int pid, siginfo_t *si, int flags)
 		thread = thread->next;
 	} while (thread != currentThread);
 	
+	return result;
+};
+
+int signalPidEx(int pid, siginfo_t *si, int flags)
+{
+	cli();
+	lockSched();
+	
+	int result = signalPidUnlocked(pid, si, flags);
+	
 	unlockSched();
 	sti();
-	
+
 	if (result != 0)
 	{
 		// if the target pid is a zombie, we still report the sending to be successful
@@ -1738,4 +1780,19 @@ void* tmpframe()
 	uint64_t virt = (uint64_t) currentThread->stack;
 	virt += 0x1000 - (virt & 0xFFF);		// page-align forward
 	return (void*) virt;
+};
+
+void traceTrap(Regs *regs, int reason)
+{
+	siginfo_t si;
+	memset(&si, 0, sizeof(siginfo_t));
+	si.si_signo = SIGTRACE;
+	si.si_pid = currentThread->thid;
+	si.si_code = reason;
+	
+	cli();
+	lockSched();
+	signalPidUnlocked(currentThread->creds->ppid, &si, SP_NOPERM);
+	currentThread->flags |= THREAD_TRACED;
+	switchTaskUnlocked(regs);
 };

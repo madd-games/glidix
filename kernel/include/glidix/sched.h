@@ -116,6 +116,13 @@
 #define	WCONTINUED			(1 << 3)
 
 /**
+ * Debug flags.
+ */
+#define	DBG_STOP_ON_EXEC		(1 << 0)
+#define	DBG_DEBUGGER			(1 << 1)		/* i am the debugger, set stop-on-exec in children */
+#define	DBG_DEBUG_MODE			(1 << 2)		/* i am being debugged */
+
+/**
  * Number of priority queues. Valid nice values, 'n', are:
  * -(NUM_PRIO_Q/2) < n < (NUM_PRIO_Q/2)
  */
@@ -317,6 +324,11 @@ typedef struct _Thread
 	 */
 	uint64_t			catchRegs[8];				// 0x250
 
+	/**
+	 * Debug flags.
+	 */
+	int				debugFlags;				// 0x258
+	
 	// --- END OF ASSEMBLY REGION --- //
 	
 	/**
@@ -643,5 +655,10 @@ uint64_t mapTempFrame(uint64_t frame);
  * Returns a virtual pointer which may be used to access the "temporary page".
  */
 void* tmpframe();
+
+/**
+ * Send a debug signal to my parent and go into trace mode with the specified registers.
+ */
+void traceTrap(Regs *regs, int reason);
 
 #endif

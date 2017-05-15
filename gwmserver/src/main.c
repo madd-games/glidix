@@ -40,6 +40,7 @@
 #include <errno.h>
 
 #include "screen.h"
+#include "server.h"
 
 int main(int argc, char *argv[])
 {
@@ -201,5 +202,6 @@ int main(int argc, char *argv[])
 	GWMInfo *gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	gwminfo->backgroundID = desktopBackground->id;
 
+	runServer(sockfd);
 	return 0;
 };

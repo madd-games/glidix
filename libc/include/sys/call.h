@@ -135,6 +135,7 @@
 #define __SYS_block_on				103
 #define __SYS_dup3				104
 #define	__SYS_unblock				105
+#define	__SYS_trace				106
 #define __SYS_listen				107
 #define __SYS_accept				108
 #define __SYS_accept4				109

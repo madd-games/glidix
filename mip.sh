@@ -142,3 +142,11 @@ cd minipad
 make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/minipad.mip
+
+# gxdbg
+rm -rf mipdir || exit 1
+cd gxdbg
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/gxdbg.mip
+

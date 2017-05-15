@@ -64,6 +64,7 @@ size_t strnlen( const char * s, size_t maxlen );
 char * strdup( const char* src );
 char * strndup( const char* src, size_t n );
 int    strerror_r(int errnum, char *strerrbuf, size_t buflen);
+char *strsignal(int signum);
 
 #ifdef __cplusplus
 }	/* extern "C" */
