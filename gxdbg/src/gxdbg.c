@@ -52,12 +52,14 @@ typedef struct CmdHistory_
 CmdHistory *cmdHead;
 volatile int traceReason = -1;
 volatile pthread_t mainThread;
+volatile int trapValue;
 
 void on_signal(int signo, siginfo_t *si, void *context)
 {
 	if (signo == SIGTRACE)
 	{
 		traceReason = si->si_code;
+		trapValue = si->si_value.sival_int;
 	
 		if (mainThread == 0)
 		{
@@ -75,6 +77,9 @@ void printReason()
 		break;
 	case TR_EXIT:
 		printf("Terminated\n");
+		break;
+	case TR_SIGNAL:
+		printf("Child caught signal %s, %s\n", sys_signame[trapValue], sys_siglist[trapValue]);
 		break;
 	};
 };
