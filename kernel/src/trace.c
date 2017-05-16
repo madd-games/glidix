@@ -101,6 +101,56 @@ static int tcGetRegs(int thid, MachineState *state)
 	return result;
 };
 
+static int tcSetFlags(int thid, int flags)
+{
+	cli();
+	lockSched();
+	
+	Thread *ct = getCurrentThread();
+	Thread *thread = ct;
+	
+	int result = -1;
+	ERRNO = ESRCH;
+	
+	do
+	{
+		if (thread->thid == thid)
+		{
+			if (thread->creds == NULL)
+			{
+				// not our child
+				ERRNO = ESRCH;
+				break;
+			}
+			else if (thread->creds->ppid != ct->creds->pid)
+			{
+				// not our child
+				ERRNO = ESRCH;
+				break;
+			}
+			else if ((thread->flags & THREAD_TRACED) == 0)
+			{
+				// not traced
+				ERRNO = EPERM;
+				break;
+			}
+			else
+			{
+				result = 0;
+				thread->debugFlags = (thread->debugFlags & (DBG_DEBUGGER | DBG_DEBUG_MODE)) | (flags & ~(DBG_DEBUGGER | DBG_DEBUG_MODE));
+				break;
+			};
+		};
+		
+		thread = thread->next;		
+	} while (thread != ct);
+	
+	unlockSched();
+	sti();
+	
+	return result;
+};
+
 static int tcCont(int thid)
 {
 	cli();
@@ -159,6 +209,11 @@ int sys_trace(int cmd, int thid, void *param)
 	switch (cmd)
 	{
 	case TC_DEBUG:
+		if (getCurrentThread()->debugFlags != 0)
+		{
+			ERRNO = EPERM;
+			return -1;
+		};
 		__sync_fetch_and_or(&getCurrentThread()->debugFlags, DBG_DEBUGGER);
 		return 0;
 	case TC_GETREGS:
@@ -175,6 +230,9 @@ int sys_trace(int cmd, int thid, void *param)
 		return 0;
 	case TC_CONT:
 		return tcCont(thid);
+		break;
+	case TC_SET_FLAGS:
+		return tcSetFlags(thid, (int) (uint64_t) param);
 		break;
 	default:
 		ERRNO = EINVAL;

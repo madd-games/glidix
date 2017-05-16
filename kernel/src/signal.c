@@ -35,6 +35,7 @@
 #include <glidix/procmem.h>
 #include <glidix/syscall.h>
 #include <glidix/msr.h>
+#include <glidix/trace.h>
 
 /**
  * OR of all flags that userspace should be allowed to set.
@@ -191,6 +192,11 @@ void dispatchSignal()
 		*((int64_t*)&thread->regs.rdi) = -SIGKILL;
 		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
 		return;
+	};
+	
+	if (getCurrentThread()->flags & DBG_SIGNALS)
+	{
+		traceTrapEx(&getCurrentThread()->regs, TR_SIGNAL, siginfo->si_signo);
 	};
 
 #if 0
