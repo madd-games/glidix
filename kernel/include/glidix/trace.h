@@ -36,7 +36,6 @@
  */
 #define	TR_EXEC					0	/* exec called */
 #define	TR_EXIT					1	/* thread terminated */
-#define TR_SIGNAL				2	/* signal caught */
 
 /**
  * Trace commands for sys_trace().
@@ -44,7 +43,6 @@
 #define	TC_DEBUG				1	/* become a debugger */
 #define	TC_GETREGS				2	/* get registers of 'thid' */
 #define	TC_CONT					3	/* continue */
-#define TC_SET_FLAGS			4	/* set debugging flags */
 
 int sys_trace(int cmd, int thid, void *param);
 

@@ -121,7 +121,6 @@
 #define	DBG_STOP_ON_EXEC		(1 << 0)
 #define	DBG_DEBUGGER			(1 << 1)		/* i am the debugger, set stop-on-exec in children */
 #define	DBG_DEBUG_MODE			(1 << 2)		/* i am being debugged */
-#define DBG_SIGNALS				(1 << 3)		/* trap when dispatching signals */
 
 /**
  * Number of priority queues. Valid nice values, 'n', are:
@@ -658,13 +657,8 @@ uint64_t mapTempFrame(uint64_t frame);
 void* tmpframe();
 
 /**
- * Send a debug signal to my parent and go into trace mode with the specified registers. It looks a scheduler, unlike traceTrapEx()
+ * Send a debug signal to my parent and go into trace mode with the specified registers.
  */
 void traceTrap(Regs *regs, int reason);
-
-/**
- * Send a debug signal to my parent and go into trace mode with the specified registers. The "value" is a reason-dependent extra information field. It doesn't lock the scheduler, unlike traceTrap()
- */
-void traceTrapEx(Regs *regs, int reason, int value);
 
 #endif

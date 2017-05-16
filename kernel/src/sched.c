@@ -1782,23 +1782,17 @@ void* tmpframe()
 	return (void*) virt;
 };
 
-void traceTrapEx(Regs *regs, int reason, int value)
+void traceTrap(Regs *regs, int reason)
 {
 	siginfo_t si;
 	memset(&si, 0, sizeof(siginfo_t));
 	si.si_signo = SIGTRACE;
 	si.si_pid = currentThread->thid;
 	si.si_code = reason;
-	si.si_value.sival_int = value;
 	
+	cli();
+	lockSched();
 	signalPidUnlocked(currentThread->creds->ppid, &si, SP_NOPERM);
 	currentThread->flags |= THREAD_TRACED;
 	switchTaskUnlocked(regs);
-};
-
-void traceTrap(Regs *regs, int reason)
-{
-	cli();
-	lockSched();
-	traceTrapEx(regs, reason, 0);
 };
