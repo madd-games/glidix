@@ -35,7 +35,7 @@ char dynld_errmsg[1024];
 Library chainHead;
 const char *libraryPath = "";
 int debugMode = 0;
-int bindNow = 1;		/* TODO: lazy binding doesn't work; fix it and make it lazy by default */
+int bindNow = 0;
 int dynld_errno;
 
 void dynld_enter(void *retstack, Elf64_Addr entry);

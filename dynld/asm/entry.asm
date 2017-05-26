@@ -105,14 +105,17 @@ extern dynld_abort
 global dynld_lazybind
 dynld_lazybind:
 	; entry point to the lazy binder
-	xchg rdi, [rsp]			; library handle
-	xchg rsi, [rsp+8]		; index
+	push rax
+	xchg rdi, [rsp+8]		; library handle
+	xchg rsi, [rsp+16]		; index
 	
 	; preserve the rest of the argument registers
 	push rdx
 	push rcx
 	push r8
 	push r9
+	push r10
+	push r11
 	
 	; perform the relocation
 	call dynld_pltreloc
@@ -124,13 +127,16 @@ dynld_lazybind:
 	; restore argument registers
 	; because of the exchanges above, this will also return the stack to the state of the attempted
 	; call, so we just have to jump to the function (rax) after that
+	pop r11
+	pop r10
 	pop r9
 	pop r8
 	pop rcx
 	pop rdx
-	pop rdi
-	pop rsi
-	jmp rax
+	xchg rax, [rsp]
+	mov rdi, [rsp+8]
+	mov rsi, [rsp+16]
+	ret 16
 
 .fail:
 	call dynld_abort

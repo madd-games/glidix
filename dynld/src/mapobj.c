@@ -766,9 +766,6 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 	// PLT resolution or lazy binding time
 	if (lib->pltRela != NULL)
 	{
-		lib->pltgot[1] = lib;
-		lib->pltgot[2] = dynld_lazybind;
-		
 		if ((flags & RTLD_NOW) || (bindNow))
 		{
 			// we must do all bindings immediately
@@ -785,6 +782,16 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 					return 0;
 				};
 			};
+		}
+		else
+		{			
+			for (i=0; i<numPltRela; i++)
+			{
+				lib->pltgot[i+3] += lib->base;
+			};
+			
+			lib->pltgot[1] = lib;
+			lib->pltgot[2] = dynld_lazybind;
 		};
 	};
 	
