@@ -75,6 +75,8 @@
 #define	SIGTRACE	37			/* debugger notification */
 #define	__SIG_COUNT	38
 
+#define	NSIG		__SIG_COUNT
+
 #define	SIG_DFL		((void (*)(int)) 1)
 #define	SIG_ERR		((void (*)(int)) 2)
 #define	SIG_HOLD	((void (*)(int)) 3)
