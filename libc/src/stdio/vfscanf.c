@@ -44,12 +44,14 @@ static void __instr_inits(struct __instr *_is, const char *_s)
 	_is->_s = _s;
 	_is->_fp = NULL;
 	_is->_maxget = -1;
+	_is->_count = 0;
 };
 
 static void __instr_initf(struct __instr *_is, FILE *_fp)
 {
 	_is->_fp = _fp;
 	_is->_maxget = -1;
+	_is->_count = 0;
 };
 
 static int __instr_getc(struct __instr *_is)
