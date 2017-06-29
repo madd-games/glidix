@@ -32,6 +32,8 @@
 #include <sys/types.h>
 #include <pthread.h>
 
+#define SEM_FAILED NULL
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -50,6 +52,9 @@ int	sem_destroy(sem_t *sem);
 int	sem_wait(sem_t *sem);
 int	sem_post(sem_t *sem);
 int	sem_getvalue(sem_t *sem, int *valptr);
+sem_t 	*sem_open(const char *name, int oflag, ... );
+int	sem_close(sem_t *sem);
+int 	sem_unlink(const char *name);
 
 #ifdef __cplusplus
 };	/* extern "C" */
