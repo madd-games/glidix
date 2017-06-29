@@ -48,6 +48,7 @@ static uint64_t nextWindowID;
 static uint64_t nextSeq;
 static pthread_t listenThread;
 static DDIFont *defaultFont;
+static DDIPixelFormat screenFormat;
 
 typedef struct GWMWaiter_
 {
@@ -84,6 +85,7 @@ static GWMInfo *gwminfo = NULL;
 static FileIconCache *fileIconCache = NULL;
 
 DDIColor gwmColorSelection = {0, 0xAA, 0, 0xFF};
+DDIColor gwmBackColor = {0xDD, 0xDD, 0xDD, 0xFF};		// window background color
 
 static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 {
@@ -170,6 +172,7 @@ static void* listenThreadFunc(void *ignore)
 			}
 			else if (msg->generic.type == GWM_MSG_EVENT)
 			{
+				//printf("got event %d for window %lu\n", msg->event.payload.type, msg->event.payload.win);
 				EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
 				memcpy(&buf->payload, &msg->event.payload, sizeof(GWMEvent));
 				
@@ -191,6 +194,12 @@ static void* listenThreadFunc(void *ignore)
 				//ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
 				sem_post(&semEventCounter);
 			};
+		}
+		else
+		{
+			// size is 0; hangup
+			fprintf(stderr, "libgwm: connection terminated by server\n");
+			abort();
 		};
 	};
 	
@@ -211,7 +220,7 @@ int gwmInit()
 	
 	nextWindowID = 1;
 	nextSeq = 1;
-	sem_init(&semEventCounter, 0, 1);
+	sem_init(&semEventCounter, 0, 0);
 	
 	pthread_mutex_init(&waiterLock, NULL);
 	pthread_mutex_init(&eventLock, NULL);
@@ -296,7 +305,7 @@ int gwmInit()
 		return -1;
 	};
 
-	queueFD = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+	queueFD = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
 	if (queueFD == -1)
 	{
 		fprintf(stderr, "gwm: could not create socket: %s\n", strerror(errno));
@@ -323,6 +332,7 @@ int gwmInit()
 		return -1;
 	};
 	
+	gwmGetScreenFormat(&screenFormat);
 	return 0;
 };
 
@@ -343,6 +353,14 @@ GWMWindow* gwmCreateWindow(
 	uint64_t id = __sync_fetch_and_add(&nextWindowID, 1);
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
 	
+	DDISurface *canvas = ddiCreateSurface(&screenFormat, width, height, NULL, DDI_SHARED);
+	if (canvas == NULL)
+	{
+		return NULL;
+	};
+
+	ddiFillRect(canvas, 0, 0, width, height, &gwmBackColor);
+	
 	GWMCommand cmd;
 	cmd.createWindow.cmd = GWM_CMD_CREATE_WINDOW;
 	cmd.createWindow.id = id;
@@ -356,7 +374,7 @@ GWMWindow* gwmCreateWindow(
 	cmd.createWindow.pars.x = x;
 	cmd.createWindow.pars.y = y;
 	cmd.createWindow.seq = seq;
-	cmd.createWindow.painterPid = getpid();
+	cmd.createWindow.surfID = canvas->id;
 	
 	GWMMessage resp;
 	gwmPostWaiter(seq, &resp, &cmd);
@@ -364,12 +382,8 @@ GWMWindow* gwmCreateWindow(
 	{
 		GWMWindow *win = (GWMWindow*) malloc(sizeof(GWMWindow));
 		win->id = id;
-
-		win->canvases[0] = ddiOpenSurface(resp.createWindowResp.clientID[0]);
-		win->canvases[1] = ddiOpenSurface(resp.createWindowResp.clientID[1]);
-		
+		win->canvas = canvas;
 		win->handlerInfo = NULL;
-		win->currentBuffer = 1;
 		win->lastClickTime = 0;
 		
 		win->modalID = 0;
@@ -377,18 +391,19 @@ GWMWindow* gwmCreateWindow(
 		return win;
 	};
 	
+	// failed to create it
+	ddiDeleteSurface(canvas);
 	return NULL;
 };
 
 DDISurface* gwmGetWindowCanvas(GWMWindow *win)
 {
-	return win->canvases[win->currentBuffer];
+	return win->canvas;
 };
 
 void gwmDestroyWindow(GWMWindow *win)
 {
-	ddiDeleteSurface(win->canvases[0]);
-	ddiDeleteSurface(win->canvases[1]);
+	ddiDeleteSurface(win->canvas);
 	
 	GWMCommand cmd;
 	cmd.destroyWindow.cmd = GWM_CMD_DESTROY_WINDOW;
@@ -427,7 +442,6 @@ void gwmDestroyWindow(GWMWindow *win)
 
 void gwmPostDirty(GWMWindow *win)
 {
-	//printf("gwmPostDirty\n");
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
 	
 	GWMCommand cmd;
@@ -437,10 +451,10 @@ void gwmPostDirty(GWMWindow *win)
 	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	write(queueFD, &cmd, sizeof(GWMCommand));
 	
-	//GWMMessage resp;
-	//gwmPostWaiter(seq, &resp, &cmd);
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
 	
-	win->currentBuffer ^= 1;
+	//win->currentBuffer ^= 1;
 	//printf("buffer: %d\n", win->currentBuffer);
 };
 
@@ -449,7 +463,7 @@ void gwmWaitEvent(GWMEvent *ev)
 	//int one = 1;
 	//while (ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_WAIT, &one) == -1);
 	while (sem_wait(&semEventCounter) != 0);
-	
+
 	pthread_mutex_lock(&eventLock);
 	memcpy(ev, &firstEvent->payload, sizeof(GWMEvent));
 	firstEvent = firstEvent->next;
@@ -459,15 +473,7 @@ void gwmWaitEvent(GWMEvent *ev)
 
 void gwmClearWindow(GWMWindow *win)
 {
-	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
-	
-	GWMCommand cmd;
-	cmd.clearWindow.cmd = GWM_CMD_CLEAR_WINDOW;
-	cmd.clearWindow.id = win->id;
-	cmd.clearWindow.seq = seq;
-	
-	GWMMessage resp;
-	gwmPostWaiter(seq, &resp, &cmd);
+	ddiFillRect(win->canvas, 0, 0, win->canvas->width, win->canvas->height, &gwmBackColor);
 };
 
 void gwmPostUpdate(GWMWindow *win)
@@ -636,6 +642,7 @@ int gwmSetWindowCursor(GWMWindow *win, int cursor)
 
 int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon)
 {
+#if 0
 	if ((icon->width != 16) || (icon->height != 16))
 	{
 		return -1;
@@ -653,6 +660,9 @@ int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon)
 	gwmPostWaiter(seq, &resp, &cmd);
 	
 	return resp.setIconResp.status;
+#endif
+	// TODO
+	return 0;
 };
 
 DDIFont *gwmGetDefaultFont()
@@ -746,6 +756,8 @@ void gwmSetListenWindow(GWMWindow *win)
 
 void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
 {
+	// TODO
+#if 0
 	DDIPixelFormat format;
 	memcpy(&format, &win->canvases[0]->format, sizeof(DDIPixelFormat));
 	
@@ -775,6 +787,7 @@ void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
 	{
 		abort();
 	};
+#endif
 };
 
 void gwmMoveWindow(GWMWindow *win, int x, int y)
@@ -850,13 +863,13 @@ void gwmRedrawScreen()
 
 void gwmGetGlobRef(GWMWindow *win, GWMGlobWinRef *ref)
 {
-	ref->id = win->id;
-	ref->fd = queueFD;
-	ref->pid = getpid();
+	fprintf(stderr, "gwmGetGlobRef: implement me!\n");
+	abort();
 };
 
 GWMWindow *gwmScreenshotWindow(GWMGlobWinRef *ref)
 {
+#if 0
 	uint64_t id = __sync_fetch_and_add(&nextWindowID, 1);
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
 	
@@ -883,7 +896,9 @@ GWMWindow *gwmScreenshotWindow(GWMGlobWinRef *ref)
 		win->modalID = 0;
 		return win;
 	};
-	
+#endif
+
+	// TODO: implement this with the new protocol
 	return NULL;
 };
 

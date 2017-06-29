@@ -10,8 +10,8 @@ DEP_STATIC := $(OBJ_STATIC:.o=.d)
 
 DEP := $(DEP_DYN) $(DEP_STATIC)
 
-CFLAGS := -fPIC -I $(SRCDIR)/include -Wall -Werror -D_GLIDIX_SOURCE
-CFLAGS_STATIC := -I $(SRCDIR)/include -Wall -Werror -D_GLIDIX_SOURCE
+CFLAGS := -fPIC -I $(SRCDIR)/include -Wall -Werror -D_GLIDIX_SOURCE -ggdb
+CFLAGS_STATIC := -I $(SRCDIR)/include -Wall -Werror -D_GLIDIX_SOURCE -ggdb
 
 SUP_SRC := $(shell find $(SRCDIR)/support -name '*.c')
 SUP_OUT := $(patsubst $(SRCDIR)/support/%.c, support/%.so, $(SUP_SRC))
@@ -62,7 +62,7 @@ sasm/%.o: $(SRCDIR)/sasm/%.s
 
 support/%.so: $(SRCDIR)/support/%.c
 	@mkdir -p support
-	$(HOST_GCC) -shared $< -o $@ $(CFLAGS) -L.
+	$(HOST_GCC) -shared $< -o $@ $(CFLAGS) -L. -ggdb
 
 crt/%.o: $(SRCDIR)/crt/%.s
 	@mkdir -p crt

@@ -33,6 +33,9 @@
 #include <libddi.h>
 #include <unistd.h>
 
+/**
+ * Window flags.
+ */
 #define	GWM_WINDOW_HIDDEN			(1 << 0)
 #define	GWM_WINDOW_NODECORATE			(1 << 1)
 #define	GWM_WINDOW_MKFOCUSED			(1 << 2)
@@ -42,10 +45,19 @@
 #define	GWM_WINDOW_NOICON			(1 << 6)
 
 /**
+ * Error codes.
+ */
+#define	GWM_ERR_NOWND				1		/* window doesn't exist */
+#define	GWM_ERR_NOSURF				2		/* cannot open shared surface */
+#define	GWM_ERR_INVAL				3		/* invalid value (e.g. already-used ID) */
+
+/**
  * Colors.
  */
 #define	GWM_COLOR_SELECTION			&gwmColorSelection
 extern DDIColor gwmColorSelection;
+#define	GWM_COLOR_BACKGROUND			&gwmBackColor
+extern DDIColor gwmBackColor;
 
 /**
  * Unspecified window position.
@@ -137,7 +149,8 @@ extern DDIColor gwmColorSelection;
  */
 #define	GWM_CURSOR_NORMAL			0
 #define	GWM_CURSOR_TEXT				1
-#define	GWM_CURSOR_COUNT			2
+#define	GWM_CURSOR_HAND				2
+#define	GWM_CURSOR_COUNT			3
 
 /**
  * Slider flags.
@@ -227,6 +240,10 @@ typedef struct
  */
 #define	GWM_KM_CTRL				(1 << 0)
 #define	GWM_KM_SHIFT				(1 << 1)
+#define	GWM_KM_ALT				(1 << 2)
+#define	GWM_KM_CAPS_LOCK			(1 << 3)
+#define	GWM_KM_NUM_LOCK				(1 << 4)
+#define	GWM_KM_SCROLL_LOCK			(1 << 5)
 
 /**
  * Event structure.
@@ -275,7 +292,7 @@ typedef struct
 #define	GWM_CMD_CREATE_WINDOW			0
 #define	GWM_CMD_POST_DIRTY			1
 #define	GWM_CMD_DESTROY_WINDOW			2
-#define	GWM_CMD_CLEAR_WINDOW			3
+/* 3: unused */
 #define	GWM_CMD_SCREEN_SIZE			4
 #define	GWM_CMD_SET_FLAGS			5
 #define	GWM_CMD_SET_CURSOR			6
@@ -301,7 +318,7 @@ typedef union
 		uint64_t			parent;
 		GWMWindowParams			pars;
 		uint64_t			seq;	// sequence number for responses
-		int				painterPid;
+		uint32_t			surfID;	// client area surface ID
 	} createWindow;
 	
 	struct
@@ -455,7 +472,6 @@ typedef union
 		uint64_t			seq;
 		int				status;	// 0 = success, everything else = error
 		DDIPixelFormat			format;
-		uint32_t			clientID[2];
 		unsigned int			width;
 		unsigned int			height;
 	} createWindowResp;
@@ -537,10 +553,10 @@ typedef union
 	{
 		int				type;	// GWM_MSG_RESIZE_RESP
 		uint64_t			seq;
-		int				status;
-		uint32_t			clientID[2];
+		int				status;	// 0 = success, other = GWM error code
 		unsigned int			width;
 		unsigned int			height;
+		uint32_t			clientID[2];	// TODO: remove me
 	} resizeResp;
 	
 	struct
@@ -566,6 +582,7 @@ typedef union
 	{
 		int				type;	// GWM_MSG_POST_DIRTY_RESP
 		uint64_t			seq;
+		int				status;
 	} postDirtyResp;
 } GWMMessage;
 
@@ -573,13 +590,13 @@ struct GWMWindow_;
 
 /**
  * Event handler function type.
- * Return 0 when the applications should continue running; return -1 if the loop shall
+ * Return 0 when the application should continue running; return -1 if the loop shall
  * terminate.
  */
 typedef int (*GWMEventHandler)(GWMEvent *ev, struct GWMWindow_ *win);
 
 /**
- * Those structures form lists of event handlers.
+ * These structures form lists of event handlers.
  */
 typedef struct GWMHandlerInfo_
 {
@@ -604,8 +621,7 @@ typedef struct GWMWindow_
 	uint64_t				id;
 	uint64_t				shmemAddr;
 	uint64_t				shmemSize;
-	DDISurface*				canvases[2];
-	int					currentBuffer;
+	DDISurface*				canvas;
 	GWMHandlerInfo*				handlerInfo;
 	void*					data;
 	

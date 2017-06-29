@@ -41,6 +41,10 @@
 
 #include "screen.h"
 #include "server.h"
+#include "window.h"
+#include "ptr.h"
+#include "input.h"
+#include "kblayout.h"
 
 int main(int argc, char *argv[])
 {
@@ -80,7 +84,9 @@ int main(int argc, char *argv[])
 	// make sure the clipboard and shared surface directories actually exist
 	mkdir("/run/clipboard", 0777);
 	mkdir("/run/shsurf", 0777);
-
+	mkdir("/var", 0755);
+	mkdir("/var/log", 0755);
+	
 	FILE *fp = fopen("/etc/gwm.conf", "r");
 	if (fp == NULL)
 	{
@@ -93,6 +99,8 @@ int main(int argc, char *argv[])
 	
 	char *line;
 	int lineno = 0;
+	char logdest[PATH_MAX];
+	strcpy(logdest, "/var/log/gwmserver.log");
 	while ((line = fgets(linebuf, 1024, fp)) != NULL)
 	{
 		lineno++;
@@ -160,6 +168,23 @@ int main(int argc, char *argv[])
 					return 1;
 				};
 			}
+			else if (strcmp(cmd, "log") == 0)
+			{
+				char *path = strtok(NULL, " \t");
+				if (path == NULL)
+				{
+					fprintf(stderr, "/etc/gwm.conf:%d: 'log' needs a parameter\n", lineno);
+					return 1;
+				};
+				
+				if (strlen(path) >= PATH_MAX)
+				{
+					fprintf(stderr, "/etc/gwm.conf:%d: log path too long\n", lineno);
+					return 1;
+				};
+				
+				strcpy(logdest, path);
+			}
 			else
 			{
 				fprintf(stderr, "/etc/gwm.conf:%d: invalid directive: %s\n", lineno, cmd);
@@ -168,6 +193,17 @@ int main(int argc, char *argv[])
 		};
 	};
 	fclose(fp);
+	
+	int logfd = open(logdest, O_WRONLY | O_CREAT | O_APPEND);
+	if (logfd == -1)
+	{
+		fprintf(stderr, "[gwmserver] could not open log file %s: %s\n", logdest, strerror(errno));
+		return 1;
+	};
+	
+	dup2(logfd, 1);
+	dup2(logfd, 2);
+	close(logfd);
 	
 	if (dispdev[0] == 0)
 	{
@@ -202,6 +238,18 @@ int main(int argc, char *argv[])
 	GWMInfo *gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	gwminfo->backgroundID = desktopBackground->id;
 
+	if (fork() == 0)
+	{
+		execl("/usr/bin/terminal", "terminal", NULL);
+		perror("exec terminal");
+		_exit(1);
+	};
+	
+	kblSet("/usr/share/kblayout/en_US/int", stderr);
+	printf("[gwmserver] starting.\n");
+	wndInit();
+	ptrInit();
+	inputInit();
 	runServer(sockfd);
 	return 0;
 };

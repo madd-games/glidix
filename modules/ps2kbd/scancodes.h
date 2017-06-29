@@ -8,11 +8,11 @@
 	modification, are permitted provided that the following conditions are met:
 	
 	* Redistributions of source code must retain the above copyright notice, this
-	  list of conditions and the following disclaimer.
+		list of conditions and the following disclaimer.
 	
 	* Redistributions in binary form must reproduce the above copyright notice,
-	  this list of conditions and the following disclaimer in the documentation
-	  and/or other materials provided with the distribution.
+		this list of conditions and the following disclaimer in the documentation
+		and/or other materials provided with the distribution.
 	
 	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -26,19 +26,23 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_stdint_h
-#define __glidix_stdint_h
+#ifndef __ps2kbd_scancodes_h
+#define __ps2kbd_scancodes_h
 
-typedef	signed char				int8_t;
-typedef	unsigned char				uint8_t;
-typedef	signed short				int16_t;
-typedef	unsigned short				uint16_t;
-typedef	signed int				int32_t;
-typedef	unsigned int				uint32_t;
-typedef	signed long				int64_t;
-typedef	unsigned long				uint64_t;
-typedef uint64_t				uintmax_t;
-typedef	int64_t					intmax_t;
-typedef uint64_t				uintptr_t;
+/**
+ * Call this upon seeing a 0xE0 scancode. It switches to the "extended" page; we return to the
+ * "main" page once the next scancode is resolved with scancodeTranslate().
+ */
+void scancodeGotoExt();
+
+/**
+ * Get a keycode from a scancode.
+ */
+int scancodeTranslate(uint8_t scancode);
+
+/**
+ * "Transform" a scancode to be reported to humin. Appends "0xE0" if that's what came before it.
+ */
+int scancodeTransform(uint8_t scancode);
 
 #endif

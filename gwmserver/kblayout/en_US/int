@@ -1,0 +1,456 @@
+#################################################################################################
+#                                                                                               #
+#	Glidix GUI                                                                              #
+#                                                                                               #
+#	Copyright (c) 2014-2017, Madd Games.                                                    #
+#	All rights reserved.                                                                    #
+#                                                                                               #
+#	Redistribution and use in source and binary forms, with or without                      #
+#	modification, are permitted provided that the following conditions are met:             #
+#                                                                                               #
+#	* Redistributions of source code must retain the above copyright notice, this           #
+#	  list of conditions and the following disclaimer.                                      #
+#                                                                                               #
+#	* Redistributions in binary form must reproduce the above copyright notice,             #
+#	  this list of conditions and the following disclaimer in the documentation             #
+#	  and/or other materials provided with the distribution.                                #
+#                                                                                               #
+#	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"             #
+#	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE               #
+#	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE          #
+#	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE            #
+#	FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL              #
+#	DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR              #
+#	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER              #
+#	CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,           #
+#	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE           #
+#	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                    #
+#                                                                                               #
+#################################################################################################
+
+# US International keyboard layout (en_US/int)
+# Possibly with some Glidix modifications.
+
+layout {
+	# === ALPHABET ===
+
+	# 'a'
+	keycode 0x061 {
+		keychar U+0061
+		if gwm_shift then keychar U+0041
+		if gwm_caps_lock then keychar U+0041
+		if gwm_shift and gwm_caps_lock then keychar U+0061
+	}
+
+	# 'b'
+	keycode 0x062 {
+		keychar U+0062
+		if gwm_shift then keychar U+0042
+		if gwm_caps_lock then keychar U+0042
+		if gwm_shift and gwm_caps_lock then keychar U+0062
+	}
+
+	# 'c'
+	keycode 0x063 {
+		keychar U+0063
+		if gwm_shift then keychar U+0043
+		if gwm_caps_lock then keychar U+0043
+		if gwm_shift and gwm_caps_lock then keychar U+0063
+	}
+
+	# 'd'
+	keycode 0x064 {
+		keychar U+0064
+		if gwm_shift then keychar U+0044
+		if gwm_caps_lock then keychar U+0044
+		if gwm_shift and gwm_caps_lock then keychar U+0064
+	}
+
+	# 'e'
+	keycode 0x065 {
+		keychar U+0065
+		if gwm_shift then keychar U+0045
+		if gwm_caps_lock then keychar U+0045
+		if gwm_shift and gwm_caps_lock then keychar U+0065
+	}
+
+	# 'f'
+	keycode 0x066 {
+		keychar U+0066
+		if gwm_shift then keychar U+0046
+		if gwm_caps_lock then keychar U+0046
+		if gwm_shift and gwm_caps_lock then keychar U+0066
+	}
+
+	# 'g'
+	keycode 0x067 {
+		keychar U+0067
+		if gwm_shift then keychar U+0047
+		if gwm_caps_lock then keychar U+0047
+		if gwm_shift and gwm_caps_lock then keychar U+0067
+	}
+
+	# 'h'
+	keycode 0x068 {
+		keychar U+0068
+		if gwm_shift then keychar U+0048
+		if gwm_caps_lock then keychar U+0048
+		if gwm_shift and gwm_caps_lock then keychar U+0068
+	}
+
+	# 'i'
+	keycode 0x069 {
+		keychar U+0069
+		if gwm_shift then keychar U+0049
+		if gwm_caps_lock then keychar U+0049
+		if gwm_shift and gwm_caps_lock then keychar U+0069
+	}
+
+	# 'j'
+	keycode 0x06A {
+		keychar U+006A
+		if gwm_shift then keychar U+004A
+		if gwm_caps_lock then keychar U+004A
+		if gwm_shift and gwm_caps_lock then keychar U+006A
+	}
+
+	# 'k'
+	keycode 0x06B {
+		keychar U+006B
+		if gwm_shift then keychar U+004B
+		if gwm_caps_lock then keychar U+004B
+		if gwm_shift and gwm_caps_lock then keychar U+006B
+	}
+
+	# 'l'
+	keycode 0x06C {
+		keychar U+006C
+		if gwm_shift then keychar U+004C
+		if gwm_caps_lock then keychar U+004C
+		if gwm_shift and gwm_caps_lock then keychar U+006C
+	}
+
+	# 'm'
+	keycode 0x06D {
+		keychar U+006D
+		if gwm_shift then keychar U+004D
+		if gwm_caps_lock then keychar U+004D
+		if gwm_shift and gwm_caps_lock then keychar U+006D
+	}
+
+	# 'n'
+	keycode 0x06E {
+		keychar U+006E
+		if gwm_shift then keychar U+004E
+		if gwm_caps_lock then keychar U+004E
+		if gwm_shift and gwm_caps_lock then keychar U+006E
+	}
+
+	# 'o'
+	keycode 0x06F {
+		keychar U+006F
+		if gwm_shift then keychar U+004F
+		if gwm_caps_lock then keychar U+004F
+		if gwm_shift and gwm_caps_lock then keychar U+006F
+	}
+
+	# 'p'
+	keycode 0x070 {
+		keychar U+0070
+		if gwm_shift then keychar U+0050
+		if gwm_caps_lock then keychar U+0050
+		if gwm_shift and gwm_caps_lock then keychar U+0070
+	}
+
+	# 'q'
+	keycode 0x071 {
+		keychar U+0071
+		if gwm_shift then keychar U+0051
+		if gwm_caps_lock then keychar U+0051
+		if gwm_shift and gwm_caps_lock then keychar U+0071
+	}
+
+	# 'r'
+	keycode 0x072 {
+		keychar U+0072
+		if gwm_shift then keychar U+0052
+		if gwm_caps_lock then keychar U+0052
+		if gwm_shift and gwm_caps_lock then keychar U+0072
+	}
+
+	# 's'
+	keycode 0x073 {
+		keychar U+0073
+		if gwm_shift then keychar U+0053
+		if gwm_caps_lock then keychar U+0053
+		if gwm_shift and gwm_caps_lock then keychar U+0073
+	}
+
+	# 't'
+	keycode 0x074 {
+		keychar U+0074
+		if gwm_shift then keychar U+0054
+		if gwm_caps_lock then keychar U+0054
+		if gwm_shift and gwm_caps_lock then keychar U+0074
+	}
+
+	# 'u'
+	keycode 0x075 {
+		keychar U+0075
+		if gwm_shift then keychar U+0055
+		if gwm_caps_lock then keychar U+0055
+		if gwm_shift and gwm_caps_lock then keychar U+0075
+	}
+
+	# 'v'
+	keycode 0x076 {
+		keychar U+0076
+		if gwm_shift then keychar U+0056
+		if gwm_caps_lock then keychar U+0056
+		if gwm_shift and gwm_caps_lock then keychar U+0076
+	}
+
+	# 'w'
+	keycode 0x077 {
+		keychar U+0077
+		if gwm_shift then keychar U+0057
+		if gwm_caps_lock then keychar U+0057
+		if gwm_shift and gwm_caps_lock then keychar U+0077
+	}
+
+	# 'x'
+	keycode 0x078 {
+		keychar U+0078
+		if gwm_shift then keychar U+0058
+		if gwm_caps_lock then keychar U+0058
+		if gwm_shift and gwm_caps_lock then keychar U+0078
+	}
+
+	# 'y'
+	keycode 0x079 {
+		keychar U+0079
+		if gwm_shift then keychar U+0059
+		if gwm_caps_lock then keychar U+0059
+		if gwm_shift and gwm_caps_lock then keychar U+0079
+	}
+
+	# 'z'
+	keycode 0x07A {
+		keychar U+007A
+		if gwm_shift then keychar U+005A
+		if gwm_caps_lock then keychar U+005A
+		if gwm_shift and gwm_caps_lock then keychar U+007A
+	}
+	
+	# === NUMBER ROW AND OTHER SHIFTED KEYS ===
+
+	# '0)'
+	keycode 0x030 {
+		keychar U+0030
+		if gwm_shift then keychar U+0029
+	}
+
+	# '1!'
+	keycode 0x031 {
+		keychar U+0031
+		if gwm_shift then keychar U+0021
+	}
+
+	# '2@'
+	keycode 0x032 {
+		keychar U+0032
+		if gwm_shift then keychar U+0040
+	}
+
+	# '3#'
+	keycode 0x033 {
+		keychar U+0033
+		if gwm_shift then keychar U+0023
+	}
+
+	# '4$'
+	keycode 0x034 {
+		keychar U+0034
+		if gwm_shift then keychar U+0024
+	}
+
+	# '5%'
+	keycode 0x035 {
+		keychar U+0035
+		if gwm_shift then keychar U+0025
+	}
+
+	# '6^'
+	keycode 0x036 {
+		keychar U+0036
+		if gwm_shift then keychar U+005E
+	}
+
+	# '7&'
+	keycode 0x037 {
+		keychar U+0037
+		if gwm_shift then keychar U+0026
+	}
+
+	# '8*'
+	keycode 0x038 {
+		keychar U+0038
+		if gwm_shift then keychar U+002A
+	}
+
+	# '9('
+	keycode 0x039 {
+		keychar U+0039
+		if gwm_shift then keychar U+0028
+	}
+
+	# '`~'
+	keycode 0x060 {
+		keychar U+0060
+		if gwm_shift then keychar U+007E
+	}
+
+	# '-_'
+	keycode 0x02D {
+		keychar U+002D
+		if gwm_shift then keychar U+005F
+	}
+
+	# '=+'
+	keycode 0x03D {
+		keychar U+003D
+		if gwm_shift then keychar U+002B
+	}
+
+	# '[{'
+	keycode 0x05B {
+		keychar U+005B
+		if gwm_shift then keychar U+007B
+	}
+
+	# ']}'
+	keycode 0x05D {
+		keychar U+005D
+		if gwm_shift then keychar U+007D
+	}
+
+	# ';:'
+	keycode 0x03B {
+		keychar U+003B
+		if gwm_shift then keychar U+003A
+	}
+
+	# ''"'
+	keycode 0x027 {
+		keychar U+0027
+		if gwm_shift then keychar U+0022
+	}
+
+	# '\|'
+	keycode 0x05C {
+		keychar U+005C
+		if gwm_shift then keychar U+007C
+	}
+
+	# '<>'
+	keycode 0x03C {
+		keychar U+003C
+		if gwm_shift then keychar U+003E
+	}
+
+	# ',<'
+	keycode 0x02C {
+		keychar U+002C
+		if gwm_shift then keychar U+003C
+	}
+
+	# '.>'
+	keycode 0x02E {
+		keychar U+002E
+		if gwm_shift then keychar U+003E
+	}
+
+	# '/?'
+	keycode 0x02F {
+		keychar U+002F
+		if gwm_shift then keychar U+003F
+	}
+
+	# === WHITESPACE ===
+	
+	# space
+	keycode 0x020 {
+		keychar U+0020
+	}
+	
+	# backspace
+	keycode 0x008 {
+		keychar U+0008
+	}
+	
+	# tab
+	keycode 0x009 {
+		keychar U+0009
+	}
+	
+	# return/enter
+	keycode 0x00D {
+		keychar U+000A
+	}
+	
+	# numpad return/enter
+	keycode 0x13E {
+		keychar U+000A
+	}
+	
+	# === MODIFIER KEYS ===
+	
+	# left ctrl
+	keycode 0x104 {
+		modifier gwm_ctrl
+	}
+	
+	# right ctrl
+	keycode 0x107 {
+		modifier gwm_ctrl
+	}
+	
+	# left shift
+	keycode 0x105 {
+		modifier gwm_shift
+	}
+	
+	# right shift
+	keycode 0x108 {
+		modifier gwm_shift
+	}
+	
+	# left alt
+	keycode 0x106 {
+		modifier gwm_alt
+	}
+	
+	# right alt
+	keycode 0x109 {
+		modifier gwm_alt
+	}
+	
+	# === TOGGLE KEYS ===
+	
+	# caps lock
+	keycode 0x127 {
+		toggle gwm_caps_lock
+	}
+	
+	# num lock
+	keycode 0x11C {
+		toggle gwm_num_lock
+	}
+	
+	# scroll lock
+	keycode 0x117 {
+		toggle gwm_scroll_lock
+	}
+	
+	# TODO: numpad and stuff
+}

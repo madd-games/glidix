@@ -1522,13 +1522,6 @@ void killOtherThreads()
 	unlockSched();
 	sti();
 	
-	// wait for the termination
-	while (currentThread->creds->refcount != 1)
-	{
-		__sync_synchronize();
-		kyield();
-	};
-	
 	// remove scheduler notifications directed at us
 	spinlockAcquire(&notifLock);
 	SchedNotif *notif = firstNotif;

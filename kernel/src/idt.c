@@ -398,6 +398,7 @@ extern int panicking;	/* panic.c */
 void isrHandler(Regs *regs)
 {
 	// ignore spurious IRQs
+	Thread *thread;
 	if (regs->intNo == IRQ7)
 	{
 		apic->eoi = 0;
@@ -436,6 +437,22 @@ void isrHandler(Regs *regs)
 		
 		dumpRunqueue();
 		stackTraceHere();
+		
+		thread = getCurrentThread();
+		do
+		{
+			kprintf("=== THREAD '%s' (THID=%d) ===\n", thread->name, thread->thid);
+			kdumpregs(&thread->regs);
+			stackTrace(thread->regs.rip, thread->regs.rbp);
+			thread = thread->next;
+		} while (thread != getCurrentThread());
+		
+		while (1)
+		{
+			cli();
+			hlt();
+		};
+		
 		break;
 	case I_UNDEF_OPCODE:
 		sendCPUErrorSignal(regs, SIGILL, ILL_ILLOPC, (void*) regs->rip);

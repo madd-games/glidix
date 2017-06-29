@@ -317,6 +317,12 @@ int main(int argc, char *argv[])
 			continue;
 		};
 		
+		int dbgflags = DBG_SIGNALS;
+		if (__syscall(__SYS_trace, TC_SET_FLAGS, mainThread, dbgflags) != 0)
+		{
+			fprintf(stderr, "cannot set debug flags: %s\n", strerror(errno));
+		};
+		
 		char *cmdline = NULL;
 		while (1)
 		{

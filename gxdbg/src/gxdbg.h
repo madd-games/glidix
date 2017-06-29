@@ -29,14 +29,19 @@
 #ifndef GXDBG_H
 #define GXDBG_H
 
-#define	TR_EXEC					0	/* exec called */
-#define	TR_EXIT					1	/* thread terminated */
-#define TR_SIGNAL				2	/* signal caught */
+#define	TR_EXEC					0		/* exec called */
+#define	TR_EXIT					1		/* thread terminated */
+#define TR_SIGNAL				2		/* signal caught */
 
-#define	TC_DEBUG				1	/* become a debugger */
-#define	TC_GETREGS				2	/* get registers of 'thid' */
-#define	TC_CONT					3	/* continue */
-#define TC_SET_FLAGS			4	/* set debugging flags */
+#define	TC_DEBUG				1		/* become a debugger */
+#define	TC_GETREGS				2		/* get registers of 'thid' */
+#define	TC_CONT					3		/* continue */
+#define TC_SET_FLAGS				4		/* set debugging flags */
+
+#define	DBG_STOP_ON_EXEC			(1 << 0)
+#define	DBG_DEBUGGER				(1 << 1)	/* i am the debugger, set stop-on-exec in children */
+#define	DBG_DEBUG_MODE				(1 << 2)	/* i am being debugged */
+#define DBG_SIGNALS				(1 << 3)	/* trap when dispatching signals */
 
 typedef struct
 {

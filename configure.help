@@ -6,5 +6,30 @@ a Makefile, so that you can run "make" to build the OS.
 
 Accepted options:
 
-	--sysroot=[SYSROOT]	Specify a system root directory for
-				cross-compilation.
+	--sysroot=SYSROOT		Specify a system root directory for
+					cross-compilation.
+	
+	--module-NAME=enable		Enable the building of module NAME.
+	--module-NAME=initmod		Build module NAME as an initmod (on
+					the initrd).
+	--module-NAME=disable		Do not build module NAME.
+					All modules are build as normal (not
+					initmods) by default.
+
+	--enable-gxsetup		Build "gxsetup", the Glidix installer.
+	--disable-gxsetup		Do not build gxsetup (the default).
+	
+	--enable-binutils		Build native Glidix binutils.
+	--disable-binutils		Do not build binutils (the default).
+
+	--binutils-version=VERSION	Specify the binutils version to build.
+					(Not all are supported).
+	
+	--enable-gxboot			Build the Glidix bootloader gxboot.
+	--disable-gxboot		Do not build gxboot (the default).
+	
+	--enable-gcc			Build native Glidix GCC.
+	--disable-gcc			Do not build GCC (the default).
+	
+	--gcc-version=VERSION		Specify the version of GCC to build.
+					(Not all are supported).

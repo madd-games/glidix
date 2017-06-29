@@ -310,7 +310,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 {
 	if (debugMode)
 	{
-		dynld_printf("dynld: mapping object `%s' into memory\n", name);
+		dynld_printf("dynld: mapping object `%s' into memory at %p\n", name, base);
 	};
 	
 	Elf64_Ehdr elfHeader;

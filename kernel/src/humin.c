@@ -37,88 +37,6 @@
 #include <glidix/ktty.h>
 #include <glidix/term.h>
 
-// US keyboard layout
-static unsigned char keymap[128] =
-{
-		0,	0, '1', '2', '3', '4', '5', '6', '7', '8',	/* 9 */
-	'9', '0', '-', '=', '\b',	/* Backspace */
-	'\t',			/* Tab */
-	'q', 'w', 'e', 'r',	/* 19 */
-	't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',	/* Enter key */
-		0,			/* 29	 - Control */
-	'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',	/* 39 */
- '\'', '`',	 0x80,		/* Left shift */
- '\\', 'z', 'x', 'c', 'v', 'b', 'n',			/* 49 */
-	'm', ',', '.', '/',	 0x80,				/* Right shift */
-	'*',
-		0,	/* Alt */
-	' ',	/* Space bar */
-		0,	/* Caps lock */
-		0,	/* 59 - F1 key ... > */
-		0,	 0,	 0,	 0,	 0,	 0,	 0,	 0,
-		0,	/* < ... F10 */
-		0,	/* 69 - Num lock*/
-		0,	/* Scroll Lock */
-		0,	/* Home key */
-		CC_ARROW_UP,	/* Up Arrow */
-		0,	/* Page Up */
-	'-',
-		CC_ARROW_LEFT,	/* Left Arrow */
-		0,
-		CC_ARROW_RIGHT,	/* Right Arrow */
-	'+',
-		0,	/* 79 - End key*/
-		CC_ARROW_DOWN,	/* Down Arrow */
-		0,	/* Page Down */
-		0,	/* Insert Key */
-		0,	/* Delete Key */
-		0,	 0,	 0,
-		CC_PANIC,	/* F11 Key */
-		0,	/* F12 Key */
-		0,	/* All other keys are undefined */
-};
-
-// when shift is pressed
-static unsigned char keymapShift[128] =
-{
-		0,	0, '!', '@', '#', '$', '%', '^', '&', '*',	/* 9 */
-	'(', ')', '_', '+', '\b',	/* Backspace */
-	'\t',			/* Tab */
-	'Q', 'W', 'E', 'R',	/* 19 */
-	'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',	/* Enter key */
-		0,			/* 29	 - Control */
-	'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':',	/* 39 */
- '\"', '`',	 0x80,		/* Left shift */
- '|', 'Z', 'X', 'C', 'V', 'B', 'N',			/* 49 */
-	'M', '<', '>', '?',	 0x80,				/* Right shift */
-	'*',
-		0,	/* Alt */
-	' ',	/* Space bar */
-		0,	/* Caps lock */
-		0,	/* 59 - F1 key ... > */
-		0,	 0,	 0,	 0,	 0,	 0,	 0,	 0,
-		0,	/* < ... F10 */
-		0,	/* 69 - Num lock*/
-		0,	/* Scroll Lock */
-		0,	/* Home key */
-		0,	/* Up Arrow */
-		0,	/* Page Up */
-	'-',
-		0,	/* Left Arrow */
-		0,
-		0,	/* Right Arrow */
-	'+',
-		0,	/* 79 - End key*/
-		0,	/* Down Arrow */
-		0,	/* Page Down */
-		0,	/* Insert Key */
-		0,	/* Delete Key */
-		0,	 0,	 0,
-		0,	/* F11 Key */
-		0,	/* F12 Key */
-		0,	/* All other keys are undefined */
-};
-
 static int huminNextID = 0;
 
 static void hudev_close(File *fp)
@@ -253,55 +171,150 @@ void huminPostEvent(HuminDevice *hudev, HuminEvent *ev)
 {
 	semWait(&hudev->sem);
 	
-	// handle forced panic key
-	if (ev->type == HUMIN_EV_BUTTON_DOWN)
-	{
-		if ((ev->button.scancode > 0) && (ev->button.scancode < 128))
-		{
-			if (keymap[ev->button.scancode] == CC_PANIC)
-			{
-				panic("user forced panic (F11)");
-			};
-		};
-	};
-	
 	if (!hudev->inUse)
 	{
 		semSignal(&hudev->sem);
-		if ((ev->type == HUMIN_EV_BUTTON_DOWN) || (ev->type == HUMIN_EV_BUTTON_UP))
+		if (ev->type == HUMIN_EV_BUTTON_DOWN)
 		{
-			if (ev->button.scancode == 0x1D)
+			int keycode = ev->button.keycode;
+			if ((keycode == HUMIN_KC_LCTRL) || (keycode == HUMIN_KC_RCTRL))
 			{
-				if (ev->type == HUMIN_EV_BUTTON_DOWN) ctrl = 1;
-				else ctrl = 0;
+				ctrl = 1;
+			}
+			else if ((keycode == HUMIN_KC_LSHIFT) || (keycode == HUMIN_KC_RSHIFT))
+			{
+				shift = 1;
+			}
+			else if (ctrl)
+			{
+				if (keycode == HUMIN_KC_C)
+				{
+					termPutChar(CC_VINTR);
+				};
 			}
 			else
 			{
-				unsigned char key = keymap[ev->button.scancode];
-				if (shift) key = keymapShift[ev->button.scancode];
-				if (key == 0x80)
+				// control not pressed
+				if (keycode == HUMIN_KC_DOWN)
 				{
-					if (ev->type == HUMIN_EV_BUTTON_DOWN) shift = 1;
-					else shift = 0;
-					return;
-				};
-				if (key == 0) return;
-
-				if (ev->type == HUMIN_EV_BUTTON_DOWN)
+					termPutChar(CC_ARROW_DOWN);
+				}
+				else if (keycode == HUMIN_KC_UP)
 				{
-					
-					if (ctrl)
+					termPutChar(CC_ARROW_UP);
+				}
+				else if (keycode == HUMIN_KC_LEFT)
+				{
+					termPutChar(CC_ARROW_LEFT);
+				}
+				else if (keycode == HUMIN_KC_RIGHT)
+				{
+					termPutChar(CC_ARROW_RIGHT);
+				}
+				else if (keycode == HUMIN_KC_RETURN)
+				{
+					termPutChar('\n');
+				}
+				else if ((keycode >= '0') && (keycode <= '9'))
+				{
+					if (shift)
 					{
-						if (key == 'c')
-						{
-							termPutChar(CC_VINTR);
-						};
+						termPutChar(")!@#$%^&*("[keycode-'0']);
 					}
 					else
 					{
-						termPutChar(key);
+						termPutChar((char) keycode);
 					};
+				}
+				else if (keycode == '-')
+				{
+					if (shift) termPutChar('_');
+					else termPutChar('-');
+				}
+				else if (keycode == '=')
+				{
+					if (shift) termPutChar('+');
+					else termPutChar('=');
+				}
+				else if (keycode == '`')
+				{
+					if (shift) termPutChar('~');
+					else termPutChar('`');
+				}
+				else if (keycode == '\t')
+				{
+					termPutChar('\t');
+				}
+				else if (keycode == '[')
+				{
+					if (shift) termPutChar('{');
+					else termPutChar('[');
+				}
+				else if (keycode == ']')
+				{
+					if (shift) termPutChar('}');
+					else termPutChar(']');
+				}
+				else if (keycode == ';')
+				{
+					if (shift) termPutChar(':');
+					else termPutChar(';');
+				}
+				else if (keycode == '\'')
+				{
+					if (shift) termPutChar('"');
+					else termPutChar('\'');
+				}
+				else if (keycode == '\\')
+				{
+					if (shift) termPutChar('|');
+					else termPutChar('\\');
+				}
+				else if (keycode == '<')
+				{
+					if (shift) termPutChar('>');
+					else termPutChar('<');
+				}
+				else if (keycode == ',')
+				{
+					if (shift) termPutChar('<');
+					else termPutChar(',');
+				}
+				else if (keycode == '.')
+				{
+					if (shift) termPutChar('>');
+					else termPutChar('.');
+				}
+				else if (keycode == '/')
+				{
+					if (shift) termPutChar('?');
+					else termPutChar('/');
+				}
+				else if ((keycode >= 'a') && (keycode <= 'z'))
+				{
+					if (shift) termPutChar((char) (keycode-'a'+'A'));
+					else termPutChar((char) keycode);
+				}
+				else if (keycode == '\b')
+				{
+					termPutChar('\b');
+				}
+				else if (keycode == ' ')
+				{
+					termPutChar(' ');
 				};
+			};
+		}
+		else if (ev->type == HUMIN_EV_BUTTON_UP)
+		{
+			int keycode = ev->button.keycode;
+			if ((keycode == HUMIN_KC_LCTRL) || (keycode == HUMIN_KC_RCTRL))
+			{
+				ctrl = 0;
+			}
+			else if ((keycode == HUMIN_KC_LSHIFT) || (keycode == HUMIN_KC_RSHIFT))
+			{
+				shift = 0;
 			};
 		};
 		

@@ -1,12 +1,12 @@
 SRC := $(shell find $(SRCDIR)/src -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror
+CFLAGS := -Wall -Werror -ggdb
 
 .PHONY: install
 
 gxdbg: $(OBJ)
-	$(HOST_GCC) $^ -o $@
+	$(HOST_GCC) $^ -o $@ -ggdb
 
 -include $(DEP)
 

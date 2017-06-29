@@ -166,7 +166,7 @@ static void scroll()
 
 static void kputch(char c)
 {
-	outb(0xE9, c);
+	//outb(0xE9, c);
 	//while ((inb(0x3F8 + 5) & 0x20) == 0);
 	//outb(0x3F8, c);
 	
@@ -528,7 +528,7 @@ static void __printf_conv_s(int flags, int lenmod, int fieldWidth, int precision
 
 void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 {
-	if (putcon) mutexLock(&consoleLock);
+	/*if (putcon)*/ mutexLock(&consoleLock);
 	consoleState.putcon = putcon;
 
 	while ((*fmt) != 0)
@@ -659,7 +659,7 @@ void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 
 	updateVGACursor();
 
-	if (putcon) mutexUnlock(&consoleLock);
+	/*if (putcon)*/ mutexUnlock(&consoleLock);
 };
 
 void kvprintf(const char *fmt, va_list ap)

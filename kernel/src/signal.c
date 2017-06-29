@@ -141,6 +141,13 @@ int isUnblockableSig(int signo)
 	case SIGKILL:
 	case SIGTHKILL:
 	case SIGSTOP:
+	
+	// also synchronous signals
+	case SIGSEGV:
+	case SIGABRT:
+	case SIGILL:
+	case SIGBUS:
+	case SIGSYS:
 		return 1;
 	default:
 		return 0;
@@ -194,17 +201,10 @@ void dispatchSignal()
 		return;
 	};
 	
-	if (getCurrentThread()->flags & DBG_SIGNALS)
+	if (getCurrentThread()->debugFlags & DBG_SIGNALS)
 	{
 		traceTrapEx(&getCurrentThread()->regs, TR_SIGNAL, siginfo->si_signo);
 	};
-
-#if 0
-	if ((siginfo->si_signo == SIGSEGV) && (thread->creds->pid == 1))
-	{
-		panic("SIGSEGV in init, address=%p, rip=%p", siginfo->si_addr, thread->regs.rip);
-	};
-#endif
 
 	// what action do we take?
 	SigAction *action = &thread->sigdisp->actions[siginfo->si_signo];
@@ -289,7 +289,7 @@ void dispatchSignal()
 
 int sendSignalEx(Thread *thread, siginfo_t *siginfo, int flags)
 {
-	if (siginfo->si_signo >= SIG_NUM)
+	if ((siginfo->si_signo < 0) || (siginfo->si_signo >= SIG_NUM))
 	{
 		stackTraceHere();
 		panic("invalid signal number passed to sendSignal(): %d", siginfo->si_signo);

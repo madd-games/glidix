@@ -89,8 +89,10 @@ static char* preprocVars(char *line)
 			sprintf(numbuf, "%d", getpid());
 			value = numbuf;
 		}
-		else if (sscanf(scan, "%d", &argIndex) == 1)
+		else if (((*scan) >= '0') && ((*scan) <= '9'))
 		{
+			argIndex = (int) (*scan) - '0';
+			
 			while ((*scan >= '0') && (*scan <= '9')) scan++;
 			if (argIndex >= shScriptArgc)
 			{
@@ -201,12 +203,6 @@ static char* preprocBackticks(char *line)
 				if (sz == 0) break;
 				buffer[sz] = 0;
 				
-				char *edit;
-				for (edit=buffer; *edit!=0; edit++)
-				{
-					if (*edit == '\n') *edit = ' ';
-				};
-				
 				char *newline = str_concat(result, buffer);
 				free(result);
 				result = newline;
@@ -223,7 +219,8 @@ static char* preprocBackticks(char *line)
 
 char *preprocAutospace(char *line)
 {
-	// insert automatic spaces in things like "echo>test" -> "echo > test"
+	// TODO: skip over brackets?
+	// insert implicit spaces in things like "echo>test" -> "echo > test"
 	char *out = (char*) malloc(strlen(line) * 3 + 1);
 	char *put = out;
 	char *scan = line;

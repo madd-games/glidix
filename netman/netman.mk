@@ -1,8 +1,8 @@
-CFLAGS := -I$(SRCDIR)/include -Wall -Werror
+CFLAGS := -I$(SRCDIR)/include -Wall -Werror -ggdb
 
 TOOLS_SRC := $(shell find $(SRCDIR)/tools -name '*.c')
 TOOLS_OUT := $(patsubst $(SRCDIR)/tools/%.c, tools/%, $(TOOLS_SRC))
-TOOLS_LDFLAGS := -ldl -Wl,-export-dynamic
+TOOLS_LDFLAGS := -ldl -Wl,-export-dynamic -ggdb
 
 IPV4_SRC := $(shell find $(SRCDIR)/ipv4 -name '*.c')
 IPV4_OUT := $(patsubst $(SRCDIR)/ipv4/%.c, ipv4/%.so, $(IPV4_SRC))
@@ -21,11 +21,11 @@ tools/%: $(SRCDIR)/tools/%.c $(SRCDIR)/include/gxnetman.h
 
 ipv4/%.so: $(SRCDIR)/ipv4/%.c
 	@mkdir -p ipv4
-	$(HOST_GCC) -fPIC -shared $< -o $@ $(CFLAGS)
+	$(HOST_GCC) -fPIC -shared $< -o $@ $(CFLAGS) -ggdb
 
 ipv6/%.so: $(SRCDIR)/ipv6/%.c
 	@mkdir -p ipv6
-	$(HOST_GCC) -fPIC -shared $< -o $@ $(CFLAGS)
+	$(HOST_GCC) -fPIC -shared $< -o $@ $(CFLAGS) -ggdb
 
 install:
 	@mkdir -p $(DESTDIR)/usr/bin

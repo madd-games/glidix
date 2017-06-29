@@ -68,7 +68,7 @@ int sem_wait(sem_t *sem)
 			};
 			
 			// block
-			if (__syscall(__SYS_block_on, &sem->__value, value) != 0)
+			if (__syscall(__SYS_block_on, &sem->__value, -1L) != 0)
 			{
 				errno = EINVAL;
 				return -1;
@@ -92,18 +92,10 @@ int sem_post(sem_t *sem)
 	while (1)
 	{
 		int64_t value = sem->__value;
-		if (value == 0)
-		{
-			// nobody to wake up; just increment atomically
-			if (__sync_val_compare_and_swap(&sem->__value, value, value+1) == value)
-			{
-				return 0;
-			};
-		}
-		else if (value == -1)
+		if (value == -1)
 		{
 			// set to 1, and wake up any waiters if successful
-			if (__sync_val_compare_and_swap(&sem->__value, value, 1) == value)
+			if (__sync_val_compare_and_swap(&sem->__value, value, 1UL) == value)
 			{
 				if (__syscall(__SYS_unblock, &sem->__value) != 0)
 				{

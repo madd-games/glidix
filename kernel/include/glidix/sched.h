@@ -121,7 +121,7 @@
 #define	DBG_STOP_ON_EXEC		(1 << 0)
 #define	DBG_DEBUGGER			(1 << 1)		/* i am the debugger, set stop-on-exec in children */
 #define	DBG_DEBUG_MODE			(1 << 2)		/* i am being debugged */
-#define DBG_SIGNALS				(1 << 3)		/* trap when dispatching signals */
+#define DBG_SIGNALS			(1 << 3)		/* trap when dispatching signals */
 
 /**
  * Number of priority queues. Valid nice values, 'n', are:

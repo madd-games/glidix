@@ -443,7 +443,7 @@ void shutdownSystem(int action)
 };
 
 int main(int argc, char *argv[])
-{
+{	
 	if (getpid() == 1)
 	{
 		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);

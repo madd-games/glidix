@@ -1,12 +1,12 @@
 SRC := $(shell find $(SRCDIR)/src -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -I$(SRCDIR)/../libgwm -I$(SRCDIR)/../libddi
+CFLAGS := -Wall -Werror -I$(SRCDIR)/../libgwm -I$(SRCDIR)/../libddi -ggdb
 
 .PHONY: install
 
 minipad: $(OBJ)
-	$(HOST_GCC) $^ -o $@ -L../libgwm -L../libddi -L../fstools -mgui
+	$(HOST_GCC) $^ -o $@ -L../libgwm -L../libddi -L../fstools -mgui -ggdb
 
 -include $(DEP)
 

@@ -35,6 +35,7 @@
 #include <glidix/module.h>
 #include <glidix/port.h>
 #include <glidix/memory.h>
+#include <glidix/string.h>
 
 uint16_t comPorts[4] = {0x3F8, 0x2F8, 0x3E8, 0x2E8};
 const char *comNames[4] = {"com1", "com2", "com3", "com4"};
@@ -74,12 +75,19 @@ static ssize_t com_pwrite(File *fp, const void *buffer, size_t size, off_t pos)
 	return sizeOut;
 };
 
+static int com_dup(File *me, File *copy, size_t szFile)
+{
+	memcpy(copy, me, szFile);
+	return 0;
+};
+
 static int com_open(void *data, File *fp, size_t szFile)
 {
 	fp->fsdata = data;
 	fp->write = com_write;
 	fp->pwrite = com_pwrite;
 	fp->close = com_close;
+	fp->dup = com_dup;
 	
 	return 0;
 };

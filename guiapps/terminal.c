@@ -536,6 +536,7 @@ void *ctrlThreadFunc(void *context)
 			execv("/usr/bin/env", argv);
 		};
 		
+		perror("exec");
 		exit(1);
 	};
 	

@@ -1,11 +1,11 @@
 C_SRC := $(shell find $(SRCDIR) -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, %.o, $(C_SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror
+CFLAGS := -Wall -Werror -ggdb
 
 gxsetup: $(OBJ)
 	@mkdir -p out
-	$(HOST_GCC) -o $@ $^ -lcrypt
+	$(HOST_GCC) -o $@ $^ -lcrypt -ggdb
 
 -include $(DEP)
 

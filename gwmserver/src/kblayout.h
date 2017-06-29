@@ -1,5 +1,5 @@
 /*
-	Glidix Shell
+	Glidix GUI
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,35 +26,77 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SH_H_
-#define SH_H_
+#ifndef KBLAYOUT_H
+#define KBLAYOUT_H
 
-#include <stdio.h>
-
-extern int shLastStatus;
-extern int shScriptArgc;
-extern char **shScriptArgs;
+#include <inttypes.h>
 
 /**
- * Fetch the next line of input. Returns NULL on end of input, or a string on the heap
- * if a line has been fetched; that string must then be passed to free().
+ * Keyboard directives (used in scancode rules).
  */
-char *shFetch();
+enum
+{
+	KD_KEYCODE,
+	KD_KEYCHAR,
+	KD_MODIFIER,
+	KD_TOGGLE
+};
 
 /**
- * Switch to running a different script. Used by the "." command. A stack is used to remember
- * which scripts to return to.
+ * Keyboard directive. An array of those forms a rule.
  */
-void shSource(FILE *script);
+typedef struct
+{
+	/**
+	 * Parameter to the directive.
+	 */
+	uint64_t par;
+	
+	/**
+	 * Condition. All bits set in this field must also be set in the "keymod" variable, else this
+	 * directive is ignored.
+	 */
+	int cond;
+	
+	/**
+	 * The directive type (KD_*).
+	 */
+	int type;
+} KBL_Directive;
 
 /**
- * Switch to running an inline command.
+ * A keyboard rule. Specifies what to do with a keycode.
  */
-void shInline(char *line);
+typedef struct
+{
+	/**
+	 * List of directives.
+	 */
+	KBL_Directive *dirs;
+	size_t numDirs;
+} KBL_Rule;
 
 /**
- * Clear the stack.
+ * Describes a keyboard layout.
  */
-void shClearStack();
+typedef struct
+{
+	/**
+	 * Table of rules. Valid keycodes are 0x000-0x1FF
+	 */
+	KBL_Rule rules[0x200];
+} KeyboardLayout;
+
+/**
+ * Load a keyboard layout file. Write any error/warning messages to the specified file. Returns 0 on success,
+ * or -1 on error; if it fails, the keyboard layout remains unchanged.
+ */
+int kblSet(const char *filename, FILE *errfp);
+
+/**
+ * Translate a keycode to a keychar (and/or another keycode) according to the current keyboard layout.
+ * 'evtype' is the type of input event (GWM_EVENT_UP or GWM_EVENT_DOWN) and is needed to control keymod.
+ */
+void kblTranslate(int *keycode, uint64_t *keychar, int *keymod, int evtype);
 
 #endif

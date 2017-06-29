@@ -117,7 +117,7 @@ case $i in
 		maybe_gxsetup="gxsetup"
 		;;
 	
-	--disable--gxsetup)
+	--disable-gxsetup)
 		maybe_gxsetup=""
 		;;
 		

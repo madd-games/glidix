@@ -266,9 +266,15 @@ static ssize_t unixsock_recvfrom(Socket *sock, void *buffer, size_t len, int fla
 			return -1;
 		};
 		
+		if (status == 0)
+		{
+			// EOF
+			return 0;
+		};
+		
 		semWait(&unixsock->seq.lock);
 		Message *msg = unixsock->seq.msgFirst;
-		
+				
 		if (len > msg->size)
 		{
 			len = msg->size;

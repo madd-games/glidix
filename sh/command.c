@@ -219,6 +219,102 @@ static int executeGroup(CmdGroup *group)
 			fprintf(stderr, "exec %s: %s\n", *ptr, strerror(errno));
 			member->status = 1;
 		}
+		else if ((*ptr)[0] == '(')
+		{
+			if ((*ptr)[strlen(*ptr)-1] != ')')
+			{
+				fprintf(stderr, "%s: syntax error\n", *ptr);
+				member->status = 1;
+				continue;
+			};
+
+			int pipefd[2];
+			if (member->next != NULL)
+			{
+				pipe(pipefd);
+			};
+			
+			childrenLeft = 1;
+			member->pid = fork();
+			if (member->pid == 0)
+			{
+				member->pid = getpid();
+				setpgid(0, group->firstMember->pid);
+				
+				int i;
+				for (i=0; i<3; i++)
+				{
+					if (isatty(i))
+					{
+						tcsetpgrp(i, group->firstMember->pid);
+					};
+				};
+				
+				if (member->prev != NULL)
+				{
+					close(1);
+					dup2(prevInput, 1);
+					close(prevInput);
+				};
+				
+				if (member->next != NULL)
+				{
+					close(pipefd[1]);
+					close(0);
+					dup2(pipefd[0], 0);
+					close(pipefd[0]);
+				};
+				
+				CmdRedir *redir;
+				for (redir=member->redir; redir!=NULL; redir=redir->next)
+				{	
+					if (redir->targetName[0] == '&')
+					{
+						int fd = 1;
+						sscanf(redir->targetName, "&%d", &fd);
+						if (fd != redir->fd)
+						{
+							close(redir->fd);
+							dup2(fd, redir->fd);
+							
+							// we do NOT close the target descriptor in this case
+						};
+					}
+					else
+					{
+						int fd = open(redir->targetName, redir->oflag, 0644);
+						if (fd != redir->fd)
+						{
+							close(redir->fd);
+							dup2(fd, redir->fd);
+							close(fd);
+						};
+					};
+				};
+				
+				char *cmd = *ptr;
+				cmd++;
+				cmd[strlen(cmd)-1] = 0;
+				
+				shClearStack();
+				shInline(cmd);
+				return 0;		// execute as normal
+			}
+			else
+			{
+				if (member->next != NULL)
+				{
+					// (only then did we create a pipe)
+					close(pipefd[0]);
+				};
+				
+				if (member->prev != NULL)
+				{
+					close(prevInput);
+				};
+				prevInput = pipefd[1];
+			};
+		}
 		else
 		{
 			char execPath[PATH_MAX];

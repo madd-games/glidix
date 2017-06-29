@@ -1,7 +1,7 @@
 C_SRC := $(shell find $(SRCDIR)/lib -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/lib/%.c, lib/%.o, $(C_SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -fPIC -I$(SRCDIR)/lib
+CFLAGS := -Wall -Werror -fPIC -I$(SRCDIR)/lib -ggdb
 
 BIN_SRC := $(shell find $(SRCDIR)/bin -name '*.c')
 BIN_OUT := $(patsubst $(SRCDIR)/bin/%.c, bin/%, $(BIN_SRC))
@@ -11,10 +11,10 @@ all: $(BIN_OUT) libfstools.so
 
 bin/%: $(SRCDIR)/bin/%.c libfstools.so
 	@mkdir -p bin
-	$(HOST_GCC) $< -o $@ -Wall -Werror -I$(SRCDIR)/lib -L. -lfstools
+	$(HOST_GCC) $< -o $@ -Wall -Werror -I$(SRCDIR)/lib -L. -lfstools -ggdb
 
 libfstools.so: $(OBJ)
-	$(HOST_GCC) -fPIC -shared -o $@ $^
+	$(HOST_GCC) -fPIC -shared -o $@ $^ -ggdb
 
 -include $(DEP)
 

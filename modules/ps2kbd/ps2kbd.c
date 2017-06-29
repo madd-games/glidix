@@ -39,6 +39,8 @@
 #include <glidix/humin.h>
 #include <glidix/ptr.h>
 
+#include "scancodes.h"
+
 #define	MOUSE_BL			(1 << 0)
 #define	MOUSE_BR			(1 << 1)
 #define	MOUSE_BM			(1 << 2)
@@ -125,6 +127,7 @@ static void kbdThread(void *data)
 					if (buttons & MOUSE_BL) ev.button.type = HUMIN_EV_BUTTON_DOWN;
 					else ev.button.type = HUMIN_EV_BUTTON_UP;
 					ev.button.scancode = HUMIN_SC_MOUSE_LEFT;
+					ev.button.keycode = HUMIN_KC_MOUSE_LEFT;
 					huminPostEvent(hups, &ev);
 				};
 
@@ -133,6 +136,7 @@ static void kbdThread(void *data)
 					if (buttons & MOUSE_BM) ev.button.type = HUMIN_EV_BUTTON_DOWN;
 					else ev.button.type = HUMIN_EV_BUTTON_UP;
 					ev.button.scancode = HUMIN_SC_MOUSE_MIDDLE;
+					ev.button.keycode = HUMIN_KC_MOUSE_MIDDLE;
 					huminPostEvent(hups, &ev);
 				};
 
@@ -141,6 +145,7 @@ static void kbdThread(void *data)
 					if (buttons & MOUSE_BR) ev.button.type = HUMIN_EV_BUTTON_DOWN;
 					else ev.button.type = HUMIN_EV_BUTTON_UP;
 					ev.button.scancode = HUMIN_SC_MOUSE_RIGHT;
+					ev.button.keycode = HUMIN_KC_MOUSE_RIGHT;
 					huminPostEvent(hups, &ev);
 				};
 			};
@@ -149,13 +154,22 @@ static void kbdThread(void *data)
 			continue;
 		};
 		
-		// first report it as an event for the humin interface.
-		HuminEvent ev;
-		memset(&ev, 0, sizeof(HuminEvent));
-		ev.button.type = HUMIN_EV_BUTTON_DOWN;
-		if (code & 0x80) ev.button.type = HUMIN_EV_BUTTON_UP;
-		ev.button.scancode = code & 0x7F;
-		huminPostEvent(hups, &ev);
+		if (code == 0xE0)
+		{
+			// extension
+			scancodeGotoExt();
+		}
+		else
+		{
+			// report it as an event for the humin interface.
+			HuminEvent ev;
+			memset(&ev, 0, sizeof(HuminEvent));
+			ev.button.type = HUMIN_EV_BUTTON_DOWN;
+			if (code & 0x80) ev.button.type = HUMIN_EV_BUTTON_UP;
+			ev.button.scancode = scancodeTransform(code & 0x7F);
+			ev.button.keycode = scancodeTranslate(code);
+			huminPostEvent(hups, &ev);
+		};
 	};
 };
 
@@ -200,7 +214,7 @@ void mouse_write(uint8_t a_write) //unsigned char
 
 uint8_t mouse_read()
 {
-	//Get's response from mouse
+	//Get response from mouse
 	mouse_wait(0); 
 	return inb(0x60);
 }
@@ -234,7 +248,7 @@ void mouse_install()
 
 MODULE_INIT()
 {
-	kprintf("Initializing the PS/2 keyboard\n");
+	kprintf("ps2kbd: initializing the PS/2 keyboard/mouse\n");
 	oldHandler = registerIRQHandler(1, onKeyboardIRQ);
 	oldHandler12 = registerIRQHandler(12, onMouseIRQ);
 	hups = huminCreateDevice("PS/2 Keyboard and Mouse");
@@ -261,7 +275,7 @@ MODULE_INIT()
 
 MODULE_FINI()
 {
-	kprintf("Shutting down PS/2 keyboard\n");
+	kprintf("ps2kbd: shutting down PS/2 keyboard\n");
 	registerIRQHandler(1, oldHandler);
 	registerIRQHandler(12, oldHandler12);
 	huminDeleteDevice(hups);

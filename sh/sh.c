@@ -99,6 +99,29 @@ void shSource(FILE *script)
 	inputFile = script;
 };
 
+void shInline(char *line)
+{
+	if (stackIndex == MAX_STACK_DEPTH)
+	{
+		fprintf(stderr, "%sShell stack exhausted!%s\n", "\e\"\x04", "\e\"\x07");
+		exit(1);
+	};
+	
+	stack[stackIndex].shellMode = shellMode;
+	stack[stackIndex].inlineCommand = inlineCommand;
+	stack[stackIndex].inputFile = inputFile;
+	stackIndex++;
+	
+	shellMode = MODE_INLINE;
+	inlineCommand = line;
+	inputFile = NULL;
+};
+
+void shClearStack()
+{
+	stackIndex = 0;
+};
+
 /**
  * Fetch a line of input, and return a pointer to it on the heap. The returned value shall
  * be passed to free() later. If 'cont' is 1, that means we are asking for a line continuation;

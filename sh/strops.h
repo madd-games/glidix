@@ -37,7 +37,8 @@ char *str_concat(const char *a, const char *b);
 
 /**
  * Find the first occurence of one of the characters in 'needleList', in the
- * string 'haystack', but only if they're not quotes by one of the 'quoteChars'.
+ * string 'haystack', but only if they're not quoted by one of the 'quoteChars'.
+ * Also handles brackets, where brackets are quoted by ' and ".
  * Returns a pointer to the character in question, or NULL if it's not there.
  */
 char *str_find(char *haystack, const char *needleList, const char *quoteChars);

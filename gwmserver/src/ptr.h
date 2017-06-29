@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix GUI
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,19 +26,15 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_stdint_h
-#define __glidix_stdint_h
+#ifndef PTR_H
+#define PTR_H
 
-typedef	signed char				int8_t;
-typedef	unsigned char				uint8_t;
-typedef	signed short				int16_t;
-typedef	unsigned short				uint16_t;
-typedef	signed int				int32_t;
-typedef	unsigned int				uint32_t;
-typedef	signed long				int64_t;
-typedef	unsigned long				uint64_t;
-typedef uint64_t				uintmax_t;
-typedef	int64_t					intmax_t;
-typedef uint64_t				uintptr_t;
+#include <stdio.h>
+#include <stdlib.h>
+
+/**
+ * Initialize the pointer device subsystem.
+ */
+void ptrInit();
 
 #endif

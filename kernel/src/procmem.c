@@ -499,6 +499,32 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 	};
 };
 
+static void invalidateBlocks(uint64_t frame)
+{
+	Thread *ct = getCurrentThread();
+	Thread *thread = ct;
+	
+	uint64_t rflags = getFlagsRegister();
+	cli();
+	lockSched();
+	
+	int shouldResched = 0;
+	do
+	{
+		if ((thread->blockPhys >> 12) == frame)
+		{
+			thread->blockPhys = 0;
+			shouldResched |= signalThread(thread);
+		};
+		
+		thread = thread->next;
+	} while (thread != ct);
+	
+	unlockSched();
+	if (shouldResched) kyield();
+	setFlagsRegister(rflags);
+};
+
 void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 {
 	if ((faultAddr < ADDR_MIN) || (faultAddr >= ADDR_MAX))
@@ -714,6 +740,8 @@ void vmFault(Regs *regs, uint64_t faultAddr, int flags)
 				uint64_t old = pte->framePhysAddr;
 				pte->framePhysAddr = frame;
 				piDecref(old);
+				
+				invalidateBlocks(old);
 			};
 			
 			pte->gx_cow = 0;
@@ -829,18 +857,51 @@ void vmUnmapThread()
 	uint64_t pos = 0;
 	Segment *seg = pm->segs;
 	
+	Thread *ct = getCurrentThread();
 	while (seg != NULL)
 	{
 		if (seg->flags & MAP_THREAD)
 		{
-			unmapArea(pos, seg->numPages << 12);
-			if (seg->ft != NULL)
+			if (seg->creator == ct)
 			{
-				ftDown(seg->ft);
-			};
+				unmapArea(pos, seg->numPages << 12);
+				if (seg->ft != NULL)
+				{
+					ftDown(seg->ft);
+				};
 			
-			seg->ft = NULL;
-			seg->flags = 0;
+				seg->ft = NULL;
+				seg->flags = 0;
+				seg->creator = NULL;
+				
+				if (seg->prev != NULL)
+				{
+					if (seg->prev->flags == 0)
+					{
+						seg->prev->next = seg->next;
+						if (seg->next != NULL) seg->next->prev = seg->prev;
+						
+						seg->prev->numPages += seg->numPages;
+						
+						Segment *prev = seg->prev;
+						kfree(seg);
+						seg = prev;
+					};
+				};
+				
+				if (seg->next != NULL)
+				{
+					if (seg->next->flags == 0)
+					{
+						seg->numPages += seg->next->numPages;
+						
+						Segment *next = seg->next->next;
+						kfree(seg->next);
+						seg->next = next;
+						if (next != NULL) next->prev = seg;
+					};
+				};
+			};
 		};
 		
 		pos += seg->numPages << 12;
