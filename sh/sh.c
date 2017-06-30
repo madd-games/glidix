@@ -45,6 +45,7 @@
 #include "sh.h"
 
 #define	MAX_STACK_DEPTH			32
+#define	MAX_BRACKET_DEPTH		24
 
 static char username[256] = "unknown";
 static char *inlineCommand = NULL;
@@ -135,9 +136,19 @@ static char *shGetLine(int cont)
 		if (inlineCommand == NULL) return NULL;
 		else
 		{
-			char *result = strdup(inlineCommand);
-			inlineCommand = NULL;
-			return result;
+			char *incmd = inlineCommand;
+			char *linebreak = strchr(inlineCommand, '\n');
+			if (linebreak != NULL)
+			{
+				*linebreak = 0;
+				inlineCommand = linebreak + 1;
+			}
+			else
+			{
+				inlineCommand = NULL;
+			};
+			
+			return strdup(incmd);
 		};
 	};
 	
@@ -308,21 +319,80 @@ static char *shGetLine(int cont)
 	return line;
 };
 
+/**
+ * Check if string is "complete" (all brackets closed). Return values:
+ * 0 - all brackets closed and coherent
+ * 1 - a close-bracket symbol without matching open-bracket was spotted
+ * 2 - maximum bracket depth exceeded
+ * other - the bottom-level close-bracket character we are waiting for (unclosed brackets).
+ */
+char shGetExpected(const char *str)
+{
+	// each element on the stack is the close-bracket symbol necessary
+	char bracketStack[MAX_BRACKET_DEPTH];
+	int bracketDepth = 0;
+	
+	const char *brOpens = 	"\"'({";
+	const char *brCloses =  "\"')}";
+	const char *nonNestingBrackets = "\"'";
+	
+	for (; *str!=0; str++)
+	{
+		if (*str == '\\')
+		{
+			str++;
+			continue;
+		};
+		
+		if (bracketDepth != 0)
+		{
+			if (bracketStack[bracketDepth-1] == *str)
+			{
+				bracketDepth--;
+				continue;
+			};
+			
+			// do not check for bad bracket closings or new open brackets inside non-nesting brackets
+			if (strchr(nonNestingBrackets, bracketStack[bracketDepth-1]) != NULL)
+			{
+				continue;
+			};
+		};
+		
+		// check for open-brackets
+		char *matchChar = strchr(brOpens, *str);
+		if (matchChar != NULL)
+		{
+			if (bracketDepth == MAX_BRACKET_DEPTH)
+			{
+				// maximum depth exceeded
+				return 2;
+			};
+			
+			const char *closer = brCloses + (matchChar - brOpens);
+			bracketStack[bracketDepth++] = *closer;
+			continue;
+		};
+
+		// any close-bracket here is a mismatch
+		if (strchr(brCloses, *str) != NULL)
+		{
+			return 1;
+		};
+	};
+	
+	if (bracketDepth == 0) return 0;
+	else return bracketStack[bracketDepth-1];
+};
+
 char *shFetch()
 {
 	char *line = strdup("");
 	
 	int cont = 0;
-	do
+	while (1)
 	{
-		if (line[strlen(line)-1] == '\\')
-		{
-			line[strlen(line)-1] = 0;
-		};
-		
 		char *nextBit = shGetLine(cont);
-		cont = 1;
-		
 		if (nextBit == NULL)
 		{
 			if (line[0] == 0)
@@ -334,24 +404,128 @@ char *shFetch()
 			break;
 		};
 		
+		cont = 1;
+		
 		char *commentStart = str_find(nextBit, "#", "\"'");
 		if (commentStart != NULL)
 		{
 			*commentStart = 0;
 		};
 		
+		// remove whitespaces from the end
+		while (strlen(nextBit) != 0)
+		{
+			char *scan = &nextBit[strlen(nextBit)-1];
+			if (strchr(" \t\n", *scan) != NULL) *scan = 0;
+			else break;
+		};
+		
+		// line continuation if ends in '\'
+		if (strlen(nextBit) != 0)
+		{
+			if (nextBit[strlen(nextBit)-1] == '\\')
+			{
+				nextBit[strlen(nextBit)-1] = 0;
+				char *newline = str_concat(line, nextBit);
+				free(line);
+				free(nextBit);
+				line = newline;
+				continue;
+			};
+		};
+
 		char *newline = str_concat(line, nextBit);
 		free(line);
 		free(nextBit);
 		line = newline;
-	} while (line[strlen(line)-1] == '\\');
+
+		// line continuation if incomplete
+		if (shGetExpected(line) >= 10)
+		{
+			newline = str_concat(line, "\n");
+			free(line);
+			line = newline;
+			continue;
+		};
+		
+		// in all other cases break
+		break;
+	};
 	
-	return line;
+	// check if good
+	char status = shGetExpected(line);
+	if (status == 0)
+	{
+		return line;
+	}
+	else if (status == 1)
+	{
+		fprintf(stderr, "sh: close-bracket without a matching open-bracket\n");
+		free(line);
+		if (shellMode == MODE_INTERACTIVE) return strdup("");
+		return NULL;
+	}
+	else if (status == 2)
+	{
+		fprintf(stderr, "sh: bracket depth limit exceeded\n");
+		free(line);
+		if (shellMode == MODE_INTERACTIVE) return strdup("");
+		return NULL;
+	}
+	else
+	{
+		fprintf(stderr, "sh: expected `%c' before EOF\n", status);
+		free(line);
+		return NULL;
+	};
 };
 
 void on_signal(int sig, siginfo_t *si, void *ignore)
 {
 
+};
+
+void shPop()
+{
+	stackIndex--;
+	shellMode = stack[stackIndex].shellMode;
+	inlineCommand = stack[stackIndex].inlineCommand;
+	inputFile = stack[stackIndex].inputFile;
+};
+
+int shRun()
+{
+	int lastStatus = 0;
+	int bottomFrame = stackIndex;
+	
+	while (1)
+	{
+		while (1)
+		{
+			char *line = shFetch();
+			if (line == NULL) break;
+			line = preprocLine(line);
+			lastStatus = cmdRun(line);
+			free(line);
+		};
+		
+		if (stackIndex == bottomFrame)
+		{
+			break;
+		};
+		
+		if (inputFile != NULL)
+		{
+			if (inputFile != stdin)
+			{
+				fclose(inputFile);
+			};
+		};
+		
+		shPop();
+	};
+	
+	return lastStatus;
 };
 
 int main(int argc, char *argv[], char *initEnv[])
@@ -394,7 +568,7 @@ int main(int argc, char *argv[], char *initEnv[])
 				return 1;
 			};
 			
-			inlineCommand = argv[i];
+			inlineCommand = strdup(argv[i]);
 		}
 		else if (strcmp(argv[i], "-x") == 0)
 		{
@@ -434,36 +608,6 @@ int main(int argc, char *argv[], char *initEnv[])
 	{
 		inputFile = stdin;
 	};
-	
-	while (1)
-	{
-		while (1)
-		{
-			char *line = shFetch();
-			if (line == NULL) break;
-			line = preprocLine(line);
-			shLastStatus = cmdRun(line);
-			free(line);
-		};
-		
-		if (stackIndex == 0)
-		{
-			break;
-		};
-		
-		if (inputFile != NULL)
-		{
-			if (inputFile != stdin)
-			{
-				fclose(inputFile);
-			};
-		};
-		
-		stackIndex--;
-		shellMode = stack[stackIndex].shellMode;
-		inlineCommand = stack[stackIndex].inlineCommand;
-		inputFile = stack[stackIndex].inputFile;
-	};
-	
-	return 0;
+
+	return shRun();
 };

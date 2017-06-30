@@ -57,4 +57,14 @@ void shInline(char *line);
  */
 void shClearStack();
 
+/**
+ * Execute the shell until the current stack frame returns, then give the return status.
+ */
+int shRun();
+
+/**
+ * Pop the shell stack.
+ */
+void shPop();
+
 #endif

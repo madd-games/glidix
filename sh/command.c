@@ -219,6 +219,23 @@ static int executeGroup(CmdGroup *group)
 			fprintf(stderr, "exec %s: %s\n", *ptr, strerror(errno));
 			member->status = 1;
 		}
+		else if ((*ptr)[0] == '{')
+		{
+			if ((*ptr)[strlen(*ptr)-1] != '}')
+			{
+				fprintf(stderr, "%s: syntax error\n", *ptr);
+				member->status = 1;
+				continue;
+			};
+			
+			char *cmd = *ptr;
+			cmd++;
+			cmd[strlen(cmd)-1] = 0;
+
+			shInline(strdup(cmd));
+			member->status = shRun();
+			shPop();
+		}
 		else if ((*ptr)[0] == '(')
 		{
 			if ((*ptr)[strlen(*ptr)-1] != ')')
@@ -296,9 +313,9 @@ static int executeGroup(CmdGroup *group)
 				cmd++;
 				cmd[strlen(cmd)-1] = 0;
 				
+				shInline(strdup(cmd));
 				shClearStack();
-				shInline(cmd);
-				return 0;		// execute as normal
+				return shRun();
 			}
 			else
 			{
@@ -468,6 +485,8 @@ int cmdRun(char *cmd)
 	
 	int isVarSetting = 1;
 	int nextRedir = 0;
+	int status;
+	CmdGroup *group;
 	for (token=str_token(&strp, WHITESPACES, "\"'"); token!=NULL; token=str_token(&strp, WHITESPACES, "\"'"))
 	{
 		if (nextRedir)
@@ -576,6 +595,18 @@ int cmdRun(char *cmd)
 			currentMember->prev = currentMember->next = NULL;
 			currentMember->redir = NULL;
 		}
+		else if (token[0] == '(' && currentMember->numTokens != 0)
+		{
+			fprintf(stderr, "sh: invalid subshell syntax\n");
+			status = 1;
+			goto end;
+		}
+		else if (token[0] == '{' && currentMember->numTokens != 0)
+		{
+			fprintf(stderr, "sh: invalid subshell syntax\n");
+			status = 1;
+			goto end;
+		}
 		else
 		{
 			int index = currentMember->numTokens++;
@@ -598,7 +629,6 @@ int cmdRun(char *cmd)
 	currentMember->tokens = (char**) realloc(currentMember->tokens, sizeof(char*)*(currentMember->numTokens+1));
 	currentMember->tokens[currentMember->numTokens] = NULL;
 
-	int status;
 	if (isVarSetting)
 	{
 		// setting shell variables only
@@ -677,7 +707,8 @@ int cmdRun(char *cmd)
 	};
 
 	// delete all data
-	CmdGroup *group = chain.firstGroup;
+	end:
+	group = chain.firstGroup;
 	while (group != NULL)
 	{
 		CmdGroup *next = group->next;

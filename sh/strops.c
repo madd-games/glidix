@@ -49,13 +49,24 @@ char *str_find(char *haystack, const char *needleList, const char *quoteChars)
 	{
 		char c = *haystack;
 		
+		if (c == '\\')
+		{
+			haystack++;
+			continue;
+		};
+		
+		if (strchr(quoteChars, currentQuote) == NULL && bracketLevel == 0 && strchr(needleList, c) != NULL)
+		{
+			return haystack;
+		};
+		
 		if (currentQuote == 0)
 		{
-			if (c == '(')
+			if (c == '(' || c == '{')
 			{
 				bracketLevel++;
 			}
-			else if (c == ')')
+			else if (c == ')' || c == '}')
 			{
 				if (bracketLevel != 0) bracketLevel--;
 			}
@@ -69,10 +80,7 @@ char *str_find(char *haystack, const char *needleList, const char *quoteChars)
 			}
 			else if (strchr(needleList, c) != NULL)
 			{
-				if (strchr(quoteChars, currentQuote) == NULL || currentQuote == 0)
-				{
-					return haystack;
-				};
+				return haystack;
 			};
 		}
 		else if (currentQuote == c)
@@ -137,6 +145,13 @@ void str_canon(char *str)
 	char *scan = temp;
 	while (*scan != 0)
 	{
+		if (*scan == '\\')
+		{
+			scan++;
+			*str++ = *scan++;
+			continue;
+		};
+		
 		if (quote != 0)
 		{
 			if (*scan == quote)
@@ -152,12 +167,12 @@ void str_canon(char *str)
 		}
 		else
 		{
-			if (*scan == '(')
+			if (*scan == '(' || *scan == '{')
 			{
 				bracketLevel++;
 				*str++ = *scan++;
 			}
-			else if (*scan == ')')
+			else if (*scan == ')' || *scan == '}')
 			{
 				if (bracketLevel != 0) bracketLevel--;
 				*str++ = *scan++;
