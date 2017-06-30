@@ -25,3 +25,6 @@ install:
 	@mkdir -p $(DESTDIR)/sys/mod
 	cp gxsetup $(DESTDIR)/bin/gxsetup
 	cp $(SRCDIR)/startup.sh $(DESTDIR)/etc/init/startup.sh
+	cp $(SRCDIR)/passwd $(DESTDIR)/etc/passwd
+	cp $(SRCDIR)/shadow $(DESTDIR)/etc/shadow
+	cp $(SRCDIR)/group $(DESTDIR)/etc/group
