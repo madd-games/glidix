@@ -247,6 +247,13 @@ char *preprocAutospace(char *line)
 			*put++ = *scan++;
 			*put++ = ' ';
 		}
+		else if (memcmp(scan, "&&", 2) == 0 || memcmp(scan, "||", 2) == 0)
+		{
+			*put++ = ' ';
+			*put++ = *scan++;
+			*put++ = *scan++;
+			*put++ = ' ';
+		}
 		else
 		{
 			char c = *scan++;

@@ -53,6 +53,11 @@ static int findExecPath(const char *cmd, char *path)
 			return 0;
 		};
 	}
+	else if (strcmp(cmd, "[") == 0)
+	{
+		strcpy(path, "/usr/bin/test");
+		return 0;
+	}
 	else
 	{
 		const char *pathspec = dictGet(&dictEnviron, "PATH");

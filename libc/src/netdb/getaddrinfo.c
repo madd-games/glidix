@@ -744,6 +744,7 @@ void __add_addr(struct addr_list *list, const struct addrinfo *hints, struct add
 			unsigned short portno = ((struct sockaddr_in*)info->ai_addr)->sin_port;
 			
 			struct sockaddr_in6 *inaddr = (struct sockaddr_in6*) info->ai_addr;
+			memset(inaddr, 0, sizeof(struct sockaddr_in6));
 			inaddr->sin6_family = AF_INET6;
 			inaddr->sin6_port = htons(portno);
 			inaddr->sin6_flowinfo = 0;

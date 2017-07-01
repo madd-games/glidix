@@ -482,9 +482,15 @@ int main(int argc, char *argv[])
 		_glidix_mount("ramfs", ".tmp", "/tmp/", 0);
 		_glidix_mount("ramfs", ".run", "/run/", 0);
 		_glidix_mount("ramfs", ".run", "/var/run/", 0);
+		_glidix_mount("ramfs", ".run", "/", 0);
 		
-		mkdir("/run/sem", 01777);
-
+		if (mkdir("/sem", 01777) != 0)
+		{
+			perror("mkdir /run/sem");
+			return 1;
+		};
+		
+		_glidix_unmount("/");
 		loadmods();
 		
 		printf("init: initializing partitions...\n");

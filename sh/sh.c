@@ -495,7 +495,7 @@ void shPop()
 
 int shRun()
 {
-	int lastStatus = 0;
+	shLastStatus = 0;
 	int bottomFrame = stackIndex;
 	
 	while (1)
@@ -505,7 +505,7 @@ int shRun()
 			char *line = shFetch();
 			if (line == NULL) break;
 			line = preprocLine(line);
-			lastStatus = cmdRun(line);
+			shLastStatus = cmdRun(line);
 			free(line);
 		};
 		
@@ -525,7 +525,7 @@ int shRun()
 		shPop();
 	};
 	
-	return lastStatus;
+	return shLastStatus;
 };
 
 int main(int argc, char *argv[], char *initEnv[])
