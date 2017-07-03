@@ -147,10 +147,10 @@ typedef union
 		void (*send)(struct NetIf_ *netif, const void *frame, size_t framelen);
 		
 		/**
-		 * The head of the currently-resolved address list, and the list spinlock.
+		 * The head of the currently-resolved address list, and the list lock.
 		 */
 		MacResolution*		res;
-		Spinlock		resLock;
+		Semaphore		resLock;
 	} ethernet;
 	
 	/**

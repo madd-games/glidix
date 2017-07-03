@@ -697,8 +697,8 @@ static void dnsInit()
 	
 	// load nameservers from all necessary directories
 	// we read the IPv6 ones before the IPv4 ones
-	dnsReadServers("/etc/dns/ipv6");
-	dnsReadServers("/etc/dns/ipv4");
+	dnsReadServers("/run/dns/ipv6");
+	dnsReadServers("/run/dns/ipv4");
 };
 
 static int __getsrvport(const char *servname, int *resp)

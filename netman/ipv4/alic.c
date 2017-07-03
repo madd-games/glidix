@@ -62,7 +62,7 @@ void netman_alic_ifup(NetmanIfConfig *config)
 
 	// delete DNS servers
 	char dnspath[256];
-	sprintf(dnspath, "/etc/dns/ipv4/%s.if", config->ifname);
+	sprintf(dnspath, "/run/dns/ipv4/%s.if", config->ifname);
 	unlink(dnspath);
 	
 	// we need a socket to test if addresses are reachable

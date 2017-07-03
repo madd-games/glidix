@@ -120,6 +120,7 @@ static uint64_t dmaAllocPages(uint64_t physStart, uint64_t count)
 				pte->present = 1;
 				pte->framePhysAddr = physStart+j;
 				pte->rw = 1;
+				pte->pcd = 1;	// not caching
 			};
 			
 			refreshAddrSpace();

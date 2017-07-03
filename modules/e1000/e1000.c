@@ -140,6 +140,8 @@ static int e1000_int(void *context)
 	volatile uint32_t *regICR = (volatile uint32_t*) (nif->mmioAddr + 0x00C0);
 	uint32_t icr = *regICR;
 	
+	kprintf_debug("ICR: %04X\n", icr);
+	
 	if (icr == 0)
 	{
 		return -1;
@@ -153,7 +155,7 @@ static int e1000_int(void *context)
 			wcUp(&nif->wcInts);
 		};
 		
-		if ((icr & (1 << 7))/* || (icr & (1 << 6)) || (icr & (1 << 4))*/)
+		if ((icr & (1 << 16)) || (icr & (1 << 7)) || (icr & (1 << 6)) || (icr & (1 << 4)))
 		{
 			// packet received
 			__sync_fetch_and_add(&nif->numIntRX, 1);
@@ -308,8 +310,10 @@ static void e1000_thread(void *context)
 			ESharedArea *sha = (ESharedArea*) dmaGetPtr(&nif->dmaSharedArea);
 			int index = nif->nextRX & (NUM_RX_DESC-1);
 			
-			while (sha->rxdesc[index].status & 1)
+			//while (sha->rxdesc[index].status & 1)
+			if (1)
 			{
+				//kprintf_debug("RECEIVE STATUS: %02hhX\n", sha->rxdesc[index].status);
 				// actually received
 				index &= (NUM_RX_DESC-1);
 				int drop = 0;
@@ -333,7 +337,8 @@ static void e1000_thread(void *context)
 				else
 				{
 					__sync_fetch_and_add(&nif->netif->numRecv, 1);
-					
+	
+					__sync_synchronize();
 					EPacket *pkt = (EPacket*) kmalloc(sizeof(EPacket) + len + 4);
 					pkt->next = NULL;
 					pkt->size = len;
@@ -401,8 +406,15 @@ MODULE_INIT(const char *opt)
 
 		// set the link UP
 		volatile uint32_t *regCtrl = (volatile uint32_t*) nif->mmioAddr;
+		do
+		{
+			(*regCtrl) |= (1 << 26);					// reset
+			__sync_synchronize();
+			sleep(1);
+		} while ((*regCtrl) & (1 << 26));
 		(*regCtrl) |= (1 << 6);							// UP
-
+		__sync_synchronize();
+		
 		// zero out the MTA
 		volatile uint32_t *regMTA = (volatile uint32_t*) (nif->mmioAddr + 0x5200);
 		for (i=0; i<128; i++)
@@ -427,11 +439,7 @@ MODULE_INIT(const char *opt)
 		volatile uint32_t *regICR = (volatile uint32_t*) (nif->mmioAddr + 0x00C0);
 		(void)(*regICR);
 		volatile uint32_t *regIMS = (volatile uint32_t*) (nif->mmioAddr + 0x00D0);
-		//*regIMS = 0
-		//	| (1 << 0)			// TX Descriptor Written Back
-		//	| (1 << 7)			// RX interrupt
-		//;
-		*regIMS = 0x1F6DC;			// all interrupts
+		*regIMS = 0x1FFFF;			// all interrupts
 		
 		// allocate the shared area
 		if (dmaCreateBuffer(&nif->dmaSharedArea, sizeof(ESharedArea), 0) != 0)
@@ -442,11 +450,6 @@ MODULE_INIT(const char *opt)
 		// initialize transmit descriptors
 		ESharedArea *sha = (ESharedArea*) dmaGetPtr(&nif->dmaSharedArea);
 		memset(sha, 0, sizeof(ESharedArea));
-		for (i=0; i<NUM_TX_DESC; i++)
-		{
-			sha->txdesc[i].phaddr = 0;
-			sha->txdesc[i].cmd = 0;
-		};
 		
 		ESharedArea *physShared = (ESharedArea*) dmaGetPhys(&nif->dmaSharedArea);
 		uint64_t txBase = (uint64_t) (physShared->txdesc);

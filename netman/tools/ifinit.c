@@ -118,10 +118,10 @@ int main(int argc, char *argv[])
 	};
 		
 	// ensure that any necessary directories exist (ignore errors if they already exist)
-	mkdir("/etc", 0755);
-	mkdir("/etc/dns", 0755);
-	mkdir("/etc/dns/ipv6", 0755);
-	mkdir("/etc/dns/ipv4", 0755);
+	mkdir("/run", 0755);
+	mkdir("/run/dns", 0755);
+	mkdir("/run/dns/ipv6", 0755);
+	mkdir("/run/dns/ipv4", 0755);
 	mkdir("/var", 0755);
 	mkdir("/var/log", 0755);
 	mkdir("/var/log/netman", 0755);
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
 			fprintf(fp, "ff02::2		ip6-allrouters\n");
 			fclose(fp);
 			
-			fprintf(stderr, "%s: created /etc/hosts with defualt settings\n", argv[0]);
+			fprintf(stderr, "%s: created /etc/hosts with default settings\n", argv[0]);
 		}
 		else
 		{

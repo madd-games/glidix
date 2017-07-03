@@ -34,6 +34,8 @@
 #include <glidix/console.h>
 #include <glidix/icmp.h>
 #include <glidix/socket.h>
+#include <glidix/mutex.h>
+#include <glidix/semaphore.h>
 
 #define CRCPOLY2 0xEDB88320UL  /* left-right reversal */
 
@@ -72,7 +74,7 @@ static MacResolution *getMacResolution(NetIf *netif, int family, uint8_t *ip)
 	size_t size = 16;
 	if (family == AF_INET) size = 4;
 	
-	spinlockAcquire(&netif->ifconfig.ethernet.resLock);
+	semWait(&netif->ifconfig.ethernet.resLock);
 	MacResolution *scan;
 	MacResolution *last = NULL;
 	for (scan=netif->ifconfig.ethernet.res; scan!=NULL; scan=scan->next)
@@ -82,7 +84,7 @@ static MacResolution *getMacResolution(NetIf *netif, int family, uint8_t *ip)
 		{
 			if (memcmp(scan->ip, ip, size) == 0)
 			{
-				spinlockRelease(&netif->ifconfig.ethernet.resLock);
+				semSignal(&netif->ifconfig.ethernet.resLock);
 				return scan;
 			};
 		};
@@ -106,7 +108,7 @@ static MacResolution *getMacResolution(NetIf *netif, int family, uint8_t *ip)
 		last->next = macres;
 	};
 	
-	spinlockRelease(&netif->ifconfig.ethernet.resLock);
+	semSignal(&netif->ifconfig.ethernet.resLock);
 	return macres;
 };
 

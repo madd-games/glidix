@@ -29,13 +29,16 @@
 #ifndef __glidix_ethernet_h
 #define __glidix_ethernet_h
 
+/**
+ * Ethernet stuff. This is used by <glidix/netif.h>.
+ */
+ 
 #include <glidix/common.h>
 #include <glidix/condvar.h>
 
 /**
- * Ethernet stuff. This is used by <glidix/netif.h>.
+ * EtherType values for supported protocols.
  */
-
 #define	ETHER_TYPE_ARP			0x0806
 #define	ETHER_TYPE_IP			0x0800
 #define	ETHER_TYPE_IPV6			0x86DD

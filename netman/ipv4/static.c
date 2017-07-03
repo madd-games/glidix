@@ -334,7 +334,7 @@ void netman_static_ifup(NetmanIfConfig *config)
 	
 	// write the DNS servers
 	char dnspath[256];
-	sprintf(dnspath, "/etc/dns/ipv4/%s.if", config->ifname);
+	sprintf(dnspath, "/run/dns/ipv4/%s.if", config->ifname);
 	
 	FILE *fp = fopen(dnspath, "w");
 	if (fp == NULL)

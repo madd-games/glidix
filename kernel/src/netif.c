@@ -322,29 +322,6 @@ void initNetIf()
 	initSocket();
 };
 
-void packetDump(const void *packet, size_t packetlen)
-{
-	const uint8_t *scan = (const uint8_t*) packet;
-	size_t offset;
-	
-	static const char hexdigits[16] = "0123456789abcdef";
-	for (offset=0; offset<packetlen; offset+=16)
-	{
-		kprintf_debug("0x%016lX ", offset);
-		
-		size_t fullOffset;
-		for (fullOffset=offset; fullOffset<(offset+16) && (fullOffset<packetlen); fullOffset++)
-		{
-			char hi = hexdigits[scan[fullOffset] >> 4];
-			char lo = hexdigits[scan[fullOffset] & 0xF];
-			kprintf_debug("%c%c ", hi, lo);
-		};
-		
-		kprintf_debug("\n");
-	};
-	kprintf_debug("---\n");
-};
-
 void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 {
 	if (packetlen < 1)
@@ -383,8 +360,6 @@ void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 		((IPHeader4*)packet)->checksum = 0;
 		((IPHeader4*)packet)->checksum = ipv4_checksum(packet, 20);
 		
-		__sync_fetch_and_add(&netif->numRecv, 1);
-		
 		// find out the source and destination address of the packet
 		// the ports shall be set to zero; those are filled out by passPacketToSocket() according
 		// to protocol.
@@ -418,8 +393,6 @@ void onPacket(NetIf *netif, const void *packet, size_t packetlen)
 		
 		if (info.hop != 0) info.hop--;
 		((IPHeader6*)packet)->hop = (uint8_t) info.hop;
-
-		__sync_fetch_and_add(&netif->numRecv, 1);
 		
 		// find out the source and destination address of the packet
 		// the ports shall be set to zero; those are filled out by passPacketToSocket() according
@@ -1561,6 +1534,11 @@ NetIf *CreateNetworkInterface(void *drvdata, NetIfConfig *ifconfig)
 	strcpy(netif->name, ifname);
 	memcpy(&netif->ifconfig, ifconfig, sizeof(NetIfConfig));
 	netif->scopeID = __sync_fetch_and_add(&nextScopeID, 1);
+	
+	if (ifconfig->type == IF_ETHERNET)
+	{
+		semInit(&netif->ifconfig.ethernet.resLock);
+	};
 	
 	NetIf *last = &iflist;
 	while (last->next != NULL)

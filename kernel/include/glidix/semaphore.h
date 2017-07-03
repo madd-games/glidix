@@ -64,7 +64,7 @@ typedef struct SemWaitThread_
 	/**
 	 * The thread that is waiting.
 	 */
-	struct _Thread*					thread;
+	struct _Thread*				thread;
 	
 	/**
 	 * This is initialized to 0 by the waiting thread, and set to 1 by a thread when it

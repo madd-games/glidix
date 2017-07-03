@@ -167,8 +167,8 @@ static void scroll()
 static void kputch(char c)
 {
 	//outb(0xE9, c);
-	//while ((inb(0x3F8 + 5) & 0x20) == 0);
-	//outb(0x3F8, c);
+	while ((inb(0x3F8 + 5) & 0x20) == 0);
+	outb(0x3F8, c);
 	
 	if (!consoleState.putcon) return;
 

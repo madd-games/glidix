@@ -241,7 +241,7 @@ void netman_dhcp_ifup(NetmanIfConfig *config)
 
 	// delete DNS servers
 	char dnspath[256];
-	sprintf(dnspath, "/etc/dns/ipv4/%s.if", config->ifname);
+	sprintf(dnspath, "/run/dns/ipv4/%s.if", config->ifname);
 	unlink(dnspath);
 	
 	// first remove all current addresses
@@ -477,6 +477,7 @@ void netman_dhcp_ifup(NetmanIfConfig *config)
 	header.hops = 0;
 	header.xid = xid;
 	header.siaddr = params.server;
+	header.flags = htons(0x8000);	// broadcast
 	memcpy(header.chaddr, mac, 6);
 	memcpy(header.magic, "\x63\x82\x53\x63", 4);
 	pktAppend(&dhcpRequest, &header, sizeof(DHCPHeader));

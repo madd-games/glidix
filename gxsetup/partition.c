@@ -113,7 +113,7 @@ echo \"Loading configuration...\"\n\
 . /etc/init/startup.conf\n\
 echo \"Starting level 1 services...\"\n\
 service state 1\n\
-echo \"Loading kernel modules...\n\
+echo \"Loading kernel modules...\"\n\
 ldmods\n\
 echo \"Starting level 2 services...\"\n\
 service state 2\n\

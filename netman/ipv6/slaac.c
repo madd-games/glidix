@@ -225,7 +225,7 @@ void netman_slaac_ifup(NetmanIfConfig *config)
 	
 	// delete the DNS servers
 	char dnspath[256];
-	sprintf(dnspath, "/etc/dns/ipv6/%s.if", config->ifname);
+	sprintf(dnspath, "/run/dns/ipv6/%s.if", config->ifname);
 	unlink(dnspath);
 	
 	// remove all routes
@@ -527,11 +527,17 @@ void netman_slaac_ifup(NetmanIfConfig *config)
 				{
 					// new prefix!
 					// start by adding the route
+					int domain = _GLIDIX_DOM_GLOBAL;
+					if (info->prefix[0] == 0xFD)
+					{
+						domain = _GLIDIX_DOM_SITE;
+					};
+					
 					memcpy(&inroute->dest, info->prefix, 16);
 					memset(&inroute->mask, 0, 16);
 					memset(&inroute->mask, 0xFF, 8);
 					memset(&inroute->gateway, 0, 16);
-					inroute->domain = _GLIDIX_DOM_GLOBAL;
+					inroute->domain = domain;
 					
 					// we add it at the very start (index 0) because the default route
 					// must come later
@@ -567,12 +573,12 @@ void netman_slaac_ifup(NetmanIfConfig *config)
 					memcpy(&addrInfo->prefixes[prefIndex].addrFixed.mask, mask64, 16);
 					addrInfo->prefixes[prefIndex].addrFixed.domain = _GLIDIX_DOM_NODEFAULT;
 					
-					// temporary addresses have the global domain
+					// temporary addresses have the global/site domain
 					for (i=0; i<NUM_TEMP_ADDR; i++)
 					{
 						genRandomAddr(info->prefix, &addrInfo->prefixes[prefIndex].addrTemp[i].addr);
 						memcpy(&addrInfo->prefixes[prefIndex].addrTemp[i].mask, mask64, 16);
-						addrInfo->prefixes[prefIndex].addrTemp[i].domain = _GLIDIX_DOM_GLOBAL;
+						addrInfo->prefixes[prefIndex].addrTemp[i].domain = domain;
 					};
 					
 					// submit the changes to the system
