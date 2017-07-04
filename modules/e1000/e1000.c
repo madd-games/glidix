@@ -437,13 +437,7 @@ MODULE_INIT(const char *opt)
 			regRA[i] = filtScan[i];
 		};
 		__sync_synchronize();
-		
-		// enable interrupts, clear existing ones
-		uint32_t *volatile regICR = (uint32_t*volatile) (nif->mmioAddr + 0x00C0);
-		(void)(*regICR);
-		uint32_t *volatile regIMS = (uint32_t*volatile) (nif->mmioAddr + 0x00D0);
-		*regIMS = 0x1FFFF;			// all interrupts
-		
+
 		// allocate the shared area
 		if (dmaCreateBuffer(&nif->dmaSharedArea, sizeof(ESharedArea), 0) != 0)
 		{
@@ -498,6 +492,10 @@ MODULE_INIT(const char *opt)
 		// next RX descriptor is zero
 		nif->nextRX = 0;
 		pciSetIrqHandler(nif->pcidev, e1000_int, nif);
+
+		// enable interrupts
+		uint32_t *volatile regIMS = (uint32_t*volatile) (nif->mmioAddr + 0x00D0);
+		*regIMS = 0x1FFFF;			// all interrupts
 
 		// set up receive base and size
 		uint32_t *volatile regRDB = (uint32_t*volatile) (nif->mmioAddr + 0x2800);
