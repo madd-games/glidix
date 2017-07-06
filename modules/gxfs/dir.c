@@ -79,7 +79,6 @@ static int gxfs_next(Dir *dir)
 			continue;
 		};
 		
-		//kprintf("ENTRY %p (%s)\n", scanner->current, scanner->current->ent.d_name);
 		memcpy(&dir->dirent, &scanner->current->ent, sizeof(struct dirent));
 		return 0;
 	};
@@ -481,6 +480,12 @@ int gxfsOpenDir(GXFS *gxfs, uint64_t ino, Dir *dir, size_t szdir)
 	scanner->dir = info;
 	scanner->current = info->dir;
 	
+	while (scanner->current->ent.d_ino == 0)
+	{
+		if (scanner->current->next != NULL) scanner->current = scanner->current->next;
+		else break;
+	};
+	
 	dir->fsdata = scanner;
 	dir->openfile = gxfs_openfile;
 	dir->opendir = gxfs_opendir;
@@ -526,7 +531,7 @@ void gxfsFlushDir(InodeInfo *info)
 		{
 			if (dirent->ent.d_ino != 0)
 			{
-				// not the end pointer
+				// not the end pointer and not deleted
 				char buffer[256];
 				memset(buffer, 0, 256);
 			
