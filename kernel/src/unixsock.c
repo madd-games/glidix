@@ -336,7 +336,8 @@ static void unixsock_remove(SysObject *sysobj)
 	// (the file descriptor for it is definitely closed, because otherwise the reference
 	// count of the sysobj would not drop to zero)
 	// TODO: clean up the queue and stuff
-	kfree(sysobj->data);
+	Socket *sock = (Socket*) sysobj->data;
+	FreeSocket(sock);
 };
 
 static void unixsock_close(Socket *sock)

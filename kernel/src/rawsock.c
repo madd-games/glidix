@@ -315,7 +315,7 @@ static void rawsock_close(Socket *sock)
 		packet = next;
 	};
 	
-	kfree(sock);
+	FreeSocket(sock);
 };
 
 static int rawsock_getsockname(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)

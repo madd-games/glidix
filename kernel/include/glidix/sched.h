@@ -667,4 +667,10 @@ void traceTrap(Regs *regs, int reason);
  */
 void traceTrapEx(Regs *regs, int reason, int value);
 
+/**
+ * Called by a kernel thread to detach itself; meaning that it will not be necessary to call ReleaseKernelThread() on it
+ * to deallocate its resources.
+ */
+void detachMe();
+
 #endif

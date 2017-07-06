@@ -107,7 +107,7 @@ typedef struct Socket_
 	/**
 	 * This is called by close() after calling shutdown(). This function is responsible for freeing any resources
 	 * used by the socket. You are also repsonsible for freeing the socket itself. If this function is NULL, the
-	 * socket is freed by close() itself.
+	 * socket is freed by close() itself. The socket is to be freed using FreeSocket().
 	 */
 	void (*close)(struct Socket_ *sock);
 
@@ -276,5 +276,10 @@ int SocketListen(File *fp, int backlog);
  * Implements accept().
  */
 File* SocketAccept(File *fp, struct sockaddr *addr, size_t *addrlenptr);
+
+/**
+ * Remove a socket from the list and then free it.
+ */
+void FreeSocket(Socket *sock);
 
 #endif

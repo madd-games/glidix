@@ -379,6 +379,11 @@ static void sysManFunc(void *ignore)
 					{
 						break;
 					};
+					
+					if (threadFound->flags & THREAD_DETACHED)
+					{
+						break;
+					};
 				};
 				
 				threadFound = threadFound->next;
@@ -677,15 +682,31 @@ static void kernelThreadExit()
 		panic("kernel startup thread tried to exit (this is a bug)");
 	};
 
-	// we need to do all of this with interrupts disabled. we remove ourselves from the runqueue,
-	// but do not free the stack nor the thread description; this will be done by ReleaseKernelThread()
-	cli();
-	Regs regs;
-	lockSched();
-	currentThread->prev->next = currentThread->next;
-	currentThread->next->prev = currentThread->prev;
-	currentThread->flags |= THREAD_TERMINATED;
-	switchTaskUnlocked(&regs);
+	if (currentThread->flags & THREAD_DETACHED)
+	{
+		spinlockAcquire(&sysManLock);
+		cli();
+		lockSched();
+		timedCancel(&currentThread->alarmTimer);
+		currentThread->flags |= THREAD_TERMINATED;
+		numThreadsToClean++;
+		spinlockRelease(&sysManLock);
+		signalThread(threadSysMan);
+		Regs regs;
+		switchTaskUnlocked(&regs);
+	}
+	else
+	{
+		// we need to do all of this with interrupts disabled. we remove ourselves from the runqueue,
+		// but do not free the stack nor the thread description; this will be done by ReleaseKernelThread()
+		cli();
+		Regs regs;
+		lockSched();
+		currentThread->prev->next = currentThread->next;
+		currentThread->next->prev = currentThread->prev;
+		currentThread->flags |= THREAD_TERMINATED;
+		switchTaskUnlocked(&regs);
+	};
 };
 
 void ReleaseKernelThread(Thread *thread)
@@ -1794,4 +1815,13 @@ void traceTrap(Regs *regs, int reason)
 	cli();
 	lockSched();
 	traceTrapEx(regs, reason, 0);
+};
+
+void detachMe()
+{
+	cli();
+	lockSched();
+	getCurrentThread()->flags |= THREAD_DETACHED;
+	unlockSched();
+	sti();
 };

@@ -34,7 +34,7 @@
 #include <glidix/string.h>
 #include <glidix/console.h>
 #include <glidix/netif.h>
-#include <glidix/spinlock.h>
+#include <glidix/mutex.h>
 #include <glidix/icmp.h>
 #include <glidix/ipreasm.h>
 
@@ -47,8 +47,8 @@ Socket* CreateUnixSocket(int type);			/* unixsock.c */
 static Semaphore sockLock;
 static Socket sockList;
 
-static Spinlock portLock;
-static uint8_t *ethports;
+static Mutex portLock;
+static uint8_t *ephports;
 
 /**
  * If 1, then packet forwarding is enabled.
@@ -60,16 +60,14 @@ void initSocket()
 	semInit(&sockLock);
 	memset(&sockList, 0, sizeof(Socket));
 	
-	spinlockRelease(&portLock);
-	ethports = (uint8_t*) kmalloc(2048);		// 16384 ports, 1 byte for each 8
+	mutexInit(&portLock);
+	ephports = (uint8_t*) kmalloc(2048);		// 16384 ports, 1 byte for each 8
 };
 
 static void sock_close(File *fp)
 {
-	semWait(&sockLock);
 	if (fp->fsdata == NULL)
 	{
-		semSignal(&sockLock);
 		return;
 	};
 
@@ -81,17 +79,13 @@ static void sock_close(File *fp)
 		sock->shutdown(sock, SHUT_RDWR);
 	};
 
-	if (sock->prev != NULL) sock->prev->next = sock->next;
-	if (sock->next != NULL) sock->next->prev = sock->prev;
-	semSignal(&sockLock);
-	
 	if (sock->close != NULL)
 	{
 		sock->close(sock);
 	}
 	else
 	{
-		kfree(sock);
+		FreeSocket(sock);
 	};
 };
 
@@ -778,20 +772,20 @@ int ClaimSocketAddr(const struct sockaddr *addr, struct sockaddr *dest)
 
 uint16_t AllocPort()
 {
-	spinlockAcquire(&portLock);
+	mutexLock(&portLock);
 	
 	int index;
 	for (index=0; index<2048; index++)
 	{
-		if (ethports[index] != 0xFF)
+		if (ephports[index] != 0xFF)
 		{
 			int bitoff;
 			for (bitoff=0; bitoff<8; bitoff++)
 			{
-				if ((ethports[index] & (1 << bitoff)) == 0)
+				if ((ephports[index] & (1 << bitoff)) == 0)
 				{
-					ethports[index] |= (1 << bitoff);
-					spinlockRelease(&portLock);
+					ephports[index] |= (1 << bitoff);
+					mutexUnlock(&portLock);
 					
 					uint16_t result = (uint16_t) (49152 + 8 * index + bitoff);
 					return __builtin_bswap16(result);
@@ -800,7 +794,7 @@ uint16_t AllocPort()
 		};
 	};
 	
-	spinlockRelease(&portLock);
+	mutexUnlock(&portLock);
 	return 0;
 };
 
@@ -813,9 +807,9 @@ void FreePort(uint16_t port)
 		int index = portoff / 8;
 		int bitoff = portoff % 8;
 		
-		spinlockAcquire(&portLock);
-		ethports[index] &= ~(1 << bitoff);
-		spinlockRelease(&portLock);
+		mutexLock(&portLock);
+		ephports[index] &= ~(1 << bitoff);
+		mutexUnlock(&portLock);
 	};
 };
 
@@ -893,4 +887,14 @@ int SocketMulticast(File *fp, int op, const struct in6_addr *addr, uint32_t scop
 	};
 	
 	return sock->mcast(sock, op, addr, scope);
+};
+
+void FreeSocket(Socket *sock)
+{
+	semWait(&sockLock);
+	if (sock->prev != NULL) sock->prev->next = sock->next;
+	if (sock->next != NULL) sock->next->prev = sock->prev;
+	semSignal(&sockLock);
+	
+	kfree(sock);
 };

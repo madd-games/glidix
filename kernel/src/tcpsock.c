@@ -657,6 +657,16 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 	};
 };
 
+static void tcpWaitThread(void *data)
+{
+	uint16_t srcport = (uint16_t) (uint64_t) data;
+	detachMe();
+		
+	// sleep for 4 minutes before releasing port
+	sleep(4*60*1000);
+	FreePort(srcport);
+};
+
 static void tcpsock_close(Socket *sock)
 {
 	TCPSocket *tcpsock = (TCPSocket*) sock;
@@ -696,10 +706,14 @@ static void tcpsock_close(Socket *sock)
 		
 		kfree(ob);
 		
-		FreePort(srcport);
+		KernelThreadParams pars;
+		memset(&pars, 0, sizeof(KernelThreadParams));
+		pars.stackSize = DEFAULT_STACK_SIZE;
+		pars.name = "TCP Waiter Thread";
+		CreateKernelThread(tcpWaitThread, &pars, (void*) (uint64_t) srcport);
 	};
 	
-	kfree(sock);
+	FreeSocket(sock);
 };
 
 static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
