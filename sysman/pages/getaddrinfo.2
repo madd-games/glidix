@@ -1,0 +1,107 @@
+>NAME
+
+getaddrinfo - return addresses corresponding to a name
+
+>SYNPOSIS
+
+	#include <netdb.h>
+	
+	int getaddrinfo(const char *'nodename', const char *'servname', const struct addrinfo *'hints', struct addrinfo **'out');
+
+>DESCRIPTION
+
+This function translates 'nodename', and a service named by 'servname' on that node, into possible socket addresses, according to hints specified in the 'hints' parameter. The 'struct addrinfo' structure is used to represent hints, as well as returned addresses, and includes the following public fields:
+
+	struct addrinfo
+	{
+		int				'ai_flags';
+		int				'ai_family';
+		int				'ai_socktype';
+		int				'ai_protocol';
+		socklen_t			'ai_addrlen';
+		struct sockaddr*		'ai_addr';
+		char*				'ai_canonname';
+		struct addrinfo*		'ai_next';
+	};
+
+The 'hints' parameter is either *NULL* (indicating defaults) or a 'struct addrinfo' with the following fields taken into account, and the rest zeroed out:
+
+\* 'ai_flags' - a bitwise-OR of address flags. Currently, Glidix only takes one flag into account - *AI_V4MAPPED*. When this flag is passed, IPv4 addresses are converted into v4-mapped-v6 addresses, which can be used with IPv6 sockets. See [ipv6.6]. By default the value is 0.
+\* 'ai_family' - the address family for which to return addresses - *AF_INET* for [ipv4.6], *AF_INET6* for [ipv6.6], or *AF_UNSPEC* if both families shoudl be taken into account. The default is *AF_UNSPEC*.
+\* 'ai_socktype' - the type of socket to return; either *SOCK_STREAM*, *SOCK_DGRAM* or 0; in which case both socket types are returned.
+\* 'ai_protocol' - the protocol to return; 0 indicating that any protocol may be returned.
+
+The function shall look up the IP addresses associated with 'nodename', and return a linked list head into the 'out' pointer. The 'servname' field is either a service name (none currently supported by Glidix), or a string containing a decimal number, interpreted as the port number to return in the socket addresses. The returned list must later be freed using [freeaddrinfo.2]. IPv6 addresses are returned before IPv4 addresses. The fields in each returned address info structure are set as follows:
+
+\* 'ai_family' - the address family. Either *AF_INET* or *AF_INET6*. See [socket.2].
+\* 'ai_socktype' - type of socket; either *SOCK_STREAM* or *SOCK_DGRAM*.
+\* 'ai_protocol' - protocol number for the socket.
+\* 'ai_addrlen' - size of the address structure in 'ai_addr'.
+\* 'ai_addr' - the socket address (either a 'struct sockaddr_in' or 'struct sockaddr_in6' depending on 'ai_family').
+\* 'ai_canoname' - currently set to *NULL*.
+\* 'ai_next' - link to the next address (*NULL* indicates end of the list).
+
+The resolution occurs as follows:
+
+\* The name is first looked up in '/etc/hosts'. This is used to resolve names like 'ip6-loopback' or 'localhost'. See [hosts.3].
+\* DNS lookups occur, according to current DNS configuration (from '/run/dns'). See [dns.3].
+
+>RETURN VALUE
+
+On success, this function returns '0' and sets 'out' to the head of the linked list of addresses. On error, it returns a nonzero error number.
+
+>ERRORS
+
+The following error numbers may be returned by this function:
+
+\* *EAI_AGAIN* - try again.
+\* *EAI_BADFLAGS* - 'ai_flags' in 'hints' had invalid bits set.
+\* *EAI_FAIL* - resolutions failed due to unexpected errors.
+\* *EAI_FAMILY* - invalid address family specified in 'ai_family' in 'hints'.
+\* *EAI_MEMORY* - out of memory.
+\* *EAI_NONAME* - 'nodename' does not name an existing node.
+\* *EAI_SERVICE* - 'servname' was invalid.
+\* *EAI_SOCKTYPE* - invalid socket type specified in 'ai_socktype' in 'hints'.
+\* *EAI_SYSTEM* - error specified in [errno.6].
+
+An error message may be obtained using [gai_strerror.2].
+
+>EXAMPLE
+
+Creating a connection to 'www.example.com' port '80':
+
+	int create_connection()
+	{
+		/* resolve the name */
+		struct addrinfo *list;
+		int error = getaddrinfo("www.example.com", "80", NULL, &list);
+		if (error != 0)
+		{
+			fprintf(stderr, "getaddrinfo: %s\\n", gai_strerror(error));
+			return -1;
+		};
+		
+		/* try all addresses */
+		struct addrinfo *ai;
+		for (ai=list; ai!=NULL; ai=ai->ai_next)
+		{
+			/* try creating the socket */
+			int sockfd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+			if (sockfd == -1) continue;
+			
+			/* try connecting */
+			if (connect(sockfd, ai->ai_addr, ai->ai_addrlen) != 0) continue;
+			
+			/* success! */
+			freeaddrinfo(list);
+			return sockfd;
+		};
+		
+		/* failed! */
+		freeaddrinfo(list);
+		return -1;
+	};
+
+>SEE ALSO
+
+[freeaddrinfo.2], [gai_strerror.2], [socket.2], [ipv4.6], [ipv6.6]

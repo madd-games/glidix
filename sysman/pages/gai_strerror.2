@@ -1,0 +1,17 @@
+>NAME
+
+gai_strerror - translate name resolver error codes to messages
+
+>SYNOPSIS
+
+	#include <netdb.h>
+	
+	const char *gai_strerror(int 'error');
+
+>DESCRIPTION
+
+This function returns a string containing a human-readable error message corresponding to an error code returned by [getaddrinfo.2] or related functions.
+
+>SEE ALSO
+
+[getaddrinfo.2]

@@ -1,0 +1,17 @@
+>NAME
+
+freeaddrinfo - free address structures
+
+>SYNOPSIS
+
+	#include <netdb.h>
+	
+	void freeaddrinfo(struct addrinfo *'list');
+
+>DESCRIPTION
+
+Given the head of an address list returned by [getaddrinfo.2], this function frees the memory allocated by them.
+
+>SEE ALSO
+
+[getaddrinfo.2]
