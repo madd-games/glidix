@@ -239,8 +239,10 @@ int SocketBindif(File *fp, const char *ifname);
  * Try claiming a specific unique local address (used by bind()). Returns 0 if the claim was successful and no other
  * socket currently uses the address; in this case, the address is copied into "dest". Otherwise, -1 is returned and
  * "dest" is unmodified. This is thread-safe as long as copying the address into "dest" is enough to rename your socket.
+ *
+ * 'ifname' is either an interface name to bind to or an empty string.
  */
-int ClaimSocketAddr(const struct sockaddr *addr, struct sockaddr *dest);
+int ClaimSocketAddr(const struct sockaddr *addr, struct sockaddr *dest, const char *ifname);
 
 /**
  * Allocate an ephemeral port, and mark it as used. The value is returned in network byte order, and can therefore be

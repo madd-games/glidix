@@ -34,6 +34,9 @@
 #include "screen.h"
 #include "kblayout.h"
 
+#define	WINDOW_BORDER_WIDTH				3
+#define	WINDOW_CAPTION_HEIGHT				20
+
 Window *desktopWindow;
 
 pthread_mutex_t mouseLock = PTHREAD_MUTEX_INITIALIZER;
@@ -70,6 +73,8 @@ void wndInit()
 	desktopWindow->params.flags = GWM_WINDOW_NODECORATE;
 	desktopWindow->params.width = screen->width;
 	desktopWindow->params.height = screen->height;
+	desktopWindow->fgScrollX = -(2*WINDOW_BORDER_WIDTH);
+	desktopWindow->fgScrollY = -(WINDOW_BORDER_WIDTH + WINDOW_CAPTION_HEIGHT);
 	desktopWindow->canvas = desktopBackground;
 	desktopWindow->front = ddiCreateSurface(&screen->format, screen->width, screen->height,
 						(char*)desktopBackground->data, 0);
@@ -362,7 +367,8 @@ static Window* wndAbsToRelFrom(Window *win, int winX, int winY, int *relX, int *
 	for (child=win->children; child!=NULL; child=child->next)
 	{
 		pthread_mutex_lock(&child->lock);
-		Window *candidate = wndAbsToRelFrom(child, winX - child->params.x, winY - child->params.y, relX, relY);
+		Window *candidate = wndAbsToRelFrom(child, winX - child->params.x - win->fgScrollX,
+								winY - child->params.y - win->fgScrollY, relX, relY);
 		pthread_mutex_unlock(&child->lock);
 		if (candidate != NULL)
 		{
@@ -406,18 +412,13 @@ void wndSendEvent(Window *win, GWMEvent *ev)
 	pthread_mutex_unlock(&win->lock);
 };
 
-void wndOnLeftDown()
+void wndSetFocused(Window *wnd)
 {
-	pthread_mutex_lock(&wincacheLock);
-	if (wndHovering != NULL)
+	if (wnd != NULL)
 	{
-		wndUp(wndHovering);
-		if (wndActive != NULL) wndDown(wndActive);
-		wndActive = wndHovering;
-		
-		if (wndFocused != wndHovering)
+		if (wndFocused != wnd)
 		{
-			wndUp(wndHovering);
+			wndUp(wnd);
 			if (wndFocused != NULL)
 			{
 				GWMEvent ev;
@@ -428,7 +429,7 @@ void wndOnLeftDown()
 				wndDown(wndFocused);
 			};
 		
-			wndFocused = wndHovering;
+			wndFocused = wnd;
 
 			GWMEvent ev;
 			memset(&ev, 0, sizeof(GWMEvent));
@@ -449,6 +450,23 @@ void wndOnLeftDown()
 			wndDown(wndFocused);
 		};
 		wndFocused = NULL;
+	};
+};
+
+void wndOnLeftDown()
+{
+	pthread_mutex_lock(&wincacheLock);
+	if (wndHovering != NULL)
+	{
+		wndUp(wndHovering);
+		if (wndActive != NULL) wndDown(wndActive);
+		wndActive = wndHovering;
+		
+		wndSetFocused(wndHovering);
+	}
+	else
+	{
+		wndSetFocused(NULL);
 	};
 	pthread_mutex_unlock(&wincacheLock);
 };
@@ -497,21 +515,7 @@ void wndSetFlags(Window *wnd, int flags)
 	if (flags & GWM_WINDOW_MKFOCUSED)
 	{
 		pthread_mutex_lock(&wincacheLock);
-		if (wndFocused != wnd)
-		{
-			if (wndFocused != NULL)
-			{
-				wndUp(wnd);
-				GWMEvent ev;
-				memset(&ev, 0, sizeof(GWMEvent));
-				ev.type = GWM_EVENT_FOCUS_OUT;
-				ev.win = wndFocused->id;
-				wndSendEvent(wndFocused, &ev);
-				wndDown(wndFocused);
-			};
-
-			wndFocused = wnd;
-		};
+		wndSetFocused(wnd);
 		pthread_mutex_unlock(&wincacheLock);
 	};
 	

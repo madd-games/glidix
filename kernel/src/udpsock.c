@@ -162,7 +162,7 @@ static int udpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 	
 	if (port != 0)
 	{
-		if (ClaimSocketAddr(addr, &udpsock->sockname) != 0)
+		if (ClaimSocketAddr(addr, &udpsock->sockname, sock->ifname) != 0)
 		{
 			ERRNO = EADDRINUSE;
 			return -1;
@@ -182,7 +182,7 @@ static int udpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 			((struct sockaddr_in6*)&chaddr)->sin6_port = AllocPort();
 		};
 
-		if (ClaimSocketAddr(&chaddr, &udpsock->sockname) != 0)
+		if (ClaimSocketAddr(&chaddr, &udpsock->sockname, sock->ifname) != 0)
 		{
 			ERRNO = EADDRINUSE;
 			return -1;

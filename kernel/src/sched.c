@@ -744,6 +744,7 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 
 	// allocate and fill in the thread structure
 	Thread *thread = (Thread*) kmalloc(sizeof(Thread));
+	memset(thread, 0, sizeof(Thread));
 	thread->catchRegs[7] = 0;
 	thread->stack = kmalloc(stackSize);
 	thread->stackSize = stackSize;

@@ -262,7 +262,7 @@ static int tcpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrle
 		return -1;
 	};
 	
-	if (ClaimSocketAddr(addr, &tcpsock->sockname) != 0)
+	if (ClaimSocketAddr(addr, &tcpsock->sockname, sock->ifname) != 0)
 	{
 		ERRNO = EADDRINUSE;
 		return -1;

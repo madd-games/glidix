@@ -637,7 +637,7 @@ void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, 
 	semSignal(&sockLock);
 };
 
-int ClaimSocketAddr(const struct sockaddr *addr, struct sockaddr *dest)
+int ClaimSocketAddr(const struct sockaddr *addr, struct sockaddr *dest, const char *ifname)
 {
 	int isAnyAddr = 0;
 	uint16_t claimingPort;
@@ -689,6 +689,11 @@ int ClaimSocketAddr(const struct sockaddr *addr, struct sockaddr *dest)
 		{
 			if (sock->getsockname(sock, &otherAddr, &addrlen) == 0)
 			{
+				if (ifname[0] != 0 && sock->ifname[0] != 0)
+				{
+					if (strcmp(ifname, sock->ifname) != 0) continue;
+				};
+				
 				if (otherAddr.sa_family == AF_INET)
 				{
 					struct sockaddr_in *otherinaddr = (struct sockaddr_in*) &otherAddr;
