@@ -529,9 +529,10 @@ int sendPacketEx(struct sockaddr *src, const struct sockaddr *dest, const void *
 
 /**
  * Load an IPv4 or IPv6 address which is the default source address for the interface that "dest" goes to.
+ * If 'ifname' is not NULL, it limits the selection to the named interface.
  */
-void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest);
-void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest);
+void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest, const char *ifname);
+void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest, const char *ifname);
 
 /**
  * Calculate the "internet checksum" of the data specified.

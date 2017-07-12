@@ -300,7 +300,7 @@ static uint16_t udpChecksum4(const struct sockaddr_in *src, const struct sockadd
 	return 0;
 };
 
-static uint16_t udpChecksum6(const struct sockaddr_in6 *insrc, const struct sockaddr_in6 *indst, const void *msg, size_t size)
+static uint16_t udpChecksum6(const struct sockaddr_in6 *insrc, const struct sockaddr_in6 *indst, const void *msg, size_t size, const char *ifname)
 {
 	static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	
@@ -317,7 +317,7 @@ static uint16_t udpChecksum6(const struct sockaddr_in6 *insrc, const struct sock
 	if (memcmp(&insrc->sin6_addr, zeroes, 16) == 0)
 	{
 		memcpy(&copyaddr, insrc, sizeof(struct sockaddr_in6));
-		getDefaultAddr6(&copyaddr.sin6_addr, &indst->sin6_addr);
+		getDefaultAddr6(&copyaddr.sin6_addr, &indst->sin6_addr, ifname);
 		insrc = &copyaddr;
 	};
 	
@@ -447,7 +447,7 @@ static ssize_t udpsock_sendto(Socket *sock, const void *message, size_t msgsize,
 		packet->checksum = 0;
 		memcpy(packet->payload, message, msgsize);
 		
-		packet->checksum = udpChecksum6(insrc, indst, message, msgsize);
+		packet->checksum = udpChecksum6(insrc, indst, message, msgsize, sock->ifname);
 		
 		int status = sendPacketEx(&udpsock->sockname, &destaddr, packet, sizeof(UDPPacket) + msgsize,
 					IPPROTO_UDP, sock->options, sock->ifname);

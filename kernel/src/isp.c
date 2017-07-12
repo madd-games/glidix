@@ -74,17 +74,17 @@ void ispInit()
 	pt->entries[1].pcd = 1;
 	pt->entries[1].rw = 1;
 
-	// IOAPIC register space
-	pt->entries[2].present = 1;
-	pt->entries[2].framePhysAddr = 0xFEC00;
-	pt->entries[2].pcd = 1;
-	pt->entries[2].rw = 1;
+	// 2 unused, for now.
 	
 	// user support page; executable userspace code
 	pt->entries[3].present = 1;
 	pt->entries[3].framePhysAddr = (((uint64_t)(&usup_start)-0xFFFF800000000000) >> 12);
 	pt->entries[3].user = 1;
 
+	/**
+	 * NOTE: 4-19 inclusive reserved for I/O APICs.
+	 */
+	
 	// set it in the PML4 (so it maps from 0xFFFF808000000000 up).
 	pml4->entries[257].present = 1;
 	pml4->entries[257].pdptPhysAddr = (((uint64_t)pdpt-0xFFFF800000000000) >> 12);

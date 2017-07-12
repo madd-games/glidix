@@ -72,6 +72,11 @@ static struct
 static Mutex consoleLock;
 SECTION(".videoram") unsigned char initVideoRAM[2*80*25];
 
+/**
+ * Whether the console should be outputting to COM1.
+ */
+int conOutCom = 0;
+
 void initConsole()
 {
 	mutexInit(&consoleLock);
@@ -167,8 +172,11 @@ static void scroll()
 static void kputch(char c)
 {
 	//outb(0xE9, c);
-	//while ((inb(0x3F8 + 5) & 0x20) == 0);
-	//outb(0x3F8, c);
+	if (conOutCom)
+	{
+		while ((inb(0x3F8 + 5) & 0x20) == 0);
+		outb(0x3F8, c);
+	};
 	
 	if (!consoleState.putcon) return;
 

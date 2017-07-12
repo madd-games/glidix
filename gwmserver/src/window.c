@@ -335,8 +335,8 @@ void wndMouseMove(int x, int y)
 void wndAbsToRelWithin(Window *win, int x, int y, int *relX, int *relY)
 {
 	pthread_mutex_lock(&win->lock);
-	int expX = x - win->params.x;
-	int expY = y - win->params.y;
+	int expX = x - win->params.x + win->parent->fgScrollX;
+	int expY = y - win->params.y + win->parent->fgScrollY;
 	Window *parent = win->parent;
 	if (parent != NULL) wndUp(parent);
 	pthread_mutex_unlock(&win->lock);
@@ -367,8 +367,8 @@ static Window* wndAbsToRelFrom(Window *win, int winX, int winY, int *relX, int *
 	for (child=win->children; child!=NULL; child=child->next)
 	{
 		pthread_mutex_lock(&child->lock);
-		Window *candidate = wndAbsToRelFrom(child, winX - child->params.x - win->fgScrollX,
-								winY - child->params.y - win->fgScrollY, relX, relY);
+		Window *candidate = wndAbsToRelFrom(child, winX - child->params.x + win->fgScrollX,
+								winY - child->params.y + win->fgScrollY, relX, relY);
 		pthread_mutex_unlock(&child->lock);
 		if (candidate != NULL)
 		{
@@ -436,6 +436,32 @@ void wndSetFocused(Window *wnd)
 			ev.type = GWM_EVENT_FOCUS_IN;
 			ev.win = wndFocused->id;
 			wndSendEvent(wndFocused, &ev);
+			
+			// move to front
+			if (wnd->parent != NULL)
+			{
+				pthread_mutex_lock(&wnd->parent->lock);
+				if (wnd->next != NULL)
+				{
+					wnd->next->prev = wnd->prev;
+				
+					if (wnd->prev == NULL)
+					{
+						wnd->parent->children = wnd->next;
+					}
+					else
+					{
+						wnd->prev->next = wnd->next;
+					};
+				
+					Window *last = wnd->next;
+					while (last->next != NULL) last = last->next;
+				
+					last->next = wnd;
+					wnd->prev = last;
+				};
+				pthread_mutex_unlock(&wnd->parent->lock);
+			};
 		};
 	}
 	else

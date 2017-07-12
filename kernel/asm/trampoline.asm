@@ -40,7 +40,7 @@ mov es, ax
 mov ss, ax
 
 ; release the flagAP2BSP to tell the BSP that we've booted
-mov [0xB025], byte 0
+mov [0xB025], al
 
 ; wait for the BSP to tell us that we may continue booting
 .bspwait:

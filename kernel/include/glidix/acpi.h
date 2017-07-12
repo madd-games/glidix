@@ -100,4 +100,10 @@ extern int apicCount;
 
 void acpiInit();
 
+/**
+ * Remap a global system interrupt (sysint) to the specified I/O APIC redirection entry.
+ * Returns the index of the I/O APIC chip (in order of detection) on which the operation was performed.
+ */
+int mapInterrupt(int sysint, uint64_t entry);
+
 #endif

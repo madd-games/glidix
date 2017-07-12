@@ -282,17 +282,9 @@ static void pciMapInterruptFromGSI(uint8_t bus, uint8_t slot, uint8_t intpin, in
 	gsiMapSize++;
 	
 	// remap the interrupt
-	uint32_t volatile* regsel = (uint32_t volatile*) 0xFFFF808000002000;
-	uint32_t volatile* iowin = (uint32_t volatile*) 0xFFFF808000002010;
-	*regsel = (0x10+2*gsi);
-	__sync_synchronize();
-	uint64_t entry = (uint64_t)(intNo) | ((uint64_t)(apic->id) << 56) | (1 << 15) | (1 << 13); // level-triggered, active low
-	*iowin = (uint32_t) entry;
-	__sync_synchronize();
-	*regsel = (0x10+2*gsi+1);
-	__sync_synchronize();
-	*iowin = (uint32_t)(entry>>32);
-	__sync_synchronize();
+	// level-triggered, active low
+	uint64_t entry = (uint64_t)(intNo) | ((uint64_t)(apic->id >> 24) << 56) | (1 << 15) | (1 << 13);
+	mapInterrupt(gsi, entry);
 	
 	// and register with the device
 	pciMapLocalInterrupt(bus, slot, intpin, intNo);

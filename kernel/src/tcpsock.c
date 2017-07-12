@@ -594,7 +594,7 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 		const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
 		struct sockaddr_in *inname = (struct sockaddr_in*) &tcpsock->sockname;
 		inname->sin_family = AF_INET;
-		getDefaultAddr4(&inname->sin_addr, &inaddr->sin_addr);
+		getDefaultAddr4(&inname->sin_addr, &inaddr->sin_addr, sock->ifname);
 		inname->sin_port = AllocPort();
 		srcport = inname->sin_port;
 		dstport = inaddr->sin_port;
@@ -604,7 +604,7 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 		const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
 		struct sockaddr_in6 *inname = (struct sockaddr_in6*) &tcpsock->sockname;
 		inname->sin6_family = AF_INET6;
-		getDefaultAddr6(&inname->sin6_addr, &inaddr->sin6_addr);
+		getDefaultAddr6(&inname->sin6_addr, &inaddr->sin6_addr, sock->ifname);
 		inname->sin6_port = AllocPort();
 		srcport = inname->sin6_port;
 		dstport = inaddr->sin6_port;

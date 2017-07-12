@@ -454,6 +454,7 @@ void initSched2()
 	// the idle thread needs 2 things: the registers and flags indicating
 	// it is always waiting. everthing else can be uninitialized
 	idleThread = NEW(Thread);
+	memset(idleThread, 0, sizeof(Thread));
 	idleThread->regs.fsbase = 0;
 	idleThread->regs.gsbase = 0;
 	idleThread->regs.cs = 0x08;
@@ -470,6 +471,7 @@ void initSchedAP()
 	// the idle thread needs 2 things: the registers and flags indicating
 	// it is always waiting. everthing else can be uninitialized
 	idleThread = NEW(Thread);
+	memset(idleThread, 0, sizeof(Thread));
 	idleThread->regs.fsbase = 0;
 	idleThread->regs.gsbase = 0;
 	idleThread->regs.cs = 0x08;

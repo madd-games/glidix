@@ -162,10 +162,11 @@ void initMultiProc()
 	memcpy((void*)0xFFFF80000000A000, &trampoline_start, trampolineSize);
 	
 	TrampolineData *tramData = (TrampolineData*) 0xFFFF80000000B000;
-
+	
 	for (cpuno=1; cpuno<numCPU; cpuno++)
 	{
 		// the GDT must be in low memory at first
+		kprintf("Starting up CPU %d (APIC ID 0x%02X)... ", cpuno, cpuList[cpuno].apicID);
 		uint16_t *limitPtr = (uint16_t*) &tramData->gdtPtr[0];
 		uint64_t *ptrPtr = (uint64_t*) &tramData->gdtPtr[2];
 		
@@ -264,6 +265,7 @@ void initMultiProc()
 			
 			if (!ok)
 			{
+				FAILED();
 				panic("CPU with APIC ID %d refuses to start up\n", (int) cpuList[cpuno].apicID);
 			};
 		};
@@ -273,6 +275,8 @@ void initMultiProc()
 		__sync_synchronize();
 		
 		// wait to be able to continue
+		DONE();
+		kprintf("Waiting for release... ");
 		spinlockAcquire(&tramData->exitLock);
 		
 		DONE();

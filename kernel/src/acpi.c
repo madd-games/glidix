@@ -32,10 +32,55 @@
 #include <glidix/isp.h>
 #include <glidix/memory.h>
 #include <glidix/apic.h>
+#include <glidix/pagetab.h>
+#include <glidix/idt.h>
 
 static uint32_t acpiNumTables;
 static uint32_t *acpiTables;
 static MADT_IOAPIC madtIOAPIC;
+
+/**
+ * I/O APIC memory-mapped registers (REGSELF and IOWIN).
+ */
+typedef struct
+{
+	volatile uint32_t			regsel;		// 0x00
+	volatile uint32_t			pad0;		// 0x04
+	volatile uint32_t			pad1;		// 0x08
+	volatile uint32_t			pad2;		// 0x0C
+	volatile uint32_t			iowin;		// 0x10
+} IoApic;
+
+/**
+ * Information about a detected I/O APIC.
+ */
+typedef struct
+{
+	/**
+	 * Virtual location into which the I/O APIC register space was mapped.
+	 */
+	IoApic*					regs;
+	
+	/**
+	 * Interrupt base (first handled interrupt number accoridng to MADT).
+	 */
+	int					intbase;
+	
+	/**
+	 * Number of interrupts handled by this I/O APIC.
+	 */
+	int					intcnt;
+} IoApicInfo;
+
+/**
+ * Array of APIC information structures.
+ */
+static IoApicInfo ioapics[16];
+
+/**
+ * Number of detected I/O APICs.
+ */
+static int numIoApics = 0;
 
 static void acpiReadTable(int index, ACPI_SDTHeader *head, uint32_t *payloadPhysAddr)
 {
@@ -77,7 +122,6 @@ static ACPI_RSDPDescriptor *findRSDP()
 
 	uint16_t ebdaSegment = *((uint16_t*)0xFFFF80000000040E);
 	uint64_t start = 0xFFFF800000000000+(((uint64_t)ebdaSegment) << 4);
-	//kprintf("START: %a\n", start);
 	return findRSDPInRange(start, start+0x400);
 };
 
@@ -85,65 +129,92 @@ static ACPI_RSDPDescriptor *findRSDP()
 static int irqMap[16];
 static uint16_t irqFlags[16];
 
-static void ioapicInit(uint64_t ioapicbasephys)
+void ioapicDetected(uint64_t base, uint32_t intbase)
 {
-	uint32_t volatile* regsel = (uint32_t volatile*) /*(ioapicbasephys+0xFFFF800000000000)*/ 0xFFFF808000002000;
-	uint32_t volatile* iowin = (uint32_t volatile*) /*(ioapicbasephys+0xFFFF800000000010)*/ 0xFFFF808000002010;
-	*regsel = 1;
-	__sync_synchronize();
-	uint32_t maxintr = ((*iowin) >> 16) & 0xFF;
-	__sync_synchronize();
-
-	//kprintf("APIC ID: %d, NUM INTERRUPTS: %d\n", apic->id, maxintr);
-	uint8_t *checkInts = (uint8_t*) kmalloc(maxintr+1);
-	memset(checkInts, 0, maxintr+1);
+	int index = numIoApics++;
 	
+	// the page table is already created, by isp.c.
+	uint64_t addr = 0xFFFF808000004000 + ((uint64_t)index << 12);
+	uint64_t ptaddr = 0xFFFFFF8000000000 | (addr >> 9);
+	PTe *pte = (PTe*) ptaddr;
+	
+	pte->present = 1;
+	pte->framePhysAddr = (base >> 12);
+	pte->pcd = 1;
+	pte->rw = 1;
+	refreshAddrSpace();
+	
+	IoApic *regs = (IoApic*) addr;
+	ioapics[index].regs = regs;
+	ioapics[index].intbase = (int) intbase;
+	
+	// get the number of interrupts
+	regs->regsel = 1;
+	uint32_t maxintr = (regs->iowin >> 16) & 0xFF;
+	ioapics[index].intcnt = (int) (maxintr+1);
+	
+	kprintf("I/O APIC: intbase=%d, intcnt=%d, phys=0x%016lX\n",
+		ioapics[index].intbase, ioapics[index].intcnt, base);
+};
+
+int mapInterrupt(int sysint, uint64_t entry)
+{
+	static Spinlock apicLock;
+	uint64_t flags = getFlagsRegister();
+	cli();
+	spinlockAcquire(&apicLock);
+	
+	int i;
+	for (i=0; i<numIoApics; i++)
+	{
+		IoApicInfo *info = &ioapics[i];
+		if ((info->intbase <= sysint) && ((info->intbase+info->intcnt) > sysint))
+		{
+			sysint -= info->intbase;
+			info->regs->regsel = (0x10+2*sysint);
+			__sync_synchronize();
+			info->regs->iowin = (uint32_t)(entry);
+			__sync_synchronize();
+			info->regs->regsel = (0x10+2*sysint+1);
+			__sync_synchronize();
+			info->regs->iowin = (uint32_t)(entry >> 32);
+			break;
+		};
+	};
+	
+	spinlockRelease(&apicLock);
+	setFlagsRegister(flags);
+	return i;
+};
+
+static void configInts()
+{
+	kprintf("LOCAL APIC ID: 0x%08X\n", apic->id);
+	uint8_t checkInts[16];
+	memset(checkInts, 0, 16);
+
 	int i;
 	for (i=0; i<16; i++)
 	{
-		//kprintf("SYSINT %d -> LOCAL INT %d\n", irqMap[i], i+32);
-		*regsel = (0x10+2*irqMap[i]);
-		__sync_synchronize();
-		uint64_t entry = (uint64_t)(i+32) | ((uint64_t)(apic->id) << 56);
-		if ((irqFlags[i] & 3) == 3)
+		if (irqMap[i] != -1)
 		{
-			entry |= (1 << 13);		// active low
+			uint64_t entry = (uint64_t)(i+32) | ((uint64_t)(apic->id >> 24) << 56);
+			if ((irqFlags[i] & 3) == 3)
+			{
+				entry |= (1 << 13);		// active low
+			};
+			if ((irqFlags[i] & 0x0C) == 0x0C)
+			{
+				entry |= (1 << 15);
+			};
+			
+			kprintf("SYSINT %d -> LOCAL INT %d (flags=%d, ioapic=%d)\n",
+				irqMap[i], i+32, irqFlags[i], mapInterrupt(irqMap[i], entry));
+			if (irqMap[i] < 16) checkInts[irqMap[i]] = 1;
 		};
-		if ((irqFlags[i] & 0x0C) == 0x0C)
-		{
-			entry |= (1 << 15);
-		};
-		*iowin = (uint32_t)(entry);
-		__sync_synchronize();
-		*regsel = (0x10+2*irqMap[i]+1);
-		__sync_synchronize();
-		*iowin = (uint32_t)(entry >> 32);
-		__sync_synchronize();
-		
-		checkInts[irqMap[i]] = 1;
 	};
 
-	for (i=0; i<=maxintr; i++)
-	{
-		if (!checkInts[i])
-		{
-			//kprintf("SYSINT %d -> LOCAL INT 7\n", i);
-			*regsel = (0x10+2*i);
-			__sync_synchronize();
-			uint64_t entry = (uint64_t)(39) | ((uint64_t)(apic->id) << 56);
-			*iowin = (uint32_t)(entry);
-			__sync_synchronize();
-			*regsel = (0x10+2*i+1);
-			__sync_synchronize();
-			*iowin = (uint32_t)(entry >> 32);
-			__sync_synchronize();
-		};
-	};
-	
-	kfree(checkInts);
 	kprintf("Done.\n");
-
-	//panic("Stop");
 };
 
 uint8_t apicList[16];
@@ -175,7 +246,7 @@ void acpiInit()
 		irqMap[i] = i;
 	};
 	
-	uint64_t ioapicphys = 0;
+	//uint64_t ioapicphys = 0;
 	
 	ACPI_SDTHeader head;
 	uint32_t payloadPhysAddr;
@@ -212,27 +283,21 @@ void acpiInit()
 				else if (rhead.type == 1)
 				{
 					pmem_read(&madtIOAPIC, searching+sizeof(MADTRecordHeader), sizeof(MADT_IOAPIC));
-					//kprintf("BASE: %a\n", madtIOAPIC.ioapicbase);
-					//kprintf("INTBASE: %a\n", madtIOAPIC.intbase);
-					//ioapicInit(madtIOAPIC.ioapicbase);
-					ioapicphys = madtIOAPIC.ioapicbase;
+					ioapicDetected(madtIOAPIC.ioapicbase, madtIOAPIC.intbase);
 				}
 				else if (rhead.type == 2)
 				{
 					MADT_IntOvr intovr;
 					pmem_read(&intovr, searching, sizeof(MADT_IntOvr));
-					//kprintf("INTOVR: BUS=%d, IRQ=%d, SYSINT=%d, FLAGS=%a\n", intovr.bus, intovr.irq, intovr.sysint, intovr.flags);
+					kprintf("INTOVR: BUS=%d, IRQ=%d, SYSINT=%d, FLAGS=%d\n", intovr.bus, intovr.irq, intovr.sysint, intovr.flags);
 					if (intovr.bus == 0)
 					{
 						irqFlags[intovr.irq] = intovr.flags;
-						//if (intovr.irq != intovr.sysint)
-						//{
 						irqMap[intovr.irq] = intovr.sysint;
-						if (intovr.sysint < 16)
+						if (intovr.sysint < 16 && intovr.irq != intovr.sysint)
 						{
-							irqMap[intovr.sysint] = 7;
+							irqMap[intovr.sysint] = -1;
 						};
-						//};
 					};
 				};
 				
@@ -242,10 +307,5 @@ void acpiInit()
 		};
 	};
 	
-	if (ioapicphys == 0)
-	{
-		panic("failed to find the IOAPIC ACPI table");
-	};
-	
-	ioapicInit(ioapicphys);
+	configInts();
 };

@@ -697,7 +697,7 @@ int sendPacketEx(struct sockaddr *src, const struct sockaddr *dest, const void *
 			struct sockaddr_in *insrc = (struct sockaddr_in*) src;
 			struct sockaddr_in *indst = (struct sockaddr_in*) dest;
 			insrc->sin_family = AF_INET;
-			getDefaultAddr4(&insrc->sin_addr, &indst->sin_addr);
+			getDefaultAddr4(&insrc->sin_addr, &indst->sin_addr, ifname);
 		}
 		else if (dest->sa_family == AF_INET6)
 		{
@@ -705,7 +705,7 @@ int sendPacketEx(struct sockaddr *src, const struct sockaddr *dest, const void *
 			struct sockaddr_in6 *indst = (struct sockaddr_in6*) dest;
 			insrc->sin6_family = AF_INET6;
 			insrc->sin6_scope_id = indst->sin6_scope_id;
-			getDefaultAddr6(&insrc->sin6_addr, &indst->sin6_addr);
+			getDefaultAddr6(&insrc->sin6_addr, &indst->sin6_addr, ifname);
 		}
 		else
 		{
@@ -729,7 +729,7 @@ int sendPacketEx(struct sockaddr *src, const struct sockaddr *dest, const void *
 		if (memcmp(&insrc->sin_addr, zeroes, 4) == 0)
 		{
 			memcpy(&src_replace, insrc, sizeof(struct sockaddr));
-			getDefaultAddr4(&inreplace->sin_addr, &indst->sin_addr);
+			getDefaultAddr4(&inreplace->sin_addr, &indst->sin_addr, ifname);
 			src = &src_replace;
 		};
 	}
@@ -742,7 +742,7 @@ int sendPacketEx(struct sockaddr *src, const struct sockaddr *dest, const void *
 		if (memcmp(&insrc->sin6_addr, zeroes, 16) == 0)
 		{
 			memcpy(&src_replace, insrc, sizeof(struct sockaddr));
-			getDefaultAddr6(&inreplace->sin6_addr, &indst->sin6_addr);
+			getDefaultAddr6(&inreplace->sin6_addr, &indst->sin6_addr, ifname);
 			src = &src_replace;
 		};
 	};
@@ -1102,15 +1102,31 @@ int sendPacketEx(struct sockaddr *src, const struct sockaddr *dest, const void *
 	return -ENETUNREACH;
 };
 
-void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest)
+void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest, const char *ifname)
 {
+	if (ifname != NULL)
+	{
+		if (ifname[0] == 0)
+		{
+			ifname = NULL;
+		};
+	};
+	
 	uint32_t addr = *((uint32_t*)dest);
 
 	mutexLock(&iflistLock);
 	
-	NetIf *netif = &iflist;
-	while (netif != NULL)
+	NetIf *netif;
+	for (netif=&iflist; netif!=NULL; netif=netif->next)
 	{
+		if (ifname != NULL)
+		{
+			if (strcmp(netif->name, ifname) != 0)
+			{
+				continue;
+			};
+		};
+		
 		int i;
 		for (i=0; i<netif->ipv4.numRoutes; i++)
 		{
@@ -1137,23 +1153,37 @@ void getDefaultAddr4(struct in_addr *src, const struct in_addr *dest)
 				return;
 			};
 		};
-		
-		netif = netif->next;
 	};
 	
 	memset(src, 0, 4);
 	mutexUnlock(&iflistLock);
 };
 
-void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest)
+void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest, const char *ifname)
 {
+	if (ifname != NULL)
+	{
+		if (ifname[0] == 0)
+		{
+			ifname = NULL;
+		};
+	};
+
 	uint64_t *addr = ((uint64_t*)dest);
 	
 	mutexLock(&iflistLock);
 	
 	NetIf *netif = &iflist;
-	while (netif != NULL)
+	for (netif=&iflist; netif!=NULL; netif=netif->next)
 	{
+		if (ifname != NULL)
+		{
+			if (strcmp(netif->name, ifname) != 0)
+			{
+				continue;
+			};
+		};
+		
 		int i;
 		for (i=0; i<netif->ipv6.numRoutes; i++)
 		{
@@ -1180,8 +1210,6 @@ void getDefaultAddr6(struct in6_addr *src, const struct in6_addr *dest)
 				return;
 			};
 		};
-		
-		netif = netif->next;
 	};
 	
 	memset(src, 0, 16);
