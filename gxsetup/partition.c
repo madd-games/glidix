@@ -1284,6 +1284,7 @@ void partFlush()
 	mkdir("/mnt/tmp", 0755);
 	mkdir("/mnt/media", 0755);
 	mkdir("/mnt/home", 0755);
+	mkdir("/mnt/root", 0755);
 	
 	// configuration files
 	drawProgress("SETUP", "Creating configuration files...", 3, NUM_SETUP_OPS);

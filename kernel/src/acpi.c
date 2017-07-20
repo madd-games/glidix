@@ -153,6 +153,20 @@ void ioapicDetected(uint64_t base, uint32_t intbase)
 	uint32_t maxintr = (regs->iowin >> 16) & 0xFF;
 	ioapics[index].intcnt = (int) (maxintr+1);
 	
+	// mask all interrupts until programmed
+	int intno;
+	for (intno=0; intno<ioapics[index].intcnt; intno++)
+	{
+		regs->regsel = (0x10+2*intno);
+		__sync_synchronize();
+		regs->iowin = (1 << 16);		// mask interrupt
+		__sync_synchronize();
+		regs->regsel = (0x10+2*intno+1);
+		__sync_synchronize();
+		regs->iowin = 0;
+		__sync_synchronize();
+	};
+	
 	kprintf("I/O APIC: intbase=%d, intcnt=%d, phys=0x%016lX\n",
 		ioapics[index].intbase, ioapics[index].intcnt, base);
 };
@@ -178,6 +192,7 @@ int mapInterrupt(int sysint, uint64_t entry)
 			info->regs->regsel = (0x10+2*sysint+1);
 			__sync_synchronize();
 			info->regs->iowin = (uint32_t)(entry >> 32);
+			__sync_synchronize();
 			break;
 		};
 	};

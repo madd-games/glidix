@@ -388,6 +388,7 @@ GWMWindow* gwmCreateWindow(
 		
 		win->modalID = 0;
 		if (parent != NULL) win->modalID = parent->modalID;
+		win->icon = NULL;
 		return win;
 	};
 	
@@ -641,28 +642,32 @@ int gwmSetWindowCursor(GWMWindow *win, int cursor)
 };
 
 int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon)
-{
-#if 0
-	if ((icon->width != 16) || (icon->height != 16))
+{	
+	if (win->icon != NULL)
 	{
-		return -1;
+		ddiDeleteSurface(win->icon);
 	};
+	
+	win->icon = ddiCreateSurface(&win->canvas->format, 16, 16, NULL, DDI_SHARED);
+	if (win->icon == NULL)
+	{
+		return GWM_ERR_NOSURF;
+	};
+	
+	ddiOverlay(icon, 0, 0, win->icon, 0, 0, 16, 16);
 	
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
 	
 	GWMCommand cmd;
 	cmd.setIcon.cmd = GWM_CMD_SET_ICON;
+	cmd.setIcon.surfID = win->icon->id;
 	cmd.setIcon.seq = seq;
 	cmd.setIcon.win = win->id;
-	memcpy(cmd.setIcon.data, icon->data, icon->format.bpp*16*16);
 	
 	GWMMessage resp;
 	gwmPostWaiter(seq, &resp, &cmd);
 	
 	return resp.setIconResp.status;
-#endif
-	// TODO
-	return 0;
 };
 
 DDIFont *gwmGetDefaultFont()

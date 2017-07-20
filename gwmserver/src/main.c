@@ -235,9 +235,14 @@ int main(int argc, char *argv[])
 	ddiFillRect(frontBuffer, 0, 0, screen->width, screen->height, &backgroundColor);
 	
 	ftruncate(fd, sizeof(GWMInfo));
-	GWMInfo *gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	gwminfo->backgroundID = desktopBackground->id;
 
+	printf("[gwmserver] initialize theme info\n");
+	gwmGlobalThemeInit(&frontBuffer->format);
+	
+	imgWincap = ddiOpenSurface(gwminfo->imgWinCap);
+	
 	if (fork() == 0)
 	{
 		execl("/usr/bin/terminal", "terminal", NULL);

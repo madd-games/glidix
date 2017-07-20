@@ -203,6 +203,7 @@ int main(int argc, char *argv[])
 
 			if (strcmp(crypt(password, passcrypt), passcrypt) != 0)
 			{
+				sleep(5);
 				fprintf(stderr, "Sorry, please try again.\n");
 				continue;
 			}

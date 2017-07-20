@@ -55,6 +55,8 @@ int main(int argc, char *argv[])
 	char modname[512];
 	while ((ent = readdir(dirp)) != NULL)
 	{
+		if (ent->d_name[0] == '.') continue;
+		
 		strcpy(filename, ent->d_name);
 		if (strlen(filename) < 5)
 		{

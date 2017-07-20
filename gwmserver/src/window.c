@@ -46,7 +46,7 @@ int cursorX, cursorY;
  * Cached windows. Each one counts as a new reference so you must wndDown() when
  * setting to a different value, and you must wndUp() the new value.
  */
-pthread_mutex_t wincacheLock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t wincacheLock;
 Window *wndHovering = NULL;				// mouse hovers over this window
 Window *wndFocused = NULL;				// main focused window
 Window *wndActive = NULL;				// active window (currently clicked on)
@@ -73,8 +73,8 @@ void wndInit()
 	desktopWindow->params.flags = GWM_WINDOW_NODECORATE;
 	desktopWindow->params.width = screen->width;
 	desktopWindow->params.height = screen->height;
-	desktopWindow->fgScrollX = -(2*WINDOW_BORDER_WIDTH);
-	desktopWindow->fgScrollY = -(WINDOW_BORDER_WIDTH + WINDOW_CAPTION_HEIGHT);
+	desktopWindow->fgScrollX = -WINDOW_BORDER_WIDTH;
+	desktopWindow->fgScrollY = -WINDOW_CAPTION_HEIGHT;
 	desktopWindow->canvas = desktopBackground;
 	desktopWindow->front = ddiCreateSurface(&screen->format, screen->width, screen->height,
 						(char*)desktopBackground->data, 0);
@@ -94,6 +94,11 @@ void wndInit()
 	
 	cursorX = screen->width / 2;
 	cursorY = screen->height / 2;
+	
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	pthread_mutex_init(&wincacheLock, &attr);
 };
 
 Window* wndCreate(Window *parent, GWMWindowParams *pars, uint64_t id, int fd, DDISurface *canvas)
@@ -107,6 +112,8 @@ Window* wndCreate(Window *parent, GWMWindowParams *pars, uint64_t id, int fd, DD
 	wnd->canvas = canvas;
 	wnd->front = ddiCreateSurface(&canvas->format, canvas->width, canvas->height, (char*)canvas->data, 0);
 	wnd->display = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, DDI_SHARED);
+	
+	wnd->icon = NULL;
 	
 	wnd->id = id;
 	wnd->fd = fd;
@@ -133,6 +140,11 @@ Window* wndCreate(Window *parent, GWMWindowParams *pars, uint64_t id, int fd, DD
 		pthread_mutex_lock(&wincacheLock);
 		if (wndFocused != NULL)
 		{
+			GWMEvent ev;
+			memset(&ev, 0, sizeof(GWMEvent));
+			ev.type = GWM_EVENT_FOCUS_OUT;
+			ev.win = wndFocused->id;
+			wndSendEvent(wndFocused, &ev);
 			wndDown(wndFocused);
 		};
 		wndUp(wnd);
@@ -212,6 +224,70 @@ int wndDestroy(Window *wnd)
 	return 0;
 };
 
+int wndIsFocused(Window *wnd)
+{
+	//pthread_mutex_lock(&wincacheLock);
+	Window *compare;
+	for (compare=wndFocused; compare!=NULL; compare=compare->parent)
+	{
+		if (compare == wnd)
+		{
+			//pthread_mutex_unlock(&wincacheLock);
+			return 1;
+		};
+	};
+	
+	//pthread_mutex_unlock(&wincacheLock);
+	return 0;
+};
+
+void wndDrawDecoration(DDISurface *target, Window *wnd)
+{
+	int active = wndIsFocused(wnd);
+	
+	DDIColor *bgColor;
+	if (active)
+	{
+		bgColor = &gwminfo->colWinActive;
+	}
+	else
+	{
+		bgColor = &gwminfo->colWinInactive;
+	};
+	
+	ddiFillRect(target, wnd->params.x, wnd->params.y+WINDOW_CAPTION_HEIGHT,
+			wnd->params.width+2*WINDOW_BORDER_WIDTH, wnd->params.height+WINDOW_BORDER_WIDTH,
+			bgColor);
+	
+	int dy;
+	if (active)
+	{
+		dy = 0;
+	}
+	else
+	{
+		dy = WINDOW_CAPTION_HEIGHT;
+	};
+	
+	int sideWidth = (imgWincap->width - 1) / 2;
+	int winWidth = wnd->params.width + 2 * WINDOW_BORDER_WIDTH;
+	ddiBlit(imgWincap, 0, dy, target, wnd->params.x, wnd->params.y, sideWidth, WINDOW_CAPTION_HEIGHT);
+	
+	int dx;
+	for (dx=sideWidth; dx<winWidth-sideWidth; dx++)
+	{
+		ddiBlit(imgWincap, sideWidth, dy, target, wnd->params.x+dx, wnd->params.y, 1, WINDOW_CAPTION_HEIGHT);
+	};
+	
+	ddiBlit(imgWincap, imgWincap->width-sideWidth, dy, target, wnd->params.x+winWidth-sideWidth,
+		wnd->params.y, sideWidth, WINDOW_CAPTION_HEIGHT);
+	
+	if (wnd->icon != NULL)
+	{
+		ddiBlit(wnd->icon, 0, 0, target, wnd->params.x+2, wnd->params.y+2, 16, 16);
+	};
+};
+
 void wndDirty(Window *wnd)
 {
 	pthread_mutex_lock(&wnd->lock);
@@ -226,6 +302,11 @@ void wndDirty(Window *wnd)
 		pthread_mutex_lock(&child->lock);
 		if ((child->params.flags & GWM_WINDOW_HIDDEN) == 0)
 		{
+			if ((wnd == desktopWindow) && ((child->params.flags & GWM_WINDOW_NODECORATE) == 0))
+			{
+				wndDrawDecoration(wnd->display, child);
+			};
+			
 			ddiBlit(child->display, 0, 0, wnd->display,
 				child->params.x-wnd->fgScrollX, child->params.y-wnd->fgScrollY,
 				child->params.width, child->params.height);
@@ -281,7 +362,7 @@ void wndMouseMove(int x, int y)
 		ev.win = wndActive->id;
 		ev.x = relX;
 		ev.y = relY;
-		wndSendEvent(wndHovering, &ev);
+		wndSendEvent(wndActive, &ev);
 		
 		// we don't need the "hovered window"
 		if (wnd != NULL) wndDown(wnd);
@@ -335,8 +416,18 @@ void wndMouseMove(int x, int y)
 void wndAbsToRelWithin(Window *win, int x, int y, int *relX, int *relY)
 {
 	pthread_mutex_lock(&win->lock);
-	int expX = x - win->params.x + win->parent->fgScrollX;
-	int expY = y - win->params.y + win->parent->fgScrollY;
+	int expX, expY;
+	if (win->parent != NULL)
+	{
+		expX = x - win->params.x + win->parent->fgScrollX;
+		expY = y - win->params.y + win->parent->fgScrollY;
+	}
+	else
+	{
+		expX = x - win->params.x;
+		expY = y - win->params.y;
+	};
+	
 	Window *parent = win->parent;
 	if (parent != NULL) wndUp(parent);
 	pthread_mutex_unlock(&win->lock);
@@ -367,8 +458,16 @@ static Window* wndAbsToRelFrom(Window *win, int winX, int winY, int *relX, int *
 	for (child=win->children; child!=NULL; child=child->next)
 	{
 		pthread_mutex_lock(&child->lock);
-		Window *candidate = wndAbsToRelFrom(child, winX - child->params.x + win->fgScrollX,
-								winY - child->params.y + win->fgScrollY, relX, relY);
+		Window *candidate;
+		if (child->params.flags & GWM_WINDOW_HIDDEN)
+		{
+			candidate = NULL;
+		}
+		else
+		{
+			candidate = wndAbsToRelFrom(child, winX - child->params.x + win->fgScrollX,
+							winY - child->params.y + win->fgScrollY, relX, relY);
+		};
 		pthread_mutex_unlock(&child->lock);
 		if (candidate != NULL)
 		{
@@ -437,9 +536,14 @@ void wndSetFocused(Window *wnd)
 			ev.win = wndFocused->id;
 			wndSendEvent(wndFocused, &ev);
 			
-			// move to front
+			// move the top-level window to front
 			if (wnd->parent != NULL)
 			{
+				while (wnd->parent->parent != NULL)
+				{
+					wnd = wnd->parent;
+				};
+				
 				pthread_mutex_lock(&wnd->parent->lock);
 				if (wnd->next != NULL)
 				{
@@ -459,8 +563,12 @@ void wndSetFocused(Window *wnd)
 				
 					last->next = wnd;
 					wnd->prev = last;
+					wnd->next = NULL;
 				};
 				pthread_mutex_unlock(&wnd->parent->lock);
+				
+				wndDirty(desktopWindow);
+				wndDrawScreen();
 			};
 		};
 	}
@@ -476,6 +584,9 @@ void wndSetFocused(Window *wnd)
 			wndDown(wndFocused);
 		};
 		wndFocused = NULL;
+		
+		wndDirty(desktopWindow);
+		wndDrawScreen();
 	};
 };
 
@@ -546,4 +657,19 @@ void wndSetFlags(Window *wnd, int flags)
 	};
 	
 	wndDirty(wnd);
+};
+
+int wndSetIcon(Window *wnd, uint32_t surfID)
+{
+	int status = 0;
+	
+	pthread_mutex_lock(&wnd->lock);
+	if (wnd->icon != NULL) ddiDeleteSurface(wnd->icon);
+	wnd->icon = ddiOpenSurface(surfID);
+	if (wnd->icon == NULL) status = GWM_ERR_NOSURF;
+	pthread_mutex_unlock(&wnd->lock);
+	
+	wndDirty(desktopWindow);
+	wndDrawScreen();
+	return status;
 };

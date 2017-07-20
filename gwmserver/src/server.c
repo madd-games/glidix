@@ -310,6 +310,8 @@ void* clientThreadFunc(void *context)
 			else
 			{
 				wndSetFlags(wnd, cmd.setFlags.flags);
+				wndDirty(wnd);
+				wndDrawScreen();
 				resp.setFlagsResp.status = 0;
 			};
 			
@@ -337,13 +339,39 @@ void* clientThreadFunc(void *context)
 				if (win == NULL)
 				{
 					resp.setCursorResp.status = GWM_ERR_NOWND;
+				}
+				else
+				{
+					win->cursor = cmd.setCursor.cursor;
+					wndDown(win);
+					wndDrawScreen();
+					resp.setCursorResp.status = 0;
 				};
-				
-				win->cursor = cmd.setCursor.cursor;
+			};
+			
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
+		else if (cmd.cmd == GWM_CMD_SET_ICON)
+		{
+			if (sz < sizeof(cmd.setIcon))
+			{
+				printf("[gwmserver] GWM_CMD_SET_ICON command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.setIconResp.type = GWM_MSG_SET_ICON_RESP;
+			resp.setIconResp.seq = cmd.setIcon.seq;
+			
+			Window *win = wltGet(wlt, cmd.setIcon.win);
+			if (win == NULL)
+			{
+				resp.setIconResp.status = GWM_ERR_NOWND;
+			}
+			else
+			{
+				resp.setIconResp.status = wndSetIcon(win, cmd.setIcon.surfID);
 				wndDown(win);
-				wndDrawScreen();
-				
-				resp.setCursorResp.status = 0;
 			};
 			
 			write(sockfd, &resp, sizeof(GWMMessage));

@@ -905,6 +905,7 @@ int signalThread(Thread *thread)
 int threadClone(Regs *regs, int flags, MachineState *state)
 {
 	Thread *thread = (Thread*) kmalloc(sizeof(Thread));
+	memset(thread, 0, sizeof(Thread));
 	thread->catchRegs[7] = 0;
 	fpuSave(&thread->fpuRegs);
 	memcpy(&thread->regs, regs, sizeof(Regs));

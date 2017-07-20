@@ -14,7 +14,7 @@ Glidix is an experimental UNIX-clone OS, designed to run on x86_64. It is made m
  * Storage devices: IDE and AHCI; IDE is incomplete.
  * Graphics: BGA. Hardware acceleration for various cards is planned.
  * Input devices: PS/2 mouse and keyboard
- * Ethernet cards: NE2000 (promiscous only), Intel 8254x (*PRO/1000 MT Desktop*, and *T/MT Server*), and broken support for VirtIO net.
+ * Ethernet cards: NE2000 (promiscous only), Intel 8254x (*PRO/1000 MT Desktop*, and *T/MT Server*), AMD PCNet (promiscous only).
 
 ## Features
 

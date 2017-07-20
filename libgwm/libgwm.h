@@ -50,6 +50,7 @@
 #define	GWM_ERR_NOWND				1		/* window doesn't exist */
 #define	GWM_ERR_NOSURF				2		/* cannot open shared surface */
 #define	GWM_ERR_INVAL				3		/* invalid value (e.g. already-used ID) */
+#define	GWM_ERR_NOENT				4		/* name does not exist */
 
 /**
  * Colors.
@@ -189,24 +190,38 @@ extern DDIColor gwmBackColor;
 #define	GWM_FICON_LARGE				1
 
 /**
+ * Data types for theme descriptions.
+ */
+#define	GWM_TYPE_SURFACE			1
+#define	GWM_TYPE_COLOR				2
+
+/**
  * Window manager information structure, located in the shared file /run/gwminfo.
+ * Contains information shared by all applications, such as the desktop background
+ * surface, and theme information.
  */
 typedef struct
 {
 	/**
-	 * Reserved.
+	 * Window caption surface.
 	 */
-	int					rsv0;
+	uint32_t				imgWinCap;
 	
 	/**
-	 * Reserved.
+	 * Window buttons surface.
 	 */
-	int					rsv1;
+	uint32_t				imgWinButtons;
 	
 	/**
 	 * ID of the background surface.
 	 */
 	uint32_t				backgroundID;
+	
+	/**
+	 * Color of active/inactive windows.
+	 */
+	DDIColor				colWinActive;
+	DDIColor				colWinInactive;
 } GWMInfo;
 
 /**
@@ -366,9 +381,9 @@ typedef union
 	struct
 	{
 		int				cmd;	// GWM_CMD_SET_ICON
+		uint32_t			surfID;	// surface ID of icon surface
 		uint64_t			seq;
 		uint64_t			win;
-		char				data[16*16*4];
 	} setIcon;
 	
 	struct
@@ -632,6 +647,11 @@ typedef struct GWMWindow_
 	
 	// modal ID; 0 = main program, other values = modal dialogs
 	uint64_t				modalID;
+	
+	/**
+	 * Icon surface.
+	 */
+	DDISurface*				icon;
 } GWMWindow;
 
 /**
@@ -1474,5 +1494,25 @@ char* gwmRunFileChooser(GWMWindow *fc);
  * Always returns something; it may be a dummy icon.
  */
 DDISurface* gwmGetFileIcon(const char *iconName, int size);
+
+/**
+ * Perform a global theme initialization. Only root can do this, it does not require gwmInit() to be called,
+ * and should only happen once, by the gwmserver. Returns 0 on success, or -1 on error; in which case it also
+ * prints an error message.
+ */
+int gwmGlobalThemeInit(DDIPixelFormat *format);
+
+/**
+ * Get a theme element. On success, returns a pointer whose type is dependent on the element type:
+ *
+ *	GWM_TYPE_SURFACE - A DDISurface* representing the shared surface.
+ *	GWM_TYPE_COLOR - A DDIColor* pointer, directly into the shared area.
+ *
+ * On error, NULL is returned and 'errOut' is set to a GWM error code (GWM_ERR_*) if it's not NULL:
+ *
+ *	GWM_ERR_INVAL - Wrong type specified.
+ *	GWM_ERR_NOENT - No such theme property.
+ */
+void* gwmGetThemeProp(const char *name, int type, int *errOut);
 
 #endif

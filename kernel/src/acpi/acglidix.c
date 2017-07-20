@@ -132,8 +132,9 @@ ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS port, UINT32 *value, UINT32 width)
 
 void AcpiOsStall(UINT32 ms)
 {
+	// microseconds for some reason
 	TRACE();
-	int then = getUptime() + ms;
+	int then = getUptime() + (ms/1000 + 1);
 	while (getUptime() < then);
 };
 

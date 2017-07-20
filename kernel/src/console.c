@@ -77,6 +77,11 @@ SECTION(".videoram") unsigned char initVideoRAM[2*80*25];
  */
 int conOutCom = 0;
 
+void enableDebugTerm()
+{
+	conOutCom = 1;
+};
+
 void initConsole()
 {
 	mutexInit(&consoleLock);

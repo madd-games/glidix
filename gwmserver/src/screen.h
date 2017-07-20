@@ -30,9 +30,13 @@
 #define SCREEN_H
 
 #include <libddi.h>
+#include <libgwm.h>
 
 extern DDISurface *frontBuffer;
 extern DDISurface *screen;
 extern DDISurface *desktopBackground;
+GWMInfo *gwminfo;
+
+DDISurface *imgWincap;
 
 #endif

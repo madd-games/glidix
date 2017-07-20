@@ -47,6 +47,7 @@ void setCursorPos(uint8_t x, uint8_t y);
 void switchConsoleToSoftwareBuffer(unsigned char *buffer, int width, int height);
 void renderConsoleToScreen();
 void setGfxTerm(int value);
+void enableDebugTerm();
 
 #define	DONE()						kprintf("Done\n")
 #define	FAILED()					kprintf("Failed\n")

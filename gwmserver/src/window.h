@@ -78,6 +78,11 @@ typedef struct Window_
 	DDISurface*					display;
 	
 	/**
+	 * The icon (or NULL).
+	 */
+	DDISurface*					icon;
+	
+	/**
 	 * Window ID assigned by the application, and the file descriptor referring to the client
 	 * connection, used to dispatch events. If 'fd' is zero, then the window is not attached
 	 * to any application ("destroyed") and will ignore events.
@@ -184,5 +189,11 @@ void wndInputEvent(int type, int scancode, int keycode);
  * Set window flags.
  */
 void wndSetFlags(Window *wnd, int flags);
+
+/**
+ * Set the icon of a window to the specified surface ID. Return 0 on success, or a GWM error number
+ * on error.
+ */
+int wndSetIcon(Window *wnd, uint32_t surfID);
 
 #endif
