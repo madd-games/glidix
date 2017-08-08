@@ -89,6 +89,7 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 		if (mutex->__type == PTHREAD_MUTEX_RECURSIVE)
 		{
 			mutex->__count++;
+			return 0;
 		}
 		else
 		{
@@ -124,6 +125,7 @@ int pthread_mutex_trylock(pthread_mutex_t *mutex)
 		if (mutex->__type == PTHREAD_MUTEX_RECURSIVE)
 		{
 			mutex->__count++;
+			return 0;
 		}
 		else
 		{
