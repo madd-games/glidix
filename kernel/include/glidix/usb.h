@@ -33,80 +33,248 @@
 #include <glidix/semaphore.h>
 
 /**
- * USB status bits.
+ * bmRequestType
  */
-#define	USB_DISCONNECTED			(1 << 0)
+#define	USB_REQ_HOST_TO_DEVICE				0
+#define	USB_REQ_DEVICE_TO_HOST				(1 << 7)
+
+#define	USB_REQ_STANDARD				(0 << 5)
+#define	USB_REQ_CLASS					(1 << 5)
+#define	USB_REQ_VENDOR					(2 << 5)
+
+#define	USB_REQ_DEVICE					0
+#define	USB_REQ_INTERFACE				1
+#define	USB_REQ_ENDPOINT				2
+#define	USB_REQ_OTHER					3
 
 /**
- * USB standard requests (bRequest)
+ * bRequest
  */
-#define	USB_GET_STATUS				0
-#define	USB_CLEAR_FEATURE			1
-/* Reserved					2 */
-#define	USB_SET_FEATURE				3
-/* Reserved					4 */
-#define	USB_SET_ADDRESS				5
-#define	USB_GET_DESCRIPTOR			6
-#define	USB_SET_DESCRIPTOR			7
-#define	USB_GET_CONFIGURATION			8
-#define	USB_SET_CONFIGURATION			9
-#define	USB_GET_INTERFACE			10
-#define	USB_SET_INTERFACE			11
-#define	USB_SYNC_FRAME				12
+#define	USB_REQ_GET_STATUS				0x00
+#define	USB_REQ_CLEAR_FEATURE				0x01
+#define	USB_REQ_SET_FEATURE				0x03
+#define	USB_REQ_SET_ADDRESS				0x05
+#define	USB_REQ_GET_DESCRIPTOR				0x06
+#define	USB_REQ_SET_DESCRIPTOR				0x07
+#define	USB_REQ_GET_CONFIGURATION			0x08
+#define	USB_REQ_SET_CONFIGURATION			0x09
 
 /**
- * Represents a USB device.
+ * USB packet types.
+ */
+#define	USB_END						0		/* list terminator */
+#define	USB_SETUP					1
+#define	USB_IN						2
+#define	USB_OUT						3
+
+/**
+ * Types of USB transactions.
+ */
+#define	USB_TRANS_CONTROL				1
+
+/**
+ * USB device flags.
+ */
+#define	USB_DEV_HANGUP					(1 << 0)	/* device has been disconnected */
+
+/**
+ * USB-related data types.
+ */
+typedef	uint8_t						usb_addr_t;
+typedef uint8_t						usb_epno_t;
+typedef int						usb_dt_t;
+
+/**
+ * USB setup packet.
+ */
+typedef struct
+{
+	uint8_t						bmRequestType;
+	uint8_t						bRequest;
+	uint16_t					wValue;
+	uint16_t					wIndex;
+	uint16_t					wLength;
+} USBSetupPacket;
+
+/**
+ * Describes an element of a transaction. Used for control and bulk transactions.
+ */
+typedef struct
+{
+	/**
+	 * Type of transaction (USB_SETUP, USB_IN, USB_OUT).
+	 */
+	int						type;
+	
+	/**
+	 * Value of the data toggle bit (0 or 1).
+	 */
+	usb_dt_t					dt;
+	
+	/**
+	 * Size of the data to transfer, in the buffer. The sum of
+	 * previous transfers' sizes is the offset.
+	 */
+	size_t						size;
+} USBTransferInfo;
+
+/**
+ * Request header.
+ */
+struct USBDevice_;
+typedef struct
+{
+	/**
+	 * Type of request (USB_TRANS_*).
+	 */
+	int						type;
+	
+	/**
+	 * A semaphore to be signalled when this request is completed, if
+	 * not NULL.
+	 */
+	Semaphore*					semComplete;
+	
+	/**
+	 * The device on which this request is being performed.
+	 */
+	struct USBDevice_*				dev;
+	
+	/**
+	 * Size of the URB in bytes.
+	 */
+	size_t						size;
+	
+	/**
+	 * Status (0 = good, anything else = error). Set after the request is completed.
+	 */
+	int						status;
+} USBRequestHeader;
+
+/**
+ * Describes a USB request.
+ */
+struct USBControlPipe_;
+typedef union
+{
+	/**
+	 * Request header, common for all types.
+	 */
+	USBRequestHeader				header;
+	
+	/**
+	 * For control transfers (USB_TRANS_CONTROL).
+	 */
+	struct
+	{
+		USBRequestHeader			header;
+		
+		/**
+		 * The pipe to transfer to/from.
+		 */
+		struct USBControlPipe_*			pipe;
+		
+		/**
+		 * List of packets.
+		 */
+		USBTransferInfo*			packets;
+		
+		/**
+		 * The buffer containing transfer data. For USB_SETUP and USB_OUT, it must
+		 * contain the data to be sent, and for USB_IN, it must have space to store
+		 * the inputted values. The buffer is not updated except for fields filled
+		 * in by USB_IN transfers, after completion of the request.
+		 *
+		 * There MUST be write permission for the entire buffer, regardless of transfer
+		 * types, as the host controller driver may wish to transfer the contents to a
+		 * temporary location, and then copy back.
+		 */
+		void*					buffer;
+	} control;
+} USBRequest;
+
+/**
+ * Describes the operations of a USB controller. This is passed to usbCreateDevice()
+ * to tell the kernel how to perform various operations on the device.
+ *
+ * All pointers are allowed to be NULL, indicating a no-op.
+ */
+typedef struct
+{
+	/**
+	 * Create a new control pipe. Return a controller-driver-specific opaque structure describing
+	 * the new pipe, or NULL if a fatal error occured. The endpoint number for the pipe is
+	 * 'epno'.
+	 */
+	void* (*createControlPipe)(struct USBDevice_ *dev, usb_epno_t epno, size_t maxPacketLen);
+	
+	/**
+	 * Delete a control pipe. 'data' is a value previously returned by createControlPipe().
+	 */
+	void (*deleteControlPipe)(void *data);
+	
+	/**
+	 * Submit a USB transfer. Return 0 on success, errno on error.
+	 */
+	int (*submit)(USBRequest* urb);
+} USBCtrl;
+
+/**
+ * Describes a USB device.
  */
 typedef struct USBDevice_
 {
 	/**
-	 * Links the device to the list.
+	 * Address of the device (1-127).
 	 */
-	struct USBDevice_*			prev;
-	struct USBDevice_*			next;
+	usb_addr_t					addr;
 	
 	/**
-	 * The size of this structure.
+	 * Controller description.
 	 */
-	size_t					size;
+	USBCtrl*					ctrl;
 	
 	/**
-	 * Controller-driver-specific data structure for this USB device.
+	 * Device flags.
 	 */
-	void*					data;
+	int						flags;
+	
+	/**
+	 * Controller-specific data.
+	 */
+	void*						data;
+	
+	/**
+	 * Version of USB that this device conforms to.
+	 */
+	int						usbver;
 	
 	/**
 	 * Reference count.
 	 */
-	int					refcount;
+	int						refcount;
 	
 	/**
-	 * Signalled every time the status bits change.
+	 * Device lock.
 	 */
-	Semaphore				semStatus;
-	
-	/**
-	 * Current status of the device.
-	 */
-	uint64_t				status;
-	
-	/**
-	 * Address of the device ("function address").
-	 */
-	uint8_t					faddr;
+	Semaphore					lock;
 } USBDevice;
 
 /**
- * USB request format.
+ * Describes a USB control pipe.
  */
-typedef struct
+typedef struct USBControlPipe_
 {
-	uint8_t					bmRequestType;
-	uint8_t					bRequest;
-	uint16_t				wValue;
-	uint16_t				wIndex;
-	uint16_t				wLength;
-} USBRequest;
+	/**
+	 * The device on which this pipe's endpoints are located.
+	 */
+	USBDevice*					dev;
+	
+	/**
+	 * Controller driver data.
+	 */
+	void*						data;
+} USBControlPipe;
 
 /**
  * Initialize the USB subsystem.
@@ -114,37 +282,61 @@ typedef struct
 void usbInit();
 
 /**
- * Allocates a USB device structure and returns a pointer to it. You may then fill out the structure
- * and call usbPostDevice() to present the device to the system. The structure returned by this function
- * contains the default values of all fields, with 'size' set to the size of the USBDevice structure
- * supported by the kernel; if this is smaller than what the driver expects, it means that the driver is
- * running on a kernel version older than what it was built for.
- *
- * The returned structure has a reference count of 0. You must not call any other USB functions on it prior
- * to calling usbPostDevice(), which sets the reference count to 1.
- *
- * The 'faddr' field is set to a unique function address allocated by the kernel. This address will be deallocated
- * when usbDisconnect() is called.
- *
- * Returns NULL on error. The possible reasons are:
- *  - we are out of function addresses.
+ * Allocate a new device address and return it. Returns 0 if out of addresses.
  */
-USBDevice* usbCreateDevice();
+usb_addr_t usbAllocAddr();
 
 /**
- * Adds a USB device to the system device list. This must be the first function called on a device returned by
- * usbCreateDevice(), right after the controller driver fills out the appropriate fields. This function sets the
- * reference count to 1 and allows the device to be enumerated by USB device drivers.
- *
- * Note that this call will result in a bunch of control messages being sent to the device to determine its type
- * etc.
+ * Release a device address.
  */
-void usbPostDevice(USBDevice *usbdev);
+void usbReleaseAddr(usb_addr_t addr);
 
 /**
- * Called by the controller driver when a USB device is disconnected. This decreases the reference count, and the
- * controller driver must not reference the USB device anymore.
+ * Create a device object. This is called by the controller driver when a USB device is detected.
  */
-void usbDisconnect(USBDevice *usbdev);
+USBDevice* usbCreateDevice(usb_addr_t addr, USBCtrl *ctrl, int flags, void *data, int usbver);
+
+/**
+ * Hang up a USB device. This is called by the controller driver when the device is unplugged from
+ * a port. It also decrements the reference count of the device, so the reference becomes invalid.
+ *
+ * Prior to calling this function, the controller driver should make a copy of the "data" field (if
+ * used) and after calling this function, release any other resources associated with the device.
+ * This function sets the "ctrl" field to a no-op controller.
+ */
+void usbHangup(USBDevice *dev);
+
+/**
+ * Create a USB control pipe object for the specified device, with the endpoint number 'epno',
+ * and maximum packet length 'maxPacketLen'. Returns the object on success, or NULL on failure.
+ */
+USBControlPipe* usbCreateControlPipe(USBDevice *dev, usb_epno_t epno, size_t maxPacketLen);
+
+/**
+ * Delete a USB control pipe.
+ */
+void usbDeleteControlPipe(USBControlPipe *dev);
+
+/**
+ * Create a control request made up of the specified packets and buffer, on the given control pipe.
+ * Returns NULL on a fatal error.
+ */
+USBRequest* usbCreateControlRequest(USBControlPipe *pipe, USBTransferInfo *packets, void *buffer, Semaphore *semComplete);
+
+/**
+ * Submit a USB request. This function returns immediately when the request gets queued; in order to wait
+ * for completion, you must wait on the completion semaphore. Returns 0 on success, or errno on error.
+ */
+int usbSubmitRequest(USBRequest *urb);
+
+/**
+ * Delete a USB request object.
+ */
+void usbDeleteRequest(USBRequest *urb);
+
+/**
+ * Called by the controller driver. Mark a USB request as completed.
+ */
+void usbPostComplete(USBRequest *urb);
 
 #endif

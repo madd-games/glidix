@@ -216,4 +216,14 @@ void pciSetBusMastering(PCIDevice *dev, int enable);
  */
 void pciSetIrqHandler(PCIDevice *dev, int (*handler)(void *param), void *param);
 
+/**
+ * Read from the PCI configuration space of a device. The offset must be 4-byte-aligned.
+ */
+uint32_t pciRead(PCIDevice *dev, uint32_t offset);
+
+/**
+ * Write to the PCI configuration space of a device. The offset must be 4-byte-aligned.
+ */
+void pciWrite(PCIDevice *dev, uint32_t offset, uint32_t value);
+
 #endif

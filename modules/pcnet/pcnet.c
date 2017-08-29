@@ -346,7 +346,7 @@ MODULE_INIT()
 		nif->running = 1;
 		nif->nextTX = 0;
 		
-		if (dmaCreateBuffer(&nif->dmaSharedArea, sizeof(PCnetSharedArea), 0) != 0)
+		if (dmaCreateBuffer(&nif->dmaSharedArea, sizeof(PCnetSharedArea), DMA_32BIT) != 0)
 		{
 			panic("failed to allocate shared area for PCnet");
 		};

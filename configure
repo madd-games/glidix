@@ -83,7 +83,7 @@ for i in "$@"
 do
 case $i in
 	--iso)
-		expanded_options="$expanded_options --module-gxfs=initmod --module-isofs=initmod --module-sdide=initmod --module-sdahci=initmod --module-ohci=disable --enable-gxsetup --enable-binutils --enable-gxboot --enable-gcc"
+		expanded_options="$expanded_options --module-gxfs=initmod --module-isofs=initmod --module-sdide=initmod --module-sdahci=initmod --module-ehci=initmod --enable-gxsetup --enable-binutils --enable-gxboot --enable-gcc"
 		iso_target="yes"
 		;;
 	*)

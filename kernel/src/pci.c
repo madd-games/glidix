@@ -578,8 +578,6 @@ void pciSetBusMastering(PCIDevice *dev, int enable)
 	uint32_t lfunc = (uint32_t) dev->func;
 	addr = (lbus << 16) | (lslot << 11) | (lfunc << 8) | (1 << 31) | 0x4;
 	
-	//outd(PCI_CONFIG_ADDR, addr);
-	//uint32_t statcmd = ind(PCI_CONFIG_DATA);
 	uint32_t statcmd = pciConfRead(addr);
 	
 	if (enable)
@@ -591,8 +589,6 @@ void pciSetBusMastering(PCIDevice *dev, int enable)
 		statcmd &= ~(1 << 2);
 	};
 	
-	//outd(PCI_CONFIG_ADDR, addr);
-	//outd(PCI_CONFIG_DATA, statcmd);
 	pciConfWrite(addr, statcmd);
 	
 	mutexUnlock(&pciLock);
@@ -603,4 +599,26 @@ void pciSetIrqHandler(PCIDevice *dev, int (*handler)(void *param), void *param)
 	// set param FIRST! atomicity.
 	dev->irqParam = param;
 	dev->irqHandler = handler;
+};
+
+uint32_t pciRead(PCIDevice *dev, uint32_t offset)
+{
+	uint32_t addr;
+	uint32_t lbus = (uint32_t) dev->bus;
+	uint32_t lslot = (uint32_t) dev->slot;
+	uint32_t lfunc = (uint32_t) dev->func;
+	addr = (lbus << 16) | (lslot << 11) | (lfunc << 8) | (1 << 31) | offset;
+	
+	return pciConfRead(addr);
+};
+
+void pciWrite(PCIDevice *dev, uint32_t offset, uint32_t value)
+{
+	uint32_t addr;
+	uint32_t lbus = (uint32_t) dev->bus;
+	uint32_t lslot = (uint32_t) dev->slot;
+	uint32_t lfunc = (uint32_t) dev->func;
+	addr = (lbus << 16) | (lslot << 11) | (lfunc << 8) | (1 << 31) | offset;
+	
+	pciConfWrite(addr, value);
 };

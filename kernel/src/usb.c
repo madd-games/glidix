@@ -30,93 +30,154 @@
 #include <glidix/string.h>
 #include <glidix/memory.h>
 
-static Semaphore usbLock;
-static USBDevice *firstDevice;
 static uint8_t addrBitmap[16];
-
-static uint8_t allocAddr()
-{
-	// never allocate address 0!
-	int i;
-	for (i=1; i<=127; i++)
-	{
-		int byte = i/8;
-		int bit = i%8;
-		
-		if (atomic_test_and_set8(&addrBitmap[byte], bit) == 0)
-		{
-			return (uint8_t) i;
-		};
-	};
-	
-	return 0;
-};
+static USBCtrl ctrlNop;
 
 void usbInit()
 {
-	semInit(&usbLock);
-	firstDevice = NULL;
-	memset(addrBitmap, 0, 16);
+	addrBitmap[0] = 1;		// address 0 reserved
 };
 
-static void usbDownref(USBDevice *dev)
+usb_addr_t usbAllocAddr()
+{
+	usb_addr_t i;
+	for (i=1; i<128; i++)
+	{
+		uint8_t index = i / 8;
+		uint8_t mask = (1 << (i % 8));
+		
+		if ((__sync_fetch_and_or(&addrBitmap[index], mask) & mask) == 0)
+		{
+			break;
+		};
+	};
+	
+	return i;
+};
+
+void usbReleaseAddr(usb_addr_t addr)
+{
+	uint8_t index = addr / 8;
+	uint8_t mask = (1 << (addr % 8));
+	__sync_fetch_and_and(&addrBitmap[index], ~mask);
+};
+
+USBDevice* usbCreateDevice(usb_addr_t addr, USBCtrl *ctrl, int flags, void *data, int usbver)
+{
+	USBDevice *dev = NEW(USBDevice);
+	dev->addr = addr;
+	dev->ctrl = ctrl;
+	dev->flags = flags;
+	dev->data = data;
+	dev->usbver = usbver;
+	dev->refcount = 1;
+	semInit(&dev->lock);
+	
+	return dev;
+};
+
+void usbUp(USBDevice *dev)
+{
+	__sync_fetch_and_add(&dev->refcount, 1);
+};
+
+void usbDown(USBDevice *dev)
 {
 	if (__sync_add_and_fetch(&dev->refcount, -1) == 0)
 	{
+		usbReleaseAddr(dev->addr);
 		kfree(dev);
 	};
 };
 
-USBDevice* usbCreateDevice()
+void usbHangup(USBDevice *dev)
 {
-	uint8_t faddr = allocAddr();
-	if (faddr == 0)
+	semWait(&dev->lock);
+	dev->flags |= USB_DEV_HANGUP;
+	dev->ctrl = &ctrlNop;
+	semSignal(&dev->lock);
+	
+	usbDown(dev);
+};
+
+USBControlPipe* usbCreateControlPipe(USBDevice *dev, usb_epno_t epno, size_t maxPacketLen)
+{
+	// create the pipe driver data
+	semWait(&dev->lock);
+	if (dev->ctrl->createControlPipe == NULL)
+	{
+		semSignal(&dev->lock);
+		return NULL;
+	};
+	
+	void *pipedata = dev->ctrl->createControlPipe(dev, epno, maxPacketLen);
+	semSignal(&dev->lock);
+	
+	if (pipedata == NULL)
 	{
 		return NULL;
 	};
 	
-	USBDevice *dev = NEW(USBDevice);
-	memset(dev, 0, sizeof(USBDevice));
-	dev->size = sizeof(USBDevice);
-	dev->faddr = faddr;
-	return dev;
+	// upref the device to place into the pipe object
+	usbUp(dev);
+	
+	// create the pipe
+	USBControlPipe *pipe = NEW(USBControlPipe);
+	pipe->dev = dev;
+	pipe->data = pipedata;
+	
+	return pipe;
 };
 
-void usbPostDevice(USBDevice *dev)
+void usbDeleteControlPipe(USBControlPipe *pipe)
 {
-	semInit2(&dev->semStatus, 0);
-	dev->refcount = 1;
+	USBDevice *dev = pipe->dev;
 	
-	semWait(&usbLock);
-	if (firstDevice == NULL)
+	semWait(&dev->lock);
+	if (dev->ctrl->deleteControlPipe != NULL)
 	{
-		dev->prev = dev->next = NULL;
-		firstDevice = dev;
-	}
-	else
-	{
-		dev->prev = NULL;
-		firstDevice->prev = dev;
-		dev->next = firstDevice;
-		firstDevice = dev;
+		dev->ctrl->deleteControlPipe(pipe->data);
 	};
-	semSignal(&usbLock);
+	semSignal(&dev->lock);
+	
+	usbDown(dev);
+	kfree(pipe);
 };
 
-void usbDisconnect(USBDevice *dev)
+USBRequest* usbCreateControlRequest(USBControlPipe *pipe, USBTransferInfo *packets, void *buffer, Semaphore *semComplete)
 {
-	semWait(&usbLock);
-	if (dev->prev != NULL) dev->prev->next = dev->next;
-	if (dev->next != NULL) dev->next->prev = dev->prev;
-	if (firstDevice == dev) firstDevice = dev->next;
-	semSignal(&usbLock);
+	USBRequest *urb = (USBRequest*) kmalloc(sizeof(urb->control));
+	memset(urb, 0, sizeof(urb->control));
+	urb->header.type = USB_TRANS_CONTROL;
+	urb->header.semComplete = semComplete;
+	urb->header.dev = pipe->dev;
+	usbUp(pipe->dev);
+	urb->header.size = sizeof(urb->control);
 	
-	__sync_fetch_and_or(&dev->status, USB_DISCONNECTED);
+	urb->control.pipe = pipe;
+	urb->control.packets = packets;
+	urb->control.buffer = buffer;
 	
-	uint8_t byte = dev->faddr / 8;
-	uint8_t bit = dev->faddr % 8;
-	uint8_t mask = (1 << bit);
-	__sync_fetch_and_and(&addrBitmap[byte], ~mask);
+	return urb;
+};
+
+int usbSubmitRequest(USBRequest *urb)
+{
+	USBCtrl *ctrl = urb->header.dev->ctrl;
+	if (ctrl->submit == NULL)
+	{
+		return ENOSYS;
+	};
 	
-	usbDownref(dev);
+	return ctrl->submit(urb);
+};
+
+void usbDeleteRequest(USBRequest *urb)
+{
+	kfree(urb);
+};
+
+void usbPostComplete(USBRequest *urb)
+{
+	if (urb->header.semComplete != NULL) semSignal(urb->header.semComplete);
 };

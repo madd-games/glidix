@@ -170,9 +170,9 @@ void stackTrace(uint64_t rip, uint64_t rbp);
 void stackTraceHere();
 
 /**
- * Give up remaining CPU time (implemented in sched.c, don't ask for reasons).
+ * Give up remaining CPU time (implemented in sched.c).
  */
-void		kyield();
+void kyield();
 
 /**
  * This is used to improve debugging of the OS inside Bochs. When this function is called,
