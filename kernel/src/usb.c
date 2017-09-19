@@ -29,9 +29,103 @@
 #include <glidix/usb.h>
 #include <glidix/string.h>
 #include <glidix/memory.h>
+#include <glidix/sched.h>
+#include <glidix/console.h>
 
 static uint8_t addrBitmap[16];
 static USBCtrl ctrlNop;
+
+static USBTransferInfo tiGetDeviceDescriptor[] = {
+	{USB_SETUP, 0, sizeof(USBSetupPacket)},
+	{USB_IN, 1, sizeof(USBDeviceDescriptor)},
+	{USB_OUT, 0, 0},
+	{USB_END}
+};
+
+void usbUp(USBDevice *dev)
+{
+	__sync_fetch_and_add(&dev->refcount, 1);
+};
+
+void usbDown(USBDevice *dev)
+{
+	if (__sync_add_and_fetch(&dev->refcount, -1) == 0)
+	{
+		usbReleaseAddr(dev->addr);
+		kfree(dev);
+	};
+};
+
+void usbDevInitFunc(void *context)
+{
+	// the device is alread upreffered for us
+	USBDevice *dev = (USBDevice*) context;
+	
+	// detach us. the idea is that this thread gets spawned upon detection of a device,
+	// and we look for the appropriate driver to handle the device. if the driver is found,
+	// then this thread shall continue to exist, running the driver code, managing the device,
+	// and exiting once the device is disconnected. if the driver isn't found, we just exit.
+	detachMe();
+	
+	// set up the default control pipe
+	USBControlPipe *pipe = usbCreateControlPipe(dev, 0, 64);
+	if (pipe == NULL)
+	{
+		kprintf_debug("usb: failed to create default control pipe\n");
+		usbDown(dev);
+		return;
+	};
+	
+	// get the device descriptor
+	struct
+	{
+		USBSetupPacket setup;
+		USBDeviceDescriptor desc;
+	} req;
+	
+	memset(&req, 0, sizeof(req));
+	req.setup.bmRequestType = USB_REQ_DEVICE_TO_HOST | USB_REQ_STANDARD | USB_REQ_DEVICE;
+	req.setup.bRequest = USB_REQ_GET_DESCRIPTOR;
+	req.setup.wValue = 0x10;				// device descriptor zero
+	req.setup.wIndex = 0;
+	req.setup.wLength = sizeof(USBDeviceDescriptor);
+	
+	Semaphore semComplete;
+	semInit2(&semComplete, 0);
+	USBRequest *urb = usbCreateControlRequest(pipe, tiGetDeviceDescriptor, &req, &semComplete);
+	if (urb == NULL)
+	{
+		kprintf_debug("usb: failed to create GET_DESCRIPTOR request\n");
+		usbDeleteControlPipe(pipe);
+		usbDown(dev);
+		return;
+	};
+	
+	int status = usbSubmitRequest(urb);
+	if (status != 0)
+	{
+		kprintf_debug("usb: failed to submit GET_DESCRIPTOR request: status %d\n", status);
+		usbDeleteRequest(urb);
+		usbDeleteControlPipe(pipe);
+		usbDown(dev);
+		return;
+	};
+	
+	kprintf_debug("i'm at the semaphore wait bit!!!!!!!!\n");
+	semWait(&semComplete);
+	kprintf_debug("finished waiting!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+	status = usbGetRequestStatus(urb);
+	if (status != 0)
+	{
+		kprintf_debug("usb: execution of GET_DESCRIPTOR failed: status %d\n", status);
+		usbDeleteRequest(urb);
+		usbDeleteControlPipe(pipe);
+		usbDown(dev);
+		return;
+	};
+	
+	kprintf("i got all the info!\n");
+};
 
 void usbInit()
 {
@@ -70,24 +164,16 @@ USBDevice* usbCreateDevice(usb_addr_t addr, USBCtrl *ctrl, int flags, void *data
 	dev->flags = flags;
 	dev->data = data;
 	dev->usbver = usbver;
-	dev->refcount = 1;
+	dev->refcount = 2;		/* one returned, one for the init thread */
 	semInit(&dev->lock);
+
+	KernelThreadParams pars;
+	memset(&pars, 0, sizeof(KernelThreadParams));
+	pars.stackSize = DEFAULT_STACK_SIZE;
+	pars.name = "USB Device Initializer Thread";
+	CreateKernelThread(usbDevInitFunc, &pars, dev);
 	
 	return dev;
-};
-
-void usbUp(USBDevice *dev)
-{
-	__sync_fetch_and_add(&dev->refcount, 1);
-};
-
-void usbDown(USBDevice *dev)
-{
-	if (__sync_add_and_fetch(&dev->refcount, -1) == 0)
-	{
-		usbReleaseAddr(dev->addr);
-		kfree(dev);
-	};
 };
 
 void usbHangup(USBDevice *dev)
@@ -180,4 +266,9 @@ void usbDeleteRequest(USBRequest *urb)
 void usbPostComplete(USBRequest *urb)
 {
 	if (urb->header.semComplete != NULL) semSignal(urb->header.semComplete);
+};
+
+int usbGetRequestStatus(USBRequest *urb)
+{
+	return urb->header.status;
 };

@@ -39,6 +39,7 @@
 #include "pkg.h"
 #include "msgbox.h"
 #include "render.h"
+#include "error.h"
 
 typedef struct
 {
@@ -175,7 +176,7 @@ void pkgInstall()
 				close(0);
 				close(1);
 				close(2);
-				open("/dev/null", O_RDWR);
+				open("/run/mip-log", O_RDWR | O_CREAT | O_TRUNC);
 				dup(0);
 				dup(1);
 				execl("/usr/bin/mip-inst", "mip-install", path, "--dest=/mnt", NULL);
@@ -188,13 +189,13 @@ void pkgInstall()
 			if (!WIFEXITED(status))
 			{
 				msgbox("ERROR", "mip-install terminated with an error!");
-				continue;
+				displayError("/run/mip-log");
 			};
 		
 			if (WEXITSTATUS(status) != 0)
 			{
 				msgbox("ERROR", "mip-install terminated with an error!");
-				continue;
+				displayError("/run/mip-log");
 			};
 		};
 	};

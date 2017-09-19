@@ -26,26 +26,12 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef RENDER_H_
-#define RENDER_H_
-
-#include <inttypes.h>
-
-#define	COLOR_BACKGROUND			0x1F
-#define	COLOR_WINDOW				0x70
-#define	COLOR_SHADOW				0x01
-#define	COLOR_SELECTION				0x4F
-#define	COLOR_TEXTFIELD				0x07
-#define	COLOR_PROGRESS				0x0A
+#ifndef ERROR_H_
+#define ERROR_H_
 
 /**
- * Render a window of the specified size, caption and status bar, and store the coordinates of its
- * top-left corner in (*startX, *startY).
+ * Display an error file.
  */
-void renderWindow(const char *status, const char *caption, int width, int height, int *startX, int *startY);
-
-void setColor(uint8_t col);
-void setCursor(uint8_t x, uint8_t y);
-void clearScreen();
+void displayError(const char *filename);
 
 #endif

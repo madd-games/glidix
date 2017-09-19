@@ -176,7 +176,7 @@ static void scroll()
 
 static void kputch(char c)
 {
-	//outb(0xE9, c);
+	outb(0xE9, c);
 	if (conOutCom)
 	{
 		while ((inb(0x3F8 + 5) & 0x20) == 0);

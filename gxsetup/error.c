@@ -26,26 +26,29 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef RENDER_H_
-#define RENDER_H_
+#include "error.h"
+#include "render.h"
 
-#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
-#define	COLOR_BACKGROUND			0x1F
-#define	COLOR_WINDOW				0x70
-#define	COLOR_SHADOW				0x01
-#define	COLOR_SELECTION				0x4F
-#define	COLOR_TEXTFIELD				0x07
-#define	COLOR_PROGRESS				0x0A
-
-/**
- * Render a window of the specified size, caption and status bar, and store the coordinates of its
- * top-left corner in (*startX, *startY).
- */
-void renderWindow(const char *status, const char *caption, int width, int height, int *startX, int *startY);
-
-void setColor(uint8_t col);
-void setCursor(uint8_t x, uint8_t y);
-void clearScreen();
-
-#endif
+void displayError(const char *filename)
+{
+	clearScreen();
+	printf("Failure:\n");
+	
+	FILE *fp = fopen(filename, "r");
+	char linebuf[1024];
+	char *line;
+	
+	while ((line = fgets(linebuf, 1024, fp)) != NULL)
+	{
+		printf("%s", line);
+	};
+	
+	fclose(fp);
+	
+	printf("Installer terminating.\n");
+	while (1) pause();
+};

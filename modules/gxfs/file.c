@@ -61,6 +61,7 @@ static int gxfs_dup(File *me, File *fp, size_t filesz)
 	
 	FileData *newData = NEW(FileData);
 	__sync_fetch_and_add(&data->info->refcount, 1);
+	__sync_fetch_and_add(&data->info->data.inoLinks, 1);
 	ftUp(data->info->ft);
 	
 	memcpy(newData, data, sizeof(FileData));

@@ -167,10 +167,10 @@ void gxfsDownrefInode(InodeInfo *info)
 			{
 				// we delete the tree if this is not a symbolic link
 				// (symbolic links have no trees attached)
-				gxfsDeleteTree(info->fs, info->data.inoTreeDepth, info->data.inoRoot);
+				gxfsDeleteTree(gxfs, info->data.inoTreeDepth, info->data.inoRoot);
 			};
 			
-			gxfsFreeBlock(info->fs, info->index);
+			gxfsFreeBlock(gxfs, info->index);
 
 			if (info->ft != NULL)
 			{
@@ -179,7 +179,6 @@ void gxfsDownrefInode(InodeInfo *info)
 				ftDown(info->ft);
 			};
 
-			GXFS *gxfs = info->fs;
 			mutexLock(&gxfs->mtxInodes);
 			
 			if (info->prev == NULL)
