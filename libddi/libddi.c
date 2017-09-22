@@ -35,6 +35,7 @@
 #include <errno.h>
 #endif
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -129,7 +130,7 @@ struct DDIFont_
 	int size;
 	
 	/**
-	 * Hashtable of cached glyph bitmaps. The hash is the bottom 5 bits.
+	 * Hashtable of cached glyph bitmaps. The hash is the bottom 5 bits of the codepoint.
 	 */
 	DDIGlyphCache* glyphCache[32];
 };
@@ -1518,6 +1519,8 @@ void ddiWritePen(DDIPen *pen, const char *text)
 			{
 				DDIGlyphCache *glyph = ddiGetGlyph(pen->font, point);
 				if (glyph == NULL) break;
+				
+				pen->writePos++;
 				
 				int x, y;
 				int putX, putY;
