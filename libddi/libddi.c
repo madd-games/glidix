@@ -1270,6 +1270,40 @@ void ddiSetPenSpacing(DDIPen *pen, int letterSpacing, int lineHeight)
 	pen->lineHeight = lineHeight;
 };
 
+DDIGlyphCache* ddiGetGlyph(DDIFont *font, long codepoint)
+{
+	// first try getting the cache glyph
+	DDIGlyphCache *cache;
+	for (cache=font->glyphCache[codepoint & 0x1F]; cache!=NULL; cache=cache->next)
+	{
+		if (cache->codepoint == codepoint) return cache;
+	};
+	
+	FT_UInt glyph = FT_Get_Char_Index(font->face, codepoint);
+	FT_Error error = FT_Load_Glyph(font->face, glyph, FT_LOAD_DEFAULT);
+	if (error != 0) return NULL;
+	error = FT_Render_Glyph(font->face->glyph, FT_RENDER_MODE_NORMAL);
+	if (error != 0) return NULL;
+
+	FT_Bitmap *bitmap = &font->face->glyph->bitmap;
+	
+	cache = (DDIGlyphCache*) malloc(sizeof(DDIGlyphCache));
+	cache->next = font->glyphCache[codepoint & 0x1F];
+	font->glyphCache[codepoint & 0x1F] = cache;
+	cache->codepoint = codepoint;
+	cache->bitmap = (uint8_t*) malloc(bitmap->pitch * bitmap->rows);
+	memcpy(cache->bitmap, bitmap->buffer, bitmap->pitch * bitmap->rows);
+	cache->width = bitmap->width;
+	cache->height = bitmap->rows;
+	cache->pitch = bitmap->pitch;
+	cache->advanceX = font->face->glyph->advance.x;
+	cache->advanceY = font->face->glyph->advance.y;
+	cache->bitmap_top = font->face->glyph->bitmap_top;
+	cache->bitmap_left = font->face->glyph->bitmap_left;
+	
+	return cache;
+};
+
 /**
  * Calculate the size of the surface that will fit the text segment. If the text needs to be wrapped, 'nextEl' will point
  * to the location at which the rendering is to be stopped, and the rest of the text is to be rendered on another line.
@@ -1278,7 +1312,6 @@ void ddiSetPenSpacing(DDIPen *pen, int letterSpacing, int lineHeight)
  */ 
 static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *height, int *offsetX, int *offsetY, const char **nextEl)
 {
-	FT_Error error;
 	int penX=0, penY=0;
 	int minX=0, maxX=0, minY=0, maxY=0;
 	
@@ -1339,31 +1372,18 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 		}
 		else
 		{
-			FT_UInt glyph = FT_Get_Char_Index(pen->font->face, point);
-			error = FT_Load_Glyph(pen->font->face, glyph, FT_LOAD_DEFAULT);
-			if (error != 0)
-			{
-				return -1;
-			};
-	
-			error = FT_Render_Glyph(pen->font->face->glyph, FT_RENDER_MODE_NORMAL);
-			if (error != 0)
-			{
-				return -1;
-			};
-		
-			FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
-		
-			int left = penX + pen->font->face->glyph->bitmap_left;
-			int top = penY - pen->font->face->glyph->bitmap_top;
+			DDIGlyphCache *glyph = ddiGetGlyph(pen->font, point);
+			
+			int left = penX + glyph->bitmap_left;
+			int top = penY - glyph->bitmap_top;
 			if (left < minX) minX = left;
 			if (top < minY) minY = top;
 
-			penX += (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
-			penY += pen->font->face->glyph->advance.y >> 6;
+			penX += (glyph->advanceX >> 6) + pen->letterSpacing;
+			penY += glyph->advanceY >> 6;
 
-			int right = left + (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
-			int bottom = top + bitmap->rows;
+			int right = left + (glyph->advanceX >> 6) + pen->letterSpacing;
+			int bottom = top + glyph->height;
 			if (right > maxX) maxX = right;
 			if (bottom > maxY) maxY = bottom;
 		};
@@ -1407,40 +1427,6 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 	*nextEl = NULL;
 	
 	return 0;
-};
-
-DDIGlyphCache* ddiGetGlyph(DDIFont *font, long codepoint)
-{
-	// first try getting the cache glyph
-	DDIGlyphCache *cache;
-	for (cache=font->glyphCache[codepoint & 0x1F]; cache!=NULL; cache=cache->next)
-	{
-		if (cache->codepoint == codepoint) return cache;
-	};
-	
-	FT_UInt glyph = FT_Get_Char_Index(font->face, codepoint);
-	FT_Error error = FT_Load_Glyph(font->face, glyph, FT_LOAD_DEFAULT);
-	if (error != 0) return NULL;
-	error = FT_Render_Glyph(font->face->glyph, FT_RENDER_MODE_NORMAL);
-	if (error != 0) return NULL;
-
-	FT_Bitmap *bitmap = &font->face->glyph->bitmap;
-	
-	cache = (DDIGlyphCache*) malloc(sizeof(DDIGlyphCache));
-	cache->next = font->glyphCache[codepoint & 0x1F];
-	font->glyphCache[codepoint & 0x1F] = cache;
-	cache->codepoint = codepoint;
-	cache->bitmap = (uint8_t*) malloc(bitmap->pitch * bitmap->rows);
-	memcpy(cache->bitmap, bitmap->buffer, bitmap->pitch * bitmap->rows);
-	cache->width = bitmap->width;
-	cache->height = bitmap->rows;
-	cache->pitch = bitmap->pitch;
-	cache->advanceX = font->face->glyph->advance.x;
-	cache->advanceY = font->face->glyph->advance.y;
-	cache->bitmap_top = font->face->glyph->bitmap_top;
-	cache->bitmap_left = font->face->glyph->bitmap_left;
-	
-	return cache;
 };
 
 void ddiWritePen(DDIPen *pen, const char *text)
