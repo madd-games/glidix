@@ -79,13 +79,17 @@ void pkgSelection()
 	
 	renderWindow("\30" "\31" " Select package\t<ENTER> Toggle installation\t" "\x1A" " Proceed",
 			"SELECT PACKAGES",
-			 50, (int) numPackages,
+			 50, 10,
 			 &startX, &startY);
 	
+	size_t scrollPos = 0;
 	while (1)
 	{
+		size_t barStart = scrollPos * 10 / numPackages;
+		size_t barEnd = (scrollPos+10) * 10 / numPackages;
+		
 		size_t i;
-		for (i=0; i<numPackages; i++)
+		for (i=scrollPos; i<scrollPos+10; i++)
 		{
 			char prefix, tick;
 			if (i == selected)
@@ -108,8 +112,18 @@ void pkgSelection()
 				tick = ' ';
 			};
 		
-			setCursor((uint8_t)startX, (uint8_t)(startY+i));
-			printf("%c[%c] %-45s", prefix, tick, packages[i].name);
+			size_t linePos = i - scrollPos;
+			char scrollChar = 176;
+			if ((linePos >= barStart) && (linePos <= barEnd))
+			{
+				scrollChar = 219;
+			};
+			
+			setCursor((uint8_t)startX, (uint8_t)(startY+i-scrollPos));
+			printf("%c[%c] %-44s", prefix, tick, packages[i].name);
+			
+			setColor(COLOR_SCROLLBAR);
+			printf("%c", scrollChar);
 		};
 
 		setCursor(79, 24);
@@ -121,11 +135,13 @@ void pkgSelection()
 		{
 			// up
 			if (selected != 0) selected--;
+			if (selected < scrollPos) scrollPos = selected;
 		}
 		else if (c == 0x8C)
 		{
 			// down
 			if (selected != (numPackages-1)) selected++;
+			if (selected >= (scrollPos+10)) scrollPos = selected-9;
 		}
 		else if (c == '\n')
 		{

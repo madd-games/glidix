@@ -34,9 +34,6 @@
 #include "screen.h"
 #include "kblayout.h"
 
-#define	WINDOW_BORDER_WIDTH				3
-#define	WINDOW_CAPTION_HEIGHT				20
-
 Window *desktopWindow;
 
 pthread_mutex_t mouseLock = PTHREAD_MUTEX_INITIALIZER;
@@ -73,8 +70,8 @@ void wndInit()
 	desktopWindow->params.flags = GWM_WINDOW_NODECORATE;
 	desktopWindow->params.width = screen->width;
 	desktopWindow->params.height = screen->height;
-	desktopWindow->fgScrollX = -WINDOW_BORDER_WIDTH;
-	desktopWindow->fgScrollY = -WINDOW_CAPTION_HEIGHT;
+	desktopWindow->fgScrollX = 0;
+	desktopWindow->fgScrollY = 0;
 	desktopWindow->canvas = desktopBackground;
 	desktopWindow->front = ddiCreateSurface(&screen->format, screen->width, screen->height,
 						(char*)desktopBackground->data, 0);
@@ -226,21 +223,22 @@ int wndDestroy(Window *wnd)
 
 int wndIsFocused(Window *wnd)
 {
-	//pthread_mutex_lock(&wincacheLock);
+	pthread_mutex_lock(&wincacheLock);
 	Window *compare;
 	for (compare=wndFocused; compare!=NULL; compare=compare->parent)
 	{
 		if (compare == wnd)
 		{
-			//pthread_mutex_unlock(&wincacheLock);
+			pthread_mutex_unlock(&wincacheLock);
 			return 1;
 		};
 	};
 	
-	//pthread_mutex_unlock(&wincacheLock);
+	pthread_mutex_unlock(&wincacheLock);
 	return 0;
 };
 
+#if 0
 void wndDrawDecoration(DDISurface *target, Window *wnd)
 {
 	int active = wndIsFocused(wnd);
@@ -287,6 +285,7 @@ void wndDrawDecoration(DDISurface *target, Window *wnd)
 		ddiBlit(wnd->icon, 0, 0, target, wnd->params.x+2, wnd->params.y+2, 16, 16);
 	};
 };
+#endif
 
 void wndDirty(Window *wnd)
 {
@@ -301,12 +300,7 @@ void wndDirty(Window *wnd)
 	{
 		pthread_mutex_lock(&child->lock);
 		if ((child->params.flags & GWM_WINDOW_HIDDEN) == 0)
-		{
-			if ((wnd == desktopWindow) && ((child->params.flags & GWM_WINDOW_NODECORATE) == 0))
-			{
-				wndDrawDecoration(wnd->display, child);
-			};
-			
+		{	
 			ddiBlit(child->display, 0, 0, wnd->display,
 				child->params.x-wnd->fgScrollX, child->params.y-wnd->fgScrollY,
 				child->params.width, child->params.height);

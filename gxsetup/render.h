@@ -37,6 +37,7 @@
 #define	COLOR_SELECTION				0x4F
 #define	COLOR_TEXTFIELD				0x07
 #define	COLOR_PROGRESS				0x0A
+#define	COLOR_SCROLLBAR				0x83
 
 /**
  * Render a window of the specified size, caption and status bar, and store the coordinates of its
