@@ -75,6 +75,42 @@ typedef struct PenLine_
 	struct PenLine_ *next;
 } PenLine;
 
+/**
+ * Represents a cache glyph; see the glyph hashtable in "DDIFont".
+ */
+typedef struct DDIGlyphCache_
+{
+	/**
+	 * Link.
+	 */
+	struct DDIGlyphCache_* next;
+	
+	/**
+	 * The Unicode codepoint.
+	 */
+	long codepoint;
+	
+	/**
+	 * The rendered bitmap.
+	 */
+	uint8_t* bitmap;
+	
+	/**
+	 * Parameters.
+	 */
+	unsigned int width, height, pitch;
+	
+	/**
+	 * Advance values (in 1/64 units; taken straight from FreeType).
+	 */
+	int advanceX, advanceY;
+	
+	/**
+	 * Bitmap top/left.
+	 */
+	int bitmap_top, bitmap_left;
+} DDIGlyphCache;
+
 struct DDIFont_
 {
 	/**
@@ -83,7 +119,7 @@ struct DDIFont_
 	FT_Library lib;
 
 	/**
-	 * Current font.
+	 * The FreeType face.
 	 */
 	FT_Face face;
 	
@@ -91,6 +127,11 @@ struct DDIFont_
 	 * Font size.
 	 */
 	int size;
+	
+	/**
+	 * Hashtable of cached glyph bitmaps. The hash is the bottom 5 bits.
+	 */
+	DDIGlyphCache* glyphCache[32];
 };
 
 struct DDIPen_
@@ -409,41 +450,11 @@ static void ddiColorToPixel(uint32_t *pixeldata, DDIPixelFormat *format, DDIColo
 	ddiInsertWithMask(pixeldata, format->alphaMask, color->alpha);
 };
 
-static void ddiCopy(void *dest, void *src, uint64_t count)
-{
-	if(!count){return;}
-	uint64_t maskDest = (uint64_t) dest & 0xFUL;
-	if (maskDest != ((uint64_t) src & 0xFUL))
-	{
-		memcpy(dest, src, count);
-		return;
-	};
-	
-	uint64_t skip = (16 - maskDest) & 15;
-	if (skip >= count)
-	{
-		memcpy(dest, src, count);
-		return;
-	}
-	else
-	{
-		memcpy(dest, src, skip);
-		dest += skip;
-		src += skip;
-		count -= skip;
-	};
-	
-	while(count >= 8){ *(uint64_t*)dest = *(uint64_t*)src; dest += 8; src += 8; count -= 8; };
-	while(count >= 4){ *(uint32_t*)dest = *(uint32_t*)src; dest += 4; src += 4; count -= 4; };
-	while(count >= 2){ *(uint16_t*)dest = *(uint16_t*)src; dest += 2; src += 2; count -= 2; };
-	while(count >= 1){ *(uint8_t*)dest = *(uint8_t*)src; dest += 1; src += 1; count -= 1; };
-};
-
 static void ddiFill(void *dest, void *src, uint64_t unit, uint64_t count)
 {
 	while (count--)
 	{
-		ddiCopy(dest, src, unit);
+		memcpy(dest, src, unit);
 		dest += unit;
 	};
 };
@@ -598,7 +609,7 @@ void ddiOverlay(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX
 	
 	for (; height; height--)
 	{
-		ddiCopy(put, scan, pixelSize * width);
+		memcpy(put, scan, pixelSize * width);
 		//memcpy(put, scan, pixelSize * width);
 		scan += srcScanlineSize;
 		put += destScanlineSize;
@@ -710,7 +721,7 @@ DDISurface* ddiLoadPNG(const char *filename, const char **error)
 	
 	for (y=0; y<height; y++)
 	{
-		ddiCopy(put, rowPointers[y], format.bpp*width);
+		memcpy(put, rowPointers[y], format.bpp*width);
 		put += format.bpp*width;
 	};
 	
@@ -755,6 +766,12 @@ DDISurface* ddiConvertSurface(DDIPixelFormat *format, DDISurface *surface, const
 		for (x=0; x<surface->width; x++)
 		{
 			*((DDIByteVector*)put) = __builtin_shuffle(*((DDIByteVector*)scan), convertMask);
+			
+			if (surface->format.alphaMask == 0 && format->alphaMask != 0)
+			{
+				*((uint32_t*)put) |= format->alphaMask;
+			};
+			
 			put += targetPixelSize;
 			scan += srcPixelSize;
 		};
@@ -1109,6 +1126,8 @@ DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error
 		return NULL;
 	};
 	
+	memset(font, 0, sizeof(DDIFont));
+	
 	font->size = size;
 	if (strlen(family) > 64)
 	{
@@ -1389,6 +1408,40 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 	return 0;
 };
 
+DDIGlyphCache* ddiGetGlyph(DDIFont *font, long codepoint)
+{
+	// first try getting the cache glyph
+	DDIGlyphCache *cache;
+	for (cache=font->glyphCache[codepoint & 0x1F]; cache!=NULL; cache=cache->next)
+	{
+		if (cache->codepoint == codepoint) return cache;
+	};
+	
+	FT_UInt glyph = FT_Get_Char_Index(font->face, codepoint);
+	FT_Error error = FT_Load_Glyph(font->face, glyph, FT_LOAD_DEFAULT);
+	if (error != 0) return NULL;
+	error = FT_Render_Glyph(font->face->glyph, FT_RENDER_MODE_NORMAL);
+	if (error != 0) return NULL;
+
+	FT_Bitmap *bitmap = &font->face->glyph->bitmap;
+	
+	cache = (DDIGlyphCache*) malloc(sizeof(DDIGlyphCache));
+	cache->next = font->glyphCache[codepoint & 0x1F];
+	font->glyphCache[codepoint & 0x1F] = cache;
+	cache->codepoint = codepoint;
+	cache->bitmap = (uint8_t*) malloc(bitmap->pitch * bitmap->rows);
+	memcpy(cache->bitmap, bitmap->buffer, bitmap->pitch * bitmap->rows);
+	cache->width = bitmap->width;
+	cache->height = bitmap->rows;
+	cache->pitch = bitmap->pitch;
+	cache->advanceX = font->face->glyph->advance.x;
+	cache->advanceY = font->face->glyph->advance.y;
+	cache->bitmap_top = font->face->glyph->bitmap_top;
+	cache->bitmap_left = font->face->glyph->bitmap_left;
+	
+	return cache;
+};
+
 void ddiWritePen(DDIPen *pen, const char *text)
 {
 	if (*text == 0) return;
@@ -1402,9 +1455,6 @@ void ddiWritePen(DDIPen *pen, const char *text)
 			break;
 		};
 		
-		int *widths = NULL;
-		size_t numChars = 0;
-		
 		// create a segment object for this
 		size_t textSize;
 		if (nextEl == NULL)
@@ -1415,6 +1465,11 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		{
 			textSize = nextEl - text;
 		};
+
+		// preallocate the width array for the most characters we could possibly have
+		// (worst case ASCII)
+		int *widths = (int*) malloc(sizeof(int) * (textSize+1));
+		size_t numChars = 0;
 		
 		const char *textEnd = &text[textSize];
 		
@@ -1423,10 +1478,18 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		memcpy(&fillColor, &pen->foreground, sizeof(DDIColor));
 		fillColor.alpha = 0;
 		ddiFillRect(surface, 0, 0, width, height, &fillColor);
+
+		unsigned int pixelSize = pen->format.bpp + pen->format.pixelSpacing;
+		unsigned int scanlineSize = pixelSize * width + pen->format.scanlineSpacing;
+
+		uint32_t pixel;
+		ddiColorToPixel(&pixel, &surface->format, &fillColor);
+		uint8_t *alphaPtr = (uint8_t*) &pixel + ddiGetIndexForMask(pen->format.alphaMask);
+		if (pen->format.alphaMask == 0) alphaPtr = NULL;
 		
-		if (pen->font->face->size->metrics.height/64 > pen->currentLine->maxHeight)
+		if (pen->font->face->size->metrics.height >> 6 > pen->currentLine->maxHeight)
 		{
-			pen->currentLine->maxHeight = pen->font->face->size->metrics.height/64;
+			pen->currentLine->maxHeight = pen->font->face->size->metrics.height >> 6;
 		};
 		
 		int penX = 0, penY = 0;
@@ -1449,39 +1512,40 @@ void ddiWritePen(DDIPen *pen, const char *text)
 				penX = penX/DDI_TAB_LEN*DDI_TAB_LEN + DDI_TAB_LEN;
 
 				pen->writePos++;
-				widths = (int*) realloc(widths, sizeof(int)*(numChars+1));
 				widths[numChars++] = penX - oldPenX;
 			}
 			else
 			{
-				FT_UInt glyph = FT_Get_Char_Index(pen->font->face, point);
-				FT_Error error = FT_Load_Glyph(pen->font->face, glyph, FT_LOAD_DEFAULT);
-				if (error != 0) break;
-				error = FT_Render_Glyph(pen->font->face->glyph, FT_RENDER_MODE_NORMAL);
-				if (error != 0) break;
-			
-				FT_Bitmap *bitmap = &pen->font->face->glyph->bitmap;
-				pen->writePos++;
-			
+				DDIGlyphCache *glyph = ddiGetGlyph(pen->font, point);
+				if (glyph == NULL) break;
+				
 				int x, y;
-				for (x=0; x<bitmap->width; x++)
+				int putX, putY;
+				for (y=0; y<glyph->height; y++)
 				{
-					for (y=0; y<bitmap->rows; y++)
+					for (x=0; x<glyph->width; x++)
 					{
-						if (bitmap->buffer[y * bitmap->pitch + x] != 0)
+						if (glyph->bitmap[y * glyph->pitch + x] != 0)
 						{
-							fillColor.alpha = bitmap->buffer[y * bitmap->pitch + x];
-							ddiFillRect(surface, penX+offsetX+x+pen->font->face->glyph->bitmap_left,
-								penY+offsetY+y-pen->font->face->glyph->bitmap_top, 1, 1, &fillColor);
+							putX = penX+offsetX+x+glyph->bitmap_left;
+							putY = penY+offsetY+y-glyph->bitmap_top;
+							
+							if (putX >= 0 && putX < width && putY >= 0 && putY < height)
+							{
+								if (alphaPtr != NULL) *alphaPtr = glyph->bitmap[y * glyph->pitch + x];
+								*((uint32_t*)(surface->data
+									+ putY * scanlineSize
+									+ putX * pixelSize
+								)) = pixel;
+							};
 						};
 					};
 				};
 			
-				widths = (int*) realloc(widths, sizeof(int)*(numChars+1));
-				widths[numChars++] = (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
+				widths[numChars++] = (glyph->advanceX >> 6) + pen->letterSpacing;
 			
-				penX += (pen->font->face->glyph->advance.x >> 6) + pen->letterSpacing;
-				penY += pen->font->face->glyph->advance.y >> 6;
+				penX += (glyph->advanceX >> 6) + pen->letterSpacing;
+				penY += glyph->advanceY >> 6;
 			};
 		};
 
@@ -1523,7 +1587,6 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		}
 		else
 		{
-			widths = (int*) realloc(widths, sizeof(int)*(numChars+1));
 			widths[numChars++] = 0;
 			pen->writePos++;
 			seg->widths = widths;
@@ -1863,7 +1926,7 @@ static DDISurface* ddiScaleLinear(DDISurface *surface, unsigned int newWidth, un
 			
 			uint8_t *src = &surface->data[((surface->format.bpp + surface->format.pixelSpacing) * surface->width + surface->format.scanlineSpacing) * srcY + (surface->format.bpp + surface->format.pixelSpacing) * srcX];
 			
-			ddiCopy(&row[(out->format.bpp + out->format.pixelSpacing) * x], src, out->format.bpp);
+			memcpy(&row[(out->format.bpp + out->format.pixelSpacing) * x], src, out->format.bpp);
 		};
 	};
 	
