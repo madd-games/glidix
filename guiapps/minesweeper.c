@@ -1,7 +1,7 @@
 /*
-	Madd Development Tools
+	Glidix GUI
 
-	Copyright (c) 2017, Madd Games.
+	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
