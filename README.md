@@ -31,7 +31,7 @@ The source comes with GCC and binutils patches, and allows a cross-compiler to b
 
  * `-mconsole` - link an executable as a console application (the default; really a no-op).
  * `-mgui` - link an executable as a GUI application. This is done by linking against `crtgui.o`, which adds the appropriate annotation to the `.glidix.annot` section. By default, it also links against `libgwm` and `libddi`; to prevent this, use `-mnoguilibs`.
- * `-module` - link as a Glidix kernel module. This avoids linking with `libc` and other system libraries, and outputs an object file (typically with `.gkm` extension), which can be loaded by the Glidix kernel. Note that source files must be compiled with `-mcmodel=large`.
+ * `-module` - link as a Glidix kernel module. This avoids linking with `libc` and other system libraries, and outputs an object file (typically with `.gkm` extension), which can be loaded by the Glidix kernel.
  * `-mnoguilibs` - when used with `-mgui`, do not link against GUI libraries.
 
 ## Planned features
