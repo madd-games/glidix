@@ -62,12 +62,14 @@ static ssize_t pipe_read(File *fp, void *buffer, size_t size)
 	char *put = (char*) buffer;
 	ssize_t bytesLeft = (ssize_t)size;
 	if (bytesLeft > sizeCanRead) bytesLeft = sizeCanRead;
+	ssize_t willRead = bytesLeft;
 	while (bytesLeft--)
 	{
 		*put++ = pipe->buffer[pipe->roff];
 		pipe->roff = (pipe->roff + 1) % PIPE_BUFFER_SIZE;
 	};
 	
+	semSignal2(&pipe->semWriteBuffer, (int) willRead);
 	semSignal(&pipe->sem);
 	return sizeCanRead;
 };
@@ -75,44 +77,57 @@ static ssize_t pipe_read(File *fp, void *buffer, size_t size)
 static ssize_t pipe_write(File *fp, const void *buffer, size_t size)
 {
 	Pipe *pipe = (Pipe*) fp->fsdata;
-	semWait(&pipe->sem);
-
-	if ((pipe->sides & SIDE_READ) == 0)
-	{
-		// the pipe is not readable!
-		siginfo_t siginfo;
-		siginfo.si_signo = SIGPIPE;
-		siginfo.si_code = 0;
-
-		cli();
-		lockSched();
-		sendSignal(getCurrentThread(), &siginfo);
-		unlockSched();
-		sti();
-		
-		ERRNO = EPIPE;
-		semSignal(&pipe->sem);
-		return -1;
-	};
 	
 	// determine the maximum amount of data we can currently write.
-	ssize_t willWrite = (pipe->roff + PIPE_BUFFER_SIZE) - pipe->woff;
-	if (willWrite > (ssize_t)size) willWrite = (ssize_t) size;
-	
-	// write it
-	const char *scan = (const char*) buffer;
-	ssize_t bytesLeft = willWrite;
-	while (bytesLeft--)
+	ssize_t haveWritten = 0;
+	while (haveWritten < size)
 	{
-		pipe->buffer[pipe->woff] = *scan++;
-		pipe->woff = (pipe->woff + 1) % PIPE_BUFFER_SIZE;
+		ssize_t willWrite = semWaitGen(&pipe->semWriteBuffer, (int) (size - haveWritten), SEM_W_FILE(fp->oflag), 0);
+		if (willWrite < 0)
+		{
+			ERRNO = -willWrite;
+			if (haveWritten == 0) return -1;
+			else return haveWritten;
+		};
+
+		haveWritten += willWrite;
+			
+		semWait(&pipe->sem);
+
+		if ((pipe->sides & SIDE_READ) == 0)
+		{
+			// the pipe is not readable!
+			siginfo_t siginfo;
+			siginfo.si_signo = SIGPIPE;
+			siginfo.si_code = 0;
+
+			cli();
+			lockSched();
+			sendSignal(getCurrentThread(), &siginfo);
+			unlockSched();
+			sti();
+		
+			ERRNO = EPIPE;
+			semSignal(&pipe->sem);
+			return -1;
+		};	
+	
+		// write it
+		const char *scan = (const char*) buffer;
+		ssize_t bytesLeft = willWrite;
+		while (bytesLeft--)
+		{
+			pipe->buffer[pipe->woff] = *scan++;
+			pipe->woff = (pipe->woff + 1) % PIPE_BUFFER_SIZE;
+		};
+	
+		// wake up waiting threads
+		semSignal2(&pipe->counter, (int) willWrite);
+	
+		semSignal(&pipe->sem);
 	};
 	
-	// wake up waiting threads
-	semSignal2(&pipe->counter, (int) willWrite);
-	
-	semSignal(&pipe->sem);
-	return willWrite;
+	return haveWritten;
 };
 
 static void pipe_close(File *fp)
@@ -129,6 +144,7 @@ static void pipe_close(File *fp)
 	else
 	{
 		pipe->sides &= ~SIDE_READ;
+		semTerminate(&pipe->semWriteBuffer);
 	};
 	
 	if (pipe->sides == 0)
@@ -232,6 +248,7 @@ int sys_pipe2(int *upipefd, int flags)
 	Pipe *pipe = (Pipe*) kmalloc(sizeof(Pipe));
 	semInit(&pipe->sem);
 	semInit2(&pipe->counter, 0);
+	semInit2(&pipe->semWriteBuffer, PIPE_BUFFER_SIZE);
 	semInit2(&pipe->semHangup, 0);
 	pipe->roff = 0;
 	pipe->woff = 0;
