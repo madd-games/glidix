@@ -108,13 +108,14 @@ extern DDIColor gwmBackColor;
 
 /**
  * Those must match up with the Glidix humin interface (<glidix/humin.h>).
+ * TODO: remove scancode stuff, we use keycodes only now!
  */
 #define	GWM_SC_MOUSE_LEFT			0x100
 #define	GWM_SC_MOUSE_MIDDLE			0x101
 #define	GWM_SC_MOUSE_RIGHT			0x102
 
 /**
- * Message box icon types.
+ * Message box icon types. Bottom 4 bits of the 'flags' parameter.
  */
 #define	GWM_MBICON_NONE				0x0
 #define	GWM_MBICON_INFO				0x1
@@ -123,7 +124,7 @@ extern DDIColor gwmBackColor;
 #define	GWM_MBICON_ERROR			0x4
 
 /**
- * Message box button sets.
+ * Message box button sets. Bits 4-7 of the 'flags' parameter.
  */
 #define	GWM_MBUT_OK				0x00
 #define	GWM_MBUT_YESNO				0x10
@@ -244,10 +245,10 @@ typedef struct
 	char					caption[256];
 	char					iconName[256];
 	unsigned int				flags;
-	unsigned int				width;
-	unsigned int				height;
-	unsigned int				x;
-	unsigned int				y;
+	int					width;
+	int					height;
+	int					x;
+	int					y;
 } GWMWindowParams;
 
 /**
@@ -843,8 +844,8 @@ void gwmQuit();
 GWMWindow* gwmCreateWindow(
 	GWMWindow *parent,
 	const char *caption,
-	unsigned int x, unsigned int y,
-	unsigned int width, unsigned int height,
+	int x, int y,
+	int width, int height,
 	int flags);
 
 /**
@@ -1232,7 +1233,7 @@ void gwmTreeViewUpdate(GWMWindow *treeview, const void *root);
  * event handler as for a normal window. A modal dialog closes when an event handler returns -1 (the application
  * does not close in this case). You may also use the "data" field in the window in whatever way you wish.
  */
-GWMWindow* gwmCreateModal(const char *caption, unsigned int x, unsigned int y, unsigned int width, unsigned int height);
+GWMWindow* gwmCreateModal(const char *caption, int x, int y, int width, int height);
 
 /**
  * Run a modal dialog. This function will return when an event handler within the modal dialog returns -1.

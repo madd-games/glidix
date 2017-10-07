@@ -27,6 +27,7 @@
 */
 
 #include <sys/socket.h>
+#include <sys/debug.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/un.h>
@@ -38,6 +39,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <signal.h>
+#include <ucontext.h>
+#include <dlfcn.h>
 
 #include "screen.h"
 #include "server.h"
@@ -51,7 +55,7 @@ int main(int argc, char *argv[])
 	char dispdev[1024];
 	uint64_t requestRes;
 	char linebuf[1024];
-
+	
 	if (geteuid() != 0)
 	{
 		fprintf(stderr, "[gwmserver] you need to be root to start the window manager\n");
@@ -249,6 +253,12 @@ int main(int argc, char *argv[])
 		perror("exec terminal");
 		_exit(1);
 	};
+	
+	// now that we won't be starting any processes, we can set core dumps
+	signal(SIGSEGV, SIG_CORE);
+	signal(SIGILL, SIG_CORE);
+	signal(SIGBUS, SIG_CORE);
+	signal(SIGABRT, SIG_CORE);
 	
 	kblSet("/usr/share/kblayout/en_US/int", stderr);
 	printf("[gwmserver] starting.\n");

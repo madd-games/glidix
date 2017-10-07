@@ -346,8 +346,8 @@ void gwmQuit()
 GWMWindow* gwmCreateWindow(
 	GWMWindow* parent,
 	const char *caption,
-	unsigned int x, unsigned int y,
-	unsigned int width, unsigned int height,
+	int x, int y,
+	int width, int height,
 	int flags)
 {
 	uint64_t id = __sync_fetch_and_add(&nextWindowID, 1);
@@ -838,7 +838,7 @@ int gwmClassifyChar(char c)
 	return 1;
 };
 
-GWMWindow* gwmCreateModal(const char *caption, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
+GWMWindow* gwmCreateModal(const char *caption, int x, int y, int width, int height)
 {
 	static uint64_t nextModalID = 1;
 	GWMWindow *win = gwmCreateWindow(NULL, caption, x, y, width, height, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
