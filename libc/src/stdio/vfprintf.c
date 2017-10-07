@@ -777,7 +777,7 @@ int vfprintf(FILE *fp, const char *fmt, va_list ap)
 			};
 			
 			// finally the conversion specification part!
-			// NOTE: we increase the fmt pointer at the very start, inthe switch statement.
+			// NOTE: we increase the fmt pointer at the very start, in the switch statement.
 			// do not forget this!
 			char spec = *fmt++;
 			switch (spec)
