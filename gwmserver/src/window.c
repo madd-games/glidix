@@ -153,7 +153,11 @@ void wndInit()
 	
 	sem_init(&semSwap, 0, 0);
 	pthread_t thread;
-	pthread_create(&thread, NULL, swapThread, NULL);
+	if (pthread_create(&thread, NULL, swapThread, NULL) != 0)
+	{
+		fprintf(stderr, "[gwmserver] failed to create swap thread\n");
+		abort();
+	};
 };
 
 Window* wndCreate(Window *parent, GWMWindowParams *pars, uint64_t id, int fd, DDISurface *canvas)

@@ -371,6 +371,296 @@ static int __printf_conv_unsigned(FILE *fp, int flags, int lenmod, int fieldWidt
 	return ret;
 };
 
+static int __printf_conv_fixedfloat(FILE *fp, int flags, int fieldWidth, int precision, int base, char spec, va_list ap)
+{
+	double x = va_arg(ap, double);
+	uint64_t val64 = *((uint64_t*)(&x));
+	
+	// check for infinity and NaN
+	// (is this the most terrible code i ever wrote?)
+	if (((val64 >> 52) & 0x7FF) == 0x7FF)
+	{
+		if (spec == 'f')
+		{
+			if (val64 & 0x8000000000000000)
+			{
+				if (val64 & 0xfffffffffffff)
+				{
+					return __printf_putfield(fp, "-nan", 4, flags, fieldWidth);
+				}
+				else
+				{
+					return __printf_putfield(fp, "-inf", 4, flags, fieldWidth);
+				};
+			}
+			else
+			{
+				if (val64 & 0xfffffffffffff)
+				{
+					return __printf_putfield(fp, "nan", 3, flags, fieldWidth);
+				}
+				else
+				{
+					return __printf_putfield(fp, "inf", 3, flags, fieldWidth);
+				};
+			};
+		}
+		else
+		{
+			if (val64 & 0x8000000000000000)
+			{
+				if (val64 & 0xfffffffffffff)
+				{
+					return __printf_putfield(fp, "-NAN", 4, flags, fieldWidth);
+				}
+				else
+				{
+					return __printf_putfield(fp, "-INF", 4, flags, fieldWidth);
+				};
+			}
+			else
+			{
+				if (val64 & 0xfffffffffffff)
+				{
+					return __printf_putfield(fp, "NAN", 3, flags, fieldWidth);
+				}
+				else
+				{
+					return __printf_putfield(fp, "INF", 3, flags, fieldWidth);
+				};
+			};
+		};
+	};
+	
+	if (precision == -1)
+	{
+		precision = 6;
+	};
+	
+	// do the integer part
+	char intconvbuf[30];
+	uint64_t intPart = (uint64_t) x;
+	char *put = &intconvbuf[29];
+	*put = 0;
+	
+	do
+	{
+		uint64_t digit = intPart % base;
+		intPart /= base;
+		
+		char c;
+		if (digit < 10)
+		{
+			c = (char) digit + '0';
+		}
+		else
+		{
+			c = (char) digit - 10 + spec - 5;
+		};
+		
+		*(--put) = c;
+	} while (intPart != 0);
+	
+	char *convbuf = (char*) malloc(strlen(put) + 1 + precision + 1);
+	strcpy(convbuf, put);
+	put = &convbuf[strlen(convbuf)];
+	*put++ = '.';
+	memset(put, 0, precision-1);
+	
+	put[precision] = 0;
+	put += precision - 1;
+	
+	uint64_t exp = 1;
+	while (precision--)
+	{
+		exp *= base;
+	};
+	
+	uint64_t fracPart = (uint64_t) (x * exp);
+	while (*put != '.')
+	{
+		uint64_t digit = fracPart % base;
+		fracPart /= base;
+		
+		char c;
+		if (digit < 10)
+		{
+			c = (char) digit + '0';
+		}
+		else
+		{
+			c = (char) digit - 10 + spec - 5;
+		};
+		
+		*(put--) = c;
+	};
+	
+	int result = __printf_putfield(fp, convbuf, strlen(convbuf), flags, fieldWidth);
+	free(convbuf);
+	return result;
+};
+
+static int __printf_conv_expfloat(FILE *fp, int flags, int fieldWidth, int precision, int base, char spec, va_list ap)
+{
+	double x = va_arg(ap, double);
+	uint64_t val64 = *((uint64_t*)(&x));
+	
+	// check for infinity and NaN
+	// (is this the most terrible code i ever wrote?)
+	if (((val64 >> 52) & 0x7FF) == 0x7FF)
+	{
+		if (spec == 'e')
+		{
+			if (val64 & 0x8000000000000000)
+			{
+				if (val64 & 0xfffffffffffff)
+				{
+					return __printf_putfield(fp, "-nan", 4, flags, fieldWidth);
+				}
+				else
+				{
+					return __printf_putfield(fp, "-inf", 4, flags, fieldWidth);
+				};
+			}
+			else
+			{
+				if (val64 & 0xfffffffffffff)
+				{
+					return __printf_putfield(fp, "nan", 3, flags, fieldWidth);
+				}
+				else
+				{
+					return __printf_putfield(fp, "inf", 3, flags, fieldWidth);
+				};
+			};
+		}
+		else
+		{
+			if (val64 & 0x8000000000000000)
+			{
+				if (val64 & 0xfffffffffffff)
+				{
+					return __printf_putfield(fp, "-NAN", 4, flags, fieldWidth);
+				}
+				else
+				{
+					return __printf_putfield(fp, "-INF", 4, flags, fieldWidth);
+				};
+			}
+			else
+			{
+				if (val64 & 0xfffffffffffff)
+				{
+					return __printf_putfield(fp, "NAN", 3, flags, fieldWidth);
+				}
+				else
+				{
+					return __printf_putfield(fp, "INF", 3, flags, fieldWidth);
+				};
+			};
+		};
+	};
+	
+	uint64_t absval64 = val64 & ~0x8000000000000000;
+	double absval = *((double*)(&absval64));
+	
+	int expval = 0;
+	while ((uint64_t)absval >= 10)
+	{
+		absval /= 10.0;
+		x /= 10.0;
+		expval++;
+	};
+	
+	while (absval < 0.1 && expval > -precision)
+	{
+		absval *= 10.0;
+		x *= 10.0;
+		expval--;
+	};
+	
+	if (precision == -1)
+	{
+		precision = 6;
+	};
+	
+	// do the integer part
+	char intconvbuf[30];
+	uint64_t intPart = (uint64_t) x;
+	char *put = &intconvbuf[29];
+	*put = 0;
+	
+	do
+	{
+		uint64_t digit = intPart % base;
+		intPart /= base;
+		
+		char c;
+		if (digit < 10)
+		{
+			c = (char) digit + '0';
+		}
+		else
+		{
+			c = (char) digit - 10 + spec - 5;
+		};
+		
+		*(--put) = c;
+	} while (intPart != 0);
+	
+	char *convbuf = (char*) malloc(strlen(put) + 1 + precision + 1 + 4);
+	strcpy(convbuf, put);
+	put = &convbuf[strlen(convbuf)];
+	*put++ = '.';
+	memset(put, 0, precision-1);
+	
+	put[precision] = 0;
+	put += precision - 1;
+	
+	uint64_t exp = 1;
+	while (precision--)
+	{
+		exp *= base;
+	};
+	
+	uint64_t fracPart = (uint64_t) (x * exp);
+	while (*put != '.')
+	{
+		uint64_t digit = fracPart % base;
+		fracPart /= base;
+		
+		char c;
+		if (digit < 10)
+		{
+			c = (char) digit + '0';
+		}
+		else
+		{
+			c = (char) digit - 10 + spec - 4;
+		};
+		
+		*(put--) = c;
+	};
+	
+	put = &convbuf[strlen(convbuf)];
+	*put++ = 'e';
+	if (expval < 0) {*put++ = '-'; expval = -expval;}
+	else *put++ = '+';
+	*put++ = '0'+((expval / 10) % 10);
+	*put++ = '0'+(expval % 10);
+	*put = 0;
+	
+	int result = __printf_putfield(fp, convbuf, strlen(convbuf), flags, fieldWidth);
+	free(convbuf);
+	return result;
+};
+
+static int __printf_conv_g(FILE *fp, int flags, int fieldWidth, int precision, int base, char spec, va_list ap)
+{
+	// TODO: don't always use F/f
+	return __printf_conv_fixedfloat(fp, flags, fieldWidth, precision, base, spec-1, ap);
+};
+
 static int __printf_conv_c(FILE *fp, va_list ap)
 {
 	fputc(va_arg(ap, int), fp);
@@ -508,7 +798,22 @@ int vfprintf(FILE *fp, const char *fmt, va_list ap)
 			case 'X':
 				out += __printf_conv_unsigned(fp, flags, lenmod, fieldWidth, precision, 16, 'A', ap);
 				break;
-			/* TODO: floats */
+			case 'f':
+			case 'F':
+				out += __printf_conv_fixedfloat(fp, flags, fieldWidth, precision, 10, spec, ap);
+				break;
+			case 'a':
+			case 'A':
+				out += __printf_conv_fixedfloat(fp, flags, fieldWidth, precision, 16, spec+5, ap);
+				break;
+			case 'e':
+			case 'E':
+				out += __printf_conv_expfloat(fp, flags, fieldWidth, precision, 10, spec, ap);
+				break;
+			case 'g':
+			case 'G':
+				out += __printf_conv_g(fp, flags, fieldWidth, precision, 10, spec, ap);
+				break;
 			case 'c':
 				out += __printf_conv_c(fp, ap);
 				break;
