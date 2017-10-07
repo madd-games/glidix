@@ -26,67 +26,78 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define _GLIDIX_SOURCE
+#include <sys/debug.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <dlfcn.h>
+#include <signal.h>
+#include <ucontext.h>
+#include <string.h>
+#include <errno.h>
 #include <unistd.h>
-#include <fcntl.h>
 
-#include "dynld.h"
-
-int dynld_open(char *path, const char *soname, ...)
+void on_sigsegv(int signo, siginfo_t *si, void *ctx)
 {
-	if (strchr(soname, '/') != NULL)
+	ucontext_t *ucontext = (ucontext_t*) ctx;
+	mcontext_t *mcontext = &ucontext->uc_mcontext;
+
+	struct stack_frame topFrame;
+	topFrame.sf_next = (struct stack_frame*) mcontext->rbp;
+	topFrame.sf_ip = (void*) mcontext->rip;
+	
+	printf("Stack trace:\n");
+	struct stack_frame *frame;
+	for (frame=&topFrame; frame!=NULL; frame=frame->sf_next)
 	{
-		strcpy(dynld_errmsg, "library not found");		// in case open() returns -1
-		realpath(soname, path);
-		return open(soname, O_RDONLY);
-	}
-	else
-	{
-		char libpath[PATH_MAX];
-		
-		va_list ap;
-		va_start(ap, soname);
-		
-		while (1)
+		char *ripinfo;
+		char *symbol;
+		Dl_AddrInfo info;
+		if (dladdrinfo(frame->sf_ip, &info, sizeof(Dl_AddrInfo)) == 0)
 		{
-			const char *pathspec = va_arg(ap, char*);
-			if (pathspec == NULL)
-			{
-				strcpy(dynld_errmsg, "library not found");
-				return -1;
-			};
-			
-			while (*pathspec != 0)
-			{
-				size_t size;
-				char *colonPos = strchr(pathspec, ':');
-				
-				if (colonPos == NULL)
-				{
-					size = strlen(pathspec);
-				}
-				else
-				{
-					size = colonPos - pathspec;
-				};
-				
-				if ((size+strlen(soname)+1) < PATH_MAX)
-				{
-					memcpy(libpath, pathspec, size);
-					libpath[size] = '/';
-					strcpy(&libpath[size+1], soname);
-					
-					int fd = open(libpath, O_RDONLY);
-					if (fd != -1)
-					{
-						realpath(libpath, path);
-						return fd;
-					};
-				};
-				
-				pathspec += size;
-				if (*pathspec == ':') pathspec++;
-			};
+			ripinfo = strdup("???");
+			symbol = strdup("???");
+		}
+		else
+		{
+			ripinfo = __dbg_addr2line(info.dl_path, info.dl_offset);
+			symbol = __dbg_getsym(info.dl_path, info.dl_offset);
 		};
+
+		printf("<%p> %s() at %s\n", frame->sf_ip, symbol, ripinfo);
+		free(ripinfo);
+		free(symbol);
 	};
+	_exit(1);
+};
+
+void bar()
+{
+	*((int*)0) = 0;
+};
+
+void foo()
+{
+	bar();
+};
+
+void test()
+{
+	foo();
+};
+
+int main()
+{
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(struct sigaction));
+	sa.sa_sigaction = on_sigsegv;
+	sa.sa_flags = SA_SIGINFO;
+	if (sigaction(SIGSEGV, &sa, NULL) != 0)
+	{
+		fprintf(stderr, "unwind-test: failed to set action for SIGSEGV: %s\n", strerror(errno));
+		return 1;
+	};
+
+	test();
+	return 0;
 };

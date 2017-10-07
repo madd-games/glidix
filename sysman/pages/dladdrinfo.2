@@ -1,0 +1,44 @@
+>NAME
+
+dladdrinfo - get information about address
+
+>SYNOPSIS
+
+	#define _GLIDIX_SOURCE
+	#include <dlfcn.h>
+	
+	size_t dladdrinfo(void *'addr', Dl_AddrInfo *'info', size_t 'infoSize');
+
+>DESCRIPTION
+
+This function takes a pointer, 'addr', and if it points into static storage of a currently-loaded object (e.g. its code, or global variables) then the function fills out the 'info' structure, which is assumed to be of size 'infoSize'. The 'Dl_AddrInfo' structure is defined in '<dlfcn.h>' when *_GLIDIX_SOURCE* is defined, as follows:
+
+	#ifdef _GLIDIX_SOURCE
+	typedef struct
+	{
+		void*					'dl_object';
+		void*					'dl_addr';
+		uint64_t				'dl_offset';
+		uint64_t				'dl_base';
+		const char*				'dl_soname';
+		const char*				'dl_path';
+	} Dl_AddrInfo;
+	#endif
+
+The 'dl_object' field specifies the object (as returned by [dlopen.2] and which can be passed to [dlsym.2]) containing the specified address. This object can be passed to [dlsym.2], but because its reference count is not increased, it must not be passed to [dlclose.2], and accessing it after it is unloaded (for example by another thread) is undefined behavior. The 'dl_addr' field is the absolute address itself.
+
+The 'dl_base' and 'dl_offset' fields specify the base address of the object, as well as the offset into it which corresponds to the given address.
+
+The 'dl_soname' field specifies the shared object name (for example, 'libc.so'), and 'dl_path' is the path to the file from which this object was loaded.
+
+>RETURN VALUE
+
+On success, the function returns the size of the returned data in 'info'; this will either be 'infoSize', or less (if using an older version of the dynamic linker for example). If the object containing the address was not found, this function returns 0 (i.e. "no information returned").
+
+>ERRORS
+
+This function returns 0 (no information returned) if the given address is not contained in any currently-loaded object. No additional error information is provided.
+
+>SEE ALSO
+
+[dynld.1], [dlopen.2], [dlsym.2], [dlclose.2]

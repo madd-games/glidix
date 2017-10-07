@@ -73,7 +73,8 @@
 #define	SIGTHKILL	35			/* kill a single thread */
 #define	SIGTHWAKE	36			/* wake a thread without dispatching a signal */
 #define	SIGTRACE	37			/* debugger notification */
-#define	__SIG_COUNT	38
+#define SIGTHSUSP
+#define	__SIG_COUNT	39
 
 #define	NSIG		__SIG_COUNT
 
@@ -81,6 +82,9 @@
 #define	SIG_ERR		((void (*)(int)) 2)
 #define	SIG_HOLD	((void (*)(int)) 3)
 #define	SIG_IGN		((void (*)(int)) 4)
+#ifdef _GLIDIX_SOURCE
+#define	SIG_CORE	((void (*)(int)) 5)
+#endif
 
 #define	SA_NOCLDSTOP	(1 << 0)
 #define	SA_NOCLDWAIT	(1 << 1)
@@ -159,6 +163,14 @@ struct sigaction
 	int sa_flags;
 	void (*sa_sigaction)(int, siginfo_t*, void*);
 };
+
+/* TODO: glidix currently does not set any of these values (leaves them all at zero); is there any use for them at all? */
+typedef struct
+{
+	void*		ss_sp;
+	size_t		ss_size;
+	int		ss_flags;
+} stack_t;
 
 #ifdef __cplusplus
 extern "C" {

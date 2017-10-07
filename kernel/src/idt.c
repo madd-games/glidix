@@ -431,6 +431,7 @@ void isrHandler(Regs *regs)
 			};
 		};
 		
+		enableDebugTerm();
 		dumpRunqueue();
 		stackTraceHere();
 		
@@ -511,7 +512,7 @@ void isrHandler(Regs *regs)
 		};
 		//heapDump();
 		kdumpregs(regs);
-		panic("Unhandled interrupt: %d\n", regs->intNo);
+		panic("unhandled interrupt: %d\n", regs->intNo);
 		break;
 	};
 };

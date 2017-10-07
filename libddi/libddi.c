@@ -26,20 +26,18 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifdef __glidix__
 #include <sys/glidix.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-#endif
-
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <png.h>
+#include <dlfcn.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
@@ -206,31 +204,61 @@ struct DDIPen_
 	PenLine *firstLine;
 };
 
-typedef struct
-{
-	int width, height;
-	DDIPixelFormat format;
-} SharedSurfaceMeta;
-
 static int ddiFD;
+DDIDisplayInfo ddiDisplayInfo;
+DDIDriver* ddiDriver;
+static void *libDriver;
+static void *ddiDrvCtx;
 
 int ddiInit(const char *display, int oflag)
 {
-#ifdef __glidix__
 	ddiFD = open(display, oflag | O_CLOEXEC);
 	if (ddiFD == -1)
 	{
 		return -1;
 	};
-#endif
+	
+	if (ioctl(ddiFD, DDI_IOCTL_VIDEO_GETINFO, &ddiDisplayInfo) != 0)
+	{
+		int errnum = errno;
+		close(ddiFD);
+		errno = errnum;
+		return -1;
+	};
+	
+	char renderPath[PATH_MAX];
+	char renderName[256];
+	
+	sprintf(renderPath, "/usr/lib/ddidrv/%s.so", ddiDisplayInfo.renderer);
+	sprintf(renderName, "ddidrv_%s", ddiDisplayInfo.renderer);
+	
+	libDriver = dlopen(renderPath, RTLD_LOCAL | RTLD_LAZY);
+	if (libDriver == NULL)
+	{
+		int errnum = errno;
+		close(ddiFD);
+		errno = errnum;
+		return -1;
+	};
+	
+	ddiDriver = (DDIDriver*) dlsym(libDriver, renderName);
+	if (ddiDriver == NULL)
+	{
+		int errnum = errno;
+		close(ddiFD);
+		dlclose(libDriver);
+		errno = errnum;
+		return -1;
+	};
+	
+	ddiDrvCtx = ddiDriver->init(ddiFD);
 	return 0;
 };
 
 void ddiQuit()
 {
-#ifdef __glidix__
 	close(ddiFD);
-#endif
+	dlclose(libDriver);
 };
 
 static size_t ddiGetSurfaceDataSize(DDISurface *surface)
@@ -249,7 +277,6 @@ static size_t ddiGetSurfaceDataSize(DDISurface *surface)
 	return size;
 };
 
-#ifdef __glidix__
 DDISurface* ddiSetVideoMode(uint64_t res)
 {
 	DDIModeRequest req;
@@ -280,7 +307,6 @@ DDISurface* ddiSetVideoMode(uint64_t res)
 	
 	return surface;
 };
-#endif
 
 size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned int height)
 {
@@ -298,135 +324,45 @@ size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned
 	return size;
 };
 
-#ifdef __glidix__
-static uint8_t* ddiCreateSharedFile(uint32_t *idOut, DDISurface *target)
-{	
-	while (1)
-	{
-		uint32_t val = _glidix_unique();
-		if (val == 0) continue;
-		
-		char shpath[256];
-		sprintf(shpath, "/run/shsurf/%08X", val);
-		
-		// TODO: we should probably think about how to manage the permissions better!
-		// this must be accessible to other users because the GUI runs as root while
-		// other applications do not.
-		int fd = open(shpath, O_RDWR | O_CREAT | O_EXCL, 0666);
-		if (fd == -1)
-		{
-			if (errno == EEXIST)
-			{
-				continue;
-			}
-			else
-			{
-				return NULL;
-			};
-		};
-		
-		SharedSurfaceMeta meta;
-		meta.width = target->width;
-		meta.height = target->height;
-		memcpy(&meta.format, &target->format, sizeof(DDIPixelFormat));
-		
-		ftruncate(fd, ddiGetSurfaceDataSize(target) + 0x1000);
-		pwrite(fd, &meta, sizeof(SharedSurfaceMeta), 0);
-		
-		void *result = mmap(NULL, ddiGetSurfaceDataSize(target), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x1000);
-		close(fd);
-		
-		if (result == MAP_FAILED)
-		{
-			return NULL;
-		};
-		
-		*idOut = val;
-		return (uint8_t*) result;
-	};
-};
-#endif
-
 DDISurface* ddiCreateSurface(DDIPixelFormat *format, unsigned int width, unsigned int height, char *data, unsigned int flags)
 {
 	DDISurface *surface = (DDISurface*) malloc(sizeof(DDISurface));
+	memset(surface, 0, sizeof(DDISurface));
 	memcpy(&surface->format, format, sizeof(DDIPixelFormat));
 	
 	surface->width = width;
 	surface->height = height;
 	surface->flags = flags;
-	surface->id = 0;
 	
-	if ((flags & DDI_STATIC_FRAMEBUFFER) == 0)
+	if (ddiDriver->createSurface(ddiDrvCtx, surface, data) != 0)
 	{
-#ifdef __glidix__
-		if (flags & DDI_SHARED)
-		{
-			surface->data = ddiCreateSharedFile(&surface->id, surface);
-			if (surface->data == NULL)
-			{
-				free(surface);
-				return NULL;
-			};
-		}
-		else
-		{
-			surface->data = (uint8_t*) mmap(NULL, ddiGetSurfaceDataSize(surface), PROT_READ | PROT_WRITE,
-							MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-		};
-#else
-		surface->data = (uint8_t*) malloc(ddiGetSurfaceDataSize(surface));
-#endif
-		if (data != NULL) memcpy(surface->data, data, ddiGetSurfaceDataSize(surface));
-	}
-	else
-	{
-		surface->data = (uint8_t*) data;
-	};
-	
-	return surface;
-};
-
-#ifdef __glidix__
-DDISurface *ddiOpenSurface(uint32_t id)
-{
-	char pathname[256];
-	sprintf(pathname, "/run/shsurf/%08X", id);
-	
-	int fd = open(pathname, O_RDWR);
-	if (fd == -1)
-	{
+		free(surface);
 		return NULL;
 	};
 	
-	SharedSurfaceMeta meta;
-	pread(fd, &meta, sizeof(SharedSurfaceMeta), 0);
+	return surface;
+};
+
+DDISurface* ddiOpenSurface(uint32_t id)
+{
 	DDISurface *surface = (DDISurface*) malloc(sizeof(DDISurface));
-	memcpy(&surface->format, &meta.format, sizeof(DDIPixelFormat));
-	
-	surface->width = meta.width;
-	surface->height = meta.height;
-	surface->flags = DDI_SHARED;
+	memset(surface, 0, sizeof(DDISurface));
 	surface->id = id;
-	surface->data = (uint8_t*) mmap(NULL, ddiGetSurfaceDataSize(surface),
-					PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x1000);
-	close(fd);
+
+	if (ddiDriver->openSurface(ddiDrvCtx, surface) != 0)
+	{
+		int errnum = errno;
+		free(surface);
+		errno = errnum;
+		return NULL;
+	};
 	
 	return surface;
 };
-#endif
 
 void ddiDeleteSurface(DDISurface *surface)
 {
-	if ((surface->flags & DDI_STATIC_FRAMEBUFFER) == 0)
-	{
-#if __glidix__
-		munmap(surface->data, ddiGetSurfaceDataSize(surface));
-#else
-		free(surface->data);
-#endif
-	};
-	
+	munmap(surface->data, ddiGetSurfaceDataSize(surface));
 	free(surface);
 };
 
@@ -442,7 +378,7 @@ static void ddiInsertWithMask(uint32_t *target, uint32_t mask, uint32_t val)
 	(*target) |= val;
 };
 
-static void ddiColorToPixel(uint32_t *pixeldata, DDIPixelFormat *format, DDIColor *color)
+void ddiColorToPixel(uint32_t *pixeldata, DDIPixelFormat *format, DDIColor *color)
 {
 	*pixeldata = 0;
 	ddiInsertWithMask(pixeldata, format->redMask, color->red);
@@ -451,170 +387,14 @@ static void ddiColorToPixel(uint32_t *pixeldata, DDIPixelFormat *format, DDIColo
 	ddiInsertWithMask(pixeldata, format->alphaMask, color->alpha);
 };
 
-static void ddiFill(void *dest, void *src, uint64_t unit, uint64_t count)
+void ddiFillRect(DDISurface *surf, int x, int y, int width, int height, DDIColor *color)
 {
-	while (count--)
-	{
-		memcpy(dest, src, unit);
-		dest += unit;
-	};
+	ddiDriver->rect(ddiDrvCtx, surf, x, y, width, height, color);
 };
 
-void ddiFillRect(DDISurface *surface, int x, int y, unsigned int width, unsigned int height, DDIColor *color)
+void ddiOverlay(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height)
 {
-	while (x < 0)
-	{
-		x++;
-		if (width == 0) return;
-		width--;
-	};
-	
-	while (y < 0)
-	{
-		y++;
-		if (height == 0) return;
-		height--;
-	};
-	
-	if ((x >= surface->width) || (y >= surface->height))
-	{
-		// do not need to do anything
-		return;
-	};
-	
-	if ((x+width) > surface->width)
-	{
-		width = surface->width - x;
-	};
-	
-	if ((y+height) > surface->height)
-	{
-		height = surface->height - y;
-	};
-	
-	uint32_t pixel;
-	ddiColorToPixel(&pixel, &surface->format, color);
-	
-	size_t pixelSize = surface->format.bpp + surface->format.pixelSpacing;
-	size_t scanlineSize = surface->format.scanlineSpacing + pixelSize * surface->width;
-	
-	char pixbuf[32];
-	memcpy(pixbuf, &pixel, 4);
-	
-	size_t offset = scanlineSize * y + pixelSize * x;
-	unsigned char *put = surface->data + offset;
-	for (; height; height--)
-	{
-		ddiFill(put, pixbuf, pixelSize, width);
-		put += scanlineSize;
-	};
-};
-
-void ddiOverlay(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY,
-	unsigned int width, unsigned int height)
-{
-	// cannot copy from negative source coordinates
-	if ((srcX < 0) || (srcY < 0))
-	{
-		return;
-	};
-	
-	// we can copy to negative target coordinates with some messing around
-	while (destX < 0)
-	{
-		srcX++;
-		destX++;
-		if (width < 0) return;
-		width--;
-	};
-	
-	while (destY < 0)
-	{
-		srcY++;
-		destY++;
-		if (height < 0) return;
-		height--;
-	};
-	
-	// clip the rectangle to make sure it can fit on both surfaces
-	if ((srcX >= src->width) || (srcY >= src->height))
-	{
-		// do not need to do anything
-		return;
-	};
-
-	if ((destX+(int)width <= 0) || (destY+(int)height <= 0))
-	{
-		return;
-	};
-	
-	if ((srcX+width) > src->width)
-	{
-		if (src->width <= srcX)
-		{
-			return;
-		};
-		
-		width = src->width - srcX;
-	};
-	
-	if ((srcY+height) > src->height)
-	{
-		if (src->height <= srcY)
-		{
-			return;
-		};
-		
-		height = src->height - srcY;
-	};
-	
-	if ((destX >= dest->width) || (destY >= dest->height))
-	{
-		// do not need to do anything
-		return;
-	};
-	
-	if ((destX+width) > dest->width)
-	{
-		if (dest->width <= destX)
-		{
-			return;
-		};
-		
-		width = dest->width - destX;
-	};
-	
-	if ((destY+height) > dest->height)
-	{
-		if (dest->height <= destY)
-		{
-			return;
-		};
-		
-		height = dest->height - destY;
-	};
-	
-	// make sure the formats are the same
-	if (memcmp(&src->format, &dest->format, sizeof(DDIPixelFormat)) != 0)
-	{
-		return;
-	};
-	
-	// calculate offsets
-	size_t pixelSize = src->format.bpp + src->format.pixelSpacing;
-	size_t srcScanlineSize = src->format.scanlineSpacing + pixelSize * src->width;
-	size_t destScanlineSize = dest->format.scanlineSpacing + pixelSize * dest->width;
-	
-	unsigned char *scan = src->data + pixelSize * srcX + srcScanlineSize * srcY;
-	unsigned char *put = dest->data + pixelSize * destX + destScanlineSize * destY;
-	
-	for (; height; height--)
-	{
-		memcpy(put, scan, pixelSize * width);
-		//memcpy(put, scan, pixelSize * width);
-		scan += srcScanlineSize;
-		put += destScanlineSize;
-	};
+	ddiDriver->overlay(ddiDrvCtx, src, srcX, srcY, dest, destX, destY, width, height);
 };
 
 #define	DDI_ERROR(msg)	if (error != NULL) *error = msg
@@ -729,7 +509,7 @@ DDISurface* ddiLoadPNG(const char *filename, const char **error)
 	return surface;
 };
 
-static int ddiGetIndexForMask(uint32_t mask)
+int ddiGetIndexForMask(uint32_t mask)
 {
 	if (mask == 0x0000FF) return 0;
 	if (mask == 0x00FF00) return 1;
@@ -873,158 +653,14 @@ int ddiSavePNG(DDISurface *surface, const char *filename, const char **error)
 	return 0;
 };
 
-/**
- * Don't question the use of the "register" keyword here. It causes the function to be approximately
- * 2 times faster, when compiling with GCC.
- */
-void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY,
-	unsigned int width, unsigned int height)
+void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height)
 {
-	if (memcmp(&src->format, &dest->format, sizeof(DDIPixelFormat)) != 0)
-	{
-		return;
-	};
-	
-	if (src->format.alphaMask == 0)
-	{
-		ddiOverlay(src, srcX, srcY, dest, destX, destY, width, height);
-	};
-	
-	int alphaIndex = ddiGetIndexForMask(src->format.alphaMask);
-
-	// cannot copy from negative source coordinates
-	if ((srcX < 0) || (srcY < 0))
-	{
-		return;
-	};
-	
-	// we can copy to negative target coordinates with some messing around
-	while (destX < 0)
-	{
-		srcX++;
-		destX++;
-		if (width < 0) return;
-		width--;
-	};
-	
-	while (destY < 0)
-	{
-		srcY++;
-		destY++;
-		if (height < 0) return;
-		height--;
-	};
-	
-	// clip the rectangle to make sure it can fit on both surfaces
-	if ((srcX >= src->width) || (srcY >= src->height))
-	{
-		// do not need to do anything
-		return;
-	};
-	
-	if ((destX+(int)width <= 0) || (destY+(int)height <= 0))
-	{
-		return;
-	};
-	
-	if ((srcX+width) > src->width)
-	{
-		if (src->width <= srcX)
-		{
-			return;
-		};
-		
-		width = src->width - srcX;
-	};
-	
-	if ((srcY+height) > src->height)
-	{
-		if (src->height <= srcY)
-		{
-			return;
-		};
-		
-		height = src->height - srcY;
-	};
-	
-	if ((destX >= dest->width) || (destY >= dest->height))
-	{
-		// do not need to do anything
-		return;
-	};
-	
-	if ((destX+width) > dest->width)
-	{
-		if (dest->width <= destX)
-		{
-			return;
-		};
-		
-		width = dest->width - destX;
-	};
-	
-	if ((destY+height) > dest->height)
-	{
-		if (dest->height <= destY)
-		{
-			return;
-		};
-		
-		height = dest->height - destY;
-	};
-	
-	// calculate offsets
-	register size_t pixelSize = src->format.bpp + src->format.pixelSpacing;
-	register size_t srcScanlineSize = src->format.scanlineSpacing + pixelSize * src->width;
-	register size_t destScanlineSize = dest->format.scanlineSpacing + pixelSize * dest->width;
-	
-	register uint8_t *scan = (uint8_t*) src->data + pixelSize * srcX + srcScanlineSize * srcY;
-	register uint8_t *put = (uint8_t*) dest->data + pixelSize * destX + destScanlineSize * destY;
-	
-	for (; height; height--)
-	{
-		register size_t count = width;
-		register uint8_t *scanStart = scan;
-		register uint8_t *putStart = put;
-		
-		while (count--)
-		{
-			register int srcAlpha = (int) scan[alphaIndex];
-			register int dstAlpha = (int) put[alphaIndex];
-			register int outAlpha = srcAlpha + (int) dstAlpha * (255 - srcAlpha) / 255;
-
-			if (outAlpha == 0)
-			{
-				*((uint32_t*)put) = 0;
-			}
-			else
-			{
-				DDIIntVector vdst = {put[0], put[1], put[2], put[3]};
-				DDIIntVector vsrc = {scan[0], scan[1], scan[2], scan[3]};
-				DDIIntVector result = (
-					(vsrc * srcAlpha)/255
-					+ (vdst * dstAlpha * (255-srcAlpha))/(255*255)
-				)*255/outAlpha;
-				
-				put[0] = (uint8_t) result[0];
-				put[1] = (uint8_t) result[1];
-				put[2] = (uint8_t) result[2];
-				put[3] = (uint8_t) result[3];
-				put[alphaIndex] = outAlpha;
-			};
-
-			scan += pixelSize;
-			put += pixelSize;
-		};
-		
-		scan = scanStart + srcScanlineSize;
-		put = putStart + destScanlineSize;
-	};
+	ddiDriver->blit(ddiDrvCtx, src, srcX, srcY, dest, destX, destY, width, height);
 };
 
 static void ddiExpandBitmapRow(unsigned char *put, uint8_t row, const void *fill, int bpp, size_t pixelSize)
 {
-	static uint8_t mask[8] = {1, 2, 4, 8, 16, 32, 64, 128};
+	static uint8_t mask[8] = {128, 64, 32, 16, 8, 4, 2, 1};
 	int i;
 	for (i=0; i<8; i++)
 	{

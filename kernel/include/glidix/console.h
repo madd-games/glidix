@@ -44,10 +44,10 @@ void unlockConsole();
 void clearScreen();
 void setConsoleColor(uint8_t col);
 void setCursorPos(uint8_t x, uint8_t y);
-void switchConsoleToSoftwareBuffer(unsigned char *buffer, int width, int height);
-void renderConsoleToScreen();
 void setGfxTerm(int value);
 void enableDebugTerm();
+void disableConsole();
+void enableConsole();
 
 #define	DONE()						kprintf("Done\n")
 #define	FAILED()					kprintf("Failed\n")

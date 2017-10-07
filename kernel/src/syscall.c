@@ -337,6 +337,9 @@ int sysOpenErrno(int vfsError)
 	case VFS_PERM:
 		ERRNO = EACCES;
 		break;
+	case VFS_EMPTY_DIRECTORY:
+		ERRNO = ENOENT;
+		break;
 	case VFS_NO_FILE:
 		ERRNO = ENOENT;
 		break;

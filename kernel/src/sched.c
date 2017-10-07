@@ -1520,6 +1520,41 @@ void wakeProcess(int pid)
 	sti();
 };
 
+void suspendOtherThreads()
+{
+	int total = 0;
+	int suspended = 0;
+	
+	siginfo_t si;
+	si.si_signo = SIGTHSUSP;
+	si.si_addr = &suspended;
+	
+	cli();
+	lockSched();
+	
+	Thread *thread = currentThread;
+	do
+	{
+		if (thread->creds != NULL)
+		{
+			if (thread->creds->pid == currentThread->creds->pid)
+			{
+				if (thread != currentThread)
+				{
+					total++;
+					sendSignal(thread, &si);
+				};
+			};
+		};
+		thread = thread->next;
+	} while (thread != currentThread);
+	
+	unlockSched();
+	sti();
+	
+	while (suspended < total) kyield();
+};
+
 void killOtherThreads()
 {
 	siginfo_t si;

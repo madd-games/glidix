@@ -34,7 +34,7 @@
 #include <glidix/devfs.h>
 
 #define	IOCTL_VIDEO_MODESET			IOCTL_ARG(VideoModeRequest, IOCTL_INT_VIDEO, 1)
-#define	IOCTL_VIDEO_GETFLAGS			IOCTL_NOARG(IOCTL_INT_VIDEO, 2)
+#define	IOCTL_VIDEO_GETINFO			IOCTL_ARG(VideoInfo, IOCTL_INT_VIDEO, 2)
 
 /**
  * Resolution specifications (bottom 8 bits are the setting type).
@@ -65,6 +65,32 @@ typedef struct
 } VideoPixelFormat;
 
 /**
+ * Graphics information structure - compatible with DDI (see libddi.h)
+ */
+typedef struct
+{
+	/**
+	 * Name of the renderer client library, e.g. "softrender".
+	 */
+	char					renderer[32];
+	
+	/**
+	 * Number of presentable surfaces that may be allocated. Must be at least 1.
+	 */
+	int					numPresentable;
+	
+	/**
+	 * Bitset of supported features.
+	 */
+	int					features;
+	
+	/**
+	 * Reserved.
+	 */
+	int					resv[16];
+} VideoInfo;
+
+/**
  * Request for video mode setting (IOCTL).
  */
 typedef struct
@@ -93,15 +119,20 @@ typedef struct
 	int (*setmode)(struct VideoDisplay_ *display, VideoModeRequest *req);
 	
 	/**
-	 * Get device flags (return 0 for now).
+	 * Get device info.
 	 */
-	int (*getflags)(struct VideoDisplay_ *display);
+	void (*getinfo)(struct VideoDisplay_ *display, VideoInfo *info);
 	
 	/**
 	 * Return the physical base address of the framebuffer in current video mode, and store
 	 * the size in *sizeOut.
 	 */
 	uint64_t (*getfbuf)(struct VideoDisplay_ *display, size_t *sizeOut);
+	
+	/**
+	 * Exit graphics mode. This function must return to VGA-compatible 80x25 text mode.
+	 */
+	void (*exitmode)(struct VideoDisplay_ *display);
 } VideoOps;
 
 /**
@@ -128,6 +159,11 @@ typedef struct VideoDisplay_
 	 * Reference count.
 	 */
 	int					refcount;
+	
+	/**
+	 * The file handle which set the mode on this device.
+	 */
+	File*					fpModeSetter;
 } VideoDisplay;
 
 /**

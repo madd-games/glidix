@@ -32,7 +32,7 @@
 #include "dynld.h"
 
 char dynld_errmsg[1024];
-Library chainHead;
+Dl_Library chainHead;
 const char *libraryPath = "";
 int debugMode = 0;
 int bindNow = 0;
@@ -41,7 +41,7 @@ int dynld_errno;
 void dynld_enter(void *retstack, Elf64_Addr entry);
 int dynld_main(int argc, char *argv[], char *envp[], void *retstack)
 {
-	if (sizeof(Library) > 0x1000)
+	if (sizeof(Dl_Library) > 0x1000)
 	{
 		dynld_printf("sizeof(Library) exceeds page size!\n");
 		return 1;
@@ -131,8 +131,11 @@ int dynld_main(int argc, char *argv[], char *envp[], void *retstack)
 		dynld_printf("dynld: invoked with pid %d\n", dynld_getpid());
 	};
 	
+	char exepath[256];
+	exepath[readlink("/proc/self/exe", exepath, 256)] = 0;
+	
 	chainHead.prev = chainHead.next = NULL;
-	if (dynld_mapobj(&chainHead, execfd, 0, progname, RTLD_LAZY | RTLD_GLOBAL) == 0)
+	if (dynld_mapobj(&chainHead, execfd, 0, progname, RTLD_LAZY | RTLD_GLOBAL, exepath) == 0)
 	{
 		dynld_printf("dynld: failed to load executable: %s\n", dynld_errmsg);
 		return 1;

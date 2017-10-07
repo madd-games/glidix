@@ -162,7 +162,7 @@ done
 
 # targets
 # NOTE: Those need to be in order; a target must come AFTER all the targets that it depends on.
-TARGETS="kernel build-tools libc dynld shutils init modules mbload sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libz libpng freetype libddi fstools libgwm gwmserver guiapps netman sysinfo minipad gxdbg"
+TARGETS="kernel build-tools libc dynld shutils init modules mbload sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libz libpng freetype libddi fstools libgwm gwmserver guiapps netman sysinfo minipad gxdbg ddi-drivers"
 
 # determine build parameters
 export GLIDIX_SYSROOT="$sysroot"

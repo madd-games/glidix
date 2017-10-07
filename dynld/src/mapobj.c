@@ -31,14 +31,19 @@
 #include <signal.h>
 #include "dynld.h"
 
-extern Library chainHead;
+extern Dl_Library chainHead;
 uint64_t addrPlacement;
 
 void dynld_diag(void *ptr);
 
-Library* dynld_getlib(const char *soname)
+Dl_Library* dynld_getlib(const char *soname)
 {
-	Library *lib;
+	if (soname == NULL)
+	{
+		return &chainHead;
+	};
+	
+	Dl_Library *lib;
 	for (lib=&chainHead; lib!=NULL; lib=lib->next)
 	{
 		if (strcmp(soname, lib->soname) == 0)
@@ -51,7 +56,44 @@ Library* dynld_getlib(const char *soname)
 	return NULL;
 };
 
-void* dynld_libsym(Library *lib, const char *symname, unsigned char binding)
+size_t dynld_addrinfo(void *ptr, Dl_AddrInfo *infoOut, size_t infoSize)
+{
+	Dl_AddrInfo info;
+	uint64_t addr = (uint64_t) ptr;
+	
+	memset(&info, 0, sizeof(Dl_AddrInfo));
+	
+	Dl_Library *lib;
+	for (lib=&chainHead; lib!=NULL; lib=lib->next)
+	{
+		int i;
+		for (i=0; i<lib->numSegs; i++)
+		{
+			uint64_t start = (uint64_t) lib->segs[i].base;
+			uint64_t end = start + lib->segs[i].size;
+			
+			if (addr >= start && addr < end)
+			{
+				// this is the correct object
+				info.dl_object = lib;
+				info.dl_addr = ptr;
+				info.dl_offset = addr - lib->base;
+				info.dl_base = lib->base;
+				info.dl_soname = lib->soname;
+				info.dl_path = lib->path;
+				
+				size_t size = sizeof(Dl_AddrInfo);
+				if (size > infoSize) size = infoSize;
+				memcpy(infoOut, &info, size);
+				return size;
+			};
+		};
+	};
+	
+	return 0;
+};
+
+void* dynld_libsym(Dl_Library *lib, const char *symname, unsigned char binding)
 {
 	size_t i;
 	for (i=0; i<lib->numSymbols; i++)
@@ -71,12 +113,13 @@ void* dynld_libsym(Library *lib, const char *symname, unsigned char binding)
 	return NULL;
 };
 
-Library* dynld_dlopen(const char *soname, int mode)
+Dl_Library* dynld_dlopen(const char *soname, int mode)
 {
-	Library *dep = dynld_getlib(soname);
+	Dl_Library *dep = dynld_getlib(soname);
 	if (dep == NULL)
 	{
-		int depfd = dynld_open(soname, "", libraryPath, "", "/usr/local/lib:/usr/lib:/lib", NULL);
+		char path[256];
+		int depfd = dynld_open(path, soname, "", libraryPath, "", "/usr/local/lib:/usr/lib:/lib", NULL);
 		if (depfd == -1)
 		{
 			strcpy(dynld_errmsg, soname);
@@ -99,7 +142,7 @@ Library* dynld_dlopen(const char *soname, int mode)
 
 		if (mode & RTLD_GLOBAL)
 		{
-			Library *last = &chainHead;
+			Dl_Library *last = &chainHead;
 			while (last->next != NULL) last = last->next;
 			
 			dep->next = NULL;
@@ -111,7 +154,7 @@ Library* dynld_dlopen(const char *soname, int mode)
 			dep->prev = dep->next = NULL;
 		};
 		
-		if (dynld_mapobj(dep, depfd, addrPlacement, soname, RTLD_LAZY | RTLD_GLOBAL) == 0)
+		if (dynld_mapobj(dep, depfd, addrPlacement, soname, RTLD_LAZY | RTLD_GLOBAL, path) == 0)
 		{
 			// leave dynld_errmsg as is; we forward the error from the recursive
 			// invocation
@@ -134,7 +177,7 @@ Library* dynld_dlopen(const char *soname, int mode)
 	return dep;
 };
 
-void* dynld_dlsym(Library *lib, const char *symname)
+void* dynld_dlsym(Dl_Library *lib, const char *symname)
 {
 	void *val = dynld_libsym(lib, symname, STB_GLOBAL);
 	if (val != NULL) return val;
@@ -147,9 +190,9 @@ char* dynld_dlerror()
 	return dynld_errmsg;
 };
 
-void* dynld_globsym(const char *symname, Library *lastLib)
+void* dynld_globsym(const char *symname, Dl_Library *lastLib)
 {
-	Library *lib;
+	Dl_Library *lib;
 	
 	// try global symbols first
 	for (lib=&chainHead; lib!=NULL; lib=lib->next)
@@ -177,6 +220,11 @@ void* dynld_globsym(const char *symname, Library *lastLib)
 	if (strcmp(symname, "dlerror") == 0)
 	{
 		return dynld_dlerror;
+	};
+	
+	if (strcmp(symname, "dladdrinfo") == 0)
+	{
+		return dynld_addrinfo;
 	};
 
 	// now try the weak symbols
@@ -222,7 +270,7 @@ void* dynld_globdat(const char *name)
 
 void* dynld_globdef(const char *name)
 {
-	Library *lib;
+	Dl_Library *lib;
 	
 	// try global symbols first
 	for (lib=chainHead.next; lib!=NULL; lib=lib->next)
@@ -243,7 +291,7 @@ void* dynld_globdef(const char *name)
 
 // perform a PLT relocation with the given index on the given library, and return the resulting
 // address (as well as filling it in the GOT). returns NULL on error.
-void* dynld_pltreloc(Library *lib, uint64_t index)
+void* dynld_pltreloc(Dl_Library *lib, uint64_t index)
 {
 	Elf64_Rela *rela = &lib->pltRela[index];
 	Elf64_Xword symidx = ELF64_R_SYM(rela->r_info);
@@ -281,7 +329,7 @@ void dynld_abort()
 	raise(SIGABRT);
 };
 
-void dynld_initlib(Library *lib)
+void dynld_initlib(Dl_Library *lib)
 {
 	if (lib->initDone) return;
 	lib->initDone = 1;
@@ -306,7 +354,7 @@ void dynld_initlib(Library *lib)
 	};
 };
 
-uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int flags)
+uint64_t dynld_mapobj(Dl_Library *lib, int fd, uint64_t base, const char *name, int flags, const char *path)
 {
 	if (debugMode)
 	{
@@ -380,6 +428,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 	lib->refcount = 1;
 	lib->base = base;
 	strcpy(lib->soname, name);
+	strcpy(lib->path, path);
 	lib->numSegs = 0;
 	lib->numDeps = 0;
 	lib->flags = flags;
@@ -547,19 +596,19 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 			numPltRela = dyn->d_un.d_val / sizeof(Elf64_Rela);
 			break;
 		case DT_INIT:
-			lib->initFunc = (InitFunc) (base + dyn->d_un.d_ptr);
+			lib->initFunc = (Dl_InitFunc) (base + dyn->d_un.d_ptr);
 			break;
 		case DT_INIT_ARRAY:
-			lib->initVec = (InitFunc*) (base + dyn->d_un.d_ptr);
+			lib->initVec = (Dl_InitFunc*) (base + dyn->d_un.d_ptr);
 			break;
 		case DT_INIT_ARRAYSZ:
 			lib->numInit = dyn->d_un.d_val >> 3;
 			break;
 		case DT_FINI:
-			lib->finiFunc = (FiniFunc) (base + dyn->d_un.d_ptr);
+			lib->finiFunc = (Dl_FiniFunc) (base + dyn->d_un.d_ptr);
 			break;
 		case DT_FINI_ARRAY:
-			lib->finiVec = (FiniFunc*) (base + dyn->d_un.d_ptr);
+			lib->finiVec = (Dl_FiniFunc*) (base + dyn->d_un.d_ptr);
 			break;
 		case DT_FINI_ARRAYSZ:
 			lib->numFini = dyn->d_un.d_val >> 3;
@@ -593,10 +642,11 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 		{
 			const char *depname = &lib->strtab[dyn->d_un.d_val];
 			
-			Library *dep = dynld_getlib(depname);
+			Dl_Library *dep = dynld_getlib(depname);
 			if (dep == NULL)
 			{
-				int depfd = dynld_open(depname, rpath, libraryPath, runpath, "/usr/local/lib:/usr/lib:/lib", NULL);
+				char deppath[256];
+				int depfd = dynld_open(deppath, depname, rpath, libraryPath, runpath, "/usr/local/lib:/usr/lib:/lib", NULL);
 				if (depfd == -1)
 				{
 					strcpy(dynld_errmsg, depname);
@@ -642,7 +692,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 				lib->next = dep;
 				addrPlacement += 0x1000;
 				
-				if (dynld_mapobj(dep, depfd, addrPlacement, depname, RTLD_LAZY | RTLD_GLOBAL) == 0)
+				if (dynld_mapobj(dep, depfd, addrPlacement, depname, RTLD_LAZY | RTLD_GLOBAL, deppath) == 0)
 				{
 					// leave dynld_errmsg as is; we forward the error from the recursive
 					// invocation
@@ -798,7 +848,7 @@ uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int
 	return topAddr;
 };
 
-int dynld_libclose(Library *lib)
+int dynld_libclose(Dl_Library *lib)
 {
 	if ((--lib->refcount) == 0)
 	{

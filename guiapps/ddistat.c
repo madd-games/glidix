@@ -1,5 +1,5 @@
 /*
-	Glidix Runtime
+	Glidix GUI
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,42 +26,37 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _SYS_DEBUG_H
-#define _SYS_DEBUG_H
+#include <libddi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
 
-#include <inttypes.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/**
- * Represents a stack frame.
- */
-struct stack_frame
+int main(int argc, char *argv[])
 {
-	struct stack_frame*		sf_next;
-	void*				sf_ip;
+	if (argc != 2)
+	{
+		fprintf(stderr, "USAGE:\t%s <display-device>\n", argv[0]);
+		fprintf(stderr, "\tPrints information about a display device.\n");
+		return 1;
+	};
+	
+	if (ddiInit(argv[1], O_RDONLY) != 0)
+	{
+		fprintf(stderr, "%s: failed to open display device %s: %s\n", argv[0], argv[1], strerror(errno));
+		return 1;
+	};
+	
+	printf(" *** DISPLAY INFO ***\n");
+	printf("Display device:          %s\n", argv[1]);
+	printf("Renderer:                %s\n", ddiDisplayInfo.renderer);
+	printf("Presentable surfaces:    %d\n", ddiDisplayInfo.numPresentable);
+	
+	printf("\n *** DDI DRIVER INFO ***\n");
+	printf("Size of DDIDriver:       %lu (mine %lu)\n", ddiDriver->size, sizeof(DDIDriver));
+	printf("Renderer string:         %s\n", ddiDriver->renderString);
+	
+	ddiQuit();
+	return 0;
 };
-
-/**
- * Get the line, source file and function name corresponding to the specified raw (unrelocated)
- * address in the given object file. Returns a string on the heap, which must later be freed using
- * free(), in the form "<function>@<source-file>:<source-line>". Always returns something; even
- * if all fields are "??".
- *
- * This function is only successful if "objdump" from "binutils" is installed.
- */
-char* __dbg_addr2line(const char *path, uint64_t offset);
-
-/**
- * Get the symbol containing the specified raw (unrelocated) address in the given object file.
- * Returns a string on the heap (which may just be "??") and free() must be called on it later.
- */
-char* __dbg_getsym(const char *path, uint64_t offset);
-
-#ifdef __cplusplus
-};	/* extern "C" */
-#endif
-
-#endif

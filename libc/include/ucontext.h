@@ -26,42 +26,27 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _SYS_DEBUG_H
-#define _SYS_DEBUG_H
+#ifndef _UCONTEXT_H
+#define _UCONTEXT_H
 
-#include <inttypes.h>
+#include <signal.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/**
- * Represents a stack frame.
- */
-struct stack_frame
+typedef struct
 {
-	struct stack_frame*		sf_next;
-	void*				sf_ip;
+	uint64_t	rflags;
+	uint64_t	rip;
+	uint64_t	rdi, rsi, rbp, rbx, rdx, rcx, rax;
+	uint64_t	r8, r9, r10, r11, r12, r13, r14, r15;
+	uint64_t	rsp;
+} mcontext_t;
+
+typedef struct __ucontext ucontext_t;
+struct __ucontext
+{
+	ucontext_t*	uc_link;
+	sigset_t	uc_sigmask;
+	stack_t		uc_stack;
+	mcontext_t	uc_mcontext;
 };
-
-/**
- * Get the line, source file and function name corresponding to the specified raw (unrelocated)
- * address in the given object file. Returns a string on the heap, which must later be freed using
- * free(), in the form "<function>@<source-file>:<source-line>". Always returns something; even
- * if all fields are "??".
- *
- * This function is only successful if "objdump" from "binutils" is installed.
- */
-char* __dbg_addr2line(const char *path, uint64_t offset);
-
-/**
- * Get the symbol containing the specified raw (unrelocated) address in the given object file.
- * Returns a string on the heap (which may just be "??") and free() must be called on it later.
- */
-char* __dbg_getsym(const char *path, uint64_t offset);
-
-#ifdef __cplusplus
-};	/* extern "C" */
-#endif
 
 #endif

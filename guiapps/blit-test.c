@@ -73,5 +73,31 @@ int main()
 	clock_t end = clock();
 	printf("Blitting a %dx%d surface %d times took %ld ms\n", SURFACE_SIZE, SURFACE_SIZE, RENDER_COUNT,
 			(end-start)*1000/CLOCKS_PER_SEC);
+
+
+	count = RENDER_COUNT;
+	start = clock();
+	
+	while (count--)
+	{
+		ddiOverlay(surfA, 0, 0, surfB, 0, 0, SURFACE_SIZE, SURFACE_SIZE);
+	};
+	
+	end = clock();
+	printf("Overlaying a %dx%d surface %d times took %ld ms\n", SURFACE_SIZE, SURFACE_SIZE, RENDER_COUNT,
+			(end-start)*1000/CLOCKS_PER_SEC);
+
+	DDIColor color;	
+	count = RENDER_COUNT;
+	start = clock();
+
+	while (count--)
+	{
+		ddiFillRect(surfA, 0, 0, SURFACE_SIZE, SURFACE_SIZE, &color);
+	};
+	
+	end = clock();
+	printf("Drawing a %dx%d rectangle %d times took %ld ms\n", SURFACE_SIZE, SURFACE_SIZE, RENDER_COUNT,
+			(end-start)*1000/CLOCKS_PER_SEC);
 	return 0;
 };

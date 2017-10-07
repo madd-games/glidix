@@ -1,12 +1,12 @@
 SRC := $(shell find $(SRCDIR)/src -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -ggdb
+CFLAGS := -Wall -Werror -D_GLIDIX_SOURCE -ggdb
 
 .PHONY: install
 
 gxdbg: $(OBJ)
-	$(HOST_GCC) $^ -o $@ -ggdb
+	$(HOST_GCC) $^ -o $@ -ggdb -ldl
 
 -include $(DEP)
 

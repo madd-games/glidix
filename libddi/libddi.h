@@ -32,17 +32,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#ifdef __glidix__
-#	include	<sys/glidix.h>
-#endif
+#include	<sys/glidix.h>
 
 /**
- * Surface flags.
+ * Surface flags (see ddiCreateSurface() ).
  */
-#define	DDI_STATIC_FRAMEBUFFER			(1 << 0)
-#ifdef __glidix__
+#define	DDI_RENDER_TARGET			(1 << 0)
 #define	DDI_SHARED				(1 << 1)
-#endif
 
 /**
  * Types of expandable bitmaps.
@@ -71,12 +67,10 @@
 #define	DDI_TAB_LEN				64
 
 /**
- * Display device IOCTLs for Glidix.
+ * Display device IOCTLs.
  */
-#ifdef __glidix__
 #define	DDI_IOCTL_VIDEO_MODESET			_GLIDIX_IOCTL_ARG(DDIModeRequest, _GLIDIX_IOCTL_INT_VIDEO, 1)
-#define	DDI_IOCTL_VIDEO_GETFLAGS		_GLIDIX_IOCTL_NOARG(_GLIDIX_IOCTL_INT_VIDEO, 2)
-#endif
+#define	DDI_IOCTL_VIDEO_GETINFO			_GLIDIX_IOCTL_ARG(DDIDisplayInfo, _GLIDIX_IOCTL_INT_VIDEO, 2)
 
 /**
  * Resolution specifications (bottom 8 bits are the setting type).
@@ -137,6 +131,33 @@ typedef struct
 } DDIPixelFormat;
 
 /**
+ * Graphics information structure provided by kernel driver.
+ */
+typedef struct
+{
+	/**
+	 * Name of the renderer client library, e.g. "softrender".
+	 */
+	char					renderer[32];
+	
+	/**
+	 * Number of presentable surfaces that may be allocated. Must be at least 1.
+	 */
+	int					numPresentable;
+	
+	/**
+	 * Bitset of supported features.
+	 */
+	int					features;
+	
+	/**
+	 * Reserved.
+	 */
+	int					resv[16];
+} DDIDisplayInfo;
+extern DDIDisplayInfo ddiDisplayInfo;
+
+/**
  * Request for video mode setting (IOCTL).
  */
 typedef struct
@@ -179,17 +200,12 @@ typedef struct
 	 * Surface ID, for shared surfaces.
 	 */
 	uint32_t				id;
+	
+	/**
+	 * Renderer data.
+	 */
+	void*					drvdata;
 } DDISurface;
-
-/**
- * Describes a pen that draws text.
- */
-typedef struct DDIPen_ DDIPen;
-
-/**
- * Describes a font to be used with a pen.
- */
-typedef struct DDIFont_ DDIFont;
 
 /**
  * Describes a color.
@@ -201,6 +217,95 @@ typedef struct
 	uint8_t					blue;
 	uint8_t					alpha;
 } DDIColor;
+
+/**
+ * Describes a DDI driver by providing pointers to implementations of functions.
+ */
+typedef struct
+{
+	/**
+	 * Size of this structure.
+	 */
+	size_t					size;
+	
+	/**
+	 * Name of the renderer.
+	 */
+	const char*				renderString;
+	
+	/**
+	 * Initialize the driver. The file descriptor referring to the display device is
+	 * passed as an argument (note that it is close-on-exec). The returned value is
+	 * passed to other driver functions, and can be used to store driver-specific data,
+	 * and is called the "driver context" (drvctx).
+	 */
+	void* (*init)(int fd);
+	
+	/**
+	 * Create a new surface.  This function must set the 'data' field of the given
+	 * surface, allocating a surface with the required format and size (as already
+	 * given in the DDISurface structure). It may also set 'drvdata' to driver-specific
+	 * metadata for the surface. The 'flags' must be respected:
+	 *
+	 * DDI_SHARED - the 'id' field must be set to a shared surface ID.
+	 * DDI_RENDER_TARGET - it must be possible to use this surface as a color attachment.
+	 *
+	 * If 'data' is not NULL, it is the source pixel data that is to be placed in the surface,
+	 * and is expected to be in the correct pixel format. If NULL, the surface begins with
+	 * undefined content.
+	 *
+	 * Return 0 on success, or -1 on error.
+	 */
+	int (*createSurface)(void* drvctx, DDISurface* surface, char *data);
+	
+	/**
+	 * Open a shared surface. This function is passed the driver context, and a surface
+	 * structure which is completly zeroed out except the 'id' field, which is set to
+	 * the ID of the desired surface. This function must set the width, height and format
+	 * of the surface, as well as attach it to the pixel data, as well as any driver-specific
+	 * information ('drvdata'). It must return 0 on success, or -1 on error, and in this case
+	 * set errno appropriately.
+	 */
+	int (*openSurface)(void* drvctx, DDISurface* surface);
+	
+	/**
+	 * Perform a blit - move the 'width' x 'height' pixel sized block from 'srcX', 'srcY' on the source
+	 * surface 'src' onto the position 'destX', 'destY' of the destination surface 'dest'. 'drvctx' is
+	 * the driver context returned by init().
+	 *
+	 * Both surfaces are to have the same pixel format; if not, the result is undefined.
+	 *
+	 * This function must perform alpha blending of the source pixels onto the destination pixels.
+	 * All coordinates are valid. Pixels outside of bounds are read as fully transparent, and writing
+	 * is secretly discarded.
+	 */
+	void (*blit)(void *drvctx, DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY,
+			int width, int height);
+	
+	/**
+	 * Similar to blit(), but no alpha blending is performed - the exact pixel values (including alpha channel)
+	 * are moved directly. Pixels outside of bounds are ignored and silently discarded.
+	 */
+	void (*overlay)(void *drvctx, DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY,
+			int width, int height);
+	
+	/**
+	 * Draw a rectangle of the given color at the specified position. This function does NOT perform alpha blending!
+	 * All coordinates are allowed. Pixels written outside of bounds are discarded.
+	 */
+	void (*rect)(void *drvctx, DDISurface *surf, int x, int y, int width, int height, DDIColor *color);
+} DDIDriver;
+extern DDIDriver* ddiDriver;
+
+/**
+ * Describes a pen that draws text.
+ */
+typedef struct DDIPen_ DDIPen;
+
+/**
+ * Describes a font to be used with a pen.
+ */
+typedef struct DDIFont_ DDIFont;
 
 /**
  * Initialize the DDI library, opening the specified display device, with the specified oflag.
@@ -235,17 +340,20 @@ size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned
  * Creates a new surface out of pixel data in the specified format. The possible flags are as
  * follows:
  *
- *	DDI_STATIC_FRAMEBUFFER
- *		Causes the resulting surface to be a software surface actually backed at the
- *		specified location; so blitting to it will overwrite your data etc.
+ *	DDI_RENDER_TARGET
+ *		The returned surface may be used as a 3D render target.
+ *
+ *	DDI_SHARED
+ *		The returned surface is shared, and can be accessed by other applications.
+ *		The 'id' field of the surface structure may be passed by another application to
+ *		ddiOpenSurface() to get access to the surface (as long as they're both using
+ *		the same display device).
  */
 DDISurface* ddiCreateSurface(DDIPixelFormat *format, unsigned int width, unsigned int height, char *data, unsigned int flags);
 
 /**
  * Open a previously created shared surface. Returns a surface on success, or NULL on error
- * (shared surface does not exist).
- *
- * Only available when compiled for Glidix.
+ * (shared surface does not exist), and in this case sets errno to the error number.
  */
 DDISurface* ddiOpenSurface(uint32_t id);
 
@@ -257,19 +365,17 @@ void ddiDeleteSurface(DDISurface *surface);
 /**
  * Fills a rectangle of a specified color within a surface. Does not support alpha blending.
  */
-void ddiFillRect(DDISurface *surface, int x, int y, unsigned int width, unsigned int height, DDIColor *color);
+void ddiFillRect(DDISurface *surface, int x, int y, int width, int height, DDIColor *color);
 
 /**
  * Copies a rectangle from one image onto another image.
  */
-void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY,
-	unsigned int width, unsigned int height);
+void ddiBlit(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height);
 
 /**
  * Similar to ddiBlit() but does not perform alpha blending.
  */
-void ddiOverlay(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY,
-	unsigned int width, unsigned int height);
+void ddiOverlay(DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height);
 	
 /**
  * Loads an image from a PNG file and creates a DDI surface out of it. The pixel format used is whatever format
@@ -427,5 +533,15 @@ void ddiColorToString(const DDIColor *col, char *buffer);
  * Returns a new surface on success, NULL on error.
  */
 DDISurface* ddiScale(DDISurface *surface, unsigned int newWidth, unsigned int newHeight, int algorithm);
+
+/**
+ * Given a 32-bit mask, return the byte offset into the 32-bit value.
+ */
+int ddiGetIndexForMask(uint32_t mask);
+
+/**
+ * Convert a color specification to a pixel.
+ */
+void ddiColorToPixel(uint32_t *pixeldata, DDIPixelFormat *format, DDIColor *color);
 
 #endif

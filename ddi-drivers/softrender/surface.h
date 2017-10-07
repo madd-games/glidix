@@ -1,5 +1,5 @@
 /*
-	Glidix Runtime
+	Madd Software Renderer
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,42 +26,34 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _SYS_DEBUG_H
-#define _SYS_DEBUG_H
+#ifndef SOFTRENDER_SURFACE_H_
+#define SOFTRENDER_SURFACE_H_
 
-#include <inttypes.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <libddi.h>
 
 /**
- * Represents a stack frame.
+ * Creates a surface. Implements ddiDriver->createSurface().
  */
-struct stack_frame
-{
-	struct stack_frame*		sf_next;
-	void*				sf_ip;
-};
+int srCreateSurface(void *drvctx, DDISurface *surface, char *data);
 
 /**
- * Get the line, source file and function name corresponding to the specified raw (unrelocated)
- * address in the given object file. Returns a string on the heap, which must later be freed using
- * free(), in the form "<function>@<source-file>:<source-line>". Always returns something; even
- * if all fields are "??".
- *
- * This function is only successful if "objdump" from "binutils" is installed.
+ * Opens a shared surface. Implements ddiDriver->openSurface().
  */
-char* __dbg_addr2line(const char *path, uint64_t offset);
+int srOpenSurface(void *drvctx, DDISurface *surface);
 
 /**
- * Get the symbol containing the specified raw (unrelocated) address in the given object file.
- * Returns a string on the heap (which may just be "??") and free() must be called on it later.
+ * Blit surfaces. Implements ddiDriver->blit().
  */
-char* __dbg_getsym(const char *path, uint64_t offset);
+void srBlit(void *drvctx, DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height);
 
-#ifdef __cplusplus
-};	/* extern "C" */
-#endif
+/**
+ * Overlay surfaces. Implements ddiDriver->overlay().
+ */
+void srOverlay(void *drvctx, DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height);
+
+/**
+ * Fill a rectangle. Implements ddiDriver->rect().
+ */
+void srRect(void *drvctx, DDISurface *surf, int x, int y, int width, int height, DDIColor *color);
 
 #endif

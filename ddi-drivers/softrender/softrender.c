@@ -1,5 +1,5 @@
 /*
-	Glidix Runtime
+	Madd Software Renderer
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,42 +26,29 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _SYS_DEBUG_H
-#define _SYS_DEBUG_H
+#include <libddi.h>
 
-#include <inttypes.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "surface.h"
 
 /**
- * Represents a stack frame.
+ * Initialize softrender. We don't need to do anything.
  */
-struct stack_frame
+void* srInit(int fd)
 {
-	struct stack_frame*		sf_next;
-	void*				sf_ip;
+	(void)fd;
+	return NULL;
 };
 
 /**
- * Get the line, source file and function name corresponding to the specified raw (unrelocated)
- * address in the given object file. Returns a string on the heap, which must later be freed using
- * free(), in the form "<function>@<source-file>:<source-line>". Always returns something; even
- * if all fields are "??".
- *
- * This function is only successful if "objdump" from "binutils" is installed.
+ * DDI driver implementation for softrender.
  */
-char* __dbg_addr2line(const char *path, uint64_t offset);
-
-/**
- * Get the symbol containing the specified raw (unrelocated) address in the given object file.
- * Returns a string on the heap (which may just be "??") and free() must be called on it later.
- */
-char* __dbg_getsym(const char *path, uint64_t offset);
-
-#ifdef __cplusplus
-};	/* extern "C" */
-#endif
-
-#endif
+DDIDriver ddidrv_softrender = {
+	.size = sizeof(DDIDriver),
+	.renderString = "Madd Games Software Renderer",
+	.init = srInit,
+	.createSurface = srCreateSurface,
+	.openSurface = srOpenSurface,
+	.blit = srBlit,
+	.overlay = srOverlay,
+	.rect = srRect,
+};

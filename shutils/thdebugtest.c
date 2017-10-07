@@ -1,5 +1,5 @@
 /*
-	Glidix Runtime
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,14 +26,42 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <sys/debug.h>
-#include <stdio.h>
+#include <sys/glidix.h>
+#include <pthread.h>
+#include <unistd.h>
 
-void __sf_trace()
+#define	NUM_THREADS		16
+
+pthread_t threads[NUM_THREADS];
+
+volatile int *currentTimers;
+int realTimers[16];
+int falseTimers[16];
+
+void* test_thread(void *ignore)
 {
-	struct stack_frame *sf;
-	for (sf=__sf_current(); sf!=NULL; sf=sf->sf_prev)
+	(void)ignore;
+	
+	while (1)
 	{
-		fprintf(stderr, "\t%p\n", sf->sf_ip);
+		__sync_fetch_and_add(&currentTimers[_glidix_cpuno()], 1);
 	};
+	
+	return NULL;
+};
+
+int main()
+{
+	int i;
+	currentTimers = realTimers;
+	
+	for (i=0; i<NUM_THREADS; i++)
+	{
+		pthread_create(&threads[i], NULL, test_thread, NULL);
+	};
+	
+	sleep(10);
+	*((int*)0) = 0;
+	
+	return 0;
 };

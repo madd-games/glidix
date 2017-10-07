@@ -1,0 +1,18 @@
+>NAME
+
+ddi - Display Device Interface
+
+>SYNOPSIS
+
+	#include <libddi.h>		/* userspace */
+	#include <glidix/video.h>	/* kernel */
+
+>DESCRIPTION
+
+DDI is the interface to graphics hardware provided by Glidix. It provides a system for switching video modes (used primarily by the [gwmserver.6]), and for hardware acceleration (for both 2D and 3D graphics). It is a multi-layer system, where a display device is controlled by a kernel-space driver and a userspace client library, or "DDI driver". The client libraries are installed in '/usr/lib/ddidrv'.
+
+>>DDI Shader Bytecode
+
+The shader bytecode is a hardware-independent representation of shader code, used for 3D rendering. It is a simple abstract register machine, with no stack or support for recursive functions. Some instructions are supported only in sepcific shader stages, others in all stages. There are 256 'local registers', which can be used to store local variables, named 'l0-l255'. Specific instructions must be used to read uniforms and inputs and to write outputs. A bytecode instruction has the following format:
+
+TODO

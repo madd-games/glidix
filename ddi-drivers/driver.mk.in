@@ -1,0 +1,9 @@
+DRIVER_NAME_C_SRC := $(shell find $(SRCDIR)/DRIVER_NAME -name '*.c')
+DRIVER_NAME_OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(DRIVER_NAME_C_SRC))
+DRIVER_NAME_DEP := $(DRIVER_NAME_OBJ:.o=.d)
+
+DRIVER_NAME.so: $(DRIVER_NAME_OBJ)
+	@mkdir -p out
+	$(HOST_GCC) -shared -o $@ $^ -ggdb
+
+-include $(DEP)

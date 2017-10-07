@@ -34,128 +34,6 @@
 #include <inttypes.h>
 #include <dlfcn.h>		/* RTLD_* */
 
-#include "elf64.h"
-
-/**
- * Describes a library segment mapped into memory.
- */
-typedef struct
-{
-	/**
-	 * Base address.
-	 */
-	void*					base;
-	
-	/**
-	 * Size in bytes.
-	 */
-	size_t					size;
-} Segment;
-
-/**
- * Initialization/termination function.
- */
-typedef void (*InitFunc)(void);
-typedef void (*FiniFunc)(void);
-
-/**
- * Describes a library loaded into memory.
- */
-typedef struct Library_
-{
-	/**
-	 * Links to the previous and next library in the chain.
-	 */
-	struct Library_*			prev;
-	struct Library_*			next;
-	
-	/**
-	 * Reference count - how many times this library was dlopen()'ed. dlclose()
-	 * decrements this and releases the library once this reaches zero.
-	 */
-	int					refcount;
-	
-	/**
-	 * Load address of this object.
-	 */
-	uint64_t				base;
-	
-	/**
-	 * Name of this library.
-	 */
-	char					soname[128];
-	
-	/**
-	 * Loading flags (RTLD_*)
-	 */
-	int					flags;
-	
-	/**
-	 * Points to the dynamic linker information.
-	 */
-	Elf64_Dyn*				dyn;
-	
-	/**
-	 * Points to the symbol table and string table.
-	 */
-	Elf64_Sym*				symtab;
-	char*					strtab;
-	size_t					numSymbols;
-	
-	/**
-	 * Relocation table, and its size.
-	 */
-	Elf64_Rela*				rela;
-	size_t					numRela;
-	
-	/**
-	 * PLT relocation table.
-	 */
-	Elf64_Rela*				pltRela;
-	
-	/**
-	 * Hash table.
-	 */
-	Elf64_Word*				hashtab;
-	
-	/**
-	 * PLT GOT.
-	 */
-	void**					pltgot;
-	
-	/**
-	 * Initialization function (or NULL), extra initialization functions, and
-	 * the number of them.
-	 */
-	InitFunc				initFunc;
-	InitFunc*				initVec;
-	size_t					numInit;
-	
-	/**
-	 * Same except destructors.
-	 */
-	FiniFunc				finiFunc;
-	FiniFunc*				finiVec;
-	size_t					numFini;
-	
-	/**
-	 * Set to 1 if initialization has been performed.
-	 */
-	int					initDone;
-	
-	/**
-	 * Segments constituting this library (max 64) and the actual amount.
-	 */
-	int					numSegs;
-	Segment					segs[64];
-	
-	/**
-	 * Pointers to libraries which this one depends on.
-	 */
-	int					numDeps;
-	struct Library_*			deps[64];
-} Library;
-
 /**
  * A very simplistic string-formatting function.
  */
@@ -202,45 +80,47 @@ extern int dynld_errno;
  * Get a library handle, and increase its reference count, if the specified object is already loaded.
  * Otherwise, return NULL.
  */
-Library* dynld_getlib(const char *soname);
+Dl_Library* dynld_getlib(const char *soname);
 
 /**
  * Find a symbol by name in the specified library. Returns NULL if the symbol is not present.
- * 'binding' specified whether global (STB_GLOBAL) or weak (STB_WEAK) symbols should be searched for.
+ * 'binding' specifies whether global (STB_GLOBAL) or weak (STB_WEAK) symbols should be searched for.
  */
-void* dynld_libsym(Library *lib, const char *symname, unsigned char binding);
+void* dynld_libsym(Dl_Library *lib, const char *symname, unsigned char binding);
 
 /**
  * Search for the named symbol in the global namespace, and if not found, then in 'lib' (makes a difference
  * when the library was loaded with RTLD_LOCAL). Returns NULL if not found.
  */
-void* dynld_globsym(const char *symname, Library *lib);
+void* dynld_globsym(const char *symname, Dl_Library *lib);
 
 /**
  * Map an object from a file into memory. Returns the amount of bytes to advance the load address
  * by on success, or 0 on error; in which case dynld_errmsg is set to an error string.
  */
-uint64_t dynld_mapobj(Library *lib, int fd, uint64_t base, const char *name, int flags);
+uint64_t dynld_mapobj(Dl_Library *lib, int fd, uint64_t base, const char *name, int flags, const char *path);
 
 /**
  * Open a library file. If 'soname' contains a slash, it is interpreted as a direct path name; otherwise,
  * the remaining arguments are a NULL-terminated lsit of strings, which may contain multiple paths separated
  * by the ":" character. The paths are searches left-to-right, to find the desired library.
  *
+ * 'path' is the buffer into which the asbolute path of the library is written.
+ *
  * On success, returns a file descriptor referring to the library; on error returns -1 and dynld_errmsg is filled
  * with an error message.
  */
-int dynld_open(const char *soname, ...);
+int dynld_open(char *path, const char *soname, ...);
 
 /**
  * Close a library. This may result in unmapping all its segments if it is no longer in use.
  */
-int dynld_libclose(Library *lib);
+int dynld_libclose(Dl_Library *lib);
 
 /**
  * Initialize a library (and all its dependencies).
  */
-void dynld_initlib(Library *lib);
+void dynld_initlib(Dl_Library *lib);
 
 /**
  * Get our PID.

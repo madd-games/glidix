@@ -48,13 +48,9 @@ void _panic(const char *filename, int lineno, const char *funcname, const char *
 	};
 	
 	haltAllCPU();
-	//unlockConsole();
 	kprintf("In function %s at %s:%d\n", funcname, filename, lineno);
 	kprintf("Kernel panic: ");
 	kvprintf(fmt, ap);
-	
-	// if we are in graphics mode, render the console
-	renderConsoleToScreen();
 	
 	while (1)
 	{

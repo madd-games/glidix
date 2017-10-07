@@ -612,7 +612,12 @@ Thread *getThreadByTHID(int thid);
 void wakeProcess(int pid);
 
 /**
- * Kill all threads of the current process except the calling thread, by sending the SIGKILL signal, discard all inbound
+ * Suspend all threads except the calling thread, by sending the SIGTHSUSP signal.
+ */
+void suspendOtherThreads();
+
+/**
+ * Kill all threads of the current process except the calling thread, by sending the SIGTHKILL signal, discard all inbound
  * scheduler notifications, and wait for total cleanup of the threads, making the calling thread the sole thread in the
  * process.
  */

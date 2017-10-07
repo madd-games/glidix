@@ -5,7 +5,7 @@ CFLAGS := -Wall -Werror -fPIC -I/glidix/usr/include/freetype2 -O3 -ggdb
 
 libddi.so: $(OBJ)
 	@mkdir -p out
-	$(HOST_GCC) -shared -o $@ $^ -lfreetype -lpng -O3 -ggdb
+	$(HOST_GCC) -shared -o $@ $^ -lfreetype -lpng -ldl -O3 -ggdb
 
 -include $(DEP)
 

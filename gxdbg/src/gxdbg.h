@@ -43,6 +43,8 @@
 #define	DBG_DEBUG_MODE				(1 << 2)	/* i am being debugged */
 #define DBG_SIGNALS				(1 << 3)	/* trap when dispatching signals */
 
+#define	SPACE_CHARS				" \t"
+
 typedef struct
 {
 	char		data[512];
@@ -58,5 +60,7 @@ typedef struct
 	uint64_t	rsp;
 	uint64_t	fsbase, gsbase;
 } MachineState;
+
+char* prompt();
 
 #endif
