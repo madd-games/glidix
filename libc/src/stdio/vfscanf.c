@@ -415,7 +415,6 @@ int __scanf_conv_chars(struct __instr *_is, int count, char *outp)
 
 int __scanf_conv_float(struct __instr *_is, int lenmod, void *outp)
 {
-	// TODO: exponents!
 	uint64_t result = 0;
 	int sign = 1;
 	uint64_t div = 1;
@@ -458,6 +457,7 @@ int __scanf_conv_float(struct __instr *_is, int lenmod, void *outp)
 			};
 			
 			pointSeen = 1;
+			continue;
 		};
 		
 		if ((c < '0') || (c > '9'))
@@ -470,10 +470,59 @@ int __scanf_conv_float(struct __instr *_is, int lenmod, void *outp)
 		if (pointSeen) div *= 10;
 		scannedYet = 1;
 	};
-	
+
 	if (!scannedYet)
 	{
 		return -1;
+	};
+
+	c = __instr_getc(_is);
+	if (c == EOF)
+	{
+		// NOP
+	}
+	else if (c == 'e')
+	{
+		char expsign = __instr_getc(_is);
+		if (expsign == '-' || expsign == '+')
+		{
+			int exp = 0;
+			
+			while (1)
+			{
+				c = __instr_getc(_is);
+				if (c < '0' || c > '9')
+				{
+					__instr_ungetc(_is, c);
+					break;
+				};
+				
+				exp = exp * 10 + (c - '0');
+			};
+			
+			if (expsign == '+')
+			{
+				while (exp--) result *= 10;
+			}
+			else
+			{
+				while (exp--)
+				{
+					if (result % 10 == 0)
+					{
+						result /= 10;
+					}
+					else
+					{
+						div *= 10;
+					};
+				};
+			};
+		};
+	}
+	else
+	{
+		__instr_ungetc(_is, c);
 	};
 	
 	if (outp != NULL)
@@ -687,6 +736,10 @@ int __scanf_gen(struct __instr *_is, const char *format, va_list ap)
 			case 'e':
 			case 'f':
 			case 'g':
+			case 'A':
+			case 'E':
+			case 'F':
+			case 'G':
 				if (__scanf_conv_float(_is, lenmod, outp) != 0) goto finish;
 				break;
 			case 'S':
