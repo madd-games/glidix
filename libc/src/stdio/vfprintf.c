@@ -51,10 +51,10 @@ enum
 	_LM_h,
 	_LM_l,
 	_LM_ll,
+	_LM_L,
 	_LM_j,
 	_LM_z,
 	_LM_t,
-	_LM_L,
 };
 
 int fputc(int ch, FILE *fp)
@@ -371,9 +371,19 @@ static int __printf_conv_unsigned(FILE *fp, int flags, int lenmod, int fieldWidt
 	return ret;
 };
 
-static int __printf_conv_fixedfloat(FILE *fp, int flags, int fieldWidth, int precision, int base, char spec, va_list ap)
+static int __printf_conv_fixedfloat(FILE *fp, int flags, int lenmod, int fieldWidth, int precision, int base, char spec, va_list ap)
 {
-	double x = va_arg(ap, double);
+	double x;
+	if (lenmod == _LM_L)
+	{
+		// loss of precision will occur perhaps in the future we can modify this to work on
+		// long doubles instead of normal doubles.
+		x = (double) va_arg(ap, long double);
+	}
+	else
+	{
+		x = va_arg(ap, double);
+	};
 	uint64_t val64 = *((uint64_t*)(&x));
 	
 	// check for infinity and NaN
@@ -505,9 +515,19 @@ static int __printf_conv_fixedfloat(FILE *fp, int flags, int fieldWidth, int pre
 	return result;
 };
 
-static int __printf_conv_expfloat(FILE *fp, int flags, int fieldWidth, int precision, int base, char spec, va_list ap)
+static int __printf_conv_expfloat(FILE *fp, int flags, int lenmod, int fieldWidth, int precision, int base, char spec, va_list ap)
 {
-	double x = va_arg(ap, double);
+	double x;
+	if (lenmod == _LM_L)
+	{
+		// loss of precision will occur perhaps in the future we can modify this to work on
+		// long doubles instead of normal doubles.
+		x = (double) va_arg(ap, long double);
+	}
+	else
+	{
+		x = va_arg(ap, double);
+	};
 	uint64_t val64 = *((uint64_t*)(&x));
 	
 	// check for infinity and NaN
@@ -666,9 +686,19 @@ static int __printf_conv_expfloat(FILE *fp, int flags, int fieldWidth, int preci
 	return result;
 };
 
-static int __printf_conv_g(FILE *fp, int flags, int fieldWidth, int precision, int base, char spec, va_list ap)
+static int __printf_conv_g(FILE *fp, int flags, int lenmod, int fieldWidth, int precision, int base, char spec, va_list ap)
 {
-	double x = va_arg(ap, double);
+	double x;
+	if (lenmod == _LM_L)
+	{
+		// loss of precision will occur perhaps in the future we can modify this to work on
+		// long doubles instead of normal doubles.
+		x = (double) va_arg(ap, long double);
+	}
+	else
+	{
+		x = va_arg(ap, double);
+	};
 	double y = x;
 	uint64_t val64 = *((uint64_t*)(&x));
 	
@@ -934,6 +964,10 @@ int vfprintf(FILE *fp, const char *fmt, va_list ap)
 					fmt++;
 				};
 				break;
+			case 'L':
+				lenmod = _LM_L;
+				fmt++;
+				break;
 			case 'j':
 				lenmod = _LM_j;
 				fmt++;
@@ -944,10 +978,6 @@ int vfprintf(FILE *fp, const char *fmt, va_list ap)
 				break;
 			case 't':
 				lenmod = _LM_t;
-				fmt++;
-				break;
-			case 'L':
-				lenmod = _LM_L;
 				fmt++;
 				break;
 			};
@@ -976,19 +1006,19 @@ int vfprintf(FILE *fp, const char *fmt, va_list ap)
 				break;
 			case 'f':
 			case 'F':
-				out += __printf_conv_fixedfloat(fp, flags, fieldWidth, precision, 10, spec, ap);
+				out += __printf_conv_fixedfloat(fp, flags, lenmod, fieldWidth, precision, 10, spec, ap);
 				break;
 			case 'a':
 			case 'A':
-				out += __printf_conv_fixedfloat(fp, flags, fieldWidth, precision, 16, spec+5, ap);
+				out += __printf_conv_fixedfloat(fp, flags, lenmod, fieldWidth, precision, 16, spec+5, ap);
 				break;
 			case 'e':
 			case 'E':
-				out += __printf_conv_expfloat(fp, flags, fieldWidth, precision, 10, spec, ap);
+				out += __printf_conv_expfloat(fp, flags, lenmod, fieldWidth, precision, 10, spec, ap);
 				break;
 			case 'g':
 			case 'G':
-				out += __printf_conv_g(fp, flags, fieldWidth, precision, 10, spec, ap);
+				out += __printf_conv_g(fp, flags, lenmod, fieldWidth, precision, 10, spec, ap);
 				break;
 			case 'c':
 				out += __printf_conv_c(fp, ap);
