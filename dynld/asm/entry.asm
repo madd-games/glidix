@@ -100,6 +100,19 @@ raise:
 	syscall
 	ret
 
+global readlink
+readlink:
+	mov rax, 66
+	mov r10, rcx
+	syscall
+	ret
+
+global realpath
+realpath:
+	mov rax, 34
+	syscall
+	ret
+
 extern dynld_pltreloc
 extern dynld_abort
 global dynld_lazybind

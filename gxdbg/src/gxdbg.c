@@ -39,8 +39,7 @@
 #include <termios.h>
 
 #include "gxdbg.h"
-
-#define	SPACE_CHARS		" \t"
+#include "core.h"
 
 typedef struct CmdHistory_ 
 {
@@ -239,7 +238,20 @@ int main(int argc, char *argv[])
 	{
 		fprintf(stderr, "USAGE:\t%s <executable> <arguments...>\n", argv[0]);
 		fprintf(stderr, "\tDebug an executable.\n");
+		fprintf(stderr, "\n\t%s --core [core-file]\n", argv[0]);
+		fprintf(stderr, "\tInspect a core file (by default named 'core')\n");
 		return 1;
+	};
+	
+	if (strcmp(argv[1], "--core") == 0)
+	{
+		const char *filename = "core";
+		if (argc == 3)
+		{
+			filename = argv[2];
+		};
+		
+		return inspectCore(filename);
 	};
 	
 	if (__syscall(__SYS_trace, TC_DEBUG, -1, NULL) != 0)
@@ -328,7 +340,7 @@ int main(int argc, char *argv[])
 		{
 			free(cmdline);
 			
-			char *cmdline = prompt();
+			cmdline = prompt();
 			char *cmd = strtok(cmdline, SPACE_CHARS);
 			if (cmd == NULL) continue;
 		

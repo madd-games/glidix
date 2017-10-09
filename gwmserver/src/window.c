@@ -26,18 +26,31 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <time.h>
+#include <poll.h>
 
 #include "window.h"
 #include "screen.h"
 #include "kblayout.h"
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
+/**
+ * Maximum frames per second.
+ */
+#define	FRAME_RATE				30
+
 Window *desktopWindow;
 
 pthread_mutex_t mouseLock = PTHREAD_MUTEX_INITIALIZER;
 int cursorX, cursorY;
+
+pthread_mutex_t invalidateLock = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * Cached windows. Each one counts as a new reference so you must wndDown() when
@@ -48,17 +61,52 @@ Window *wndHovering = NULL;				// mouse hovers over this window
 Window *wndFocused = NULL;				// main focused window
 Window *wndActive = NULL;				// active window (currently clicked on)
 
+/**
+ * A semaphore which is signalled whenever the back buffer is updated, to let the swapping thread
+ * do its job.
+ */
+sem_t semSwap;
+
 typedef struct
 {
 	DDISurface* sprite;
+	DDISurface* back;
 	int hotX, hotY;
 	const char *path;
 } Cursor;
 
 static Cursor cursors[GWM_CURSOR_COUNT] = {
-	{NULL, 0, 0, "/usr/share/images/cursor.png"},
-	{NULL, 7, 7, "/usr/share/images/txtcursor.png"},
-	{NULL, 13, 3, "/usr/share/images/hand.png"}
+	{NULL, NULL, 0, 0, "/usr/share/images/cursor.png"},
+	{NULL, NULL, 7, 7, "/usr/share/images/txtcursor.png"},
+	{NULL, NULL, 13, 3, "/usr/share/images/hand.png"}
+};
+
+void* swapThread(void *ignore)
+{
+	while (1)
+	{
+		sem_wait(&semSwap);
+		
+		// if we were signalled multiple times, merge it into one draw
+		int value;
+		sem_getvalue(&semSwap, &value);
+		while (value--) sem_wait(&semSwap);
+		
+		// draw
+		clock_t start = clock();
+		pthread_mutex_lock(&invalidateLock);
+		ddiOverlay(screen, 0, 0, frontBuffer, 0, 0, screen->width, screen->height);
+		pthread_mutex_unlock(&invalidateLock);
+		clock_t end = clock();
+		
+		// cap the framerate
+		int msTaken = (int) ((end - start) * 1000 / CLOCKS_PER_SEC);
+		int msNeeded = 1000 / FRAME_RATE;
+		if (msTaken < msNeeded)
+		{
+			poll(NULL, 0, msNeeded - msTaken);
+		};
+	};
 };
 
 void wndInit()
@@ -70,12 +118,11 @@ void wndInit()
 	desktopWindow->params.flags = GWM_WINDOW_NODECORATE;
 	desktopWindow->params.width = screen->width;
 	desktopWindow->params.height = screen->height;
-	desktopWindow->fgScrollX = 0;
-	desktopWindow->fgScrollY = 0;
+	desktopWindow->scrollX = 0;
+	desktopWindow->scrollY = 0;
 	desktopWindow->canvas = desktopBackground;
 	desktopWindow->front = ddiCreateSurface(&screen->format, screen->width, screen->height,
 						(char*)desktopBackground->data, 0);
-	desktopWindow->display = screen;
 	
 	int i;
 	for (i=0; i<GWM_CURSOR_COUNT; i++)
@@ -87,6 +134,13 @@ void wndInit()
 			fprintf(stderr, "[gwmserver] cannot load cursor %d from %s: %s\n", i, cursors[i].path, error);
 			abort();
 		};
+		
+		cursors[i].back = ddiCreateSurface(&screen->format, cursors[i].sprite->width, cursors[i].sprite->height, NULL, 0);
+		if (cursors[i].back == NULL)
+		{
+			fprintf(stderr, "[gwmserver] failed to create back-cache for cursor %d\n", i);
+			abort();
+		};
 	};
 	
 	cursorX = screen->width / 2;
@@ -96,6 +150,14 @@ void wndInit()
 	pthread_mutexattr_init(&attr);
 	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 	pthread_mutex_init(&wincacheLock, &attr);
+	
+	sem_init(&semSwap, 0, 0);
+	pthread_t thread;
+	if (pthread_create(&thread, NULL, swapThread, NULL) != 0)
+	{
+		fprintf(stderr, "[gwmserver] failed to create swap thread\n");
+		abort();
+	};
 };
 
 Window* wndCreate(Window *parent, GWMWindowParams *pars, uint64_t id, int fd, DDISurface *canvas)
@@ -108,7 +170,6 @@ Window* wndCreate(Window *parent, GWMWindowParams *pars, uint64_t id, int fd, DD
 	
 	wnd->canvas = canvas;
 	wnd->front = ddiCreateSurface(&canvas->format, canvas->width, canvas->height, (char*)canvas->data, 0);
-	wnd->display = ddiCreateSurface(&screen->format, pars->width, pars->height, NULL, DDI_SHARED);
 	
 	wnd->icon = NULL;
 	
@@ -149,6 +210,11 @@ Window* wndCreate(Window *parent, GWMWindowParams *pars, uint64_t id, int fd, DD
 		pthread_mutex_unlock(&wincacheLock);
 	};
 	
+	if ((pars->flags & GWM_WINDOW_HIDDEN) == 0)
+	{
+		wndDirty(wnd);
+	};
+	
 	return wnd;
 };
 
@@ -163,7 +229,6 @@ void wndDown(Window *wnd)
 	{
 		ddiDeleteSurface(wnd->canvas);
 		ddiDeleteSurface(wnd->front);
-		ddiDeleteSurface(wnd->display);
 		free(wnd);
 	};
 };
@@ -287,59 +352,143 @@ void wndDrawDecoration(DDISurface *target, Window *wnd)
 };
 #endif
 
-void wndDirty(Window *wnd)
+static void wndInvalidateWalk(Window *wnd, int cornerX, int cornerY, int invX, int invY, int width, int height)
 {
 	pthread_mutex_lock(&wnd->lock);
-	Window *parent = wnd->parent;
-	if (parent != NULL) wndUp(parent);
+	int scrollX = wnd->scrollX;
+	int scrollY = wnd->scrollY;
 	
-	ddiOverlay(wnd->front, wnd->bgScrollX, wnd->bgScrollY, wnd->display, 0, 0, wnd->params.width, wnd->params.height);
-	
-	Window *child;
-	for (child=wnd->children; child!=NULL; child=child->next)
+	Window *child = wnd->children;
+	while (child != NULL)
 	{
+		wndUp(child);
+		pthread_mutex_unlock(&wnd->lock);
+		
 		pthread_mutex_lock(&child->lock);
-		if ((child->params.flags & GWM_WINDOW_HIDDEN) == 0)
-		{	
-			ddiBlit(child->display, 0, 0, wnd->display,
-				child->params.x-wnd->fgScrollX, child->params.y-wnd->fgScrollY,
-				child->params.width, child->params.height);
+		
+		if (child->params.flags & GWM_WINDOW_HIDDEN)
+		{
+			pthread_mutex_unlock(&child->lock);
+			pthread_mutex_lock(&wnd->lock);
+			Window *next = child->next;
+			wndDown(child);
+			child = next;
+			continue;
 		};
-		pthread_mutex_unlock(&child->lock);
+		
+		// blit if the child overlaps the invalidated area
+		int invEndX = invX + width;
+		int invEndY = invY + height;
+		
+		int wndScreenX = cornerX + child->params.x - scrollX;
+		int wndScreenY = cornerY + child->params.y - scrollY;
+		
+		int wndEndX = wndScreenX + child->params.width;
+		int wndEndY = wndScreenY + child->params.height;
+		
+		int overlapX = MAX(wndScreenX, invX);
+		int overlapY = MAX(wndScreenY, invY);
+		
+		int overlapEndX = MIN(wndEndX, invEndX);
+		int overlapEndY = MIN(wndEndY, invEndY);
+		
+		if ((overlapX < overlapEndX) && (overlapY < overlapEndY))
+		{
+			// find the pixel on this window's front canvas
+			int srcX = overlapX + scrollX - child->params.x - cornerX - child->scrollX;
+			int srcY = overlapY + scrollY - child->params.y - cornerY - child->scrollY;
+			
+			// blit
+			ddiBlit(child->front, srcX, srcY, screen, overlapX, overlapY, overlapEndX - overlapX, overlapEndY - overlapY);
+			
+			// do it to all children
+			pthread_mutex_unlock(&child->lock);
+			wndInvalidateWalk(child, wndScreenX, wndScreenY, overlapX, overlapY, overlapEndX - overlapX, overlapEndY - overlapY);
+		}
+		else
+		{
+			// nothing to do
+			pthread_mutex_unlock(&child->lock);
+		};
+		
+		// re-lock the parent to allow us to traverse the list
+		pthread_mutex_lock(&wnd->lock);
+		Window *next = child->next;
+		wndDown(child);
+		child = next;
 	};
 	
 	pthread_mutex_unlock(&wnd->lock);
+};
+
+void wndInvalidate(int x, int y, int width, int height)
+{
+	pthread_mutex_lock(&invalidateLock);
 	
-	if (parent != NULL)
+	// first overlay the correct background fragment onto the screen
+	ddiOverlay(desktopBackground, x, y, screen, x, y, width, height);
+	
+	// now draw whatever windows are on top of it
+	wndInvalidateWalk(desktopWindow, 0, 0, x, y, width, height);
+	
+	// re-draw the overlapping part of the mouse cursor
+	pthread_mutex_lock(&mouseLock);
+	
+	pthread_mutex_lock(&wincacheLock);
+	int cursor = 0;
+	if (wndHovering != NULL) cursor = wndHovering->cursor;
+	pthread_mutex_unlock(&wincacheLock);
+	
+	int cx = cursorX - cursors[cursor].hotX;
+	int cy = cursorY - cursors[cursor].hotY;
+	
+	int left = MAX(x, cx);
+	int right = MIN(x+width, cx+cursors[cursor].sprite->width);
+	int top = MAX(y, cy);
+	int bottom = MIN(y+height, cy+cursors[cursor].sprite->height);
+	
+	if (left < right && top < bottom)
 	{
-		wndDirty(parent);
-		wndDown(parent);
+		ddiOverlay(screen, left, top, cursors[cursor].back, left - cx, top - cy, right - left, bottom - top);
+		ddiBlit(cursors[cursor].sprite, left - cx, top - cy, screen, left, top, right - left, bottom - top);
 	};
+	
+	pthread_mutex_unlock(&mouseLock);
+	
+	pthread_mutex_unlock(&invalidateLock);
+};
+
+void wndDirty(Window *wnd)
+{
+	// figure out our absolute coordinates then call wndInvalidate() on that region
+	int x, y;
+	if (wndRelToAbs(wnd, wnd->scrollX, wnd->scrollY, &x, &y) != 0) return;
+	
+	int width, height;
+	pthread_mutex_lock(&wnd->lock);
+	width = wnd->params.width;
+	height = wnd->params.height;
+	pthread_mutex_unlock(&wnd->lock);
+	
+	wndInvalidate(x, y, width, height);
 };
 
 void wndDrawScreen()
 {
-	int cursor = 0;
-	pthread_mutex_lock(&wincacheLock);
-	if (wndHovering != NULL) cursor = wndHovering->cursor;
-	pthread_mutex_unlock(&wincacheLock);
-	
-	int cx, cy;
-	pthread_mutex_lock(&mouseLock);
-	cx = cursorX;
-	cy = cursorY;
-	pthread_mutex_unlock(&mouseLock);
-	
-	pthread_mutex_lock(&desktopWindow->lock);
-	ddiOverlay(screen, 0, 0, frontBuffer, 0, 0, screen->width, screen->height);
-	ddiBlit(cursors[cursor].sprite, 0, 0, frontBuffer, cx - cursors[cursor].hotX, cy - cursors[cursor].hotY,
-		cursors[cursor].sprite->width, cursors[cursor].sprite->height);
-	pthread_mutex_unlock(&desktopWindow->lock);
+	sem_post(&semSwap);
 };
 
 void wndMouseMove(int x, int y)
 {
+	pthread_mutex_lock(&invalidateLock);
 	pthread_mutex_lock(&mouseLock);
+
+	pthread_mutex_lock(&wincacheLock);
+	int oldCursor = 0;
+	if (wndHovering != NULL) oldCursor = wndHovering->cursor;
+	pthread_mutex_unlock(&wincacheLock);
+	
+	ddiOverlay(cursors[oldCursor].back, 0, 0, screen, cursorX - cursors[oldCursor].hotX, cursorY - cursors[oldCursor].hotY, cursors[oldCursor].back->width, cursors[oldCursor].back->height);
 	cursorX = x;
 	cursorY = y;
 	
@@ -401,9 +550,15 @@ void wndMouseMove(int x, int y)
 			};
 		};
 	};
-	
+
+	int newCursor = 0;
+	if (wndHovering != NULL) newCursor = wndHovering->cursor;
+	ddiOverlay(screen, cursorX - cursors[newCursor].hotX, cursorY - cursors[newCursor].hotY, cursors[newCursor].back, 0, 0, cursors[newCursor].back->width, cursors[newCursor].back->height);
+	ddiBlit(cursors[newCursor].sprite, 0, 0, screen, cursorX - cursors[newCursor].hotX, cursorY - cursors[newCursor].hotY, cursors[newCursor].sprite->width, cursors[newCursor].sprite->height);
+
 	pthread_mutex_unlock(&wincacheLock);
 	pthread_mutex_unlock(&mouseLock);
+	pthread_mutex_unlock(&invalidateLock);
 	wndDrawScreen();
 };
 
@@ -413,8 +568,8 @@ void wndAbsToRelWithin(Window *win, int x, int y, int *relX, int *relY)
 	int expX, expY;
 	if (win->parent != NULL)
 	{
-		expX = x - win->params.x + win->parent->fgScrollX;
-		expY = y - win->params.y + win->parent->fgScrollY;
+		expX = x - win->params.x + win->parent->scrollX;
+		expY = y - win->params.y + win->parent->scrollY;
 	}
 	else
 	{
@@ -441,7 +596,7 @@ void wndAbsToRelWithin(Window *win, int x, int y, int *relX, int *relY)
 static Window* wndAbsToRelFrom(Window *win, int winX, int winY, int *relX, int *relY)
 {
 	// don't bother if outside bounds
-	if ((winX >= win->params.width) || (winY >= win->params.height))
+	if ((winX >= win->params.width) || (winY >= win->params.height) || (winX < 0) || (winY < 0))
 	{
 		return NULL;
 	};
@@ -459,8 +614,8 @@ static Window* wndAbsToRelFrom(Window *win, int winX, int winY, int *relX, int *
 		}
 		else
 		{
-			candidate = wndAbsToRelFrom(child, winX - child->params.x + win->fgScrollX,
-							winY - child->params.y + win->fgScrollY, relX, relY);
+			candidate = wndAbsToRelFrom(child, winX - child->params.x + win->scrollX,
+							winY - child->params.y + win->scrollY, relX, relY);
 		};
 		pthread_mutex_unlock(&child->lock);
 		if (candidate != NULL)
@@ -666,4 +821,31 @@ int wndSetIcon(Window *wnd, uint32_t surfID)
 	wndDirty(desktopWindow);
 	wndDrawScreen();
 	return status;
+};
+
+int wndRelToAbs(Window *win, int relX, int relY, int *absX, int *absY)
+{
+	if (win == desktopWindow)
+	{
+		*absX = relX;
+		*absY = relY;
+		return 0;
+	};
+	
+	pthread_mutex_lock(&win->lock);
+	int cornerX = win->params.x;
+	int cornerY = win->params.y;
+	int scrollX = win->scrollX;
+	int scrollY = win->scrollY;
+	Window *parent = win->parent;
+	if (parent != NULL) wndUp(parent);
+	pthread_mutex_unlock(&win->lock);
+	
+	if (parent != NULL)
+	{
+		int result = wndRelToAbs(win->parent, cornerX + relX - scrollX, cornerY + relY - scrollY, absX, absY);
+		wndDown(parent);
+		return result;
+	}
+	else return -1;
 };

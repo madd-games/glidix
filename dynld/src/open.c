@@ -26,16 +26,18 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 
 #include "dynld.h"
 
-int dynld_open(const char *soname, ...)
+int dynld_open(char *path, const char *soname, ...)
 {
 	if (strchr(soname, '/') != NULL)
 	{
 		strcpy(dynld_errmsg, "library not found");		// in case open() returns -1
+		realpath(soname, path);
 		return open(soname, O_RDONLY);
 	}
 	else
@@ -75,7 +77,11 @@ int dynld_open(const char *soname, ...)
 					strcpy(&libpath[size+1], soname);
 					
 					int fd = open(libpath, O_RDONLY);
-					if (fd != -1) return fd;
+					if (fd != -1)
+					{
+						realpath(libpath, path);
+						return fd;
+					};
 				};
 				
 				pathspec += size;

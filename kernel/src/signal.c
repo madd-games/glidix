@@ -36,19 +36,12 @@
 #include <glidix/syscall.h>
 #include <glidix/msr.h>
 #include <glidix/trace.h>
+#include <glidix/core.h>
 
 /**
  * OR of all flags that userspace should be allowed to set.
  */
-#define	OK_USER_FLAGS (\
-	(1 << 0)	/* carry flag */ \
-	| (1 << 2)	/* parity flag */ \
-	| (1 << 4)	/* adjust flag */ \
-	| (1 << 6)	/* zero flag */ \
-	| (1 << 7)	/* sign flag */ \
-	| (1 << 10)	/* direction flag */ \
-	| (1 << 11)	/* overflow flag */ \
-)
+#define	OK_USER_FLAGS 0xFFFF
 
 typedef struct
 {
@@ -87,8 +80,36 @@ void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
 		processExit(-SIGABRT);
 	};
 	
+	// push the ucontext_t (TODO: maybe somehow avoid pushing the GPRs alongside it?)
+	uint64_t addrContext = addrFPU - sizeof(SignalContext);
+	SignalContext ctx;
+	memset(&ctx, 0, sizeof(SignalContext));
+	ctx.sigmask = frame->sigmask;
+	ctx.rflags = frame->mstate.rflags;
+	ctx.rip = frame->mstate.rip;
+	ctx.rdi = frame->mstate.rdi;
+	ctx.rsi = frame->mstate.rsi;
+	ctx.rbp = frame->mstate.rbp;
+	ctx.rbx = frame->mstate.rbx;
+	ctx.rdx = frame->mstate.rdx;
+	ctx.rcx = frame->mstate.rcx;
+	ctx.rax = frame->mstate.rax;
+	ctx.r8  = frame->mstate.r8;
+	ctx.r9  = frame->mstate.r9;
+	ctx.r10 = frame->mstate.r10;
+	ctx.r11 = frame->mstate.r11;
+	ctx.r12 = frame->mstate.r12;
+	ctx.r13 = frame->mstate.r13;
+	ctx.r14 = frame->mstate.r14;
+	ctx.r15 = frame->mstate.r15;
+	ctx.rsp = frame->mstate.rsp;
+	if (memcpy_k2u((void*)addrContext, &ctx, sizeof(SignalContext)) != 0)
+	{
+		processExit(-SIGABRT);
+	};
+	
 	// push the return address
-	uint64_t addrRet = addrFPU - 8;
+	uint64_t addrRet = addrContext - 8;
 	uint64_t sigretRIP = (uint64_t)(&usup_sigret) - (uint64_t)(&usup_start) + 0xFFFF808000003000UL;
 	if (memcpy_k2u((void*)addrRet, &sigretRIP, 8) != 0)
 	{
@@ -101,7 +122,7 @@ void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
 	regs.rsp = addrRet;
 	*((int*)&regs.rdi) = frame->si.si_signo;
 	regs.rsi = addrInfo;
-	regs.rdx = 0;
+	regs.rdx = addrContext;
 	regs.rbx = addrFPU;
 	regs.r12 = addrGPR;
 	regs.r13 = frame->sigmask;
@@ -141,6 +162,7 @@ int isUnblockableSig(int signo)
 	case SIGKILL:
 	case SIGTHKILL:
 	case SIGSTOP:
+	case SIGTHSUSP:
 	
 	// also synchronous signals
 	case SIGSEGV:
@@ -152,6 +174,18 @@ int isUnblockableSig(int signo)
 	default:
 		return 0;
 	};
+};
+
+static void suspend(Regs *regs, int *suspendCounter)
+{
+	// thread->regs MUST be in the correct state as soon as we increment the
+	// "suspend counter".
+	cli();
+	lockSched();
+	memcpy(&getCurrentThread()->regs, regs, sizeof(Regs));
+	getCurrentThread()->flags |= THREAD_TRACED;
+	__sync_fetch_and_add(suspendCounter, 1);
+	switchTaskUnlocked(regs);
 };
 
 void dispatchSignal()
@@ -195,9 +229,23 @@ void dispatchSignal()
 		// not allowed to override SIGKILL
 		switchToKernelSpace(&thread->regs);
 		thread->regs.rip = (uint64_t) &processExit;
-		thread->regs.rdi = 0;
 		*((int64_t*)&thread->regs.rdi) = -SIGKILL;
 		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
+		return;
+	};
+	
+	if (siginfo->si_signo == SIGTHSUSP)
+	{
+		// cannot override SIGTHSUSP
+		uint64_t frameAddr = (uint64_t) thread->stack;
+		memcpy((void*)frameAddr, &thread->regs, sizeof(Regs));
+
+		switchToKernelSpace(&thread->regs);
+		thread->regs.rip = (uint64_t) &suspend;
+		thread->regs.rdi = frameAddr;
+		thread->regs.rsi = (uint64_t) siginfo->si_addr;
+		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
+		thread->regs.rbp = 0;
 		return;
 	};
 	
@@ -217,13 +265,27 @@ void dispatchSignal()
 	{
 		return;
 	}
+	else if (action->sa_handler == SIG_CORE)
+	{
+		// see long comment below for why we do this stuff
+		uint64_t frameAddr = (uint64_t) thread->stack;
+		memcpy((void*)frameAddr, siginfo, sizeof(siginfo_t));
+		memcpy((void*)(frameAddr+sizeof(siginfo_t)), &thread->regs, sizeof(Regs));
+		
+		switchToKernelSpace(&thread->regs);
+		thread->regs.rip = (uint64_t) &coredump;
+		thread->regs.rdi = frameAddr;
+		thread->regs.rsi = frameAddr + sizeof(siginfo_t);
+		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
+		thread->regs.rbp = 0;
+		return;
+	}
 	else if (action->sa_handler == SIG_DFL)
 	{
 		if (isDeathSig(siginfo->si_signo))
 		{
 			switchToKernelSpace(&thread->regs);
 			thread->regs.rip = (uint64_t) &processExit;
-			thread->regs.rdi = 0;
 			*((int64_t*)&thread->regs.rdi) = -siginfo->si_signo;
 			thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
 		};
@@ -295,6 +357,14 @@ int sendSignalEx(Thread *thread, siginfo_t *siginfo, int flags)
 		panic("invalid signal number passed to sendSignal(): %d", siginfo->si_signo);
 	};
 	
+	if (thread->flags & THREAD_TRACED)
+	{
+		// stop being traced, and mark as waiting so that signalThread() below puts us
+		// in the execution queue
+		thread->flags &= ~THREAD_TRACED;
+		thread->flags |= THREAD_WAITING;
+	};
+	
 	if (thread->flags & THREAD_TERMINATED)
 	{
 		return -1;
@@ -315,7 +385,7 @@ int sendSignalEx(Thread *thread, siginfo_t *siginfo, int flags)
 		signalThread(thread);
 		return -1;
 	};
-	
+
 	if (siginfo->si_signo == SIGTHWAKE)
 	{
 		// wake up the thread but do not dispatch any signal

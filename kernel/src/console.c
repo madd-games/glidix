@@ -71,6 +71,7 @@ static struct
 
 static Mutex consoleLock;
 SECTION(".videoram") unsigned char initVideoRAM[2*80*25];
+unsigned char tempVideoRAM[2*80*25];
 
 /**
  * Whether the console should be outputting to COM1.
@@ -825,10 +826,11 @@ void unlockConsole()
 	mutexUnlock(&consoleLock);
 };
 
+#if 0
 void switchConsoleToSoftwareBuffer(unsigned char *buffer, int width, int height)
 {
+	memcpy(buffer, consoleState.buffer,
 	mutexLock(&consoleLock);
-	consoleState.usingSoftware = 1;
 	consoleState.buffer = buffer;
 	consoleState.width = width;
 	consoleState.height = height;
@@ -843,6 +845,23 @@ void renderConsoleToScreen()
 	{
 		//lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
 	}
+	mutexUnlock(&consoleLock);
+};
+#endif
+
+void disableConsole()
+{
+	mutexLock(&consoleLock);
+	memcpy(tempVideoRAM, consoleState.buffer, 2 * 80 * 25);
+	consoleState.buffer = tempVideoRAM;
+	mutexUnlock(&consoleLock);
+};
+
+void enableConsole()
+{
+	mutexLock(&consoleLock);
+	memcpy(initVideoRAM, consoleState.buffer, 2 * 80 * 25);
+	consoleState.buffer = initVideoRAM;
 	mutexUnlock(&consoleLock);
 };
 

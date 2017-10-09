@@ -48,3 +48,8 @@ __attribute__ ((weak)) char* dlerror()
 	static char errmsg[] = "dynamic linker not available\0";
 	return errmsg;
 };
+
+__attribute__ ((weak)) size_t dladdrinfo(void *addr, Dl_AddrInfo *info, size_t infoSize)
+{
+	return 0;
+};

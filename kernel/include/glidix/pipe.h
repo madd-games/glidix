@@ -51,6 +51,12 @@ typedef struct
 	Semaphore			counter;
 	
 	/**
+	 * The semaphore which counts how many more bytes may be written
+	 * to the pipe.
+	 */
+	Semaphore			semWriteBuffer;
+	
+	/**
 	 * This semaphore gets signalled when the pipe is terminated.
 	 */
 	Semaphore			semHangup;

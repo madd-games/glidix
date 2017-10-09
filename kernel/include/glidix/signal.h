@@ -70,8 +70,9 @@
 #define	SIGTHKILL	35		/* kill a single thread */
 #define	SIGTHWAKE	36		/* wake a thread without dispatching a signal */
 #define	SIGTRACE	37		/* debugger notification */
+#define	SIGTHSUSP	38		/* suspend thread */
 #endif
-#define	SIG_NUM		38
+#define	SIG_NUM		39
 #ifndef _SIGNAL_H
 
 /**
@@ -130,6 +131,7 @@
 #define	SIG_ERR		((void (*)(int)) 2)
 #define	SIG_HOLD	((void (*)(int)) 3)
 #define	SIG_IGN		((void (*)(int)) 4)
+#define	SIG_CORE	((void (*)(int)) 5)
 
 #define	SA_NOCLDSTOP	(1 << 0)
 #define	SA_NOCLDWAIT	(1 << 1)
@@ -181,6 +183,26 @@ typedef struct
 	int sa_flags;
 	void (*sa_sigaction)(int, siginfo_t*, void*);
 } SigAction;
+
+/**
+ * Must match 'ucontext_t' (plus mcontext_t) from libc.
+ * The size must be a multiple of 16 to properly align the signal stack.
+ */
+typedef struct
+{
+	void*		link;			/* always NULL */
+	uint64_t	sigmask;
+	uint64_t	sp;
+	size_t		stackSize;
+	int		stackFlags;
+
+	/* mcontext_t part */
+	uint64_t	rflags;
+	uint64_t	rip;
+	uint64_t	rdi, rsi, rbp, rbx, rdx, rcx, rax;
+	uint64_t	r8, r9, r10, r11, r12, r13, r14, r15;
+	uint64_t	rsp;
+} SignalContext;
 
 /**
  * Represents a list of signal dispositions of a process. Shared by multiple

@@ -33,6 +33,7 @@
 #include <glidix/devfs.h>
 #include <glidix/sched.h>
 #include <glidix/errno.h>
+#include <glidix/console.h>
 
 typedef struct
 {
@@ -66,6 +67,12 @@ void videoDisplayDownref(VideoDisplay *disp)
 void video_close(File *fp)
 {
 	VideoDisplay *disp = fp->fsdata;
+	if (disp->fpModeSetter == fp)
+	{
+		disp->fpModeSetter = NULL;
+		disp->ops->exitmode(disp);
+		enableConsole();
+	};
 	videoDisplayDownref(disp);
 };
 
@@ -98,9 +105,17 @@ int video_ioctl(File *fp, uint64_t cmd, void *argp)
 			ERRNO = EPERM;
 			return -1;
 		};
-		return disp->ops->setmode(disp, (VideoModeRequest*)argp);
-	case IOCTL_VIDEO_GETFLAGS:
-		return disp->ops->getflags(disp);
+		disableConsole();
+		if (disp->ops->setmode(disp, (VideoModeRequest*)argp) == 0)
+		{
+			disp->fpModeSetter = fp;
+			return 0;
+		};
+		enableConsole();
+		return -1;
+	case IOCTL_VIDEO_GETINFO:
+		disp->ops->getinfo(disp, (VideoInfo*) argp);
+		return 0;
 	default:
 		ERRNO = ENODEV;
 		return -1;
@@ -129,6 +144,7 @@ VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops)
 	disp->data = data;
 	disp->ops = ops;
 	disp->refcount = 1;
+	disp->fpModeSetter = NULL;
 	
 	char devname[64];
 	strformat(devname, 64, "%s%d", drv->name, __sync_fetch_and_add(&drv->nextNum, 1));

@@ -390,6 +390,29 @@ void* clientThreadFunc(void *context)
 			memcpy(&resp.getFormatResp.format, &screen->format, sizeof(DDIPixelFormat));
 			write(sockfd, &resp, sizeof(GWMMessage));
 		}
+		else if (cmd.cmd == GWM_CMD_REL_TO_ABS)
+		{
+			if (sz < sizeof(cmd.relToAbs))
+			{
+				printf("[gwmserver] GWM_CMD_REL_TO_ABS command too small\n");
+				break;
+			};
+			
+			int absX = 0, absY = 0;
+			Window *win = wltGet(wlt, cmd.relToAbs.win);
+			if (win != NULL)
+			{
+				wndRelToAbs(win, cmd.relToAbs.relX, cmd.relToAbs.relY, &absX, &absY);
+				wndDown(win);
+			};
+			
+			GWMMessage resp;
+			resp.relToAbsResp.type = GWM_MSG_REL_TO_ABS_RESP;
+			resp.relToAbsResp.seq = cmd.relToAbs.seq;
+			resp.relToAbsResp.absX = absX;
+			resp.relToAbsResp.absY = absY;
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
 		else
 		{
 			printf("[gwmserver] received unknown command, %ld bytes (cmd=%d)\n", sz, cmd.cmd);

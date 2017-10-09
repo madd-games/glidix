@@ -71,12 +71,14 @@ typedef struct Window_
 	 */
 	DDISurface*					canvas;
 	DDISurface*					front;
-	
+
+#if 0
 	/**
 	 * Actual display, containing the drawing of children etc.
 	 */
 	DDISurface*					display;
-	
+#endif
+
 	/**
 	 * The icon (or NULL).
 	 */
@@ -91,16 +93,10 @@ typedef struct Window_
 	int						fd;
 	
 	/**
-	 * Scroll position of the "background layer" (the window contents).
+	 * Scroll position.
 	 */
-	int						bgScrollX;
-	int						bgScrollY;
-	
-	/**
-	 * Scroll position of the "foreground layer" (the child windows).
-	 */
-	int						fgScrollX;
-	int						fgScrollY;
+	int						scrollX;
+	int						scrollY;
 	
 	/**
 	 * The cursor to display for this window. Atomic read/write - no lock necessary.
@@ -139,8 +135,12 @@ void wndDown(Window *wnd);
 int wndDestroy(Window *wnd);
 
 /**
- * Make the specified window dirty. This causes it to be rendered to the screen along with its parents
- * (non-ancestors are not re-rendered, only their displays blitted as needed).
+ * Re-render a specific region of the screen.
+ */
+void wndInvalidate(int x, int y, int width, int height);
+
+/**
+ * Make the specified window dirty. This causes it to be rendered to the screen.
  */
 void wndDirty(Window *wnd);
 
@@ -164,6 +164,11 @@ void wndAbsToRelWithin(Window *wnd, int x, int y, int *relX, int *relY);
  * were determined. The window is upreffed. This enver returns NULL (but may return the desktop window).
  */
 Window* wndAbsToRel(int absX, int absY, int *relX, int *relY);
+
+/**
+ * Convert relative coordinates to absolute. Returns 0 on success, or -1 if the window is not visible.
+ */
+int wndRelToAbs(Window *win, int relX, int relY, int *absX, int *absY);
 
 /**
  * Send an event to a window. The event is ignored if the window is not attached to an application.

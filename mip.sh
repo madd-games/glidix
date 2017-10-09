@@ -150,3 +150,9 @@ make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/gxdbg.mip
 
+# ddidrv
+rm -rf mipdir || exit 1
+cd ddi-drivers
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/ddidrv.mip

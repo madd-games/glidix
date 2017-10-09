@@ -68,7 +68,8 @@ const char *sys_signame[__SIG_COUNT] = {
 	"SIGAIO",
 	"SIGTHKILL",
 	"SIGTHWAKE",
-	"SIGTRACE"
+	"SIGTRACE",
+	"SIGTHSUSP"
 };
 
 const char *sys_siglist[__SIG_COUNT] = {
@@ -109,7 +110,8 @@ const char *sys_siglist[__SIG_COUNT] = {
 	"Asynchronous I/O",
 	"Thread killed",
 	"Thread wake-up",
-	"Debugged child event"
+	"Debugged child event",
+	"Thread suspended"
 };
 
 char *strsignal(int signum)

@@ -1,0 +1,61 @@
+>NAME
+
+TODO
+sigaction - get or set a signal disposition
+
+>SYNOPSIS
+
+	#include <signal.h>
+	
+	int sigaction(int 'signum', const struct sigaction *'act', struct sigaction *'oldact');
+
+>DESCRIPTION
+
+This function gets or sets the signal dispoition for the signal 'signum'. If 'oldact' is not *NULL*, then the current disposition is first placed in the structure located at 'oldact'. Then, if 'act' is not *NULL*, the disposition is changed according to the structure at 'act'. The 'struct sigaction' structure is defined in '<signal.h>' and includes at least the following fields:
+
+	struct sigaction
+	{
+		void (*'sa_handler')(int);
+		sigset_t 'sa_mask';
+		int 'sa_flags';
+		void (*'sa_sigaction')(int, siginfo_t*, void*);
+	};
+
+This structure should be zeroed out before filling out any fields. All zeroes means all defaults.
+
+If *SA_SIGINFO* is *NOT* given in 'sa_flags', then 'sa_handler' defines the action to take when the signal arrives:
+
+\* If 'sa_handler' is *SIG_DFL*, the default action is taken, as detailed in [signal.6].
+\* If 'sa_handler' is *SIG_IGN*, the signal is ignored.
+\* If 'sa_handler' is *SIG_CORE*, then a [core.6] file is produced, and the process is terminated. This macro is only available if *_GLIDIX_SOURCE* is defined before including 'any' header files.
+\* Otherwise, 'sa_handler' must be a pointer to a function which is called upon receiving the signal. It takes the signal number as the only argument.
+
+The 'sa_flags' field is a bitwise-OR of zero or more signal flags. Currently, the only flag respected by Glidix is *SA_SIGINFO*. If passed, the 'sa_handler' field is ignored, and instead, the 'sa_sigaction' field specifies a function to call when the signal arrives. The function takes as arguments the signal number, a 'siginfo_t' pointer describing the signal, and a 'ucontext_t' pointer (cast to 'void \*') referring to the state before catching the signal (this is usually ignored by the handler).
+
+The 'sa_mask' field is the set of signals which should be blocked while the handler is running.
+
+The 'siginfo_t' structure describes the signal, and is defiend in '<signal.h>' with at least the following fields:
+
+	union sigval
+	{
+		int		'sival_int';
+		void*		'sival_ptr';
+	};
+	
+	typedef struct
+	{
+		int		'si_signo';
+		int		'si_code';
+		int		'si_errno';
+		pid_t		'si_pid';
+		uid_t		'si_uid';
+		void*		'si_addr';
+		int		'si_status';
+		long		'si_band';
+		union sigval	'si_value';
+	} siginfo_t;
+
+It is impossible to set the signal disposition for *SIGKILL* and *SIGSTOP*. The setting for them is ignored.
+>SEE ALSO
+
+[signal.6]

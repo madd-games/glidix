@@ -32,9 +32,9 @@ The dynamic linker resolves references to symbols [dlopen.2], [dlsym.2], [dlclos
 
 When resolving a symbol, the following things are attempted (in this order):
 
-\* If the symbol is [dlopen.2], [dlsym.2], [dlclose.2], or [dlerror.2], it is resolved to internal functions.
-
 \* The executable, and then all libraries in order of loading (a library comes before its dependencies), are searched for a global symbol with the specified name.
+
+\* If the symbol is [dlopen.2], [dlsym.2], [dlclose.2], [dlerror.2] or [dladdrinfo.2], it is resolved to internal functions.
 
 \* If not found, then the libraries are searched again, this time for a 'weak' symbol with that name.
 

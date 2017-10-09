@@ -1,0 +1,22 @@
+>NAME
+
+core - Core dump
+
+>SYNOPSIS
+
+	#include <glidix/core.h>
+
+>DESCRIPTION
+
+To allow a broken application to be debugged after a crash, Glidix provides support for core dumps. When a signal is received, whose disposition (see [sigaction.2]) is set to *SIG_CORE*, the program is terminated, and a file named 'core' is produced in the current working directory. The core file currently contains the following information:
+
+\* The credentials of the process which crashed. See [creds.6].
+\* Information about the signal which caused the crash. See [signal.6].
+\* A full dump of the process\' address space.
+\* A list of threads which were running at the time of the crash, and their complete state.
+
+Core dumps may be inspected by a debugger to get information such as a stack trace, list of loaded libraries, etc.
+
+>SEE ALSO
+
+[creds.6], [signal.6], [sigaction.2]
