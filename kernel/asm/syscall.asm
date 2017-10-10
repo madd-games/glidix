@@ -52,8 +52,11 @@ _syscall_entry:
 	
 	; preserve other stuff
 	push rcx				; return RIP
+	push rbp				; RBP (to create a stack frame)
+	mov rbp, rsp
 	push r11				; return RFLAGS
 	push r9					; R9 needs to be preserved for resettable system calls
+	push r9					; push again to align stack
 	
 	; segments and enabling interrupts
 	mov cx, 0x10
@@ -82,8 +85,10 @@ _syscall_entry:
 	call sysEpilog
 
 	; restore
+	pop r9					; was pushed for stack alignment
 	pop r9
 	pop r11
+	pop rbp
 	pop rcx
 	cli
 	pop rsp

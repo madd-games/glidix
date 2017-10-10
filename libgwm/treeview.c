@@ -341,7 +341,7 @@ static int treeviewHandler(GWMEvent *ev, GWMWindow *treeview)
 	switch (ev->type)
 	{
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->colResizing = getColToResize(data, ev->x);
 			data->resizeAnchor = ev->x;
@@ -349,7 +349,7 @@ static int treeviewHandler(GWMEvent *ev, GWMWindow *treeview)
 		};
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->colResizing = -1;
 			data->clicked = 1;

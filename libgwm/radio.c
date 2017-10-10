@@ -145,14 +145,14 @@ static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio)
 		gwmRedrawRadio(radio);
 		return 0;
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->state = RADIO_PRESSED;
 			gwmRedrawRadio(radio);
 		};
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if (data->state == RADIO_PRESSED)
 			{

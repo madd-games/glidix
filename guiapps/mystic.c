@@ -162,7 +162,7 @@ int mysticHandler(GWMEvent *ev, GWMWindow *win)
 	case GWM_EVENT_CLOSE:
 		return -1;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			clickTile(ev->x/TILE_SIZE, (ev->y-20)/TILE_SIZE);
 			redraw();

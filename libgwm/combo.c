@@ -119,7 +119,7 @@ static int comboHandler(GWMEvent *ev, GWMWindow *combo)
 		redrawCombo(combo);
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if ((data->flags & GWM_COMBO_DISABLED) == 0)
 			{

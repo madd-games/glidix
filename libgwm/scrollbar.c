@@ -178,7 +178,7 @@ int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar)
 		{
 			if (data->viewTotal != 0)
 			{
-				if (ev->scancode == GWM_SC_MOUSE_LEFT)
+				if (ev->keycode == GWM_KC_MOUSE_LEFT)
 				{
 					if (data->flags & GWM_SCROLLBAR_HORIZ)
 					{
@@ -207,7 +207,7 @@ int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar)
 	case GWM_EVENT_UP:
 		if ((data->flags & GWM_SCROLLBAR_DISABLED) == 0)
 		{
-			if (ev->scancode == GWM_SC_MOUSE_LEFT)
+			if (ev->keycode == GWM_KC_MOUSE_LEFT)
 			{
 				data->pressed = 0;
 				gwmRedrawScrollbar(sbar);

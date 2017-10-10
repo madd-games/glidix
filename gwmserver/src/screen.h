@@ -38,5 +38,6 @@ extern DDISurface *desktopBackground;
 GWMInfo *gwminfo;
 
 DDISurface *imgWincap;
+DDISurface *imgWinbut;
 
 #endif

@@ -291,12 +291,12 @@ int eventHandler(GWMEvent *ev, GWMWindow *win)
 	case GWM_EVENT_CLOSE:
 		return -1;
 	case GWM_EVENT_UP:
-		if ((ev->scancode == GWM_SC_MOUSE_LEFT) && (!gameOver))
+		if ((ev->keycode == GWM_KC_MOUSE_LEFT) && (!gameOver))
 		{
 			leftClick(ev->x, ev->y);
 			renderGame();
 		}
-		else if ((ev->scancode == GWM_SC_MOUSE_RIGHT) && (!gameOver))
+		else if ((ev->keycode == GWM_KC_MOUSE_RIGHT) && (!gameOver))
 		{
 			rightClick(ev->x, ev->y);
 			renderGame();
@@ -474,7 +474,7 @@ int onSettings(void *ignore)
 	
 	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, 4, canvas->width, 20, 0, 0, NULL);
 	
-	ddiWritePen(pen, "Width: \n\n Height: \n\n Mines:");
+	ddiWritePen(pen, "Width: \n\nHeight: \n\nMines:");
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	

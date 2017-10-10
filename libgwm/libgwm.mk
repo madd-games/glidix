@@ -21,8 +21,9 @@ install:
 	@mkdir -p $(DESTDIR)/usr/include
 	@mkdir -p $(DESTDIR)/usr/share/images
 	@mkdir -p $(DESTDIR)/usr/share/fonts
+	@mkdir -p $(DESTDIR)/usr/share/themes
 	cp libgwm.so $(DESTDIR)/usr/lib/libgwm.so
 	cp $(SRCDIR)/libgwm.h $(DESTDIR)/usr/include/libgwm.h
 	cp -RT $(SRCDIR)/images $(DESTDIR)/usr/share/images
 	cp -RT $(SRCDIR)/fonts $(DESTDIR)/usr/share/fonts
-
+	cp $(SRCDIR)/GlidixGreen.thm $(DESTDIR)/usr/share/themes/GlidixGreen.thm

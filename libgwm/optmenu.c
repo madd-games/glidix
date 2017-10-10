@@ -127,7 +127,7 @@ static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu)
 		redrawOptmenu(optmenu);
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if ((data->flags & GWM_OPTMENU_DISABLED) == 0)
 			{

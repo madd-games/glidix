@@ -116,14 +116,14 @@ int gwmButtonHandler(GWMEvent *ev, GWMWindow *button)
 		gwmRedrawButton(button);
 		return 0;
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->state = BUTTON_STATE_CLICKED;
 			gwmRedrawButton(button);
 		};
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if (data->state == BUTTON_STATE_CLICKED)
 			{

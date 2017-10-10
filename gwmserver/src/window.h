@@ -34,6 +34,12 @@
 #include <pthread.h>
 
 /**
+ * Properties of window decorations.
+ */
+#define WINDOW_CAPTION_HEIGHT			20
+#define	WINDOW_BORDER_WIDTH			5
+
+/**
  * Describes a window.
  */
 typedef struct Window_
@@ -72,13 +78,6 @@ typedef struct Window_
 	DDISurface*					canvas;
 	DDISurface*					front;
 
-#if 0
-	/**
-	 * Actual display, containing the drawing of children etc.
-	 */
-	DDISurface*					display;
-#endif
-
 	/**
 	 * The icon (or NULL).
 	 */
@@ -102,6 +101,16 @@ typedef struct Window_
 	 * The cursor to display for this window. Atomic read/write - no lock necessary.
 	 */
 	int						cursor;
+	
+	/**
+	 * 1 if this window is decorated (its parent is a "decoration window"), 0 otherwise.
+	 */
+	int						decorated;
+	
+	/**
+	 * 0 if this window is a decoration.
+	 */
+	int						isDecoration;
 } Window;
 
 extern Window* desktopWindow;
@@ -200,5 +209,10 @@ void wndSetFlags(Window *wnd, int flags);
  * on error.
  */
 int wndSetIcon(Window *wnd, uint32_t surfID);
+
+/**
+ * Draw the window decoration for 'child', where 'decor' is its decoration window.
+ */
+void wndDecorate(Window *decor, Window *child);
 
 #endif

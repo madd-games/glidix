@@ -38,6 +38,7 @@
 #include <signal.h>
 #include <libgwm.h>
 
+#define	TERMINAL_ALPHA		0xCC
 typedef struct
 {
 	char c;
@@ -64,22 +65,22 @@ char escapeBuffer[4];
 int escapePos = -1;
 
 DDIColor consoleColors[16] = {
-	{0x00, 0x00, 0x00, 0xFF},		/* 0 */
-	{0x00, 0x00, 0xAA, 0xFF},		/* 1 */
-	{0x00, 0xAA, 0x00, 0xFF},		/* 2 */
-	{0x00, 0xAA, 0xAA, 0xFF},		/* 3 */
-	{0xAA, 0x00, 0x00, 0xFF},		/* 4 */
-	{0xAA, 0x00, 0xAA, 0xFF},		/* 5 */
-	{0xAA, 0x55, 0x00, 0xFF},		/* 6 */
-	{0xAA, 0xAA, 0xAA, 0xFF},		/* 7 */
-	{0x55, 0x55, 0x55, 0xFF},		/* 8 */
-	{0x55, 0x55, 0xFF, 0xFF},		/* 9 */
-	{0x55, 0xFF, 0x55, 0xFF},		/* A */
-	{0x55, 0xFF, 0xFF, 0xFF},		/* B */
-	{0xFF, 0x55, 0x55, 0xFF},		/* C */
-	{0xFF, 0x55, 0xFF, 0xFF},		/* D */
-	{0xFF, 0xFF, 0x55, 0xFF},		/* E */
-	{0xFF, 0xFF, 0xFF, 0xFF},		/* F */
+	{0x00, 0x00, 0x00, TERMINAL_ALPHA},		/* 0 */
+	{0x00, 0x00, 0xAA, TERMINAL_ALPHA},		/* 1 */
+	{0x00, 0xAA, 0x00, TERMINAL_ALPHA},		/* 2 */
+	{0x00, 0xAA, 0xAA, TERMINAL_ALPHA},		/* 3 */
+	{0xAA, 0x00, 0x00, TERMINAL_ALPHA},		/* 4 */
+	{0xAA, 0x00, 0xAA, TERMINAL_ALPHA},		/* 5 */
+	{0xAA, 0x55, 0x00, TERMINAL_ALPHA},		/* 6 */
+	{0xAA, 0xAA, 0xAA, TERMINAL_ALPHA},		/* 7 */
+	{0x55, 0x55, 0x55, TERMINAL_ALPHA},		/* 8 */
+	{0x55, 0x55, 0xFF, TERMINAL_ALPHA},		/* 9 */
+	{0x55, 0xFF, 0x55, TERMINAL_ALPHA},		/* A */
+	{0x55, 0xFF, 0xFF, TERMINAL_ALPHA},		/* B */
+	{0xFF, 0x55, 0x55, TERMINAL_ALPHA},		/* C */
+	{0xFF, 0x55, 0xFF, TERMINAL_ALPHA},		/* D */
+	{0xFF, 0xFF, 0x55, TERMINAL_ALPHA},		/* E */
+	{0xFF, 0xFF, 0xFF, TERMINAL_ALPHA},		/* F */
 };
 
 const char font[16*256] = {
@@ -605,7 +606,7 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 				write(fdMaster, &put, 1);
 			};
 		}
-		else if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		else if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			selectStart = selectEnd = selectAnchor = getPositionFromCoords(ev->x, ev->y);
 			pthread_mutex_lock(&consoleLock);
@@ -661,7 +662,7 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 	}
 	else if (ev->type == GWM_EVENT_UP)
 	{
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			selectAnchor = -1;
 		};
@@ -678,8 +679,7 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	GWMWindow *top = gwmCreateWindow(NULL, "Terminal", 10, 10, 720, 400, GWM_WINDOW_MKFOCUSED);
-	GWMWindow *wnd = gwmCreateWindow(top, "body", 0, 0, 720, 400, 0);
+	GWMWindow *wnd = gwmCreateWindow(NULL, "Terminal", 10, 10, 720, 400, GWM_WINDOW_MKFOCUSED);
 	termWindow = wnd;
 	
 	gwmSetWindowCursor(wnd, GWM_CURSOR_TEXT);
@@ -694,7 +694,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		gwmSetWindowIcon(top, icon);
+		gwmSetWindowIcon(wnd, icon);
 	};
 	
 	clearConsole();
@@ -719,7 +719,6 @@ int main(int argc, char *argv[])
 	
 	pthread_create(&ctrlThread, NULL, ctrlThreadFunc, argv);
 	
-	gwmSetEventHandler(top, terminalHandler);
 	gwmSetEventHandler(wnd, terminalHandler);
 	gwmMainLoop();
 	gwmQuit();

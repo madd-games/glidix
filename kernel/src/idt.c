@@ -45,6 +45,7 @@ IDTEntry idt[256];
 IDTPointer idtPtr;
 static IRQHandler irqHandlers[16];
 static volatile uint64_t uptime;
+extern Thread firstThread;
 
 extern void loadIDT();
 extern void isr0();
@@ -435,14 +436,14 @@ void isrHandler(Regs *regs)
 		dumpRunqueue();
 		stackTraceHere();
 		
-		thread = getCurrentThread();
+		thread = &firstThread;
 		do
 		{
 			kprintf("=== THREAD '%s' (THID=%d) ===\n", thread->name, thread->thid);
 			kdumpregs(&thread->regs);
 			stackTrace(thread->regs.rip, thread->regs.rbp);
 			thread = thread->next;
-		} while (thread != getCurrentThread());
+		} while (thread != &firstThread);
 		
 		while (1)
 		{

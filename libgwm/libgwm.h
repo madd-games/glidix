@@ -107,14 +107,6 @@ extern DDIColor gwmBackColor;
 #define	GWM_SCROLLBAR_DISABLED			(1 << 1)
 
 /**
- * Those must match up with the Glidix humin interface (<glidix/humin.h>).
- * TODO: remove scancode stuff, we use keycodes only now!
- */
-#define	GWM_SC_MOUSE_LEFT			0x100
-#define	GWM_SC_MOUSE_MIDDLE			0x101
-#define	GWM_SC_MOUSE_RIGHT			0x102
-
-/**
  * Message box icon types. Bottom 4 bits of the 'flags' parameter.
  */
 #define	GWM_MBICON_NONE				0x0
@@ -137,14 +129,118 @@ extern DDIColor gwmBackColor;
 #define	GWM_ME_SEPARATOR			(1 << 0)		/* draw separator below */
 
 /**
- * Key codes.
+ * Key codes (those must match with <glidix/humin.h>).
  */
-#define	GWM_KC_LEFT				0x100
-#define	GWM_KC_RIGHT				0x101
-#define	GWM_KC_UP				0x102
-#define	GWM_KC_DOWN				0x103
-#define	GWM_KC_CTRL				0x104
-#define	GWM_KC_SHIFT				0x105
+#define	GWM_KC_ESC				0x01B		/* escape (\e) */
+#define	GWM_KC_BACKTICK				0x060		/* backtick (`) key */
+#define	GWM_KC_1				0x031		/* number keys: */
+#define	GWM_KC_2				0x032
+#define	GWM_KC_3				0x033
+#define	GWM_KC_4				0x034
+#define	GWM_KC_5				0x035
+#define	GWM_KC_6				0x036
+#define	GWM_KC_7				0x037
+#define	GWM_KC_8				0x038
+#define	GWM_KC_9				0x039
+#define	GWM_KC_0				0x030
+#define	GWM_KC_HYPHEN				0x02D		/* hyphen/underspace key */
+#define	GWM_KC_EQUALS				0x03D		/* equals/plus key */
+#define	GWM_KC_BACKSPACE			0x008		/* backspace (\b) */
+#define	GWM_KC_TAB				0x009		/* tab (\t) */
+#define	GWM_KC_Q				0x071
+#define	GWM_KC_W				0x077
+#define	GWM_KC_E				0x065
+#define	GWM_KC_R				0x072
+#define	GWM_KC_T				0x074
+#define	GWM_KC_Y				0x079
+#define	GWM_KC_U				0x075
+#define	GWM_KC_I				0x069
+#define	GWM_KC_O				0x06F
+#define	GWM_KC_P				0x070
+#define	GWM_KC_SQB_LEFT				0x05B		/* [{ key */
+#define	GWM_KC_SQB_RIGHT			0x05D		/* ]} key */
+#define	GWM_KC_RETURN				0x00D		/* carriage return (\r) */
+#define	GWM_KC_ENTER				GWM_KC_RETURN	/* alias */
+#define	GWM_KC_A				0x061
+#define	GWM_KC_S				0x073
+#define	GWM_KC_D				0x064
+#define	GWM_KC_F				0x066
+#define	GWM_KC_G				0x067
+#define	GWM_KC_H				0x068
+#define	GWM_KC_J				0x06A
+#define	GWM_KC_K				0x06B
+#define	GWM_KC_L				0x06C
+#define	GWM_KC_SEMICOLON			0x03B		/* ;: key */
+#define	GWM_KC_QUOTE				0x027		/* '" key */
+#define	GWM_KC_BACKSLASH			0x05C		/* \| key */
+#define	GWM_KC_ARROWS				0x03C		/* |\ or <> key (left of Z or left of RETURN) */
+#define	GWM_KC_Z				0x07A
+#define	GWM_KC_X				0x078
+#define	GWM_KC_C				0x063
+#define	GWM_KC_V				0x076
+#define	GWM_KC_B				0x062
+#define	GWM_KC_N				0x06E
+#define	GWM_KC_M				0x06D
+#define	GWM_KC_COMMA				0x02C		/* ,< key */
+#define	GWM_KC_PERIOD				0x02E		/* .> key */
+#define	GWM_KC_SLASH				0x02F		/* /? key */
+#define	GWM_KC_SPACE				0x020		/* space bar */
+#define	GWM_KC_LEFT				0x100		/* left arrow key */
+#define	GWM_KC_RIGHT				0x101		/* right arrow key */
+#define	GWM_KC_UP				0x102		/* up arrow key */
+#define	GWM_KC_DOWN				0x103		/* down arrow key */
+#define	GWM_KC_LCTRL				0x104		/* left ctrl */
+#define	GWM_KC_LSHIFT				0x105		/* left shift */
+#define	GWM_KC_LALT				0x106		/* left alt */
+#define	GWM_KC_RCTRL				0x107		/* right ctrl */
+#define	GWM_KC_RSHIFT				0x108		/* right shift */
+#define	GWM_KC_RALT				0x109		/* right alt, or alt gr */
+#define	GWM_KC_F1				0x10A
+#define	GWM_KC_F2				0x10B
+#define	GWM_KC_F3				0x10C
+#define	GWM_KC_F4				0x10D
+#define	GWM_KC_F5				0x10E
+#define	GWM_KC_F6				0x10F
+#define	GWM_KC_F7				0x110
+#define	GWM_KC_F8				0x111
+#define	GWM_KC_F9				0x112
+#define	GWM_KC_F10				0x113
+#define	GWM_KC_F11				0x114
+#define	GWM_KC_F12				0x115
+#define	GWM_KC_PRINT_SCREEN			0x116		/* print screen / sysrq */
+#define	GWM_KC_SCROLL_LOCK			0x117
+#define	GWM_KC_PAUSE				0x118
+#define	GWM_KC_INSERT				0x119
+#define	GWM_KC_HOME				0x11A
+#define	GWM_KC_PAGE_UP				0x11B
+#define	GWM_KC_NUM_LOCK				0x11C
+#define	GWM_KC_NUMPAD_SLASH			0x11D
+#define	GWM_KC_NUMPAD_ASTERISK			0x11E
+#define	GWM_KC_NUMPAD_HYPHEN			0x11F
+#define	GWM_KC_DELETE				0x120
+#define	GWM_KC_END				0x121
+#define	GWM_KC_PAGE_DOWN			0x122
+#define	GWM_KC_NUMPAD_7				0x123
+#define	GWM_KC_NUMPAD_8				0x124
+#define	GWM_KC_NUMPAD_9				0x125
+#define	GWM_KC_NUMPAD_PLUS			0x126
+#define	GWM_KC_CAPS_LOCK			0x127
+#define	GWM_KC_NUMPAD_4				0x128
+#define	GWM_KC_NUMPAD_5				0x129
+#define	GWM_KC_NUMPAD_6				0x12A
+#define	GWM_KC_NUMPAD_1				0x12B
+#define	GWM_KC_NUMPAD_2				0x12C
+#define	GWM_KC_NUMPAD_3				0x12D
+#define	GWM_KC_NUMPAD_RETURN			0x13E
+#define	GWM_KC_NUMPAD_ENTER			GWM_KC_NUMPAD_RETURN
+#define	GWM_KC_LSUPER				0x13F		/* left "super" key */
+#define	GWM_KC_RSUPER				0x140		/* right "super" key */
+#define	GWM_KC_CONTEXT				0x141		/* context menu key */
+#define	GWM_KC_NUMPAD_0				0x142
+#define	GWM_KC_NUMPAD_DEL			0x143		/* numpad delete key */
+#define	GWM_KC_MOUSE_LEFT			0x144		/* left mouse button */
+#define	GWM_KC_MOUSE_MIDDLE			0x145		/* middle mouse button */
+#define	GWM_KC_MOUSE_RIGHT			0x146		/* right mouse button */
 
 /**
  * Cursor types.
@@ -303,12 +399,23 @@ typedef struct
 } GWMGlobWinRef;
 
 /**
+ * Flags for the 'which' parameter for the "atomic config" command.
+ */
+#define	GWM_AC_X				(1 << 0)
+#define	GWM_AC_Y				(1 << 1)
+#define	GWM_AC_WIDTH				(1 << 2)
+#define	GWM_AC_HEIGHT				(1 << 3)
+#define	GWM_AC_SCROLL_X				(1 << 4)
+#define	GWM_AC_SCROLL_Y				(1 << 5)
+#define	GWM_AC_CANVAS				(1 << 6)
+
+/**
  * Commands understood by the window manager.
  */
 #define	GWM_CMD_CREATE_WINDOW			0
 #define	GWM_CMD_POST_DIRTY			1
 #define	GWM_CMD_DESTROY_WINDOW			2
-/* 3: unused */
+#define	GWM_CMD_RETHEME				3
 #define	GWM_CMD_SCREEN_SIZE			4
 #define	GWM_CMD_SET_FLAGS			5
 #define	GWM_CMD_SET_CURSOR			6
@@ -318,8 +425,8 @@ typedef struct
 #define	GWM_CMD_GET_WINDOW_PARAMS		10
 #define	GWM_CMD_SET_LISTEN_WINDOW		11
 #define	GWM_CMD_TOGGLE_WINDOW			12
-#define	GWM_CMD_RESIZE				13
-#define	GWM_CMD_MOVE				14
+/* unused: 13 */
+#define	GWM_CMD_ATOMIC_CONFIG			14
 #define	GWM_CMD_REL_TO_ABS			15
 #define	GWM_CMD_REDRAW_SCREEN			16
 #define	GWM_CMD_SCREENSHOT_WINDOW		17
@@ -419,24 +526,21 @@ typedef union
 		uint64_t			seq;
 		GWMGlobWinRef			ref;
 	} toggleWindow;
-	
+
 	struct
 	{
-		int				cmd;	// GWM_CMD_RESIZE
+		int				cmd;	// GWM_CMD_ATOMIC_CONFIG
 		uint64_t			seq;
 		uint64_t			win;
-		unsigned int			width;
-		unsigned int			height;
-	} resize;
-	
-	struct
-	{
-		int				cmd;	// GWM_CMD_MOVE
-		uint64_t			seq;
-		uint64_t			win;
+		int				which;	// bitset of which properties to set
 		int				x;
 		int				y;
-	} move;
+		int				width;
+		int				height;
+		int				scrollX;
+		int				scrollY;
+		uint32_t			canvasID;
+	} atomicConfig;
 	
 	struct
 	{
@@ -1078,7 +1182,7 @@ void gwmSetScrollbarLen(GWMWindow *sbar, int len);
 /**
  * Change the size of a window. This frees, and hence invalidates, a previous return value from gwmGetWindowCanvas()!
  */
-void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height);
+void gwmResizeWindow(GWMWindow *win, int width, int height);
 
 /**
  * Change the position of a window.
@@ -1515,5 +1619,10 @@ int gwmGlobalThemeInit(DDIPixelFormat *format);
  *	GWM_ERR_NOENT - No such theme property.
  */
 void* gwmGetThemeProp(const char *name, int type, int *errOut);
+
+/**
+ * Inform all applications and the window manager that the theme has changed.
+ */
+void gwmRetheme();
 
 #endif

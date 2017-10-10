@@ -202,7 +202,7 @@ static int areaHandler(GWMEvent *ev, GWMWindow *area)
 		redrawTextArea(area);
 		return 0;
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			newCursorPos = ddiPenCoordsToPos(data->pen, ev->x, ev->y);
 			if (newCursorPos < 0) newCursorPos = 0;
@@ -254,7 +254,7 @@ static int areaHandler(GWMEvent *ev, GWMWindow *area)
 		};
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->clickPos = -1;
 		};

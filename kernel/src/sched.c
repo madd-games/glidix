@@ -41,7 +41,7 @@
 #include <glidix/signal.h>
 #include <glidix/trace.h>
 
-static Thread firstThread;
+Thread firstThread;
 PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
 static PER_CPU Thread *idleThread;
 
@@ -481,7 +481,7 @@ void initSchedAP()
 	idleThread->regs.rip = (uint64_t) &idleThreadFunc;
 	idleThread->regs.rbp = 0;
 	idleThread->flags = THREAD_WAITING;
-	
+
 	// set up any valid register set for the initial task switch
 	Regs regs;
 	memcpy(&regs, &idleThread->regs, sizeof(Regs));

@@ -172,7 +172,7 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win)
 		menu->focused = 1;
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			gwmCloseMenu(menu);
 			i = ev->y/MENU_ENTRY_HEIGHT;
@@ -233,7 +233,7 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 	
 	if (menu->numEntries == 0) menuHeight = 10;
 	
-	menu->win = gwmCreateWindow(NULL, "GWMMenu", x, y, MENU_WIDTH, menuHeight, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
+	menu->win = gwmCreateWindow(NULL, "GWMMenu", x, y, MENU_WIDTH, menuHeight, GWM_WINDOW_NODECORATE | GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	if (menu->win == NULL)
 	{
 		return;

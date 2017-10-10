@@ -310,7 +310,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 		gwmRedrawTextField(field);
 		return 0;
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			newCursorPos = ddiPenCoordsToPos(data->pen, ev->x, ev->y);
 			if (newCursorPos < 0) data->cursorPos = 0;
@@ -376,11 +376,11 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 		};
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->clickPos = -1;
 		}
-		else if (ev->scancode == GWM_SC_MOUSE_RIGHT)
+		else if (ev->keycode == GWM_KC_MOUSE_RIGHT)
 		{
 			gwmOpenMenu(data->menu, field, ev->x, ev->y);
 		};

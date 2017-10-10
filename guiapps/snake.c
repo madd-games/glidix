@@ -252,13 +252,14 @@ int snakeHandler(GWMEvent *ev, GWMWindow *win)
 			vector.x = 0;
 			vector.y = 0;
 			break;
-		case GWM_KC_CTRL:
+		case GWM_KC_LCTRL:
+		case GWM_KC_RCTRL:
 			stepWait = 100;
 			break;
 		};
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->keycode == GWM_KC_CTRL)
+		if (ev->keycode == GWM_KC_LCTRL || ev->keycode == GWM_KC_RCTRL)
 		{
 			stepWait = 300;
 		};

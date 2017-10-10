@@ -122,7 +122,7 @@ static int menubarHandler(GWMEvent *ev, GWMWindow *menubar)
 	switch (ev->type)
 	{
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			for (i=0; i<data->numMenus; i++)
 			{

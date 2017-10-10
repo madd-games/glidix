@@ -95,14 +95,14 @@ int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox)
 		gwmRedrawCheckbox(checkbox);
 		return 0;
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->mstate = CB_MSTATE_CLICKED;
 			gwmRedrawCheckbox(checkbox);
 		};
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if (data->mstate == CB_MSTATE_CLICKED)
 			{

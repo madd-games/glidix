@@ -115,7 +115,7 @@ int notebookHandler(GWMEvent *ev, GWMWindow *notebook)
 		newSelectedTab = -1;
 		break;
 	case GWM_EVENT_DOWN:
-		if (ev->scancode != GWM_SC_MOUSE_LEFT)
+		if (ev->keycode != GWM_KC_MOUSE_LEFT)
 		{
 			return 0;
 		};

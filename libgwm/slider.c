@@ -121,7 +121,7 @@ static int gwmSliderHandler(GWMEvent *ev, GWMWindow *slider)
 	switch (ev->type)
 	{
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->pressed = 1;
 			data->value = (pressPos-SLIDER_BREADTH/2) * data->max / (data->len-SLIDER_BREADTH);
@@ -131,7 +131,7 @@ static int gwmSliderHandler(GWMEvent *ev, GWMWindow *slider)
 		};
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->pressed = 0;
 		};

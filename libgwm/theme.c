@@ -98,17 +98,17 @@ static void drawButton(DDISurface *surf, int x, int y, int width, int height, DD
 	ddiFillRect(surf, x+1, y+1, width-2, height-2, color);
 	if (pressed)
 	{
-		ddiFillRect(surf, x, y, width, 1, &white);
-		ddiFillRect(surf, x, y, 1, height, &white);
-		ddiFillRect(surf, x, y+height-1, width, 1, &black);
-		ddiFillRect(surf, x+width-1, y, 1, height, &black);
-	}
-	else
-	{
 		ddiFillRect(surf, x, y, width, 1, &black);
 		ddiFillRect(surf, x, y, 1, height, &black);
 		ddiFillRect(surf, x, y+height-1, width, 1, &white);
 		ddiFillRect(surf, x+width-1, y, 1, height, &white);
+	}
+	else
+	{
+		ddiFillRect(surf, x, y, width, 1, &white);
+		ddiFillRect(surf, x, y, 1, height, &white);
+		ddiFillRect(surf, x, y+height-1, width, 1, &black);
+		ddiFillRect(surf, x+width-1, y, 1, height, &black);
 	};
 };
 

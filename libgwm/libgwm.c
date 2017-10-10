@@ -210,13 +210,17 @@ int gwmInit()
 {
 	fsInit();
 	
-	int fd = open("/run/gwminfo", O_RDONLY);
+	int fileFlags = O_RDONLY;
+	if (geteuid() == 0) fileFlags = O_RDWR;
+	int fd = open("/run/gwminfo", fileFlags);
 	if (fd == -1)
 	{
 		return -1;
 	};
 	
-	gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), PROT_READ, MAP_SHARED, fd, 0);
+	int mapFlags = PROT_READ;
+	if (geteuid() == 0) mapFlags = PROT_READ | PROT_WRITE;
+	gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), mapFlags, MAP_SHARED, fd, 0);
 	
 	nextWindowID = 1;
 	nextSeq = 1;
@@ -552,7 +556,7 @@ static void gwmModalLoop(uint64_t modalID)
 				{
 					if (info->state == 1)
 					{
-						if ((ev.type == GWM_EVENT_UP) && (ev.scancode == GWM_SC_MOUSE_LEFT))
+						if ((ev.type == GWM_EVENT_UP) && (ev.keycode == GWM_KC_MOUSE_LEFT))
 						{
 							clock_t now = clock();
 							if (info->win->lastClickTime != 0)
@@ -759,7 +763,7 @@ void gwmSetListenWindow(GWMWindow *win)
 	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
-void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
+void gwmResizeWindow(GWMWindow *win, int width, int height)
 {
 	// TODO
 #if 0
@@ -793,20 +797,43 @@ void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
 		abort();
 	};
 #endif
+
+	DDIPixelFormat format;
+	memcpy(&format, &win->canvas->format, sizeof(DDIPixelFormat));
+	
+	// resize the canvas
+	DDISurface *newCanvas = ddiCreateSurface(&format, width, height, NULL, DDI_SHARED);
+	ddiFillRect(newCanvas, 0, 0, width, height, &gwmBackColor);
+	ddiBlit(win->canvas, 0, 0, newCanvas, 0, 0, win->canvas->width, win->canvas->height);
+	ddiDeleteSurface(win->canvas);
+	win->canvas = newCanvas;
+	
+	// send the configuration command
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	GWMCommand cmd;
+	cmd.atomicConfig.cmd = GWM_CMD_ATOMIC_CONFIG;
+	cmd.atomicConfig.seq = seq;
+	cmd.atomicConfig.win = win->id;
+	cmd.atomicConfig.which = GWM_AC_WIDTH | GWM_AC_HEIGHT | GWM_AC_CANVAS;
+	cmd.atomicConfig.width = width;
+	cmd.atomicConfig.height = height;
+	cmd.atomicConfig.canvasID = newCanvas->id;
+	
+	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
 void gwmMoveWindow(GWMWindow *win, int x, int y)
 {
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
-	
+
 	GWMCommand cmd;
-	cmd.move.cmd = GWM_CMD_MOVE;
-	cmd.move.seq = seq;
-	cmd.move.win = win->id;
-	cmd.move.x = x;
-	cmd.move.y = y;
+	cmd.atomicConfig.cmd = GWM_CMD_ATOMIC_CONFIG;
+	cmd.atomicConfig.seq = seq;
+	cmd.atomicConfig.win = win->id;
+	cmd.atomicConfig.which = GWM_AC_X | GWM_AC_Y;
+	cmd.atomicConfig.x = x;
+	cmd.atomicConfig.y = y;
 	
-	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
@@ -862,7 +889,6 @@ void gwmRedrawScreen()
 	GWMCommand cmd;
 	cmd.cmd = GWM_CMD_REDRAW_SCREEN;
 	
-	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
@@ -971,4 +997,12 @@ DDISurface* gwmGetFileIcon(const char *iconName, int size)
 	{
 		return cache->large;
 	};
+};
+
+void gwmRetheme()
+{
+	GWMCommand cmd;
+	cmd.cmd = GWM_CMD_RETHEME;
+	
+	write(queueFD, &cmd, sizeof(GWMCommand));
 };

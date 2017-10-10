@@ -350,7 +350,7 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 	switch (ev->type)
 	{
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			pressed = 1;
 			sysbarRedraw();
@@ -381,7 +381,7 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 		sysbarRedraw();
 		return 0;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if (ev->x < 40)
 			{

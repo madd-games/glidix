@@ -2522,6 +2522,7 @@ unsigned sys_alarm(unsigned sec)
 {
 	uint64_t currentTime = getNanotime();
 	uint64_t timeToSignal = currentTime + (uint64_t) sec * NANO_PER_SEC;
+	if (sec == 0) timeToSignal = 0;
 	
 	cli();
 	lockSched();
