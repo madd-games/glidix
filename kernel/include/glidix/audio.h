@@ -30,6 +30,7 @@
 #define __glidix_audio_h
 
 #include <glidix/common.h>
+#include <glidix/semaphore.h>
 
 /**
  * Audio stream.
@@ -72,9 +73,9 @@ typedef struct
  */
 typedef struct AudioAppBuffer_
 {
-	struct AudioAppBuffer_ *next;
-	struct AudioAppBuffer_ *prev;
-	struct AudioStream_ *audioStream;
+	struct AudioAppBuffer_ 	*next;
+	struct AudioAppBuffer_ 	*prev;
+	AudioStream	 	*audioStream;
 } AudioAppBuffer;
 
 /**
@@ -82,9 +83,24 @@ typedef struct AudioAppBuffer_
  */
 typedef struct AudioOutput_
 {
-	struct AudioOutput_ *next;
-	struct AudioOutput_ *prev;
-	struct AudioStream_ *audioStream;
+	struct AudioOutput_ 	*next;
+	struct AudioOutput_ 	*prev;
+	AudioStream 		*audioStream;
 } AudioOutput;
+
+/**
+ * Initialize a new output device.
+ */
+AudioOutput* audioCreateOutput(AudioStream* audioStream);
+
+/**
+ * Remove an output device.
+ */
+void audioDeleteOutput(AudioOutput* device);
+
+/**
+ * Initializes the audio subsystem.
+ */
+void audioInit();
 
 #endif

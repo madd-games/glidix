@@ -27,6 +27,40 @@
 */
 
 #include <glidix/audio.h>
+#include <glidix/memory.h>
 
 static AudioAppBuffer* 	firstBuffer;
 static AudioOutput* 	currentOut;
+static AudioOutput*	firstOut;
+static Semaphore	semOutputList;
+
+AudioOutput* audioCreateOutput(AudioStream* audioStream)
+{
+	AudioOutput *device = (AudioOutput*) NEW(AudioOutput);
+	device->audioStream = audioStream;
+	device->prev = NULL;
+	
+	semWait(&semOutputList);
+	if (firstOut != NULL) firstOut->prev = device;
+	device->next = firstOut;
+	firstOut = device;
+	semSignal(&semOutputList);
+	
+	return device;
+}
+
+void audioDeleteOutput(AudioOutput* device)
+{
+	semWait(&semOutputList);
+	if(device == firstOut) firstOut = device->next;
+	if(device->next != NULL) device->next->prev = device->prev;
+	if(device->prev != NULL) device->prev->next = device->next;
+	semSignal(&semOutputList);
+	
+	kfree(device);
+}
+
+void audioInit()
+{
+	semInit(&semOutputList);
+}
