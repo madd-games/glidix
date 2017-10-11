@@ -2,3 +2,4 @@
 # C Source File
 filename *.c
 label C source file
+icon x-csrc
