@@ -402,15 +402,10 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 
 int sysbarShutdown(void *context)
 {
-	if (gwmMessageBox(NULL, "Shut down", "Are you sure you want to shut down?", GWM_MBICON_WARN | GWM_MBUT_YESNO) == 0)
+	if (fork() == 0)
 	{
-		if (fork() == 0)
-		{
-			execl("/usr/bin/halt", "poweroff", NULL);
-			exit(1);
-		};
-		
-		return -1;
+		execl("/usr/bin/gui-shutdown", "gui-shutdown", NULL);
+		_exit(1);
 	};
 	
 	return 0;

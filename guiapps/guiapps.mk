@@ -16,3 +16,4 @@ install:
 	@mkdir -p $(DESTDIR)/usr/share/apps
 	export DESTDIR=$(DESTDIR) && sh $(SRCDIR)/install.sh $(OUT)
 	cp -RT $(SRCDIR)/apps $(DESTDIR)/usr/share/apps
+	chmod 6755 $(DESTDIR)/usr/bin/gui-shutdown

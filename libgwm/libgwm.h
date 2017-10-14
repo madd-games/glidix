@@ -291,6 +291,7 @@ extern DDIColor gwmBackColor;
  */
 #define	GWM_TYPE_SURFACE			1
 #define	GWM_TYPE_COLOR				2
+#define	GWM_TYPE_INT				3
 
 /**
  * Window manager information structure, located in the shared file /run/gwminfo.
@@ -319,6 +320,14 @@ typedef struct
 	 */
 	DDIColor				colWinActive;
 	DDIColor				colWinInactive;
+	
+	/**
+	 * "gui-shutdown" graphic. It is a 320x200 image where:
+	 * The rectangle (74, 68) to (138, 132) is the "reboot" button.
+	 * The rectangle (180, 68) to (244, 132) is the "shutdown" button.
+	 * (Hence both 64x64)
+	 */
+	uint32_t				imgShutdown;
 } GWMInfo;
 
 /**
@@ -1601,6 +1610,7 @@ int gwmGlobalThemeInit(DDIPixelFormat *format);
  *
  *	GWM_TYPE_SURFACE - A DDISurface* representing the shared surface.
  *	GWM_TYPE_COLOR - A DDIColor* pointer, directly into the shared area.
+ *	GWM_TYPE_INT - A int* pointer, directly into the shared area.
  *
  * On error, NULL is returned and 'errOut' is set to a GWM error code (GWM_ERR_*) if it's not NULL:
  *

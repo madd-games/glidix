@@ -635,30 +635,33 @@ void wndMouseMove(int x, int y)
 		
 		if (wndActive->isDecoration)
 		{
-			// move the window
-			// (note that as a decoration, it is a child of the desktop window; we can assume
-			//  that all relative coordinates are in fact absolute)
-			pthread_mutex_lock(&wndActive->lock);
-			int oldX = wndActive->params.x;
-			int oldY = wndActive->params.y;
-			wndActive->params.x = x - decDragX;
-			wndActive->params.y = y - decDragY;
+			if (decDragX <= wndActive->params.width-70 && decDragY < WINDOW_CAPTION_HEIGHT)
+			{
+				// move the window
+				// (note that as a decoration, it is a child of the desktop window; we can assume
+				//  that all relative coordinates are in fact absolute)
+				pthread_mutex_lock(&wndActive->lock);
+				int oldX = wndActive->params.x;
+				int oldY = wndActive->params.y;
+				wndActive->params.x = x - decDragX;
+				wndActive->params.y = y - decDragY;
 			
-			mustInvalidate = 1;
-			invX = MIN(oldX, wndActive->params.x);
-			invY = MIN(oldY, wndActive->params.y);
+				mustInvalidate = 1;
+				invX = MIN(oldX, wndActive->params.x);
+				invY = MIN(oldY, wndActive->params.y);
 			
-			int oldEndX = oldX + wndActive->params.width;
-			int oldEndY = oldY + wndActive->params.height;
-			int newEndX = wndActive->params.x + wndActive->params.width;
-			int newEndY = wndActive->params.y + wndActive->params.height;
+				int oldEndX = oldX + wndActive->params.width;
+				int oldEndY = oldY + wndActive->params.height;
+				int newEndX = wndActive->params.x + wndActive->params.width;
+				int newEndY = wndActive->params.y + wndActive->params.height;
 			
-			int endX = MAX(oldEndX, newEndX);
-			int endY = MAX(oldEndY, newEndY);
+				int endX = MAX(oldEndX, newEndX);
+				int endY = MAX(oldEndY, newEndY);
 			
-			invWidth = endX - invX;
-			invHeight = endY - invY;
-			pthread_mutex_unlock(&wndActive->lock);
+				invWidth = endX - invX;
+				invHeight = endY - invY;
+				pthread_mutex_unlock(&wndActive->lock);
+			};
 		};
 		
 		// we don't need the "hovered window"
