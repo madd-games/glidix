@@ -106,7 +106,7 @@ static void gwmRedrawSlider(GWMWindow *slider)
 	gwmPostDirty(slider);
 };
 
-static int gwmSliderHandler(GWMEvent *ev, GWMWindow *slider)
+static int gwmSliderHandler(GWMEvent *ev, GWMWindow *slider, void *context)
 {
 	GWMSliderData *data = (GWMSliderData*) slider->data;
 	
@@ -115,7 +115,7 @@ static int gwmSliderHandler(GWMEvent *ev, GWMWindow *slider)
 	
 	if (data->flags & GWM_SLIDER_DISABLED)
 	{
-		return gwmDefaultHandler(ev, slider);
+		return GWM_EVSTATUS_CONT;
 	};
 	
 	switch (ev->type)
@@ -129,13 +129,13 @@ static int gwmSliderHandler(GWMEvent *ev, GWMWindow *slider)
 			if (data->value > data->max) data->value = data->max;
 			gwmRedrawSlider(slider);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->pressed = 0;
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_MOTION:
 		if (data->pressed)
 		{
@@ -144,9 +144,9 @@ static int gwmSliderHandler(GWMEvent *ev, GWMWindow *slider)
 			if (data->value > data->max) data->value = data->max;
 			gwmRedrawSlider(slider);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, slider);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -179,7 +179,7 @@ GWMWindow* gwmCreateSlider(GWMWindow *parent, int x, int y, int len, int value, 
 	slider->data = data;
 	
 	gwmRedrawSlider(slider);
-	gwmSetEventHandler(slider, gwmSliderHandler);
+	gwmPushEventHandler(slider, gwmSliderHandler, NULL);
 	return slider;
 };
 

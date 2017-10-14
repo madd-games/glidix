@@ -108,7 +108,7 @@ static void redrawOptmenu(GWMWindow *optmenu)
 	gwmPostDirty(optmenu);
 };
 
-static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu)
+static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu, void *context)
 {
 	OptmenuData *data = (OptmenuData*) optmenu->data;
 	
@@ -121,11 +121,11 @@ static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu)
 			data->state = OPTMENU_HOVER;
 		};
 		redrawOptmenu(optmenu);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		if (data->state != OPTMENU_DOWN) data->state = OPTMENU_NORMAL;
 		redrawOptmenu(optmenu);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -136,9 +136,9 @@ static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu)
 				gwmOpenMenu(data->options, optmenu, 0, OPTMENU_HEIGHT-1);
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, optmenu);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -175,7 +175,7 @@ GWMWindow* gwmCreateOptionMenu(GWMWindow *parent, uint64_t id, const char *text,
 	
 	optmenu->data = data;
 	redrawOptmenu(optmenu);
-	gwmSetEventHandler(optmenu, optmenuHandler);
+	gwmPushEventHandler(optmenu, optmenuHandler, NULL);
 	return optmenu;
 };
 

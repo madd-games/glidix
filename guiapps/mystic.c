@@ -155,21 +155,21 @@ void clickTile(int x, int y)
 	};
 };
 
-int mysticHandler(GWMEvent *ev, GWMWindow *win)
+int mysticHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
-		return -1;
+		return GWM_EVSTATUS_BREAK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			clickTile(ev->x/TILE_SIZE, (ev->y-20)/TILE_SIZE);
 			redraw();
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -277,7 +277,7 @@ int main()
 	
 	redraw();
 	
-	gwmSetEventHandler(win, mysticHandler);
+	gwmPushEventHandler(win, mysticHandler, NULL);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
 	gwmMainLoop();
 	gwmQuit();

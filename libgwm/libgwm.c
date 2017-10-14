@@ -335,6 +335,17 @@ void gwmQuit()
 	fsQuit();
 };
 
+static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
+{
+	switch (ev->type)
+	{
+	case GWM_EVENT_CLOSE:
+		return GWM_EVSTATUS_BREAK;
+	default:
+		return GWM_EVSTATUS_OK;
+	};
+};
+
 GWMWindow* gwmCreateWindow(
 	GWMWindow* parent,
 	const char *caption,
@@ -375,12 +386,13 @@ GWMWindow* gwmCreateWindow(
 		GWMWindow *win = (GWMWindow*) malloc(sizeof(GWMWindow));
 		win->id = id;
 		win->canvas = canvas;
-		win->handlerInfo = NULL;
 		win->lastClickTime = 0;
 		
 		win->modalID = 0;
 		if (parent != NULL) win->modalID = parent->modalID;
 		win->icon = NULL;
+		
+		gwmPushEventHandler(win, gwmDefaultHandler, NULL);
 		return win;
 	};
 	
@@ -407,7 +419,8 @@ void gwmDestroyWindow(GWMWindow *win)
 		perror("write(queueFD)");
 		return;
 	};
-	
+
+#if 0
 	if (win->handlerInfo != NULL)
 	{
 		GWMHandlerInfo *info = win->handlerInfo;
@@ -423,6 +436,22 @@ void gwmDestroyWindow(GWMWindow *win)
 		{
 			info->state = 2;
 		};
+	};
+#endif
+
+	GWMHandlerInfo *info = firstHandler;
+	while (info != NULL)
+	{
+		GWMHandlerInfo *next = info->next;
+		if (info->win == win)
+		{
+			if (info->prev != NULL) info->prev->next = info->next;
+			if (info->next != NULL) info->next->prev = info->prev;
+			if (firstHandler == info) firstHandler = info->next;
+			free(info);
+		};
+		
+		info = next;
 	};
 	
 	free(win);
@@ -485,7 +514,7 @@ void gwmPostUpdate(GWMWindow *win)
 	sem_post(&semEventCounter);
 };
 
-void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler)
+void gwmPushEventHandler(GWMWindow *win, GWMEventHandler handler, void *context)
 {
 	GWMHandlerInfo *info = (GWMHandlerInfo*) malloc(sizeof(GWMHandlerInfo));
 	info->win = win;
@@ -493,20 +522,9 @@ void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler)
 	info->prev = NULL;
 	info->next = firstHandler;
 	info->state = 0;
+	info->context = context;
 	if (firstHandler != NULL) firstHandler->prev = info;
 	firstHandler = info;
-	win->handlerInfo = info;
-};
-
-int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win)
-{
-	switch (ev->type)
-	{
-	case GWM_EVENT_CLOSE:
-		return -1;
-	default:
-		return 0;
-	};
 };
 
 static void gwmModalLoop(uint64_t modalID)
@@ -523,7 +541,8 @@ static void gwmModalLoop(uint64_t modalID)
 			if ((ev.win == info->win->id) && (info->win->modalID == modalID))
 			{
 				info->state = 1;
-				if (info->callback(&ev, info->win) != 0)
+				int status = info->callback(&ev, info->win, info->context);
+				if (status == GWM_EVSTATUS_BREAK)
 				{
 					return;
 				}
@@ -541,11 +560,25 @@ static void gwmModalLoop(uint64_t modalID)
 									if ((info->win->lastClickX == ev.x)
 										&& (info->win->lastClickY == ev.y))
 									{
-										ev.type = GWM_EVENT_DOUBLECLICK;
-										if (info->callback(&ev, info->win) != 0)
+										// add a double-click event to queue
+										EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
+										memcpy(&buf->payload, &ev, sizeof(GWMEvent));
+										buf->payload.type = GWM_EVENT_DOUBLECLICK;
+										pthread_mutex_lock(&eventLock);
+										if (firstEvent == NULL)
 										{
-											return;
+											buf->prev = buf->next = NULL;
+											firstEvent = lastEvent = buf;
+										}
+										else
+										{
+											buf->prev = lastEvent;
+											buf->next = NULL;
+											lastEvent->next = buf;
+											lastEvent = buf;
 										};
+										pthread_mutex_unlock(&eventLock);
+										sem_post(&semEventCounter);
 									};
 								};
 							};
@@ -561,8 +594,9 @@ static void gwmModalLoop(uint64_t modalID)
 					{
 						free(info);
 					};
-					break;
 				};
+				
+				if (status == GWM_EVSTATUS_OK) break;
 			};
 		};
 	};

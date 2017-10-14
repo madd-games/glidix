@@ -65,12 +65,12 @@ void doShutdown(const char *how)
 	gwmMessageBox(NULL, "Shutdown failed", message, GWM_MBUT_OK | GWM_MBICON_ERROR);
 };
 
-int shutdownHandler(GWMEvent *ev, GWMWindow *win)
+int shutdownHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
-		return -1;
+		return GWM_EVSTATUS_BREAK;
 	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -94,9 +94,9 @@ int shutdownHandler(GWMEvent *ev, GWMWindow *win)
 				return -1;
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 	
 };
@@ -149,7 +149,7 @@ int main(int argc, char *argv[])
 	
 	ddiBlit(box, 0, 0, canvas, boxX, boxY, BOX_WIDTH, BOX_HEIGHT);	
 	
-	gwmSetEventHandler(win, shutdownHandler);
+	gwmPushEventHandler(win, shutdownHandler, NULL);
 	gwmPostDirty(win);
 	gwmSetWindowFlags(win, GWM_WINDOW_NODECORATE | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_MKFOCUSED);
 	

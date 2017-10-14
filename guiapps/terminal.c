@@ -571,13 +571,13 @@ static int getPositionFromCoords(int cx, int cy)
 	return ty * 80 + tx;
 };
 
-int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
+int terminalHandler(GWMEvent *ev, GWMWindow *ignore, void *context)
 {
 	DDISurface *surface = gwmGetWindowCanvas(termWindow);
 	
 	if (ev->type == GWM_EVENT_CLOSE)
 	{
-		return -1;
+		return GWM_EVSTATUS_BREAK;
 	}
 	else if (ev->type == GWM_EVENT_UPDATE)
 	{
@@ -585,7 +585,7 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 		renderConsole(surface);
 		pthread_mutex_unlock(&consoleLock);
 		
-		if (!running) return -1;
+		if (!running) return GWM_EVSTATUS_BREAK;
 	}
 	else if (ev->type == GWM_EVENT_DOWN)
 	{
@@ -668,7 +668,7 @@ int terminalHandler(GWMEvent *ev, GWMWindow *ignore)
 		};
 	};
 	
-	return 0;
+	return GWM_EVSTATUS_OK;
 };
 
 int main(int argc, char *argv[])
@@ -719,7 +719,7 @@ int main(int argc, char *argv[])
 	
 	pthread_create(&ctrlThread, NULL, ctrlThreadFunc, argv);
 	
-	gwmSetEventHandler(wnd, terminalHandler);
+	gwmPushEventHandler(wnd, terminalHandler, NULL);
 	gwmMainLoop();
 	gwmQuit();
 	

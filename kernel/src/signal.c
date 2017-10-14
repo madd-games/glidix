@@ -523,6 +523,11 @@ SigDisp *sigdispExec(SigDisp *old)
 		{
 			new->actions[i].sa_handler = SIG_IGN;
 		};
+		
+		if (old->actions[i].sa_handler == SIG_CORE)
+		{
+			new->actions[i].sa_handler = SIG_CORE;
+		};
 	};
 	
 	sigdispDownref(old);

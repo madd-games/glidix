@@ -119,7 +119,7 @@ static void redrawMenu(GWMMenu *menu, int selectPos)
 	gwmPostDirty(menu->win);
 };
 
-static int menuEventHandler(GWMEvent *ev, GWMWindow *win)
+static int menuEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	GWMMenu *menu = (GWMMenu*) win->data;
 	int i;
@@ -160,17 +160,17 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win)
 		{
 			menu->selectedSub = -1;
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		redrawMenu(menu, menu->selectedSub);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_FOCUS_OUT:
 		menu->focused = 0;
 		if (menu->selectedSub == -1) gwmCloseMenu(menu);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_FOCUS_IN:
 		menu->focused = 1;
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -184,9 +184,9 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win)
 				};
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -287,7 +287,7 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 	menu->focused = 1;
 	gwmPostDirty(menu->win);
 	gwmSetWindowFlags(menu->win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NODECORATE);
-	gwmSetEventHandler(menu->win, menuEventHandler);
+	gwmPushEventHandler(menu->win, menuEventHandler, NULL);
 };
 
 void gwmCloseMenu(GWMMenu *menu)

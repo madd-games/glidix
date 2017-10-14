@@ -53,6 +53,13 @@
 #define	GWM_ERR_NOENT				4		/* name does not exist */
 
 /**
+ * Event handler return statuses.
+ */
+#define	GWM_EVSTATUS_OK				0
+#define	GWM_EVSTATUS_BREAK			-1
+#define	GWM_EVSTATUS_CONT			-2
+
+/**
  * Colors.
  */
 #define	GWM_COLOR_SELECTION			&gwmColorSelection
@@ -708,10 +715,12 @@ struct GWMWindow_;
 
 /**
  * Event handler function type.
- * Return 0 when the application should continue running; return -1 if the loop shall
- * terminate.
+ * Must return one of the following:
+ *	GWM_EVSTATUS_OK - event handled, stop calling other handlers.
+ *	GWM_EVSTATUS_BREAK - break from the loop (modal or main loop)
+ *	GWM_EVSTATUS_CONT - continue calling other handlers
  */
-typedef int (*GWMEventHandler)(GWMEvent *ev, struct GWMWindow_ *win);
+typedef int (*GWMEventHandler)(GWMEvent *ev, struct GWMWindow_ *win, void *context);
 
 /**
  * These structures form lists of event handlers.
@@ -722,6 +731,7 @@ typedef struct GWMHandlerInfo_
 	GWMEventHandler				callback;
 	struct GWMHandlerInfo_			*prev;
 	struct GWMHandlerInfo_			*next;
+	void*					context;
 	
 	/**
 	 * 0 = handler not being executed
@@ -740,7 +750,6 @@ typedef struct GWMWindow_
 	uint64_t				shmemAddr;
 	uint64_t				shmemSize;
 	DDISurface*				canvas;
-	GWMHandlerInfo*				handlerInfo;
 	void*					data;
 	
 	// location and time of last left click; used to detect double-clicks.
@@ -981,15 +990,9 @@ void gwmClearWindow(GWMWindow *win);
 void gwmPostUpdate(GWMWindow *win);
 
 /**
- * Set an event handler for the given window, that will be called from gwmMainLoop().
+ * Push a new event handler to the top of the handler stack for the given window.
  */
-void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler);
-
-/**
- * Call this function if your event handler receives an event it does not respond to,
- * or to simply trigger the default handler.
- */
-int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win);
+void gwmPushEventHandler(GWMWindow *win, GWMEventHandler handler, void *context);
 
 /**
  * Starts the main loop. Returns after an event handler requests an exit by returning -1.

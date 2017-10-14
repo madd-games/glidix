@@ -58,23 +58,23 @@ void redraw()
 	gwmPostDirty(win);
 };
 
-int myEventHandler(GWMEvent *ev, GWMWindow *win)
+int myEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
-		return -1;
+		return GWM_EVSTATUS_BREAK;
 	case GWM_EVENT_RESIZE_REQUEST:
 		gwmMoveWindow(win, ev->x, ev->y);
 		gwmResizeWindow(win, ev->width, ev->height);
 		redraw();
 		gwmMenubarAdjust(menubar);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOUBLECLICK:
 		printf("Double-click!\n");
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -289,7 +289,7 @@ int main()
 	gwmPostDirty(tab1);
 	redraw();
 
-	gwmSetEventHandler(win, myEventHandler);
+	gwmPushEventHandler(win, myEventHandler, NULL);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	gwmMainLoop();
 	gwmQuit();

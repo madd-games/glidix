@@ -22,6 +22,7 @@ then
 	ROOTFS="gxfs"
 fi
 
-command="build-tools/mkinitrd --kernel=kernel/out/kernel.so --init=init/init --rootdev=$ROOTDEV --rootfs=$ROOTFS --output=$1 --no-default-initmod $initmod"
+command="build-tools/mkinitrd --kernel=kernel/out/kernel.so --init=init/init --rootdev=$ROOTDEV --rootfs=$ROOTFS --output=$1/vmglidix.tar --no-default-initmod $initmod"
 echo $command
 $command
+cp kernel/out/kernel.so $1/kernel.so

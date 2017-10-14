@@ -288,7 +288,7 @@ int txtSelectAll(void *context)
 	return 0;
 };
 
-int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
+int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
 	off_t newCursorPos;
@@ -300,15 +300,15 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 	case GWM_EVENT_FOCUS_IN:
 		data->focused = 1;
 		gwmRedrawTextField(field);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_FOCUS_OUT:
 		data->focused = 0;
 		gwmRedrawTextField(field);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOUBLECLICK:
 		gwmTextFieldSelectWord(field);
 		gwmRedrawTextField(field);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -374,7 +374,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 			sprintf(buf, "%c", (char)ev->keychar);
 			gwmTextFieldInsert(field, buf);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -384,7 +384,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 		{
 			gwmOpenMenu(data->menu, field, ev->x, ev->y);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_MOTION:
 		if (data->clickPos != -1)
 		{
@@ -404,9 +404,9 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field)
 			};
 			gwmRedrawTextField(field);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, field);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -442,7 +442,7 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	gwmMenuAddSeparator(data->menu);
 	gwmMenuAddEntry(data->menu, "Select All", txtSelectAll, field);
 	
-	gwmSetEventHandler(field, gwmTextFieldHandler);
+	gwmPushEventHandler(field, gwmTextFieldHandler, NULL);
 	gwmRedrawTextField(field);
 	gwmSetWindowCursor(field, GWM_CURSOR_TEXT);
 	

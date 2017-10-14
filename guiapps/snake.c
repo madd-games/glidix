@@ -219,14 +219,14 @@ void renderGame()
 	gwmPostDirty(win);
 };
 
-int snakeHandler(GWMEvent *ev, GWMWindow *win)
+int snakeHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_UPDATE:
 		move();
 		renderGame();
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
 		switch (ev->keycode)
 		{
@@ -257,17 +257,17 @@ int snakeHandler(GWMEvent *ev, GWMWindow *win)
 			stepWait = 100;
 			break;
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_LCTRL || ev->keycode == GWM_KC_RCTRL)
 		{
 			stepWait = 300;
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_CLOSE:
-		return -1;
+		return GWM_EVSTATUS_BREAK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -353,7 +353,7 @@ int main()
 	pthread_t thread;
 	pthread_create(&thread, NULL, timerThread, NULL);
 	
-	gwmSetEventHandler(win, snakeHandler);
+	gwmPushEventHandler(win, snakeHandler, NULL);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
 	gwmMainLoop();
 	gwmQuit();

@@ -1,11 +1,11 @@
 /*
-	Glidix GUI
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
-	modification, are permitted provided that the following conditions are met:
+	modification, are permitted provided that the following conditions are met, SIG_CORE);
 	
 	* Redistributions of source code must retain the above copyright notice, this
 	  list of conditions and the following disclaimer.
@@ -26,45 +26,41 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define _GLIDIX_SOURCE
 #include <stdio.h>
-#include <libgwm.h>
-#include <time.h>
-#include <sys/time.h>
 #include <stdlib.h>
-#include <string.h>
-#include <signal.h>
 #include <unistd.h>
-#include <dirent.h>
-#include <pthread.h>
-#include <poll.h>
+#include <signal.h>
+#include <string.h>
+#include <errno.h>
 
-void initPCITab(GWMWindow *notebook);
-
-int main()
+int main(int argc, char *argv[])
 {
-	if (gwmInit() != 0)
+	if (argc < 2)
 	{
-		fprintf(stderr, "gwmInit() failed!\n");
+		fprintf(stderr, "USAGE:\t%s <command> <arguments...>\n", argv[0]);
+		fprintf(stderr, "\tExecute a command while setting up signals to make core dumps\n");
 		return 1;
 	};
 	
-	GWMWindow *win = gwmCreateWindow(NULL, "System Information", GWM_POS_UNSPEC, GWM_POS_UNSPEC,
-						500, 300, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
+	signal(SIGHUP, SIG_CORE);
+	signal(SIGINT, SIG_CORE);
+	signal(SIGQUIT, SIG_CORE);
+	signal(SIGILL, SIG_CORE);
+	signal(SIGABRT, SIG_CORE);
+	signal(SIGFPE, SIG_CORE);
+	signal(SIGSEGV, SIG_CORE);
+	signal(SIGPIPE, SIG_CORE);
+	signal(SIGALRM, SIG_CORE);
+	signal(SIGTERM, SIG_CORE);
+	signal(SIGUSR1, SIG_CORE);
+	signal(SIGUSR2, SIG_CORE);
+	signal(SIGBUS, SIG_CORE);
+	signal(SIGSYS, SIG_CORE);
 	
-	DDISurface *canvas = gwmGetWindowCanvas(win);
-	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/sysinfo.png", NULL);
-	if (icon != NULL)
-	{
-		gwmSetWindowIcon(win, icon);
-		ddiDeleteSurface(icon);
-	};
-	
-	GWMWindow *notebook = gwmCreateNotebook(win, 0, 0, 500, 300, 0);
-	initPCITab(notebook);
-	
-	gwmNotebookSetTab(notebook, 0);
-	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
-	gwmMainLoop();
-	gwmQuit();
-	return 0;
+	const char *progName = argv[0];
+	argv[0] = "env";
+	execv("/usr/bin/env", argv);
+	fprintf(stderr, "%s: cannot exec /usr/bin/env: %s\n", progName, strerror(errno));
+	return 1;
 };

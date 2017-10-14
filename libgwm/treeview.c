@@ -329,7 +329,7 @@ static int getColToResize(GWMTreeViewData *data, int clickX)
 	return -1;
 };
 
-static int treeviewHandler(GWMEvent *ev, GWMWindow *treeview)
+static int treeviewHandler(GWMEvent *ev, GWMWindow *treeview, void *context)
 {
 	GWMTreeViewData *data = (GWMTreeViewData*) treeview->data;
 	int ymargin = 0;
@@ -347,7 +347,7 @@ static int treeviewHandler(GWMEvent *ev, GWMWindow *treeview)
 			data->resizeAnchor = ev->x;
 			if (data->colResizing != -1) data->oldColSize = data->colWidths[data->colResizing];
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -368,19 +368,19 @@ static int treeviewHandler(GWMEvent *ev, GWMWindow *treeview)
 			data->hoverY = ev->y + data->scroll - ymargin;
 		};
 		gwmRedrawTreeView(treeview);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		data->hoverX = data->hoverY = -1;
 		gwmRedrawTreeView(treeview);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOUBLECLICK:
 		if (data->actCallback != NULL)
 		{
 			return data->actCallback(data->actParam);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, treeview);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -455,7 +455,7 @@ GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int hei
 		scrollbarLen = height - scrollbarY - 1;
 	};
 
-	gwmSetEventHandler(treeview, treeviewHandler);
+	gwmPushEventHandler(treeview, treeviewHandler, NULL);
 	gwmRedrawTreeView(treeview);
 	
 	GWMWindow *sbar = gwmCreateScrollbar(treeview, width-8, scrollbarY, scrollbarLen, 0, 0, 10, GWM_SCROLLBAR_VERT);

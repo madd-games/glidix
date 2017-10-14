@@ -149,7 +149,7 @@ case $i in
 		maybe_gcc=""
 		;;
 	
-	gcc-version=*)
+	--gcc-version=*)
 		gcc_version=`echo $i | sed 's/[-a-zA-Z0-9]*=//'`
 		;;
 		
@@ -222,7 +222,7 @@ then
 	echo >>Makefile "	@rm -rf isodir"
 	echo >>Makefile "	@mkdir -p isodir"
 	echo >>Makefile "	@mkdir -p isodir/boot"
-	echo >>Makefile "	ROOTDEV=/dev/sdb ROOTFS=isofs sh $srcdir/initrd.sh isodir/boot/vmglidix.tar"
+	echo >>Makefile "	ROOTDEV=/dev/sdb ROOTFS=isofs sh $srcdir/initrd.sh isodir/boot"
 	
 	for pkg in $ISO_PACKAGES
 	do

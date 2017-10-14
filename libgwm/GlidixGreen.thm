@@ -37,4 +37,8 @@ namespace gwm {
 			color active #00AA00:179
 		}
 	}
+	
+	namespace tools {
+		image shutdown /usr/share/images/shutdown.png
+	}
 }

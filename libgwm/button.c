@@ -101,27 +101,27 @@ static void gwmRedrawButton(GWMWindow *button)
 	gwmPostDirty(button);
 };
 
-int gwmButtonHandler(GWMEvent *ev, GWMWindow *button)
+int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
 {
-	int retval = 0;
+	int retval = GWM_EVSTATUS_OK;
 	GWMButtonData *data = (GWMButtonData*) button->data;
 	switch (ev->type)
 	{
 	case GWM_EVENT_ENTER:
 		data->state = BUTTON_STATE_HOVERING;
 		gwmRedrawButton(button);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		data->state = BUTTON_STATE_NORMAL;
 		gwmRedrawButton(button);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->state = BUTTON_STATE_CLICKED;
 			gwmRedrawButton(button);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -144,7 +144,7 @@ int gwmButtonHandler(GWMEvent *ev, GWMWindow *button)
 		};
 		return retval;
 	default:
-		return gwmDefaultHandler(ev, button);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -167,7 +167,7 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
 	data->callback = NULL;
 	
 	gwmRedrawButton(button);
-	gwmSetEventHandler(button, gwmButtonHandler);
+	gwmPushEventHandler(button, gwmButtonHandler, NULL);
 	return button;
 };
 

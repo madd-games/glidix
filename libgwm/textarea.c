@@ -182,7 +182,7 @@ static void redrawTextArea(GWMWindow *area)
 	gwmPostDirty(area);
 };
 
-static int areaHandler(GWMEvent *ev, GWMWindow *area)
+static int areaHandler(GWMEvent *ev, GWMWindow *area, void *context)
 {
 	TextAreaData *data = (TextAreaData*) area->data;
 	off_t newCursorPos;
@@ -196,11 +196,11 @@ static int areaHandler(GWMEvent *ev, GWMWindow *area)
 	case GWM_EVENT_FOCUS_IN:
 		data->active = 1;
 		redrawTextArea(area);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_FOCUS_OUT:
 		data->active = 0;
 		redrawTextArea(area);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -252,13 +252,13 @@ static int areaHandler(GWMEvent *ev, GWMWindow *area)
 			data->cursorPos++;
 			redrawTextArea(area);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->clickPos = -1;
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_MOTION:
 		if (data->clickPos != -1)
 		{
@@ -280,9 +280,9 @@ static int areaHandler(GWMEvent *ev, GWMWindow *area)
 				};
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, area);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -319,7 +319,7 @@ GWMWindow* gwmCreateTextArea(GWMWindow *parent, int x, int y, int width, int hei
 	data->updateCB = NULL;
 	
 	area->data = data;
-	gwmSetEventHandler(area, areaHandler);
+	gwmPushEventHandler(area, areaHandler, NULL);
 	gwmSetWindowCursor(area, GWM_CURSOR_TEXT);
 	redrawTextArea(area);
 	return area;

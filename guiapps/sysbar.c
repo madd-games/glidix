@@ -341,7 +341,7 @@ void triggerWindow(int index)
 	gwmToggleWindow(&windows[index]);
 };
 
-int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
+int sysbarEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	int newSelectRow, newSelectColumn;
 	int winIndex;
@@ -355,10 +355,10 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 			sysbarRedraw();
 		};
 
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DESKTOP_UPDATE:
 		sysbarRedraw();
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_ENTER:
 	case GWM_EVENT_MOTION:
 		currentMouseX = ev->x;
@@ -371,14 +371,14 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 			lastSelectRow = newSelectRow;
 			sysbarRedraw();
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		currentMouseX = 0;
 		currentMouseY = 0;
 		lastSelectColumn = -1;
 		lastSelectRow = -1;
 		sysbarRedraw();
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -394,9 +394,9 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 				sysbarRedraw();
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -489,7 +489,7 @@ int main()
 	sysbarRedraw();
 	
 	gwmSetListenWindow(win); 
-	gwmSetEventHandler(win, sysbarEventHandler);
+	gwmPushEventHandler(win, sysbarEventHandler, NULL);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;
