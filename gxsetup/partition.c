@@ -1320,8 +1320,7 @@ void partFlush()
 	fclose(fp);
 	
 	// configure GWM
-	//const char *logmgr = "gui";
-	const char *logmgr = "logmgr";
+	const char *logmgr = "gui";
 	pid = fork();
 	if (pid == -1)
 	{

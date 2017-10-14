@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
 	
 	if (fork() == 0)
 	{
-		execl("/usr/bin/terminal", "terminal", NULL);
+		execl("/usr/bin/gui-login", "gui-login", NULL);
 		perror("exec terminal");
 		_exit(1);
 	};

@@ -27,6 +27,7 @@
 */
 
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <sys/glidix.h>
 #include <stdio.h>
 #include <pwd.h>
@@ -36,6 +37,7 @@
 #include <grp.h>
 #include <libgwm.h>
 #include <string.h>
+#include <errno.h>
 
 #define	WIN_WIDTH	232
 #define	WIN_HEIGHT	78
@@ -220,7 +222,7 @@ int logInCallback(void *ignore)
 	}
 	else
 	{
-		//sleep(5);
+		sleep(3);
 		gwmMessageBox(NULL, "Error", "Invalid username or password.", GWM_MBICON_ERROR | GWM_MBUT_OK);
 	};
 	
@@ -229,6 +231,42 @@ int logInCallback(void *ignore)
 
 int main(int argc, char *argv[])
 {
+	// set up default background
+	pid_t pid = fork();
+	if (pid == -1)
+	{
+		fprintf(stderr, "%s: fork failed: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
+	else if (pid == 0)
+	{
+		execl("/usr/bin/wallpaper", "wallpaper", "--scale", "--image=/usr/share/images/wallpaper.png", NULL);
+		perror("exec wallpaper");
+		_exit(1);
+	}
+	else
+	{
+		waitpid(pid, NULL, 0);
+	};
+	
+	// now the default theme (GlidixGreen)
+	pid = fork();
+	if (pid == -1)
+	{
+		fprintf(stderr, "%s: fork failed: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
+	else if (pid == 0)
+	{
+		execl("/usr/bin/theme", "theme", "load", "/usr/share/themes/GlidixGreen.thm", NULL);
+		perror("exec theme");
+		_exit(1);
+	}
+	else
+	{
+		waitpid(pid, NULL, 0);
+	};
+	
 	if (gwmInit() != 0)
 	{
 		fprintf(stderr, "%s: could not initialize GWM!\n", argv[0]);
