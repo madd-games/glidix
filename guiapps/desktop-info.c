@@ -38,22 +38,6 @@
 
 void printWindowInfo(const char *prefix, GWMGlobWinRef *ref)
 {
-	char exepath[256];
-	char linkpath[256];
-
-	sprintf(exepath, "/proc/%d/exe", ref->pid);
-	strcpy(linkpath, "???");
-	
-	if (ref->pid != 0)
-	{
-		ssize_t sz = readlink(exepath, linkpath, 256);
-		linkpath[sz] = 0;
-	}
-	else
-	{
-		strcpy(linkpath, "<null>");
-	};
-
 	GWMWindowParams params;
 	if (gwmGetGlobWinParams(ref, &params) == -1)
 	{
@@ -62,7 +46,7 @@ void printWindowInfo(const char *prefix, GWMGlobWinRef *ref)
 		strcpy(params.caption, "???");
 	};
 	
-	printf("%s[%d:%d:%lu] belonging to `%s': %ux%u '%s'\n", prefix, ref->pid, ref->fd, ref->id, linkpath, params.width, params.height, params.caption);
+	printf("%s[%d:%lu] %ux%u '%s'\n", prefix, ref->fd, ref->id, params.width, params.height, params.caption);
 };
 
 int main()
@@ -79,7 +63,7 @@ int main()
 	int count = gwmGetDesktopWindows(&focused, wins);
 	printf("There are %d windows open\n", count);
 	
-	if (focused.pid != 0)
+	if (focused.fd != 0)
 	{
 		printWindowInfo("Focused window: ", &focused);
 	};

@@ -415,6 +415,63 @@ void* clientThreadFunc(void *context)
 			memcpy(&resp.getFormatResp.format, &screen->format, sizeof(DDIPixelFormat));
 			write(sockfd, &resp, sizeof(GWMMessage));
 		}
+		else if (cmd.cmd == GWM_CMD_GET_WINDOW_LIST)
+		{
+			if (sz < sizeof(cmd.getWindowList))
+			{
+				printf("[gwmserver] GWM_CMD_GET_WINDOW_LIST command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.getWindowListResp.type = GWM_MSG_GET_WINDOW_LIST_RESP;
+			resp.getWindowListResp.seq = cmd.getWindowList.seq;
+			wndGetWindowList(&resp.getWindowListResp.focused, resp.getWindowListResp.wins, &resp.getWindowListResp.count);
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
+		else if (cmd.cmd == GWM_CMD_GET_WINDOW_PARAMS)
+		{
+			if (sz < sizeof(cmd.getWindowParams))
+			{
+				printf("[gwmserver] GWM_CMD_GET_WINDOW_PARAMS command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.getWindowParamsResp.type = GWM_MSG_GET_WINDOW_PARAMS_RESP;
+			resp.getWindowParamsResp.seq = cmd.getWindowParams.seq;
+			resp.getWindowParamsResp.status = wndGetWindowParams(&cmd.getWindowParams.ref, &resp.getWindowParamsResp.params);
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
+		else if (cmd.cmd == GWM_CMD_SET_LISTEN_WINDOW)
+		{
+			if (sz < sizeof(cmd.setListenWindow))
+			{
+				printf("[gwmserver] GWM_CMD_SET_LISTEN_WINDOW command too small\n");
+				break;
+			};
+			
+			Window *win = wltGet(wlt, cmd.setListenWindow.win);
+			if (win != NULL)
+			{
+				wndSetListenWindow(win);
+				wndDown(win);
+			};
+		}
+		else if (cmd.cmd == GWM_CMD_TOGGLE_WINDOW)
+		{
+			if (sz < sizeof(cmd.toggleWindow))
+			{
+				printf("[gwmserver] GWM_CMD_TOGGLE_WINDOW command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.toggleWindowResp.type = GWM_MSG_TOGGLE_WINDOW_RESP;
+			resp.toggleWindowResp.seq = cmd.toggleWindow.seq;
+			resp.toggleWindowResp.status = wndToggle(&cmd.toggleWindow.ref);
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
 		else if (cmd.cmd == GWM_CMD_ATOMIC_CONFIG)
 		{
 			if (sz < sizeof(cmd.atomicConfig))

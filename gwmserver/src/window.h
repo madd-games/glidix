@@ -215,4 +215,37 @@ int wndSetIcon(Window *wnd, uint32_t surfID);
  */
 void wndDecorate(Window *decor, Window *child);
 
+/**
+ * Get the list of windows. Used to implement the GWM_CMD_GET_WINDOW_LIST command. The global reference
+ * of the focused window's top-level application-visible parent is stored in 'focused', and the references
+ * of all other windows on the desktop (their decorated child if they are decorations) is stored in
+ * 'list'. The list must have 128 entries. 'outCount' points to where the actual number of windows will
+ * be stored.
+ */
+void wndGetWindowList(GWMGlobWinRef *focused, GWMGlobWinRef *list, int *outCount);
+
+/**
+ * Given a window reference, return the parameters of a window, if it's on the desktop. Returns 0 on success,
+ * or an error number (usually GWM_ERR_NOWND) on error.
+ */
+int wndGetWindowParams(GWMGlobWinRef *ref, GWMWindowParams *params);
+
+/**
+ * Set the specified window as the "desktop listening window", which receives desktop update events if the list
+ * of windows on the desktop changes. Mainly used to implement the system bar (sysbar).
+ */
+void wndSetListenWindow(Window *win);
+
+/**
+ * Send the desktop update event.
+ */
+void wndDesktopUpdate();
+
+/**
+ * "Toggle" a window. This handles what should happen when someone clicks on it on the system bar:
+ *  - If it not hidden, minimize it (set GWM_WINDOW_HIDDEN) and make not focused.
+ *  - If hidden, make focused and not hidden.
+ */
+int wndToggle(GWMGlobWinRef *ref);
+
 #endif

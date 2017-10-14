@@ -296,8 +296,7 @@ void sysbarRedraw()
 					};
 				};
 				
-				if ((winlist[i].pid == focwin.pid) && (winlist[i].fd == focwin.fd)
-					&& (winlist[i].id == focwin.id))
+				if ((winlist[i].id == focwin.id) && (winlist[i].fd == focwin.fd))
 				{
 					spriteIndex += 3;
 				};

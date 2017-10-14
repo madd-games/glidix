@@ -96,11 +96,6 @@ static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 	sem_init(&waiter->lock, 0, 0);
 	
 	pthread_mutex_lock(&waiterLock);
-	//if (_glidix_mqsend(queueFD, guiPid, guiFD, cmd, sizeof(GWMCommand)) != 0)
-	//{
-	//	pthread_mutex_unlock(&waiterLock);
-	//	perror("_glidix_mqsend");
-	//};
 	if (write(queueFD, cmd, sizeof(GWMCommand)) != sizeof(GWMCommand))
 	{
 		pthread_mutex_unlock(&waiterLock);
@@ -121,7 +116,6 @@ static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 static void* listenThreadFunc(void *ignore)
 {
 	(void)ignore;
-	//queueFD = _glidix_mqclient(guiPid, guiFD);
 	char msgbuf[65536];
 	
 	// block all signals. we don't want signal handlers to be invoked in the GWM
@@ -134,8 +128,6 @@ static void* listenThreadFunc(void *ignore)
 	initFinished = 1;
 	while (1)
 	{
-		//_glidix_msginfo info;
-		//ssize_t size = _glidix_mqrecv(queueFD, &info, msgbuf, 65536);
 		ssize_t size = read(queueFD, msgbuf, 65536);
 		if (size == -1)
 		{
@@ -143,7 +135,6 @@ static void* listenThreadFunc(void *ignore)
 			else break;
 		};
 
-		//if (info.type == _GLIDIX_MQ_INCOMING)
 		if (size > 0)
 		{
 			if (size < sizeof(GWMMessage))
@@ -172,7 +163,6 @@ static void* listenThreadFunc(void *ignore)
 			}
 			else if (msg->generic.type == GWM_MSG_EVENT)
 			{
-				//printf("got event %d for window %lu\n", msg->event.payload.type, msg->event.payload.win);
 				EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
 				memcpy(&buf->payload, &msg->event.payload, sizeof(GWMEvent));
 				
@@ -190,8 +180,6 @@ static void* listenThreadFunc(void *ignore)
 					lastEvent = buf;
 				};
 				pthread_mutex_unlock(&eventLock);
-				//int one = 1;
-				//ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
 				sem_post(&semEventCounter);
 			};
 		}
@@ -414,11 +402,6 @@ void gwmDestroyWindow(GWMWindow *win)
 	cmd.destroyWindow.cmd = GWM_CMD_DESTROY_WINDOW;
 	cmd.destroyWindow.id = win->id;
 	
-	//if (_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand)) != 0)
-	//{
-	//	perror("_glidix_mqsend");
-	//	return;
-	//};
 	if (write(queueFD, &cmd, sizeof(GWMCommand)) != sizeof(GWMCommand))
 	{
 		perror("write(queueFD)");
@@ -453,20 +436,14 @@ void gwmPostDirty(GWMWindow *win)
 	cmd.postDirty.cmd = GWM_CMD_POST_DIRTY;
 	cmd.postDirty.id = win->id;
 	cmd.postDirty.seq = seq;
-	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	write(queueFD, &cmd, sizeof(GWMCommand));
 	
 	GWMMessage resp;
 	gwmPostWaiter(seq, &resp, &cmd);
-	
-	//win->currentBuffer ^= 1;
-	//printf("buffer: %d\n", win->currentBuffer);
 };
 
 void gwmWaitEvent(GWMEvent *ev)
 {
-	//int one = 1;
-	//while (ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_WAIT, &one) == -1);
 	while (sem_wait(&semEventCounter) != 0);
 
 	pthread_mutex_lock(&eventLock);
@@ -505,8 +482,6 @@ void gwmPostUpdate(GWMWindow *win)
 		lastEvent = buf;
 	};
 	pthread_mutex_unlock(&eventLock);
-	//int one = 1;
-	//ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
 	sem_post(&semEventCounter);
 };
 
@@ -759,45 +734,11 @@ void gwmSetListenWindow(GWMWindow *win)
 	cmd.setListenWindow.seq = seq;
 	cmd.setListenWindow.win = win->id;
 	
-	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
 void gwmResizeWindow(GWMWindow *win, int width, int height)
 {
-	// TODO
-#if 0
-	DDIPixelFormat format;
-	memcpy(&format, &win->canvases[0]->format, sizeof(DDIPixelFormat));
-	
-	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
-	
-	GWMCommand cmd;
-	cmd.resize.cmd = GWM_CMD_RESIZE;
-	cmd.resize.seq = seq;
-	cmd.resize.win = win->id;
-	cmd.resize.width = width;
-	cmd.resize.height = height;
-	
-	GWMMessage resp;
-	gwmPostWaiter(seq, &resp, &cmd);
-	
-	if (resp.resizeResp.status == 0)
-	{
-		ddiDeleteSurface(win->canvases[0]);
-		ddiDeleteSurface(win->canvases[1]);
-		
-		win->canvases[0] = ddiOpenSurface(resp.resizeResp.clientID[0]);
-		win->canvases[1] = ddiOpenSurface(resp.resizeResp.clientID[1]);
-		
-		win->currentBuffer = 1;
-	}
-	else
-	{
-		abort();
-	};
-#endif
-
 	DDIPixelFormat format;
 	memcpy(&format, &win->canvas->format, sizeof(DDIPixelFormat));
 	

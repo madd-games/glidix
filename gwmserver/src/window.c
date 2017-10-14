@@ -60,6 +60,7 @@ pthread_mutex_t wincacheLock;
 Window *wndHovering = NULL;				// mouse hovers over this window
 Window *wndFocused = NULL;				// main focused window
 Window *wndActive = NULL;				// active window (currently clicked on)
+Window *wndListen = NULL;				// desktop update listening window
 
 /**
  * Caption font.
@@ -389,6 +390,7 @@ Window* wndCreate(Window *parent, GWMWindowParams *pars, uint64_t id, int fd, DD
 		};
 	};
 	
+	if (parent == desktopWindow || parent->isDecoration) wndDesktopUpdate();
 	return wnd;
 };
 
@@ -453,6 +455,11 @@ int wndDestroy(Window *wnd)
 		wndDown(wnd);
 		wndActive = NULL;
 	};
+	if (wndListen == wnd)
+	{
+		wndDown(wnd);
+		wndListen = NULL;
+	};
 	pthread_mutex_unlock(&wincacheLock);
 	
 	if (wnd->decorated)
@@ -466,7 +473,7 @@ int wndDestroy(Window *wnd)
 	};
 	
 	wndDown(wnd);
-	
+	if (parent == desktopWindow) wndDesktopUpdate();
 	return 0;
 };
 
@@ -817,7 +824,7 @@ void wndSetFocused(Window *wnd)
 {
 	if (wnd == NULL) wnd = desktopWindow;
 	if (wnd->isDecoration) wnd = wnd->children;
-	
+
 	if (wndFocused != wnd)
 	{
 		wndUp(wnd);
@@ -925,6 +932,15 @@ void wndSetFocused(Window *wnd)
 		};
 		
 		wndDrawScreen();
+	};
+
+	if (wndListen != NULL)
+	{
+		GWMEvent event;
+		memset(&event, 0, sizeof(GWMEvent));
+		event.type = GWM_EVENT_DESKTOP_UPDATE;
+		event.win = wndListen->id;
+		wndSendEvent(wndListen, &event);
 	};
 };
 
@@ -1041,6 +1057,8 @@ void wndSetFlags(Window *wnd, int flags)
 	{
 		wndDecorate(decoration, wnd);
 	};
+
+	wndDesktopUpdate();
 };
 
 int wndSetIcon(Window *wnd, uint32_t surfID)
@@ -1060,6 +1078,7 @@ int wndSetIcon(Window *wnd, uint32_t surfID)
 		wndDecorate(decoration, wnd);
 	};
 	
+	wndDesktopUpdate();
 	return status;
 };
 
@@ -1088,4 +1107,183 @@ int wndRelToAbs(Window *win, int relX, int relY, int *absX, int *absY)
 		return result;
 	}
 	else return -1;
+};
+
+void wndGetWindowList(GWMGlobWinRef *focused, GWMGlobWinRef *list, int *outCount)
+{
+	int count = 0;
+	focused->fd = focused->id = 0;
+	
+	pthread_mutex_lock(&wincacheLock);
+	Window *win = wndFocused;
+	if (win != NULL)
+	{
+		while (win->parent != desktopWindow && !win->decorated)
+		{
+			win = win->parent;
+			if (win == NULL) break;
+		};
+		
+		if (win != NULL)
+		{
+			focused->fd = win->fd;
+			focused->id = win->id;
+		};
+	};
+	pthread_mutex_unlock(&wincacheLock);
+	
+	pthread_mutex_lock(&desktopWindow->lock);
+	for (win=desktopWindow->children; win!=NULL; win=win->next)
+	{
+		if (count == 128) break;
+		
+		if (win->isDecoration)
+		{
+			list->id = win->children->id;
+			list->fd = win->children->fd;
+		}
+		else
+		{
+			list->id = win->id;
+			list->fd = win->fd;
+		};
+		
+		list++;
+		count++;
+	};
+	pthread_mutex_unlock(&desktopWindow->lock);
+	
+	if (outCount != NULL) *outCount = count;
+};
+
+int wndGetWindowParams(GWMGlobWinRef *ref, GWMWindowParams *params)
+{
+	Window *chosenWindow = NULL;
+	
+	pthread_mutex_lock(&desktopWindow->lock);
+	Window *win;
+	for (win=desktopWindow->children; win!=NULL; win=win->next)
+	{
+		if (win->isDecoration)
+		{
+			if (win->children->fd == ref->fd && win->children->id == ref->id)
+			{
+				chosenWindow = win->children;
+				wndUp(chosenWindow);
+			};
+		}
+		else
+		{
+			if (win->fd == ref->fd && win->id == ref->id)
+			{
+				wndUp(win);
+				chosenWindow = win;
+			};
+		};
+	};
+	pthread_mutex_unlock(&desktopWindow->lock);
+	
+	if (chosenWindow != NULL)
+	{
+		pthread_mutex_lock(&chosenWindow->lock);
+		memcpy(params, &chosenWindow->params, sizeof(GWMWindowParams));
+		pthread_mutex_unlock(&chosenWindow->lock);
+		
+		wndDown(chosenWindow);
+		return 0;
+	}
+	else
+	{
+		return GWM_ERR_NOWND;
+	};
+};
+
+void wndSetListenWindow(Window *win)
+{
+	wndUp(win);
+	
+	pthread_mutex_lock(&wincacheLock);
+	wndListen = win;
+	pthread_mutex_unlock(&wincacheLock);
+};
+
+void wndDesktopUpdate()
+{
+	pthread_mutex_lock(&wincacheLock);
+	if (wndListen != NULL)
+	{
+		GWMEvent event;
+		memset(&event, 0, sizeof(GWMEvent));
+		event.type = GWM_EVENT_DESKTOP_UPDATE;
+		event.win = wndListen->id;
+		wndSendEvent(wndListen, &event);
+	};
+	pthread_mutex_unlock(&wincacheLock);
+};
+
+int wndToggle(GWMGlobWinRef *ref)
+{
+	Window *chosenWindow = NULL;
+	
+	pthread_mutex_lock(&desktopWindow->lock);
+	Window *win;
+	for (win=desktopWindow->children; win!=NULL; win=win->next)
+	{
+		if (win->isDecoration)
+		{
+			if (win->children->fd == ref->fd && win->children->id == ref->id)
+			{
+				chosenWindow = win->children;
+				wndUp(chosenWindow);
+			};
+		}
+		else
+		{
+			if (win->fd == ref->fd && win->id == ref->id)
+			{
+				wndUp(win);
+				chosenWindow = win;
+			};
+		};
+	};
+	pthread_mutex_unlock(&desktopWindow->lock);
+	
+	if (chosenWindow != NULL)
+	{
+		pthread_mutex_lock(&wincacheLock);		// it's recursive so it's ok
+		pthread_mutex_lock(&chosenWindow->lock);
+		if ((chosenWindow->params.flags & GWM_WINDOW_HIDDEN) == 0)
+		{
+			chosenWindow->params.flags |= GWM_WINDOW_HIDDEN;
+			if (chosenWindow->decorated) chosenWindow->parent->params.flags |= GWM_WINDOW_HIDDEN;
+			pthread_mutex_unlock(&chosenWindow->lock);
+			
+			wndDown(wndFocused);
+			wndFocused = NULL;
+		}
+		else
+		{
+			chosenWindow->params.flags &= ~GWM_WINDOW_HIDDEN;	// make sure it's not hidden
+			if (chosenWindow->decorated) chosenWindow->parent->params.flags &= ~GWM_WINDOW_HIDDEN;
+			pthread_mutex_unlock(&chosenWindow->lock);
+			
+			wndFocused = chosenWindow;
+			wndUp(chosenWindow);
+		};
+		pthread_mutex_unlock(&wincacheLock);
+
+		if (chosenWindow->decorated)
+		{
+			wndDecorate(chosenWindow->parent, chosenWindow);
+		};
+
+		wndDirty(chosenWindow);
+		wndDown(chosenWindow);
+		wndDesktopUpdate();
+		return 0;
+	}
+	else
+	{
+		return GWM_ERR_NOWND;
+	};
 };

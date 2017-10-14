@@ -376,8 +376,8 @@ typedef struct
 {
 	int					type;
 	uint64_t				win;		// window ID
-	int					x;		// mouse position relative to window; or window
-	int					y;		// position for GWM_EVENT_RESIZE_REQUEST
+	int					x;		// {mouse position relative to window; or window
+	int					y;		// {position for GWM_EVENT_RESIZE_REQUEST
 	int					scancode;	// hardware-specific key scancode
 	int					keycode;	// hardware-independent key code
 	int					keymod;		// bitwise-OR of active modifiers (GWM_KM_*)
@@ -394,7 +394,6 @@ typedef struct
 typedef struct
 {
 	uint64_t				id;
-	int					pid;
 	int					fd;
 } GWMGlobWinRef;
 
@@ -574,7 +573,7 @@ typedef union
 #define	GWM_MSG_GET_WINDOW_LIST_RESP		8
 #define	GWM_MSG_GET_WINDOW_PARAMS_RESP		9
 #define	GWM_MSG_TOGGLE_WINDOW_RESP		10
-#define	GWM_MSG_RESIZE_RESP			11
+/* unused: 11 */
 #define	GWM_MSG_REL_TO_ABS_RESP			12
 #define	GWM_MSG_SCREENSHOT_WINDOW_RESP		13
 #define	GWM_MSG_POST_DIRTY_RESP			14
@@ -668,16 +667,6 @@ typedef union
 		uint64_t			seq;
 		int				status;
 	} toggleWindowResp;
-	
-	struct
-	{
-		int				type;	// GWM_MSG_RESIZE_RESP
-		uint64_t			seq;
-		int				status;	// 0 = success, other = GWM error code
-		unsigned int			width;
-		unsigned int			height;
-		uint32_t			clientID[2];	// TODO: remove me
-	} resizeResp;
 	
 	struct
 	{
