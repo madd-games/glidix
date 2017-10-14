@@ -2319,8 +2319,12 @@ png_compare_ICC_profile_with_sRGB(png_const_structrp png_ptr,
                       * discourage their use, skip the 'have_md5' warning below,
                       * which is made irrelevant by this error.
                       */
-                     png_chunk_report(png_ptr, "known incorrect sRGB profile",
-                        PNG_CHUNK_ERROR);
+                     /* Glidix: disable the warning, it's completly unnecessary,
+                      * Photoshop causes it (and the graphic designer uses that),
+                      * and no problems are caused whatsoever.
+                      */
+                     //png_chunk_report(png_ptr, "known incorrect sRGB profile",
+                     //   PNG_CHUNK_ERROR);
                   }
 
                   /* Warn that this being done; this isn't even an error since
