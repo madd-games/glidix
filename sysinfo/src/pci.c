@@ -174,16 +174,16 @@ GWMTreeEnum enumBar = {
 	.teCloseNode =				barCloseNode
 };
 
-int pciInfoHandler(GWMEvent *ev, GWMWindow *win)
+int pciInfoHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
 		gwmDestroyTreeView((GWMWindow*) win->data);
 		gwmDestroyWindow(win);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -246,7 +246,7 @@ int pciActivate(void *context)
 		win->data = barTree;
 		
 		gwmPostDirty(win);
-		gwmSetEventHandler(win, pciInfoHandler);
+		gwmPushEventHandler(win, pciInfoHandler, NULL);
 		gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
 	};
 	

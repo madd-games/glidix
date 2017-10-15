@@ -246,10 +246,11 @@ int main(int argc, char *argv[])
 	gwmGlobalThemeInit(&frontBuffer->format);
 	
 	imgWincap = ddiOpenSurface(gwminfo->imgWinCap);
+	imgWinbut = ddiOpenSurface(gwminfo->imgWinButtons);
 	
 	if (fork() == 0)
 	{
-		execl("/usr/bin/terminal", "terminal", NULL);
+		execl("/usr/bin/gui-login", "gui-login", NULL);
 		perror("exec terminal");
 		_exit(1);
 	};
@@ -259,6 +260,7 @@ int main(int argc, char *argv[])
 	signal(SIGILL, SIG_CORE);
 	signal(SIGBUS, SIG_CORE);
 	signal(SIGABRT, SIG_CORE);
+	signal(SIGALRM, SIG_CORE);
 	
 	kblSet("/usr/share/kblayout/en_US/int", stderr);
 	printf("[gwmserver] starting.\n");

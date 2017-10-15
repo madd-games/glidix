@@ -114,7 +114,7 @@ void gwmRenderMenubar(GWMWindow *menubar)
 	gwmRedrawMenubar(menubar, -1);
 };
 
-static int menubarHandler(GWMEvent *ev, GWMWindow *menubar)
+static int menubarHandler(GWMEvent *ev, GWMWindow *menubar, void *context)
 {
 	GWMMenubarData *data = (GWMMenubarData*) menubar->data;
 	size_t i;
@@ -122,7 +122,7 @@ static int menubarHandler(GWMEvent *ev, GWMWindow *menubar)
 	switch (ev->type)
 	{
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			for (i=0; i<data->numMenus; i++)
 			{
@@ -134,9 +134,9 @@ static int menubarHandler(GWMEvent *ev, GWMWindow *menubar)
 				};
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, menubar);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -155,7 +155,7 @@ GWMWindow *gwmCreateMenubar(GWMWindow *parent)
 	data->textSurface = NULL;
 
 	menubar->data = data;
-	gwmSetEventHandler(menubar, menubarHandler);
+	gwmPushEventHandler(menubar, menubarHandler, NULL);
 	return menubar;
 };
 

@@ -29,6 +29,9 @@
 #include <sys/call.h>
 #include <pthread.h>
 #include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
 int pthread_mutexattr_init(pthread_mutexattr_t *attr)
 {

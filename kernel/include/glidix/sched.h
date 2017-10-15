@@ -461,6 +461,12 @@ typedef struct _Thread
 	uint64_t			blockPhys;
 	
 	/**
+	 * Spinlock for controlling coredumps. Only one thread will ever acquire this lock, and
+	 * it guarantees that there aren't multiple threads coredumping all at once.
+	 */
+	Spinlock			slCore;
+	
+	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.
 	 */
 	struct _Thread			*prev;

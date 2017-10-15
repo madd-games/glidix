@@ -103,7 +103,7 @@ static void gwmRedrawNotebook(GWMWindow *notebook)
 	gwmPostDirty(notebook);
 };
 
-int notebookHandler(GWMEvent *ev, GWMWindow *notebook)
+int notebookHandler(GWMEvent *ev, GWMWindow *notebook, void *context)
 {
 	GWMNotebookData *data = (GWMNotebookData*) notebook->data;
 	int newSelectedTab;
@@ -115,9 +115,9 @@ int notebookHandler(GWMEvent *ev, GWMWindow *notebook)
 		newSelectedTab = -1;
 		break;
 	case GWM_EVENT_DOWN:
-		if (ev->scancode != GWM_SC_MOUSE_LEFT)
+		if (ev->keycode != GWM_KC_MOUSE_LEFT)
 		{
-			return 0;
+			return GWM_EVSTATUS_OK;
 		};
 		switchTab = 1;
 		// no break
@@ -140,7 +140,7 @@ int notebookHandler(GWMEvent *ev, GWMWindow *notebook)
 		
 		break;
 	default:
-		return gwmDefaultHandler(ev, notebook);
+		return GWM_EVSTATUS_CONT;
 	};
 	
 	if (newSelectedTab != data->selectedTab)
@@ -157,7 +157,7 @@ int notebookHandler(GWMEvent *ev, GWMWindow *notebook)
 		};
 	};
 
-	return 0;
+	return GWM_EVSTATUS_OK;
 };
 
 GWMWindow *gwmCreateNotebook(GWMWindow *parent, int x, int y, int width, int height, int flags)
@@ -185,7 +185,7 @@ GWMWindow *gwmCreateNotebook(GWMWindow *parent, int x, int y, int width, int hei
 	
 	notebook->data = data;
 	gwmRedrawNotebook(notebook);
-	gwmSetEventHandler(notebook, notebookHandler);
+	gwmPushEventHandler(notebook, notebookHandler, NULL);
 	return notebook;
 };
 

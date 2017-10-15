@@ -296,8 +296,7 @@ void sysbarRedraw()
 					};
 				};
 				
-				if ((winlist[i].pid == focwin.pid) && (winlist[i].fd == focwin.fd)
-					&& (winlist[i].id == focwin.id))
+				if ((winlist[i].id == focwin.id) && (winlist[i].fd == focwin.fd))
 				{
 					spriteIndex += 3;
 				};
@@ -342,7 +341,7 @@ void triggerWindow(int index)
 	gwmToggleWindow(&windows[index]);
 };
 
-int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
+int sysbarEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	int newSelectRow, newSelectColumn;
 	int winIndex;
@@ -350,16 +349,16 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 	switch (ev->type)
 	{
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			pressed = 1;
 			sysbarRedraw();
 		};
 
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DESKTOP_UPDATE:
 		sysbarRedraw();
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_ENTER:
 	case GWM_EVENT_MOTION:
 		currentMouseX = ev->x;
@@ -372,16 +371,16 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 			lastSelectRow = newSelectRow;
 			sysbarRedraw();
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		currentMouseX = 0;
 		currentMouseY = 0;
 		lastSelectColumn = -1;
 		lastSelectRow = -1;
 		sysbarRedraw();
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if (ev->x < 40)
 			{
@@ -395,23 +394,18 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win)
 				sysbarRedraw();
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
 int sysbarShutdown(void *context)
 {
-	if (gwmMessageBox(NULL, "Shut down", "Are you sure you want to shut down?", GWM_MBICON_WARN | GWM_MBUT_YESNO) == 0)
+	if (fork() == 0)
 	{
-		if (fork() == 0)
-		{
-			execl("/usr/bin/halt", "poweroff", NULL);
-			exit(1);
-		};
-		
-		return -1;
+		execl("/usr/bin/gui-shutdown", "gui-shutdown", NULL);
+		_exit(1);
 	};
 	
 	return 0;
@@ -495,7 +489,7 @@ int main()
 	sysbarRedraw();
 	
 	gwmSetListenWindow(win); 
-	gwmSetEventHandler(win, sysbarEventHandler);
+	gwmPushEventHandler(win, sysbarEventHandler, NULL);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;

@@ -56,7 +56,7 @@ static void* inputThreadFunc(void *context)
 		if (hev.type == HUMIN_EV_BUTTON_DOWN)
 		{
 			// mouse
-			if (hev.button.scancode == GWM_SC_MOUSE_LEFT)
+			if (hev.button.keycode == GWM_KC_MOUSE_LEFT)
 			{
 				wndOnLeftDown();
 			};
@@ -66,7 +66,7 @@ static void* inputThreadFunc(void *context)
 		else if (hev.type == HUMIN_EV_BUTTON_UP)
 		{
 			// mouse
-			if (hev.button.scancode == GWM_SC_MOUSE_LEFT)
+			if (hev.button.keycode == GWM_KC_MOUSE_LEFT)
 			{
 				wndOnLeftUp();
 			};

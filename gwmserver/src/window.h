@@ -34,6 +34,12 @@
 #include <pthread.h>
 
 /**
+ * Properties of window decorations.
+ */
+#define WINDOW_CAPTION_HEIGHT			20
+#define	WINDOW_BORDER_WIDTH			5
+
+/**
  * Describes a window.
  */
 typedef struct Window_
@@ -72,13 +78,6 @@ typedef struct Window_
 	DDISurface*					canvas;
 	DDISurface*					front;
 
-#if 0
-	/**
-	 * Actual display, containing the drawing of children etc.
-	 */
-	DDISurface*					display;
-#endif
-
 	/**
 	 * The icon (or NULL).
 	 */
@@ -102,6 +101,16 @@ typedef struct Window_
 	 * The cursor to display for this window. Atomic read/write - no lock necessary.
 	 */
 	int						cursor;
+	
+	/**
+	 * 1 if this window is decorated (its parent is a "decoration window"), 0 otherwise.
+	 */
+	int						decorated;
+	
+	/**
+	 * 0 if this window is a decoration.
+	 */
+	int						isDecoration;
 } Window;
 
 extern Window* desktopWindow;
@@ -200,5 +209,43 @@ void wndSetFlags(Window *wnd, int flags);
  * on error.
  */
 int wndSetIcon(Window *wnd, uint32_t surfID);
+
+/**
+ * Draw the window decoration for 'child', where 'decor' is its decoration window.
+ */
+void wndDecorate(Window *decor, Window *child);
+
+/**
+ * Get the list of windows. Used to implement the GWM_CMD_GET_WINDOW_LIST command. The global reference
+ * of the focused window's top-level application-visible parent is stored in 'focused', and the references
+ * of all other windows on the desktop (their decorated child if they are decorations) is stored in
+ * 'list'. The list must have 128 entries. 'outCount' points to where the actual number of windows will
+ * be stored.
+ */
+void wndGetWindowList(GWMGlobWinRef *focused, GWMGlobWinRef *list, int *outCount);
+
+/**
+ * Given a window reference, return the parameters of a window, if it's on the desktop. Returns 0 on success,
+ * or an error number (usually GWM_ERR_NOWND) on error.
+ */
+int wndGetWindowParams(GWMGlobWinRef *ref, GWMWindowParams *params);
+
+/**
+ * Set the specified window as the "desktop listening window", which receives desktop update events if the list
+ * of windows on the desktop changes. Mainly used to implement the system bar (sysbar).
+ */
+void wndSetListenWindow(Window *win);
+
+/**
+ * Send the desktop update event.
+ */
+void wndDesktopUpdate();
+
+/**
+ * "Toggle" a window. This handles what should happen when someone clicks on it on the system bar:
+ *  - If it not hidden, minimize it (set GWM_WINDOW_HIDDEN) and make not focused.
+ *  - If hidden, make focused and not hidden.
+ */
+int wndToggle(GWMGlobWinRef *ref);
 
 #endif

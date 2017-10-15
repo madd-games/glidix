@@ -113,7 +113,7 @@ static void gwmRedrawScrollbar(GWMWindow *sbar)
 	gwmPostDirty(sbar);
 };
 
-int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar)
+int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar, void *context)
 {
 	GWMScrollbarData *data = (GWMScrollbarData*) sbar->data;
 	int delta;
@@ -134,7 +134,7 @@ int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar)
 			data->mouseX = data->mouseY = -1;
 			gwmRedrawScrollbar(sbar);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_ENTER:
 	case GWM_EVENT_MOTION:
 		if ((data->flags & GWM_SCROLLBAR_DISABLED) == 0)
@@ -172,13 +172,13 @@ int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar)
 			gwmRedrawScrollbar(sbar);
 			return status;
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
 		if ((data->flags & GWM_SCROLLBAR_DISABLED) == 0)
 		{
 			if (data->viewTotal != 0)
 			{
-				if (ev->scancode == GWM_SC_MOUSE_LEFT)
+				if (ev->keycode == GWM_KC_MOUSE_LEFT)
 				{
 					if (data->flags & GWM_SCROLLBAR_HORIZ)
 					{
@@ -203,19 +203,19 @@ int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar)
 				};
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if ((data->flags & GWM_SCROLLBAR_DISABLED) == 0)
 		{
-			if (ev->scancode == GWM_SC_MOUSE_LEFT)
+			if (ev->keycode == GWM_KC_MOUSE_LEFT)
 			{
 				data->pressed = 0;
 				gwmRedrawScrollbar(sbar);
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, sbar);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -251,7 +251,7 @@ GWMWindow *gwmCreateScrollbar(GWMWindow *parent, int x, int y, int len, int view
 	data->pressed = 0;
 	data->callback = NULL;
 
-	gwmSetEventHandler(sbar, gwmScrollbarHandler);
+	gwmPushEventHandler(sbar, gwmScrollbarHandler, NULL);
 	gwmRedrawScrollbar(sbar);	
 	return sbar;
 };

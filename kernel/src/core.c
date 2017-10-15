@@ -135,6 +135,15 @@ void coredump(siginfo_t *si, Regs *regs)
 	ProcMem *pm = getCurrentThread()->pm;
 	Segment *vmseg;
 	
+	// make sure that we can be the coredump thread; otherwise go to sleep
+	if (spinlockTry(&getCurrentThread()->slCore) != 0)
+	{
+		cli();
+		lockSched();
+		waitThread(getCurrentThread());
+		switchTaskUnlocked(regs);
+	};
+	
 	// put other threads to sleep then get all the states
 	suspendOtherThreads();
 	

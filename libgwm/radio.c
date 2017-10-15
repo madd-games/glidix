@@ -130,7 +130,7 @@ void gwmSetRadioGroupValue(GWMRadioGroup *group, int value)
 	gwmRedrawRadioGroup(group);
 };
 
-static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio)
+static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio, void *context)
 {
 	GWMRadioData *data = (GWMRadioData*) radio->data;
 	
@@ -139,20 +139,20 @@ static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio)
 	case GWM_EVENT_ENTER:
 		data->state = RADIO_HOVER;
 		gwmRedrawRadio(radio);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		data->state = RADIO_NORMAL;
 		gwmRedrawRadio(radio);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->state = RADIO_PRESSED;
 			gwmRedrawRadio(radio);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if (data->state == RADIO_PRESSED)
 			{
@@ -165,9 +165,9 @@ static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio)
 				};
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, radio);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -198,7 +198,7 @@ GWMWindow* gwmCreateRadioButton(GWMWindow *parent, int x, int y, GWMRadioGroup *
 	};
 	
 	gwmRedrawRadio(radio);
-	gwmSetEventHandler(radio, gwmRadioHandler);
+	gwmPushEventHandler(radio, gwmRadioHandler, NULL);
 	return radio;
 };
 

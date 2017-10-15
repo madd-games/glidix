@@ -46,6 +46,9 @@
 #include "window.h"
 #include "screen.h"
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 typedef struct WndLookup_
 {
 	struct WndLookup_*		next;
@@ -161,6 +164,7 @@ void* clientThreadFunc(void *context)
 			break;
 		};
 		
+		// NOTE: Please keep the following in numeric order of commands as given in libgwm.h
 		if (cmd.cmd == GWM_CMD_CREATE_WINDOW)
 		{
 			if (sz < sizeof(cmd.createWindow))
@@ -275,6 +279,28 @@ void* clientThreadFunc(void *context)
 			Window *win = wltRemove(wlt, cmd.destroyWindow.id);
 			wndDestroy(win);	// also decrefs
 		}
+		else if (cmd.cmd == GWM_CMD_RETHEME)
+		{
+			pthread_mutex_lock(&desktopWindow->lock);
+			Window *win = desktopWindow->children;
+			if (win != NULL) wndUp(win);
+			pthread_mutex_unlock(&desktopWindow->lock);
+			
+			while (win != NULL)
+			{
+				if (win->isDecoration)
+				{
+					wndDecorate(win, win->children);
+				};
+				
+				pthread_mutex_lock(&desktopWindow->lock);
+				Window *next = win->next;
+				if (next != NULL) wndUp(next);
+				wndDown(win);
+				win = next;
+				pthread_mutex_unlock(&desktopWindow->lock);
+			};
+		}
 		else if (cmd.cmd == GWM_CMD_SCREEN_SIZE)
 		{
 			if (sz < sizeof(cmd.screenSize))
@@ -310,7 +336,6 @@ void* clientThreadFunc(void *context)
 			else
 			{
 				wndSetFlags(wnd, cmd.setFlags.flags);
-				wndDirty(wnd);
 				wndDrawScreen();
 				resp.setFlagsResp.status = 0;
 			};
@@ -390,6 +415,191 @@ void* clientThreadFunc(void *context)
 			memcpy(&resp.getFormatResp.format, &screen->format, sizeof(DDIPixelFormat));
 			write(sockfd, &resp, sizeof(GWMMessage));
 		}
+		else if (cmd.cmd == GWM_CMD_GET_WINDOW_LIST)
+		{
+			if (sz < sizeof(cmd.getWindowList))
+			{
+				printf("[gwmserver] GWM_CMD_GET_WINDOW_LIST command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.getWindowListResp.type = GWM_MSG_GET_WINDOW_LIST_RESP;
+			resp.getWindowListResp.seq = cmd.getWindowList.seq;
+			wndGetWindowList(&resp.getWindowListResp.focused, resp.getWindowListResp.wins, &resp.getWindowListResp.count);
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
+		else if (cmd.cmd == GWM_CMD_GET_WINDOW_PARAMS)
+		{
+			if (sz < sizeof(cmd.getWindowParams))
+			{
+				printf("[gwmserver] GWM_CMD_GET_WINDOW_PARAMS command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.getWindowParamsResp.type = GWM_MSG_GET_WINDOW_PARAMS_RESP;
+			resp.getWindowParamsResp.seq = cmd.getWindowParams.seq;
+			resp.getWindowParamsResp.status = wndGetWindowParams(&cmd.getWindowParams.ref, &resp.getWindowParamsResp.params);
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
+		else if (cmd.cmd == GWM_CMD_SET_LISTEN_WINDOW)
+		{
+			if (sz < sizeof(cmd.setListenWindow))
+			{
+				printf("[gwmserver] GWM_CMD_SET_LISTEN_WINDOW command too small\n");
+				break;
+			};
+			
+			Window *win = wltGet(wlt, cmd.setListenWindow.win);
+			if (win != NULL)
+			{
+				wndSetListenWindow(win);
+				wndDown(win);
+			};
+		}
+		else if (cmd.cmd == GWM_CMD_TOGGLE_WINDOW)
+		{
+			if (sz < sizeof(cmd.toggleWindow))
+			{
+				printf("[gwmserver] GWM_CMD_TOGGLE_WINDOW command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.toggleWindowResp.type = GWM_MSG_TOGGLE_WINDOW_RESP;
+			resp.toggleWindowResp.seq = cmd.toggleWindow.seq;
+			resp.toggleWindowResp.status = wndToggle(&cmd.toggleWindow.ref);
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
+		else if (cmd.cmd == GWM_CMD_ATOMIC_CONFIG)
+		{
+			if (sz < sizeof(cmd.atomicConfig))
+			{
+				printf("[gwmserver] GWM_CMD_ATOMIC_CONFIG command too small\n");
+				break;
+			};
+			
+			Window *win = wltGet(wlt, cmd.atomicConfig.win);
+			if (win != NULL)
+			{
+				int which = cmd.atomicConfig.which;
+				int oldX, oldY, newX, newY;
+				int shouldInvalidate = 1;
+				int oldEndX, oldEndY, newEndX, newEndY;
+				
+				if (win->decorated)
+				{
+					pthread_mutex_lock(&win->parent->lock);
+					
+					oldX = win->parent->params.x;
+					oldY = win->parent->params.y;
+					
+					if (which & GWM_AC_X)
+					{
+						win->parent->params.x = newX = cmd.atomicConfig.x;
+					}
+					else
+					{
+						newX = oldX;
+					};
+					
+					if (which & GWM_AC_Y)
+					{
+						win->parent->params.y = newY = cmd.atomicConfig.y;
+					}
+					else
+					{
+						newY = oldY;
+					};
+					
+					pthread_mutex_unlock(&win->parent->lock);
+				}
+				else
+				{
+					shouldInvalidate = !wndRelToAbs(win, 0, 0, &oldX, &oldY);
+					pthread_mutex_lock(&win->lock);
+					
+					if (which & GWM_AC_X) win->params.x = cmd.atomicConfig.x;
+					if (which & GWM_AC_Y) win->params.y = cmd.atomicConfig.y;
+					
+					pthread_mutex_unlock(&win->lock);
+					wndRelToAbs(win, 0, 0, &newX, &newY);
+				};
+				
+				// changing of width, height and canvas is independent of decoration
+				// scroll is indpent too of course
+				pthread_mutex_lock(&win->lock);
+				
+				oldEndX = oldX + win->params.width;
+				oldEndY = oldY + win->params.height;
+				
+				if (which & GWM_AC_WIDTH) win->params.width = cmd.atomicConfig.width;
+				if (which & GWM_AC_HEIGHT) win->params.height = cmd.atomicConfig.height;
+				
+				newEndX = newX + win->params.width;
+				newEndY = newY + win->params.height;
+				
+				if (which & GWM_AC_SCROLL_X) win->scrollX = cmd.atomicConfig.scrollX;
+				if (which & GWM_AC_SCROLL_Y) win->scrollY = cmd.atomicConfig.scrollY;
+				
+				if (which & GWM_AC_CANVAS)
+				{
+					DDISurface *newCanvas = ddiOpenSurface(cmd.atomicConfig.canvasID);
+					if (newCanvas != NULL)
+					{
+						ddiDeleteSurface(win->front);
+						ddiDeleteSurface(win->canvas);
+						win->canvas = newCanvas;
+						win->front = ddiCreateSurface(&screen->format, win->canvas->width,
+										win->canvas->height, (char*)newCanvas->data,
+										0);
+					};
+				};
+				
+				pthread_mutex_unlock(&win->lock);
+				
+				// update the decoration if needed
+				if (win->decorated)
+				{
+					if (which & (GWM_AC_WIDTH | GWM_AC_HEIGHT))
+					{
+						pthread_mutex_lock(&win->parent->lock);
+						
+						oldEndX = oldX + win->parent->params.x;
+						oldEndY = oldY + win->parent->params.y;
+						
+						if (which & GWM_AC_WIDTH)
+							win->parent->params.width = cmd.atomicConfig.width + 2 * WINDOW_BORDER_WIDTH;
+						if (which & GWM_AC_HEIGHT)
+							win->parent->params.height = cmd.atomicConfig.height + WINDOW_CAPTION_HEIGHT + WINDOW_BORDER_WIDTH;
+						
+						newEndX = newX + win->parent->params.width;
+						newEndY = newY + win->parent->params.height;
+						
+						ddiDeleteSurface(win->parent->canvas);
+						ddiDeleteSurface(win->parent->front);
+						
+						win->parent->canvas = ddiCreateSurface(&screen->format, win->parent->params.width, win->parent->params.height, NULL, 0);
+						win->parent->front = ddiCreateSurface(&screen->format, win->parent->params.width, win->parent->params.height, NULL, 0);
+						pthread_mutex_unlock(&win->parent->lock);
+						wndDecorate(win->parent, win);
+					};
+				};
+				
+				if (shouldInvalidate)
+				{
+					int invX = MIN(oldX, newX);
+					int invY = MIN(oldY, newY);
+					int endX = MAX(oldEndX, newEndX);
+					int endY = MAX(oldEndY, newEndY);
+					
+					wndInvalidate(invX, invY, endX - invX, endY - invY);
+				};
+
+				wndDown(win);
+			};
+		}
 		else if (cmd.cmd == GWM_CMD_REL_TO_ABS)
 		{
 			if (sz < sizeof(cmd.relToAbs))
@@ -412,6 +622,10 @@ void* clientThreadFunc(void *context)
 			resp.relToAbsResp.absX = absX;
 			resp.relToAbsResp.absY = absY;
 			write(sockfd, &resp, sizeof(GWMMessage));
+		}
+		else if (cmd.cmd == GWM_CMD_REDRAW_SCREEN)
+		{
+			wndInvalidate(0, 0, screen->width, screen->height);
 		}
 		else
 		{

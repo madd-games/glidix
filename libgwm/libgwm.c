@@ -96,11 +96,6 @@ static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 	sem_init(&waiter->lock, 0, 0);
 	
 	pthread_mutex_lock(&waiterLock);
-	//if (_glidix_mqsend(queueFD, guiPid, guiFD, cmd, sizeof(GWMCommand)) != 0)
-	//{
-	//	pthread_mutex_unlock(&waiterLock);
-	//	perror("_glidix_mqsend");
-	//};
 	if (write(queueFD, cmd, sizeof(GWMCommand)) != sizeof(GWMCommand))
 	{
 		pthread_mutex_unlock(&waiterLock);
@@ -121,7 +116,6 @@ static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 static void* listenThreadFunc(void *ignore)
 {
 	(void)ignore;
-	//queueFD = _glidix_mqclient(guiPid, guiFD);
 	char msgbuf[65536];
 	
 	// block all signals. we don't want signal handlers to be invoked in the GWM
@@ -134,8 +128,6 @@ static void* listenThreadFunc(void *ignore)
 	initFinished = 1;
 	while (1)
 	{
-		//_glidix_msginfo info;
-		//ssize_t size = _glidix_mqrecv(queueFD, &info, msgbuf, 65536);
 		ssize_t size = read(queueFD, msgbuf, 65536);
 		if (size == -1)
 		{
@@ -143,7 +135,6 @@ static void* listenThreadFunc(void *ignore)
 			else break;
 		};
 
-		//if (info.type == _GLIDIX_MQ_INCOMING)
 		if (size > 0)
 		{
 			if (size < sizeof(GWMMessage))
@@ -172,7 +163,6 @@ static void* listenThreadFunc(void *ignore)
 			}
 			else if (msg->generic.type == GWM_MSG_EVENT)
 			{
-				//printf("got event %d for window %lu\n", msg->event.payload.type, msg->event.payload.win);
 				EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
 				memcpy(&buf->payload, &msg->event.payload, sizeof(GWMEvent));
 				
@@ -190,8 +180,6 @@ static void* listenThreadFunc(void *ignore)
 					lastEvent = buf;
 				};
 				pthread_mutex_unlock(&eventLock);
-				//int one = 1;
-				//ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
 				sem_post(&semEventCounter);
 			};
 		}
@@ -210,13 +198,17 @@ int gwmInit()
 {
 	fsInit();
 	
-	int fd = open("/run/gwminfo", O_RDONLY);
+	int fileFlags = O_RDONLY;
+	if (geteuid() == 0) fileFlags = O_RDWR;
+	int fd = open("/run/gwminfo", fileFlags);
 	if (fd == -1)
 	{
 		return -1;
 	};
 	
-	gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), PROT_READ, MAP_SHARED, fd, 0);
+	int mapFlags = PROT_READ;
+	if (geteuid() == 0) mapFlags = PROT_READ | PROT_WRITE;
+	gwminfo = (GWMInfo*) mmap(NULL, sizeof(GWMInfo), mapFlags, MAP_SHARED, fd, 0);
 	
 	nextWindowID = 1;
 	nextSeq = 1;
@@ -343,6 +335,17 @@ void gwmQuit()
 	fsQuit();
 };
 
+static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
+{
+	switch (ev->type)
+	{
+	case GWM_EVENT_CLOSE:
+		return GWM_EVSTATUS_BREAK;
+	default:
+		return GWM_EVSTATUS_OK;
+	};
+};
+
 GWMWindow* gwmCreateWindow(
 	GWMWindow* parent,
 	const char *caption,
@@ -383,12 +386,13 @@ GWMWindow* gwmCreateWindow(
 		GWMWindow *win = (GWMWindow*) malloc(sizeof(GWMWindow));
 		win->id = id;
 		win->canvas = canvas;
-		win->handlerInfo = NULL;
 		win->lastClickTime = 0;
 		
 		win->modalID = 0;
 		if (parent != NULL) win->modalID = parent->modalID;
 		win->icon = NULL;
+		
+		gwmPushEventHandler(win, gwmDefaultHandler, NULL);
 		return win;
 	};
 	
@@ -410,17 +414,13 @@ void gwmDestroyWindow(GWMWindow *win)
 	cmd.destroyWindow.cmd = GWM_CMD_DESTROY_WINDOW;
 	cmd.destroyWindow.id = win->id;
 	
-	//if (_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand)) != 0)
-	//{
-	//	perror("_glidix_mqsend");
-	//	return;
-	//};
 	if (write(queueFD, &cmd, sizeof(GWMCommand)) != sizeof(GWMCommand))
 	{
 		perror("write(queueFD)");
 		return;
 	};
-	
+
+#if 0
 	if (win->handlerInfo != NULL)
 	{
 		GWMHandlerInfo *info = win->handlerInfo;
@@ -437,6 +437,22 @@ void gwmDestroyWindow(GWMWindow *win)
 			info->state = 2;
 		};
 	};
+#endif
+
+	GWMHandlerInfo *info = firstHandler;
+	while (info != NULL)
+	{
+		GWMHandlerInfo *next = info->next;
+		if (info->win == win)
+		{
+			if (info->prev != NULL) info->prev->next = info->next;
+			if (info->next != NULL) info->next->prev = info->prev;
+			if (firstHandler == info) firstHandler = info->next;
+			free(info);
+		};
+		
+		info = next;
+	};
 	
 	free(win);
 };
@@ -449,20 +465,14 @@ void gwmPostDirty(GWMWindow *win)
 	cmd.postDirty.cmd = GWM_CMD_POST_DIRTY;
 	cmd.postDirty.id = win->id;
 	cmd.postDirty.seq = seq;
-	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	write(queueFD, &cmd, sizeof(GWMCommand));
 	
 	GWMMessage resp;
 	gwmPostWaiter(seq, &resp, &cmd);
-	
-	//win->currentBuffer ^= 1;
-	//printf("buffer: %d\n", win->currentBuffer);
 };
 
 void gwmWaitEvent(GWMEvent *ev)
 {
-	//int one = 1;
-	//while (ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_WAIT, &one) == -1);
 	while (sem_wait(&semEventCounter) != 0);
 
 	pthread_mutex_lock(&eventLock);
@@ -501,12 +511,10 @@ void gwmPostUpdate(GWMWindow *win)
 		lastEvent = buf;
 	};
 	pthread_mutex_unlock(&eventLock);
-	//int one = 1;
-	//ioctl(eventCounterFD, _GLIDIX_IOCTL_SEMA_SIGNAL, &one);
 	sem_post(&semEventCounter);
 };
 
-void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler)
+void gwmPushEventHandler(GWMWindow *win, GWMEventHandler handler, void *context)
 {
 	GWMHandlerInfo *info = (GWMHandlerInfo*) malloc(sizeof(GWMHandlerInfo));
 	info->win = win;
@@ -514,20 +522,9 @@ void gwmSetEventHandler(GWMWindow *win, GWMEventHandler handler)
 	info->prev = NULL;
 	info->next = firstHandler;
 	info->state = 0;
+	info->context = context;
 	if (firstHandler != NULL) firstHandler->prev = info;
 	firstHandler = info;
-	win->handlerInfo = info;
-};
-
-int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win)
-{
-	switch (ev->type)
-	{
-	case GWM_EVENT_CLOSE:
-		return -1;
-	default:
-		return 0;
-	};
 };
 
 static void gwmModalLoop(uint64_t modalID)
@@ -544,7 +541,8 @@ static void gwmModalLoop(uint64_t modalID)
 			if ((ev.win == info->win->id) && (info->win->modalID == modalID))
 			{
 				info->state = 1;
-				if (info->callback(&ev, info->win) != 0)
+				int status = info->callback(&ev, info->win, info->context);
+				if (status == GWM_EVSTATUS_BREAK)
 				{
 					return;
 				}
@@ -552,7 +550,7 @@ static void gwmModalLoop(uint64_t modalID)
 				{
 					if (info->state == 1)
 					{
-						if ((ev.type == GWM_EVENT_UP) && (ev.scancode == GWM_SC_MOUSE_LEFT))
+						if ((ev.type == GWM_EVENT_UP) && (ev.keycode == GWM_KC_MOUSE_LEFT))
 						{
 							clock_t now = clock();
 							if (info->win->lastClickTime != 0)
@@ -562,11 +560,25 @@ static void gwmModalLoop(uint64_t modalID)
 									if ((info->win->lastClickX == ev.x)
 										&& (info->win->lastClickY == ev.y))
 									{
-										ev.type = GWM_EVENT_DOUBLECLICK;
-										if (info->callback(&ev, info->win) != 0)
+										// add a double-click event to queue
+										EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
+										memcpy(&buf->payload, &ev, sizeof(GWMEvent));
+										buf->payload.type = GWM_EVENT_DOUBLECLICK;
+										pthread_mutex_lock(&eventLock);
+										if (firstEvent == NULL)
 										{
-											return;
+											buf->prev = buf->next = NULL;
+											firstEvent = lastEvent = buf;
+										}
+										else
+										{
+											buf->prev = lastEvent;
+											buf->next = NULL;
+											lastEvent->next = buf;
+											lastEvent = buf;
 										};
+										pthread_mutex_unlock(&eventLock);
+										sem_post(&semEventCounter);
 									};
 								};
 							};
@@ -582,8 +594,9 @@ static void gwmModalLoop(uint64_t modalID)
 					{
 						free(info);
 					};
-					break;
 				};
+				
+				if (status == GWM_EVSTATUS_OK) break;
 			};
 		};
 	};
@@ -755,58 +768,47 @@ void gwmSetListenWindow(GWMWindow *win)
 	cmd.setListenWindow.seq = seq;
 	cmd.setListenWindow.win = win->id;
 	
-	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
-void gwmResizeWindow(GWMWindow *win, unsigned int width, unsigned int height)
+void gwmResizeWindow(GWMWindow *win, int width, int height)
 {
-	// TODO
-#if 0
 	DDIPixelFormat format;
-	memcpy(&format, &win->canvases[0]->format, sizeof(DDIPixelFormat));
+	memcpy(&format, &win->canvas->format, sizeof(DDIPixelFormat));
 	
+	// resize the canvas
+	DDISurface *newCanvas = ddiCreateSurface(&format, width, height, NULL, DDI_SHARED);
+	ddiFillRect(newCanvas, 0, 0, width, height, &gwmBackColor);
+	ddiBlit(win->canvas, 0, 0, newCanvas, 0, 0, win->canvas->width, win->canvas->height);
+	ddiDeleteSurface(win->canvas);
+	win->canvas = newCanvas;
+	
+	// send the configuration command
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
-	
 	GWMCommand cmd;
-	cmd.resize.cmd = GWM_CMD_RESIZE;
-	cmd.resize.seq = seq;
-	cmd.resize.win = win->id;
-	cmd.resize.width = width;
-	cmd.resize.height = height;
+	cmd.atomicConfig.cmd = GWM_CMD_ATOMIC_CONFIG;
+	cmd.atomicConfig.seq = seq;
+	cmd.atomicConfig.win = win->id;
+	cmd.atomicConfig.which = GWM_AC_WIDTH | GWM_AC_HEIGHT | GWM_AC_CANVAS;
+	cmd.atomicConfig.width = width;
+	cmd.atomicConfig.height = height;
+	cmd.atomicConfig.canvasID = newCanvas->id;
 	
-	GWMMessage resp;
-	gwmPostWaiter(seq, &resp, &cmd);
-	
-	if (resp.resizeResp.status == 0)
-	{
-		ddiDeleteSurface(win->canvases[0]);
-		ddiDeleteSurface(win->canvases[1]);
-		
-		win->canvases[0] = ddiOpenSurface(resp.resizeResp.clientID[0]);
-		win->canvases[1] = ddiOpenSurface(resp.resizeResp.clientID[1]);
-		
-		win->currentBuffer = 1;
-	}
-	else
-	{
-		abort();
-	};
-#endif
+	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
 void gwmMoveWindow(GWMWindow *win, int x, int y)
 {
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
-	
+
 	GWMCommand cmd;
-	cmd.move.cmd = GWM_CMD_MOVE;
-	cmd.move.seq = seq;
-	cmd.move.win = win->id;
-	cmd.move.x = x;
-	cmd.move.y = y;
+	cmd.atomicConfig.cmd = GWM_CMD_ATOMIC_CONFIG;
+	cmd.atomicConfig.seq = seq;
+	cmd.atomicConfig.win = win->id;
+	cmd.atomicConfig.which = GWM_AC_X | GWM_AC_Y;
+	cmd.atomicConfig.x = x;
+	cmd.atomicConfig.y = y;
 	
-	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
@@ -862,7 +864,6 @@ void gwmRedrawScreen()
 	GWMCommand cmd;
 	cmd.cmd = GWM_CMD_REDRAW_SCREEN;
 	
-	//_glidix_mqsend(queueFD, guiPid, guiFD, &cmd, sizeof(GWMCommand));
 	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
@@ -971,4 +972,12 @@ DDISurface* gwmGetFileIcon(const char *iconName, int size)
 	{
 		return cache->large;
 	};
+};
+
+void gwmRetheme()
+{
+	GWMCommand cmd;
+	cmd.cmd = GWM_CMD_RETHEME;
+	
+	write(queueFD, &cmd, sizeof(GWMCommand));
 };

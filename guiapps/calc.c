@@ -52,14 +52,14 @@ long lastNumber = 0;
 long currentNumber = 0;
 int selectedOp = OP_NONE;
 
-int myEventHandler(GWMEvent *ev, GWMWindow *win)
+int myEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
-		return -1;
+		return GWM_EVSTATUS_BREAK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -204,7 +204,7 @@ int main()
 	
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
 	
-	gwmSetEventHandler(win, myEventHandler);
+	gwmPushEventHandler(win, myEventHandler, NULL);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;

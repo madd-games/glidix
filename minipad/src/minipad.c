@@ -111,28 +111,28 @@ int onExit(void *ignore)
 		case 0:		/* yes */
 			if (openedFile == NULL)
 			{
-				if (doFileChoice() != 0) return 0;
+				if (doFileChoice() != 0) return GWM_EVSTATUS_OK;
 			};
-			if (doFileSave() == 0) return -1;
-			return 0;
+			if (doFileSave() == 0) return GWM_EVSTATUS_BREAK;
+			return GWM_EVSTATUS_OK;
 		case 1:		/* no */
-			return -1;
+			return GWM_EVSTATUS_BREAK;
 		case 2:		/* cancel */
-			return 0;
+			return GWM_EVSTATUS_OK;
 		};
 	};
 	
 	return -1;
 };
 
-int eventHandler(GWMEvent *ev, GWMWindow *win)
+int eventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
 		return onExit(NULL);
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -290,7 +290,7 @@ int main(int argc, char *argv[])
 	
 	gwmSetWindowFlags(topWindow, 0);
 	gwmSetWindowFlags(textArea, GWM_WINDOW_MKFOCUSED);
-	gwmSetEventHandler(topWindow, eventHandler);
+	gwmPushEventHandler(topWindow, eventHandler, NULL);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;

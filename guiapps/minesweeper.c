@@ -284,40 +284,40 @@ void rightClick(int x, int y)
 };
 
 
-int eventHandler(GWMEvent *ev, GWMWindow *win)
+int eventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
-		return -1;
+		return GWM_EVSTATUS_BREAK;
 	case GWM_EVENT_UP:
-		if ((ev->scancode == GWM_SC_MOUSE_LEFT) && (!gameOver))
+		if ((ev->keycode == GWM_KC_MOUSE_LEFT) && (!gameOver))
 		{
 			leftClick(ev->x, ev->y);
 			renderGame();
 		}
-		else if ((ev->scancode == GWM_SC_MOUSE_RIGHT) && (!gameOver))
+		else if ((ev->keycode == GWM_KC_MOUSE_RIGHT) && (!gameOver))
 		{
 			rightClick(ev->x, ev->y);
 			renderGame();
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UPDATE:
 		renderGame();
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
-int dialogHandler(GWMEvent *ev, GWMWindow *win)
+int dialogHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
-		return -1;
+		return GWM_EVSTATUS_BREAK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 	
 };
@@ -474,7 +474,7 @@ int onSettings(void *ignore)
 	
 	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, 4, canvas->width, 20, 0, 0, NULL);
 	
-	ddiWritePen(pen, "Width: \n\n Height: \n\n Mines:");
+	ddiWritePen(pen, "Width: \n\nHeight: \n\nMines:");
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
@@ -495,7 +495,7 @@ int onSettings(void *ignore)
 	GWMWindow *btnCancel = gwmCreateButton(dialog, "Cancel", 4+buttonWidth, 20*3+34, buttonWidth, 0);
 	gwmSetButtonCallback(btnCancel, inputCancel, dialog);
 	
-	gwmSetEventHandler(dialog, dialogHandler);
+	gwmPushEventHandler(dialog, dialogHandler, NULL);
 	
 	gwmRunModal(dialog, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOICON);
 
@@ -628,7 +628,7 @@ int main()
 	renderGame();
 	setupMenus();
 
-	gwmSetEventHandler(win, eventHandler);
+	gwmPushEventHandler(win, eventHandler, NULL);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
 	gwmMainLoop();
 	gwmQuit();

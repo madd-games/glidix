@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
 		
 		if (layoutOp == OP_CENTER)
 		{
-			ddiBlit(image, 0, 0, background, (background->width-image->width)/2, (background->height-image->height)/2, background->width, background->height);
+			ddiBlit(image, 0, 0, background, (background->width-image->width)/2, (background->height-image->height)/2, image->width, image->height);
 		}
 		else if (layoutOp == OP_SCALE)
 		{

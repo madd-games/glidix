@@ -64,7 +64,6 @@ int main()
 	
 	gwmNotebookSetTab(notebook, 0);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
-	gwmSetEventHandler(win, gwmDefaultHandler);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;

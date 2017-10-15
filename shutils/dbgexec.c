@@ -1,11 +1,11 @@
 /*
-	Glidix GUI
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
 	Redistribution and use in source and binary forms, with or without
-	modification, are permitted provided that the following conditions are met:
+	modification, are permitted provided that the following conditions are met, SIG_CORE);
 	
 	* Redistributions of source code must retain the above copyright notice, this
 	  list of conditions and the following disclaimer.
@@ -26,18 +26,41 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SCREEN_H
-#define SCREEN_H
+#define _GLIDIX_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <string.h>
+#include <errno.h>
 
-#include <libddi.h>
-#include <libgwm.h>
-
-extern DDISurface *frontBuffer;
-extern DDISurface *screen;
-extern DDISurface *desktopBackground;
-GWMInfo *gwminfo;
-
-DDISurface *imgWincap;
-DDISurface *imgWinbut;
-
-#endif
+int main(int argc, char *argv[])
+{
+	if (argc < 2)
+	{
+		fprintf(stderr, "USAGE:\t%s <command> <arguments...>\n", argv[0]);
+		fprintf(stderr, "\tExecute a command while setting up signals to make core dumps\n");
+		return 1;
+	};
+	
+	signal(SIGHUP, SIG_CORE);
+	signal(SIGINT, SIG_CORE);
+	signal(SIGQUIT, SIG_CORE);
+	signal(SIGILL, SIG_CORE);
+	signal(SIGABRT, SIG_CORE);
+	signal(SIGFPE, SIG_CORE);
+	signal(SIGSEGV, SIG_CORE);
+	signal(SIGPIPE, SIG_CORE);
+	signal(SIGALRM, SIG_CORE);
+	signal(SIGTERM, SIG_CORE);
+	signal(SIGUSR1, SIG_CORE);
+	signal(SIGUSR2, SIG_CORE);
+	signal(SIGBUS, SIG_CORE);
+	signal(SIGSYS, SIG_CORE);
+	
+	const char *progName = argv[0];
+	argv[0] = "env";
+	execv("/usr/bin/env", argv);
+	fprintf(stderr, "%s: cannot exec /usr/bin/env: %s\n", progName, strerror(errno));
+	return 1;
+};

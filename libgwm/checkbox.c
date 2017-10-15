@@ -80,7 +80,7 @@ static void gwmRedrawCheckbox(GWMWindow *checkbox)
 	gwmPostDirty(checkbox);
 };
 
-int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox)
+int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox, void *context)
 {
 	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
 	
@@ -89,20 +89,20 @@ int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox)
 	case GWM_EVENT_ENTER:
 		data->mstate = CB_MSTATE_HOVERING;
 		gwmRedrawCheckbox(checkbox);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		data->mstate = CB_MSTATE_NORMAL;
 		gwmRedrawCheckbox(checkbox);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			data->mstate = CB_MSTATE_CLICKED;
 			gwmRedrawCheckbox(checkbox);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if (data->mstate == CB_MSTATE_CLICKED)
 			{
@@ -118,9 +118,9 @@ int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox)
 			};
 			gwmRedrawCheckbox(checkbox);
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, checkbox);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -137,7 +137,7 @@ GWMWindow *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int fla
 	data->mstate = CB_MSTATE_NORMAL;
 	
 	gwmRedrawCheckbox(checkbox);
-	gwmSetEventHandler(checkbox, gwmCheckboxHandler);
+	gwmPushEventHandler(checkbox, gwmCheckboxHandler, NULL);
 	return checkbox;
 };
 

@@ -119,7 +119,7 @@ static void redrawMenu(GWMMenu *menu, int selectPos)
 	gwmPostDirty(menu->win);
 };
 
-static int menuEventHandler(GWMEvent *ev, GWMWindow *win)
+static int menuEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	GWMMenu *menu = (GWMMenu*) win->data;
 	int i;
@@ -160,19 +160,19 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win)
 		{
 			menu->selectedSub = -1;
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		redrawMenu(menu, menu->selectedSub);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_FOCUS_OUT:
 		menu->focused = 0;
 		if (menu->selectedSub == -1) gwmCloseMenu(menu);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_FOCUS_IN:
 		menu->focused = 1;
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			gwmCloseMenu(menu);
 			i = ev->y/MENU_ENTRY_HEIGHT;
@@ -184,9 +184,9 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win)
 				};
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, win);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -233,7 +233,7 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 	
 	if (menu->numEntries == 0) menuHeight = 10;
 	
-	menu->win = gwmCreateWindow(NULL, "GWMMenu", x, y, MENU_WIDTH, menuHeight, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
+	menu->win = gwmCreateWindow(NULL, "GWMMenu", x, y, MENU_WIDTH, menuHeight, GWM_WINDOW_NODECORATE | GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	if (menu->win == NULL)
 	{
 		return;
@@ -287,7 +287,7 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 	menu->focused = 1;
 	gwmPostDirty(menu->win);
 	gwmSetWindowFlags(menu->win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NODECORATE);
-	gwmSetEventHandler(menu->win, menuEventHandler);
+	gwmPushEventHandler(menu->win, menuEventHandler, NULL);
 };
 
 void gwmCloseMenu(GWMMenu *menu)

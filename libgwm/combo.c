@@ -90,7 +90,7 @@ static void redrawCombo(GWMWindow *combo)
 	gwmPostDirty(combo);
 };
 
-static int comboHandler(GWMEvent *ev, GWMWindow *combo)
+static int comboHandler(GWMEvent *ev, GWMWindow *combo, void *context)
 {
 	ComboData *data = (ComboData*) combo->data;
 	
@@ -113,13 +113,13 @@ static int comboHandler(GWMEvent *ev, GWMWindow *combo)
 			};
 		};
 		redrawCombo(combo);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		if (data->state != COMBO_DOWN) data->state = COMBO_NORMAL;
 		redrawCombo(combo);
-		return 0;
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
-		if (ev->scancode == GWM_SC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			if ((data->flags & GWM_COMBO_DISABLED) == 0)
 			{
@@ -128,9 +128,9 @@ static int comboHandler(GWMEvent *ev, GWMWindow *combo)
 				gwmOpenMenu(data->options, combo, 0, COMBO_HEIGHT-1);
 			};
 		};
-		return 0;
+		return GWM_EVSTATUS_OK;
 	default:
-		return gwmDefaultHandler(ev, combo);
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -173,7 +173,7 @@ GWMWindow* gwmCreateCombo(GWMWindow *parent, const char *text, int x, int y, int
 	
 	combo->data = data;
 	redrawCombo(combo);
-	gwmSetEventHandler(combo, comboHandler);
+	gwmPushEventHandler(combo, comboHandler, NULL);
 	return combo;
 };
 
