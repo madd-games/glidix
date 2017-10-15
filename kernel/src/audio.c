@@ -28,11 +28,14 @@
 
 #include <glidix/audio.h>
 #include <glidix/memory.h>
+#include <glidix/sched.h>
+#include <glidix/string.h>
 
-static AudioAppBuffer* 	firstBuffer;
+//static AudioAppBuffer* 	firstBuffer;
 static AudioOutput* 	currentOut;
 static AudioOutput*	firstOut;
 static Semaphore	semOutputList;
+static Semaphore	semSamplesToMix;
 
 AudioOutput* audioCreateOutput(AudioStream* audioStream)
 {
@@ -47,7 +50,7 @@ AudioOutput* audioCreateOutput(AudioStream* audioStream)
 	semSignal(&semOutputList);
 	
 	return device;
-}
+};
 
 void audioDeleteOutput(AudioOutput* device)
 {
@@ -58,9 +61,46 @@ void audioDeleteOutput(AudioOutput* device)
 	semSignal(&semOutputList);
 	
 	kfree(device);
-}
+};
+
+void audioMixerThread()
+{
+	while(1)
+	{
+		int samplesToMix = semWaitGen(&semSamplesToMix, 100, 0, 0);
+		semWait(&semOutputList);
+		while(samplesToMix--)
+		{
+			if(currentOut != NULL)
+			{
+				
+				if(currentOut->audioStream->bitsPSample == 8)
+				{
+					uint8_t *ptr = (uint8_t*) currentOut->audioStream->buffer + currentOut->audioStream->head;
+					if(currentOut->audioStream->head%2) ptr[currentOut->audioStream->head] = 0;
+					else ptr[currentOut->audioStream->head] = 0xFF;
+				}
+				if(currentOut->audioStream->bitsPSample == 16)
+				{
+					uint16_t *ptr = (uint16_t*) currentOut->audioStream->buffer + currentOut->audioStream->head;
+					if(currentOut->audioStream->head%2) ptr[currentOut->audioStream->head] = 0;
+					else ptr[currentOut->audioStream->head] = 0xFFFF;
+				}
+				currentOut->audioStream->head = (currentOut->audioStream->head + 1) % currentOut->audioStream->nOfSamples;
+			}
+		}
+		semSignal(&semOutputList);
+	}
+};
 
 void audioInit()
 {
 	semInit(&semOutputList);
-}
+	semInit2(&semSamplesToMix, 0);
+	
+	KernelThreadParams pars;
+	memset(&pars, 0, sizeof(KernelThreadParams));
+	pars.name = "Audio Mixer Thread";
+	pars.stackSize = DEFAULT_STACK_SIZE;
+	CreateKernelThread(audioMixerThread, &pars, NULL);
+};

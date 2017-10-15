@@ -58,7 +58,7 @@ typedef struct
 	int nOfChannels;
 	
 	/**
-	 * Head of the buffer.
+	 * Head of the buffer, in samples.
 	 */
 	off_t head;
 	
