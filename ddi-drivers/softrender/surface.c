@@ -101,7 +101,7 @@ static uint8_t* ddiCreateSharedFile(uint32_t *idOut, DDISurface *target)
 					PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x1000);
 		close(fd);
 		
-		if (result == MAP_FAILED)
+		if (result == MAP_FAILED && target->width != 0 && target->height != 0)
 		{
 			return NULL;
 		};
@@ -118,10 +118,6 @@ int srCreateSurface(void *drvctx, DDISurface *surface, char *data)
 	if (surface->flags & DDI_SHARED)
 	{
 		surface->data = ddiCreateSharedFile(&surface->id, surface);
-		if (surface->data == NULL)
-		{
-			return -1;
-		};
 	}
 	else
 	{

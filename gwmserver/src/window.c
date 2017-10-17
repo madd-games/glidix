@@ -548,6 +548,28 @@ static void wndInvalidateWalk(Window *wnd, int cornerX, int cornerY, int invX, i
 
 void wndInvalidate(int x, int y, int width, int height)
 {
+	if (x < 0)
+	{
+		width += x;
+		x = 0;
+	};
+	
+	if (y < 0)
+	{
+		height += y;
+		y = 0;
+	};
+	
+	if ((x+width) > screen->width)
+	{
+		width = screen->width - x;
+	};
+	
+	if ((y+height) > screen->height)
+	{
+		height = screen->height - y;
+	};
+	
 	pthread_mutex_lock(&wincacheLock);
 	int cursor = 0;
 	if (wndHovering != NULL) cursor = wndHovering->cursor;

@@ -364,6 +364,24 @@ typedef struct
 } GWMWindowParams;
 
 /**
+ * Flags for the box layout.
+ */
+#define	GWM_BOX_HORIZONTAL			0		/* horizontal by default */
+#define	GWM_BOX_VERTICAL			(1 << 0)	/* vertical with this flag */
+#define	GWM_BOX_INCLUDE_HIDDEN			(1 << 1)	/* include hidden children in calculation */
+
+/**
+ * Flags for a box layout child.
+ */
+#define	GWM_BOX_LEFT				(1 << 0)	/* border on left side */
+#define	GWM_BOX_RIGHT				(1 << 1)	/* border on right side */
+#define	GWM_BOX_UP				(1 << 2)	/* border on up side */
+#define	GWM_BOX_DOWN				(1 << 3)	/* border on down side */
+#define	GWM_BOX_FILL				(1 << 4)	/* fill allocated space on parallel axis */
+
+#define	GWM_BOX_ALL				0xF		/* border in all directions */
+
+/**
  * Flags for @keymod.
  */
 #define	GWM_KM_CTRL				(1 << 0)
@@ -374,7 +392,31 @@ typedef struct
 #define	GWM_KM_SCROLL_LOCK			(1 << 5)
 
 /**
- * Event structure.
+ * Symbols. Used to mark widgets with a common function. The symbol 0 is reserved (GWM_SYM_NONE).
+ * When bit 24 is set, it indicates a user-defined symbol. So all user-defined symbols must use
+ * symbols larger than or equal to GWM_SYM_USER.
+ */
+#define	GWM_SYM_USER				(1 << 24)
+
+/**
+ * Built-in symbols.
+ */
+#define	GWM_SYM_NONE				0
+#define	GWM_SYM_OK				1
+#define	GWM_SYM_CANCEL				2
+#define	GWM_SYM_YES				3
+#define	GWM_SYM_NO				4
+
+/**
+ * Starting numbers for event classes.
+ * When bit 24 is set, the event is cascading.
+ * When bit 25 is set, the event is user-defined (otherwise libgwm built-in).
+ */
+#define	GWM_EVENT_CASCADING			(1 << 24)
+#define	GWM_EVENT_USER				(1 << 25)
+
+/**
+ * Built-in events.
  */
 #define	GWM_EVENT_CLOSE				0
 #define	GWM_EVENT_DOWN				1
@@ -388,6 +430,18 @@ typedef struct
 #define	GWM_EVENT_DESKTOP_UPDATE		9
 #define	GWM_EVENT_RESIZE_REQUEST		10
 #define	GWM_EVENT_DOUBLECLICK			11
+
+/**
+ * Cascading events.
+ */
+#define	GWM_EVENT_COMMAND			(GWM_EVENT_CASCADING + 1)
+
+/**
+ * General event structure.
+ * NOTE: This structure must not be edited, for binary compatibility reasons.
+ * It may sometimes be cast to other types, such as GWMCommandEvent, depending on
+ * the 'type' field.
+ */
 typedef struct
 {
 	int					type;
@@ -401,6 +455,15 @@ typedef struct
 	unsigned int 				width;		// requested window dimensions (for GWM_EVENT_RESIZE_REQUEST)
 	unsigned int				height;
 } GWMEvent;
+
+/**
+ * Command event structure. Aliased from GWMEvent when 'type' is GWM_EVENT_COMMAND.
+ */
+typedef struct
+{
+	GWMEvent				header;
+	int					symbol;		// command symbol
+} GWMCommandEvent;
 
 /**
  * Global window reference - uniquely identifies a window on the screen, which may belong
@@ -732,14 +795,36 @@ typedef struct GWMHandlerInfo_
 	struct GWMHandlerInfo_			*prev;
 	struct GWMHandlerInfo_			*next;
 	void*					context;
+	int					refcount;
+} GWMHandlerInfo;
+
+/**
+ * Represents an abstract layout manager.
+ */
+typedef struct GWMLayout_ GWMLayout;
+struct GWMLayout_
+{
+	/**
+	 * Layout-specific data.
+	 */
+	void*					data;
 	
 	/**
-	 * 0 = handler not being executed
-	 * 1 = handler being executed
-	 * 2 = handler being executed and window was deleted.
+	 * Get the minimum size allowable by the layout.
 	 */
-	int					state;
-} GWMHandlerInfo;
+	void (*getMinSize)(GWMLayout *layout, int *width, int *height);
+	
+	/**
+	 * Get the preferred size of the layout. This is the one that will be set by gwmFit().
+	 */
+	void (*getPrefSize)(GWMLayout *layout, int *width, int *height);
+	
+	/**
+	 * Trigger the layout. Move the contents to the specified position, and give them the
+	 * specified size. Also trigger the layout of any children.
+	 */
+	void (*run)(GWMLayout *layout, int x, int y, int width, int height);
+};
 
 /**
  * Describes a window on the application side.
@@ -764,6 +849,39 @@ typedef struct GWMWindow_
 	 * Icon surface.
 	 */
 	DDISurface*				icon;
+	
+	/**
+	 * Parent window. Normally this is the actual parent in the window hierarchy, but sometimes
+	 * it is instead the principle parent, e.g. for menus. Used for cascading events.
+	 */
+	struct GWMWindow_*			parent;
+	
+	/**
+	 * Layout of the window (NULL indicating absolute positioning).
+	 */
+	GWMLayout*				layout;
+	
+	/**
+	 * Called when the window is to be position by its parent layout manager. This function specifies
+	 * the position and requested size of the window. The function may center the widget if it can't
+	 * be expanded to the full requested size. If this function is NULL, centering happens by default.
+	 * The layout manager of this widget is executed only if this function is not NULL though.
+	 */
+	void (*position)(struct GWMWindow_ *win, int x, int y, int width, int height);
+	
+	/**
+	 * Get the minimum or preferred size of the window. If either of these functions is defined, both must
+	 * be. If nethier are defined (NULL) then:
+	 *  - If a layout manager for this window is specified, it is used to compute the sizes.
+	 *  - Otherwise, the width and height of the window are used as both.
+	 */
+	void (*getMinSize)(struct GWMWindow_ *win, int *width, int *height);
+	void (*getPrefSize)(struct GWMWindow_ *win, int *width, int *height);
+	
+	/**
+	 * Current window flags set by libgwm.
+	 */
+	int					flags;
 } GWMWindow;
 
 /**
@@ -950,6 +1068,13 @@ int gwmInit();
 void gwmQuit();
 
 /**
+ * Post an event to the given window. Returns the final event status:
+ *	GWM_EVSTATUS_OK if all handlers returned GWM_EVSTATUS_OK or GWM_EVSTATUS_CONT
+ *	GWM_EVSTATUS_BREAK if some handler returned it
+ */
+int gwmPostEvent(GWMEvent *ev, GWMWindow *win);
+
+/**
  * Creates a new window. On success, returns a window handle; on error, returns NULL.
  */
 GWMWindow* gwmCreateWindow(
@@ -1006,9 +1131,19 @@ void gwmMainLoop();
 GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
 
 /**
+ * Create a stock button with the given symbol.
+ */
+GWMWindow* gwmCreateStockButton(GWMWindow *parent, int symbol);
+
+/**
  * Destroys a button.
  */
 void gwmDestroyButton(GWMWindow *button);
+
+/**
+ * Set the symbol of a button.
+ */
+void gwmSetButtonSymbol(GWMWindow *button, int symbol);
 
 /**
  * Set the callback function for a button. Return value is the same as for event handlers.
@@ -1626,5 +1761,60 @@ void* gwmGetThemeProp(const char *name, int type, int *errOut);
  * Inform all applications and the window manager that the theme has changed.
  */
 void gwmRetheme();
+
+/**
+ * Create an abstract layout manager. Typically only used internally by functions like gwmCreateBoxLayout()
+ * etc. A layout created using this function is to be destroyed with gwmDestroyAbstractLayout().
+ * Typically you want to use a type-specific creation (and destruction) functions like gwmCreateBoxLayout()
+ * and gwmDestroyBoxLayout() instead.
+ *
+ * All fields are initially set to NULL. You *MUST* set all calculation functions before using the layout;
+ * failure to do so results in undefined behaviour (typically NULL references).
+ */
+GWMLayout* gwmCreateAbstractLayout();
+
+/**
+ * Destroy an abstract layout. Note that you should always use the type-specific destruction function - for
+ * example if you created the layout with gwmCreateBoxLayout(), it must be destroyed with gwmDestroyBoxLayout().
+ */
+void gwmDestroyAbstractLayout(GWMLayout *layout);
+
+/**
+ * Calculate the preffered size of the layout of the given window, resize the window to the preffered size, and
+ * lay out all the children. This should be called when layouts have been set up and the window is soon to be
+ * presented.
+ */
+void gwmFit(GWMWindow *win);
+
+/**
+ * Set the layout manager for a window.
+ */
+void gwmSetWindowLayout(GWMWindow *win, GWMLayout *layout);
+
+/**
+ * Create a box layout. The flags must be one of the following:
+ *	GWM_BOX_HORIZONTAL - lay out children horizontally
+ *	GWM_BOX_VERTICAL - lay out children vertically
+ * You may also bitwise-OR zero or more of the following into it:
+ *	GWM_BOX_INCLUDE_HIDDEN - allocate space for hidden children (not done by default).
+ */
+GWMLayout* gwmCreateBoxLayout(int flags);
+
+/**
+ * Destroy a box layout. It must not be currently assigned to any window (the window must be destroyed, or its
+ * layout set to NULL or something else).
+ */
+void gwmDestroyBoxLayout(GWMLayout *layout);
+
+/**
+ * Add a window to a box layout.
+ */
+void gwmBoxLayoutAddWindow(GWMLayout *box, GWMWindow *win, int proportion, int border, int flags);
+
+/**
+ * Given a stock symbol, return its label (in the correct language).
+ * Returns "??" for invalid labels.
+ */
+const char *gwmGetStockLabel(int symbol);
 
 #endif

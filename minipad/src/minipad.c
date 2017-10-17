@@ -122,7 +122,7 @@ int onExit(void *ignore)
 		};
 	};
 	
-	return -1;
+	return GWM_EVSTATUS_BREAK;
 };
 
 int eventHandler(GWMEvent *ev, GWMWindow *win, void *context)

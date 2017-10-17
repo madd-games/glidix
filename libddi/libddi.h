@@ -187,8 +187,8 @@ typedef struct
 	/**
 	 * Image parameters.
 	 */
-	unsigned int				width;
-	unsigned int				height;
+	int					width;
+	int					height;
 	unsigned int				flags;
 	
 	/**

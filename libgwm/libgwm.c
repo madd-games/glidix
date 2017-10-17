@@ -342,6 +342,10 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	case GWM_EVENT_CLOSE:
 		return GWM_EVSTATUS_BREAK;
 	default:
+		if (ev->type & GWM_EVENT_CASCADING)
+		{
+			if (win->parent != NULL) return gwmPostEvent(ev, win->parent);
+		};
 		return GWM_EVSTATUS_OK;
 	};
 };
@@ -392,6 +396,13 @@ GWMWindow* gwmCreateWindow(
 		if (parent != NULL) win->modalID = parent->modalID;
 		win->icon = NULL;
 		
+		win->parent = parent;
+		win->layout = NULL;
+		win->position = NULL;
+		win->getMinSize = NULL;
+		win->getPrefSize = NULL;
+		win->flags = flags;
+		
 		gwmPushEventHandler(win, gwmDefaultHandler, NULL);
 		return win;
 	};
@@ -404,6 +415,11 @@ GWMWindow* gwmCreateWindow(
 DDISurface* gwmGetWindowCanvas(GWMWindow *win)
 {
 	return win->canvas;
+};
+
+static void gwmHandlerDecref(GWMHandlerInfo *info)
+{
+	if (--info->refcount == 0) free(info);
 };
 
 void gwmDestroyWindow(GWMWindow *win)
@@ -420,25 +436,6 @@ void gwmDestroyWindow(GWMWindow *win)
 		return;
 	};
 
-#if 0
-	if (win->handlerInfo != NULL)
-	{
-		GWMHandlerInfo *info = win->handlerInfo;
-		if (info->prev != NULL) info->prev->next = info->next;
-		if (info->next != NULL) info->next->prev = info->prev;
-		if (firstHandler == info) firstHandler = info->next;
-		
-		if (info->state == 0)
-		{
-			free(info);
-		}
-		else
-		{
-			info->state = 2;
-		};
-	};
-#endif
-
 	GWMHandlerInfo *info = firstHandler;
 	while (info != NULL)
 	{
@@ -448,7 +445,8 @@ void gwmDestroyWindow(GWMWindow *win)
 			if (info->prev != NULL) info->prev->next = info->next;
 			if (info->next != NULL) info->next->prev = info->prev;
 			if (firstHandler == info) firstHandler = info->next;
-			free(info);
+			info->win = NULL;
+			gwmHandlerDecref(info);
 		};
 		
 		info = next;
@@ -521,84 +519,91 @@ void gwmPushEventHandler(GWMWindow *win, GWMEventHandler handler, void *context)
 	info->callback = handler;
 	info->prev = NULL;
 	info->next = firstHandler;
-	info->state = 0;
 	info->context = context;
+	info->refcount = 1;
 	if (firstHandler != NULL) firstHandler->prev = info;
 	firstHandler = info;
+};
+
+static int gwmPostEventByWindowID(GWMEvent *ev, uint64_t modalID)
+{
+	GWMHandlerInfo *info;
+	for (info=firstHandler; info!=NULL; info=info->next)
+	{
+		if ((ev->win == info->win->id) && (info->win->modalID == modalID))
+		{
+			info->refcount++;
+			int status = info->callback(ev, info->win, info->context);
+			if (status == GWM_EVSTATUS_BREAK)
+			{
+				gwmHandlerDecref(info);
+				return GWM_EVSTATUS_BREAK;
+			}
+			else if (info->win != NULL) // info->win may be set to NULL by callback() if the window was destroyed.
+			{
+				if ((ev->type == GWM_EVENT_UP) && (ev->keycode == GWM_KC_MOUSE_LEFT))
+				{
+					clock_t now = clock();
+					if (info->win->lastClickTime != 0)
+					{
+						if ((now-info->win->lastClickTime) <= GWM_DOUBLECLICK_TIMEOUT)
+						{
+							if ((info->win->lastClickX == ev->x)
+								&& (info->win->lastClickY == ev->y))
+							{
+								// add a double-click event to queue
+								EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
+								memcpy(&buf->payload, ev, sizeof(GWMEvent));
+								buf->payload.type = GWM_EVENT_DOUBLECLICK;
+								pthread_mutex_lock(&eventLock);
+								if (firstEvent == NULL)
+								{
+									buf->prev = buf->next = NULL;
+									firstEvent = lastEvent = buf;
+								}
+								else
+								{
+									buf->prev = lastEvent;
+									buf->next = NULL;
+									lastEvent->next = buf;
+									lastEvent = buf;
+								};
+								pthread_mutex_unlock(&eventLock);
+								sem_post(&semEventCounter);
+							};
+						};
+					};
+			
+					info->win->lastClickX = ev->x;
+					info->win->lastClickY = ev->y;
+					info->win->lastClickTime = now;
+				};
+			};
+			
+			GWMWindow *winWas = info->win;
+			gwmHandlerDecref(info);
+			if (status == GWM_EVSTATUS_OK) break;
+			if (winWas == NULL) break;
+		};
+	};
+	
+	return GWM_EVSTATUS_OK;
+};
+
+int gwmPostEvent(GWMEvent *ev, GWMWindow *win)
+{
+	ev->win = win->id;
+	return gwmPostEventByWindowID(ev, win->modalID);
 };
 
 static void gwmModalLoop(uint64_t modalID)
 {
 	GWMEvent ev;
-	GWMHandlerInfo *info;
 	
 	while (1)
 	{
 		gwmWaitEvent(&ev);
-		
-		for (info=firstHandler; info!=NULL; info=info->next)
-		{
-			if ((ev.win == info->win->id) && (info->win->modalID == modalID))
-			{
-				info->state = 1;
-				int status = info->callback(&ev, info->win, info->context);
-				if (status == GWM_EVSTATUS_BREAK)
-				{
-					return;
-				}
-				else
-				{
-					if (info->state == 1)
-					{
-						if ((ev.type == GWM_EVENT_UP) && (ev.keycode == GWM_KC_MOUSE_LEFT))
-						{
-							clock_t now = clock();
-							if (info->win->lastClickTime != 0)
-							{
-								if ((now-info->win->lastClickTime) <= GWM_DOUBLECLICK_TIMEOUT)
-								{
-									if ((info->win->lastClickX == ev.x)
-										&& (info->win->lastClickY == ev.y))
-									{
-										// add a double-click event to queue
-										EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
-										memcpy(&buf->payload, &ev, sizeof(GWMEvent));
-										buf->payload.type = GWM_EVENT_DOUBLECLICK;
-										pthread_mutex_lock(&eventLock);
-										if (firstEvent == NULL)
-										{
-											buf->prev = buf->next = NULL;
-											firstEvent = lastEvent = buf;
-										}
-										else
-										{
-											buf->prev = lastEvent;
-											buf->next = NULL;
-											lastEvent->next = buf;
-											lastEvent = buf;
-										};
-										pthread_mutex_unlock(&eventLock);
-										sem_post(&semEventCounter);
-									};
-								};
-							};
-						
-							info->win->lastClickX = ev.x;
-							info->win->lastClickY = ev.y;
-							info->win->lastClickTime = now;
-						};
-					
-						info->state = 0;
-					}
-					else
-					{
-						free(info);
-					};
-				};
-				
-				if (status == GWM_EVSTATUS_OK) break;
-			};
-		};
+		if (gwmPostEventByWindowID(&ev, modalID) == GWM_EVSTATUS_BREAK) break;
 	};
 };
 
@@ -634,6 +639,11 @@ int gwmSetWindowFlags(GWMWindow *win, int flags)
 	
 	GWMMessage resp;
 	gwmPostWaiter(seq, &resp, &cmd);
+	
+	if (resp.setFlagsResp.status == 0)
+	{
+		win->flags = flags;
+	};
 	
 	return resp.setFlagsResp.status;
 };

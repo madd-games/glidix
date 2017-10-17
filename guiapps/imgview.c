@@ -57,7 +57,7 @@ DDISurface *makeCheckerboard(DDIPixelFormat *format, int width, int height)
 	{
 		for (x=0; x<width; x+=8)
 		{
-			int index = (x & 1) ^ (y & 1);
+			int index = ((x >> 3) & 1) ^ ((y >> 3) & 1);
 			ddiFillRect(board, x, y, 8, 8, &colors[index]);
 		};
 	};

@@ -32,7 +32,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define	BUTTON_MIN_WIDTH	20
 #define	BUTTON_HEIGHT		30
 
 enum
@@ -51,13 +50,16 @@ typedef struct
 	int			state;
 	GWMButtonCallback	callback;
 	void			*callbackParam;
+	int			symbol;
+	int			prefWidth;
 } GWMButtonData;
 
 static void gwmRedrawButton(GWMWindow *button)
 {
 	GWMButtonData *data = (GWMButtonData*) button->data;
 	DDISurface *canvas = gwmGetWindowCanvas(button);
-	
+	if (canvas->width == 0 && data->prefWidth != 0) return;
+
 	static DDIColor transparent = {0, 0, 0, 0};
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
 	
@@ -90,6 +92,7 @@ static void gwmRedrawButton(GWMWindow *button)
 	
 	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height-11, 0, 0, NULL);
 	ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);
+	ddiSetPenWrap(pen, 0);
 	ddiWritePen(pen, data->text);
 	
 	int txtWidth, txtHeight;
@@ -98,6 +101,7 @@ static void gwmRedrawButton(GWMWindow *button)
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
+	data->prefWidth = txtWidth + 16;
 	gwmPostDirty(button);
 };
 
@@ -148,13 +152,36 @@ int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
 	};
 };
 
+static int defaultButtonCallback(void *context)
+{
+	GWMWindow *button = (GWMWindow*) context;
+	GWMButtonData *data = (GWMButtonData*) button->data;
+	
+	GWMCommandEvent event;
+	memset(&event, 0, sizeof(GWMCommandEvent));
+	event.header.type = GWM_EVENT_COMMAND;
+	event.symbol = data->symbol;
+	
+	return gwmPostEvent((GWMEvent*) &event, button);
+};
+
+static void gwmSizeButton(GWMWindow *button, int *width, int *height)
+{
+	GWMButtonData *data = (GWMButtonData*) button->data;
+	*width = data->prefWidth;
+	*height = BUTTON_HEIGHT;
+};
+
+static void gwmPositionButton(GWMWindow *button, int x, int y, int width, int height)
+{
+	y += (BUTTON_HEIGHT - height) / 2;
+	gwmMoveWindow(button, x, y);
+	gwmResizeWindow(button, width, BUTTON_HEIGHT);
+	gwmRedrawButton(button);
+};
+
 GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, int width, int flags)
 {
-	if (width < BUTTON_MIN_WIDTH)
-	{
-		width = BUTTON_MIN_WIDTH;
-	};
-	
 	GWMWindow *button = gwmCreateWindow(parent, "GWMButton", x, y, width, BUTTON_HEIGHT, 0);
 	if (button == NULL) return NULL;
 	
@@ -164,11 +191,23 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
 	data->text = strdup(text);
 	data->flags = flags;
 	data->state = BUTTON_STATE_NORMAL;
-	data->callback = NULL;
+	data->callback = defaultButtonCallback;
+	data->callbackParam = button;
+	data->symbol = 0;
+	data->prefWidth = 0;
+	
+	button->getMinSize = button->getPrefSize = gwmSizeButton;
+	button->position = gwmPositionButton;
 	
 	gwmRedrawButton(button);
 	gwmPushEventHandler(button, gwmButtonHandler, NULL);
 	return button;
+};
+
+void gwmSetButtonSymbol(GWMWindow *button, int symbol)
+{
+	GWMButtonData *data = (GWMButtonData*) button->data;
+	data->symbol = symbol;
 };
 
 void gwmDestroyButton(GWMWindow *button)
@@ -184,4 +223,9 @@ void gwmSetButtonCallback(GWMWindow *button, GWMButtonCallback callback, void *p
 	GWMButtonData *data = (GWMButtonData*) button->data;
 	data->callback = callback;
 	data->callbackParam = param;
+};
+
+GWMWindow* gwmCreateStockButton(GWMWindow *parent, int symbol)
+{
+	return gwmCreateButton(parent, gwmGetStockLabel(symbol), 0, 0, 0, 0);
 };
