@@ -248,4 +248,11 @@ void wndDesktopUpdate();
  */
 int wndToggle(GWMGlobWinRef *ref);
 
+/**
+ * Take a screenshot of a window, given its global reference. The screenshot is drawn at (0, 0) on the given
+ * surface, and the actual dimensions of the window are returned in the given pointers. Returns 0 on success,
+ * or a GWM error number in case of an error (such as a non-existent window).
+ */
+int wndScreenshot(DDISurface *target, GWMGlobWinRef *ref, int *outWidth, int *outHeight);
+
 #endif

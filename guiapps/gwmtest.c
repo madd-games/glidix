@@ -49,6 +49,19 @@ int main()
 
 	gwmFit(win);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
+	
+	GWMGlobWinRef ref;
+	gwmGetGlobRef(win, &ref);
+	DDISurface *shot = gwmScreenshotWindow(&ref);
+	if (shot == NULL)
+	{
+		fprintf(stderr, "screenshot failed!\n");
+	}
+	else
+	{
+		ddiSavePNG(shot, "shot.png", NULL);
+	};
+	
 	gwmMainLoop();	
 	gwmQuit();
 	return 0;

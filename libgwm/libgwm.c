@@ -879,43 +879,57 @@ void gwmRedrawScreen()
 
 void gwmGetGlobRef(GWMWindow *win, GWMGlobWinRef *ref)
 {
-	fprintf(stderr, "gwmGetGlobRef: implement me!\n");
-	abort();
-};
-
-GWMWindow *gwmScreenshotWindow(GWMGlobWinRef *ref)
-{
-#if 0
-	uint64_t id = __sync_fetch_and_add(&nextWindowID, 1);
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
 	
 	GWMCommand cmd;
+	cmd.getGlobRef.cmd = GWM_CMD_GET_GLOB_REF;
+	cmd.getGlobRef.seq = seq;
+	cmd.getGlobRef.win = win->id;
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	memcpy(ref, &resp.getGlobRefResp.ref, sizeof(GWMGlobWinRef));
+};
+
+DDISurface* gwmScreenshotWindow(GWMGlobWinRef *ref)
+{
+	DDIPixelFormat format;
+	gwmGetScreenFormat(&format);
+	
+	int screenWidth, screenHeight;
+	gwmScreenSize(&screenWidth, &screenHeight);
+	
+	DDISurface *shadow = ddiCreateSurface(&format, screenWidth, screenHeight, NULL, DDI_SHARED);
+	if (shadow == NULL) return NULL;
+	
+	DDIColor trans = {0, 0, 0, 0};
+	ddiFillRect(shadow, 0, 0, screenWidth, screenHeight, &trans);
+	
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+
+	GWMCommand cmd;
 	cmd.screenshotWindow.cmd = GWM_CMD_SCREENSHOT_WINDOW;
-	cmd.screenshotWindow.id = id;
 	cmd.screenshotWindow.seq = seq;
+	cmd.screenshotWindow.surfID = shadow->id;
 	memcpy(&cmd.screenshotWindow.ref, ref, sizeof(GWMGlobWinRef));
 	
 	GWMMessage resp;
 	gwmPostWaiter(seq, &resp, &cmd);
-	if (resp.screenshotWindowResp.status == 0)
+	
+	if (resp.screenshotWindowResp.status != 0)
 	{
-		GWMWindow *win = (GWMWindow*) malloc(sizeof(GWMWindow));
-		win->id = id;
-
-		win->canvases[0] = ddiOpenSurface(resp.screenshotWindowResp.clientID[0]);
-		win->canvases[1] = ddiOpenSurface(resp.screenshotWindowResp.clientID[1]);
-		
-		win->handlerInfo = NULL;
-		win->currentBuffer = 0;
-		win->lastClickTime = 0;
-		
-		win->modalID = 0;
-		return win;
+		ddiDeleteSurface(shadow);
+		return NULL;
 	};
-#endif
-
-	// TODO: implement this with the new protocol
-	return NULL;
+	
+	int width = resp.screenshotWindowResp.width;
+	int height = resp.screenshotWindowResp.height;
+	
+	DDISurface *result = ddiCreateSurface(&format, width, height, NULL, 0);
+	ddiOverlay(shadow, 0, 0, result, 0, 0, width, height);
+	ddiDeleteSurface(shadow);
+	return result;
 };
 
 DDISurface* gwmGetFileIcon(const char *iconName, int size)

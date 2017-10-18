@@ -472,6 +472,21 @@ void* clientThreadFunc(void *context)
 			resp.toggleWindowResp.status = wndToggle(&cmd.toggleWindow.ref);
 			write(sockfd, &resp, sizeof(GWMMessage));
 		}
+		else if (cmd.cmd == GWM_CMD_GET_GLOB_REF)
+		{
+			if (sz < sizeof(cmd.getGlobRef))
+			{
+				printf("[gwmserver] GWM_CMD_GET_GLOB_REF command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.getGlobRefResp.type = GWM_MSG_GET_GLOB_REF_RESP;
+			resp.getGlobRefResp.seq = cmd.getGlobRef.seq;
+			resp.getGlobRefResp.ref.id = cmd.getGlobRef.win;
+			resp.getGlobRefResp.ref.fd = sockfd;
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
 		else if (cmd.cmd == GWM_CMD_ATOMIC_CONFIG)
 		{
 			if (sz < sizeof(cmd.atomicConfig))
@@ -626,6 +641,33 @@ void* clientThreadFunc(void *context)
 		else if (cmd.cmd == GWM_CMD_REDRAW_SCREEN)
 		{
 			wndInvalidate(0, 0, screen->width, screen->height);
+		}
+		else if (cmd.cmd == GWM_CMD_SCREENSHOT_WINDOW)
+		{
+			if (sz < sizeof(cmd.screenshotWindow))
+			{
+				printf("[gwmserver] GWM_CMD_SCREENSHOT_WINDOW command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.screenshotWindowResp.type = GWM_MSG_SCREENSHOT_WINDOW_RESP;
+			resp.screenshotWindowResp.seq = cmd.screenshotWindow.seq;
+			
+			DDISurface *target = ddiOpenSurface(cmd.screenshotWindow.surfID);
+			if (target == NULL)
+			{
+				resp.screenshotWindowResp.status = GWM_ERR_NOSURF;
+			}
+			else
+			{
+				resp.screenshotWindowResp.status =
+					wndScreenshot(target, &cmd.screenshotWindow.ref,
+						&resp.screenshotWindowResp.width, &resp.screenshotWindowResp.height);
+				ddiDeleteSurface(target);
+			};
+			
+			write(sockfd, &resp, sizeof(GWMMessage));
 		}
 		else
 		{

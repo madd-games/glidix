@@ -503,7 +503,7 @@ typedef struct
 #define	GWM_CMD_GET_WINDOW_PARAMS		10
 #define	GWM_CMD_SET_LISTEN_WINDOW		11
 #define	GWM_CMD_TOGGLE_WINDOW			12
-/* unused: 13 */
+#define	GWM_CMD_GET_GLOB_REF			13
 #define	GWM_CMD_ATOMIC_CONFIG			14
 #define	GWM_CMD_REL_TO_ABS			15
 #define	GWM_CMD_REDRAW_SCREEN			16
@@ -607,6 +607,13 @@ typedef union
 
 	struct
 	{
+		int				cmd;	// GWM_CMD_GET_GLOB_REF
+		uint64_t			seq;
+		uint64_t			win;
+	} getGlobRef;
+	
+	struct
+	{
 		int				cmd;	// GWM_CMD_ATOMIC_CONFIG
 		uint64_t			seq;
 		uint64_t			win;
@@ -633,7 +640,7 @@ typedef union
 	{
 		int				cmd;	// GWM_CMD_SCREENSHOT_WINDOW
 		uint64_t			seq;
-		uint64_t			id;
+		uint64_t			surfID;	// surface to screenshot to
 		GWMGlobWinRef			ref;	// of the window being screenshotted
 	} screenshotWindow;
 } GWMCommand;
@@ -652,7 +659,7 @@ typedef union
 #define	GWM_MSG_GET_WINDOW_LIST_RESP		8
 #define	GWM_MSG_GET_WINDOW_PARAMS_RESP		9
 #define	GWM_MSG_TOGGLE_WINDOW_RESP		10
-/* unused: 11 */
+#define	GWM_MSG_GET_GLOB_REF_RESP		13
 #define	GWM_MSG_REL_TO_ABS_RESP			12
 #define	GWM_MSG_SCREENSHOT_WINDOW_RESP		13
 #define	GWM_MSG_POST_DIRTY_RESP			14
@@ -749,6 +756,13 @@ typedef union
 	
 	struct
 	{
+		int				type;	// GWM_MSG_GET_GLOB_REF_RESP
+		uint64_t			seq;
+		GWMGlobWinRef			ref;
+	} getGlobRefResp;
+	
+	struct
+	{
 		int				type;	// GWM_MSG_REL_TO_ABS_RESP
 		uint64_t			seq;
 		int				absX;
@@ -760,10 +774,8 @@ typedef union
 		int				type;	// GWM_MSG_SCREENSHOT_WINDOW_RESP
 		uint64_t			seq;
 		int				status;	// 0 = success
-		DDIPixelFormat			format;
-		uint32_t			clientID[2];
-		unsigned int			width;
-		unsigned int			height;
+		int				width;
+		int				height;
 	} screenshotWindowResp;
 	
 	struct
@@ -1554,11 +1566,10 @@ int gwmGetSliderValue(GWMWindow *slider);
 void gwmGetGlobRef(GWMWindow *win, GWMGlobWinRef *ref);
 
 /**
- * Take a screenshot of the specified window (must be top-level and not hidden). On success, returns a hidden
- * window handle where the currently-selected canvas contains a screenshot of the selected window. On error
- * (non-exiting or hidden window), returns NULL.
+ * Take a screenshot of the specified window, and return a surface containing it. The surface will be in
+ * screen pixel format. Returns NULL if the screenshot could not be taken.
  */
-GWMWindow *gwmScreenshotWindow(GWMGlobWinRef *ref);
+DDISurface* gwmScreenshotWindow(GWMGlobWinRef *ref);
 
 /**
  * Create a combo box. A combo box contains a text field which the user may edit, and a dropdown menu which

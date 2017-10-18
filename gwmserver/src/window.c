@@ -161,6 +161,7 @@ void wndInit()
 	pthread_mutexattr_init(&attr);
 	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 	pthread_mutex_init(&wincacheLock, &attr);
+	pthread_mutex_init(&invalidateLock, &attr);
 	
 	sem_init(&semSwap, 0, 0);
 	pthread_t thread;
@@ -194,6 +195,20 @@ int wndIsFocused(Window *wnd)
 	
 	pthread_mutex_unlock(&wincacheLock);
 	return 0;
+};
+
+static int wndButtonEnabled(Window *child, int btn)
+{
+	if (btn == 0)
+	{
+		return (child->params.flags & GWM_WINDOW_NOTASKBAR) == 0;
+	}
+	else if (btn == 1)
+	{
+		return (child->params.flags & GWM_WINDOW_RESIZEABLE);
+	};
+	
+	return 1;
 };
 
 void wndDecorate(Window *decor, Window *child)
@@ -288,7 +303,10 @@ void wndDecorate(Window *decor, Window *child)
 			int width = 20;
 			if (i == 2) width = 30;
 			
-			ddiBlit(imgWinbut, 20*i, 0, decor->canvas, decor->params.width-70+20*i, 0, width, 20);
+			int state = 0;
+			if (!wndButtonEnabled(child, i)) state = 3;
+			
+			ddiBlit(imgWinbut, 20*i, 20*state, decor->canvas, decor->params.width-70+20*i, 0, width, 20);
 		};
 	};
 	
@@ -643,6 +661,7 @@ void wndMouseMove(int x, int y)
 	
 	int relX, relY;
 	Window *wnd = wndAbsToRel(x, y, &relX, &relY);
+	Window *toRedecorate = NULL;
 	
 	if (wndActive != NULL)
 	{
@@ -695,6 +714,13 @@ void wndMouseMove(int x, int y)
 		{
 			if (wndHovering != NULL)
 			{
+				// if necessary, re-draw the buttons on the decoration to remove the hover effect
+				if (wndHovering->isDecoration)
+				{
+					toRedecorate = wndHovering;
+					wndUp(toRedecorate);
+				};
+				
 				// leave event
 				GWMEvent ev;
 				memset(&ev, 0, sizeof(GWMEvent));
@@ -729,7 +755,7 @@ void wndMouseMove(int x, int y)
 			};
 		};
 	};
-
+	
 	int newCursor = 0;
 	if (wndHovering != NULL) newCursor = wndHovering->cursor;
 	ddiOverlay(screen, cursorX - cursors[newCursor].hotX, cursorY - cursors[newCursor].hotY, cursors[newCursor].back, 0, 0, cursors[newCursor].back->width, cursors[newCursor].back->height);
@@ -737,8 +763,61 @@ void wndMouseMove(int x, int y)
 
 	pthread_mutex_unlock(&mouseLock);
 	pthread_mutex_unlock(&invalidateLock);
+
+	if (toRedecorate != NULL)
+	{
+		if ((toRedecorate->children->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
+		{
+			int i;
+			for (i=0; i<3; i++)
+			{
+				int width = 20;
+				if (i == 2) width = 30;
+
+				int state = 0;
+				if (!wndButtonEnabled(toRedecorate->children, i)) state = 3;
+
+				ddiBlit(imgWinbut, 20*i, 20*state, toRedecorate->canvas, toRedecorate->params.width-70+20*i, 0, width, 20);
+				ddiOverlay(toRedecorate->canvas, toRedecorate->params.width-70+20*i, 0, toRedecorate->front, toRedecorate->params.width-70+20*i, 0, width, 20);
+				wndInvalidate(toRedecorate->params.x+toRedecorate->params.width-70+20*i, toRedecorate->params.y, width, 20);
+			};
+		};
+		
+		wndDown(toRedecorate);
+	};
+
+	if (wndHovering != NULL)
+	{
+		if (wndHovering->isDecoration)
+		{
+			int offX = cursorX - wndHovering->params.x;
+			int offY = cursorY - wndHovering->params.y;
+
+			int btn = (offX - (wndHovering->params.width - 70)) / 20;
+			if (btn == 3) btn = 2;
+			if (offY >= WINDOW_CAPTION_HEIGHT || offX < (wndHovering->params.width - 70)) btn = -1;
+			
+			if ((wndHovering->children->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
+			{
+				int i;
+				for (i=0; i<3; i++)
+				{
+					int width = 20;
+					if (i == 2) width = 30;
+		
+					int state = 0;
+					if (!wndButtonEnabled(wndHovering->children, i)) state = 3;
+					else if (i == btn) state = 1;
+		
+					ddiBlit(imgWinbut, 20*i, 20*state, wndHovering->canvas, wndHovering->params.width-70+20*i, 0, width, 20);
+					ddiOverlay(wndHovering->canvas, wndHovering->params.width-70+20*i, 0, wndHovering->front, wndHovering->params.width-70+20*i, 0, width, 20);
+					wndInvalidate(wndHovering->params.x+wndHovering->params.width-70+20*i, wndHovering->params.y, width, 20);
+				};
+			};
+		};
+	};
 	pthread_mutex_unlock(&wincacheLock);
-	
+
 	if (mustInvalidate)
 	{
 		wndInvalidate(invX, invY, invWidth, invHeight);
@@ -971,6 +1050,8 @@ void wndSetFocused(Window *wnd)
 
 void wndOnLeftDown()
 {
+	Window *toRedecorate = NULL;
+
 	pthread_mutex_lock(&wincacheLock);
 	if (wndHovering != NULL)
 	{
@@ -984,16 +1065,57 @@ void wndOnLeftDown()
 		};
 		
 		wndSetFocused(wndHovering);
+		
+		if (wndHovering->isDecoration)
+		{
+			toRedecorate = wndHovering;
+			wndUp(wndHovering);
+		};
 	}
 	else
 	{
 		wndSetFocused(NULL);
 	};
 	pthread_mutex_unlock(&wincacheLock);
+
+	if (toRedecorate != NULL)
+	{
+		int offX = cursorX - toRedecorate->params.x;
+		int offY = cursorY - toRedecorate->params.y;
+		
+		int btn = -1;
+		if (offX >= (toRedecorate->params.width-70) && offY < WINDOW_CAPTION_HEIGHT)
+		{
+			btn = (offX - (toRedecorate->params.width-70))/20;
+			if (btn == 3) btn = 2;
+		};
+		
+		if ((toRedecorate->children->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
+		{
+			int i;
+			for (i=0; i<3; i++)
+			{
+				int width = 20;
+				if (i == 2) width = 30;
+
+				int state = 0;
+				if (!wndButtonEnabled(toRedecorate->children, i)) state = 3;
+				else if (i == btn) state = 2;
+
+				ddiBlit(imgWinbut, 20*i, 20*state, toRedecorate->canvas, toRedecorate->params.width-70+20*i, 0, width, 20);
+				ddiOverlay(toRedecorate->canvas, toRedecorate->params.width-70+20*i, 0, toRedecorate->front, toRedecorate->params.width-70+20*i, 0, width, 20);
+				wndInvalidate(toRedecorate->params.x+toRedecorate->params.width-70+20*i, toRedecorate->params.y, width, 20);
+			};
+		};
+		
+		wndDown(toRedecorate);
+	};
 };
 
 void wndOnLeftUp()
 {
+	int shouldUpdateDesktop = 0;
+	
 	pthread_mutex_lock(&wincacheLock);
 	if (wndActive != NULL)
 	{
@@ -1001,23 +1123,68 @@ void wndOnLeftUp()
 		{
 			int x = cursorX - wndActive->params.x;
 			int y = cursorY - wndActive->params.y;
-			
-			if (y < 20)
+
+			int btn = -1;
+			if (x >= (wndActive->params.width-70) && y < WINDOW_CAPTION_HEIGHT)
 			{
-				int btnIdx = (x - (wndActive->params.width - 70))/20;
-				if (btnIdx == 3) btnIdx = 2;	// because close button is longer
-				
-				switch (btnIdx)
+				btn = (x - (wndActive->params.width-70))/20;
+				if (btn == 3) btn = 2;
+			};
+			
+			// TODO: for reasons completly unclear to me, the following code does NOT cause the
+			// clicked button to be re-drawn unclicked. it works literally everywhere else, just
+			// not here. no refreshing happens, and the buttons remains drawn as clicked until the
+			// mouse is moved. i checked - the loop does get entered.
+			if ((wndActive->children->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
+			{
+				int i;
+				for (i=0; i<3; i++)
 				{
-				case 2:		/* close */
-					pthread_mutex_lock(&wndActive->children->lock);
-					GWMEvent ev;
-					memset(&ev, 0, sizeof(GWMEvent));
-					ev.type = GWM_EVENT_CLOSE;
-					ev.win = wndActive->children->id;
-					wndSendEvent(wndActive->children, &ev);
-					pthread_mutex_unlock(&wndActive->children->lock);
-					break;
+					int width = 20;
+					if (i == 2) width = 30;
+
+					int state = 0;
+					if (!wndButtonEnabled(wndActive->children, i)) state = 3;
+					else if (i == btn) state = 1;
+					
+					ddiBlit(imgWinbut, 20*i, 20*state, wndActive->canvas, wndActive->params.width-70+20*i, 0, width, 20);
+					ddiOverlay(wndActive->canvas, wndActive->params.width-70+20*i, 0, wndActive->front, wndActive->params.width-70+20*i, 0, width, 20);
+					wndInvalidate(wndActive->params.x+wndActive->params.width-70+20*i, wndActive->params.y, width, 20);
+				};
+			};
+			
+			if ((wndActive->children->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
+			{
+				if (y < 20)
+				{
+					int btnIdx = (x - (wndActive->params.width - 70))/20;
+					if (btnIdx == 3) btnIdx = 2;	// because close button is longer
+				
+					switch (btnIdx)
+					{
+					case 0:		/* minimize */
+						shouldUpdateDesktop = 1;
+						pthread_mutex_lock(&wndActive->children->lock);
+						wndActive->children->params.flags |= GWM_WINDOW_HIDDEN;
+						wndActive->params.flags |= GWM_WINDOW_HIDDEN;
+						pthread_mutex_unlock(&wndActive->children->lock);
+						if (wndFocused != NULL)
+						{
+							wndDown(wndFocused);
+							wndFocused = NULL;
+						};
+						wndDirty(wndActive);
+						break;
+					case 2:		/* close */
+						pthread_mutex_lock(&wndActive->children->lock);
+						GWMEvent ev;
+						memset(&ev, 0, sizeof(GWMEvent));
+						ev.type = GWM_EVENT_CLOSE;
+						ev.win = wndActive->children->id;
+						wndSendEvent(wndActive->children, &ev);
+						pthread_mutex_unlock(&wndActive->children->lock);
+						break;
+					};
 				};
 			};
 		};
@@ -1026,6 +1193,8 @@ void wndOnLeftUp()
 		wndActive = NULL;
 	};
 	pthread_mutex_unlock(&wincacheLock);
+	
+	if (shouldUpdateDesktop) wndDesktopUpdate();
 };
 
 void wndInputEvent(int type, int scancode, int keycode)
@@ -1311,4 +1480,79 @@ int wndToggle(GWMGlobWinRef *ref)
 	{
 		return GWM_ERR_NOWND;
 	};
+};
+
+static void wndScreenshotWalk(DDISurface *target, Window *win, int cornerX, int cornerY, int maxWidth, int maxHeight)
+{
+	pthread_mutex_lock(&win->lock);
+	if (win->params.flags & GWM_WINDOW_HIDDEN)
+	{
+		pthread_mutex_unlock(&win->lock);
+		return;
+	};
+	int width = MIN(win->params.width, maxWidth);
+	int height = MIN(win->params.height, maxHeight);
+	int scrollX = win->scrollX;
+	int scrollY = win->scrollY;
+	ddiBlit(win->front, win->scrollX, win->scrollY, target, cornerX, cornerY, width, height);
+	
+	Window *child;
+	for (child=win->children; child!=NULL; child=child->next)
+	{
+		pthread_mutex_unlock(&win->lock);
+		
+		pthread_mutex_lock(&child->lock);
+		int childX = child->params.x - scrollX;
+		int childY = child->params.y - scrollY;
+		pthread_mutex_unlock(&child->lock);
+		
+		wndScreenshotWalk(target, child, cornerX + childX, cornerY + childY, width - childX, height - childY);
+		
+		pthread_mutex_lock(&win->lock);
+	};
+	
+	pthread_mutex_unlock(&win->lock);
+};
+
+int wndScreenshot(DDISurface *target, GWMGlobWinRef *ref, int *outWidth, int *outHeight)
+{
+	Window *chosenWindow = NULL;
+	
+	// choose the window or ITS DECORATION, not the window itself.
+	pthread_mutex_lock(&desktopWindow->lock);
+	Window *win;
+	for (win=desktopWindow->children; win!=NULL; win=win->next)
+	{
+		if (win->isDecoration)
+		{
+			if (win->children->fd == ref->fd && win->children->id == ref->id)
+			{
+				chosenWindow = win;
+				wndUp(chosenWindow);
+			};
+		}
+		else
+		{
+			if (win->fd == ref->fd && win->id == ref->id)
+			{
+				wndUp(win);
+				chosenWindow = win;
+			};
+		};
+	};
+	pthread_mutex_unlock(&desktopWindow->lock);
+	
+	if (chosenWindow == NULL)
+	{
+		return GWM_ERR_NOWND;
+	};
+	
+	pthread_mutex_lock(&chosenWindow->lock);
+	*outWidth = chosenWindow->params.width;
+	*outHeight = chosenWindow->params.height;
+	pthread_mutex_unlock(&chosenWindow->lock);
+	
+	wndScreenshotWalk(target, chosenWindow, 0, 0, *outWidth, *outHeight);
+	wndDown(chosenWindow);
+	return 0;
 };
