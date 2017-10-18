@@ -289,6 +289,13 @@ void kmain(KernelBootInfo *info)
 	kprintf_debug(" set rip=0x%p\n", &trapKernel);
 	kprintf_debug(" *** END OF INFO *** \n");
 
+	// make sure that we were given the boto ID (an old bootloader might not do it)
+	// this is required to detect the boot device
+	if ((info->features & KB_FEATURE_BOOTID) == 0)
+	{
+		panic("the boot ID has not been passed by the bootloader");
+	};
+	
 	kprintf("Initializing the IDT... ");
 	initIDT();
 	DONE();

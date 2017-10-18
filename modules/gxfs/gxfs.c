@@ -58,6 +58,7 @@ static void gxfs_getinfo(FileSystem *fs, FSInfo *info)
 	info->fs_usedblk = gxfs->sb.sbUsedBlocks;
 	info->fs_blocks = gxfs->sb.sbTotalBlocks;
 	info->fs_blksize = 512;
+	memcpy(info->fs_bootid, gxfs->sb.sbMGSID, 16);
 };
 
 static int gxfs_unmount(FileSystem *fs)

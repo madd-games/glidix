@@ -109,6 +109,7 @@ typedef struct
 	uint32_t		type;
 } PACKED MultibootMemoryMap;
 
+#define	KB_FEATURE_BOOTID		(1 << 0)
 typedef struct
 {
 	uint64_t			features;
@@ -122,7 +123,13 @@ typedef struct
 	uint64_t			initrdSymtabOffset;
 	uint64_t			initrdStrtabOffset;
 	uint64_t			numSymbols;
+	uint8_t				bootID[16];
 } KernelBootInfo;
+
+typedef struct
+{
+	uint8_t				sst_bootid[16];
+} SystemState;
 
 typedef struct
 {

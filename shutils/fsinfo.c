@@ -28,10 +28,24 @@
 
 #define _GLIDIX_SOURCE
 #include <sys/fsinfo.h>
+#include <sys/call.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
+char *idToString(uint8_t *id)
+{
+	char *result = (char*) malloc(33);
+	size_t i;
+	
+	for (i=0; i<16; i++)
+	{
+		sprintf(&result[2*i], "%02hhX", id[i]);
+	};
+	
+	return result;
+};
 
 int main(int argc, char *argv[])
 {
@@ -58,6 +72,26 @@ int main(int argc, char *argv[])
 	}
 	else if (argc == 2)
 	{
+		if (strcmp(argv[1], "-d") == 0 || strcmp(argv[1], "--drivers") == 0)
+		{
+			char names[256*16];
+			int drvcount = (int) __syscall(__SYS_fsdrv, names, 256);
+			if (drvcount == -1)
+			{
+				fprintf(stderr, "%s: cannot get driver list: %s\n", argv[0], strerror(errno));
+				return 1;
+			};
+			
+			const char *scan = names;
+			while (drvcount--)
+			{
+				printf("%s\n", scan);
+				scan += 16;
+			};
+			
+			return 0;
+		};
+		
 		dev_t id;
 		if (sscanf(argv[1], "%lu", &id) != 1)
 		{
@@ -103,6 +137,7 @@ int main(int argc, char *argv[])
 		};
 		
 		printf("Block size: %lu bytes\n", list[i].fs_blksize);
+		printf("Boot ID: %s\n", idToString(list[i].fs_bootid));
 		return 0;
 	}
 	else

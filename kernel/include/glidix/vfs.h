@@ -573,7 +573,8 @@ typedef struct fsinfo
 	size_t					fs_usedblk;
 	size_t					fs_blocks;
 	size_t					fs_blksize;
-	char					fs_pad[984];
+	uint8_t					fs_bootid[16];
+	char					fs_pad[968];
 } FSInfo;
 
 void dumpFS(FileSystem *fs);

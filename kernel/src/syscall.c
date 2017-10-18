@@ -3794,11 +3794,30 @@ int sys_routetable(uint64_t family)
 	return sysRouteTable(family);
 };
 
+int sys_systat(void *buffer, size_t sz)
+{
+	SystemState sst;
+	memcpy(sst.sst_bootid, bootInfo->bootID, 16);
+	
+	if (sz > sizeof(SystemState))
+	{
+		sz = sizeof(SystemState);
+	};
+	
+	if (memcpy_k2u(buffer, &sst, sz) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	return 0;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 136
+#define SYSCALL_NUMBER 138
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3936,6 +3955,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_procstat,				// 133
 	&sys_cpuno,				// 134
 	&sysInvalid,				// 135 [guaranteed to always be unused!]
+	&sys_systat,				// 136
+	&sys_fsdrv,				// 137
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

@@ -506,7 +506,7 @@ void mb_main(MultibootInfo *info)
 	};
 	
 	memset(kinfo, 0, sizeof(KernelInfo));
-	kinfo->features = 0;
+	kinfo->features = KB_FEATURE_BOOTID;
 	kinfo->kernelMain = mb_symbol("kmain");
 	
 	if (kinfo->kernelMain == 0)
@@ -533,6 +533,7 @@ void mb_main(MultibootInfo *info)
 	kinfo->initrdSymtabOffset = (uint64_t) (uint32_t) symtab - (uint64_t) (uint32_t) initrdStart;
 	kinfo->initrdStrtabOffset = (uint64_t) (uint32_t) strings - (uint64_t) (uint32_t) initrdStart;
 	kinfo->numSymbols = numSyms;
+	memcpy(kinfo->bootID, "\0\0" "ISOBOOT" "\0\0\0\0\0\xF0\x0D", 16);
 	
 	mb_go64(kernelInfoVirt, kinfo);
 };

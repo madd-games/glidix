@@ -23,11 +23,14 @@ This function stores information about mounted fileystems in the 'list', which i
 		size_t					'fs_usedblk';
 		size_t					'fs_blocks';
 		size_t					'fs_blksize';
+		uint8_t					'fs_bootid'[16];
 	};
 
 The 'fs_dev' field is a unique identifier of the filesystem; this is the value placed in the 'st_dev' field by [stat.2] on files on this filesystem. The 'fs_image' field is the filesystem image, usually the name of the file or device that contains it (e.g. '/dev/sda0'). The 'fs_mntpoint' field specifies the mountpoint, with a slash at the end (e.g. '/dev/'), and 'fs_name' is the name of the filesystem (e.g. 'gxfs').
 
 The 'fs_usedino' and 'fs_inodes' field specify the number of used inodes, and the total number of inodes available, respectively. If the latter is 0, it means there is no inode information available for this filesystem. Likewise, 'fs_usedblk' and 'fs_blocks' specify the number of used, and total blocks. The 'fs_blksize' field specifies the size, in bytes, of a block.
+
+The 'fs_bootid' field specifies a 16-byte (128-bit) identifier of the partition. For GXFS, this is a unique value stored in the filesystem header; other filesystem drivers may set it to all zeroes if no unique ID is known. If the first 2 bytes are zero, then the rest is considered to be not a unique ID, but still used to detect the boot device; the ISO 9660 driver sets this to a magic string, to allow Glidix CDs to boot.
 
 >RETURN VALUE
 

@@ -41,8 +41,6 @@ const char *progName;
 const char *optKernel = "/initrd/kernel.so";
 const char *optOutput = "/boot/vmglidix.tar";
 const char *optInit = "/initrd/init";
-const char *optRootDev = "/dev/sda0";
-const char *optRootFS = "gxfs";
 const char **optInitmods = NULL;
 int optNumInitmods = 0;
 int optDefaultInitmods = 1;
@@ -211,14 +209,6 @@ int main(int argc, char *argv[])
 		{
 			optInit = &argv[i][7];
 		}
-		else if (startsWith(argv[i], "--rootdev="))
-		{
-			optRootDev = &argv[i][10];
-		}
-		else if (startsWith(argv[i], "--rootfs="))
-		{
-			optRootFS = &argv[i][9];
-		}
 		else
 		{
 			fprintf(stderr, "%s: unrecognised command-line option: %s\n", argv[0], argv[i]);
@@ -239,13 +229,6 @@ int main(int argc, char *argv[])
 	};
 	
 	if (appendFile("init", optInit) != 0)
-	{
-		return 1;
-	};
-	
-	char startupConfig[1024];
-	sprintf(startupConfig, "root %s %s\nexec /bin/sh /etc/init/startup.sh\n", optRootFS, optRootDev);
-	if (appendString("startup.conf", startupConfig) != 0)
 	{
 		return 1;
 	};

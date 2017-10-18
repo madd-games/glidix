@@ -508,7 +508,7 @@ void bmain()
 		return;
 	};
 	
-	kinfo->features = 0;
+	kinfo->features = KB_FEATURE_BOOTID;
 	kinfo->kernelMain = getSymbol("kmain");
 	if (kinfo->kernelMain == 0)
 	{
@@ -531,6 +531,7 @@ void bmain()
 	kinfo->initrdSymtabOffset = (qword_t) (dword_t) ((char*) symtab - (char*) initrdStart);
 	kinfo->initrdStrtabOffset = (qword_t) (dword_t) ((char*) strings - (char*) initrdStart);
 	kinfo->numSymbols = numSyms;
+	memcpy(kinfo->bootID, sb.sbMGSID, 16);
 	
 	// identity-map our area
 	// we allocate this AFTER passing the end pointer to the kernel, because it's temporary.

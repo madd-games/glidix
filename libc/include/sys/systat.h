@@ -1,6 +1,5 @@
 /*
-	Glidix kernel
-
+	Glidix Runtime
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
@@ -26,39 +25,17 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_fsdriver_h
-#define __glidix_fsdriver_h
+#ifndef __SYS_SYSTAT_H
+#define __SYS_SYSTAT_H
+
+#include <inttypes.h>
 
 /**
- * An interface for filesystem drivers.
+ * The structure filled in by sys_systat().
  */
-
-#include <glidix/vfs.h>
-#include <glidix/mount.h>
-#include <glidix/errno.h>
-
-typedef struct _FSDriver
+struct system_state
 {
-	/**
-	 * This is called when mounting a filesystem. It has to fill the passed FileSystem structure with file pointers
-	 * to appropriate driver functions. 0 is returned on success, -1 on error.
-	 * 'image' is the path to the filesystem image, which could be a physical drive.
-	 * 'szfs' is sizeof(FileSystem).
-	 */
-	int (*onMount)(const char *image, FileSystem *fs, size_t szfs);
-
-	/**
-	 * The name of this filesystem, as used by sys_mount(). Maximum 16 characters, including the terminator (NUL).
-	 */
-	const char *name;
-
-	struct _FSDriver *prev;
-	struct _FSDriver *next;
-} FSDriver;
-
-void initFSDrivers();
-void registerFSDriver(FSDriver *drv);
-int sys_mount(const char *fsname, const char *image, const char *mountpoint, int flags);
-int sys_fsdrv(char *buffer, int num);
+	uint8_t				sst_bootid[16];		/* boot ID */
+};
 
 #endif

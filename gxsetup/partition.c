@@ -1381,15 +1381,7 @@ void partFlush()
 		dup(0);
 		dup(1);
 		
-		char optRootDev[512];
-		for (idx=0; idx<fsnum; idx++)
-		{
-			if (strcmp(fstab[idx].mntpoint, "/mnt/") == 0)
-			{
-				sprintf(optRootDev, "--rootdev=%s", fstab[idx].device);
-			};
-		};
-		execl("/usr/bin/mkinitrd", "mkinitrd", optRootDev, "--rootfs=gxfs", "--output=/mnt/boot/vmglidix.tar", NULL);
+		execl("/usr/bin/mkinitrd", "mkinitrd", "--output=/mnt/boot/vmglidix.tar", NULL);
 		exit(1);
 	};
 	

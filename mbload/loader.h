@@ -283,6 +283,7 @@ typedef struct
 /**
  * Kernel information structure; this is passed to the kernel.
  */
+#define	KB_FEATURE_BOOTID		(1 << 0)
 typedef struct
 {
 	uint64_t			features;			/* 0x00 */
@@ -296,6 +297,7 @@ typedef struct
 	uint64_t			initrdSymtabOffset;		/* 0x38 */
 	uint64_t			initrdStrtabOffset;		/* 0x40 */
 	uint64_t			numSymbols;			/* 0x48 */
+	uint8_t				bootID[16];			/* 0x50 */
 } KernelInfo;
 
 #endif

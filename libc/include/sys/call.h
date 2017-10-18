@@ -164,13 +164,16 @@
 #define __SYS_nice				132
 #define __SYS_procstat				133
 #define __SYS_cpuno				134
+#define	__SYS_undef				135	/* the reserved "undefined" number */
+#define	__SYS_systat				136
+#define	__SYS_fsdrv				137
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * Invoke an arbitrary system call. This funciton is not completly efficient; it should be used for rare syscalls.
+ * Invoke an arbitrary system call. This function is not completly efficient; it should be used for rare syscalls.
  * For the standard calls, there are wrappers defined in assembly.
  */
 uint64_t __syscall(int __sysno, ...);

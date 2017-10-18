@@ -91,6 +91,7 @@ static void iso_getinfo(FileSystem *fs, FSInfo *info)
 	semWait(&isofs->sem);
 	
 	info->fs_blksize = isofs->blockSize;
+	memcpy(info->fs_bootid, "\0\0" "ISOBOOT" "\0\0\0\0\0\xF0\x0D", 16);
 	
 	semSignal(&isofs->sem);
 };

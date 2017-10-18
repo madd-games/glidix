@@ -310,6 +310,7 @@ typedef struct
 /**
  * Kernel information structure; this is passed to the kernel.
  */
+#define	KB_FEATURE_BOOTID		(1 << 0)
 typedef struct
 {
 	qword_t				features;			/* 0x00 */
@@ -323,6 +324,7 @@ typedef struct
 	qword_t				initrdSymtabOffset;		/* 0x38 */
 	qword_t				initrdStrtabOffset;		/* 0x40 */
 	qword_t				numSymbols;			/* 0x48 */
+	byte_t				bootID[16];			/* 0x50 */
 } KernelInfo;
 
 extern DAP dap;

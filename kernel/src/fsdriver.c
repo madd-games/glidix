@@ -163,3 +163,39 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 
 	return 0;
 };
+
+int sys_fsdrv(char *buffer, int num)
+{
+	int outNum = 0;
+	if (num < 0)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	semWait(&semFS);
+	FSDriver *drv;
+	for (drv=firstDriver; drv!=NULL; drv=drv->next)
+	{
+		if (num != 0)
+		{
+			char entry[16];
+			memset(entry, 16, 0);
+			strcpy(entry, drv->name);
+			
+			if (memcpy_k2u(buffer, entry, 16) != 0)
+			{
+				semSignal(&semFS);
+				ERRNO = EFAULT;
+				return -1;
+			};
+			
+			buffer += 16;
+		};
+		
+		outNum++;
+	};
+	semSignal(&semFS);
+	
+	return outNum;
+};

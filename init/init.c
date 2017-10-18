@@ -26,6 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define _GLIDIX_SOURCE
 #include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -33,6 +34,8 @@
 #include <sys/glidix.h>
 #include <sys/fsinfo.h>
 #include <sys/mman.h>
+#include <sys/call.h>
+#include <sys/systat.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -46,9 +49,9 @@ int shouldHalt = 0;
 int shouldRunPoweroff = 0;
 int ranPoweroff = 0;
 
-char* confRootType = NULL;
-char* confRootDevice = NULL;
-char** confExec = NULL;
+//char* confRootType = NULL;
+//char* confRootDevice = NULL;
+//char** confExec = NULL;
 
 struct fsinfo startupFSList[256];
 size_t startupFSCount;
@@ -99,6 +102,7 @@ void loadmods()
 	closedir(dirp);
 };
 
+#if 0
 int interpret_config_option(char *line)
 {
 	char *saveptr;
@@ -106,6 +110,7 @@ int interpret_config_option(char *line)
 	
 	if (strcmp(cmd, "root") == 0)
 	{
+#if 0
 		confRootType = strtok_r(NULL, " ", &saveptr);
 		if (confRootType == NULL)
 		{
@@ -119,6 +124,7 @@ int interpret_config_option(char *line)
 			fprintf(stderr, "init: syntax error in 'root' command\n");
 			return -1;
 		};
+#endif
 	}
 	else if (strcmp(cmd, "exec") == 0)
 	{
@@ -144,7 +150,9 @@ int interpret_config_option(char *line)
 	
 	return 0;
 };
+#endif
 
+#if 0
 int load_config(const char *filename)
 {
 	struct stat st;
@@ -218,6 +226,7 @@ int load_config(const char *filename)
 	
 	return 0;
 };
+#endif
 
 void on_signal(int sig, siginfo_t *si, void *ignore)
 {
@@ -442,6 +451,92 @@ void shutdownSystem(int action)
 	_glidix_down(action);
 };
 
+int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *bootid)
+{
+	// try mounting it first
+	if (_glidix_mount(fstype, image, "/", 0) != 0)
+	{
+		return -1;
+	};
+	
+	// if it mounted correctly, verify that the boot ID is as expected
+	struct fsinfo list[256];
+	size_t count = _glidix_fsinfo(list, 256);
+	
+	size_t i;
+	for (i=0; i<count; i++)
+	{
+		if (strcmp(list[i].fs_mntpoint, "/") == 0)
+		{
+			if (memcmp(list[i].fs_bootid, bootid, 16) == 0)
+			{
+				printf("init: root filesystem detected as %s on %s\n", fstype, image);
+				return 0;
+			}
+			else
+			{
+				break;
+			};
+		};
+	};
+	
+	// not the correct ID, unmount
+	_glidix_unmount("/");
+	return -1;
+};
+
+int try_mount_root_with_type(const char *fstype, uint8_t *bootid)
+{
+	DIR *dirp = opendir("/dev");
+	if (dirp == NULL)
+	{
+		fprintf(stderr, "init: cannot scan /dev: %s\n", strerror(errno));
+		return -1;
+	};
+	
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		if (memcmp(ent->d_name, "sd", 2) == 0)
+		{
+			char fullpath[256];
+			sprintf(fullpath, "/dev/%s", ent->d_name);
+			if (try_mount_root_candidate(fstype, fullpath, bootid) == 0) return 0;
+		};
+	};
+	
+	closedir(dirp);
+	return -1;
+};
+
+int try_mount_root()
+{
+	char names[256*16];
+	int drvcount = (int) __syscall(__SYS_fsdrv, names, 256);
+	if (drvcount == -1)
+	{
+		fprintf(stderr, "init: cannot get filesystem driver list: %s\n", strerror(errno));
+		return 1;
+	};
+
+	struct system_state sst;
+	if (__syscall(__SYS_systat, &sst, sizeof(struct system_state)) != 0)
+	{
+		fprintf(stderr, "init: failed to get system state: %s\n", strerror(errno));
+	};
+	
+	const char *scan = names;
+	while (drvcount--)
+	{
+		const char *fstype = scan;
+		scan += 16;
+		
+		if (try_mount_root_with_type(fstype, sst.sst_bootid) == 0) return 0;
+	};
+	
+	return -1;
+};
+
 int main(int argc, char *argv[])
 {	
 	if (getpid() == 1)
@@ -496,6 +591,7 @@ int main(int argc, char *argv[])
 		printf("init: initializing partitions...\n");
 		init_parts();
 		
+#if 0
 		printf("init: loading configuration file /initrd/startup.conf...\n");
 		if (load_config("/initrd/startup.conf") == -1)
 		{
@@ -505,7 +601,23 @@ int main(int argc, char *argv[])
 				printf("init: failed to start up\n");
 			};
 		};
-
+#endif
+		
+		printf("init: looking for root filesystem...\n");
+		if (try_mount_root() != 0)
+		{
+			printf("init: failed to find the root filesystem!\n");
+			return 1;
+		};
+		
+		printf("init: executing startup script...\n");
+		if (fork() == 0)
+		{
+			execl("/bin/sh", "/bin/sh", "/etc/init/startup.sh", NULL);
+			perror("init: exec");
+			_exit(1);
+		};
+		
 		while (1)
 		{
 			pause();
