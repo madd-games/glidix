@@ -451,6 +451,17 @@ void shutdownSystem(int action)
 	_glidix_down(action);
 };
 
+void id_to_string(char *buffer, uint8_t *bootid)
+{
+	size_t i;
+	for (i=0; i<16; i++)
+	{
+		sprintf(&buffer[2*i], "%02hhX", bootid[i]);
+	};
+};
+
+char **devList = NULL;
+
 int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *bootid)
 {
 	// try mounting it first
@@ -462,12 +473,16 @@ int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *boo
 	// if it mounted correctly, verify that the boot ID is as expected
 	struct fsinfo list[256];
 	size_t count = _glidix_fsinfo(list, 256);
-	
+
 	size_t i;
 	for (i=0; i<count; i++)
 	{
 		if (strcmp(list[i].fs_mntpoint, "/") == 0)
 		{
+			char idbuf[33];
+			id_to_string(idbuf, list[i].fs_bootid);
+
+			printf("init: boot ID of %s on %s is %s\n", fstype, image, idbuf);
 			if (memcmp(list[i].fs_bootid, bootid, 16) == 0)
 			{
 				printf("init: root filesystem detected as %s on %s\n", fstype, image);
@@ -487,30 +502,68 @@ int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *boo
 
 int try_mount_root_with_type(const char *fstype, uint8_t *bootid)
 {
-	DIR *dirp = opendir("/dev");
-	if (dirp == NULL)
-	{
-		fprintf(stderr, "init: cannot scan /dev: %s\n", strerror(errno));
-		return -1;
-	};
+	//DIR *dirp = opendir("/dev");
+	//if (dirp == NULL)
+	//{
+	//	fprintf(stderr, "init: cannot scan /dev: %s\n", strerror(errno));
+	//	return -1;
+	//};
 	
-	struct dirent *ent;
-	while ((ent = readdir(dirp)) != NULL)
-	{
-		if (memcmp(ent->d_name, "sd", 2) == 0)
-		{
-			char fullpath[256];
-			sprintf(fullpath, "/dev/%s", ent->d_name);
-			if (try_mount_root_candidate(fstype, fullpath, bootid) == 0) return 0;
-		};
-	};
+	//struct dirent *ent;
+	//while ((ent = readdir(dirp)) != NULL)
+	//{
+	//	if (memcmp(ent->d_name, "sd", 2) == 0)
+	//	{
+	//		char fullpath[256];
+	//		sprintf(fullpath, "/dev/%s", ent->d_name);
+	//		if (try_mount_root_candidate(fstype, fullpath, bootid) == 0) return 0;
+	//	};
+	//};
 	
-	closedir(dirp);
+	//closedir(dirp);
+	//return -1;
+
+	char **scan;
+	for (scan=devList; *scan!=NULL; scan++)
+	{
+		char *dev = *scan;
+		if (try_mount_root_candidate(fstype, dev, bootid) == 0) return 0;
+	};
+
 	return -1;
 };
 
 int try_mount_root()
 {
+	// get the list of devices
+	size_t numDevs = 0;
+	DIR *dirp = opendir("/dev");
+	if (dirp == NULL)
+	{
+		fprintf(stderr, "init: failed to scan /dev: %s\n", strerror(errno));
+		return -1;
+	};
+
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		if (memcmp(ent->d_name, "sd", 2) == 0)
+		{
+			char *devname = (char*) malloc(strlen(ent->d_name) + strlen("/dev/") + 1);
+			sprintf(devname, "/dev/%s", ent->d_name);
+
+			devList = (char**) realloc(devList, sizeof(char*) * (numDevs+1));
+			devList[numDevs++] = devname;
+
+			printf("init: detected candidate storage device: %s\n", devname);
+		};
+	};
+
+	devList = (char**) realloc(devList, sizeof(char*) * (numDevs+1));
+	devList[numDevs] = NULL;
+
+	closedir(dirp);
+
 	char names[256*16];
 	int drvcount = (int) __syscall(__SYS_fsdrv, names, 256);
 	if (drvcount == -1)
@@ -525,6 +578,10 @@ int try_mount_root()
 		fprintf(stderr, "init: failed to get system state: %s\n", strerror(errno));
 	};
 	
+	char idbuf[33];
+	id_to_string(idbuf, sst.sst_bootid);
+	printf("init: kernel boot ID is %s\n", idbuf);
+
 	const char *scan = names;
 	while (drvcount--)
 	{
