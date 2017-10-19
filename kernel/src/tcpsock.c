@@ -373,6 +373,8 @@ static void tcpThread(void *context)
 	Semaphore *sems[4] = {&tcpsock->semConnected, &tcpsock->semStop, &tcpsock->semAck, &tcpsock->semAckOut};
 	Semaphore *semsOut[3] = {&tcpsock->semStop, &tcpsock->semAckOut, &tcpsock->semSendFetch};
 
+	detachMe();
+	
 	uint16_t srcport, dstport;
 	if (sock->domain == AF_INET)
 	{
@@ -391,8 +393,11 @@ static void tcpThread(void *context)
 	};
 
 	int connectDone = 0;
+	int wantExit = 0;
 	while (1)
 	{
+		if (wantExit) break;
+		
 		uint64_t deadline = getNanotime() + sock->options[GSO_SNDTIMEO];
 		if (sock->options[GSO_SNDTIMEO] == 0)
 		{
@@ -400,7 +405,8 @@ static void tcpThread(void *context)
 		};
 		
 		int sendOK = 0;
-		while ((getNanotime() < deadline) || (deadline == 0))
+		int retransCount = 16;
+		while (((getNanotime() < deadline) || (deadline == 0)) && (retransCount--))
 		{
 			tcpsock->currentOut->segment->ackno = htonl(tcpsock->nextAckNo);
 			ChecksumOutbound(tcpsock->currentOut);
@@ -420,7 +426,8 @@ static void tcpThread(void *context)
 			
 				tcpsock->state = TCP_TERMINATED;
 				kfree(tcpsock->currentOut);
-				return;
+				wantExit = 1;
+				break;
 			};
 			
 			uint8_t bitmap = 0;
@@ -433,7 +440,8 @@ static void tcpThread(void *context)
 			{
 				kfree(tcpsock->currentOut);
 				tcpsock->state = TCP_TERMINATED;
-				return;
+				wantExit = 1;
+				break;
 			};
 			
 			if (bitmap & (1 << 2))
@@ -449,6 +457,9 @@ static void tcpThread(void *context)
 			};
 		};
 		
+		if (wantExit) break;
+		
+		int wasFin = tcpsock->currentOut->segment->flags & TCP_FIN;
 		kfree(tcpsock->currentOut);
 		
 		if (!sendOK)
@@ -496,16 +507,12 @@ static void tcpThread(void *context)
 			tcpsock->state = TCP_ESTABLISHED;
 		};
 		
+		if (wasFin) break;
+		
 		while (1)
 		{
 			uint8_t bitmap = 0;
 			semPoll(3, semsOut, &bitmap, 0, 0);
-		
-			if (bitmap & (1 << 0))
-			{
-				tcpsock->state = TCP_TERMINATED;
-				return;
-			};
 		
 			if (bitmap & (1 << 2))
 			{
@@ -523,6 +530,12 @@ static void tcpThread(void *context)
 				// ackno filled in at the start of the loop iteration
 				ob->segment->dataOffsetNS = 0x50;
 				ob->segment->flags = TCP_PSH | TCP_ACK;
+				// a count of zero means end of data, so send FIN.
+				if (count == 0)
+				{
+					ob->segment->flags = TCP_FIN | TCP_ACK;
+					tcpsock->nextSeqNo++;
+				};
 				ob->segment->winsz = 0xFFFF;
 				uint8_t *put = (uint8_t*) &ob->segment[1];
 				uint32_t size = (uint32_t)count;
@@ -561,8 +574,64 @@ static void tcpThread(void *context)
 				
 				kfree(ob);
 			};
+
+			if (bitmap & (1 << 0))
+			{
+				tcpsock->state = TCP_TERMINATED;
+				wantExit = 1;
+				break;
+			};
 		};
 	};
+
+	// wait up to 4 minutes, acknowledging any packets if necessary (during a clean exit)
+	uint64_t deadline = getNanotime() + 4UL * 60UL * 1000000000UL;
+	uint64_t currentTime;
+	Semaphore *semsClosing[2] = {&tcpsock->semStop, &tcpsock->semAckOut};
+	while ((currentTime = getNanotime()) < deadline)
+	{
+		uint8_t bitmap = 0;
+		semPoll(2, semsClosing, &bitmap, 0, deadline - currentTime);
+
+		if (bitmap & (1 << 0))
+		{
+			wantExit = 1;
+			semsClosing[0] = NULL;
+		};
+		
+		if (bitmap & (1 << 1))
+		{
+			if (!wantExit)
+			{
+				semWaitGen(&tcpsock->semAckOut, -1, 0, 0);
+	
+				TCPOutbound *ob = CreateOutbound(&tcpsock->sockname, &tcpsock->peername, 0);
+				TCPSegment *ack = ob->segment;
+		
+				ack->srcport = srcport;
+				ack->dstport = dstport;
+				ack->seqno = htonl(tcpsock->nextSeqNo);
+				ack->ackno = htonl(tcpsock->nextAckNo);
+				ack->dataOffsetNS = 0x50;
+				ack->flags = TCP_FIN | TCP_ACK;
+				ack->winsz = 0xFFFF;
+				ChecksumOutbound(ob);
+		
+				sendPacketEx(&tcpsock->sockname, &tcpsock->peername,
+						ob->segment, ob->size,
+						IPPROTO_TCP, sock->options, sock->ifname);
+		
+				kfree(ob);
+			};
+		};
+	};
+
+	// wait for the socket to actually be closed by the application (in case it wasn't already)
+	while (semWaitGen(&tcpsock->semSendFetch, 512, 0, 0) != 0);
+	
+	// free the port and socket
+	FreePort(srcport);
+	FreeSocket(sock);
 };
 
 static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t size)
@@ -657,63 +726,20 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 	};
 };
 
-static void tcpWaitThread(void *data)
-{
-	uint16_t srcport = (uint16_t) (uint64_t) data;
-	detachMe();
-		
-	// sleep for 4 minutes before releasing port
-	sleep(4*60*1000);
-	FreePort(srcport);
-};
-
 static void tcpsock_close(Socket *sock)
 {
 	TCPSocket *tcpsock = (TCPSocket*) sock;
 	if (tcpsock->thread != NULL)
 	{
-		uint16_t srcport, dstport;
-		if (sock->domain == AF_INET)
-		{
-			const struct sockaddr_in *inaddr = (const struct sockaddr_in*) &tcpsock->peername;
-			struct sockaddr_in *inname = (struct sockaddr_in*) &tcpsock->sockname;
-			srcport = inname->sin_port;
-			dstport = inaddr->sin_port;
-		}
-		else
-		{
-			const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) &tcpsock->peername;
-			struct sockaddr_in6 *inname = (struct sockaddr_in6*) &tcpsock->sockname;
-			inname->sin6_family = AF_INET6;
-			srcport = inname->sin6_port;
-			dstport = inaddr->sin6_port;
-		};
-		
-		semSignal(&tcpsock->semStop);
-		ReleaseKernelThread(tcpsock->thread);
 
-		TCPOutbound *ob = CreateOutbound(&tcpsock->sockname, &tcpsock->peername, 0);
-		ob->segment->srcport = srcport;
-		ob->segment->dstport = dstport;
-		ob->segment->seqno = htonl(tcpsock->nextSeqNo);
-		ob->segment->ackno = htonl(tcpsock->nextAckNo);
-		ob->segment->dataOffsetNS = 0x50;
-		ob->segment->flags = TCP_FIN | TCP_ACK;
-		ChecksumOutbound(ob);
-		
-		sendPacketEx(&tcpsock->sockname, &tcpsock->peername, ob->segment, ob->size, IPPROTO_TCP,
-			sock->options, sock->ifname);
-		
-		kfree(ob);
-		
-		KernelThreadParams pars;
-		memset(&pars, 0, sizeof(KernelThreadParams));
-		pars.stackSize = DEFAULT_STACK_SIZE;
-		pars.name = "TCP Waiter Thread";
-		CreateKernelThread(tcpWaitThread, &pars, (void*) (uint64_t) srcport);
+		// terminate the semSendFetch semaphore, causing the handler thread to send a FIN and
+		// later terminate.
+		semTerminate(&tcpsock->semSendFetch);
+	}
+	else
+	{
+		FreeSocket(sock);
 	};
-	
-	FreeSocket(sock);
 };
 
 static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
@@ -850,7 +876,7 @@ static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 				semTerminate(&tcpsock->semRecvFetch);
 				semSignal(&tcpsock->semAckOut);
 			};
-			
+
 			semSignal(&tcpsock->lock);
 		}
 		else if (size > headerSize)
@@ -1041,7 +1067,8 @@ void tcpsock_shutdown(Socket *sock, int shutflags)
 		if ((tcpsock->shutflags & SHUT_RD) == 0)
 		{
 			tcpsock->shutflags |= SHUT_RD;
-			semTerminate(&tcpsock->semRecvFetch);
+			// do not terminate the receive semaphore. this should only happen
+			// if we actually receive a FIN.
 		};
 	};
 	
