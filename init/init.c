@@ -102,139 +102,9 @@ void loadmods()
 	closedir(dirp);
 };
 
-#if 0
-int interpret_config_option(char *line)
-{
-	char *saveptr;
-	const char *cmd = strtok_r(line, " ", &saveptr);
-	
-	if (strcmp(cmd, "root") == 0)
-	{
-#if 0
-		confRootType = strtok_r(NULL, " ", &saveptr);
-		if (confRootType == NULL)
-		{
-			fprintf(stderr, "init: syntax error in 'root' command\n");
-			return -1;
-		};
-		
-		confRootDevice = strtok_r(NULL, " ", &saveptr);
-		if (confRootDevice == NULL)
-		{
-			fprintf(stderr, "init: syntax error in 'root' command\n");
-			return -1;
-		};
-#endif
-	}
-	else if (strcmp(cmd, "exec") == 0)
-	{
-		char **args = NULL;
-		int numArgs=0;
-		const char *par;
-		for (par=strtok_r(NULL, " ", &saveptr); par!=NULL; par=strtok_r(NULL, " ", &saveptr))
-		{
-			args = realloc(args, sizeof(char*)*(numArgs+1));
-			args[numArgs++] = strdup(par);
-		};
-		
-		args = realloc(args, sizeof(char*)*(numArgs+1));
-		args[numArgs] = NULL;
-		
-		confExec = args;
-	}
-	else
-	{
-		fprintf(stderr, "init: bad command: %s\n", cmd);
-		return -1;
-	};
-	
-	return 0;
-};
-#endif
-
-#if 0
-int load_config(const char *filename)
-{
-	struct stat st;
-	if (stat(filename, &st) == -1)
-	{
-		perror(filename);
-		return -1;
-	};
-	
-	char *config_raw = (char*) malloc(st.st_size);
-	int fd = open(filename, O_RDONLY);
-	if (fd == -1)
-	{
-		perror(filename);
-		return -1;
-	};
-	
-	read(fd, config_raw, st.st_size);
-	close(fd);
-	
-	config_raw[st.st_size] = 0;
-	
-	char *saveptr;
-	char *token;
-	
-	for (token=strtok_r(config_raw, "\n", &saveptr); token!=NULL; token=strtok_r(NULL, "\n", &saveptr))
-	{
-		if (token[0] == 0)
-		{
-			continue;
-		}
-		else if (token[0] == '#')
-		{
-			continue;
-		}
-		else
-		{
-			if (interpret_config_option(token) == -1) return -1;
-		};
-	};
-	
-	if (confExec == NULL)
-	{
-		fprintf(stderr, "init: no exec command specified\n");
-		return -1;
-	};
-	
-	if (confRootType != NULL)
-	{
-		if (_glidix_mount(confRootType, confRootDevice, "/", 0) != 0)
-		{
-			perror("init: mount root");
-			printf("init: failed to mount root device %s (%s)\n", confRootDevice, confRootType);
-			return -1;
-		};
-	};
-	
-	if (stat(confExec[0], &st) != 0)
-	{
-		_glidix_unmount("/");
-		printf("init: cannot stat executable %s\n", confExec[0]);
-		return -1;
-	};
-	
-	if (fork() == 0)
-	{
-		execv(confExec[0], confExec);
-		perror("execv");
-		exit(1);
-	};
-	
-	return 0;
-};
-#endif
-
 void on_signal(int sig, siginfo_t *si, void *ignore)
 {
-	if (sig == SIGINT)
-	{
-		//kill(2, SIGINT);
-	}
-	else if (sig == SIGCHLD)
+	if (sig == SIGCHLD)
 	{
 		waitpid(si->si_pid, NULL, 0);
 	}
@@ -502,27 +372,6 @@ int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *boo
 
 int try_mount_root_with_type(const char *fstype, uint8_t *bootid)
 {
-	//DIR *dirp = opendir("/dev");
-	//if (dirp == NULL)
-	//{
-	//	fprintf(stderr, "init: cannot scan /dev: %s\n", strerror(errno));
-	//	return -1;
-	//};
-	
-	//struct dirent *ent;
-	//while ((ent = readdir(dirp)) != NULL)
-	//{
-	//	if (memcmp(ent->d_name, "sd", 2) == 0)
-	//	{
-	//		char fullpath[256];
-	//		sprintf(fullpath, "/dev/%s", ent->d_name);
-	//		if (try_mount_root_candidate(fstype, fullpath, bootid) == 0) return 0;
-	//	};
-	//};
-	
-	//closedir(dirp);
-	//return -1;
-
 	char **scan;
 	for (scan=devList; *scan!=NULL; scan++)
 	{
@@ -647,18 +496,6 @@ int main(int argc, char *argv[])
 		
 		printf("init: initializing partitions...\n");
 		init_parts();
-		
-#if 0
-		printf("init: loading configuration file /initrd/startup.conf...\n");
-		if (load_config("/initrd/startup.conf") == -1)
-		{
-			printf("init: attempting startup with fallback configuration file /initrd/startup-fallback.conf...\n");
-			if (load_config("/initrd/startup-fallback.conf") == -1)
-			{
-				printf("init: failed to start up\n");
-			};
-		};
-#endif
 		
 		printf("init: looking for root filesystem...\n");
 		if (try_mount_root() != 0)
