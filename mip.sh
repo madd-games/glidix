@@ -156,3 +156,27 @@ cd ddi-drivers
 make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/ddidrv.mip
+
+# initrd
+rm -rf mipdir || exit 1
+mkdir -p mipdir/run/mkinitrd
+cp kernel/out/kernel.so mipdir/run/mkinitrd/kernel.so
+cp init/init mipdir/run/mkinitrd/init
+initmod=""
+for modname in `ls modconf`
+do
+	if [ "`cat modconf/$modname`" = "initmod" ]
+	then
+		initmod="$initmod $modname.gkm"
+		cp modules/$modname.gkm mipdir/run/mkinitrd/$modname.gkm
+	fi
+done
+echo "#! /bin/sh" > mipdir/run/mkinitrd/build.sh
+echo "echo \"Generating the initrd...\"" >> mipdir/run/mkinitrd/build.sh
+echo "mkinitrd --kernel=kernel.so --init=init --output=../../boot/vmglidix.tar --no-default-initmod $initmod" >> mipdir/run/mkinitrd/build.sh
+echo "echo \"Cleaning up...\"" >> mipdir/run/mkinitrd/build.sh
+echo "rm kernel.so init build.sh $initmod" >> mipdir/run/mkinitrd/build.sh
+echo "echo \"Done; initmods are: $initmod\"" >> mipdir/run/mkinitrd/build.sh
+echo "echo \"*** RESTART THE SYSTEM TO APPLY CHANGES ***\"" >> mipdir/run/mkinitrd/build.sh
+chmod +x mipdir/run/mkinitrd/build.sh
+build-tools/mkmip mipdir $1/initrd.mip --setup=/run/mkinitrd/build.sh || exit 1

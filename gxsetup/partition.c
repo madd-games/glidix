@@ -41,7 +41,7 @@
 #include "msgbox.h"
 #include "progress.h"
 
-#define	NUM_SETUP_OPS			5
+#define	NUM_SETUP_OPS			4
 
 enum
 {
@@ -1361,41 +1361,4 @@ void partFlush()
 	fp = fopen("/mnt/etc/init/startup.conf", "w");
 	fprintf(fp, startupConf, logmgr);
 	fclose(fp);
-	
-	// now onto setting up the initrd
-	drawProgress("SETUP", "Creating the initrd...", 4, NUM_SETUP_OPS);
-	
-	pid = fork();
-	if (pid == -1)
-	{
-		msgbox("ERROR", "fork() failed for mkinitrd");
-		return;
-	};
-	
-	if (pid == 0)
-	{
-		close(0);
-		close(1);
-		close(2);
-		open("/dev/null", O_RDWR);
-		dup(0);
-		dup(1);
-		
-		execl("/usr/bin/mkinitrd", "mkinitrd", "--output=/mnt/boot/vmglidix.tar", NULL);
-		exit(1);
-	};
-	
-	waitpid(pid, &status, 0);
-	
-	if (!WIFEXITED(status))
-	{
-		msgbox("ERROR", "mkinitrd terminated with an error!");
-		return;
-	};
-	
-	if (WEXITSTATUS(status) != 0)
-	{
-		msgbox("ERROR", "mkinitrd terminated with an error!");
-		return;
-	};
 };

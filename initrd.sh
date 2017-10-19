@@ -25,4 +25,4 @@ fi
 command="build-tools/mkinitrd --kernel=kernel/out/kernel.so --init=init/init --output=$1/vmglidix.tar --no-default-initmod $initmod"
 echo $command
 $command || exit 1
-cp kernel/out/kernel.so $1/kernel.so
+cp kernel/out/kernel.so $1/kernel.so		# TODO: remove
