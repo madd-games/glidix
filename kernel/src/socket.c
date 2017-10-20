@@ -215,8 +215,8 @@ File* CreateSocket(int domain, int type, int proto)
 	
 	if (domain != AF_UNIX)
 	{
-		// append the socket to the beginning of the socket list.
-		// (the order does not acutally matter but adding to the beginning is faster).
+		// prepend the socket to the beginning of the socket list.
+		// (the order does not actually matter but adding to the beginning is faster).
 		semWait(&sockLock);
 		sock->prev = &sockList;
 		sock->next = sockList.next;
@@ -306,6 +306,16 @@ File* SocketAccept(File *fp, struct sockaddr *addr, size_t *addrlenptr)
 	File *newfp = MakeSocketFile(newsock);
 	newsock->fp = newfp;
 	
+	if (sock->domain == AF_INET || sock->domain == AF_INET6)
+	{
+		semWait(&sockLock);
+		sock->prev = &sockList;
+		sock->next = sockList.next;
+		if (sock->next != NULL) sock->next->prev = sock;
+		sockList.next = sock;
+		semSignal(&sockLock);
+	};
+
 	return newfp;
 };
 

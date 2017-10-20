@@ -126,10 +126,21 @@ typedef struct
 	/**
 	 * The data; this is prefixed with the pseudo-header which is NOT sent! The
 	 * pseudo-header is not taken into account when computing 'size'. The 'segment'
-	 * field points to the aqctual data to be sent.
+	 * field points to the actual data to be sent.
 	 */
 	char					data[];
 } TCPOutbound;
+
+/**
+ * Represents the addresses of a pending TCP connection.
+ */
+typedef struct TCPPending_
+{
+	struct TCPPending_*			next;
+	struct sockaddr				local;
+	struct sockaddr				peer;
+	uint32_t				ackno;		// the ACK number that we must use in our SYN+ACK
+} TCPPending;
 
 /**
  * TCP SOCKET
@@ -205,10 +216,14 @@ typedef struct
 	size_t					idxRecvFetch;
 	
 	/**
-	 * (Listening sockets) counts the number of connections waiting to be accept()ed.
+	 * (Listening sockets) counts the number of connections waiting to be accept()ed,
+	 * and the list of them.
 	 */
 	Semaphore				semConnWaiting;
+	TCPPending*				firstPending;
 } TCPSocket;
+
+Socket *CreateTCPSocket();
 
 static int tcpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrlen)
 {
@@ -399,6 +414,7 @@ static void tcpThread(void *context)
 	};
 
 	int connectDone = 0;
+	if (tcpsock->state == TCP_ESTABLISHED) connectDone = 1;
 	int wantExit = 0;
 	while (1)
 	{
@@ -783,53 +799,110 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 		return SOCK_CONT;
 	};
 	
-	if (tcpsock->state == TCP_LISTENING)
-	{
-		uint16_t listenPort;
-		static uint64_t zeroAddr = {0, 0};
-		
-		if (sock->domain == AF_INET)
-		{
-			const struct sockaddr_in *inname = (const struct sockaddr_in*) &tcpsock->sockname;
-			
-			localPort = inname->sin_port;
-			
-			const struct sockaddr_in *indst = (const struct sockaddr_in*) dest;
-			
-			if (memcmp(&indst->sin_addr, &inname->sin_addr, 4) != 0 && memcmp(&inname->sin_addr, zeroAddr, 4) != 0)
-			{
-				return SOCK_CONT;
-			};
-		}
-		else
-		{
-			const struct sockaddr_in6 *inname = (const struct sockaddr_in6*) &tcpsock->sockname;
-			
-			localPort = inname->sin6_port;
-
-			const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
-			
-			if (memcmp(&indst->sin6_addr, &inname->sin6_addr, 16) != 0 && memcmp(&inname->sin6_addr, zeroAddr, 16) != 0)
-			{
-				return SOCK_CONT;
-			};
-		};
-		
-		TCPSegment *seg = (TCPSegment*) packet;
-		if (seg->dstport != localPort)
-		{
-			return SOCK_CONT;
-		};
-		
-		// we just received a connection
-		semWait(&tcpsock->lock);
-		// TODO
-		semSignal(&tcpsock->lock);
-		return SOCK_STOP;
-	};
-	
 	if (proto == IPPROTO_TCP)
-	{	
+	{
+		if (tcpsock->state == TCP_LISTENING)
+		{
+			uint16_t listenPort;
+			static uint64_t zeroAddr[2] = {0, 0};
+		
+			if (sock->domain == AF_INET)
+			{
+				const struct sockaddr_in *inname = (const struct sockaddr_in*) &tcpsock->sockname;
+			
+				listenPort = inname->sin_port;
+			
+				const struct sockaddr_in *indst = (const struct sockaddr_in*) dest;
+			
+				if (memcmp(&indst->sin_addr, &inname->sin_addr, 4) != 0 && memcmp(&inname->sin_addr, zeroAddr, 4) != 0)
+				{
+					return SOCK_CONT;
+				};
+			}
+			else
+			{
+				const struct sockaddr_in6 *inname = (const struct sockaddr_in6*) &tcpsock->sockname;
+			
+				listenPort = inname->sin6_port;
+
+				const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
+			
+				if (memcmp(&indst->sin6_addr, &inname->sin6_addr, 16) != 0 && memcmp(&inname->sin6_addr, zeroAddr, 16) != 0)
+				{
+					return SOCK_CONT;
+				};
+			};
+		
+			TCPSegment *seg = (TCPSegment*) packet;
+			if (seg->dstport != listenPort)
+			{
+				return SOCK_CONT;
+			};
+		
+			struct sockaddr local;
+			memset(&local, 0, sizeof(struct sockaddr));
+			struct sockaddr peer;
+			memset(&peer, 0, sizeof(struct sockaddr));
+			memcpy(&local, dest, addrlen);
+			memcpy(&peer, src, addrlen);
+		
+			if (sock->domain == AF_INET)
+			{
+				((struct sockaddr_in*)&local)->sin_port = seg->dstport;
+				((struct sockaddr_in*)&peer)->sin_port = seg->srcport;
+			}
+			else
+			{
+				((struct sockaddr_in6*)&local)->sin6_port = seg->dstport;
+				((struct sockaddr_in6*)&peer)->sin6_port = seg->srcport;
+				((struct sockaddr_in6*)&local)->sin6_scope_id = 0;
+				((struct sockaddr_in6*)&local)->sin6_flowinfo = 0;
+				((struct sockaddr_in6*)&peer)->sin6_scope_id = 0;
+				((struct sockaddr_in6*)&peer)->sin6_flowinfo = 0;
+			};
+		
+			// we just received a connection
+			semWait(&tcpsock->lock);
+		
+			// first check if the connection is already pending
+			int found = 0;
+			TCPPending *pend;
+			for (pend=tcpsock->firstPending; pend!=NULL; pend=pend->next)
+			{
+				if (memcmp(&pend->local, &local, sizeof(struct sockaddr)) == 0
+					&& memcmp(&pend->peer, &peer, sizeof(struct sockaddr)) == 0)
+				{
+					found = 1;
+					break;
+				};
+			};
+		
+			// if not yet on the pending list, add it
+			if (!found)
+			{
+				pend = NEW(TCPPending);
+				pend->next = NULL;
+				memcpy(&pend->local, &local, sizeof(struct sockaddr));
+				memcpy(&pend->peer, &peer, sizeof(struct sockaddr));
+				pend->ackno = ntohs(seg->seqno+1);
+				
+				if (tcpsock->firstPending == NULL)
+				{
+					tcpsock->firstPending = pend;
+				}
+				else
+				{
+					TCPPending *last = tcpsock->firstPending;
+					while (last->next != NULL) last = last->next;
+					last->next = pend;
+				};
+			};
+		
+			semSignal(&tcpsock->lock);
+			semSignal(&tcpsock->semConnWaiting);
+			return SOCK_STOP;
+		};
+	
 		if (ValidateChecksum(src, dest, packet, size) != 0)
 		{
 			return SOCK_CONT;
@@ -1203,7 +1276,6 @@ static int tcpsock_listen(Socket *sock, int backlog)
 
 	if (sock->domain == AF_INET)
 	{
-		const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
 		struct sockaddr_in *inname = (struct sockaddr_in*) &tcpsock->sockname;
 		if (inname->sin_family == AF_UNSPEC)
 		{
@@ -1214,7 +1286,6 @@ static int tcpsock_listen(Socket *sock, int backlog)
 	}
 	else
 	{
-		const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
 		struct sockaddr_in6 *inname = (struct sockaddr_in6*) &tcpsock->sockname;
 		if (inname->sin6_family == AF_UNSPEC)
 		{
@@ -1227,6 +1298,94 @@ static int tcpsock_listen(Socket *sock, int backlog)
 	tcpsock->state = TCP_LISTENING;
 	semSignal(&tcpsock->lock);
 	return 0;
+};
+
+static Socket* tcpsock_accept(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
+{
+	TCPSocket *tcpsock = (TCPSocket*) sock;
+	if (tcpsock->state != TCP_LISTENING)
+	{
+		ERRNO = EINVAL;
+		return NULL;
+	};
+	
+	if (addrlenptr != NULL)
+	{
+		if ((*addrlenptr) < INET_SOCKADDR_LEN)
+		{
+			ERRNO = EINVAL;
+			return NULL;
+		};
+	};
+	
+	int count = semWaitGen(&tcpsock->semConnWaiting, 1, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+	if (count < 0)
+	{
+		ERRNO = -count;
+		return NULL;
+	};
+	
+	// a connection is pending, create the socket.
+	// TODO: there is a race condition where we remove the pending connection from the list,
+	// and another SYN arrives before we add the socket to the list, causing another connection
+	// request to be created. We must work on that somehow.
+	Socket *client = CreateTCPSocket();
+	client->domain = sock->domain;
+	client->type = SOCK_STREAM;
+	client->proto = IPPROTO_TCP;
+	memset(client->options, 0, 8*GSO_COUNT);
+	
+	TCPSocket *tcpclient = (TCPSocket*) client;
+	
+	semWait(&tcpsock->lock);
+	TCPPending *pend = tcpsock->firstPending;
+	tcpsock->firstPending = pend->next;
+	semSignal(&tcpsock->lock);
+	
+	semWait(&tcpclient->lock);
+	memcpy(&tcpclient->sockname, &pend->local, sizeof(struct sockaddr));
+	memcpy(&tcpclient->peername, &pend->peer, sizeof(struct sockaddr));
+	
+	tcpclient->state = TCP_ESTABLISHED;
+	tcpclient->nextSeqNo = (uint32_t) getRandom();
+	tcpclient->nextAckNo = pend->ackno;
+	
+	tcpclient->currentOut = CreateOutbound(&tcpclient->sockname, &tcpclient->peername, 0);
+	tcpclient->expectedAck = tcpclient->nextSeqNo;
+	TCPSegment *syn = tcpclient->currentOut->segment;
+	if (sock->domain == AF_INET)
+	{
+		syn->srcport = ((struct sockaddr_in*)&pend->local)->sin_port;
+		syn->dstport = ((struct sockaddr_in*)&pend->peer)->sin_port;
+	}
+	else
+	{
+		syn->srcport = ((struct sockaddr_in6*)&pend->local)->sin6_port;
+		syn->dstport = ((struct sockaddr_in6*)&pend->peer)->sin6_port;
+	};
+	syn->seqno = htonl(tcpclient->nextSeqNo-1);
+	syn->ackno = htonl(pend->ackno);
+	syn->dataOffsetNS = 0x50;
+	syn->flags = TCP_SYN | TCP_ACK;
+	syn->winsz = 0xFFFF;
+	ChecksumOutbound(tcpclient->currentOut);
+	
+	KernelThreadParams pars;
+	memset(&pars, 0, sizeof(KernelThreadParams));
+	pars.stackSize = DEFAULT_STACK_SIZE;
+	pars.name = "TCP Thread";
+	tcpclient->thread = CreateKernelThread(tcpThread, &pars, tcpclient);
+	
+	semSignal(&tcpclient->lock);
+	
+	if (addrlenptr != NULL) *addrlenptr = INET_SOCKADDR_LEN;
+	if (addr != NULL)
+	{
+		memcpy(addr, &pend->peer, INET_SOCKADDR_LEN);
+	};
+	
+	kfree(pend);
+	return client;
 };
 
 Socket *CreateTCPSocket()
@@ -1256,6 +1415,7 @@ Socket *CreateTCPSocket()
 	sock->getsockname = tcpsock_getsockname;
 	sock->getpeername = tcpsock_getpeername;
 	sock->listen = tcpsock_listen;
+	sock->accept = tcpsock_accept;
 	
 	return sock;
 };
