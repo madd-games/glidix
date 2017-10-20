@@ -180,13 +180,13 @@ static ssize_t capsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	return (ssize_t) len;
 };
 
-static void capsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
+static int capsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto)
 {
 	CapSocket *capsock = (CapSocket*) sock;
-	if (capsock->shutflags != 0) return;
-	if (src->sa_family != AF_CAPTURE) return;
-	if (capsock->sockname.scap_family == AF_UNSPEC) return;
+	if (capsock->shutflags != 0) return SOCK_CONT;
+	if (src->sa_family != AF_CAPTURE) return SOCK_CONT;
+	if (capsock->sockname.scap_family == AF_UNSPEC) return SOCK_CONT;
 	
 	const struct sockaddr_cap *caddr = (const struct sockaddr_cap*) src;
 	if (strcmp(caddr->scap_ifname, capsock->sockname.scap_ifname) == 0)
@@ -195,14 +195,14 @@ static void capsock_packet(Socket *sock, const struct sockaddr *src, const struc
 		{
 			if (proto != IPPROTO_IP)
 			{
-				return;
+				return SOCK_CONT;
 			};
 		}
 		else
 		{
 			if (proto != sock->proto)
 			{
-				return;
+				return SOCK_CONT;
 			};
 		};
 		
@@ -228,6 +228,8 @@ static void capsock_packet(Socket *sock, const struct sockaddr *src, const struc
 	
 		semSignal(&capsock->counter);
 	};
+	
+	return SOCK_CONT;
 };
 
 Socket *CreateCaptureSocket(int type, int proto)

@@ -65,6 +65,10 @@
 
 #define	MCAST_MAX_GROUPS		256
 
+/* return values from packet() */
+#define	SOCK_CONT			0			/* continue looking for sockets (considered the default) */
+#define	SOCK_STOP			1			/* stop looking for sockets (used mainly by TCP to avoid new connections arriving at a listening socket unnecessarily) */
+
 typedef struct Socket_
 {
 	File*				fp;
@@ -116,8 +120,12 @@ typedef struct Socket_
 	 * destination address of the packet (they both have the same address family, either AF_INET or AF_INET6).
 	 * "addrlen" is the size of both address structures. "packet" and "size" point to the packet (excluding the
 	 * IP header), and specify the size of the packet. "proto" is the protocol given on the IP header.
+	 *
+	 * Returns one of the statuses:
+	 *	SOCK_CONT (typical status) - the kernel shall keep looking for sockets to put the packet in.
+	 *	SOCK_STOP - do not look for more sockets
 	 */
-	void (*packet)(struct Socket_ *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
+	int (*packet)(struct Socket_ *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto);
 
 	/**

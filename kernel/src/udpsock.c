@@ -463,14 +463,14 @@ static ssize_t udpsock_sendto(Socket *sock, const void *message, size_t msgsize,
 	return (ssize_t) msgsize;
 };
 
-static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
+static int udpsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto)
 {
 	static uint8_t zeroes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	UDPSocket *udpsock = (UDPSocket*) sock;
 	if (proto != IPPROTO_UDP)
 	{
-		return;
+		return SOCK_CONT;
 	};
 	
 	struct sockaddr_in6 src6, dest6;
@@ -487,13 +487,13 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 	
 	if (dest->sa_family != sock->domain)
 	{
-		return;
+		return SOCK_CONT;
 	};
 
 	if (udpsock->sockname.sa_family == AF_UNSPEC)
 	{
 		// not bound
-		return;
+		return SOCK_CONT;
 	};
 	
 	UDPPacket *udp = (UDPPacket*) packet;
@@ -508,14 +508,14 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 			if (sockname->sin_addr.s_addr != indst->sin_addr.s_addr)
 			{
 				// not destined to this socket
-				return;
+				return SOCK_CONT;
 			};
 		};
 		
 		if (sockname->sin_port != udp->dstport)
 		{
 			// not destined to this port
-			return;
+			return SOCK_CONT;
 		};
 	}
 	else
@@ -525,7 +525,7 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 		
 		if ((sockname->sin6_scope_id != 0) && (indst->sin6_scope_id != sockname->sin6_scope_id))
 		{
-			return;
+			return SOCK_CONT;
 		};
 		
 		if (indst->sin6_addr.s6_addr[0] == 0xFF)
@@ -550,7 +550,7 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 			
 			if (!found)
 			{
-				return;
+				return SOCK_CONT;
 			};
 		}
 		else
@@ -563,7 +563,7 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 					if (!havev4addr)
 					{
 						// not destined to this socket
-						return;
+						return SOCK_CONT;
 					};
 				};
 			};
@@ -572,7 +572,7 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 		if (sockname->sin6_port != udp->dstport)
 		{
 			// not destined to this port
-			return;
+			return SOCK_CONT;
 		};
 	};
 	
@@ -581,7 +581,7 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 	// TODO: or should checksums be implemented?
 	if (__builtin_bswap16(udp->len) > size)
 	{
-		return;
+		return SOCK_CONT;
 	};
 	
 	UDPInbound *inbound = (UDPInbound*) kmalloc(sizeof(UDPInbound) + __builtin_bswap16(udp->len));
@@ -616,6 +616,7 @@ static void udpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 	semSignal(&udpsock->queueLock);
 	
 	semSignal(&udpsock->counter);
+	return SOCK_CONT;
 };
 
 static ssize_t udpsock_recvfrom(Socket *sock, void *buffer, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)

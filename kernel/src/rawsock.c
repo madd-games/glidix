@@ -153,10 +153,10 @@ static ssize_t rawsock_sendto(Socket *sock, const void *message, size_t len, int
 	return 0;
 };
 
-static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
+static int rawsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto)
 {
-	if ((dest->sa_family != AF_INET) && (dest->sa_family != AF_INET6)) return;
+	if ((dest->sa_family != AF_INET) && (dest->sa_family != AF_INET6)) return SOCK_CONT;
 	
 	RawSocket *rawsock = (RawSocket*) sock;
 	if (rawsock->addr.sa_family != AF_UNSPEC)
@@ -164,7 +164,7 @@ static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struc
 		if (rawsock->addr.sa_family != dest->sa_family)
 		{
 			// different family, discard packet
-			return;
+			return SOCK_CONT;
 		};
 		
 		// make sure the addresses match
@@ -178,7 +178,7 @@ static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struc
 				if (memcmp(&inaddr->sin_addr, &indest->sin_addr, 4) != 0)
 				{
 					// different destination, discard
-					return;
+					return SOCK_CONT;
 				};
 			};
 		}
@@ -197,7 +197,7 @@ static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struc
 				)
 				{
 					// different destination, discard
-					return;
+					return SOCK_CONT;
 				};
 			};
 		};
@@ -208,7 +208,7 @@ static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struc
 		if (sock->proto != proto)
 		{
 			// different protocol, discard
-			return;
+			return SOCK_CONT;
 		};
 	
 		RawPacket *rawpack = (RawPacket*) kmalloc(sizeof(RawPacket) + size);
@@ -234,6 +234,8 @@ static void rawsock_packet(Socket *sock, const struct sockaddr *src, const struc
 		// announce to any waiting processes that a packet was received
 		semSignal2(&rawsock->packetCounter, 1);
 	};
+	
+	return SOCK_CONT;
 };
 
 static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)

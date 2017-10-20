@@ -742,31 +742,31 @@ static void tcpsock_close(Socket *sock)
 	};
 };
 
-static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
+static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct sockaddr *dest, size_t addrlen,
 			const void *packet, size_t size, int proto)
 {
 	// TODO: 4-mapped-6 addresses
 	if (src->sa_family != sock->domain)
 	{
-		return;
+		return SOCK_CONT;
 	};
 	
 	if (size < sizeof(TCPSegment))
 	{
-		return;
+		return SOCK_CONT;
 	};
 	
 	TCPSocket *tcpsock = (TCPSocket*) sock;
 	if (tcpsock->state == TCP_CLOSED)
 	{
-		return;
+		return SOCK_CONT;
 	};
 	
 	if (proto == IPPROTO_TCP)
 	{	
 		if (ValidateChecksum(src, dest, packet, size) != 0)
 		{
-			return;
+			return SOCK_CONT;
 		};
 		
 		uint16_t localPort, remotePort;
@@ -783,12 +783,12 @@ static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 			
 			if (memcmp(&insrc->sin_addr, &inpeer->sin_addr, 4) != 0)
 			{
-				return;
+				return SOCK_CONT;
 			};
 			
 			if (memcmp(&indst->sin_addr, &inname->sin_addr, 4) != 0)
 			{
-				return;
+				return SOCK_CONT;
 			};
 		}
 		else
@@ -804,12 +804,12 @@ static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 			
 			if (memcmp(&insrc->sin6_addr, &inpeer->sin6_addr, 16) != 0)
 			{
-				return;
+				return SOCK_CONT;
 			};
 			
 			if (memcmp(&indst->sin6_addr, &inname->sin6_addr, 16) != 0)
 			{
-				return;
+				return SOCK_CONT;
 			};
 		};
 		
@@ -817,8 +817,11 @@ static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 
 		if ((seg->srcport != remotePort) || (seg->dstport != localPort))
 		{
-			return;
+			return SOCK_CONT;
 		};
+		
+		// at this point, we know that this packet is destined to this socket, so from now on return SOCK_STOP only,
+		// to avoid it arriving at other sockets
 		
 		if (seg->flags & TCP_ACK)
 		{
@@ -846,7 +849,7 @@ static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 		if (tcpsock->state == TCP_TERMINATED)
 		{
 			semSignal(&tcpsock->semAckOut);
-			return;
+			return SOCK_STOP;
 		};
 		
 		size_t headerSize = (size_t)(seg->dataOffsetNS >> 4) * 4;
@@ -893,7 +896,7 @@ static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 					// we can't fit this payload in our buffer! drop it as it will
 					// be re-transmitted soon
 					semSignal(&tcpsock->lock);
-					return;
+					return SOCK_STOP;
 				};
 				
 				tcpsock->cntRecvPut -= payloadSize;
@@ -912,8 +915,12 @@ static void tcpsock_packet(Socket *sock, const struct sockaddr *src, const struc
 			};
 			semSignal(&tcpsock->lock);
 		};
+		
+		return SOCK_STOP;
 	};
 	// TODO: ICMP messages relating to TCP
+	
+	return SOCK_CONT;
 };
 
 static ssize_t tcpsock_sendto(Socket *sock, const void *buffer, size_t size, int flags, const struct sockaddr *addr, size_t addrlen)

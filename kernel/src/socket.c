@@ -627,7 +627,7 @@ void onTransportPacket(const struct sockaddr *src, const struct sockaddr *dest, 
 		{
 			if (sock->packet != NULL)
 			{
-				sock->packet(sock, src, dest, addrlen, packet, size, proto);
+				if (sock->packet(sock, src, dest, addrlen, packet, size, proto) == SOCK_STOP) break;
 			};
 		};
 		
