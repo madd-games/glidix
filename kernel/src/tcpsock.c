@@ -46,6 +46,7 @@
 #define	TCP_CONNECTING				2
 #define	TCP_ESTABLISHED				3
 #define	TCP_TERMINATED				4
+#define	TCP_LISTENING				5
 
 /**
  * TCP segment flags
@@ -202,6 +203,11 @@ typedef struct
 	Semaphore				semRecvFetch;
 	size_t					idxRecvPut;
 	size_t					idxRecvFetch;
+	
+	/**
+	 * (Listening sockets) counts the number of connections waiting to be accept()ed.
+	 */
+	Semaphore				semConnWaiting;
 } TCPSocket;
 
 static int tcpsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrlen)
@@ -662,20 +668,35 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 	{
 		const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
 		struct sockaddr_in *inname = (struct sockaddr_in*) &tcpsock->sockname;
-		inname->sin_family = AF_INET;
-		getDefaultAddr4(&inname->sin_addr, &inaddr->sin_addr, sock->ifname);
-		inname->sin_port = AllocPort();
-		srcport = inname->sin_port;
+		if (inname->sin_family == AF_UNSPEC)
+		{
+			inname->sin_family = AF_INET;
+			getDefaultAddr4(&inname->sin_addr, &inaddr->sin_addr, sock->ifname);
+			inname->sin_port = AllocPort();
+			srcport = inname->sin_port;
+		}
+		else
+		{
+			srcport = inname->sin_port;
+		};
+		
 		dstport = inaddr->sin_port;
 	}
 	else
 	{
 		const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
 		struct sockaddr_in6 *inname = (struct sockaddr_in6*) &tcpsock->sockname;
-		inname->sin6_family = AF_INET6;
-		getDefaultAddr6(&inname->sin6_addr, &inaddr->sin6_addr, sock->ifname);
-		inname->sin6_port = AllocPort();
-		srcport = inname->sin6_port;
+		if (inname->sin6_family == AF_UNSPEC)
+		{
+			inname->sin6_family = AF_INET6;
+			getDefaultAddr6(&inname->sin6_addr, &inaddr->sin6_addr, sock->ifname);
+			inname->sin6_port = AllocPort();
+			srcport = inname->sin6_port;
+		}
+		else
+		{
+			srcport = inname->sin6_port;
+		}
 		dstport = inaddr->sin6_port;
 	};
 	
@@ -760,6 +781,51 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 	if (tcpsock->state == TCP_CLOSED)
 	{
 		return SOCK_CONT;
+	};
+	
+	if (tcpsock->state == TCP_LISTENING)
+	{
+		uint16_t listenPort;
+		static uint64_t zeroAddr = {0, 0};
+		
+		if (sock->domain == AF_INET)
+		{
+			const struct sockaddr_in *inname = (const struct sockaddr_in*) &tcpsock->sockname;
+			
+			localPort = inname->sin_port;
+			
+			const struct sockaddr_in *indst = (const struct sockaddr_in*) dest;
+			
+			if (memcmp(&indst->sin_addr, &inname->sin_addr, 4) != 0 && memcmp(&inname->sin_addr, zeroAddr, 4) != 0)
+			{
+				return SOCK_CONT;
+			};
+		}
+		else
+		{
+			const struct sockaddr_in6 *inname = (const struct sockaddr_in6*) &tcpsock->sockname;
+			
+			localPort = inname->sin6_port;
+
+			const struct sockaddr_in6 *indst = (const struct sockaddr_in6*) dest;
+			
+			if (memcmp(&indst->sin6_addr, &inname->sin6_addr, 16) != 0 && memcmp(&inname->sin6_addr, zeroAddr, 16) != 0)
+			{
+				return SOCK_CONT;
+			};
+		};
+		
+		TCPSegment *seg = (TCPSegment*) packet;
+		if (seg->dstport != localPort)
+		{
+			return SOCK_CONT;
+		};
+		
+		// we just received a connection
+		semWait(&tcpsock->lock);
+		// TODO
+		semSignal(&tcpsock->lock);
+		return SOCK_STOP;
 	};
 	
 	if (proto == IPPROTO_TCP)
@@ -1124,6 +1190,45 @@ static int tcpsock_getpeername(Socket *sock, struct sockaddr *addr, size_t *addr
 	return 0;
 };
 
+static int tcpsock_listen(Socket *sock, int backlog)
+{
+	TCPSocket *tcpsock = (TCPSocket*) sock;
+	semWait(&tcpsock->lock);
+	if (tcpsock->state != TCP_CLOSED)
+	{
+		semSignal(&tcpsock->lock);
+		ERRNO = EALREADY;
+		return -1;
+	};
+
+	if (sock->domain == AF_INET)
+	{
+		const struct sockaddr_in *inaddr = (const struct sockaddr_in*) addr;
+		struct sockaddr_in *inname = (struct sockaddr_in*) &tcpsock->sockname;
+		if (inname->sin_family == AF_UNSPEC)
+		{
+			inname->sin_family = AF_INET;
+			memset(&inname->sin_addr, 0, 4);
+			inname->sin_port = AllocPort();
+		};
+	}
+	else
+	{
+		const struct sockaddr_in6 *inaddr = (const struct sockaddr_in6*) addr;
+		struct sockaddr_in6 *inname = (struct sockaddr_in6*) &tcpsock->sockname;
+		if (inname->sin6_family == AF_UNSPEC)
+		{
+			inname->sin6_family = AF_INET6;
+			memset(&inname->sin6_addr, 0, 16);
+			inname->sin6_port = AllocPort();
+		};
+	};
+	
+	tcpsock->state = TCP_LISTENING;
+	semSignal(&tcpsock->lock);
+	return 0;
+};
+
 Socket *CreateTCPSocket()
 {
 	TCPSocket *tcpsock = NEW(TCPSocket);
@@ -1136,6 +1241,7 @@ Socket *CreateTCPSocket()
 	semInit2(&tcpsock->semSendPut, TCP_BUFFER_SIZE);
 	semInit2(&tcpsock->semSendFetch, 0);
 	semInit2(&tcpsock->semRecvFetch, 0);
+	semInit2(&tcpsock->semConnWaiting, 0);
 	tcpsock->cntRecvPut = TCP_BUFFER_SIZE;
 	Socket *sock = (Socket*) tcpsock;
 	
@@ -1149,6 +1255,7 @@ Socket *CreateTCPSocket()
 	sock->pollinfo = tcpsock_pollinfo;
 	sock->getsockname = tcpsock_getsockname;
 	sock->getpeername = tcpsock_getpeername;
+	sock->listen = tcpsock_listen;
 	
 	return sock;
 };
