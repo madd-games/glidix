@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,37 +26,55 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/common.h>
-#include <glidix/console.h>
-#include <glidix/cpu.h>
-#include <stdarg.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
-int panicking = 0;
-void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...)
+int main()
 {
-	va_list ap;
-	va_start(ap, fmt);
-
-	cli();
-	if (__sync_fetch_and_add(&panicking, 1) != 0)
+	int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sockfd == -1)
 	{
-		while (1)
-		{
-			cli();
-			hlt();
-		};
+		perror("socket");
+		return 1;
 	};
 	
-	enableDebugTerm();
-	haltAllCPU();
-	kprintf("In function %s at %s:%d\n", funcname, filename, lineno);
-	kprintf("Kernel panic: ");
-	kvprintf(fmt, ap);
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(struct sockaddr_in));
+	addr.sin_family = AF_INET;
+	addr.sin_port = 7777;
+	
+	if (bind(sockfd, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) != 0)
+	{
+		perror("bind");
+		close(sockfd);
+		return 1;
+	};
+	
+	if (listen(sockfd, 5) != 0)
+	{
+		perror("listen");
+		close(sockfd);
+		return 1;
+	};
 	
 	while (1)
 	{
-		ASM ("cli; hlt");
+		struct sockaddr_in addr;
+		socklen_t len = sizeof(struct sockaddr_in);
+		int client = accept(sockfd, (struct sockaddr*) &addr, &len);
+		if (client == -1)
+		{
+			perror("accept");
+			close(sockfd);
+			return 1;
+		};
+		
+		write(client, "hello world", 11);
+		close(client);
 	};
-
-	/* no need for cleanup because the CPU is halted */
+	
+	return 0;
 };

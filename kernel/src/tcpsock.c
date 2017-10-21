@@ -839,6 +839,11 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 				return SOCK_CONT;
 			};
 		
+			if ((seg->flags & TCP_SYN) == 0)
+			{
+				return SOCK_CONT;
+			};
+			
 			struct sockaddr local;
 			memset(&local, 0, sizeof(struct sockaddr));
 			struct sockaddr peer;
