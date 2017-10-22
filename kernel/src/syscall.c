@@ -2232,12 +2232,15 @@ int sys_accept4(int fd, struct sockaddr *uaddr, size_t *uaddrlenptr, int flags)
 	};
 	
 	struct sockaddr addr;
-	size_t addrlen;
+	size_t addrlen = INET_SOCKADDR_LEN;
 	
-	if (memcpy_u2k(&addrlen, uaddrlenptr, sizeof(size_t)) != 0)
+	if (uaddrlenptr != NULL)
 	{
-		ERRNO = EFAULT;
-		return -1;
+		if (memcpy_u2k(&addrlen, uaddrlenptr, sizeof(size_t)) != 0)
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
 	};
 	
 	if (addrlen > sizeof(struct sockaddr)) addrlen = sizeof(struct sockaddr);
@@ -2267,8 +2270,15 @@ int sys_accept4(int fd, struct sockaddr *uaddr, size_t *uaddrlenptr, int flags)
 		return -1;
 	};
 	
-	memcpy_k2u(uaddr, &addr, addrlen);
-	memcpy_k2u(uaddrlenptr, &addrlen, sizeof(size_t));
+	if (uaddr != NULL)
+	{
+		memcpy_k2u(uaddr, &addr, addrlen);
+	};
+	
+	if (uaddrlenptr != NULL)
+	{
+		memcpy_k2u(uaddrlenptr, &addrlen, sizeof(size_t));
+	};
 	
 	int fdflags = 0;
 	if (flags & SOCK_CLOEXEC) fdflags |= FD_CLOEXEC;

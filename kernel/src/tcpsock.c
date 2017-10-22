@@ -325,7 +325,7 @@ static TCPOutbound* CreateOutbound(const struct sockaddr *src, const struct sock
 		ob->pseudoSize = sizeof(TCPEncap6) + dataSize;
 		
 		TCPEncap6 *encap = (TCPEncap6*) ob->data;
-		memset(encap, 0, sizeof(TCPEncap6*)+dataSize);
+		memset(encap, 0, sizeof(TCPEncap6)+dataSize);
 		
 		ob->segment = &encap->seg;
 		memcpy(encap->saddr, &insrc->sin6_addr, 16);
