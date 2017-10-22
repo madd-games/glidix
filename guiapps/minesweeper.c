@@ -284,40 +284,40 @@ void rightClick(int x, int y)
 };
 
 
-int eventHandler(GWMEvent *ev, GWMWindow *win, void *context)
+int eventHandler(GWMEvent *ev, GWMWindow *win)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
-		return GWM_EVSTATUS_BREAK;
+		return -1;
 	case GWM_EVENT_UP:
-		if ((ev->keycode == GWM_KC_MOUSE_LEFT) && (!gameOver))
+		if ((ev->scancode == GWM_SC_MOUSE_LEFT) && (!gameOver))
 		{
 			leftClick(ev->x, ev->y);
 			renderGame();
 		}
-		else if ((ev->keycode == GWM_KC_MOUSE_RIGHT) && (!gameOver))
+		else if ((ev->scancode == GWM_SC_MOUSE_RIGHT) && (!gameOver))
 		{
 			rightClick(ev->x, ev->y);
 			renderGame();
 		};
-		return GWM_EVSTATUS_OK;
+		return 0;
 	case GWM_EVENT_UPDATE:
 		renderGame();
-		return GWM_EVSTATUS_OK;
+		return 0;
 	default:
-		return GWM_EVSTATUS_CONT;
+		return gwmDefaultHandler(ev, win);
 	};
 };
 
-int dialogHandler(GWMEvent *ev, GWMWindow *win, void *context)
+int dialogHandler(GWMEvent *ev, GWMWindow *win)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_CLOSE:
-		return GWM_EVSTATUS_BREAK;
+		return -1;
 	default:
-		return GWM_EVSTATUS_CONT;
+		return gwmDefaultHandler(ev, win);
 	};
 	
 };
@@ -474,7 +474,7 @@ int onSettings(void *ignore)
 	
 	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, 4, canvas->width, 20, 0, 0, NULL);
 	
-	ddiWritePen(pen, "Width: \n\nHeight: \n\nMines:");
+	ddiWritePen(pen, "Width: \n\n Height: \n\n Mines:");
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
@@ -495,7 +495,7 @@ int onSettings(void *ignore)
 	GWMWindow *btnCancel = gwmCreateButton(dialog, "Cancel", 4+buttonWidth, 20*3+34, buttonWidth, 0);
 	gwmSetButtonCallback(btnCancel, inputCancel, dialog);
 	
-	gwmPushEventHandler(dialog, dialogHandler, NULL);
+	gwmSetEventHandler(dialog, dialogHandler);
 	
 	gwmRunModal(dialog, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOICON);
 
@@ -543,7 +543,7 @@ int main()
 	
 	if(gwmInit() !=0)
 	{
-		gwmMessageBox(NULL, "GWM Error", "Failed to initialize GWM!", GWM_MBICON_ERROR | GWM_MBUT_OK);
+		fprintf(stderr, "GWM Error", "Failed to initialize GWM!\n");
 		return 1;
 	}
 	win = gwmCreateWindow(NULL, "Minesweeper", 10, 10, 200, 200, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
@@ -628,7 +628,7 @@ int main()
 	renderGame();
 	setupMenus();
 
-	gwmPushEventHandler(win, eventHandler, NULL);
+	gwmSetEventHandler(win, eventHandler);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
 	gwmMainLoop();
 	gwmQuit();
