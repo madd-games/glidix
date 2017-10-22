@@ -543,7 +543,7 @@ int main()
 	
 	if(gwmInit() !=0)
 	{
-		gwmMessageBox(NULL, "GWM Error", "Failed to initialize GWM!", GWM_MBICON_ERROR | GWM_MBUT_OK);
+		fprintf(stderr, "GWM Error", "Failed to initialize GWM!\n");
 		return 1;
 	}
 	win = gwmCreateWindow(NULL, "Minesweeper", 10, 10, 200, 200, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
