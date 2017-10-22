@@ -63,7 +63,7 @@
 /**
  * TCP timeouts.
  */
-#define	TCP_RETRANS_TIMEOUT			NT_MILLI(200)
+#define	TCP_RETRANS_TIMEOUT			NT_MILLI(500)
 
 /**
  * Size of TCP buffers (the size of the receive buffer, and of the send buffer).
@@ -414,7 +414,11 @@ static void tcpThread(void *context)
 	};
 
 	int connectDone = 0;
-	if (tcpsock->state == TCP_ESTABLISHED) connectDone = 1;
+	if (tcpsock->state == TCP_ESTABLISHED)
+	{
+		sems[0] = NULL;
+		connectDone = 1;
+	};
 	int wantExit = 0;
 	while (1)
 	{
@@ -803,6 +807,7 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 	{
 		if (tcpsock->state == TCP_LISTENING)
 		{
+			TCPSegment *seg = (TCPSegment*) packet;
 			uint16_t listenPort;
 			static uint64_t zeroAddr[2] = {0, 0};
 		
@@ -833,7 +838,6 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 				};
 			};
 		
-			TCPSegment *seg = (TCPSegment*) packet;
 			if (seg->dstport != listenPort)
 			{
 				return SOCK_CONT;
@@ -889,7 +893,7 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 				pend->next = NULL;
 				memcpy(&pend->local, &local, sizeof(struct sockaddr));
 				memcpy(&pend->peer, &peer, sizeof(struct sockaddr));
-				pend->ackno = ntohs(seg->seqno+1);
+				pend->ackno = ntohl(seg->seqno)+1;
 				
 				if (tcpsock->firstPending == NULL)
 				{
@@ -1239,6 +1243,7 @@ static void tcpsock_pollinfo(Socket *sock, Semaphore **sems)
 {
 	TCPSocket *tcpsock = (TCPSocket*) sock;
 	sems[PEI_READ] = &tcpsock->semRecvFetch;
+	if (tcpsock->state == TCP_LISTENING) sems[PEI_READ] = &tcpsock->semConnWaiting;
 	sems[PEI_WRITE] = &tcpsock->semConnected;
 };
 
@@ -1382,6 +1387,7 @@ static Socket* tcpsock_accept(Socket *sock, struct sockaddr *addr, size_t *addrl
 	tcpclient->thread = CreateKernelThread(tcpThread, &pars, tcpclient);
 	
 	semSignal(&tcpclient->lock);
+	semSignal(&tcpclient->semConnected);
 	
 	if (addrlenptr != NULL) *addrlenptr = INET_SOCKADDR_LEN;
 	if (addr != NULL)

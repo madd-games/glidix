@@ -28,6 +28,7 @@
 
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -44,7 +45,7 @@ int main()
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(struct sockaddr_in));
 	addr.sin_family = AF_INET;
-	addr.sin_port = 7777;
+	addr.sin_port = htons(7777);
 	
 	if (bind(sockfd, (struct sockaddr*) &addr, sizeof(struct sockaddr_in)) != 0)
 	{
@@ -72,6 +73,9 @@ int main()
 			return 1;
 		};
 		
+		char buf[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &addr.sin_addr, buf, INET_ADDRSTRLEN);
+		printf("[qotd] accepted a connection from %s:%hu; sending 'hello world'\n", buf, ntohs(addr.sin_port));
 		write(client, "hello world", 11);
 		close(client);
 	};

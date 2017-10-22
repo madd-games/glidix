@@ -306,13 +306,13 @@ File* SocketAccept(File *fp, struct sockaddr *addr, size_t *addrlenptr)
 	File *newfp = MakeSocketFile(newsock);
 	newsock->fp = newfp;
 	
-	if (sock->domain == AF_INET || sock->domain == AF_INET6)
+	if (newsock->domain == AF_INET || newsock->domain == AF_INET6)
 	{
 		semWait(&sockLock);
-		sock->prev = &sockList;
-		sock->next = sockList.next;
-		if (sock->next != NULL) sock->next->prev = sock;
-		sockList.next = sock;
+		newsock->prev = &sockList;
+		newsock->next = sockList.next;
+		if (newsock->next != NULL) newsock->next->prev = newsock;
+		sockList.next = newsock;
 		semSignal(&sockLock);
 	};
 
