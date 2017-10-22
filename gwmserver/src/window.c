@@ -45,6 +45,11 @@
  */
 #define	FRAME_RATE				30
 
+/**
+ * Maximum number of resizes per second.
+ */
+#define	RESIZE_RATE				5
+
 Window *desktopWindow;
 
 pthread_mutex_t mouseLock = PTHREAD_MUTEX_INITIALIZER;
@@ -68,15 +73,35 @@ Window *wndListen = NULL;				// desktop update listening window
 static DDIFont *fntCaption;
 
 /**
- * Position which a decoration was clicked at to begin drag.
+ * Position which a decoration was clicked at to begin drag. If 'decResizing' is nonzero, then
+ * we are resizing; decDragWidth and decDragHeight are the size of the window when the mouse is
+ * at the drag position exactly. decDragCursor is the drag cursor to show, if resizing.
  */
 int decDragX, decDragY;
+int decResizing;
+int decDragWidth, decDragHeight;
+int decDragCursor;
 
 /**
  * A semaphore which is signalled whenever the back buffer is updated, to let the swapping thread
  * do its job.
  */
 sem_t semSwap;
+
+/**
+ * Resize request queue. Un-processed requests on the same window are coalesced into one for
+ * optimisation. The semaphore is signalled every time the queue changed.
+ */
+sem_t semResize;
+pthread_mutex_t resizeLock = PTHREAD_MUTEX_INITIALIZER;
+typedef struct ResizeRequest_
+{
+	struct ResizeRequest_ *next;
+	Window *wnd;
+	int x, y;
+	int width, height;
+} ResizeRequest;
+ResizeRequest *resizeHead;
 
 typedef struct
 {
@@ -89,8 +114,11 @@ typedef struct
 static Cursor cursors[GWM_CURSOR_COUNT] = {
 	{NULL, NULL, 0, 0, "/usr/share/images/cursor.png"},
 	{NULL, NULL, 7, 7, "/usr/share/images/txtcursor.png"},
-	{NULL, NULL, 13, 3, "/usr/share/images/hand.png"}
+	{NULL, NULL, 13, 3, "/usr/share/images/hand.png"},
+	{NULL, NULL, 12, 12, "/usr/share/images/se-resize.png"}
 };
+
+int currentCursor = 0;
 
 void* swapThread(void *ignore)
 {
@@ -113,6 +141,50 @@ void* swapThread(void *ignore)
 		// cap the framerate
 		int msTaken = (int) ((end - start) * 1000 / CLOCKS_PER_SEC);
 		int msNeeded = 1000 / FRAME_RATE;
+		if (msTaken < msNeeded)
+		{
+			poll(NULL, 0, msNeeded - msTaken);
+		};
+	};
+};
+
+void* resizeThread(void *ignore)
+{
+	while (1)
+	{
+		sem_wait(&semResize);
+		
+		// if we were signalled multiple times, merge the request into one batch
+		int value;
+		sem_getvalue(&semResize, &value);
+		while (value--) sem_wait(&semResize);
+		
+		// send the requests
+		clock_t start = clock();
+		pthread_mutex_lock(&resizeLock);
+		while (resizeHead != NULL)
+		{
+			GWMEvent ev;
+			memset(&ev, 0, sizeof(GWMEvent));
+			ev.type = GWM_EVENT_RESIZE_REQUEST;
+			ev.x = resizeHead->x;
+			ev.y = resizeHead->y;
+			ev.width = resizeHead->width;
+			ev.height = resizeHead->height;
+			ev.win = resizeHead->wnd->id;
+			wndSendEvent(resizeHead->wnd, &ev);
+			wndDown(resizeHead->wnd);
+			
+			ResizeRequest *next = resizeHead->next;
+			free(resizeHead);
+			resizeHead = next;
+		};
+		pthread_mutex_unlock(&resizeLock);
+		clock_t end = clock();
+		
+		// cap the resize rate
+		int msTaken = (int) ((end - start) * 1000 / CLOCKS_PER_SEC);
+		int msNeeded = 1000 / RESIZE_RATE;
 		if (msTaken < msNeeded)
 		{
 			poll(NULL, 0, msNeeded - msTaken);
@@ -176,6 +248,13 @@ void wndInit()
 	if (fntCaption == NULL)
 	{
 		fprintf(stderr, "[gwmserver] failed to load caption font (DejaVu Sans Bold, 16): %s\n", error);
+		abort();
+	};
+	
+	sem_init(&semResize, 0, 0);
+	if (pthread_create(&thread, NULL, resizeThread, NULL) != 0)
+	{
+		fprintf(stderr, "[gwmserver] failed to create resize thread\n");
 		abort();
 	};
 };
@@ -588,10 +667,9 @@ void wndInvalidate(int x, int y, int width, int height)
 		height = screen->height - y;
 	};
 	
-	pthread_mutex_lock(&wincacheLock);
-	int cursor = 0;
-	if (wndHovering != NULL) cursor = wndHovering->cursor;
-	pthread_mutex_unlock(&wincacheLock);
+	pthread_mutex_lock(&mouseLock);
+	int cursor = currentCursor;
+	pthread_mutex_unlock(&mouseLock);
 
 	pthread_mutex_lock(&invalidateLock);
 	
@@ -652,8 +730,7 @@ void wndMouseMove(int x, int y)
 	pthread_mutex_lock(&invalidateLock);
 	pthread_mutex_lock(&mouseLock);
 
-	int oldCursor = 0;
-	if (wndHovering != NULL) oldCursor = wndHovering->cursor;
+	int oldCursor = currentCursor;
 	
 	ddiOverlay(cursors[oldCursor].back, 0, 0, screen, cursorX - cursors[oldCursor].hotX, cursorY - cursors[oldCursor].hotY, cursors[oldCursor].back->width, cursors[oldCursor].back->height);
 	cursorX = x;
@@ -680,7 +757,7 @@ void wndMouseMove(int x, int y)
 			{
 				// move the window
 				// (note that as a decoration, it is a child of the desktop window; we can assume
-				//  that all relative coordinates are in fact absolute)
+				//  that X and Y of the window are absolute)
 				pthread_mutex_lock(&wndActive->lock);
 				int oldX = wndActive->params.x;
 				int oldY = wndActive->params.y;
@@ -703,6 +780,54 @@ void wndMouseMove(int x, int y)
 				invHeight = endY - invY;
 				pthread_mutex_unlock(&wndActive->lock);
 			};
+			
+			if (decResizing)
+			{
+				if (wndActive->children->params.flags & GWM_WINDOW_RESIZEABLE)
+				{
+					// resize the window both ways
+					pthread_mutex_lock(&wndActive->lock);
+					int dx = decDragWidth - decDragX;
+					int dy = decDragHeight - decDragY;
+					int newX = wndActive->params.x;
+					int newY = wndActive->params.y;
+					int newWidth = dx + relX;
+					int newHeight = dy + relY;
+					pthread_mutex_unlock(&wndActive->lock);
+					
+					pthread_mutex_lock(&resizeLock);
+					ResizeRequest **nextput = &resizeHead;
+					ResizeRequest *req;
+					for (req=resizeHead; req!=NULL; req=req->next)
+					{
+						nextput = &req->next;
+						
+						if (req->wnd == wndActive->children)
+						{
+							req->x = newX;
+							req->y = newY;
+							req->width = newWidth;
+							req->height = newHeight;
+							break;
+						};
+					};
+					
+					if (req == NULL)
+					{
+						req = (ResizeRequest*) malloc(sizeof(ResizeRequest));
+						req->next = NULL;
+						req->wnd = wndActive->children;
+						wndUp(wndActive->children);
+						req->x = newX;
+						req->y = newY;
+						req->width = newWidth;
+						req->height = newHeight;
+						*nextput = req;
+						sem_post(&semResize);
+					};
+					pthread_mutex_unlock(&resizeLock);
+				};
+			};
 		};
 		
 		// we don't need the "hovered window"
@@ -714,7 +839,6 @@ void wndMouseMove(int x, int y)
 		{
 			if (wndHovering != NULL)
 			{
-				// if necessary, re-draw the buttons on the decoration to remove the hover effect
 				if (wndHovering->isDecoration)
 				{
 					toRedecorate = wndHovering;
@@ -757,13 +881,41 @@ void wndMouseMove(int x, int y)
 	};
 	
 	int newCursor = 0;
-	if (wndHovering != NULL) newCursor = wndHovering->cursor;
+	if (wndHovering != NULL)
+	{
+		newCursor = wndHovering->cursor;
+		if (wndHovering->isDecoration)
+		{
+			// resize cursors if necessary
+			if (wndHovering->children->params.flags & GWM_WINDOW_RESIZEABLE)
+			{
+				int relX = cursorX - wndHovering->params.x;
+				int relY = cursorY - wndHovering->params.y;
+			
+				int seX = wndHovering->params.width - 10;
+				int seY = wndHovering->params.height - 10;
+			
+				if (relX >= seX && relY >= seY && relY > WINDOW_CAPTION_HEIGHT)
+				{
+					newCursor = GWM_CURSOR_SE_RESIZE;
+				};
+			};
+			
+			if (decResizing && wndActive == wndHovering)
+			{
+				newCursor = decDragCursor;
+			};
+		};
+	};
 	ddiOverlay(screen, cursorX - cursors[newCursor].hotX, cursorY - cursors[newCursor].hotY, cursors[newCursor].back, 0, 0, cursors[newCursor].back->width, cursors[newCursor].back->height);
 	ddiBlit(cursors[newCursor].sprite, 0, 0, screen, cursorX - cursors[newCursor].hotX, cursorY - cursors[newCursor].hotY, cursors[newCursor].sprite->width, cursors[newCursor].sprite->height);
 
+	currentCursor = newCursor;
+	
 	pthread_mutex_unlock(&mouseLock);
 	pthread_mutex_unlock(&invalidateLock);
-
+	
+	// if necessary, re-draw the buttons on the decoration to remove the hover effect
 	if (toRedecorate != NULL)
 	{
 		if ((toRedecorate->children->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
@@ -1062,6 +1214,23 @@ void wndOnLeftDown()
 		if (wndHovering->isDecoration)
 		{
 			wndAbsToRelWithin(wndHovering, cursorX, cursorY, &decDragX, &decDragY);
+			pthread_mutex_lock(&wndHovering->lock);
+			if (decDragX >= (wndHovering->params.width-10) && decDragY >= (wndHovering->params.height-10)
+				&& decDragY > WINDOW_CAPTION_HEIGHT)
+			{
+				decResizing = 1;
+				decDragCursor = GWM_CURSOR_SE_RESIZE;
+			}
+			else
+			{
+				decResizing = 0;
+			};
+			pthread_mutex_unlock(&wndHovering->lock);
+			
+			pthread_mutex_lock(&wndHovering->children->lock);
+			decDragWidth = wndHovering->children->params.width;
+			decDragHeight = wndHovering->children->params.height;
+			pthread_mutex_unlock(&wndHovering->children->lock);
 		};
 		
 		wndSetFocused(wndHovering);
@@ -1155,7 +1324,7 @@ void wndOnLeftUp()
 			
 			if ((wndActive->children->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
 			{
-				if (y < 20)
+				if (y < 20 && x >= (wndActive->params.width - 70))
 				{
 					int btnIdx = (x - (wndActive->params.width - 70))/20;
 					if (btnIdx == 3) btnIdx = 2;	// because close button is longer

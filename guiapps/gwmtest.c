@@ -44,11 +44,11 @@ int main()
 	gwmSetWindowLayout(win, box);
 	
 	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_YES), 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
-	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_NO), 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
+	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_NO), 1, 5, GWM_BOX_ALL | GWM_BOX_FILL);
 	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_CANCEL), 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
 
 	gwmFit(win);
-	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
+	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	
 	GWMGlobWinRef ref;
 	gwmGetGlobRef(win, &ref);

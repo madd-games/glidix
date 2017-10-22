@@ -55,6 +55,20 @@ void gwmFit(GWMWindow *win)
 	win->layout->run(win->layout, 0, 0, width, height);
 };
 
+void gwmLayout(GWMWindow *win, int width, int height)
+{
+	if (win->layout == NULL) return;
+	
+	int minWidth, minHeight;
+	win->layout->getMinSize(win->layout, &minWidth, &minHeight);
+	
+	if (width < minWidth) width = minWidth;
+	if (height < minHeight) height = minHeight;
+	
+	gwmResizeWindow(win, width, height);
+	win->layout->run(win->layout, 0, 0, width, height);
+};
+
 void gwmSetWindowLayout(GWMWindow *win, GWMLayout *layout)
 {
 	win->layout = layout;

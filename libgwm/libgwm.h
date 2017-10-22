@@ -255,7 +255,8 @@ extern DDIColor gwmBackColor;
 #define	GWM_CURSOR_NORMAL			0
 #define	GWM_CURSOR_TEXT				1
 #define	GWM_CURSOR_HAND				2
-#define	GWM_CURSOR_COUNT			3
+#define	GWM_CURSOR_SE_RESIZE			3
+#define	GWM_CURSOR_COUNT			4		/* number of cursors */
 
 /**
  * Slider flags.
@@ -1796,6 +1797,12 @@ void gwmDestroyAbstractLayout(GWMLayout *layout);
  * presented.
  */
 void gwmFit(GWMWindow *win);
+
+/**
+ * Resize a window to a specific size, and lay out the children. If the size is less than the minimum, then the
+ * minimum size is used instead.
+ */
+void gwmLayout(GWMWindow *win, int width, int height);
 
 /**
  * Set the layout manager for a window.

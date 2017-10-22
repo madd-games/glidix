@@ -341,6 +341,10 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	{
 	case GWM_EVENT_CLOSE:
 		return GWM_EVSTATUS_BREAK;
+	case GWM_EVENT_RESIZE_REQUEST:
+		gwmMoveWindow(win, ev->x, ev->y);
+		gwmLayout(win, ev->width, ev->height);
+		return GWM_EVSTATUS_OK;
 	default:
 		if (ev->type & GWM_EVENT_CASCADING)
 		{

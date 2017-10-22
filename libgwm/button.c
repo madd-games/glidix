@@ -174,7 +174,7 @@ static void gwmSizeButton(GWMWindow *button, int *width, int *height)
 
 static void gwmPositionButton(GWMWindow *button, int x, int y, int width, int height)
 {
-	y += (BUTTON_HEIGHT - height) / 2;
+	y += (height - BUTTON_HEIGHT) / 2;
 	gwmMoveWindow(button, x, y);
 	gwmResizeWindow(button, width, BUTTON_HEIGHT);
 	gwmRedrawButton(button);

@@ -543,17 +543,29 @@ void* clientThreadFunc(void *context)
 				};
 				
 				// changing of width, height and canvas is independent of decoration
-				// scroll is indpent too of course
+				// scroll is independent too of course
 				pthread_mutex_lock(&win->lock);
 				
 				oldEndX = oldX + win->params.width;
 				oldEndY = oldY + win->params.height;
+				
+				if (win->decorated)
+				{
+					oldEndX = oldX + win->parent->params.width;
+					oldEndY = oldY + win->parent->params.height;
+				};
 				
 				if (which & GWM_AC_WIDTH) win->params.width = cmd.atomicConfig.width;
 				if (which & GWM_AC_HEIGHT) win->params.height = cmd.atomicConfig.height;
 				
 				newEndX = newX + win->params.width;
 				newEndY = newY + win->params.height;
+				
+				if (win->decorated)
+				{
+					newEndX = newX + win->parent->params.width;
+					newEndY = newY + win->parent->params.height;
+				};
 				
 				if (which & GWM_AC_SCROLL_X) win->scrollX = cmd.atomicConfig.scrollX;
 				if (which & GWM_AC_SCROLL_Y) win->scrollY = cmd.atomicConfig.scrollY;
@@ -581,8 +593,8 @@ void* clientThreadFunc(void *context)
 					{
 						pthread_mutex_lock(&win->parent->lock);
 						
-						oldEndX = oldX + win->parent->params.x;
-						oldEndY = oldY + win->parent->params.y;
+						oldEndX = oldX + win->parent->params.width;
+						oldEndY = oldY + win->parent->params.height;
 						
 						if (which & GWM_AC_WIDTH)
 							win->parent->params.width = cmd.atomicConfig.width + 2 * WINDOW_BORDER_WIDTH;
@@ -613,6 +625,7 @@ void* clientThreadFunc(void *context)
 				};
 
 				wndDown(win);
+				wndDrawScreen();
 			};
 		}
 		else if (cmd.cmd == GWM_CMD_REL_TO_ABS)
