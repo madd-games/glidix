@@ -64,19 +64,42 @@ const char *catNames[CAT_NUM] = {
 
 DDISurface *imgSysBar;
 DDISurface *menuButton;
-DDISurface *imgIconbar;
+DDISurface *imgTaskBtn;
 DDISurface *imgBackground;
+DDISurface *imgDefIcon;
+
 GWMWindow *win;
 int currentMouseX=0, currentMouseY=0;
-int lastSelectRow=-1;
-int lastSelectColumn=-1;
+int lastSelect=-1;
 int pressed = 0;
-GWMGlobWinRef windows[128];
-int numWindows = 0;
+
 GWMMenu *menuSys;
 GWMMenu *menuCat[CAT_NUM];
 DDISurface *imgFolder;
 DDISurface *imgApp;
+GWMGlobWinRef focwin;
+
+typedef struct WinInfo_
+{
+	struct WinInfo_ *prev;
+	struct WinInfo_ *next;
+	
+	/**
+	 * Window parameters.
+	 */
+	GWMWindowParams params;
+	
+	/**
+	 * The window icon.
+	 */
+	DDISurface *icon;
+	
+	/**
+	 * The reference.
+	 */
+	GWMGlobWinRef ref;
+} WinInfo;
+WinInfo *windows;
 
 int catByName(const char *name)
 {
@@ -261,89 +284,174 @@ void sysbarRedraw()
 {
 	DDISurface *canvas = gwmGetWindowCanvas(win);
 	ddiOverlay(imgBackground, 0, 0, canvas, 0, 0, canvas->width, canvas->height);
-	
-	GWMGlobWinRef focwin;
-	GWMGlobWinRef winlist[128];
-	int count = gwmGetDesktopWindows(&focwin, winlist);
-	int displayIndex = 0;
-	
-	int selectedColumn = (currentMouseX-40)/150;
-	int selectedRow = currentMouseY/20;
-	if (currentMouseX < 40) selectedColumn = -1;
-	
-	int i;
-	for (i=0; i<count; i++)
+
+	WinInfo *info;
+	int index = 0;
+	for (info=windows; info!=NULL; info=info->next)
 	{
-		GWMWindowParams params;
-		if (gwmGetGlobWinParams(&winlist[i], &params) == 0)
+		int spriteIndex = 4;
+		if (index == lastSelect)
 		{
-			if ((params.flags & GWM_WINDOW_NOTASKBAR) == 0)
-			{
-				int spriteIndex = 0;
-
-				int row = displayIndex & 1;
-				int column = displayIndex >> 1;
-				memcpy(&windows[displayIndex], &winlist[i], sizeof(GWMGlobWinRef));
-				displayIndex++;
-				
-				if ((row == selectedRow) && (column == selectedColumn))
-				{
-					spriteIndex = 1;
-					
-					if (pressed)
-					{
-						spriteIndex = 2;
-					};
-				};
-				
-				if ((winlist[i].id == focwin.id) && (winlist[i].fd == focwin.fd))
-				{
-					spriteIndex += 3;
-				};
-		
-				ddiBlit(imgIconbar, 0, 20*spriteIndex, canvas, 40+150*column, 20*row, 150, 20);
-
-				DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 45+150*column, 20*row+2,
-								143, 18, 0, 0, NULL);
-				if (pen != NULL)
-				{
-					char name[258];
-					if (params.flags & GWM_WINDOW_HIDDEN)
-					{
-						sprintf(name, "[%s]", params.iconName);
-					}
-					else
-					{
-						strcpy(name, params.iconName);
-					};
-					
-					ddiSetPenWrap(pen, 0);
-					ddiWritePen(pen, name);
-					ddiExecutePen(pen, canvas);
-					ddiDeletePen(pen);
-				};
-			};
+			spriteIndex = 2;
+			if (pressed) spriteIndex = 3;
+		}
+		else if (info->ref.id == focwin.id && info->ref.fd == focwin.fd)
+		{
+			spriteIndex = 0;
 		};
+		
+		ddiBlit(imgTaskBtn, 32*spriteIndex, 0, canvas, 40+34*index, 3, 32, 32);
+		if (info->icon != NULL)
+		{
+			ddiBlit(info->icon, 0, 0, canvas, 40+34*index+8, 11, 16, 16);
+		}
+		else
+		{
+			ddiBlit(imgDefIcon, 0, 0, canvas, 40+34*index+8, 11, 16, 16);
+		};
+		index++;
 	};
 	
-	numWindows = displayIndex;
 	ddiBlit(menuButton, 0, 0, canvas, 2, 2, 32, 32);
 	gwmPostDirty(win);
 };
 
 void triggerWindow(int index)
 {
-	if ((index < 0) || (index >= numWindows))
+	WinInfo *info = windows;
+	while (index--)
 	{
-		return;
+		if (info == NULL) return;
+		info = info->next;
 	};
 	
-	gwmToggleWindow(&windows[index]);
+	if (info == NULL) return;
+	gwmToggleWindow(&info->ref);
+};
+
+void desktopUpdate()
+{
+	GWMGlobWinRef winlist[128];
+	int count = gwmGetDesktopWindows(&focwin, winlist);
+	
+	// first remove from the list any windows that are no longer existent
+	WinInfo *info = windows;
+	while (info != NULL)
+	{
+		int i;
+		int found = 0;
+		for (i=0; i<count; i++)
+		{
+			if (info->ref.id == winlist[i].id && info->ref.fd == winlist[i].fd)
+			{
+				found = 1;
+				break;
+			};
+		};
+
+		GWMWindowParams params;
+		if (gwmGetGlobWinParams(&info->ref, &params) != 0)
+		{
+			found = 0;
+		};
+		
+		if (params.flags & GWM_WINDOW_NOTASKBAR)
+		{
+			found = 0;
+		};
+
+		if (!found)
+		{
+			WinInfo *next = info->next;
+			if (info->prev != NULL) info->prev->next = info->next;
+			if (info->next != NULL) info->next->prev = info->prev;
+			if (windows == info) windows = info->next;
+			
+			if (info->icon != NULL) ddiDeleteSurface(info->icon);
+			free(info);
+			info = next;
+		}
+		else
+		{
+			info = info->next;
+		};
+	};
+	
+	// now add to the list the windows that aren't on it yet
+	int i;
+	for (i=0; i<count; i++)
+	{
+		GWMWindowParams params;
+		if (gwmGetGlobWinParams(&winlist[i], &params) != 0)
+		{
+			continue;
+		};
+		
+		if (params.flags & GWM_WINDOW_NOTASKBAR)
+		{
+			continue;
+		};
+		
+		int found = 0;
+		for (info=windows; info!=NULL; info=info->next)
+		{
+			if (info->ref.id == winlist[i].id && info->ref.fd == winlist[i].fd)
+			{
+				found = 1;
+				uint32_t iconID = gwmGetGlobIcon(&info->ref);
+				if (info->icon == NULL)
+				{
+					if (iconID != 0)
+					{
+						info->icon = ddiOpenSurface(iconID);
+					};
+				}
+				else
+				{
+					if (iconID == 0)
+					{
+						ddiDeleteSurface(info->icon);
+						info->icon = NULL;
+					}
+					else if (iconID != info->icon->id)
+					{
+						ddiDeleteSurface(info->icon);
+						info->icon = ddiOpenSurface(iconID);
+					};
+				};
+				break;
+			};
+		};
+		
+		if (!found)
+		{
+			info = (WinInfo*) malloc(sizeof(WinInfo));
+			info->next = NULL;
+			memcpy(&info->ref, &winlist[i], sizeof(GWMGlobWinRef));
+			uint32_t iconID = gwmGetGlobIcon(&winlist[i]);
+			if (iconID == 0) info->icon = NULL;
+			else info->icon = ddiOpenSurface(iconID);
+			memcpy(&info->params, &params, sizeof(GWMWindowParams));
+			
+			if (windows == NULL)
+			{
+				info->prev = NULL;
+				windows = info;
+			}
+			else
+			{
+				WinInfo *last = windows;
+				while (last->next != NULL) last = last->next;
+				info->prev = last;
+				last->next = info;
+			};
+		};
+	};
 };
 
 int sysbarEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
-	int newSelectRow, newSelectColumn;
+	int newSelect;
 	int winIndex;
 	
 	switch (ev->type)
@@ -357,39 +465,37 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DESKTOP_UPDATE:
+		desktopUpdate();
 		sysbarRedraw();
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_ENTER:
 	case GWM_EVENT_MOTION:
 		currentMouseX = ev->x;
 		currentMouseY = ev->y;
-		newSelectColumn = (ev->x-40)/150;
-		newSelectRow = ev->y/20;
-		if ((newSelectColumn != lastSelectColumn) || (newSelectRow != lastSelectRow))
+		newSelect = (ev->x-40)/34;
+		if (newSelect != lastSelect)
 		{
-			lastSelectColumn = newSelectColumn;
-			lastSelectRow = newSelectRow;
+			lastSelect = newSelect;
 			sysbarRedraw();
 		};
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		currentMouseX = 0;
 		currentMouseY = 0;
-		lastSelectColumn = -1;
-		lastSelectRow = -1;
+		lastSelect = -1;
 		sysbarRedraw();
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
+			pressed = 0;
 			if (ev->x < 40)
 			{
 				gwmOpenMenu(menuSys, win, 0, 0);
 			}
 			else
 			{
-				pressed = 0;
-				winIndex = 2 * lastSelectColumn + lastSelectRow;
+				winIndex = lastSelect;
 				triggerWindow(winIndex);
 				sysbarRedraw();
 			};
@@ -473,10 +579,17 @@ int main()
 		return 1;
 	};
 	
-	imgIconbar = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/iconbar.png", &error);
-	if (imgIconbar == NULL)
+	imgTaskBtn = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/taskbtn.png", &error);
+	if (imgTaskBtn == NULL)
 	{
-		fprintf(stderr, "Failed to load icon bar image: %s\n", error);
+		fprintf(stderr, "Failed to load task bar image: %s\n", error);
+		return 1;
+	};
+
+	imgDefIcon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/defwinicon.png", &error);
+	if (imgDefIcon == NULL)
+	{
+		fprintf(stderr, "Failed to load default icon image: %s\n", error);
 		return 1;
 	};
 

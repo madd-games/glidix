@@ -45,6 +45,7 @@ int main()
 	
 	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_YES), 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
 	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_NO), 1, 5, GWM_BOX_ALL | GWM_BOX_FILL);
+	gwmBoxLayoutAddWindow(box, gwmCreateLabel(win, "Hello world", 0), 0, 5, GWM_BOX_ALL);
 	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_CANCEL), 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
 
 	gwmFit(win);

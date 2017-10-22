@@ -682,6 +682,20 @@ void* clientThreadFunc(void *context)
 			
 			write(sockfd, &resp, sizeof(GWMMessage));
 		}
+		else if (cmd.cmd == GWM_CMD_GET_GLOB_ICON)
+		{
+			if (sz < sizeof(cmd.getGlobIcon))
+			{
+				printf("[gwmserver] GWM_CMD_GET_GLOB_ICON command too small\n");
+				break;
+			};
+			
+			GWMMessage resp;
+			resp.getGlobIconResp.type = GWM_MSG_GET_GLOB_ICON_RESP;
+			resp.getGlobIconResp.seq = cmd.getGlobIcon.seq;
+			resp.getGlobIconResp.status = wndGetGlobIcon(&cmd.getGlobIcon.ref, &resp.getGlobIconResp.surfID);
+			write(sockfd, &resp, sizeof(GWMMessage));
+		}
 		else
 		{
 			printf("[gwmserver] received unknown command, %ld bytes (cmd=%d)\n", sz, cmd.cmd);

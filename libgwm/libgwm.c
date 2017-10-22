@@ -1009,3 +1009,39 @@ void gwmRetheme()
 	
 	write(queueFD, &cmd, sizeof(GWMCommand));
 };
+
+void* gwmGetData(GWMWindow *win, GWMEventHandler handler)
+{
+	GWMHandlerInfo *info;
+	for (info=firstHandler; info!=NULL; info=info->next)
+	{
+		if (info->win == win && info->callback == handler)
+		{
+			return info->context;
+		};
+	};
+	
+	return NULL;
+};
+
+uint32_t gwmGetGlobIcon(GWMGlobWinRef *ref)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	
+	GWMCommand cmd;
+	cmd.getGlobIcon.cmd = GWM_CMD_GET_GLOB_ICON;
+	cmd.getGlobIcon.seq = seq;
+	memcpy(&cmd.getGlobIcon.ref, ref, sizeof(GWMGlobWinRef));
+	
+	GWMMessage resp;
+	gwmPostWaiter(seq, &resp, &cmd);
+	
+	if (resp.getGlobIconResp.status != 0)
+	{
+		return 0;
+	}
+	else
+	{
+		return resp.getGlobIconResp.surfID;
+	};
+};

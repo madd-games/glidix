@@ -509,6 +509,7 @@ typedef struct
 #define	GWM_CMD_REL_TO_ABS			15
 #define	GWM_CMD_REDRAW_SCREEN			16
 #define	GWM_CMD_SCREENSHOT_WINDOW		17
+#define	GWM_CMD_GET_GLOB_ICON			18
 typedef union
 {
 	int					cmd;
@@ -641,9 +642,16 @@ typedef union
 	{
 		int				cmd;	// GWM_CMD_SCREENSHOT_WINDOW
 		uint64_t			seq;
-		uint64_t			surfID;	// surface to screenshot to
+		uint32_t			surfID;	// surface to screenshot to
 		GWMGlobWinRef			ref;	// of the window being screenshotted
 	} screenshotWindow;
+	
+	struct
+	{
+		int				cmd;	// GWM_CMD_GET_GLOB_ICON
+		uint32_t			seq;
+		GWMGlobWinRef			ref;
+	} getGlobIcon;
 } GWMCommand;
 
 /**
@@ -664,6 +672,7 @@ typedef union
 #define	GWM_MSG_REL_TO_ABS_RESP			12
 #define	GWM_MSG_SCREENSHOT_WINDOW_RESP		13
 #define	GWM_MSG_POST_DIRTY_RESP			14
+#define	GWM_MSG_GET_GLOB_ICON_RESP		15
 typedef union
 {
 	struct
@@ -785,6 +794,14 @@ typedef union
 		uint64_t			seq;
 		int				status;
 	} postDirtyResp;
+	
+	struct
+	{
+		int				type;	// GWM_MSG_GET_GLOB_ICON_RESP
+		uint64_t			seq;
+		int				status;
+		uint32_t			surfID;	// of the icon
+	} getGlobIconResp;
 } GWMMessage;
 
 struct GWMWindow_;
@@ -1139,9 +1156,17 @@ void gwmPushEventHandler(GWMWindow *win, GWMEventHandler handler, void *context)
 void gwmMainLoop();
 
 /**
- * Creates a new button in the specified window.
+ * Creates a new button in the specified window, with absolute coordinates. Use is discouraged; use
+ * gwmNewButton(), followed by appropriate calls to property-setting functions. Alternatively, you
+ * could use a convenience wrapper such as gwmCreateStockButton() or gwmCreateButtonWithLabel().
  */
 GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
+
+/**
+ * Create a new button in the specified window. This call should be followed by property-setting
+ * calls.
+ */
+GWMWindow *gwmNewButton(GWMWindow *parent);
 
 /**
  * Create a stock button with the given symbol.
@@ -1149,9 +1174,25 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
 GWMWindow* gwmCreateStockButton(GWMWindow *parent, int symbol);
 
 /**
+ * Create a button with the given symbol and label. For common system buttons (stock buttons), use
+ * gwmCreateStockButton() to get the correctly-translated label.
+ */
+GWMWindow* gwmCreateButtonWithLabel(GWMWindow *parent, int symbol, const char *label);
+
+/**
  * Destroys a button.
  */
 void gwmDestroyButton(GWMWindow *button);
+
+/**
+ * Set the label of a button.
+ */
+void gwmSetButtonLabel(GWMWindow *button, const char *label);
+
+/**
+ * Set button flags.
+ */
+void gwmSetButtonFlags(GWMWindow *button, int flags);
 
 /**
  * Set the symbol of a button.
@@ -1834,5 +1875,37 @@ void gwmBoxLayoutAddWindow(GWMLayout *box, GWMWindow *win, int proportion, int b
  * Returns "??" for invalid labels.
  */
 const char *gwmGetStockLabel(int symbol);
+
+/**
+ * Get data associated with an event handler (may be NULL). Returns NULL if the event handler is not found.
+ * This is used to store arbitrary class-specific data; the event handler is used as a class identifier.
+ */
+void* gwmGetData(GWMWindow *win, GWMEventHandler handler);
+
+/**
+ * Create a new label. This call should be followed by property-setting calls. Alternatively, you may use
+ * the convenience wrapper, gwmCreateLabel().
+ */
+GWMWindow* gwmNewLabel(GWMWindow *parent);
+
+/**
+ * Convenience wrapper to create a label with properties.
+ */
+GWMWindow* gwmCreateLabel(GWMWindow *parent, const char *text, int width);
+
+/**
+ * Set the text of a label.
+ */
+void gwmSetLabelText(GWMWindow *label, const char *text);
+
+/**
+ * Set the maximum width of a label. 0 means there is no limit, and so it should not wrap.
+ */
+void gwmSetLabelWidth(GWMWindow *label, int width);
+
+/**
+ * Get the icon surface ID of a window.
+ */
+uint32_t gwmGetGlobIcon(GWMGlobWinRef *ref);
 
 #endif

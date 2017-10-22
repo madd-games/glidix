@@ -255,4 +255,10 @@ int wndToggle(GWMGlobWinRef *ref);
  */
 int wndScreenshot(DDISurface *target, GWMGlobWinRef *ref, int *outWidth, int *outHeight);
 
+/**
+ * Get the icon surface ID of a window, given its global reference. Returns 0 on success or an error number on
+ * error.
+ */
+int wndGetGlobIcon(GWMGlobWinRef *ref, uint32_t *outSurf);
+
 #endif

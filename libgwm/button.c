@@ -54,9 +54,58 @@ typedef struct
 	int			prefWidth;
 } GWMButtonData;
 
+static void gwmRedrawButton(GWMWindow *button);
+
+int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
+{
+	int retval = GWM_EVSTATUS_OK;
+	GWMButtonData *data = (GWMButtonData*) context;
+	switch (ev->type)
+	{
+	case GWM_EVENT_ENTER:
+		data->state = BUTTON_STATE_HOVERING;
+		gwmRedrawButton(button);
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_LEAVE:
+		data->state = BUTTON_STATE_NORMAL;
+		gwmRedrawButton(button);
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_DOWN:
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
+		{
+			data->state = BUTTON_STATE_CLICKED;
+			gwmRedrawButton(button);
+		};
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_UP:
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
+		{
+			if (data->state == BUTTON_STATE_CLICKED)
+			{
+				if (data->callback != NULL)
+				{
+					if ((data->flags & GWM_BUTTON_DISABLED) == 0)
+					{
+						retval = data->callback(data->callbackParam);
+					};
+				};
+				data->state = BUTTON_STATE_HOVERING;
+			}
+			else
+			{
+				data->state = BUTTON_STATE_NORMAL;
+			};
+			gwmRedrawButton(button);
+		};
+		return retval;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
+};
+
 static void gwmRedrawButton(GWMWindow *button)
 {
-	GWMButtonData *data = (GWMButtonData*) button->data;
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(button);
 	if (canvas->width == 0 && data->prefWidth != 0) return;
 
@@ -105,58 +154,11 @@ static void gwmRedrawButton(GWMWindow *button)
 	gwmPostDirty(button);
 };
 
-int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
-{
-	int retval = GWM_EVSTATUS_OK;
-	GWMButtonData *data = (GWMButtonData*) button->data;
-	switch (ev->type)
-	{
-	case GWM_EVENT_ENTER:
-		data->state = BUTTON_STATE_HOVERING;
-		gwmRedrawButton(button);
-		return GWM_EVSTATUS_OK;
-	case GWM_EVENT_LEAVE:
-		data->state = BUTTON_STATE_NORMAL;
-		gwmRedrawButton(button);
-		return GWM_EVSTATUS_OK;
-	case GWM_EVENT_DOWN:
-		if (ev->keycode == GWM_KC_MOUSE_LEFT)
-		{
-			data->state = BUTTON_STATE_CLICKED;
-			gwmRedrawButton(button);
-		};
-		return GWM_EVSTATUS_OK;
-	case GWM_EVENT_UP:
-		if (ev->keycode == GWM_KC_MOUSE_LEFT)
-		{
-			if (data->state == BUTTON_STATE_CLICKED)
-			{
-				if (data->callback != NULL)
-				{
-					if ((data->flags & GWM_BUTTON_DISABLED) == 0)
-					{
-						retval = data->callback(data->callbackParam);
-					};
-				};
-				data->state = BUTTON_STATE_HOVERING;
-			}
-			else
-			{
-				data->state = BUTTON_STATE_NORMAL;
-			};
-			gwmRedrawButton(button);
-		};
-		return retval;
-	default:
-		return GWM_EVSTATUS_CONT;
-	};
-};
-
 static int defaultButtonCallback(void *context)
 {
 	GWMWindow *button = (GWMWindow*) context;
-	GWMButtonData *data = (GWMButtonData*) button->data;
-	
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
+
 	GWMCommandEvent event;
 	memset(&event, 0, sizeof(GWMCommandEvent));
 	event.header.type = GWM_EVENT_COMMAND;
@@ -167,7 +169,7 @@ static int defaultButtonCallback(void *context)
 
 static void gwmSizeButton(GWMWindow *button, int *width, int *height)
 {
-	GWMButtonData *data = (GWMButtonData*) button->data;
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
 	*width = data->prefWidth;
 	*height = BUTTON_HEIGHT;
 };
@@ -186,8 +188,6 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
 	if (button == NULL) return NULL;
 	
 	GWMButtonData *data = (GWMButtonData*) malloc(sizeof(GWMButtonData));
-	button->data = data;
-	
 	data->text = strdup(text);
 	data->flags = flags;
 	data->state = BUTTON_STATE_NORMAL;
@@ -199,20 +199,20 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
 	button->getMinSize = button->getPrefSize = gwmSizeButton;
 	button->position = gwmPositionButton;
 	
+	gwmPushEventHandler(button, gwmButtonHandler, data);
 	gwmRedrawButton(button);
-	gwmPushEventHandler(button, gwmButtonHandler, NULL);
 	return button;
 };
 
 void gwmSetButtonSymbol(GWMWindow *button, int symbol)
 {
-	GWMButtonData *data = (GWMButtonData*) button->data;
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
 	data->symbol = symbol;
 };
 
 void gwmDestroyButton(GWMWindow *button)
 {
-	GWMButtonData *data = (GWMButtonData*) button->data;
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
 	free(data->text);
 	free(data);
 	gwmDestroyWindow(button);
@@ -220,7 +220,7 @@ void gwmDestroyButton(GWMWindow *button)
 
 void gwmSetButtonCallback(GWMWindow *button, GWMButtonCallback callback, void *param)
 {
-	GWMButtonData *data = (GWMButtonData*) button->data;
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
 	data->callback = callback;
 	data->callbackParam = param;
 };
@@ -228,4 +228,31 @@ void gwmSetButtonCallback(GWMWindow *button, GWMButtonCallback callback, void *p
 GWMWindow* gwmCreateStockButton(GWMWindow *parent, int symbol)
 {
 	return gwmCreateButton(parent, gwmGetStockLabel(symbol), 0, 0, 0, 0);
+};
+
+GWMWindow *gwmNewButton(GWMWindow *parent)
+{
+	return gwmCreateButton(parent, "", 0, 0, 0, 0);
+};
+
+void gwmSetButtonLabel(GWMWindow *button, const char *label)
+{
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
+	free(data->text);
+	data->text = strdup(label);
+	gwmRedrawButton(button);
+};
+
+void gwmSetButtonFlags(GWMWindow *button, int flags)
+{
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
+	data->flags = flags;
+	gwmRedrawButton(button);
+};
+
+GWMWindow* gwmCreateButtonWithLabel(GWMWindow *parent, int symbol, const char *label)
+{
+	GWMWindow *btn = gwmCreateButton(parent, label, 0, 0, 0, 0);
+	gwmSetButtonSymbol(btn, symbol);
+	return btn;
 };

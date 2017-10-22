@@ -1621,8 +1621,7 @@ int wndToggle(GWMGlobWinRef *ref)
 			if (chosenWindow->decorated) chosenWindow->parent->params.flags |= GWM_WINDOW_HIDDEN;
 			pthread_mutex_unlock(&chosenWindow->lock);
 			
-			wndDown(wndFocused);
-			wndFocused = NULL;
+			wndSetFocused(desktopWindow);
 		}
 		else
 		{
@@ -1630,8 +1629,7 @@ int wndToggle(GWMGlobWinRef *ref)
 			if (chosenWindow->decorated) chosenWindow->parent->params.flags &= ~GWM_WINDOW_HIDDEN;
 			pthread_mutex_unlock(&chosenWindow->lock);
 			
-			wndFocused = chosenWindow;
-			wndUp(chosenWindow);
+			wndSetFocused(chosenWindow);
 		};
 		pthread_mutex_unlock(&wincacheLock);
 
@@ -1724,4 +1722,53 @@ int wndScreenshot(DDISurface *target, GWMGlobWinRef *ref, int *outWidth, int *ou
 	wndScreenshotWalk(target, chosenWindow, 0, 0, *outWidth, *outHeight);
 	wndDown(chosenWindow);
 	return 0;
+};
+
+int wndGetGlobIcon(GWMGlobWinRef *ref, uint32_t *outSurf)
+{
+	Window *chosenWindow = NULL;
+	
+	pthread_mutex_lock(&desktopWindow->lock);
+	Window *win;
+	for (win=desktopWindow->children; win!=NULL; win=win->next)
+	{
+		if (win->isDecoration)
+		{
+			if (win->children->fd == ref->fd && win->children->id == ref->id)
+			{
+				chosenWindow = win->children;
+				wndUp(chosenWindow);
+			};
+		}
+		else
+		{
+			if (win->fd == ref->fd && win->id == ref->id)
+			{
+				wndUp(win);
+				chosenWindow = win;
+			};
+		};
+	};
+	pthread_mutex_unlock(&desktopWindow->lock);
+	
+	if (chosenWindow != NULL)
+	{
+		pthread_mutex_lock(&chosenWindow->lock);
+		if (chosenWindow->icon == NULL)
+		{
+			*outSurf = 0;
+		}
+		else
+		{
+			*outSurf = chosenWindow->icon->id;
+		};
+		pthread_mutex_unlock(&chosenWindow->lock);
+		
+		wndDown(chosenWindow);
+		return 0;
+	}
+	else
+	{
+		return GWM_ERR_NOWND;
+	};
 };

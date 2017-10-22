@@ -274,6 +274,8 @@ static void gwmBoxRun(GWMLayout *layout, int x, int y, int width, int height)
 				if (child->flags & GWM_BOX_UP) child->len += child->border;
 				if (child->flags & GWM_BOX_DOWN) child->len += child->border;
 				child->otherLen = width;
+				if (child->flags & GWM_BOX_LEFT) child->otherLen += child->border;
+				if (child->flags & GWM_BOX_RIGHT) child->otherLen += child->border;
 			}
 			else
 			{
@@ -281,6 +283,8 @@ static void gwmBoxRun(GWMLayout *layout, int x, int y, int width, int height)
 				if (child->flags & GWM_BOX_LEFT) child->len += child->border;
 				if (child->flags & GWM_BOX_RIGHT) child->len += child->border;
 				child->otherLen = height;
+				if (child->flags & GWM_BOX_UP) child->otherLen += child->border;
+				if (child->flags & GWM_BOX_DOWN) child->otherLen += child->border;
 			};
 			
 			totalFixed += child->len;
