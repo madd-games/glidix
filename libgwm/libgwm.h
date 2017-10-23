@@ -1871,6 +1871,11 @@ void gwmDestroyBoxLayout(GWMLayout *layout);
 void gwmBoxLayoutAddWindow(GWMLayout *box, GWMWindow *win, int proportion, int border, int flags);
 
 /**
+ * Add a sub-layout to a box layout.
+ */
+void gwmBoxLayoutAddLayout(GWMLayout *box, GWMLayout *child, int proportion, int border, int flags);
+
+/**
  * Given a stock symbol, return its label (in the correct language).
  * Returns "??" for invalid labels.
  */
@@ -1907,5 +1912,27 @@ void gwmSetLabelWidth(GWMWindow *label, int width);
  * Get the icon surface ID of a window.
  */
 uint32_t gwmGetGlobIcon(GWMGlobWinRef *ref);
+
+/**
+ * Create a new image widget. This call should be followed by property-setting functions. Alternatively,
+ * you may use the convenience wrapper, gwmCreateImage().
+ */
+GWMWindow* gwmNewImage(GWMWindow *parent);
+
+/**
+ * Set the surface to be displayed on an image. NULL indicates no image.
+ */
+void gwmSetImageSurface(GWMWindow *image, DDISurface *surf);
+
+/**
+ * Set the viewport of an image. This indicates the offset into the surface, and size of the cropped area,
+ * to be drawn. A width or height of 0 indicates the maximum extent along the given axis.
+ */
+void gwmSetImageViewport(GWMWindow *image, int x, int y, int width, int height);
+
+/**
+ * Convenience wrapper to create an image of the specified surface and viewport.
+ */
+GWMWindow* gwmCreateImage(GWMWindow *parent, DDISurface *surf, int x, int y, int width, int height);
 
 #endif

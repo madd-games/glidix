@@ -496,3 +496,24 @@ void gwmBoxLayoutAddWindow(GWMLayout *box, GWMWindow *win, int proportion, int b
 		data->lastChild = child;
 	};
 };
+
+void gwmBoxLayoutAddLayout(GWMLayout *box, GWMLayout *sub, int proportion, int border, int flags)
+{
+	BoxChild *child = (BoxChild*) malloc(sizeof(BoxChild));
+	memset(child, 0, sizeof(BoxChild));
+	child->proportion = proportion;
+	child->border = border;
+	child->flags = flags;
+	child->layout = sub;
+	
+	BoxLayoutData *data = (BoxLayoutData*) box->data;
+	if (data->lastChild == NULL)
+	{
+		data->firstChild = data->lastChild = child;
+	}
+	else
+	{
+		data->lastChild->next = child;
+		data->lastChild = child;
+	};
+};

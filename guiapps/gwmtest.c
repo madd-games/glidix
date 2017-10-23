@@ -39,11 +39,15 @@ int main()
 	
 	GWMWindow *win = gwmCreateWindow(NULL, "GWM Test", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0,
 					GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
+	DDISurface *canvas = gwmGetWindowCanvas(win);
 	
 	GWMLayout *box = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
 	gwmSetWindowLayout(win, box);
 	
+	DDISurface *testSurf = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/mbicons.png", NULL);
+	
 	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_YES), 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
+	gwmBoxLayoutAddWindow(box, gwmCreateImage(win, testSurf, 32, 0, 32, 32), 0, 5, GWM_BOX_ALL);
 	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_NO), 1, 5, GWM_BOX_ALL | GWM_BOX_FILL);
 	gwmBoxLayoutAddWindow(box, gwmCreateLabel(win, "Hello world", 0), 0, 5, GWM_BOX_ALL);
 	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_CANCEL), 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
