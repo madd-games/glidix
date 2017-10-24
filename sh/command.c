@@ -660,46 +660,49 @@ int cmdRun(char *cmd)
 				};
 			};
 			
-			if (WIFSIGNALLED(status))
+			const char *suffix = "";
+			if (WCOREDUMP(status)) suffix = " (core dumped)";
+			
+			if (WIFSIGNALED(status))
 			{
 				int sig = WTERMSIG(status);
 				switch (sig)
 				{
 				case SIGABRT:
-					fprintf(stderr, "Aborted\n");
+					fprintf(stderr, "Aborted%s\n", suffix);
 					break;
 				case SIGALRM:
-					fprintf(stderr, "Alarm\n");
+					fprintf(stderr, "Alarm%s\n", suffix);
 					break;
 				case SIGBUS:
-					fprintf(stderr, "Bus error\n");
+					fprintf(stderr, "Bus error%s\n", suffix);
 					break;
 				case SIGFPE:
-					fprintf(stderr, "Arithmetic error\n");
+					fprintf(stderr, "Arithmetic error%s\n", suffix);
 					break;
 				case SIGHUP:
-					fprintf(stderr, "Hangup\n");
+					fprintf(stderr, "Hangup%s\n", suffix);
 					break;
 				case SIGILL:
-					fprintf(stderr, "Illegal instruction\n");
+					fprintf(stderr, "Illegal instruction%s\n", suffix);
 					break;
 				case SIGKILL:
-					fprintf(stderr, "Killed\n");
+					fprintf(stderr, "Killed%s\n", suffix);
 					break;
 				case SIGPIPE:
-					fprintf(stderr, "Broken pipe\n");
+					fprintf(stderr, "Broken pipe%s\n", suffix);
 					break;
 				case SIGSEGV:
-					fprintf(stderr, "Invalid memory access\n");
+					fprintf(stderr, "Invalid memory access%s\n", suffix);
 					break;
 				case SIGSTOP:
-					fprintf(stderr, "Stopped\n");
+					fprintf(stderr, "Stopped%s\n", suffix);
 					break;
 				case SIGTERM:
-					fprintf(stderr, "Terminated\n");
+					fprintf(stderr, "Terminated%s\n", suffix);
 					break;
 				case SIGSYS:
-					fprintf(stderr, "Bad system call\n");
+					fprintf(stderr, "Bad system call%s\n", suffix);
 					break;
 				};
 			};
@@ -742,5 +745,16 @@ int cmdRun(char *cmd)
 		group = next;
 	};
 
-	return status;
+	if (WIFEXITED(status))
+	{
+		return WEXITSTATUS(status);
+	}
+	else if (WIFSIGNALED(status))
+	{
+		return 128 + WTERMSIG(status);
+	}
+	else
+	{
+		return 255;
+	};
 };

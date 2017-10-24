@@ -93,7 +93,7 @@ static char* preprocVars(char *line)
 		{
 			argIndex = (int) (*scan) - '0';
 			
-			while ((*scan >= '0') && (*scan <= '9')) scan++;
+			scan++;
 			if (argIndex >= shScriptArgc)
 			{
 				value = NULL;
