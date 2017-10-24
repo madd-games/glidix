@@ -51,6 +51,7 @@ typedef struct
 	GWMButtonCallback	callback;
 	void			*callbackParam;
 	int			symbol;
+	int			minWidth;
 	int			prefWidth;
 } GWMButtonData;
 
@@ -107,7 +108,7 @@ static void gwmRedrawButton(GWMWindow *button)
 {
 	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(button);
-	if (canvas->width == 0 && data->prefWidth != 0) return;
+	if (canvas->width == 0 && data->minWidth != 0) return;
 
 	static DDIColor transparent = {0, 0, 0, 0};
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
@@ -150,7 +151,7 @@ static void gwmRedrawButton(GWMWindow *button)
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
-	data->prefWidth = txtWidth + 16;
+	data->minWidth = txtWidth + 16;
 	gwmPostDirty(button);
 };
 
@@ -167,10 +168,18 @@ static int defaultButtonCallback(void *context)
 	return gwmPostEvent((GWMEvent*) &event, button);
 };
 
-static void gwmSizeButton(GWMWindow *button, int *width, int *height)
+static void gwmMinSizeButton(GWMWindow *button, int *width, int *height)
 {
 	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
-	*width = data->prefWidth;
+	*width = data->minWidth;
+	*height = BUTTON_HEIGHT;
+};
+
+static void gwmPrefSizeButton(GWMWindow *button, int *width, int *height)
+{
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
+	if (data->prefWidth != 0) *width = data->prefWidth;
+	else *width = data->minWidth;
 	*height = BUTTON_HEIGHT;
 };
 
@@ -194,9 +203,11 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
 	data->callback = defaultButtonCallback;
 	data->callbackParam = button;
 	data->symbol = 0;
+	data->minWidth = 0;
 	data->prefWidth = 0;
 	
-	button->getMinSize = button->getPrefSize = gwmSizeButton;
+	button->getMinSize = gwmMinSizeButton;
+	button->getPrefSize = gwmPrefSizeButton;
 	button->position = gwmPositionButton;
 	
 	gwmPushEventHandler(button, gwmButtonHandler, data);
@@ -255,4 +266,10 @@ GWMWindow* gwmCreateButtonWithLabel(GWMWindow *parent, int symbol, const char *l
 	GWMWindow *btn = gwmCreateButton(parent, label, 0, 0, 0, 0);
 	gwmSetButtonSymbol(btn, symbol);
 	return btn;
+};
+
+void gwmSetButtonPrefWidth(GWMWindow *button, int width)
+{
+	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
+	data->prefWidth = width;
 };

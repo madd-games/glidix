@@ -36,7 +36,7 @@ int main()
 		fprintf(stderr, "Failed to initialize GWM!\n");
 		return 1;
 	};
-	
+#if 0
 	GWMWindow *win = gwmCreateWindow(NULL, "GWM Test", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0,
 					GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	DDISurface *canvas = gwmGetWindowCanvas(win);
@@ -66,8 +66,22 @@ int main()
 	{
 		ddiSavePNG(shot, "shot.png", NULL);
 	};
+#endif
+
+#if 0
+	GWMWindow *msg = gwmNewMessageDialog(NULL);
+	gwmSetMessageText(msg, "Hello, world!");
+	gwmSetMessageIconStd(msg, GWM_MBICON_WARN);
+	gwmMessageAddStockButton(msg, GWM_SYM_YES);
+	gwmMessageAddStockButton(msg, GWM_SYM_NO);
+	gwmSetWindowCaption(msg, "Test caption");
+	int answer = gwmRunMessageDialog(msg);
+	printf("Answer: %d\n", answer);
+#endif
+
+	printf("Answer: %d\n", gwmMessageBox(NULL, "Caption this", "Hello world", GWM_MBUT_OKCANCEL | GWM_MBICON_SUCCESS));
 	
-	gwmMainLoop();	
+	//gwmMainLoop();
 	gwmQuit();
 	return 0;
 };

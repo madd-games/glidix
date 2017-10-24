@@ -811,6 +811,19 @@ void gwmResizeWindow(GWMWindow *win, int width, int height)
 	write(queueFD, &cmd, sizeof(GWMCommand));
 };
 
+void gwmSetWindowCaption(GWMWindow *win, const char *caption)
+{
+	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
+	GWMCommand cmd;
+	cmd.atomicConfig.cmd = GWM_CMD_ATOMIC_CONFIG;
+	cmd.atomicConfig.seq = seq;
+	cmd.atomicConfig.win = win->id;
+	cmd.atomicConfig.which = GWM_AC_CAPTION;
+	strcpy(cmd.atomicConfig.caption, caption);
+	
+	write(queueFD, &cmd, sizeof(GWMCommand));
+};
+
 void gwmMoveWindow(GWMWindow *win, int x, int y)
 {
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);

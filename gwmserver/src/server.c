@@ -558,6 +558,11 @@ void* clientThreadFunc(void *context)
 				if (which & GWM_AC_WIDTH) win->params.width = cmd.atomicConfig.width;
 				if (which & GWM_AC_HEIGHT) win->params.height = cmd.atomicConfig.height;
 				
+				if (which & GWM_AC_CAPTION)
+				{
+					memcpy(win->params.caption, cmd.atomicConfig.caption, 256);
+				};
+				
 				newEndX = newX + win->params.width;
 				newEndY = newY + win->params.height;
 				
@@ -589,7 +594,7 @@ void* clientThreadFunc(void *context)
 				// update the decoration if needed
 				if (win->decorated)
 				{
-					if (which & (GWM_AC_WIDTH | GWM_AC_HEIGHT))
+					if (which & (GWM_AC_WIDTH | GWM_AC_HEIGHT | GWM_AC_CAPTION))
 					{
 						pthread_mutex_lock(&win->parent->lock);
 						
@@ -610,6 +615,7 @@ void* clientThreadFunc(void *context)
 						win->parent->canvas = ddiCreateSurface(&screen->format, win->parent->params.width, win->parent->params.height, NULL, 0);
 						win->parent->front = ddiCreateSurface(&screen->format, win->parent->params.width, win->parent->params.height, NULL, 0);
 						pthread_mutex_unlock(&win->parent->lock);
+						
 						wndDecorate(win->parent, win);
 					};
 				};

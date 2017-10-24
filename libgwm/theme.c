@@ -59,6 +59,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.server.wincolor.inactive",	GWM_TYPE_COLOR,		offsetof(GWMInfo, colWinInactive)},
 	{"gwm.server.wincolor.active",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colWinActive)},
 	{"gwm.tools.shutdown",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgShutdown)},
+	{"gwm.toolkit.mbicons",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgMessageIcons)},
 	
 	// LIST TERMINATOR
 	{NULL, 0, 0}
@@ -181,6 +182,21 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	ddiFillRect(surf, 0, 0, 320, 200, &bgr);
 	ddiFillRect(surf, 74, 68, 64, 64, &blue);
 	ddiFillRect(surf, 180, 68, 64, 64, &red);
+	
+	// message box icons
+	surf = surfaceSetup(format, &info->imgMessageIcons, 160, 32);
+	if (surf == NULL) return -1;
+	static DDIColor msgColors[5] = {
+		{0x00, 0x00, 0xFF, 0xFF},
+		{0xFF, 0x00, 0xFF, 0xFF},
+		{0xFF, 0xFF, 0x00, 0xFF},
+		{0xFF, 0x00, 0x00, 0xFF},
+		{0x00, 0xFF, 0x00, 0xFF}
+	};
+	for (i=0; i<5; i++)
+	{
+		ddiFillRect(surf, 32*i, 0, 32, 32, &msgColors[i]);
+	};
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

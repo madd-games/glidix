@@ -41,4 +41,8 @@ namespace gwm {
 	namespace tools {
 		image shutdown /usr/share/images/shutdown.png
 	}
+	
+	namespace toolkit {
+		image mbicons /usr/share/images/mbicons.png
+	}
 }

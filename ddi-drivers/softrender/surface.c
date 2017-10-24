@@ -76,7 +76,13 @@ static uint8_t* ddiCreateSharedFile(uint32_t *idOut, DDISurface *target)
 		char shpath[256];
 		sprintf(shpath, "/run/shsurf/%08X", val);
 		
-		int fd = open(shpath, O_RDWR | O_CREAT | O_EXCL, 0600);
+		mode_t mode = 0600;
+		if (geteuid() == 0)
+		{
+			mode = 0777;
+		};
+		
+		int fd = open(shpath, O_RDWR | O_CREAT | O_EXCL, mode);
 		if (fd == -1)
 		{
 			if (errno == EEXIST)

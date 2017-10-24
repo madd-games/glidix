@@ -864,9 +864,7 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 			{
 				((struct sockaddr_in6*)&local)->sin6_port = seg->dstport;
 				((struct sockaddr_in6*)&peer)->sin6_port = seg->srcport;
-				((struct sockaddr_in6*)&local)->sin6_scope_id = 0;
 				((struct sockaddr_in6*)&local)->sin6_flowinfo = 0;
-				((struct sockaddr_in6*)&peer)->sin6_scope_id = 0;
 				((struct sockaddr_in6*)&peer)->sin6_flowinfo = 0;
 			};
 		

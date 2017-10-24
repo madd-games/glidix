@@ -753,7 +753,8 @@ void wndMouseMove(int x, int y)
 		
 		if (wndActive->isDecoration)
 		{
-			if (decDragX <= wndActive->params.width-70 && decDragY < WINDOW_CAPTION_HEIGHT)
+			if ((decDragX <= wndActive->params.width-70 || (wndActive->params.flags & GWM_WINDOW_NOSYSMENU))
+				&& decDragY < WINDOW_CAPTION_HEIGHT)
 			{
 				// move the window
 				// (note that as a decoration, it is a child of the desktop window; we can assume

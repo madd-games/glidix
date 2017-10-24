@@ -119,6 +119,13 @@ GWMWindow* gwmNewImage(GWMWindow *parent)
 	return image;
 };
 
+void gwmDestroyImage(GWMWindow *image)
+{
+	ImageData *data = (ImageData*) gwmGetData(image, imageHandler);
+	gwmDestroyWindow(image);
+	free(data);
+};
+
 void gwmSetImageSurface(GWMWindow *image, DDISurface *surf)
 {
 	ImageData *data = (ImageData*) gwmGetData(image, imageHandler);

@@ -128,3 +128,11 @@ GWMWindow* gwmCreateLabel(GWMWindow *parent, const char *text, int width)
 	gwmSetLabelWidth(label, width);
 	return label;
 };
+
+void gwmDestroyLabel(GWMWindow *label)
+{
+	LabelData *data = (LabelData*) gwmGetData(label, labelHandler);
+	gwmDestroyWindow(label);
+	free(data->text);
+	free(data);
+};

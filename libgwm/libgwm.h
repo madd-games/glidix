@@ -51,6 +51,7 @@
 #define	GWM_ERR_NOSURF				2		/* cannot open shared surface */
 #define	GWM_ERR_INVAL				3		/* invalid value (e.g. already-used ID) */
 #define	GWM_ERR_NOENT				4		/* name does not exist */
+#define	GWM_ERR_NORC				5		/* not enough resources */
 
 /**
  * Event handler return statuses.
@@ -121,6 +122,7 @@ extern DDIColor gwmBackColor;
 #define	GWM_MBICON_QUEST			0x2
 #define	GWM_MBICON_WARN				0x3
 #define	GWM_MBICON_ERROR			0x4
+#define	GWM_MBICON_SUCCESS			0x5
 
 /**
  * Message box button sets. Bits 4-7 of the 'flags' parameter.
@@ -336,6 +338,12 @@ typedef struct
 	 * (Hence both 64x64)
 	 */
 	uint32_t				imgShutdown;
+	
+	/**
+	 * Message box icons surface. They are layed out horizontally, each 32x32.
+	 * From left to right: info, question, warning, error, success.
+	 */
+	uint32_t				imgMessageIcons;
 } GWMInfo;
 
 /**
@@ -487,6 +495,7 @@ typedef struct
 #define	GWM_AC_SCROLL_X				(1 << 4)
 #define	GWM_AC_SCROLL_Y				(1 << 5)
 #define	GWM_AC_CANVAS				(1 << 6)
+#define	GWM_AC_CAPTION				(1 << 7)
 
 /**
  * Commands understood by the window manager.
@@ -627,6 +636,7 @@ typedef union
 		int				scrollX;
 		int				scrollY;
 		uint32_t			canvasID;
+		char				caption[256];
 	} atomicConfig;
 	
 	struct
@@ -1125,6 +1135,11 @@ DDISurface* gwmGetWindowCanvas(GWMWindow *win);
 void gwmDestroyWindow(GWMWindow *win);
 
 /**
+ * Set the caption of a window.
+ */
+void gwmSetWindowCaption(GWMWindow *win, const char *caption);
+
+/**
  * Tell the window manager that a window needs re-drawing.
  */
 void gwmPostDirty(GWMWindow *win);
@@ -1200,13 +1215,57 @@ void gwmSetButtonFlags(GWMWindow *button, int flags);
 void gwmSetButtonSymbol(GWMWindow *button, int symbol);
 
 /**
+ * Set the preferred width of a button. If set to 0 (the default), the preferred width is the same as
+ * the minimum width required to fit the text.
+ */
+void gwmSetButtonPrefWidth(GWMWindow *button, int width);
+
+/**
  * Set the callback function for a button. Return value is the same as for event handlers.
  */
 typedef int (*GWMButtonCallback)(void *param);
 void gwmSetButtonCallback(GWMWindow *button, GWMButtonCallback callback, void *param);
 
 /**
- * Display a message box.
+ * Create a new message dialog. The 'parent' is primarily used for notifications, and may be NULL.
+ */
+GWMWindow* gwmNewMessageDialog(GWMWindow *parent);
+
+/**
+ * Set the text in a message dialog.
+ */
+void gwmSetMessageText(GWMWindow *msg, const char *text);
+
+/**
+ * Set the icon in a message dialog to be a specific viewport in a surface.
+ */
+void gwmSetMessageIconCustom(GWMWindow *msg, DDISurface *surf, int x, int y, int width, int height);
+
+/**
+ * Set the icon in a message dialog to a standard one (GWM_MBICON_*).
+ */
+void gwmSetMessageIconStd(GWMWindow *msg, int inum);
+
+/**
+ * Add a stock button to a message dialog. Returns 0 on success or GWM_ERR_NORC if the button limit has
+ * been exhausted. The button limit is 4.
+ */
+int gwmMessageAddStockButton(GWMWindow *msg, int symbol);
+
+/**
+ * Add a button with a custom symbol and label to a message dialog. Returns 0 on success or GWM_ERR_NORC
+ * if the button limit has been exhausted. The button limit is 4.
+ */
+int gwmMessageAddButton(GWMWindow *msg, int symbol, const char *label);
+
+/**
+ * Run a message dialog. This function destroys the message dialog, and returns the symbol of the button
+ * which the user clicked.
+ */
+int gwmRunMessageDialog(GWMWindow *msg);
+
+/**
+ * Display a message box. Returns the symbol of the button which was clicked.
  */
 int gwmMessageBox(GWMWindow *parent, const char *caption, const char *text, int flags);
 
@@ -1894,6 +1953,11 @@ void* gwmGetData(GWMWindow *win, GWMEventHandler handler);
 GWMWindow* gwmNewLabel(GWMWindow *parent);
 
 /**
+ * Destroy a label.
+ */
+void gwmDestroyLabel(GWMWindow *label);
+
+/**
  * Convenience wrapper to create a label with properties.
  */
 GWMWindow* gwmCreateLabel(GWMWindow *parent, const char *text, int width);
@@ -1918,6 +1982,11 @@ uint32_t gwmGetGlobIcon(GWMGlobWinRef *ref);
  * you may use the convenience wrapper, gwmCreateImage().
  */
 GWMWindow* gwmNewImage(GWMWindow *parent);
+
+/**
+ * Destroy an image.
+ */
+void gwmDestroyImage(GWMWindow *image);
 
 /**
  * Set the surface to be displayed on an image. NULL indicates no image.

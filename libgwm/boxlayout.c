@@ -84,6 +84,9 @@ static void gwmBoxMinSize(GWMLayout *box, int *outWidth, int *outHeight)
 	int otherAxis = mainAxis ^ 1;
 	dims[0] = dims[1] = 0;
 	
+	int otherLeftoverMax = 0;
+	int units = 0;
+	
 	BoxChild *child;
 	for (child=data->firstChild; child!=NULL; child=child->next)
 	{
@@ -118,11 +121,6 @@ static void gwmBoxMinSize(GWMLayout *box, int *outWidth, int *outHeight)
 		subdims[0] = width;
 		subdims[1] = height;
 
-		if (child->proportion != 0)
-		{
-			subdims[mainAxis] *= child->proportion;
-		};
-
 		if (child->flags & GWM_BOX_LEFT)
 		{
 			subdims[0] += child->border;
@@ -142,11 +140,20 @@ static void gwmBoxMinSize(GWMLayout *box, int *outWidth, int *outHeight)
 		{
 			subdims[1] += child->border;
 		};
-		
+
+		if (child->proportion != 0)
+		{
+			units += child->proportion;
+			if (dims[otherAxis] < subdims[otherAxis]) dims[otherAxis] = subdims[otherAxis];
+			if (otherLeftoverMax < subdims[mainAxis]) otherLeftoverMax = subdims[mainAxis];
+			continue;
+		};
+
 		dims[mainAxis] += subdims[mainAxis];
 		if (dims[otherAxis] < subdims[otherAxis]) dims[otherAxis] = subdims[otherAxis];
 	};
 	
+	dims[mainAxis] += otherLeftoverMax * units;
 	*outWidth = dims[0];
 	*outHeight = dims[1];
 };
@@ -159,7 +166,10 @@ static void gwmBoxPrefSize(GWMLayout *box, int *outWidth, int *outHeight)
 	int mainAxis = data->flags & GWM_BOX_VERTICAL;
 	int otherAxis = mainAxis ^ 1;
 	dims[0] = dims[1] = 0;
-	
+
+	int otherLeftoverMax = 0;
+	int units = 0;
+
 	BoxChild *child;
 	for (child=data->firstChild; child!=NULL; child=child->next)
 	{
@@ -193,12 +203,7 @@ static void gwmBoxPrefSize(GWMLayout *box, int *outWidth, int *outHeight)
 		int subdims[2];
 		subdims[0] = width;
 		subdims[1] = height;
-		
-		if (child->proportion != 0)
-		{
-			subdims[mainAxis] *= child->proportion;
-		};
-		
+
 		if (child->flags & GWM_BOX_LEFT)
 		{
 			subdims[0] += child->border;
@@ -217,6 +222,14 @@ static void gwmBoxPrefSize(GWMLayout *box, int *outWidth, int *outHeight)
 		if (child->flags & GWM_BOX_DOWN)
 		{
 			subdims[1] += child->border;
+		};
+
+		if (child->proportion != 0)
+		{
+			units += child->proportion;
+			if (dims[otherAxis] < subdims[otherAxis]) dims[otherAxis] = subdims[otherAxis];
+			if (otherLeftoverMax < subdims[mainAxis]) otherLeftoverMax = subdims[mainAxis];
+			continue;
 		};
 		
 		dims[mainAxis] += subdims[mainAxis];
@@ -383,7 +396,7 @@ static void gwmBoxRun(GWMLayout *layout, int x, int y, int width, int height)
 			};
 		};
 		
-		int otherOffset = (dims[otherAxis] - otherLen) / 2;
+		int otherOffset = (dims[otherAxis] - otherLen) / 2 + coords[otherAxis];
 		if (data->flags & GWM_BOX_VERTICAL)
 		{
 			if (child->flags & GWM_BOX_LEFT)
@@ -440,8 +453,9 @@ static void gwmBoxRun(GWMLayout *layout, int x, int y, int width, int height)
 		
 		// move on
 		resultSize[mainAxis] = len;
-		coords[0] += resultSize[0];
-		coords[1] += resultSize[1];
+		//coords[0] += resultSize[0];
+		//coords[1] += resultSize[1];
+		coords[mainAxis] += resultSize[mainAxis];
 	};
 };
 

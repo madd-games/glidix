@@ -347,7 +347,9 @@ size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned
  *		The returned surface is shared, and can be accessed by other applications.
  *		The 'id' field of the surface structure may be passed by another application to
  *		ddiOpenSurface() to get access to the surface (as long as they're both using
- *		the same display device).
+ *		the same display device). A shared surface created by a normal user can only
+ *		be opened by the same user. A shared surface created by root is accessible to
+ *		all users on the system.
  */
 DDISurface* ddiCreateSurface(DDIPixelFormat *format, unsigned int width, unsigned int height, char *data, unsigned int flags);
 
