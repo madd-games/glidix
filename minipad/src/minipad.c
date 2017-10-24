@@ -108,16 +108,16 @@ int onExit(void *ignore)
 				GWM_MBICON_WARN | GWM_MBUT_YESNOCANCEL);
 		switch (resp)
 		{
-		case 0:		/* yes */
+		case GWM_SYM_YES:
 			if (openedFile == NULL)
 			{
 				if (doFileChoice() != 0) return GWM_EVSTATUS_OK;
 			};
 			if (doFileSave() == 0) return GWM_EVSTATUS_BREAK;
 			return GWM_EVSTATUS_OK;
-		case 1:		/* no */
+		case GWM_SYM_NO:
 			return GWM_EVSTATUS_BREAK;
-		case 2:		/* cancel */
+		case GWM_SYM_CANCEL:
 			return GWM_EVSTATUS_OK;
 		};
 	};

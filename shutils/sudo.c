@@ -26,12 +26,15 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define _GLIDIX_SOURCE
 #include <stdio.h>
 #include <pwd.h>
 #include <termios.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
+#include <time.h>
 
 char password[128];
 char passcrypt[128];
@@ -134,6 +137,7 @@ int findPassword(const char *username)
 	return -1;
 };
 
+// TODO: sudoers file!
 int isAdmin()
 {
 	if ((getegid() == 0) || (getegid() == 1))
@@ -158,7 +162,50 @@ int isAdmin()
 	return 0;
 };
 
-// TODO: sudoers file!
+int hasAuthed()
+{
+	// check if the current user has recently (in the last 10 minutes) authenticated, and return
+	// nonzero if so. this is to avoid constantly asking for the password
+	
+	// first make sure the auth directories exist
+	mkdir("/run/sudo", 0755);
+	mkdir("/run/sudo/auth", 0700);
+	
+	char path[256];
+	sprintf(path, "/run/sudo/auth/%lu", getuid());
+	
+	struct stat st;
+	if (stat(path, &st) != 0)
+	{
+		unlink(path);	// in case it exists but something's wrong with it
+		return 0;
+	};
+	
+	// check if it was created less than 10 minutes ago
+	time_t earliestAllowed = time(NULL) - 10 * 60;
+	if (st.st_btime < earliestAllowed)
+	{
+		unlink(path);	// too old
+		return 0;
+	};
+	
+	return 1;
+};
+
+void authOk()
+{
+	// report successful authentication, so that the user doesn't have to re-authenticate until
+	// a timeout.
+	
+	// first make sure the auth directories exist
+	mkdir("/run/sudo", 0755);
+	mkdir("/run/sudo/auth", 0700);
+	
+	char path[256];
+	sprintf(path, "/run/sudo/auth/%lu", getuid());
+	close(open(path, O_CREAT | O_WRONLY, 0600));
+};
+
 int main(int argc, char *argv[])
 {
 	if (geteuid() != 0)
@@ -174,7 +221,7 @@ int main(int argc, char *argv[])
 	};
 
 	// root running sudo should just be like running env.
-	if (getuid() != 0)
+	if (getuid() != 0 && !hasAuthed())
 	{
 		struct passwd *pwd = getpwuid(getuid());
 		if (pwd == NULL)
@@ -209,6 +256,7 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
+				authOk();
 				break;
 			};
 		};
