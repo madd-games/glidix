@@ -162,7 +162,7 @@ int strcpy_u2k(char *dst, const char *src)
 
 void sys_exit(int status)
 {
-	processExit(status);
+	processExit(WS_EXIT(status));
 	kyield();
 };
 

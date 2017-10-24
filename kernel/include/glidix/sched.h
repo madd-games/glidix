@@ -116,6 +116,13 @@
 #define	WCONTINUED			(1 << 3)
 
 /**
+ * For manipulating the 'waitstatus' value.
+ */
+#define	WS_EXIT(ret)			(((ret) & 0xFF) << 8)	/* normal exit with status 'ret' */
+#define	WS_SIG(sig)			(sig)			/* terminated by signal 'sig' */
+#define	WS_CORE				(1 << 7)		/* bitwise-OR to set "core dumped" */
+
+/**
  * Debug flags.
  */
 #define	DBG_STOP_ON_EXEC		(1 << 0)
@@ -249,7 +256,7 @@ typedef struct
 	int				numGroups;
 	
 	/**
-	 * Exit status to be sent to the parent of the process when all the threads
+	 * Wait status to be sent to the parent of the process when all the threads
 	 * have terminated. This is set to zero initially; this way, if all threads
 	 * terminate by calling pthread_exit(), it will be as if the entire process
 	 * exited with exit() with a status of 0. Otherwise, if a thread calls exit(),
@@ -583,7 +590,7 @@ void threadExitEx(uint64_t retval);
 void threadExit();
 
 /**
- * Exit the entire process.
+ * Exit the entire process, setting the specified return status.
  */
 void processExit(int status);
 

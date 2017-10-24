@@ -63,21 +63,21 @@ void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
 	uint64_t addrGPR = frame->mstate.rsp - (sizeof(MachineState) - 512) - 128;
 	if (memcpy_k2u((void*)addrGPR, &frame->mstate.rflags, sizeof(MachineState)-512) != 0)
 	{
-		processExit(-SIGABRT);
+		processExit(WS_SIG(SIGABRT));
 	};
 	
 	// push the siginfo_t
 	uint64_t addrInfo = addrGPR - sizeof(siginfo_t);
 	if (memcpy_k2u((void*)addrInfo, &frame->si, sizeof(siginfo_t)) != 0)
 	{
-		processExit(-SIGABRT);
+		processExit(WS_SIG(SIGABRT));
 	};
 	
 	// now push the FPU registers; this must be 16-byte aligned.
 	uint64_t addrFPU = (addrInfo - 512) & ~0xF;
 	if (memcpy_k2u((void*)addrFPU, &frame->mstate, 512) != 0)
 	{
-		processExit(-SIGABRT);
+		processExit(WS_SIG(SIGABRT));
 	};
 	
 	// push the ucontext_t (TODO: maybe somehow avoid pushing the GPRs alongside it?)
@@ -105,7 +105,7 @@ void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
 	ctx.rsp = frame->mstate.rsp;
 	if (memcpy_k2u((void*)addrContext, &ctx, sizeof(SignalContext)) != 0)
 	{
-		processExit(-SIGABRT);
+		processExit(WS_SIG(SIGABRT));
 	};
 	
 	// push the return address
@@ -113,7 +113,7 @@ void jumpToHandler(SignalStackFrame *frame, uint64_t handler)
 	uint64_t sigretRIP = (uint64_t)(&usup_sigret) - (uint64_t)(&usup_start) + 0xFFFF808000003000UL;
 	if (memcpy_k2u((void*)addrRet, &sigretRIP, 8) != 0)
 	{
-		processExit(-SIGABRT);
+		processExit(WS_SIG(SIGABRT));
 	};
 	
 	Regs regs;
@@ -220,6 +220,7 @@ void dispatchSignal()
 		// not allowed to override SIGTHKILL
 		switchToKernelSpace(&thread->regs);
 		thread->regs.rip = (uint64_t) &threadExit;
+		thread->regs.rdi = 0;
 		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
 		return;
 	};
@@ -229,7 +230,7 @@ void dispatchSignal()
 		// not allowed to override SIGKILL
 		switchToKernelSpace(&thread->regs);
 		thread->regs.rip = (uint64_t) &processExit;
-		*((int64_t*)&thread->regs.rdi) = -SIGKILL;
+		*((int64_t*)&thread->regs.rdi) = WS_SIG(SIGKILL);
 		thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
 		return;
 	};
@@ -286,7 +287,7 @@ void dispatchSignal()
 		{
 			switchToKernelSpace(&thread->regs);
 			thread->regs.rip = (uint64_t) &processExit;
-			*((int64_t*)&thread->regs.rdi) = -siginfo->si_signo;
+			*((int64_t*)&thread->regs.rdi) = WS_SIG(siginfo->si_signo);
 			thread->regs.rsp = ((uint64_t) thread->stack + (uint64_t) thread->stackSize) & ~((uint64_t)0xF);
 		};
 		

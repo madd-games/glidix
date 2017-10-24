@@ -228,7 +228,7 @@ void coredump(siginfo_t *si, Regs *regs)
 	if (fp == NULL)
 	{
 		// failed to make a coredump!
-		processExit(-si->si_signo);
+		processExit(WS_SIG(si->si_signo));
 	};
 	
 	if (fp->truncate != NULL)
@@ -333,5 +333,5 @@ void coredump(siginfo_t *si, Regs *regs)
 	kfree(seglist);
 	kfree(thlist);
 	vfsClose(fp);
-	processExit(-si->si_signo);
+	processExit(WS_SIG(si->si_signo) | WS_CORE);
 };

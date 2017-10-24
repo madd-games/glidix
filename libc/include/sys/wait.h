@@ -40,10 +40,11 @@ extern "C" {
 #define	WUNTRACED		(1 << 2)
 #define	WCONTINUED		(1 << 3)
 
-#define	WIFEXITED(status)	((status) >= 0)
-#define	WEXITSTATUS(status)	(status)
-#define	WIFSIGNALLED(status)	((status) < 0)
-#define	WTERMSIG(status)	(-(status))
+#define	WEXITSTATUS(ws)		(((ws) & 0xFF00) >> 8)
+#define	WTERMSIG(ws)		((ws) & 0x7F)
+#define	WIFEXITED(ws)		(WTERMSIG(ws) == 0)
+#define WIFSIGNALED(status)	(((signed char) (((status) & 0x7f) + 1) >> 1) > 0)
+#define	WCOREDUMP(ws)		((ws) & (1 << 7))
 
 pid_t wait(int *stat_loc);
 pid_t waitpid(pid_t pid, int *stat_loc, int flags);
