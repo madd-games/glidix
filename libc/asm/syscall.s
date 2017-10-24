@@ -72,7 +72,7 @@ GLIDIX_SYSCALL	47,	dup2
 GLIDIX_SYSCALL	48,	pipe
 GLIDIX_SYSCALL	49,	_glidix_seterrnoptr
 GLIDIX_SYSCALL	50,	_glidix_geterrnoptr
-GLIDIX_SYSCALL	51,	clock
+GLIDIX_SYSCALL	51,	_glidix_nanotime
 GLIDIX_SYSCALL	52,	pread
 GLIDIX_SYSCALL	53,	pwrite
 GLIDIX_SYSCALL	54,	mmap

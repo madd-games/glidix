@@ -34,9 +34,10 @@ extern "C" {
 #endif
 
 #include <sys/types.h>
+#include <inttypes.h>
 
-#define	CLK_TCK				1000
-#define	CLOCKS_PER_SEC			1000000000
+#define	CLK_TCK				1000000
+#define	CLOCKS_PER_SEC			1000000				/* value required by POSIX */
 #define	TIME_MAX			9223372036854775807L
 
 struct tm
@@ -82,9 +83,10 @@ char*		ctime_r(const time_t *timer, char *buf);
 time_t		mktime(struct tm *tm);
 size_t		strftime(char *s, size_t maxsize, const char *format, const struct tm *timeptr);
 double		difftime(time_t time1, time_t time0);
+clock_t		clock();
 
 /* implemented by libglidix directly */
-clock_t		clock();
+uint64_t	_glidix_nanotime();
 
 #ifdef __cplusplus
 };		/* extern "C" */
