@@ -1085,7 +1085,14 @@ static ssize_t tcpsock_sendto(Socket *sock, const void *buffer, size_t size, int
 		ERRNO = EOPNOTSUPP;
 		return -1;
 	};
-	
+
+	int error = (int) atomic_swap32(&tcpsock->sockErr, 0);
+	if (error != 0)
+	{
+		ERRNO = error;
+		return -1;
+	};
+
 	uint8_t bitmap = 0;
 	Semaphore *semConn = &tcpsock->semConnected;
 	
@@ -1171,6 +1178,13 @@ static ssize_t tcpsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 	if (addrlen != NULL) *addrlen = INET_SOCKADDR_LEN;
 	if (addr != NULL) memcpy(addr, &tcpsock->peername, INET_SOCKADDR_LEN);
 	
+	int error = (int) atomic_swap32(&tcpsock->sockErr, 0);
+	if (error != 0)
+	{
+		ERRNO = error;
+		return -1;
+	};
+
 	int size = semWaitGen(&tcpsock->semRecvFetch, (int)len, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
 	if (size < 0)
 	{
