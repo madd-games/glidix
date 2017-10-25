@@ -676,10 +676,17 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 	};
 	
 	semWait(&tcpsock->lock);
-	if (tcpsock->state != TCP_CLOSED)
+	if (tcpsock->state == TCP_CONNECTING)
 	{
 		semSignal(&tcpsock->lock);
 		ERRNO = EALREADY;
+		return -1;
+	};
+	
+	if (tcpsock->state != TCP_CLOSED)
+	{
+		semSignal(&tcpsock->lock);
+		ERRNO = EISCONN;
 		return -1;
 	};
 	

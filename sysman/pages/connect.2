@@ -1,0 +1,39 @@
+>NAME
+
+connect - Establish the peer of a socket
+
+>SYNOPSIS
+
+	#include <sys/socket.h>
+	
+	int connect(int 'sockfd', const struct sockaddr *'addr', socklen_t 'addrlen');
+
+>DESCRIPTION
+
+This function establishes the addresss given in 'addr' as the peer of socket 'sockfd'. For connectionless sockets, this sets the default destination for [send.2]. For connection-oriented sockets, such as [tcp.6], it performs a handshake which establishes a connection with the remote host, and all calls to [send.2] communicate with this peer only.
+
+The 'addr' must be a socket address structure of the address family of the socket (e.g. 'struct sockaddr_in6' for *AF_INET6*), cast to a 'struct sockaddr' pointer. 'addrlen' specifies the size of the family-specific structure used.
+
+For connectionless sockets, this function returns immediately. For connection-oriented sockets, it by default blocks until a connection is established, or an error occurs. If the socket is non-blocking, or is interrupted by a signal (see [signal.6]), then this function returns '-1', sets [errno.6] to *EINPROGRESS*, and continues connecting asynchronously. In this case, [poll.2] will indicate that the socket is ready to write once the connection has been established. If an error occurs in an asynchronous connection, then a following socket operation (e.g. [send.2]) will return the error. Furthermore, if another socket function is called while the connection is still being established, then it will block or likewise return with error *EINPROGESS*.
+
+>RETURN VALUE
+
+This function returns 0 on success, or -1 on error, setting [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to an error number. Different types of sockets may return additional errors other than the ones listed below.
+
+\* *EFAULT* - 'addr' is outside addresses available for reading.
+\* *EBADF* - 'sockfd' is not a valid file descriptor.
+\* *ENOTSOCK* - 'sockfd' is a valid file descriptor but does not refer to a socket.
+\* *EOPNOTSUPP* - the socket referenced by 'sockfd' does not support connecting.
+\* *EAFNOSUPPORT* - 'addr' has the wrong address family, or 'addrlen' is not suitable for it.
+\* *EALREADY* - a connection attempt is already in progress (a previous 'connect()' returned with *EINPROGRESS* and is still being performed asynchronously).
+\* *EISCONN* - the socket is already connected, or listening, and the protocol does not support changing the peer.
+\* *EADDRINUSE* - the socket was not bound yet, and no port could be allocated to it.
+\* *EINPROGESS* - the socket is non-blocking, or the function was interrupted by a signal, and the connection has been being established asynchronously. A call to [poll.2] will report the socket as available for writing once the connection has been established.
+
+>SEE ALSO
+
+[socket.2], [listen.2], [signal.6], [bind.2]
