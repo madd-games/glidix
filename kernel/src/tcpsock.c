@@ -979,7 +979,6 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 		if (seg->flags & TCP_ACK)
 		{
 			uint64_t ackno = (uint64_t) ntohl(seg->ackno);
-			//kprintf("Received ACK number: %p; expecting %p\n", ackno, tcpsock->expectedAck);
 			if (atomic_compare_and_swap64(&tcpsock->expectedAck, ackno, (1UL << 32)) == ackno)
 			{
 				semSignal(&tcpsock->semAck);
@@ -1035,7 +1034,7 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 
 			semSignal(&tcpsock->lock);
 		}
-		else if (size > headerSize)
+		else if (seg->flags & TCP_PSH)
 		{
 			size_t payloadSize = size - headerSize;
 			const uint8_t *scan = (const uint8_t*)seg + headerSize;
@@ -1064,8 +1063,9 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 				semSignal2(&tcpsock->semRecvFetch, (int)payloadSize);
 				
 				tcpsock->nextAckNo += (uint32_t)payloadSize;
-				semSignal(&tcpsock->semAckOut);
 			};
+
+			semSignal(&tcpsock->semAckOut);
 			semSignal(&tcpsock->lock);
 		};
 		
