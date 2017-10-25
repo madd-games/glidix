@@ -32,7 +32,7 @@ On error, this function returns '-1' and sets [errno.6] to an error number. Diff
 \* *EALREADY* - a connection attempt is already in progress (a previous 'connect()' returned with *EINPROGRESS* and is still being performed asynchronously).
 \* *EISCONN* - the socket is already connected, or listening, and the protocol does not support changing the peer.
 \* *EADDRINUSE* - the socket was not bound yet, and no port could be allocated to it.
-\* *EINPROGESS* - the socket is non-blocking, or the function was interrupted by a signal, and the connection has been being established asynchronously. A call to [poll.2] will report the socket as available for writing once the connection has been established.
+\* *EINPROGESS* - the socket is non-blocking, or the function was interrupted by a signal, and the connection is being established asynchronously. A call to [poll.2] will report the socket as available for writing once the connection has been established.
 
 >SEE ALSO
 
