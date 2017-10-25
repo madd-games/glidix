@@ -157,6 +157,13 @@ make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/ddidrv.mip
 
+# gpm
+rm -rf mipdir || exit 1
+cd gpm
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/gpm.mip
+
 # initrd
 rm -rf mipdir || exit 1
 mkdir -p mipdir/run/mkinitrd

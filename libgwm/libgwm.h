@@ -1349,7 +1349,7 @@ void gwmGetScreenFormat(DDIPixelFormat *format);
 /**
  * Gets a list of top-level windows currently open on the desktop, as well as the currently-focused
  * window. Returns the amount of window references actually stored in the array. The array must be
- * large enough to store at least 128 window references. The pid of the focused window will be zero
+ * large enough to store at least 128 window references. The id of the focused window will be zero
  * if no window is focused. Either or both of the arguments may be NULL if you want to ignore the
  * corresponding information.
  */

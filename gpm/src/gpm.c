@@ -1,5 +1,5 @@
 /*
-	Glidix Shell Utilities
+	Glidix Package Manager
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,53 +26,10 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef MIP_H
-#define MIP_H
+#include <stdio.h>
 
-/**
- * Structures of the Madd Installable Package (MIP) file format.
- */
-
-#include <stdlib.h>
-#include <stdint.h>
-
-#define	MIP_MODE_TYPEMASK	0xF000
-
-#define	MIP_MODE_REGULAR	0x0000
-#define	MIP_MODE_ATTR		0x6000				/* attribute entry */
-#define	MIP_MODE_SYMLINK	0x7000
-#define	MIP_MODE_DIRECTORY	0x8000
-
-/* types of attribute entries (version 3 required) */
-#define	MIP_ATTR_PKGNAME	0x6000				/* package name */
-#define	MIP_ATTR_PKGVER		0x6001				/* package version (MIPVersion) */
-
-typedef struct
+int main()
 {
-	uint8_t			magic[3];			/* MIP */
-	uint8_t			version;			/* 1 - 3 */
-	
-	/* only if version >= 2 */
-	char			setupFile[256];			/* file to execute after unpacking, or empty string */
-} MIPHeader;
-
-typedef struct
-{
-	char			filename[256];
-	uint16_t		mode;				/* bit 0x8000 means directory */
-	uint64_t		size;
-} MIPFile;
-
-typedef union
-{
-	uint32_t		value;				/* version as a comparable value */
-	struct
-	{
-		uint8_t		rc;				/* release candidate number (0 for stable) */
-		uint8_t		patchlevel;
-		uint8_t		minor;
-		uint8_t		major;
-	};
-} MIPPackage;
-
-#endif
+	printf("hello world\n");
+	return 0;
+};
