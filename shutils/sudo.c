@@ -29,16 +29,122 @@
 #define _GLIDIX_SOURCE
 #include <stdio.h>
 #include <pwd.h>
+#include <grp.h>
 #include <termios.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
 #include <time.h>
+#include <errno.h>
 
 char password[128];
 char passcrypt[128];
 char shname[128];
+
+int canSudo()
+{
+	if (getuid() == 0) return 1;
+
+	FILE *fp = fopen("/etc/sudoers", "r");
+	if (fp == NULL)
+	{
+		fprintf(stderr, "CRITICAL: cannot open /etc/sudoers for reading: %s\n", strerror(errno));
+		abort();
+	};
+	
+	char linebuf[1024];
+	int lineno = 0;
+	while (fgets(linebuf, 1024, fp) != NULL)
+	{
+		// remove comments
+		lineno++;
+		char *comment = strchr(linebuf, '#');
+		if (comment != NULL) *comment = 0;
+		char *endline = strchr(linebuf, '\n');
+		if (endline != NULL) *endline = 0;
+		
+		char *dir = strtok(linebuf, " \t");
+		if (dir == NULL) continue;
+		
+		char *name = strtok(NULL, " \t");
+		if (name == NULL)
+		{
+			fprintf(stderr, "CRITICAL: syntax error in /etc/sudoers on line %d\n", lineno);
+			abort();
+		};
+		
+		if (strcmp(dir, "user") == 0)
+		{
+			struct passwd *info = getpwnam(name);
+			if (info == NULL) continue;
+			if (info->pw_uid != getuid()) continue;
+		}
+		else if (strcmp(dir, "group") == 0)
+		{
+			struct group *info = getgrnam(name);
+			if (info == NULL) continue;
+
+			int numGroups = getgroups(0, NULL);
+			gid_t *groups = (gid_t*) malloc(sizeof(gid_t)*numGroups);
+			getgroups(numGroups, groups);
+	
+			int i;
+			int found = 0;
+			for (i=0; i<numGroups; i++)
+			{
+				if (groups[i] == info->gr_gid)
+				{
+					found = 1;
+					break;
+				};
+			};
+			
+			free(groups);
+			if (!found)
+			{
+				if (info->gr_gid != getgid())
+				{
+					continue;
+				};
+			};
+		}
+		else
+		{
+			fprintf(stderr, "CRITICAL: invalid directive in /etc/sudoers on line %d\n", lineno);
+			abort();
+		};
+		
+		int def;
+		char *deftok = strtok(NULL, " \t");
+		if (deftok == NULL)
+		{
+			fprintf(stderr, "CRITICAL: syntax error in /etc/sudoers on line %d\n", lineno);
+			abort();
+		};
+		
+		if (strcmp(deftok, "allow") == 0)
+		{
+			def = 1;
+		}
+		else if (strcmp(deftok, "deny") == 0)
+		{
+			def = 0;
+		}
+		else
+		{
+			fprintf(stderr, "CRITICAL: syntax error in /etc/sudoers on line %d\n", lineno);
+			abort();
+		};
+		
+		// TODO: exceptions
+		fclose(fp);
+		return def;
+	};
+	
+	fclose(fp);
+	return 0;	// do not allow by default
+};
 
 void getline(char *buffer)
 {
@@ -137,31 +243,6 @@ int findPassword(const char *username)
 	return -1;
 };
 
-// TODO: sudoers file!
-int isAdmin()
-{
-	if ((getegid() == 0) || (getegid() == 1))
-	{
-		return 1;
-	};
-	
-	int numGroups = getgroups(0, NULL);
-	gid_t *groups = (gid_t*) malloc(sizeof(gid_t)*numGroups);
-	getgroups(numGroups, groups);
-	
-	int i;
-	for (i=0; i<numGroups; i++)
-	{
-		if ((groups[i] == 0) || (groups[i] == 1))
-		{
-			free(groups);
-			return 1;
-		};
-	};
-	
-	return 0;
-};
-
 int hasAuthed()
 {
 	// check if the current user has recently (in the last 10 minutes) authenticated, and return
@@ -214,9 +295,9 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 
-	if (!isAdmin())
+	if (!canSudo())
 	{
-		fprintf(stderr, "%s: you are not an admin\n", argv[0]);
+		fprintf(stderr, "%s: you do not have sudo permission\n", argv[0]);
 		return 1;
 	};
 

@@ -68,6 +68,7 @@
 int memcpy_u2k(void *dst_, const void *src_, size_t size)
 {
 	// user to kernel: src is in userspace
+	if (size == 0) return 0;
 	uint64_t start = (uint64_t) src_;
 	uint64_t end = (uint64_t) src_ + size;
 	
@@ -103,6 +104,7 @@ int memcpy_u2k(void *dst_, const void *src_, size_t size)
 int memcpy_k2u(void *dst_, const void *src_, size_t size)
 {
 	// kernel to user: dst is in userspace
+	if (size == 0) return 0;
 	uint64_t start = (uint64_t) dst_;
 	uint64_t end = (uint64_t) dst_ + size;
 	

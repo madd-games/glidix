@@ -28,3 +28,4 @@ install:
 	cp $(SRCDIR)/passwd $(DESTDIR)/etc/passwd
 	cp $(SRCDIR)/shadow $(DESTDIR)/etc/shadow
 	cp $(SRCDIR)/group $(DESTDIR)/etc/group
+	cp $(SRCDIR)/sudoers $(DESTDIR)/etc/sudoers

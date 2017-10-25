@@ -171,10 +171,21 @@ void userSetup()
 	
 	chmod("/mnt/etc/shadow", 0600);
 	
-	// and finally /etc/group
+	// now /etc/group
 	fp = fopen("/mnt/etc/group", "w");
 	fprintf(fp, "root:x:0:root\n");
 	fprintf(fp, "admin:x:1:root,%s\n", username);
 	fprintf(fp, "%s:x:1000:%s\n", username, username);
 	fclose(fp);
+	
+	// finally /etc/sudoers
+	// give the 'admin' group sole permission to sudo for now
+	fp = fopen("/mnt/etc/sudoers", "w");
+	fprintf(fp, "# /etc/sudoers\n");
+	fprintf(fp, "# This file controls who and how is allowed to use 'sudo'\n");
+	fprintf(fp, "# See sudoers(3) for more information.\n");
+	fprintf(fp, "group admin allow\n");
+	fclose(fp);
+	
+	chmod("/mnt/etc/sudoers", 0600);
 };
