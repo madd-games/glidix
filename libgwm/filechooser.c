@@ -226,7 +226,7 @@ static int onAccept(void *context)
 			int selection = gwmMessageBox(NULL, "Save File",
 						"The specified file already exists! Do you want to replace it?",
 						GWM_MBICON_WARN | GWM_MBUT_YESNO);
-			ok = (selection == 0);
+			ok = (selection == GWM_SYM_YES);
 		};
 		
 		if (ok)
