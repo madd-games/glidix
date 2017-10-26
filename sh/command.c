@@ -176,7 +176,7 @@ static int executeGroup(CmdGroup *group)
 			if (chdir(dir) != 0)
 			{
 				fprintf(stderr, "cd: %s: %s\n", dir, strerror(errno));
-				member->status = 1;
+				member->status = 0x0100;
 				continue;
 			};
 			
@@ -187,7 +187,7 @@ static int executeGroup(CmdGroup *group)
 			if (ptr[1] == NULL)
 			{
 				fprintf(stderr, "SYNTAX:\t. <script>\n");
-				member->status = 1;
+				member->status = 0x0100;
 				continue;
 			};
 			
@@ -195,7 +195,7 @@ static int executeGroup(CmdGroup *group)
 			if (fp == NULL)
 			{
 				fprintf(stderr, "%s: %s\n", ptr[1], strerror(errno));
-				member->status = 1;
+				member->status = 0x0100;
 				continue;
 			};
 			
@@ -208,7 +208,7 @@ static int executeGroup(CmdGroup *group)
 			if (ptr == NULL)
 			{
 				fprintf(stderr, "USAGE:\texec <command> [args]...\n");
-				member->status = 1;
+				member->status = 0x0100;
 				continue;
 			};
 			
@@ -216,13 +216,13 @@ static int executeGroup(CmdGroup *group)
 			if (findExecPath(*ptr, execPath) != 0)
 			{
 				fprintf(stderr, "%s: command not found\n", *ptr);
-				member->status = 1;
+				member->status = 0x0100;
 				continue;
 			};
 			
 			execve(execPath, ptr, localEnviron.list);
 			fprintf(stderr, "exec %s: %s\n", *ptr, strerror(errno));
-			member->status = 1;
+			member->status = 0x0100;
 		}
 		else if ((*ptr)[0] == '{')
 		{
@@ -343,7 +343,7 @@ static int executeGroup(CmdGroup *group)
 			if (findExecPath(*ptr, execPath) != 0)
 			{
 				fprintf(stderr, "%s: command not found\n", *ptr);
-				member->status = 1;
+				member->status = 0x0100;
 				continue;
 			};
 
