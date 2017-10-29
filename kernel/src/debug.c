@@ -49,7 +49,6 @@ void stackTrace(uint64_t rip, uint64_t rbp)
 	{
 		while (1)
 		{
-			//Symbol *symbol = findSymbolForAddr(rip);
 			SymbolInfo info;
 			findDebugSymbolInModules(rip, &info);
 			kprintf("0x%016lX 0x%016lX %s:%s+%lu\n", rip, rbp, info.modname, info.symname, info.offset);
@@ -58,6 +57,7 @@ void stackTrace(uint64_t rip, uint64_t rbp)
 			rbp = lastFrame[0];
 			rip = lastFrame[1];
 			if (rbp == 0) break;
+			if (rip < 0xFFFF800000000000) break;
 		};
 		uncatch();
 	}

@@ -445,11 +445,7 @@ void isrHandler(Regs *regs)
 			thread = thread->next;
 		} while (thread != &firstThread);
 		
-		while (1)
-		{
-			cli();
-			hlt();
-		};
+		panic("NMI");
 		
 		break;
 	case I_UNDEF_OPCODE:

@@ -3433,55 +3433,6 @@ int sys_sigsuspend(uint64_t mask)
 	return -1;
 };
 
-int sys_lockf(int fd, int cmd, off_t len)
-{
-	File *fp = ftabGet(getCurrentThread()->ftab, fd);
-	if (fp == NULL)
-	{
-		ERRNO = EBADF;
-		return -1;
-	};
-	
-	if ((cmd == F_LOCK) || (cmd == F_TLOCK))
-	{
-		if ((fp->oflag & O_WRONLY) == 0)
-		{
-			// file not writeable, can't lock
-			vfsClose(fp);
-			ERRNO = EBADF;
-			return -1;
-		};
-	};
-	
-	off_t pos = 0;
-	if (fp->seek != NULL)
-	{
-		pos = fp->seek(fp, 0, SEEK_CUR);
-	};
-	
-	struct stat st;
-	if (fp->fstat == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EOPNOTSUPP;
-		return -1;
-	};
-	
-	if (fp->fstat(fp, &st) != 0)
-	{
-		vfsClose(fp);
-		ERRNO = EIO;
-		return -1;
-	};
-	
-	int error = vfsFileLock(fp, cmd, st.st_dev, st.st_ino, pos, len);
-	vfsClose(fp);
-	
-	ERRNO = error;
-	if (error != 0) return -1;
-	return 0;
-};
-
 int sys_mcast(int fd, int op, uint32_t scope, uint64_t addr0, uint64_t addr1)
 {
 	struct in6_addr addr;
@@ -3825,11 +3776,192 @@ int sys_systat(void *buffer, size_t sz)
 	return 0;
 };
 
+int sys_flock_set(int fd, FLock *ulock, int block)
+{
+	FLock klock;
+	if (memcpy_u2k(&klock, ulock, sizeof(FLock)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (klock.l_whence != SEEK_CUR && klock.l_whence != SEEK_SET && klock.l_whence != SEEK_END)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (klock.l_type != RL_READ && klock.l_type != RL_WRITE && klock.l_type != RL_UNLOCK)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	if (fp->tree == NULL)
+	{
+		vfsClose(fp);
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (fp->seek == NULL)
+	{
+		vfsClose(fp);
+		ERRNO = EINVAL;
+		return -1;
+	};
+
+	FileTree *ft = fp->tree(fp);
+	uint64_t start;
+	switch (klock.l_whence)
+	{
+	case SEEK_SET:
+		start = (uint64_t) klock.l_start;
+		break;
+	case SEEK_CUR:
+		start = (uint64_t) (fp->seek(fp, 0, SEEK_CUR) + klock.l_start);
+		break;
+	case SEEK_END:
+		start = (uint64_t) (ft->size + klock.l_start);
+		break;
+	};
+	
+	uint64_t size;
+	if (klock.l_len == 0)
+	{
+		size = ~start;
+	}
+	else
+	{
+		size = (uint64_t) klock.l_len;
+	};
+	
+	int result = ftSetLock(ft, klock.l_type, start, size, block);
+	ftDown(ft);
+	vfsClose(fp);
+	
+	if (result != 0)
+	{
+		ERRNO = result;
+		return -1;
+	};
+	
+	return 0;
+};
+
+int sys_flock_get(int fd, FLock *ulock)
+{
+	FLock klock;
+	if (memcpy_u2k(&klock, ulock, sizeof(FLock)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (klock.l_whence != SEEK_SET && klock.l_whence != SEEK_CUR && klock.l_whence != SEEK_END)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	if (fp->tree == NULL)
+	{
+		vfsClose(fp);
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (fp->seek == NULL)
+	{
+		vfsClose(fp);
+		ERRNO = EINVAL;
+		return -1;
+	};
+
+	FileTree *ft = fp->tree(fp);
+	uint64_t start;
+	switch (klock.l_whence)
+	{
+	case SEEK_SET:
+		start = (uint64_t) klock.l_start;
+		break;
+	case SEEK_CUR:
+		start = (uint64_t) (fp->seek(fp, 0, SEEK_CUR) + klock.l_start);
+		break;
+	case SEEK_END:
+		start = (uint64_t) (ft->size + klock.l_start);
+		break;
+	};
+	
+	uint64_t size;
+	int type;
+	
+	ftGetLock(ft, &type, &klock.l_pid, &start, &size);
+	ftDown(ft);
+	vfsClose(fp);
+	
+	klock.l_type = type;
+	klock.l_whence = SEEK_SET;
+	klock.l_start = start;
+	klock.l_len = size;
+	
+	if (memcpy_k2u(ulock, &klock, sizeof(FLock)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	return 0;
+};
+
+int sys_fcntl_setfl(int fd, int oflag)
+{
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	int allFlags = O_NONBLOCK;
+	fp->oflag = (fp->oflag & ~allFlags) | (oflag & allFlags);
+	vfsClose(fp);
+	return 0;
+};
+
+int sys_fcntl_getfl(int fd)
+{
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	int oflag = fp->oflag;
+	vfsClose(fp);
+	return oflag;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 138
+#define SYSCALL_NUMBER 142
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3954,7 +4086,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_kopt,				// 120
 	&sys_sigwait,				// 121
 	&sys_sigsuspend,			// 122
-	&sys_lockf,				// 123
+	SYS_NULL,				// 123 [was lockf() ]
 	&sys_mcast,				// 124
 	&sys_fpoll,				// 125
 	&sys_oxperm,				// 126
@@ -3969,6 +4101,10 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sysInvalid,				// 135 [guaranteed to always be unused!]
 	&sys_systat,				// 136
 	&sys_fsdrv,				// 137
+	&sys_flock_set,				// 138
+	&sys_flock_get,				// 139
+	&sys_fcntl_setfl,			// 140
+	&sys_fcntl_getfl,			// 141
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

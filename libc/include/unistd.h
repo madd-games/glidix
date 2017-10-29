@@ -98,6 +98,7 @@ int		setpgrp();
 pid_t		getpgrp();
 pid_t		tcgetpgrp(int fd);
 int		tcsetpgrp(int fd, pid_t pgrp);
+int		lockf(int fd, int cmd, off_t len);
 
 /* implemented by libglidix directly */
 ssize_t		write(int fildes, const void *buf, size_t nbyte);
@@ -144,7 +145,6 @@ pid_t		getsid(pid_t pid);
 pid_t		getpgid(pid_t pid);
 ssize_t		pread(int fd, void *buf, size_t count, off_t offset);
 ssize_t		pwrite(int fd, const void *buf, size_t count, off_t offset);
-int		lockf(int fd, int cmd, off_t len);
 void		sync();
 int		nice(int incr);
 

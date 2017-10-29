@@ -121,11 +121,10 @@ static void gwmRedrawButton(GWMWindow *button)
 	
 	if (imgButton == NULL)
 	{
-		const char *error;
-		imgButton = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/button.png", &error);
+		imgButton = (DDISurface*) gwmGetThemeProp("gwm.toolkit.button", GWM_TYPE_SURFACE, NULL);
 		if (imgButton == NULL)
 		{
-			fprintf(stderr, "Failed to load button image (/usr/share/images/button.png): %s\n", error);
+			fprintf(stderr, "Failed to load button image\n");
 			abort();
 		};
 	};
@@ -168,14 +167,7 @@ static int defaultButtonCallback(void *context)
 	return gwmPostEvent((GWMEvent*) &event, button);
 };
 
-static void gwmMinSizeButton(GWMWindow *button, int *width, int *height)
-{
-	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
-	*width = data->minWidth;
-	*height = BUTTON_HEIGHT;
-};
-
-static void gwmPrefSizeButton(GWMWindow *button, int *width, int *height)
+static void gwmSizeButton(GWMWindow *button, int *width, int *height)
 {
 	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
 	if (data->prefWidth != 0) *width = data->prefWidth;
@@ -206,8 +198,7 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
 	data->minWidth = 0;
 	data->prefWidth = 0;
 	
-	button->getMinSize = gwmMinSizeButton;
-	button->getPrefSize = gwmPrefSizeButton;
+	button->getMinSize = button->getPrefSize = gwmSizeButton;
 	button->position = gwmPositionButton;
 	
 	gwmPushEventHandler(button, gwmButtonHandler, data);

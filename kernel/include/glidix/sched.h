@@ -691,4 +691,11 @@ void traceTrapEx(Regs *regs, int reason, int value);
  */
 void detachMe();
 
+/**
+ * Return the process ID that is closing a file. This is used for advisory locking. It returns the current PID if we're in
+ * a normal running process, or the dying process' ID for which files are currently being closed, if in the system management
+ * thread.
+ */
+int getClosingPid();
+
 #endif

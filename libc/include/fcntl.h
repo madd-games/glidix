@@ -54,6 +54,24 @@
 #define	F_SETFD				2
 #define	F_GETFL				3
 #define	F_SETFL				4
+#define	F_GETLK				5
+#define	F_SETLK				6
+#define	F_SETLKW			7
+
+/* lock types */
+#define	F_UNLCK					0
+#define	F_RDLCK					1
+#define	F_WRLCK					2
+
+struct flock
+{
+	short int				l_type;
+	short int				l_whence;
+	int					l_pid;
+	off_t					l_start;
+	off_t					l_len;
+	unsigned long				__l_resv[8];
+};
 
 #ifdef __cplusplus
 extern "C" {

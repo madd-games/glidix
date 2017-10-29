@@ -60,6 +60,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.server.wincolor.active",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colWinActive)},
 	{"gwm.tools.shutdown",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgShutdown)},
 	{"gwm.toolkit.mbicons",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgMessageIcons)},
+	{"gwm.toolkit.button",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgButton)},
 	
 	// LIST TERMINATOR
 	{NULL, 0, 0}
@@ -197,6 +198,17 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	{
 		ddiFillRect(surf, 32*i, 0, 32, 32, &msgColors[i]);
 	};
+	
+	// button
+	surf = surfaceSetup(format, &info->imgButton, 17, 120);
+	if (surf == NULL) return -1;
+	static DDIColor buttonNormal = {0xDD, 0xDD, 0xDD, 0xFF};
+	static DDIColor buttonHover = {0xEE, 0xEE, 0xEE, 0xFF};
+	static DDIColor buttonDisabled = {0x55, 0x55, 0x55, 0xFF};
+	drawButton(surf, 0, 0, 17, 30, &buttonNormal, 0);
+	drawButton(surf, 0, 30, 17, 30, &buttonHover, 0);
+	drawButton(surf, 0, 60, 17, 30, &buttonNormal, 1);
+	drawButton(surf, 0, 90, 17, 30, &buttonDisabled, 0);
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

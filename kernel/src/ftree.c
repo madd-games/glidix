@@ -58,22 +58,26 @@ FileTree* ftCreate(int flags)
 	ft->update = NULL;
 	ft->getpage = NULL;
 	ft->size = 0;
+	rlInit(&ft->rlock);
 	
-	mutexLock(&ftMtx);
-	if (ftLast == NULL)
+	if ((flags & FT_ANON) == 0)
 	{
-		ft->prev = ft->next = NULL;
-		ftFirst = ftLast = ft;
-	}
-	else
-	{
-		ft->prev = ftLast;
-		ft->next = NULL;
-		ftLast->next = ft;
-		ftLast = ft;
+		mutexLock(&ftMtx);
+		if (ftLast == NULL)
+		{
+			ft->prev = ft->next = NULL;
+			ftFirst = ftLast = ft;
+		}
+		else
+		{
+			ft->prev = ftLast;
+			ft->next = NULL;
+			ftLast->next = ft;
+			ftLast = ft;
+		};
+		mutexUnlock(&ftMtx);
 	};
-	mutexUnlock(&ftMtx);
-	
+
 	return ft;
 };
 
@@ -377,6 +381,7 @@ int ftTruncate(FileTree *ft, size_t size)
 
 void ftUncache(FileTree *ft)
 {
+	// TODO: maybe remove all the file locks ??
 	mutexLock(&ftMtx);
 	if (ft->prev != NULL) ft->prev->next = ft->next;
 	if (ftFirst == ft) ftFirst = ft->next;
@@ -385,9 +390,8 @@ void ftUncache(FileTree *ft)
 	ft->load = NULL;
 	ft->flush = NULL;
 	ft->update = NULL;
-	mutexUnlock(&ftMtx);
-	
 	ft->flags |= FT_ANON;
+	mutexUnlock(&ftMtx);
 };
 
 static uint64_t tryFreeFrame(FileTree *ft, int level, FileNode *node, uint64_t base)
@@ -475,4 +479,23 @@ uint64_t ftGetFreePage()
 	currentlyInFreePage = 0;
 	mutexUnlock(&ftMtx);
 	return 0;
+};
+
+void ftReleaseProcessLocks(FileTree *ft)
+{
+	uint64_t key = (uint64_t) getClosingPid();
+	rlReleaseKey(&ft->rlock, key);
+};
+
+int ftSetLock(FileTree *ft, int type, uint64_t start, uint64_t size, int block)
+{
+	uint64_t key = (uint64_t) getCurrentThread()->creds->pid;
+	return rlSet(&ft->rlock, type, key, start, size, block);
+};
+
+void ftGetLock(FileTree *ft, int *type, int *pidOut, uint64_t *start, uint64_t *size)
+{
+	uint64_t key = (uint64_t) getCurrentThread()->creds->pid;
+	rlGet(&ft->rlock, type, &key, start, size);
+	*pidOut = (int) key;
 };

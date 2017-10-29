@@ -190,27 +190,6 @@ struct dirent
 #endif
 
 /**
- * Describes a file lock.
- */
-typedef struct FileLock_
-{
-	struct FileLock_*		prev;
-	struct FileLock_*		next;
-	
-	/**
-	 * The device number and inode of the file that this lock is on.
-	 */
-	dev_t				dev;
-	ino_t				ino;
-	
-	/**
-	 * The semaphore that must be acquired to get this lock.
-	 */
-	struct Semaphore_*		sem;
-	int				__end;
-} FileLock;
-
-/**
  * Describes a "system object". It's an object with a name in the filesystem, which may be
  * retrieved and stored by the kernel, and keeps a reference count and a value. This is used
  * for example for local (UNIX) sockets.
@@ -283,7 +262,7 @@ typedef struct _File
 	ssize_t (*write)(struct _File *file, const void *buffer, size_t size);
 
 	/**
-	 * Seek to a different position in the file.
+	 * Seek to a different position in the file. Return the old position.
 	 */
 	off_t (*seek)(struct _File *file, off_t offset, int whence);
 
@@ -353,11 +332,6 @@ typedef struct _File
 	 */
 	ssize_t (*pread)(struct _File *file, void *buf, size_t count, off_t offset);
 	ssize_t (*pwrite)(struct _File *file, const void *buffer, size_t count, off_t offset);
-	
-	/**
-	 * Locks held by this file descriptor. This list must be handled using atomic operations.
-	 */
-	FileLock* locks[VFS_MAX_LOCKS_PER_FILE];
 	
 	/**
 	 * Get pollable event information about this file. 'sems' points to an array of pointers to 8 semaphores,
@@ -577,6 +551,19 @@ typedef struct fsinfo
 	char					fs_pad[968];
 } FSInfo;
 
+/**
+ * File lock description structure, matching with "struct flock" from the C library.
+ */
+typedef struct
+{
+	short int				l_type;
+	short int				l_whence;
+	int					l_pid;
+	off_t					l_start;
+	off_t					l_len;
+	uint64_t				l_resv[8];
+} FLock;
+
 void dumpFS(FileSystem *fs);
 int vfsCanCurrentThread(struct stat *st, mode_t mask);
 
@@ -605,13 +592,6 @@ void vfsClose(File *file);
 void vfsInit();
 void vfsLockCreation();
 void vfsUnlockCreation();
-
-/**
- * Perform one of the lockf() operations on the specified inode on the specified device. Returns 0
- * on success or an errno on error. If 'fp' is not NULL, associate the lock with the given file
- * description, such that when it is closed, the lock is released.
- */
-int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len);
 
 /**
  * Returns a pointer to a semaphore which always has value 1.

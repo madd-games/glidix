@@ -1,6 +1,5 @@
 /*
 	Glidix Runtime
-
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
@@ -26,37 +25,55 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <sys/glidix.h>
-#include <sys/call.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <stdarg.h>
+#include <string.h>
 #include <errno.h>
 
-int fcntl(int fd, int cmd, ...)
+int lockf(int fd, int cmd, off_t len)
 {
-	va_list ap;
-	va_start(ap, cmd);
-
-	switch (cmd)
+	struct flock lock;
+	memset(&lock, 0, sizeof(struct flock));
+	lock.l_whence = SEEK_CUR;
+	lock.l_start = 0;
+	lock.l_len = len;
+	lock.l_type = F_WRLCK;
+	
+	if (cmd == F_LOCK)
 	{
-	case F_DUPFD:
-		return dup2(fd, va_arg(ap, int));
-	case F_GETFD:
-		return _glidix_fcntl_getfd(fd);
-	case F_SETFD:
-		return _glidix_fcntl_setfd(fd, va_arg(ap, int));
-	case F_GETFL:
-		return __syscall(__SYS_fcntl_getfl, fd);
-	case F_SETFL:
-		return __syscall(__SYS_fcntl_setfl, fd, va_arg(ap, int));
-	case F_GETLK:
-		return __syscall(__SYS_flock_get, fd, va_arg(ap, struct flock*));
-	case F_SETLK:
-		return __syscall(__SYS_flock_set, fd, va_arg(ap, struct flock*), 0);
-	case F_SETLKW:
-		return __syscall(__SYS_flock_set, fd, va_arg(ap, struct flock*), 1);
-	default:
+		return fcntl(fd, F_SETLKW, &lock);
+	}
+	else if (cmd == F_TLOCK)
+	{
+		return fcntl(fd, F_SETLK, &lock);
+	}
+	else if (cmd == F_ULOCK)
+	{
+		lock.l_type = F_UNLCK;
+		return fcntl(fd, F_SETLK, &lock);
+	}
+	else if (cmd == F_TEST)
+	{
+		if (fcntl(fd, F_GETLK, &lock) != 0)
+		{
+			return -1;
+		};
+		
+		if (lock.l_type == F_UNLCK)
+		{
+			return 0;
+		};
+		
+		if (lock.l_pid == getpid())
+		{
+			return 0;
+		};
+		
+		errno = EAGAIN;
+		return -1;
+	}
+	else
+	{
 		errno = EINVAL;
 		return -1;
 	};

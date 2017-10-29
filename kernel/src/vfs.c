@@ -38,15 +38,11 @@
 #include <glidix/mutex.h>
 
 static Mutex vfsMutexCreation;
-static FileLock *fileLocks;
-static Semaphore semFileLocks;
 static Semaphore semConst;
 
 void vfsInit()
 {
 	mutexInit(&vfsMutexCreation);
-	fileLocks = NULL;
-	semInit(&semFileLocks);
 	semInit2(&semConst, 1);
 };
 
@@ -858,14 +854,11 @@ void vfsClose(File *file)
 	
 	if (destroy)
 	{
-		int i;
-		for (i=0; i<VFS_MAX_LOCKS_PER_FILE; i++)
+		if (file->tree != NULL)
 		{
-			FileLock *lock = (FileLock*) atomic_swap64((uint64_t*) &file->locks[i], 0);
-			if (lock != NULL)
-			{
-				semSignal(lock->sem);
-			};
+			FileTree *ft = file->tree(file);
+			ftReleaseProcessLocks(ft);
+			ftDown(ft);
 		};
 		
 		if (file->close != NULL) file->close(file);
@@ -881,139 +874,6 @@ void vfsLockCreation()
 void vfsUnlockCreation()
 {
 	mutexUnlock(&vfsMutexCreation);
-};
-
-int vfsFileLock(File *fp, int cmd, dev_t dev, ino_t ino, off_t off, off_t len)
-{
-	if ((off != 0) || (len != 0))
-	{
-		// currently we don't support locking sections, TODO
-		return EACCES;
-	};
-	
-	if ((cmd != F_LOCK) && (cmd != F_TLOCK) && (cmd != F_TEST) && (cmd != F_ULOCK))
-	{
-		return EINVAL;
-	};
-
-	semWait(&semFileLocks);
-	
-	// first try to find if a lock for this file already exists
-	FileLock *lock = NULL;
-	FileLock *scan = fileLocks;
-	
-	while (scan != NULL)
-	{
-		if ((scan->dev == dev) && (scan->ino == ino))
-		{
-			lock = scan;
-			break;
-		};
-		
-		scan = scan->next;
-	};
-	
-	if (lock == NULL)
-	{
-		if (cmd == F_ULOCK)
-		{
-			semSignal(&semFileLocks);
-			return 0;
-		};
-		
-		if (cmd == F_TEST)
-		{
-			semSignal(&semFileLocks);
-			return 0;
-		};
-		
-		// the lock does not yet exist
-		lock = (FileLock*) kmalloc(sizeof(FileLock) + sizeof(Semaphore));
-		lock->prev = NULL;
-		lock->next = fileLocks;
-		if (fileLocks != NULL) fileLocks->prev = lock;
-		fileLocks = lock;
-		lock->dev = dev;
-		lock->ino = ino;
-		lock->sem = (Semaphore*) &lock->__end;
-		semInit(lock->sem);
-	};
-	
-	// locks are never deleted, so once we found the object, we can release the list lock
-	semSignal(&semFileLocks);
-	
-	if (cmd == F_LOCK)
-	{
-		if (semWaitGen(lock->sem, 1, SEM_W_INTR, 0) < 0)
-		{
-			return EINTR;
-		};
-		
-		if (fp != NULL)
-		{
-			int i;
-			for (i=0; i<VFS_MAX_LOCKS_PER_FILE; i++)
-			{
-				if (atomic_compare_and_swap64(&fp->locks[i], 0, (uint64_t) lock) == 0)
-				{
-					return 0;
-				};
-			};
-			
-			// too many locks
-			semSignal(lock->sem);
-			return ENOLCK;
-		};
-	}
-	else if (cmd == F_TLOCK)
-	{
-		if (semWaitGen(lock->sem, 1, SEM_W_NONBLOCK, 0) != 1)
-		{
-			return EAGAIN;
-		};
-		
-		if (fp != NULL)
-		{
-			int i;
-			for (i=0; i<VFS_MAX_LOCKS_PER_FILE; i++)
-			{
-				if (atomic_compare_and_swap64(&fp->locks[i], 0, (uint64_t) lock) == 0)
-				{
-					return 0;
-				};
-			};
-			
-			// too many locks
-			semSignal(lock->sem);
-			return ENOLCK;
-		};
-	}
-	else if (cmd == F_TEST)
-	{
-		if (semWaitGen(lock->sem, 1, SEM_W_NONBLOCK, 0) == 0)
-		{
-			semSignal(lock->sem);
-			return 0;
-		};
-		
-		return EAGAIN;
-	}
-	else if (cmd == F_ULOCK)
-	{
-		int i;
-		for (i=0; i<VFS_MAX_LOCKS_PER_FILE; i++)
-		{
-			if (atomic_compare_and_swap64(&fp->locks[i], (uint64_t)lock, 0) == (uint64_t)lock)
-			{
-				semSignal(lock->sem);
-				break;
-			};
-		};
-		
-		return 0;
-	};
-	
-	return EINVAL;
 };
 
 Semaphore *vfsGetConstSem()

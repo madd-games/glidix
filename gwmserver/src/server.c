@@ -175,12 +175,12 @@ void* clientThreadFunc(void *context)
 			
 			if (cmd.createWindow.pars.x == GWM_POS_UNSPEC)
 			{
-				cmd.createWindow.pars.x = 5;
+				cmd.createWindow.pars.x = (screen->width - cmd.createWindow.pars.width)/2;
 			};
 			
 			if (cmd.createWindow.pars.y == GWM_POS_UNSPEC)
 			{
-				cmd.createWindow.pars.y = 5;
+				cmd.createWindow.pars.y = (screen->height - cmd.createWindow.pars.height)/2;
 			};
 
 			GWMMessage resp;

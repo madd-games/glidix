@@ -31,6 +31,7 @@
 
 #include <glidix/common.h>
 #include <glidix/semaphore.h>
+#include <glidix/rlock.h>
 
 /**
  * Tree flags.
@@ -117,6 +118,11 @@ typedef struct FileTree_
 	 * Current size of this file in bytes.
 	 */
 	size_t					size;
+	
+	/**
+	 * Record lock.
+	 */
+	RangeLock				rlock;
 } FileTree;
 
 /**
@@ -172,9 +178,25 @@ int ftTruncate(FileTree *ft, size_t size);
 void ftUncache(FileTree *ft);
 
 /**
- * Flush one of the pages in of a file tree, and return the frame number, which can now be reused (but is not freed).
+ * Flush one of the pages of a file tree, and return the frame number, which can now be reused (but is not freed).
  * Return 0 if finding a spare page was unsuccessful.
  */
 uint64_t ftGetFreePage();
+
+/**
+ * Release all record locks owned by the current process on the given file.
+ */
+void ftReleaseProcessLocks(FileTree *ft);
+
+/**
+ * Set a file lock on the given tree. 'block' determines whether blocking is allowed. Returns 0 on success, or an
+ * error number (errno) on error. The lock is associated with the current process.
+ */
+int ftSetLock(FileTree *ft, int type, uint64_t start, uint64_t size, int block);
+
+/**
+ * Get a file lock on the given tree.
+ */
+void ftGetLock(FileTree *ft, int *type, int *pidOut, uint64_t *start, uint64_t *size);
 
 #endif

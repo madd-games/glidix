@@ -344,6 +344,16 @@ typedef struct
 	 * From left to right: info, question, warning, error, success.
 	 */
 	uint32_t				imgMessageIcons;
+	
+	/**
+	 * Button graphics. 4 sprites on top of each other, each 17x30. In order from top
+	 * to bottom: normal, hovered, clicked, disabled.
+	 *
+	 * Each button is rendered with the leftmost 8 pixels from the sprite on the left,
+	 * the middle column of pixels repeated until the size is correct, and the rightmost
+	 * 8 pixels from the sprite.
+	 */
+	uint32_t				imgButton;
 } GWMInfo;
 
 /**

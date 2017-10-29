@@ -152,7 +152,7 @@
 #define __SYS_kopt				120
 #define __SYS_sigwait				121
 #define __SYS_sigsuspend			122
-#define __SYS_lockf				123
+
 #define __SYS_mcast				124
 #define __SYS_fpoll				125
 #define __SYS_oxperm				126
@@ -167,6 +167,10 @@
 #define	__SYS_undef				135	/* the reserved "undefined" number */
 #define	__SYS_systat				136
 #define	__SYS_fsdrv				137
+#define	__SYS_flock_set				138
+#define	__SYS_flock_get				139
+#define	__SYS_fcntl_setfl			140
+#define	__SYS_fcntl_getfl			141
 
 #ifdef __cplusplus
 extern "C" {

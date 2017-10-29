@@ -141,7 +141,7 @@ GLIDIX_SYSCALL	119,	pthread_kill
 GLIDIX_SYSCALL	120,	_glidix_kopt
 GLIDIX_SYSCALL	121,	_glidix_sigwait
 GLIDIX_SYSCALL	122,	_glidix_sigsuspend
-GLIDIX_SYSCALL	123,	lockf
+
 GLIDIX_SYSCALL	124,	_glidix_mcast
 GLIDIX_SYSCALL	125,	_glidix_fpoll
 GLIDIX_SYSCALL	126,	_glidix_oxperm

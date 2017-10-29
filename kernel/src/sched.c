@@ -40,13 +40,15 @@
 #include <glidix/msr.h>
 #include <glidix/signal.h>
 #include <glidix/trace.h>
+#include <glidix/ftree.h>
 
 Thread firstThread;
 PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
 static PER_CPU Thread *idleThread;
 
-static Spinlock schedLock;		// for PID and stuff
+static Spinlock schedLock;
 static int nextPid;
+static int closingPid;
 
 extern uint64_t getFlagsRegister();
 void kmain2();
@@ -401,6 +403,11 @@ static void sysManFunc(void *ignore)
 			if (threadFound != currentThread)
 			{
 				// removed from runqueue, now do cleanup
+				if (threadFound->creds != NULL)
+				{
+					closingPid = threadFound->creds->pid;
+				};
+				
 				kfree(threadFound->stack);
 				if (threadFound->pm != NULL) vmDown(threadFound->pm);
 				if (threadFound->ftab != NULL) ftabDownref(threadFound->ftab);
@@ -1863,4 +1870,20 @@ void detachMe()
 	getCurrentThread()->flags |= THREAD_DETACHED;
 	unlockSched();
 	sti();
+};
+
+int getClosingPid()
+{
+	if (currentThread == threadSysMan)
+	{
+		return closingPid;
+	}
+	else if (currentThread->creds == NULL)
+	{
+		return 0;
+	}
+	else
+	{
+		return currentThread->creds->pid;
+	};
 };
