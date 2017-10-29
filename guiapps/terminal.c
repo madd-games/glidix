@@ -37,6 +37,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <libgwm.h>
+#include <pwd.h>
 
 #define	TERMINAL_ALPHA		0xCC
 typedef struct
@@ -529,7 +530,14 @@ void *ctrlThreadFunc(void *context)
 		
 		if (argv[1] == NULL)
 		{
-			execl("/bin/sh", "sh", NULL);
+			char *shell = "/bin/sh";
+			struct passwd *pwd = getpwuid(geteuid());
+			if (pwd != NULL)
+			{
+				shell = pwd->pw_shell;
+			};
+			
+			execl(shell, shell, NULL);
 		}
 		else
 		{
