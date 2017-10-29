@@ -99,6 +99,8 @@ pid_t		getpgrp();
 pid_t		tcgetpgrp(int fd);
 int		tcsetpgrp(int fd, pid_t pgrp);
 int		lockf(int fd, int cmd, off_t len);
+char*		getlogin();
+int		getlogin_r(char *buf, size_t bufsize);
 
 /* implemented by libglidix directly */
 ssize_t		write(int fildes, const void *buf, size_t nbyte);

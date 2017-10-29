@@ -51,6 +51,8 @@
 
 #define	EOF				-1
 
+#define	L_cuserid			128
+
 #define	__FILE_FERROR			(1 << 0)
 #define	__FILE_READ			(1 << 1)
 #define	__FILE_WRITE			(1 << 2)
@@ -169,6 +171,7 @@ int	remove(const char *path);
 FILE*	tmpfile();
 FILE*	popen(const char *cmd, const char *mode);
 int	pclose(FILE *fp);
+char*	cuserid(char *buffer);
 
 /* off_t is the same as long on Glidix */
 #define	fseeko					fseek
