@@ -163,6 +163,11 @@ typedef struct Socket_
 	 * returns the new socket.
 	 */
 	struct Socket_* (*accept)(struct Socket_ *sock, struct sockaddr *addr, size_t *addrlenptr);
+	
+	/**
+	 * Get the current socket error and clear it.
+	 */
+	int (*geterr)(struct Socket_ *sock);
 } Socket;
 
 typedef struct
@@ -286,6 +291,11 @@ int SocketListen(File *fp, int backlog);
  * Implements accept().
  */
 File* SocketAccept(File *fp, struct sockaddr *addr, size_t *addrlenptr);
+
+/**
+ * Get a socket error and clear it.
+ */
+int SocketGetError(File *fp);
 
 /**
  * Remove a socket from the list and then free it.

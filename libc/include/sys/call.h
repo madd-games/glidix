@@ -152,7 +152,7 @@
 #define __SYS_kopt				120
 #define __SYS_sigwait				121
 #define __SYS_sigsuspend			122
-
+#define	__SYS_sockerr				123
 #define __SYS_mcast				124
 #define __SYS_fpoll				125
 #define __SYS_oxperm				126

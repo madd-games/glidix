@@ -63,6 +63,7 @@ extern "C" {
 
 #define	SO_RCVTIMEO			0
 #define	SO_SNDTIMEO			1
+#define	SO_ERROR			2
 
 struct sockaddr
 {

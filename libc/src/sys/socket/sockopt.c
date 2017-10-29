@@ -27,6 +27,7 @@
 */
 
 #include <sys/socket.h>
+#include <sys/call.h>
 #include <sys/time.h>
 #include <time.h>
 #include <errno.h>
@@ -195,6 +196,25 @@ int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optl
 		
 		*optlen = sizeof(uint_t);
 		*((uint_t*)optval) = 0;
+		return 0;
+	}
+	else if ((level == SOL_SOCKET) && (optname == SO_ERROR))
+	{
+		if ((*optlen) < sizeof(int))
+		{
+			errno = EINVAL;
+			return -1;
+		};
+		
+		int result = __syscall(__SYS_sockerr, sockfd);
+		if (result == -1)
+		{
+			// errno was set by the system call
+			return -1;
+		};
+		
+		*optlen = sizeof(int);
+		*((int*)optval) = result;
 		return 0;
 	}
 	else

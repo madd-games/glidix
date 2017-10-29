@@ -2323,6 +2323,20 @@ uint64_t sys_getsockopt(int fd, int proto, int option)
 	return out;
 };
 
+int sys_sockerr(int fd)
+{
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	int result = SocketGetError(fp);
+	vfsClose(fp);
+	return result;
+};
+
 int sys_uname(struct utsname *ubuf)
 {
 	struct utsname buf;
@@ -4086,7 +4100,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_kopt,				// 120
 	&sys_sigwait,				// 121
 	&sys_sigsuspend,			// 122
-	SYS_NULL,				// 123 [was lockf() ]
+	&sys_sockerr,				// 123
 	&sys_mcast,				// 124
 	&sys_fpoll,				// 125
 	&sys_oxperm,				// 126

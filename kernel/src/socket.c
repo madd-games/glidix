@@ -319,6 +319,23 @@ File* SocketAccept(File *fp, struct sockaddr *addr, size_t *addrlenptr)
 	return newfp;
 };
 
+int SocketGetError(File *fp)
+{
+	if ((fp->oflag & O_SOCKET) == 0)
+	{
+		ERRNO = ENOTSOCK;
+		return -1;
+	};
+	
+	Socket *sock = (Socket*) fp->fsdata;
+	if (sock->geterr == NULL)
+	{
+		return 0;
+	};
+	
+	return sock->geterr(sock);
+};
+
 ssize_t SendtoSocket(File *fp, const void *message, size_t len, int flags, const struct sockaddr *addr, size_t addrlen)
 {
 	if ((fp->oflag & O_SOCKET) == 0)

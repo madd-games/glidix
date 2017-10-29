@@ -1418,6 +1418,12 @@ static Socket* tcpsock_accept(Socket *sock, struct sockaddr *addr, size_t *addrl
 	return client;
 };
 
+static int tcpsock_geterr(Socket *sock)
+{
+	TCPSocket *tcpsock = (TCPSocket*) sock;
+	return (int) atomic_swap32(&tcpsock->sockErr, 0);
+};
+
 Socket *CreateTCPSocket()
 {
 	TCPSocket *tcpsock = NEW(TCPSocket);
@@ -1446,6 +1452,7 @@ Socket *CreateTCPSocket()
 	sock->getpeername = tcpsock_getpeername;
 	sock->listen = tcpsock_listen;
 	sock->accept = tcpsock_accept;
+	sock->geterr = tcpsock_geterr;
 	
 	return sock;
 };
