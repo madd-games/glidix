@@ -1034,7 +1034,7 @@ static int tcpsock_packet(Socket *sock, const struct sockaddr *src, const struct
 
 			semSignal(&tcpsock->lock);
 		}
-		else if (seg->flags & TCP_PSH)
+		else if (seg->flags & TCP_PSH || size > headerSize)
 		{
 			size_t payloadSize = size - headerSize;
 			const uint8_t *scan = (const uint8_t*)seg + headerSize;
