@@ -64,6 +64,7 @@
 #define	XP_CHXPERM			(1 << 4)
 #define	XP_NICE				(1 << 5)
 #define	XP_DISPCONF			(1 << 6)
+#define	XP_FSADMIN			(1 << 7)
 
 #define	XP_ALL				0x7FFFFFFFFFFFFFFF
 #define	XP_NCHG				0xFFFFFFFFFFFFFFFF

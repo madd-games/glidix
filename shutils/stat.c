@@ -201,6 +201,41 @@ int main(int argc, char *argv[])
 	printf("I. Perms:   %s\n", binary64(st.st_ixperm));
 	printf("O. Perms:   %s\n", binary64(st.st_oxperm));
 	printf("D. Perms:   %s\n", binary64(st.st_dxperm));
+	printf("Access control list:\n");
+	
+	for (i=0; i<ACL_SIZE; i++)
+	{
+		if (st.st_acl[i].ace_type != ACE_UNUSED)
+		{
+			const char *type;
+			const char *idname = "?";
+			switch (st.st_acl[i].ace_type)
+			{
+			case ACE_USER:
+				type = "user";
+				pwd = getpwuid(st.st_acl[i].ace_id);
+				if (pwd != NULL) idname = pwd->pw_name;
+				break;
+			case ACE_GROUP:
+				type = "group";
+				grp = getgrgid(st.st_acl[i].ace_id);
+				if (grp != NULL) idname = grp->gr_name;
+				break;
+			default:
+				type = "<unknown entry type>";
+				break;
+			};
+			
+			char permstr[8];
+			char *put = permstr;
+			if (st.st_acl[i].ace_perms & ACE_READ) *put++ = 'r';
+			if (st.st_acl[i].ace_perms & ACE_WRITE) *put++ = 'w';
+			if (st.st_acl[i].ace_perms & ACE_EXEC) *put++ = 'x';
+			*put = 0;
+
+			printf("  %s %hu <%s> %s\n", type, st.st_acl[i].ace_id, idname, permstr);
+		};
+	};
 	
 	return 0;
 };

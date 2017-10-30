@@ -51,6 +51,7 @@ PermName perms[] = {
 	{"chxperm",				XP_CHXPERM},
 	{"nice",				XP_NICE},
 	{"dispconf",				XP_DISPCONF},
+	{"fsadmin",				XP_FSADMIN},
 	{NULL,					0}
 };
 

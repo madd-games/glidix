@@ -138,6 +138,13 @@ static int gxfsMount(const char *image, FileSystem *fs, size_t szfs)
 		return -1;
 	};
 	
+	if ((sb.sbRequiredFeatures & GXFS_SUPPORTED_FEATURES) != sb.sbRequiredFeatures)
+	{
+		kprintf("gxfs: superblock demands unsupported features\n");
+		vfsClose(fp);
+		return -1;
+	};
+	
 	__sync_fetch_and_add(&numMounts, 1);
 	
 	GXFS *gxfs = NEW(GXFS);

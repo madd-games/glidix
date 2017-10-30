@@ -723,7 +723,8 @@ int sys_chmod(const char *upath, mode_t mode)
 		return -1;
 	};
 
-	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != dir->stat.st_uid))
+	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != dir->stat.st_uid)
+		&& !havePerm(XP_FSADMIN))
 	{
 		if (dir->close != NULL) dir->close(dir);
 		kfree(dir);
@@ -773,7 +774,8 @@ int sys_fchmod(int fd, mode_t mode)
 		return -1;
 	};
 
-	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != st.st_uid))
+	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != st.st_uid)
+		&& !havePerm(XP_FSADMIN))
 	{
 		vfsClose(fp);
 		ERRNO = EPERM;
@@ -813,7 +815,8 @@ static int canChangeOwner(struct stat *st, uid_t uid, gid_t gid)
 {
 	Thread *ct = getCurrentThread();
 	if (ct->creds->euid == 0) return 1;
-
+	if (havePerm(XP_FSADMIN)) return 1;
+	
 	if ((ct->creds->euid == uid) && (uid == st->st_uid))
 	{
 		return (ct->creds->egid == gid) || (ct->creds->sgid == gid) || (ct->creds->rgid == gid);
@@ -1297,7 +1300,7 @@ int sys_insmod(const char *umodname, const char *upath, const char *uopt, int fl
 		opt = NULL;
 	};
 	
-	if (getCurrentThread()->creds->euid != 0)
+	if (getCurrentThread()->creds->euid != 0 && !havePerm(XP_MODULE))
 	{
 		// only root can load modules.
 		ERRNO = EPERM;
@@ -1542,7 +1545,7 @@ int sys_rmmod(const char *umodname, int flags)
 	};
 	
 	// only root can remove modules!
-	if (getCurrentThread()->creds->euid != 0)
+	if (getCurrentThread()->creds->euid != 0 && !havePerm(XP_MODULE))
 	{
 		ERRNO = EPERM;
 		return -1;
@@ -1936,7 +1939,8 @@ int sys_utime(const char *upath, time_t atime, time_t mtime)
 	}
 	else
 	{
-		if (dirp->stat.st_uid != getCurrentThread()->creds->euid)
+		if (dirp->stat.st_uid != getCurrentThread()->creds->euid && getCurrentThread()->creds->euid != 0
+			&& !havePerm(XP_MODULE))
 		{
 			ERRNO = EACCES;
 			return -1;
@@ -3971,11 +3975,124 @@ int sys_fcntl_getfl(int fd)
 	return oflag;
 };
 
+int sys_aclput(const char *upath, int type, int id, int perms)
+{
+	if (type != VFS_ACE_USER && type != VFS_ACE_GROUP)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (id < 0 || ((id & 0xFFFF) != id))
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	int allPerms = 7;
+	if ((perms & allPerms) != perms)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	int error;
+	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
+
+	if (dir == NULL)
+	{
+		return sysOpenErrno(error);
+	};
+
+	if (dir->aclput == NULL)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		ERRNO = EIO;
+		return -1;
+	};
+
+	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != dir->stat.st_uid)
+		&& !havePerm(XP_FSADMIN))
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		ERRNO = EPERM;
+		return -1;
+	};
+
+	int status = dir->aclput(dir, (uint8_t) type, (uint16_t) id, (uint8_t) perms);
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+
+	return status;
+};
+
+int sys_aclclear(const char *upath, int type, int id)
+{
+	if (type != VFS_ACE_USER && type != VFS_ACE_GROUP)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (id < 0 || ((id & 0xFFFF) != id))
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	int error;
+	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
+
+	if (dir == NULL)
+	{
+		return sysOpenErrno(error);
+	};
+
+	if (dir->aclclear == NULL)
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		ERRNO = EIO;
+		return -1;
+	};
+
+	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != dir->stat.st_uid)
+		&& !havePerm(XP_FSADMIN))
+	{
+		if (dir->close != NULL) dir->close(dir);
+		kfree(dir);
+		ERRNO = EPERM;
+		return -1;
+	};
+
+	int status = dir->aclclear(dir, (uint8_t) type, (uint16_t) id);
+	if (dir->close != NULL) dir->close(dir);
+	kfree(dir);
+
+	return status;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 142
+#define SYSCALL_NUMBER 144
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -4119,6 +4236,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_flock_get,				// 139
 	&sys_fcntl_setfl,			// 140
 	&sys_fcntl_getfl,			// 141
+	&sys_aclput,				// 142
+	&sys_aclclear,				// 143
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

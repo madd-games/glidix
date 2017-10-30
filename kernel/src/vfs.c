@@ -115,7 +115,59 @@ int vfsCanCurrentThread(struct stat *st, mode_t mask)
 	{
 		return 1;
 	};
+	
+	// also with the XP_FSADMIN permission
+	if (havePerm(XP_FSADMIN))
+	{
+		return 1;
+	};
 
+	// check if the ACL contains an entry for the current user
+	int i;
+	for (i=0; i<VFS_ACL_SIZE; i++)
+	{
+		if (st->st_acl[i].ace_type == VFS_ACE_USER && st->st_acl[i].ace_id == thread->creds->euid)
+		{
+			return (st->st_acl[i].ace_perms & mask) == mask;
+		};
+	};
+	
+	// if any of our groups are listed in the ACL, then our permissions are the union of all the
+	// group permissions.
+	uint8_t perms = 0;
+	int found = 0;
+	for (i=0; i<VFS_ACL_SIZE; i++)
+	{
+		if (st->st_acl[i].ace_type == VFS_ACE_GROUP && st->st_acl[i].ace_id == thread->creds->egid)
+		{
+			perms = st->st_acl[i].ace_perms;
+			found = 1;
+		};
+	};
+	
+	// go through all secondary groups, bitwise-OR all permissions
+	int j;
+	for (j=0; j<thread->creds->numGroups; j++)
+	{
+		gid_t gid = thread->creds->groups[j];
+		
+		for (i=0; i<VFS_ACL_SIZE; i++)
+		{
+			if (st->st_acl[i].ace_type == VFS_ACE_GROUP && st->st_acl[i].ace_id == gid)
+			{
+				perms |= st->st_acl[i].ace_perms;
+				found = 1;
+			};
+		};
+	};
+
+	// if the group information was actually listed, use it
+	if (found)
+	{
+		return (perms & mask) == mask;
+	};
+
+	// fallback to UNIX permissions
 	if (thread->creds->euid == st->st_uid)
 	{
 		return ((st->st_mode >> 6) & mask) == mask;
@@ -472,6 +524,7 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 
 		if (*scan == '/')
 		{
+			//memset(&dir->stat, 0, sizeof(struct stat));
 			if (dir->getstat != NULL) dir->getstat(dir);
 
 			if ((dir->stat.st_mode & 0xF000) != VFS_MODE_DIRECTORY)

@@ -72,6 +72,25 @@ extern "C" {
 #define	S_ISGID				02000
 #define	S_ISVTX				01000
 
+#ifdef _GLIDIX_SOURCE
+#define	ACE_UNUSED			0
+#define	ACE_USER			1
+#define	ACE_GROUP			2
+
+#define	ACE_EXEC			(1 << 0)
+#define	ACE_WRITE			(1 << 1)
+#define	ACE_READ			(1 << 2)
+
+#define	ACL_SIZE			128
+
+struct ace
+{
+	unsigned short int		ace_id;
+	unsigned char			ace_type;
+	unsigned char			ace_perms;
+};
+#endif
+
 struct stat
 {
 	dev_t				st_dev;
@@ -92,6 +111,7 @@ struct stat
 	xperm_t				st_oxperm;
 	xperm_t				st_dxperm;
 	time_t				st_btime;
+	struct ace			st_acl[ACL_SIZE];
 #endif
 };
 
@@ -103,10 +123,17 @@ int	chmod(const char *path, mode_t mode);
 int	fchmod(int fd, mode_t mode);
 int	mkdir(const char *path, mode_t mode);
 mode_t	umask(mode_t cmask);
+int	_glidix_aclput(const char *path, int type, int id, int perms);
+int	_glidix_aclclear(const char *path, int type, int id);
 
 #define	stat(a, b)	_glidix_stat((a), (b), sizeof(struct stat))
 #define	fstat(a, b)	_glidix_fstat((a), (b), sizeof(struct stat))
 #define	lstat(a, b)	_glidix_lstat((a), (b), sizeof(struct stat))
+
+#ifdef _GLIDIX_SOURCE
+#define	aclput		_glidix_aclput
+#define	aclclear	_glidix_aclclear
+#endif
 
 #ifdef __cplusplus
 }	/* extern "C" */

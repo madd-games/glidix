@@ -170,6 +170,7 @@ void gxfsDownrefInode(InodeInfo *info)
 				gxfsDeleteTree(gxfs, info->data.inoTreeDepth, info->data.inoRoot);
 			};
 			
+			if (info->data.inoACL != 0) gxfsFreeBlock(gxfs, info->data.inoACL);
 			gxfsFreeBlock(gxfs, info->index);
 
 			if (info->ft != NULL)

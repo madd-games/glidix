@@ -171,6 +171,8 @@
 #define	__SYS_flock_get				139
 #define	__SYS_fcntl_setfl			140
 #define	__SYS_fcntl_getfl			141
+#define	__SYS_aclput				142
+#define	__SYS_aclclear				143
 
 #ifdef __cplusplus
 extern "C" {

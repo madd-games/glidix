@@ -142,14 +142,6 @@
 #define	POLL_HANGUP			(1 << PEI_HANGUP)
 #define	POLL_INVALID			(1 << PEI_INVALID)
 
-/**
- * File locking commands.
- */
-#define	F_LOCK				0
-#define	F_TLOCK				1
-#define	F_ULOCK				2
-#define	F_TEST				3
-
 #define	FILENAME_MAX			128
 #define	PATH_MAX			256
 #define	VFS_MAX_LINK_DEPTH		8
@@ -157,6 +149,19 @@
 
 #define	VFS_NAME_MAX			128
 #define	VFS_PATH_MAX			256
+
+#define	VFS_ACL_SIZE			128
+
+#define	VFS_ACE_UNUSED			0
+#define	VFS_ACE_USER			1
+#define	VFS_ACE_GROUP			2
+
+typedef struct
+{
+	uint16_t			ace_id;
+	uint8_t				ace_type;
+	uint8_t				ace_perms;
+} AccessControlEntry;
 
 #ifndef _SYS_STAT_H
 struct stat
@@ -178,6 +183,7 @@ struct stat
 	uint64_t			st_oxperm;
 	uint64_t			st_dxperm;
 	time_t				st_btime;
+	AccessControlEntry		st_acl[VFS_ACL_SIZE];
 };
 #endif
 
@@ -485,6 +491,21 @@ typedef struct _Dir
 	 * NULL.
 	 */
 	SysObject* (*getsys)(struct _Dir *dir);
+
+	/**
+	 * Set the permissions of a given user (type == VFS_ACE_USER) or group (VFS_ACE_GROUP) in the access control
+	 * list. If an entry for this entity already exists, it is updated, otherwise, it is added (if there is space).
+	 * Return 0 on success or -1 on error (and set ERRNO). ERRNO shall be set to EOVERFLOW if there is no space on
+	 * the list, ENOSPC if the filesystem needs to allocate space on disk for the ACL and it was not possible.
+	 * Other errors may also be returned.
+	 */
+	int (*aclput)(struct _Dir *dir, uint8_t type, uint16_t id, uint8_t perms);
+	
+	/**
+	 * Remove the specified entry from the ACL. Return 0 on success, or -1 on error (and set ERRNO). ERRNO shall be
+	 * set to EINVAL if the entry does not exist.
+	 */
+	int (*aclclear)(struct _Dir *dir, uint8_t type, uint16_t id);
 } Dir;
 
 struct fsinfo;

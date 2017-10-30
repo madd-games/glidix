@@ -187,6 +187,16 @@ static void gxfs_getstat(Dir *dir)
 	dir->stat.st_oxperm = targetInfo->data.inoOXPerm;
 	dir->stat.st_dxperm = targetInfo->data.inoDXPerm;
 	dir->stat.st_btime = targetInfo->data.inoBirthTime;
+	
+	if (targetInfo->data.inoACL == 0)
+	{
+		memset(dir->stat.st_acl, 0, sizeof(AccessControlEntry) * VFS_ACL_SIZE);
+	}
+	else
+	{
+		vfsPRead(targetInfo->fs->fp, dir->stat.st_acl, 512, 0x200000 + (targetInfo->data.inoACL << 9));
+	};
+	
 	mutexUnlock(&targetInfo->lock);
 	
 	gxfsDownrefInode(targetInfo);
@@ -426,6 +436,134 @@ static ssize_t gxfs_readlink(Dir *dir, char *buffer)
 	return strlen(buffer);
 };
 
+static int gxfs_aclput(Dir *dir, uint8_t type, uint16_t id, uint8_t perms)
+{
+	DirScanner *scanner = (DirScanner*) dir->fsdata;
+	
+	uint64_t ino = dir->dirent.d_ino;
+	InodeInfo *info = gxfsGetInode(scanner->dir->fs, ino);
+	if (info == NULL) return -1;
+	
+	mutexLock(&info->lock);
+	AccessControlEntry acl[128];
+	if (info->data.inoACL == 0)
+	{
+		memset(acl, 0, sizeof(AccessControlEntry) * 128);
+		info->data.inoACL = gxfsAllocBlock(scanner->dir->fs);
+		if (info->data.inoACL == 0)
+		{
+			mutexUnlock(&info->lock);
+			gxfsDownrefInode(info);
+			ERRNO = ENOSPC;
+			return -1;
+		};
+	}
+	else
+	{
+		vfsPRead(info->fs->fp, acl, 512, 0x200000 + (info->data.inoACL << 9));
+	};
+	
+	int i;
+	int ok = 0;
+	for (i=0; i<128; i++)
+	{
+		if (acl[i].ace_type == type && acl[i].ace_id == id)
+		{
+			acl[i].ace_perms = perms;
+			ok = 1;
+			break;
+		};
+	};
+	
+	if (!ok)
+	{
+		for (i=0; i<128; i++)
+		{
+			if (acl[i].ace_type == 0)
+			{
+				acl[i].ace_type = type;
+				acl[i].ace_id = id;
+				acl[i].ace_perms = perms;
+				ok = 1;
+				break;
+			};
+		};
+	};
+	
+	if (ok)
+	{
+		vfsPWrite(info->fs->fp, acl, 512, 0x200000 + (info->data.inoACL << 9));
+	};
+	
+	mutexUnlock(&info->lock);
+	gxfsDownrefInode(info);
+	
+	if (ok)
+	{
+		return 0;
+	}
+	else
+	{
+		ERRNO = EOVERFLOW;
+		return -1;
+	};
+};
+
+static int gxfs_aclclear(Dir *dir, uint8_t type, uint16_t id)
+{
+	DirScanner *scanner = (DirScanner*) dir->fsdata;
+	
+	uint64_t ino = dir->dirent.d_ino;
+	InodeInfo *info = gxfsGetInode(scanner->dir->fs, ino);
+	if (info == NULL) return -1;
+	
+	mutexLock(&info->lock);
+	AccessControlEntry acl[128];
+	if (info->data.inoACL == 0)
+	{
+		mutexUnlock(&info->lock);
+		gxfsDownrefInode(info);
+		ERRNO = EINVAL;
+		return -1;
+	}
+	else
+	{
+		vfsPRead(info->fs->fp, acl, 512, 0x200000 + (info->data.inoACL << 9));
+	};
+	
+	int i;
+	int ok = 0;
+	for (i=0; i<128; i++)
+	{
+		if (acl[i].ace_type == type && acl[i].ace_id == id)
+		{
+			acl[i].ace_type = 0;
+			acl[i].ace_id = 0;
+			acl[i].ace_perms = 0;
+			ok = 1;
+			break;
+		};
+	};
+	
+	if (ok)
+	{
+		vfsPWrite(info->fs->fp, acl, 512, 0x200000 + (info->data.inoACL << 9));
+	};
+	
+	mutexUnlock(&info->lock);
+	gxfsDownrefInode(info);
+	
+	if (ok)
+	{
+		return 0;
+	}
+	else
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+};
+
 int gxfsOpenDir(GXFS *gxfs, uint64_t ino, Dir *dir, size_t szdir)
 {
 	InodeInfo *info = gxfsGetInode(gxfs, ino);
@@ -502,6 +640,8 @@ int gxfsOpenDir(GXFS *gxfs, uint64_t ino, Dir *dir, size_t szdir)
 	dir->getstat = gxfs_getstat;
 	dir->utime = gxfs_utime;
 	dir->chxperm = gxfs_chxperm;
+	dir->aclput = gxfs_aclput;
+	dir->aclclear = gxfs_aclclear;
 	
 	info->data.inoAccessTime = time();
 	__sync_fetch_and_add(&info->data.inoLinks, 1);

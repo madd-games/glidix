@@ -43,7 +43,7 @@ The 'sa_family' field specifies which address family the address belongs to. The
 
 The size of 'struct sockaddr' may not be enough to store an arbitrary socket address from any family. For this reason, another structure called 'struct sockaddr_storage' is defined, which is large enough to store any alias structure. It is defined in '<sys/socket.h>' as follows:
 
-	struct sockaddr_strorage
+	struct sockaddr_storage
 	{
 		sa_family_t			'ss_family';
 		char				'ss_data'[];

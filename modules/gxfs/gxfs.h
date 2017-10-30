@@ -34,6 +34,7 @@
 #include <glidix/vfs.h>
 
 #define	GXFS_MAGIC			(*((const uint64_t*)"GLIDIXFS"))
+#define	GXFS_SUPPORTED_FEATURES		0
 
 typedef struct
 {
@@ -44,7 +45,9 @@ typedef struct
 	uint64_t			sbChecksum;
 	uint64_t			sbUsedBlocks;
 	uint64_t			sbFreeHead;
-	uint8_t				sbPad[512-0x40];
+	uint64_t			sbRequiredFeatures;
+	uint64_t			sbOptionalFeatures;
+	uint8_t				sbPad[512-0x50];
 } GXFS_Superblock;
 
 typedef struct
