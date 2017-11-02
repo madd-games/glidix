@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 
 static int __pwnextent(FILE *fp, struct passwd *pwd, char *buffer)
 {
@@ -213,7 +214,20 @@ int getpwnam_r(const char *username, struct passwd *pwd, char *buffer, size_t bu
 	{
 		return EIO;
 	};
-
+	
+	struct flock lock;
+	memset(&lock, 0, sizeof(struct flock));
+	lock.l_type = F_RDLCK;
+	lock.l_whence = SEEK_SET;
+	lock.l_start = 0;
+	lock.l_len = 0;
+	
+	int status;
+	do
+	{
+		status = fcntl(fileno(fp), F_SETLKW, &lock);
+	} while (status != 0 && errno == EINTR);
+	
 	while (__pwnextent(fp, pwd, buffer) != -1)
 	{
 		if (strcmp(pwd->pw_name, username) == 0)

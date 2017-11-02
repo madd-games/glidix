@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 
 int __grpnextent(FILE *fp, struct group *grp, char *buffer, char **newbuf)
 {
@@ -197,6 +198,19 @@ int getgrgid_r(gid_t gid, struct group *grp, char *buffer, size_t bufsiz, struct
 	{
 		return EIO;
 	};
+
+	struct flock lock;
+	memset(&lock, 0, sizeof(struct flock));
+	lock.l_type = F_RDLCK;
+	lock.l_whence = SEEK_SET;
+	lock.l_start = 0;
+	lock.l_len = 0;
+	
+	int status;
+	do
+	{
+		status = fcntl(fileno(fp), F_SETLKW, &lock);
+	} while (status != 0 && errno == EINTR);
 
 	char *nextbuf;
 	while (__grpnextent(fp, grp, buffer, &nextbuf) != -1)

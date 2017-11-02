@@ -28,11 +28,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 int fclose(FILE *fp)
 {
-	//printf("{fclose}\n");
 	fflush(fp);
+	if (fp->_fd != -1) close(fp->_fd);
 	if ((fp != stdin) && (fp != stdout) && (fp != stderr))
 	{
 		free(fp);

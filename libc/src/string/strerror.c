@@ -33,7 +33,7 @@ static char _strerror_buf[256];
 static const char *_strerror_msg[84] = {
 	"No error",
 	"Argument list too long.",
-	"Permission denied.",
+	"Access denied.",
 	"Address in use.",
 	"Address not available.",
 	"Address family not supported.",
