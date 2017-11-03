@@ -12,6 +12,7 @@ The '<errno.h>' header defines a macro called 'errno' which evaluates to an lval
 
 This header also defines macros representing error numbers (to which 'errno' may be set). All error numbers are nonzero and distinct from each other; except *EAGAIN* and *EWOULDBLOCK* - those have the same value under Glidix. On other operating systems, it is unspecified whether *EAGAIN* and *EWOULDBLOCK* have the same value; it may or may not be the case.
 
+The function [strerror.2] may be used to obtain a human-readable error message from an error number. The function [perror.2] can be used to conveniently print errors.
 \* *E2BIG* - Argument list too long.
 \* *EACCES* - Access denied.
 \* *EADDRINUSE* - Address in use.
@@ -89,4 +90,8 @@ This header also defines macros representing error numbers (to which 'errno' may
 \* *ETIME* - Timer expired.
 \* *ETIMEDOUT* - Connection timed out.
 \* *ETXTBSY* - Text file busy.
+\* *EWOULDBLOCK* - Same as *EAGAIN*.
 \* *EXDEV* - Cross-device link.
+
+>SEE ALSO
+[strerror.2], [perror.2]
