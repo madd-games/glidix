@@ -109,7 +109,7 @@ static const char *_strerror_msg[84] = {
 	"Invalid seek.",
 	"No such process.",
 	"Reserved.",
-	"Stream ioctl() timeout.",
+	"Timer expired.",
 	"Reserved",
 	"Connection timed out.",
 	"Text file busy.",
