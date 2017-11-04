@@ -11,6 +11,7 @@ chxperm ../bin/env inherit.all=1 delegate.all=1
 chxperm ../bin/mip-install inherit.all=1 delegate.all=1
 
 chmod 6755 ../bin/sudo
+chmod 6755 ../bin/passwd
 
 # Links
 ln ../bin/halt ../bin/poweroff

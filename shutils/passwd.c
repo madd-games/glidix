@@ -26,220 +26,225 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix__
-#	error This program assumes it runs on Glidix!
-#endif
-
-#include <sys/stat.h>
-#include <pwd.h>
-#include <grp.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <fcntl.h>
-#include <termios.h>
+#include <unistd.h>
+#include <errno.h>
 #include <string.h>
+#include <termios.h>
+#include <signal.h>
+#include <pwd.h>
 
-const char *progName;
-
-char oldpass[128];
-char newpass[128];
-char newpass2[128];
-
-char getchfd(int fd)
+void usage(const char *name)
 {
-	char c;
-	if (read(fd, &c, 1) != 1)
-	{
-		return 0xFF;
-	}
-	else
-	{
-		return c;
-	};
+	fprintf(stderr, "USAGE:\t%s\n", name);
+	fprintf(stderr, "\tChanges the password of the current user.\n");
+	fprintf(stderr, "USAGE:\t%s <username>\n", name);
+	fprintf(stderr, "\tChanges the password of the given user; must be run as root\n");
 };
-
-int nextShadowEntry(int fd, char *username, off_t *cryptoff)
-{
-	while (1)
-	{
-		char c = getchfd(fd);
-		if (c == 0xFF)
-		{
-			return -1;
-		};
-
-		if (c == ':')
-		{
-			*username = 0;
-			*cryptoff = lseek(fd, 0, SEEK_CUR);
-			while (1)
-			{
-				c = getchfd(fd);
-				if ((c == '\n') || (c == 0xFF)) break;
-			};
-			return 0;
-		};
-
-		*username++ = c;
-	};
-
-	return -1;
-};
-
-int getShadowEntryFor(const char *username, int fd, off_t *cryptoff)
-{
-	char bufusr[128];
-	while (nextShadowEntry(fd, bufusr, cryptoff) != -1)
-	{
-		if (strcmp(bufusr, username) == 0)
-		{
-			return 0;
-		};
-	};
-
-	return -1;
-};
-
-void usage()
-{
-	fprintf(stderr, "USAGE:\t%s\n", progName);
-	fprintf(stderr, "\t%s username\n", progName);
-	fprintf(stderr, "\tChange the password of the current user, or the user with the given name.\n");
-	fprintf(stderr, "\tTo change the password of another user, you must be root.\n");
-};
-
-void getline(char *buffer)
-{
-	struct termios oldtc, tc;
-	tcgetattr(0, &tc);
-	oldtc = tc;
-	tc.c_lflag &= ~(ECHO);
-	tcsetattr(0, TCSANOW, &tc);
-
-	ssize_t count = read(0, buffer, 128);
-	if (count == -1)
-	{
-		perror("read");
-		tcsetattr(0, TCSANOW, &oldtc);
-		exit(1);
-	};
-
-	if (count > 127)
-	{
-		fprintf(stderr, "input too long\n");
-		tcsetattr(0, TCSANOW, &oldtc);
-		exit(1);
-	};
-
-	tcsetattr(0, TCSANOW, &oldtc);
-	buffer[count-1] = 0;
-};
-
-char saltchars[64] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ./";
 
 int main(int argc, char *argv[])
 {
-	progName = argv[0];
-
 	if (geteuid() != 0)
 	{
-		fprintf(stderr, "%s: the effective UID is not root, the executable probably doesn't have the setuid bit!\n", argv[0]);
+		fprintf(stderr, "%s: must be run with effective root (suid bit should be set)\n", argv[0]);
 		return 1;
 	};
-
-	if ((argc != 1) && (argc != 2))
+	
+	if (argc != 1 && argc != 2)
 	{
-		usage();
+		usage(argv[0]);
 		return 1;
 	};
-
+	
 	if (argc == 2)
 	{
-		if (argv[1][0] == '-')
+		if (strcmp(argv[1], "--help") == 0)
 		{
-			usage();
+			usage(argv[0]);
 			return 1;
 		};
 	};
-
-	if ((argc == 2) && (getuid() != 0))
+	
+	struct passwd *pwd = getpwuid(getuid());
+	if (pwd == NULL)
 	{
-		fprintf(stderr, "%s: you must be root to change another user's password\n", argv[0]);
+		fprintf(stderr, "%s: fatal error: could not determine current user (UID %lu)\n", argv[0], getuid());
 		return 1;
 	};
 
-	struct passwd *pwd;
-	if (argc == 1)
+	const char *currentUserName = pwd->pw_name;
+	
+	int cmdpipe[2];
+	if (pipe(cmdpipe) != 0)
 	{
-		pwd = getpwuid(getuid());
+		fprintf(stderr, "%s: cannot create command pipe: %s\n", argv[0], strerror(errno));
+		return 1;
+	};
+	
+	int resultpipe[2];
+	if (pipe(resultpipe) != 0)
+	{
+		fprintf(stderr, "%s: cannot create result pipe: %s\n", argv[0], strerror(errno));
+		return 1;
+	};
+	
+	pid_t pid = fork();
+	if (pid == -1)
+	{
+		fprintf(stderr, "%s: cannot fork: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
+	else if (pid == 0)
+	{
+		// stdin = read side of command pipe
+		close(0);
+		dup(cmdpipe[0]);
+		close(cmdpipe[0]);
+		close(cmdpipe[1]);
+		
+		// stdout = write side of result pipe
+		close(1);
+		dup(resultpipe[1]);
+		close(resultpipe[0]);
+		close(resultpipe[1]);
+		
+		execl("/usr/bin/userctl", "passwd", NULL);
+		fprintf(stderr, "%s: failed to execute userctl: %s\n", argv[0], strerror(errno));
+		_exit(1);
 	}
 	else
 	{
-		pwd = getpwnam(argv[1]);
-	};
+		FILE *cmdout = fdopen(cmdpipe[1], "w");
+		close(cmdpipe[0]);
+		
+		FILE *resin = fdopen(resultpipe[0], "r");
+		close(resultpipe[1]);
+		
+		struct termios tc;
+		tcgetattr(0, &tc);
+		tc.c_lflag &= ~(ECHO);
+		tcsetattr(0, TCSANOW, &tc);
 
-	if (pwd == NULL)
-	{
-		fprintf(stderr, "%s: could not find the passwd entry\n", argv[0]);
-		return 1;
-	};
-
-	int fd = open("/etc/shadow", O_RDWR);
-	if (fd == -1)
-	{
-		perror("open /etc/shadow");
-		return 1;
-	};
-
-	off_t cryptoff;
-	if (getShadowEntryFor(pwd->pw_name, fd, &cryptoff) != 0)
-	{
-		fprintf(stderr, "%s: could not find shadow entry for %s\n", argv[0], pwd->pw_name);
-		return 1;
-	};
-
-	char passcrypt[67];
-	passcrypt[66] = 0;
-
-	if (argc == 1)
-	{
-		lseek(fd, cryptoff, SEEK_SET);
-		read(fd, passcrypt, 66);
-
-		printf("Current password: "); fflush(stdout); getline(oldpass);
-
-		if (strcmp(crypt(oldpass, passcrypt), passcrypt) != 0)
+		const char *username;
+		if (argc == 1)
 		{
-			fprintf(stderr, "Wrong password!\n");
+			fprintf(cmdout, "gethash %s\n", currentUserName);
+			char hash[1024];
+			if (fgets(hash, 1024, resin) == NULL)
+			{
+				waitpid(pid, NULL, 0);
+				tc.c_lflag |= ECHO;
+				tcsetattr(0, TCSANOW, &tc);
+				return 1;
+			};
+			
+			char *newline = strchr(hash, '\n');
+			if (newline != NULL) *newline = 0;
+			
+			char linebuf[1024];
+			fprintf(stderr, "Current password: "); fflush(stderr);
+			if (fgets(linebuf, 1024, stdin) == NULL)
+			{
+				kill(pid, SIGKILL);
+				waitpid(pid, NULL, 0);
+				tc.c_lflag |= ECHO;
+				tcsetattr(0, TCSANOW, &tc);
+				return 1;
+			};
+			
+			newline = strchr(linebuf, '\n');
+			if (newline != NULL) *newline = 0;
+			
+			char *enteredHash = crypt(linebuf, hash);
+			if (strcmp(enteredHash, hash) != 0)
+			{
+				fprintf(stderr, "%s: wrong password\n", argv[0]);
+				tc.c_lflag |= ECHO;
+				tcsetattr(0, TCSANOW, &tc);
+				return 1;
+			};
+			
+			username = currentUserName;
+		}
+		else
+		{
+			if (getuid() != 0)
+			{
+				fprintf(stderr, "%s: only root can set passwords of other users\n", argv[0]);
+				tc.c_lflag |= ECHO;
+				tcsetattr(0, TCSANOW, &tc);
+				return 1;
+			};
+			
+			username = argv[1];
+		};
+
+		char passwd1[1024];
+		char passwd2[1024];
+		fprintf(stderr, "New password: "); fflush(stderr);
+		if (fgets(passwd1, 1024, stdin) == NULL)
+		{
+			kill(pid, SIGKILL);
+			waitpid(pid, NULL, 0);
 			return 1;
 		};
-	};
+		
+		fprintf(stderr, "Re-type new password: "); fflush(stderr);
+		if (fgets(passwd2, 1024, stdin) == NULL)
+		{
+			kill(pid, SIGKILL);
+			waitpid(pid, NULL, 0);
+			tc.c_lflag |= ECHO;
+			tcsetattr(0, TCSANOW, &tc);
+			return 1;
+		};
+		
+		char *newline = strchr(passwd1, '\n');
+		if (newline != NULL) *newline = 0;
+		newline = strchr(passwd2, '\n');
+		if (newline != NULL) *newline = 0;
+		
+		if (strcmp(passwd1, passwd2) != 0)
+		{
+			fprintf(stderr, "%s: passwords do not match\n", argv[0]);
+			kill(pid, SIGKILL);
+			waitpid(pid, NULL, 0);
+			tc.c_lflag |= ECHO;
+			tcsetattr(0, TCSANOW, &tc);
+			return 1;
+		};
+		
+		char salt[2];
+		int fd = open("/dev/urandom", O_RDONLY);
+		if (fd == -1)
+		{
+			fprintf(stderr, "%s: fatal error: failed to open /dev/urandom: %s\n", argv[0], strerror(errno));
+			tc.c_lflag |= ECHO;
+			tcsetattr(0, TCSANOW, &tc);
+			return 1;
+		};
+		read(fd, salt, 2);
+		close(fd);
 
-	printf("New password: "); fflush(stdout); getline(newpass);
-	printf("Retype new password: "); fflush(stdout); getline(newpass2);
+		tc.c_lflag |= ECHO;
+		tcsetattr(0, TCSANOW, &tc);
 
-	if (strcmp(newpass, newpass2) != 0)
-	{
-		fprintf(stderr, "Passwords do not match!\n");
+		char *newHash = crypt(passwd1, salt);
+		fprintf(cmdout, "hash %s %s\n", username, newHash);
+		fprintf(cmdout, "save\n");
+		fclose(cmdout);
+		
+		int wstatus;
+		waitpid(pid, &wstatus, 0);
+		if (wstatus == 0)
+		{
+			fprintf(stderr, "Password updated.\n");
+			return 0;
+		};
+		
 		return 1;
 	};
-
-	char salt[2] = "AB";
-	int randfd = open("/dev/random", O_RDONLY);
-	if (randfd != -1)
-	{
-		read(randfd, salt, 2);
-		salt[0] = saltchars[(int)salt[0] * 63 / 255];
-		salt[1] = saltchars[(int)salt[1] * 63 / 255];
-		close(randfd);
-	};
-
-	char *newcrypt = crypt(newpass, salt);
-	lseek(fd, cryptoff, SEEK_SET);
-	write(fd, newcrypt, 66);
-	close(fd);
-
-	printf("Password updated.\n");
-	return 0;
 };

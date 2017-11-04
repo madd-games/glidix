@@ -38,6 +38,7 @@
 #include <libgwm.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #define	WIN_WIDTH	232
 #define	WIN_HEIGHT	78
@@ -133,6 +134,19 @@ int findPassword(const char *username)
 		perror("open /etc/shadow");
 		exit(1);
 	};
+
+	struct flock lock;
+	memset(&lock, 0, sizeof(struct flock));
+	lock.l_type = F_RDLCK;
+	lock.l_whence = SEEK_SET;
+	lock.l_start = 0;
+	lock.l_len = 0;
+	
+	int status;
+	do
+	{
+		status = fcntl(fileno(fp), F_SETLKW, &lock);
+	} while (status != 0 && errno == EINTR);
 
 	while (nextShadowEntry(fp) != -1)
 	{

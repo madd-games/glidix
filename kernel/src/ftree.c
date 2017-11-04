@@ -342,7 +342,7 @@ int ftTruncate(FileTree *ft, size_t size)
 	if (size < ft->size)
 	{
 		size_t pos;
-		for (pos=size+0xFFF; pos<ft->size; pos+=0x1000)
+		for (pos=(size+0xFFF) & (~0xFFF); pos<ft->size; pos+=0x1000)
 		{
 			FileNode *node = &ft->top;
 			int i;
@@ -371,6 +371,21 @@ int ftTruncate(FileTree *ft, size_t size)
 					node->entries[pageIndex] = 0;
 				};
 			};
+		};
+	};
+	
+	// zero out the end of the current page if truncating on a non-page-boundary.
+	if (size & 0xFFF)
+	{
+		uint64_t frame = getPageUnlocked(ft, size & ~0xFFF);
+		if (frame != 0)
+		{
+			uint64_t old = mapTempFrame(frame);
+			memset((char*) tmpframe() + (size & 0xFFF), 0, 0x1000 - (size & 0xFFF));
+			mapTempFrame(old);
+			piMarkAccessed(frame);
+			piMarkDirty(frame);
+			piDecref(frame);
 		};
 	};
 	
