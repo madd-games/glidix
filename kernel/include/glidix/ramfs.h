@@ -64,7 +64,7 @@ typedef struct RamfsDirent_
 	 * The entry. If d_ino == 0, then this is a directory end pointer. If d_ino == 1, then this is
 	 * an unlinked entry.
 	 */
-	struct dirent				dent;
+	struct kdirent				dent;
 	
 	/**
 	 * Links.

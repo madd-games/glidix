@@ -119,7 +119,7 @@ static int ramdir_next(Dir *dir)
 		RamfsInode *entNode = (RamfsInode*) data->currentEntry->dent.d_ino;
 		if (entNode != NULL)
 		{
-			memcpy(&dir->dirent, &data->currentEntry->dent, sizeof(struct dirent));
+			memcpy(&dir->dirent, &data->currentEntry->dent, sizeof(struct kdirent));
 			memcpy(&dir->stat, &entNode->meta, sizeof(struct kstat));
 			status = 0;
 		}
@@ -678,7 +678,7 @@ static int ramfs_opendir(Ramfs *ramfs, RamfsInode *inode, Dir *dir, size_t szdir
 	RamfsInode *entNode = (RamfsInode*) data->currentEntry->dent.d_ino;
 	if (entNode != NULL)
 	{
-		memcpy(&dir->dirent, &data->currentEntry->dent, sizeof(struct dirent));
+		memcpy(&dir->dirent, &data->currentEntry->dent, sizeof(struct kdirent));
 		memcpy(&dir->stat, &entNode->meta, sizeof(struct kstat));
 	};
 	

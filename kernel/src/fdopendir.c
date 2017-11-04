@@ -40,7 +40,7 @@ static ssize_t readdir(File *fp, void *buffer, size_t size)
 {
 	Dir *dir = (Dir*) fp->fsdata;
 	if (dir == NULL) return 0;
-	if (size > sizeof(struct dirent)) size = sizeof(struct dirent);
+	if (size > sizeof(struct kdirent)) size = sizeof(struct kdirent);
 	memcpy(buffer, &dir->dirent, size);
 
 	do

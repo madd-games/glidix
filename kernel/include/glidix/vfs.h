@@ -185,13 +185,11 @@ struct kstat
 	AccessControlEntry		st_acl[VFS_ACL_SIZE];
 };
 
-#ifndef _DIRENT_H
-struct dirent
+struct kdirent
 {
 	ino_t				d_ino;
 	char				d_name[128];
 };
-#endif
 
 /**
  * Describes a "system object". It's an object with a name in the filesystem, which may be
@@ -357,9 +355,9 @@ typedef struct _Dir
 	/**
 	 * Description of the current entry and its stat().
 	 */
-	struct dirent			dirent;
+	struct kdirent			dirent;
 	struct kstat			stat;
-	char				_pad[1024 - sizeof(struct kstat) - sizeof(struct dirent)];
+	char				_pad[1024 - sizeof(struct kstat) - sizeof(struct kdirent)];
 	
 	/**
 	 * If this entry points to a file, open the file. Return 0 on success, -1 on error.
