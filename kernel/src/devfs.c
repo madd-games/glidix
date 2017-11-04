@@ -40,7 +40,7 @@ typedef struct _DeviceFile
 	char		name[16];
 	void		*data;
 	int		(*open)(void *data, File *file, size_t szFile);
-	struct stat	st;
+	struct kstat	st;
 	ino_t		inode;
 	
 	struct _DeviceFile *prev;

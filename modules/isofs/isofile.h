@@ -31,6 +31,6 @@
 
 #include "isofs.h"
 
-int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, struct stat *st);
+int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, struct kstat *st);
 
 #endif

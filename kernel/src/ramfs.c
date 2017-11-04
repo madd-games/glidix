@@ -120,7 +120,7 @@ static int ramdir_next(Dir *dir)
 		if (entNode != NULL)
 		{
 			memcpy(&dir->dirent, &data->currentEntry->dent, sizeof(struct dirent));
-			memcpy(&dir->stat, &entNode->meta, sizeof(struct stat));
+			memcpy(&dir->stat, &entNode->meta, sizeof(struct kstat));
 			status = 0;
 		}
 		else
@@ -531,12 +531,12 @@ static off_t ramfile_seek(File *fp, off_t offset, int whence)
 	return result;
 };
 
-static int ramfile_fstat(File *fp, struct stat *st)
+static int ramfile_fstat(File *fp, struct kstat *st)
 {
 	FileData *data = (FileData*) fp->fsdata;
 	semWait(&data->ramfs->lock);
 	
-	memcpy(st, &data->inode->meta, sizeof(struct stat));
+	memcpy(st, &data->inode->meta, sizeof(struct kstat));
 	
 	semSignal(&data->ramfs->lock);
 	return 0;
@@ -679,7 +679,7 @@ static int ramfs_opendir(Ramfs *ramfs, RamfsInode *inode, Dir *dir, size_t szdir
 	if (entNode != NULL)
 	{
 		memcpy(&dir->dirent, &data->currentEntry->dent, sizeof(struct dirent));
-		memcpy(&dir->stat, &entNode->meta, sizeof(struct stat));
+		memcpy(&dir->stat, &entNode->meta, sizeof(struct kstat));
 	};
 	
 	if (data->currentEntry->dent.d_ino == 0)

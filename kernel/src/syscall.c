@@ -395,7 +395,7 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 
 	vfsLockCreation();
 
-	struct stat st;
+	struct kstat st;
 	int error = vfsStat(path, &st);
 	if (error != 0)
 	{
@@ -582,7 +582,7 @@ int sys_raise(int sig)
 	return 0;
 };
 
-int sys_stat(const char *upath, struct stat *buf, size_t bufsz)
+int sys_stat(const char *upath, struct kstat *buf, size_t bufsz)
 {
 	char path[USER_STRING_MAX];
 	if (strcpy_u2k(path, upath) != 0)
@@ -591,12 +591,12 @@ int sys_stat(const char *upath, struct stat *buf, size_t bufsz)
 		return -1;
 	};
 	
-	if (bufsz > sizeof(struct stat))
+	if (bufsz > sizeof(struct kstat))
 	{
-		bufsz = sizeof(struct stat);
+		bufsz = sizeof(struct kstat);
 	};
 
-	struct stat kbuf;
+	struct kstat kbuf;
 	int status = vfsStat(path, &kbuf);
 	if (status == 0)
 	{
@@ -614,11 +614,11 @@ int sys_stat(const char *upath, struct stat *buf, size_t bufsz)
 	};
 };
 
-int sys_lstat(const char *upath, struct stat *buf, size_t bufsz)
+int sys_lstat(const char *upath, struct kstat *buf, size_t bufsz)
 {
-	if (bufsz > sizeof(struct stat))
+	if (bufsz > sizeof(struct kstat))
 	{
-		bufsz = sizeof(struct stat);
+		bufsz = sizeof(struct kstat);
 	};
 	
 	char path[USER_STRING_MAX];
@@ -628,7 +628,7 @@ int sys_lstat(const char *upath, struct stat *buf, size_t bufsz)
 		return -1;
 	};
 
-	struct stat kbuf;
+	struct kstat kbuf;
 	int status = vfsLinkStat(path, &kbuf);
 	if (status == 0)
 	{
@@ -657,13 +657,13 @@ int sys_pause()
 	return -1;
 };
 
-int sys_fstat(int fd, struct stat *buf, size_t bufsz)
+int sys_fstat(int fd, struct kstat *buf, size_t bufsz)
 {
-	struct stat kbuf;
+	struct kstat kbuf;
 	
-	if (bufsz > sizeof(struct stat))
+	if (bufsz > sizeof(struct kstat))
 	{
-		bufsz = sizeof(struct stat);
+		bufsz = sizeof(struct kstat);
 	};
 
 	File *fp = ftabGet(getCurrentThread()->ftab, fd);
@@ -680,7 +680,7 @@ int sys_fstat(int fd, struct stat *buf, size_t bufsz)
 		return -1;
 	};
 
-	memset(&kbuf, 0, sizeof(struct stat));
+	memset(&kbuf, 0, sizeof(struct kstat));
 	int status = fp->fstat(fp, &kbuf);
 	vfsClose(fp);
 	
@@ -764,7 +764,7 @@ int sys_fchmod(int fd, mode_t mode)
 		return -1;
 	};
 
-	struct stat st;
+	struct kstat st;
 	int status = fp->fstat(fp, &st);
 	
 	if (status == -1)
@@ -811,7 +811,7 @@ static int sys_fsync(int fd)
 	return 0;
 };
 
-static int canChangeOwner(struct stat *st, uid_t uid, gid_t gid)
+static int canChangeOwner(struct kstat *st, uid_t uid, gid_t gid)
 {
 	Thread *ct = getCurrentThread();
 	if (ct->creds->euid == 0) return 1;
@@ -906,7 +906,7 @@ int sys_fchown(int fd, uid_t uid, gid_t gid)
 		return -1;
 	};
 
-	struct stat st;
+	struct kstat st;
 	int status = fp->fstat(fp, &st);
 
 	if (status == -1)
@@ -984,7 +984,7 @@ int sys_mkdir(const char *upath, mode_t mode)
 
 	vfsLockCreation();
 
-	struct stat st;
+	struct kstat st;
 	int error;
 	if ((error = vfsStat(parent, &st)) != 0)
 	{
@@ -1123,7 +1123,7 @@ int sys_unlink(const char *upath)
 
 	vfsLockCreation();
 
-	struct stat st;
+	struct kstat st;
 	int error;
 	if ((error = vfsStat(parent, &st)) != 0)
 	{
@@ -1319,7 +1319,7 @@ int sys_chdir(const char *upath)
 		return -1;
 	};
 	
-	struct stat st;
+	struct kstat st;
 	int error = vfsStat(path, &st);
 	if (error != 0)
 	{
@@ -1608,7 +1608,7 @@ int sys_link(const char *uoldname, const char *unewname)
 
 	vfsLockCreation();
 
-	struct stat stdir;
+	struct kstat stdir;
 	int error;
 	if ((error = vfsStat(parent, &stdir)) != 0)
 	{
@@ -1616,7 +1616,7 @@ int sys_link(const char *uoldname, const char *unewname)
 		return sysOpenErrno(error);
 	};
 
-	struct stat stold;
+	struct kstat stold;
 	if ((error = vfsLinkStat(oldname, &stold)) != 0)
 	{
 		vfsUnlockCreation();
@@ -1758,7 +1758,7 @@ int sys_symlink(const char *utarget, const char *upath)
 
 	vfsLockCreation();
 
-	struct stat st;
+	struct kstat st;
 	int error;
 	if ((error = vfsStat(parent, &st)) != 0)
 	{

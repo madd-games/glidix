@@ -163,8 +163,7 @@ typedef struct
 	uint8_t				ace_perms;
 } AccessControlEntry;
 
-#ifndef _SYS_STAT_H
-struct stat
+struct kstat
 {
 	dev_t				st_dev;
 	ino_t				st_ino;
@@ -185,7 +184,6 @@ struct stat
 	time_t				st_btime;
 	AccessControlEntry		st_acl[VFS_ACL_SIZE];
 };
-#endif
 
 #ifndef _DIRENT_H
 struct dirent
@@ -294,7 +292,7 @@ typedef struct _File
 	 * this file description always fails, which is a bad thing. If -1 is returned or this function
 	 * pointer is NULL, then EIO is returned to the caller.
 	 */
-	int (*fstat)(struct _File *file, struct stat *st);
+	int (*fstat)(struct _File *file, struct kstat *st);
 
 	/**
 	 * Like chmod() in DIR, except takes a file description instead of a directory pointer.
@@ -360,8 +358,8 @@ typedef struct _Dir
 	 * Description of the current entry and its stat().
 	 */
 	struct dirent			dirent;
-	struct stat			stat;
-	char				_pad[1024 - sizeof(struct stat) - sizeof(struct dirent)];
+	struct kstat			stat;
+	char				_pad[1024 - sizeof(struct kstat) - sizeof(struct dirent)];
 	
 	/**
 	 * If this entry points to a file, open the file. Return 0 on success, -1 on error.
@@ -578,7 +576,7 @@ typedef struct
 } FLock;
 
 void dumpFS(FileSystem *fs);
-int vfsCanCurrentThread(struct stat *st, mode_t mask);
+int vfsCanCurrentThread(struct kstat *st, mode_t mask);
 
 char *realpath(const char *relpath, char *buffer);
 
@@ -589,8 +587,8 @@ char *realpath(const char *relpath, char *buffer);
  */
 Dir *parsePath(const char *path, int flags, int *error);
 
-int vfsStat(const char *path, struct stat *st);
-int vfsLinkStat(const char *path, struct stat *st);
+int vfsStat(const char *path, struct kstat *st);
+int vfsLinkStat(const char *path, struct kstat *st);
 File *vfsOpen(const char *path, int flags, int *error);
 ssize_t vfsRead(File *file, void *buffer, size_t size);
 ssize_t vfsWrite(File *file, const void *buffer, size_t size);

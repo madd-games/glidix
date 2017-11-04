@@ -42,7 +42,7 @@ typedef struct RamfsInode_
 	 * Node metadata. The st_ino field is actually a pointer to this node structure;
 	 * and st_nlink is in fact the reference count.
 	 */
-	struct stat				meta;
+	struct kstat				meta;
 	
 	/**
 	 * For directories, this points to the first entry (which is just the directory end pointer

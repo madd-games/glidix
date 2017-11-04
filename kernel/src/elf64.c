@@ -216,7 +216,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	initUserRegs(&regs);
 	
 	vfsLockCreation();
-	struct stat st;
+	struct kstat st;
 	int error = vfsStat(path, &st);
 	if (error != 0)
 	{

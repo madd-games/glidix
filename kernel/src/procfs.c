@@ -107,7 +107,7 @@ static FileSystem *procfs;
 typedef struct
 {
 	struct dirent ent;
-	struct stat st;
+	struct kstat st;
 } ProcfsRootDirent;
 
 typedef struct
@@ -148,7 +148,7 @@ static int procfs_root_next(Dir *dir)
 	};
 
 	memcpy(&dir->dirent, &pfdir->ents[pfdir->currentIndex].ent, sizeof(struct dirent));
-	memcpy(&dir->stat, &pfdir->ents[pfdir->currentIndex].st, sizeof(struct stat));
+	memcpy(&dir->stat, &pfdir->ents[pfdir->currentIndex].st, sizeof(struct kstat));
 
 	return 0;
 };
@@ -343,7 +343,7 @@ static int procfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
 	pfdir->ents[i].st.st_ino = 1;
 
 	memcpy(&dir->dirent, &pfdir->ents[0].ent, sizeof(struct dirent));
-	memcpy(&dir->stat, &pfdir->ents[0].st, sizeof(struct stat));
+	memcpy(&dir->stat, &pfdir->ents[0].st, sizeof(struct kstat));
 
 	dir->close = procfs_root_close;
 	dir->opendir = procfs_root_opendir;

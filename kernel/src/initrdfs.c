@@ -263,7 +263,7 @@ static ssize_t pread(File *file, void *buffer, size_t size, off_t off)
 	return size;
 };
 
-static int fstat(File *file, struct stat *st)
+static int fstat(File *file, struct kstat *st)
 {
 	TarFile *tf = (TarFile*) file->fsdata;
 

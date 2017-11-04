@@ -102,7 +102,7 @@ void dumpFS(FileSystem *fs)
 	if (dir.close != NULL) dir.close(&dir);
 };
 
-int vfsCanCurrentThread(struct stat *st, mode_t mask)
+int vfsCanCurrentThread(struct kstat *st, mode_t mask)
 {
 	Thread *thread = getCurrentThread();
 	if (thread->creds == NULL)
@@ -451,7 +451,7 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 		return NULL;
 	};
 
-	struct stat st_parent;
+	struct kstat st_parent;
 	st_parent.st_dev = 0;
 	st_parent.st_ino = 2;
 	st_parent.st_mode = 01755;
@@ -524,7 +524,7 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 
 		if (*scan == '/')
 		{
-			//memset(&dir->stat, 0, sizeof(struct stat));
+			//memset(&dir->stat, 0, sizeof(struct kstat));
 			if (dir->getstat != NULL) dir->getstat(dir);
 
 			if ((dir->stat.st_mode & 0xF000) != VFS_MODE_DIRECTORY)
@@ -571,7 +571,7 @@ Dir *resolvePath(const char *path, int flags, int *error, int level)
 				return NULL;
 			};
 
-			memcpy(&st_parent, &dir->stat, sizeof(struct stat));
+			memcpy(&st_parent, &dir->stat, sizeof(struct kstat));
 
 			Dir *subdir = (Dir*) kmalloc(sizeof(Dir));
 			memset(subdir, 0, sizeof(Dir));
@@ -678,9 +678,9 @@ Dir *parsePath(const char *path, int flags, int *error)
 	return resolvePath(path, flags, error, 0);
 };
 
-static int vfsStatGen(const char *path, struct stat *st, int flags)
+static int vfsStatGen(const char *path, struct kstat *st, int flags)
 {
-	memset(st, 0, sizeof(struct stat));
+	memset(st, 0, sizeof(struct kstat));
 	
 	char rpath[256];
 	if (realpath(path, rpath) == NULL)
@@ -719,7 +719,7 @@ static int vfsStatGen(const char *path, struct stat *st, int flags)
 		return error;
 	};
 
-	memcpy(st, &dir->stat, sizeof(struct stat));
+	memcpy(st, &dir->stat, sizeof(struct kstat));
 	if (dir->close != NULL) dir->close(dir);
 	kfree(dir);
 
@@ -731,12 +731,12 @@ static int vfsStatGen(const char *path, struct stat *st, int flags)
 	return 0;
 };
 
-int vfsStat(const char *path, struct stat *st)
+int vfsStat(const char *path, struct kstat *st)
 {
 	return vfsStatGen(path, st, 0);
 };
 
-int vfsLinkStat(const char *path, struct stat *st)
+int vfsLinkStat(const char *path, struct kstat *st)
 {
 	return vfsStatGen(path, st, VFS_NO_FOLLOW);
 };
@@ -995,7 +995,7 @@ int vfsSysLink(const char *path, SysObject *sysobj)
 	
 	vfsLockCreation();
 
-	struct stat st;
+	struct kstat st;
 	int error;
 	if ((error = vfsStat(parent, &st)) != 0)
 	{

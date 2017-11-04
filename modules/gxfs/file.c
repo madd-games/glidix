@@ -54,7 +54,7 @@ static void gxfs_close(File *fp)
 	kfree(data);
 };
 
-static int gxfs_fstat(File *fp, struct stat *st)
+static int gxfs_fstat(File *fp, struct kstat *st)
 {
 	FileData *data = (FileData*) fp->fsdata;
 	

@@ -154,7 +154,7 @@ static int sdfile_ioctl(File *fp, uint64_t cmd, void *params)
 	return -1;
 };
 
-int sdfile_fstat(File *fp, struct stat *st)
+int sdfile_fstat(File *fp, struct kstat *st)
 {
 	SDHandle *data = (SDHandle*) fp->fsdata;
 	mutexLock(&data->sd->lock);

@@ -39,7 +39,7 @@
 
 typedef struct
 {
-	struct stat			st;
+	struct kstat			st;
 	ISOFileSystem*			isofs;
 	uint64_t			start;
 	uint64_t			size;
@@ -87,10 +87,10 @@ static off_t isofile_seek(File *fp, off_t offset, int whence)
 	return newOffset;
 };
 
-static int isofile_fstat(File *fp, struct stat *st)
+static int isofile_fstat(File *fp, struct kstat *st)
 {
 	ISOFile *file = (ISOFile*) fp->fsdata;
-	memcpy(st, &file->st, sizeof(struct stat));
+	memcpy(st, &file->st, sizeof(struct kstat));
 	return 0;
 };
 
@@ -111,11 +111,11 @@ static FileTree* isofile_tree(File *fp)
 	return ft;
 };
 
-int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, struct stat *st)
+int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, struct kstat *st)
 {
 	ISOFile *file = (ISOFile*) kmalloc(sizeof(ISOFile));
 	semWait(&isofs->sem);
-	memcpy(&file->st, st, sizeof(struct stat));
+	memcpy(&file->st, st, sizeof(struct kstat));
 	file->isofs = isofs;
 	file->start = start;
 	file->size = size;

@@ -157,7 +157,7 @@ static void pipe_close(File *fp)
 	};
 };
 
-static int pipe_fstat(File *fp, struct stat *st)
+static int pipe_fstat(File *fp, struct kstat *st)
 {
 	Pipe *pipe = (Pipe*) fp->fsdata;
 	semWait(&pipe->sem);
