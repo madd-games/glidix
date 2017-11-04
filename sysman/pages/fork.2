@@ -19,7 +19,7 @@ The two processes are similar, and different, in the following ways:
 
 \* The new process has a copy of all memory mappings, but calls to [mmap.2] and [munmap.2] may modify this copy, and the changes are not visible to the other process.
 
-\* The new process has a copy of all open file descriptions. If a file can be seeked, the pointer is initially equal in both copies, but when [lseek.2] or similar is called by one process, only the pointer for that process is updated and the other process does not see the change.
+\* The new process has a copy of all open file descriptors. They refer to the same file descriptions as in the parent, and so they share open file flags and file offset, as if created by [dup.2].
 
 \* The list of signal dispositions of the new process is initially identical to the dispositions of the calling process, but changes made by one process are not visible to the other. See [signal.6].
 

@@ -55,19 +55,6 @@ static void isofile_close(File *fp)
 	kfree(fp->fsdata);
 };
 
-static int isofile_dup(File *me, File *fp, size_t szfile)
-{
-	ISOFile *org = (ISOFile*) me->fsdata;
-	semWait(&org->isofs->sem);
-	org->isofs->numOpenInodes++;
-	ISOFile *file = (ISOFile*) kmalloc(sizeof(ISOFile));
-	memcpy(file, me->fsdata, sizeof(ISOFile));
-	memcpy(fp, me, szfile);
-	fp->fsdata = file;
-	semSignal(&org->isofs->sem);
-	return 0;
-};
-
 static off_t isofile_seek(File *fp, off_t offset, int whence)
 {
 	ISOFile *file = (ISOFile*) fp->fsdata;
@@ -99,59 +86,6 @@ static off_t isofile_seek(File *fp, off_t offset, int whence)
 	file->pos = newOffset;
 	return newOffset;
 };
-
-#if 0
-static ssize_t isofile_read(File *fp, void *buffer, size_t size)
-{
-	ISOFile *file = (ISOFile*) fp->fsdata;
-	semWait(&file->isofs->sem);
-	File *fsimg = file->isofs->fp;
-	fsimg->seek(fsimg, file->start + file->pos, SEEK_SET);
-
-	if ((file->pos+size) > file->size)
-	{
-		size = file->size - file->pos;
-	};
-
-	ssize_t count = vfsRead(fsimg, buffer, size);
-	semSignal(&file->isofs->sem);
-	if (count == -1)
-	{
-		return -1;
-	};
-
-	file->pos += count;
-	return count;
-};
-
-static ssize_t isofile_pread(File *fp, void *buffer, size_t size, off_t off)
-{
-	ISOFile *file = (ISOFile*) fp->fsdata;
-	semWait(&file->isofs->sem);
-	File *fsimg = file->isofs->fp;
-	fsimg->seek(fsimg, file->start + off, SEEK_SET);
-
-	if (off > file->size)
-	{
-		semSignal(&file->isofs->sem);
-		return 0;
-	};
-	
-	if ((off+size) > file->size)
-	{
-		size = file->size - off;
-	};
-
-	ssize_t count = vfsRead(fsimg, buffer, size);
-	semSignal(&file->isofs->sem);
-	if (count == -1)
-	{
-		return -1;
-	};
-
-	return count;
-};
-#endif
 
 static int isofile_fstat(File *fp, struct stat *st)
 {
@@ -189,9 +123,6 @@ int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, s
 
 	fp->fsdata = file;
 	fp->close = isofile_close;
-	//fp->read = isofile_read;
-	//fp->pread = isofile_pread;
-	fp->dup = isofile_dup;
 	fp->seek = isofile_seek;
 	fp->fstat = isofile_fstat;
 	fp->pollinfo = isofile_pollinfo;

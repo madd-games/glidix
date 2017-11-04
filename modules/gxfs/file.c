@@ -54,22 +54,6 @@ static void gxfs_close(File *fp)
 	kfree(data);
 };
 
-static int gxfs_dup(File *me, File *fp, size_t filesz)
-{
-	FileData *data = (FileData*) me->fsdata;
-	memcpy(fp, me, filesz);
-	
-	FileData *newData = NEW(FileData);
-	__sync_fetch_and_add(&data->info->refcount, 1);
-	__sync_fetch_and_add(&data->info->data.inoLinks, 1);
-	ftUp(data->info->ft);
-	
-	memcpy(newData, data, sizeof(FileData));
-	fp->fsdata = newData;
-	
-	return 0;
-};
-
 static int gxfs_fstat(File *fp, struct stat *st)
 {
 	FileData *data = (FileData*) fp->fsdata;
@@ -179,7 +163,6 @@ int gxfsOpenFile(GXFS *gxfs, uint64_t ino, File *fp, size_t filesz)
 	fp->fsdata = data;
 	fp->seek = gxfs_seek;
 	fp->close = gxfs_close;
-	fp->dup = gxfs_dup;
 	fp->fstat = gxfs_fstat;
 	fp->fchmod = gxfs_fchmod;
 	fp->fchown = gxfs_fchown;

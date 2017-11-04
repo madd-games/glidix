@@ -109,12 +109,6 @@ static ssize_t termRead(File *fp, void *buffer, size_t size)
 	return out;
 };
 
-static int termDup(File *old, File *new, size_t szfile)
-{
-	memcpy(new, old, szfile);
-	return 0;
-};
-
 int termIoctl(File *fp, uint64_t cmd, void *argp)
 {
 	Thread *target = NULL;
@@ -248,7 +242,6 @@ void setupTerminal(FileTable *ftab)
 	memset(termout, 0, sizeof(File));
 
 	termout->write = &termWrite;
-	termout->dup = &termDup;
 	termout->oflag = O_WRONLY | O_TERMINAL;
 	termout->ioctl = &termIoctl;
 	termout->refcount = 1;
@@ -261,12 +254,11 @@ void setupTerminal(FileTable *ftab)
 	memset(termin, 0, sizeof(File));
 	termin->oflag = O_RDONLY | O_TERMINAL;
 	termin->read = &termRead;
-	termin->dup = &termDup;
 	termin->ioctl = &termIoctl;
 	termin->refcount = 1;
 
-	File *termerr = (File*) kmalloc(sizeof(File));
-	termDup(termout, termerr, sizeof(File));
+	vfsDup(termout);
+	File *termerr = termout;
 	
 	if (ftabAlloc(ftab) != 0) panic("ftabAlloc did not return 0!");
 	if (ftabAlloc(ftab) != 1) panic("ftabAlloc did not return 1!");

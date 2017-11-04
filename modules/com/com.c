@@ -75,19 +75,12 @@ static ssize_t com_pwrite(File *fp, const void *buffer, size_t size, off_t pos)
 	return sizeOut;
 };
 
-static int com_dup(File *me, File *copy, size_t szFile)
-{
-	memcpy(copy, me, szFile);
-	return 0;
-};
-
 static int com_open(void *data, File *fp, size_t szFile)
 {
 	fp->fsdata = data;
 	fp->write = com_write;
 	fp->pwrite = com_pwrite;
 	fp->close = com_close;
-	fp->dup = com_dup;
 	
 	return 0;
 };

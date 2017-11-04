@@ -278,16 +278,8 @@ typedef struct _File
 	 */
 	void (*close)(struct _File *file);
 
-	/**
-	 * Duplicate the file description into another File structure. Both descriptions must
-	 * be initially identical, but may become different when read(), write(), seek() and
-	 * other functions are called on them. Return 0 if the duplication was successful; -1
-	 * if this description cannot be duplicated for whatever reason. If this entry is NULL,
-	 * the file description is considered impossible to duplicate.
-	 *
-	 * This is used by fork(); not by dup() or dup2().
-	 */
-	int (*dup)(struct _File *me, struct _File *file, size_t szFile);
+	/* we're gonna remove this soon when we revamp the VFS */
+	void *resv;
 
 	/**
 	 * This is used to implement the ioctl() interface. The 'cmd' argument must be constructed

@@ -79,21 +79,9 @@ FileTable *ftabDup(FileTable *old)
 		File *fold = old->list[i].fp;
 		if (fold != NULL)
 		{
-			if (fold->dup != NULL)
-			{
-				File *fp = NEW(File);
-				memset(fp, 0, sizeof(File));
-				fold->dup(fold, fp, sizeof(File));
-				fp->refcount = 1;
-				new->list[i].fp = fp;
-				new->list[i].flags = old->list[i].flags;
-			}
-			else
-			{
-				vfsDup(fold);
-				new->list[i].fp = fold;
-				new->list[i].flags = old->list[i].flags;
-			};
+			vfsDup(fold);
+			new->list[i].fp = fold;
+			new->list[i].flags = old->list[i].flags;
 		};
 	};
 	semSignal(&old->lock);

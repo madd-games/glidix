@@ -531,24 +531,6 @@ static off_t ramfile_seek(File *fp, off_t offset, int whence)
 	return result;
 };
 
-static int ramfile_dup(File *me, File *fp, size_t szfile)
-{
-	FileData *data = (FileData*) me->fsdata;
-	semWait(&data->ramfs->lock);
-	
-	__sync_fetch_and_add(&data->inode->meta.st_nlink, 1);
-	
-	memcpy(fp, me, szfile);
-	
-	FileData *newData = NEW(FileData);
-	memcpy(newData, data, sizeof(FileData));
-	
-	fp->fsdata = newData;
-	
-	semSignal(&data->ramfs->lock);
-	return 0;
-};
-
 static int ramfile_fstat(File *fp, struct stat *st)
 {
 	FileData *data = (FileData*) fp->fsdata;
@@ -652,7 +634,6 @@ static int ramdir_openfile(Dir *dir, File *fp, size_t szfile)
 	fp->fsdata = fdata;
 	fp->close = ramfile_close;
 	fp->seek = ramfile_seek;
-	fp->dup = ramfile_dup;
 	fp->fstat = ramfile_fstat;
 	fp->fchmod = ramfile_fchmod;
 	fp->fchown = ramfile_fchown;
