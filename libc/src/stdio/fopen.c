@@ -31,6 +31,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <unistd.h>
 #include <sys/glidix.h>
 
 /* internal/file.c */
@@ -38,7 +39,6 @@ void __fd_flush(FILE *fp);
 
 FILE *__fopen_strm(FILE *fp, const char *path, const char *mode)
 {
-	//printf("{fopen '%s', mode '%s'}\n", path, mode);
 	int oflags = 0;
 	int fpflags;
 	if (*mode == 'r')
@@ -62,22 +62,38 @@ FILE *__fopen_strm(FILE *fp, const char *path, const char *mode)
 		return NULL;
 	};
 
-	mode++;
-	if (*mode == 'b')
+	for (mode++; *mode!=0; mode++)
 	{
-		mode++;
+		switch (*mode)
+		{
+		case 'b':
+			break;
+		case '+':
+			oflags |= O_RDWR;
+			break;
+		case 'e':
+			oflags |= O_CLOEXEC;
+			break;
+		case 'x':
+			oflags |= O_EXCL;
+			break;
+		default:
+			errno = EINVAL;
+			return NULL;
+		};
 	};
 
-	if (*mode == '+')
-	{
-		oflags |= O_RDWR;
-		fpflags = __FILE_READ | __FILE_WRITE;
-	};
-
-	int fd = open(path, oflags | O_CLOEXEC, 0644);
+	int fd = open(path, oflags, 0644);
 	if (fd < 0)
 	{
 		return NULL;
+	};
+	
+	if (fp->_fd != -1)
+	{
+		dup2(fd, fp->_fd);
+		close(fd);
+		fd = fp->_fd;
 	};
 
 	fp->_buf = &fp->_nanobuf;
@@ -96,6 +112,7 @@ FILE *__fopen_strm(FILE *fp, const char *path, const char *mode)
 FILE *fopen(const char *filename, const char *mode)
 {
 	FILE *fp = (FILE*) malloc(sizeof(FILE));
+	fp->_fd = -1;
 	FILE *out = __fopen_strm(fp, filename, mode);
 	if (out == NULL) free(fp);
 	return out;

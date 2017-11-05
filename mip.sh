@@ -10,6 +10,7 @@ export DESTDIR="$mipdir"
 # libc
 cd libc
 make install || exit 1
+echo "// dummy" > ../mipdir/usr/include/limits.h || exit 1		# to stop GCC complaining
 cd ..
 build-tools/mkmip mipdir $1/libc.mip || exit 1
 
