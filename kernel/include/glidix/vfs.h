@@ -216,6 +216,12 @@ struct Inode_
 	int refcount;
 	
 	/**
+	 * The lock. Protects all mutable fields of this structure. It is also held when
+	 * flushing.
+	 */
+	Semaphore lock;
+	
+	/**
 	 * Specifies which filesystem this inode belongs to. This may be NULL if the
 	 * inode is not on any filesystem (e.g. a socket or a pipe).
 	 */
@@ -288,6 +294,74 @@ struct Inode_
 	 * Head of the dentry cache, if this is a directory inode.
 	 */
 	Dentry* dents;
+	
+	/**
+	 * If these function pointers are not NULL, then it is called every time this inode is opened,
+	 * and may return additional data to be associated with the file description, and to release
+	 * this data, respectively.
+	 *
+	 * If open() is implemented, it must return non-NULL on success. If it returns NULL, it must
+	 * also set ERRNO, and the open is rejected in this case.
+	 */
+	void* (*open)(Inode *inode, int oflag);
+	void (*close)(Inode *inode, void *filedata);
+	
+	/**
+	 * For non-random-access files, implementations of pread() and pwrite(). The 'filedata' argument
+	 * is the one returned by open() (above) for the file description in question.
+	 *
+	 * These functions, when returning -1 to indicate an error, must also set ERRNO.
+	 */
+	ssize_t (*pread)(Inode *inode, void *filedata, void *buffer, size_t size, off_t offset);
+	ssize_t (*pwrite)(Inode *inode, void *filedata, const void *buffer, size_t size, off_t offset);
+	
+	/**
+	 * For files which support this, ioctl() implementation. 'filedata' is the data retuned by open()
+	 * for the file description in question. See <glidix/ioctl.h> for information on how commands and
+	 * ioctl() in general work.
+	 *
+	 * This function may set ERRNO.
+	 */
+	int (*ioctl)(Inode *inode, void *filedata, uint64_t cmd, void *argp);
+	
+	/**
+	 * Flush this inode to disk. Return 0 on success, or -1 on error (and set ERRNO).
+	 * If NULL, the filesystem is virtual and flushing is always reported successful.
+	 */
+	int (*flush)(Inode *inode);
+};
+
+/**
+ * Describes a directory entry. Fields are protected by the directory inode lock.
+ */
+struct Dentry_
+{
+	/**
+	 * Name of the entry. On the heap; create with kmalloc() or strdup(), release with kfree().
+	 */
+	char*					name;
+	
+	/**
+	 * The containing directory inode. This counts as a reference of the inode.
+	 */
+	Inode*					dir;
+	
+	/**
+	 * Inode number of the target.
+	 */
+	ino_t					ino;
+	
+	/**
+	 * A unique "key" assigned to each dirent. It is unique within each directory, not globally.
+	 * Used for race-free directory reading from userspace.
+	 */
+	int					key;
+	
+	/**
+	 * The target inode if already cached (else NULL). If uncached, the FileSystem's loadInode()
+	 * function pointer is used to retrieve it.
+	 */
+	Inode*					target;
 };
 
 struct fsinfo;
