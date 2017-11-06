@@ -37,1049 +37,119 @@
 #include <glidix/errno.h>
 #include <glidix/mutex.h>
 
-static Mutex vfsMutexCreation;
 static Semaphore semConst;
+static FileSystem* kernelRootFS;
+static Inode *kernelRootInode;
+static Dentry *kernelRootDentry;
+static ino_t nextRootIno = 2;
+
+static int rootRegInode(FileSystem *fs, Inode *inode)
+{
+	inode->ino = __sync_fetch_and_add(&nextRootIno, 1);
+	return 0;
+};
 
 void vfsInit()
 {
-	mutexInit(&vfsMutexCreation);
 	semInit2(&semConst, 1);
+	
+	// create the "kernel root filesystem". It does not actually appear on the mount table,
+	// but is the root of all kernel threads and the initial root of "init"
+	kernelRootFS = NEW(FileSystem);
+	memset(kernelRootFS, 0, sizeof(FileSystem));
+	kernelRootFS->refcount = 1;
+	kernelRootFS->numOpenInodes = 0;
+	kernelRootFS->fsid = 0;
+	kernelRootFS->fstype = "krootfs";
+	kernelRootFS->regInode = rootRegInode;
+	semInit(&kernelRootFS->lock);
+	
+	// create the root inode ("/" directory)
+	kernelRootInode = vfsCreateInode(kernelRootFS, 0755 | VFS_MODE_DIRECTORY);
+	
+	// the root dentry
+	kernelRootDentry = NEW(Dentry);
+	memset(kernelRootDentry, 0, sizeof(Dentry));
+	kernelRootDentry->name = strdup("/");
+	kernelRootDentry->dir = kernelRootInode;
+	vfsUprefInode(kernelRootInode);
+	kernelRootDentry->ino = 2;
+	kernelRootDentry->key = 0;
+	kernelRootDentry->target = kernelRootInode;
+	vfsUprefInode(kernelRootInode);
+	kernelRootInode->parent = kernelRootDentry;
 };
 
-static void dumpDir(Dir *dir, int prefix)
+Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 {
-	while (1)
+	Inode *inode = NEW(Inode);
+	memset(inode, 0, sizeof(Inode));
+	inode->refcount = 1;
+	semInit(&inode->lock);
+	inode->fs = fs;
+	inode->mode = mode;
+	
+	if (getCurrentThread()->creds != NULL)
 	{
-		int count = prefix;
-		while (count--) kprintf("  ");
-
-		if (dir->stat.st_mode & VFS_MODE_DIRECTORY)
+		inode->uid = getCurrentThread()->creds->euid;
+		inode->gid = getCurrentThread()->creds->egid;
+	};
+	
+	inode->atime = inode->mtime = inode->ctime = inode->btime = time();
+	
+	if (fs != NULL)
+	{
+		semWait(&fs->lock);
+		if (fs->regInode != NULL)
 		{
-			kprintf("%s/\n", dir->dirent.d_name);
-			Dir subdir;
-			if (dir->opendir(dir, &subdir, sizeof(Dir)) == 0)
-			{
-				dumpDir(&subdir, prefix+1);
-			};
-		}
-		else
-		{
-			kprintf("%s (%ld bytes)\n", dir->dirent.d_name, dir->stat.st_size);
+			fs->regInode(fs, inode);
 		};
-
-		if (dir->next(dir) != 0) break;
-	};	
+		semSignal(&fs->lock);
+	};
+	
+	inode->flags |= VFS_INODE_DIRTY;
+	return inode;
 };
 
-void dumpFS(FileSystem *fs)
+void vfsUprefInode(Inode *inode)
 {
-	kprintf("Filesystem type: %s\n", fs->fsname);
-
-	Dir dir;
-	memset(&dir, 0, sizeof(Dir));
-	if (fs->openroot == NULL)
-	{
-		kprintf("This filesystem cannot be opened\n");
-	}
-	else
-	{
-		int status = fs->openroot(fs, &dir, sizeof(Dir));
-
-		if (status == VFS_EMPTY_DIRECTORY)
-		{
-			kprintf("The filesystem root is empty.\n");
-		}
-		else if (status != 0)
-		{
-			kprintf("Error opening filesystem root: %d\n", status);
-		}
-		else
-		{
-			dumpDir(&dir, 0);
-		};
-	};
-
-	if (dir.close != NULL) dir.close(&dir);
+	__sync_fetch_and_add(&inode->refcount, 1);
 };
 
-int vfsCanCurrentThread(struct kstat *st, mode_t mask)
+void vfsDownrefInode(Inode *inode)
 {
-	Thread *thread = getCurrentThread();
-	if (thread->creds == NULL)
+	if (__sync_add_and_fetch(&inode->refcount, -1) == 0)
 	{
-		return 1;
-	};
-	
-	// the root special case (he can do literally anything).
-	if (thread->creds->euid == 0)
-	{
-		return 1;
-	};
-	
-	// also with the XP_FSADMIN permission
-	if (havePerm(XP_FSADMIN))
-	{
-		return 1;
-	};
-
-	// check if the ACL contains an entry for the current user
-	int i;
-	for (i=0; i<VFS_ACL_SIZE; i++)
-	{
-		if (st->st_acl[i].ace_type == VFS_ACE_USER && st->st_acl[i].ace_id == thread->creds->euid)
+		if (inode->free != NULL)
 		{
-			return (st->st_acl[i].ace_perms & mask) == mask;
-		};
-	};
-	
-	// if any of our groups are listed in the ACL, then our permissions are the union of all the
-	// group permissions.
-	uint8_t perms = 0;
-	int found = 0;
-	for (i=0; i<VFS_ACL_SIZE; i++)
-	{
-		if (st->st_acl[i].ace_type == VFS_ACE_GROUP && st->st_acl[i].ace_id == thread->creds->egid)
-		{
-			perms = st->st_acl[i].ace_perms;
-			found = 1;
-		};
-	};
-	
-	// go through all secondary groups, bitwise-OR all permissions
-	int j;
-	for (j=0; j<thread->creds->numGroups; j++)
-	{
-		gid_t gid = thread->creds->groups[j];
-		
-		for (i=0; i<VFS_ACL_SIZE; i++)
-		{
-			if (st->st_acl[i].ace_type == VFS_ACE_GROUP && st->st_acl[i].ace_id == gid)
-			{
-				perms |= st->st_acl[i].ace_perms;
-				found = 1;
-			};
-		};
-	};
-
-	// if the group information was actually listed, use it
-	if (found)
-	{
-		return (perms & mask) == mask;
-	};
-
-	// fallback to UNIX permissions
-	if (thread->creds->euid == st->st_uid)
-	{
-		return ((st->st_mode >> 6) & mask) == mask;
-	}
-	else if (thread->creds->egid == st->st_gid)
-	{
-		return ((st->st_mode >> 3) & mask) == mask;
-	}
-	else
-	{
-		return (st->st_mode & mask) == mask;
-	};
-};
-
-char *realpath_from(const char *relpath, char *buffer, const char *fromdir)
-{
-	if (*relpath == 0)
-	{
-		*buffer = 0;
-		return buffer;
-	};
-
-	char *put = buffer;
-	size_t szput = 0;
-	const char *scan = relpath;
-
-	if (relpath[0] != '/')
-	{
-		strcpy(buffer, fromdir);
-		szput = strlen(fromdir);
-		put = &buffer[szput];
-		if (*(put-1) != '/')
-		{
-			if (szput == 255)
-			{
-				return NULL;
-			};
-
-			*put++ = '/';
-			szput++;
-		};
-	}
-	else
-	{
-		*put++ = *scan++;			// put the slash there.
-		szput++;
-		
-		while (*scan == '/') scan++;
-		if (*scan == 0)
-		{
-			*put = 0;
-			return buffer;
-		};
-	};
-
-	char token[128];
-	char *tokput = token;
-	size_t toksz = 0;
-
-	while (1)
-	{
-		char c = *scan++;
-		while ((c == '/') && ((*scan) == '/'))
-		{
-			c = *scan++;
+			inode->free(inode);
 		};
 		
-		if ((c != '/') && (c != 0))
-		{
-			if (toksz == 127)
-			{
-				return NULL;
-			};
-
-			*tokput++ = c;
-			toksz++;
-		}
-		else
-		{
-			*tokput = 0;
-			
-			if (strcmp(token, ".") == 0)
-			{
-				if (szput != 1)
-				{
-					put--;
-					szput--;
-				};
-
-				*put++ = c;
-				szput++;
-				if (c == 0)
-				{
-					break;
-				}
-				else
-				{
-					tokput = token;
-					toksz = 0;
-					continue;
-				};
-			};
-
-			if (strcmp(token, "..") == 0)
-			{
-				if (szput == 1)
-				{
-					*put = 0;
-					tokput = token;
-					toksz = 0;
-					if (c == 0) break;
-					continue;		// "parent directory" of root directory is root directory itself.
-				};
-
-				szput--;
-				put--;
-				*put = 0;
-
-				while (*put != '/')
-				{
-					put--;
-				};
-
-				//if (put != buffer) *put = 0;
-
-				//put++;
-				//*put = 0;
-				
-				if (put == buffer)
-				{
-					put++;
-					*put = 0;
-				}
-				else
-				{
-					*put = c;
-					put++;
-				};
-				
-				szput = put - buffer;
-				if (c == 0) break;
-				else
-				{
-					tokput = token;
-					toksz = 0;
-					continue;
-				};
-			};
-
-			if ((szput + toksz + 1) >= 255)
-			{
-				return NULL;
-			};
-
-			strcpy(put, token);
-			put += toksz;
-			*put++ = c;		// NUL or '/'
-
-			szput += toksz + 1;
-			if (c == 0) break;
-			
-			tokput = token;
-			toksz = 0;
-		};
+		// having a refcount of zero implies that if this is a directory, its dentries are
+		// deleted too, so no need to free those.
+		if (inode->fs != NULL) vfsDownrefFileSystem(inode->fs);
+		if (inode->ft != NULL) ftUncache(inode->ft);
+		kfree(inode->target);
+		kfree(inode);
 	};
-
-	if (strcmp(buffer, "//") == 0)
-	{
-		strcpy(buffer, "/");
-	};
-
-	return buffer;
 };
 
-char *realpath(const char *relpath, char *buffer)
+void vfsUprefFileSystem(FileSystem *fs)
 {
-	return realpath_from(relpath, buffer, getCurrentThread()->cwd);
+	__sync_fetch_and_add(&fs->refcount, 1);
 };
 
-Dir *resolvePath(const char *path, int flags, int *error, int level)
+void vfsDownrefFileSystem(FileSystem *fs)
 {
-	if (level >= VFS_MAX_LINK_DEPTH)
+	if (__sync_add_and_fetch(&fs->refcount, -1) == 0)
 	{
-		*error = VFS_LINK_LOOP;
-		return NULL;
-	};
-
-	*error = VFS_NO_FILE;			// default error
-
-	char rpath[256];
-	if (realpath(path, rpath) == NULL)
-	{
-		return NULL;
-	};
-
-	SplitPath spath;
-	if (resolveMounts(rpath, &spath) != 0)
-	{
-		return NULL;
-	};
-
-	char token[128];
-	char *end = (char*) &token[127];
-	const char *scan = spath.filename;
-	char currentDir[PATH_MAX];
-	strcpy(currentDir, spath.parent);
-
-	if (spath.fs->openroot == NULL)
-	{
-		return NULL;
-	};
-
-	Dir *dir = (Dir*) kmalloc(sizeof(Dir));
-	memset(dir, 0, sizeof(Dir));
-	
-	int openrootStatus = spath.fs->openroot(spath.fs, dir, sizeof(Dir));
-	if (openrootStatus == VFS_EMPTY_DIRECTORY)
-	{
-		int noSlash = 1;
-		char *put = token;
-		
-		while ((*scan) != 0)
-		{
-			if (*scan == '/')
-			{
-				noSlash = 0;
-				break;
-			};
-			
-			*put++ = *scan++;
-		};
-		*put = 0;
-
-		*error = VFS_EMPTY_DIRECTORY;
-		if ((noSlash) && (flags & VFS_CREATE) && (token[0] != 0))
-		{
-			if (dir->mkreg != NULL)
-			{
-				uid_t euid = 0;
-				if (getCurrentThread()->creds != NULL)
-				{
-					euid = getCurrentThread()->creds->euid;
-				};
-				
-				if (euid == 0)
-				{
-					if (dir->mkreg(dir, token, (flags >> 3) & 0x0FFF,
-						getCurrentThread()->creds->euid,
-						getCurrentThread()->creds->egid) == 0)
-					{
-						
-						dir->stat.st_dev = spath.fs->dev;
-						return dir;
-					};
-				}
-				else
-				{
-					*error = VFS_PERM;
-				};
-			}
-			else
-			{
-				*error = VFS_READ_ONLY;
-			};
-		};
-		
-		if (flags & VFS_STOP_ON_EMPTY)
-		{
-			*error = VFS_EMPTY_DIRECTORY;
-			return dir;
-		};
-
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		return NULL;
-	}
-	else if (openrootStatus != 0)
-	{
-		*error = openrootStatus;
-		kfree(dir);
-		return NULL;
-	};
-
-	struct kstat st_parent;
-	st_parent.st_dev = 0;
-	st_parent.st_ino = 2;
-	st_parent.st_mode = 01755;
-	st_parent.st_uid = 0;
-	st_parent.st_gid = 0;
-
-	while (1)
-	{
-		char *put = token;
-		while ((*scan != 0) && (*scan != '/'))
-		{
-			if (put == end)
-			{
-				*put = 0;
-				panic("parsePath(): token too long: '%s'\n", token);
-			};
-			*put++ = *scan++;
-		};
-		*put = 0;
-
-		if (strlen(token) == 0)
-		{
-			if (*scan == 0)
-			{
-				dir->stat.st_dev = spath.fs->dev;
-				return dir;
-			};
-
-			if (dir->close != NULL) dir->close(dir);
-			kfree(dir);
-			return NULL;
-		};
-
-		while (strcmp(dir->dirent.d_name, token) != 0)
-		{
-			if (dir->next(dir) != 0)
-			{
-				if ((*scan == 0) && (flags & VFS_CREATE) && (token[0] != 0))
-				{
-					if (dir->mkreg != NULL)
-					{
-						if (st_parent.st_ino == 0) panic("parent with inode 0!");
-						if (vfsCanCurrentThread(&st_parent, 2))
-						{
-							if (dir->mkreg(dir, token, (flags >> 3) & 0x0FFF,
-								getCurrentThread()->creds->euid,
-								getCurrentThread()->creds->egid) == 0)
-							{
-								
-								dir->stat.st_dev = spath.fs->dev;
-								return dir;
-							};
-						}
-						else
-						{
-							*error = VFS_PERM;
-						};
-					}
-					else
-					{
-						*error = VFS_READ_ONLY;
-					};
-				};
-
-				if (dir->close != NULL) dir->close(dir);
-				kfree(dir);
-				return NULL;
-			};
-		};
-
-		if (*scan == '/')
-		{
-			//memset(&dir->stat, 0, sizeof(struct kstat));
-			if (dir->getstat != NULL) dir->getstat(dir);
-
-			if ((dir->stat.st_mode & 0xF000) != VFS_MODE_DIRECTORY)
-			{
-				if ((dir->stat.st_mode & 0xF000) == VFS_MODE_LINK)
-				{
-					//kprintf_debug("link?\n");
-					char linkpath[PATH_MAX];
-					dir->readlink(dir, linkpath);
-					if (dir->close != NULL) dir->close(dir);
-					kfree(dir);
-					char target[PATH_MAX];
-					if (realpath_from(linkpath, target, currentDir) == NULL)
-					{
-						*error = VFS_NO_FILE;
-						return NULL;
-					};
-
-					char completePath[PATH_MAX];
-					if ((strlen(target) + strlen(scan+1) + 2) > PATH_MAX)
-					{
-						*error = VFS_NO_FILE;
-						return NULL;
-					};
-
-					strcpy(completePath, target);
-					strcat(completePath, "/");
-					strcat(completePath, scan+1);
-
-					return resolvePath(completePath, flags, error, level+1);
-				};
-
-				*error = VFS_NOT_DIR;
-				if (dir->close != NULL) dir->close(dir);
-				kfree(dir);
-				return NULL;
-			};
-
-			if ((!vfsCanCurrentThread(&dir->stat, 1)) && (flags & VFS_CHECK_ACCESS))
-			{
-				if (dir->close != NULL) dir->close(dir);
-				kfree(dir);
-				*error = VFS_PERM;
-				return NULL;
-			};
-
-			memcpy(&st_parent, &dir->stat, sizeof(struct kstat));
-
-			Dir *subdir = (Dir*) kmalloc(sizeof(Dir));
-			memset(subdir, 0, sizeof(Dir));
-
-			int derror;
-			if ((derror = dir->opendir(dir, subdir, sizeof(Dir))) != 0)
-			{
-				if ((derror == VFS_EMPTY_DIRECTORY) && (flags & VFS_STOP_ON_EMPTY))
-				{
-					if (dir->close != NULL) dir->close(dir);
-					kfree(dir);
-					*error = VFS_EMPTY_DIRECTORY;
-					return subdir;
-				};
-
-				if (dir->close != NULL) dir->close(dir);
-				kfree(dir);
-
-				if ((derror == VFS_EMPTY_DIRECTORY) && (flags & VFS_CREATE))
-				{
-					char *put = token;
-					scan++;
-					while (*scan != '/')
-					{
-						*put++ = *scan;
-						if (*scan == 0) break;
-						scan++;
-					};
-
-					*put = 0;
-					if (*scan == 0)
-					{
-						if (subdir->mkreg != NULL)
-						{
-							if (st_parent.st_ino == 0) panic("parent with inode 0!");
-							if (vfsCanCurrentThread(&st_parent, 2))
-							{
-								if (subdir->mkreg(subdir, token, (flags >> 3) & 0x0FFF,
-										getCurrentThread()->creds->euid,
-										getCurrentThread()->creds->egid) == 0)
-								{
-									subdir->stat.st_dev = spath.fs->dev;
-									return subdir;
-								};
-							}
-							else
-							{
-								*error = VFS_PERM;
-							};
-						};
-					};
-				};
-
-				if (subdir->close != NULL) subdir->close(subdir);
-				kfree(subdir);
-				*error = derror;
-				return NULL;
-			};
-
-			strcat(currentDir, "/");
-			strcat(currentDir, token);
-
-			if (dir->close != NULL) dir->close(dir);
-			kfree(dir);
-			dir = subdir;
-
-			scan++;		// skip over '/'
-		}
-		else
-		{
-			if (dir->getstat != NULL) dir->getstat(dir);
-
-			if (((dir->stat.st_mode & 0xF000) == VFS_MODE_LINK) && ((flags & VFS_NO_FOLLOW) == 0))
-			{
-				// this is a link and we were not instructed to not-follow, so we follow.
-				char linkpath[PATH_MAX];
-				ssize_t rls = dir->readlink(dir, linkpath);
-				if (dir->close != NULL) dir->close(dir);
-				kfree(dir);
-				if (rls == -1)
-				{
-					*error = VFS_IO_ERROR;
-					return NULL;
-				};
-
-				char target[PATH_MAX];
-				if (realpath_from(linkpath, target, currentDir) == NULL)
-				{
-					*error = VFS_NO_FILE;
-					return NULL;
-				};
-
-				return resolvePath(target, flags, error, level+1);
-			};
-
-			dir->stat.st_dev = spath.fs->dev;
-			return dir;
-		};
+		kfree(fs->path);
+		kfree(fs->image);
+		kfree(fs);
 	};
 };
 
-Dir *parsePath(const char *path, int flags, int *error)
+Dentry* vfsGetDentry(Inode *startdir, const char *path, int *error)
 {
-	return resolvePath(path, flags, error, 0);
-};
-
-static int vfsStatGen(const char *path, struct kstat *st, int flags)
-{
-	memset(st, 0, sizeof(struct kstat));
-	
-	char rpath[256];
-	if (realpath(path, rpath) == NULL)
-	{
-		return VFS_NO_FILE;
-	};
-
-	if (strcmp(rpath, "/") == 0)
-	{
-		// special case
-		st->st_dev = 0;
-		st->st_ino = 2;
-		st->st_mode = 0755 | VFS_MODE_DIRECTORY | VFS_MODE_STICKY;
-		st->st_nlink = 1;
-		st->st_uid = 0;
-		st->st_gid = 0;
-		st->st_rdev = 0;
-		st->st_size = 0;
-		st->st_blksize = 512;
-		st->st_blocks = 0;
-		st->st_atime = 0;
-		st->st_ctime = 0;
-		st->st_mtime = 0;
-		return 0;
-	};
-
-	if (path[strlen(path)-1] == '/')
-	{
-		return VFS_NO_FILE;
-	};
-
-	int error;
-	Dir *dir = parsePath(path, VFS_CHECK_ACCESS | flags, &error);
-	if (dir == NULL)
-	{
-		return error;
-	};
-
-	memcpy(st, &dir->stat, sizeof(struct kstat));
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-
-	if (isMountPoint(path))
-	{
-		st->st_mode = (st->st_mode & 0777) | VFS_MODE_DIRECTORY;
-	};
-	
-	return 0;
-};
-
-int vfsStat(const char *path, struct kstat *st)
-{
-	return vfsStatGen(path, st, 0);
-};
-
-int vfsLinkStat(const char *path, struct kstat *st)
-{
-	return vfsStatGen(path, st, VFS_NO_FOLLOW);
-};
-
-File *vfsOpen(const char *path, int flags, int *error)
-{
-	if (path[strlen(path)-1] == '/')
-	{
-		*error = VFS_NO_FILE;
-		return NULL;
-	};
-
-	Dir *dir = parsePath(path, flags, error);
-	if (dir == NULL)
-	{
-		*error = VFS_NO_FILE;
-		return NULL;
-	};
-
-	if (dir->openfile == NULL)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		*error = VFS_IO_ERROR;
-		return NULL;
-	};
-
-	File *file = (File*) kmalloc(sizeof(File));
-	memset(file, 0, sizeof(File));
-
-	if (dir->openfile(dir, file, sizeof(File)) != 0)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		*error = VFS_IO_ERROR;
-		return NULL;
-	};
-
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-
-	return file;
-};
-
-ssize_t vfsRead(File *file, void *buffer, size_t size)
-{
-	if (file->read == NULL)
-	{
-		if (file->seek == NULL)
-		{
-			ERRNO = EIO;
-			return -1;
-		};
-		
-		off_t pos = file->seek(file, 0, SEEK_CUR);
-		if (pos == -1)
-		{
-			ERRNO = EIO;
-			return -1;
-		};
-		
-		ssize_t shift = vfsPRead(file, buffer, size, pos);
-		if (shift == -1)
-		{
-			return -1;
-		};
-		
-		file->seek(file, shift, SEEK_CUR);
-		return shift;
-	};
-	
-	return file->read(file, buffer, size);
-};
-
-ssize_t vfsWrite(File *file, const void *buffer, size_t size)
-{
-	if (file->write == NULL)
-	{
-		if (file->seek == NULL)
-		{
-			ERRNO = EIO;
-			return -1;
-		};
-		
-		off_t pos = file->seek(file, 0, SEEK_CUR);
-		if (pos == -1)
-		{
-			ERRNO = EIO;
-			return -1;
-		};
-		
-		ssize_t shift = vfsPWrite(file, buffer, size, pos);
-		if (shift == -1)
-		{
-			return -1;
-		};
-		
-		file->seek(file, shift, SEEK_CUR);
-		return shift;
-	};
-	
-	return file->write(file, buffer, size);
-};
-
-ssize_t vfsPRead(File *file, void *buffer, size_t size, off_t pos)
-{
-	if (file->pread == NULL)
-	{
-		if (file->tree == NULL)
-		{
-			ERRNO = EIO;
-			return -1;
-		};
-		
-		FileTree *ft = file->tree(file);
-		ssize_t result = ftRead(ft, buffer, size, pos);
-		ftDown(ft);
-		return result;
-	};
-	
-	return file->pread(file, buffer, size, pos);
-};
-
-ssize_t vfsPWrite(File *file, const void *buffer, size_t size, off_t pos)
-{
-	if (file->pwrite == NULL)
-	{
-		if (file->tree == NULL)
-		{
-			ERRNO = EIO;
-			return -1;
-		};
-		
-		FileTree *ft = file->tree(file);
-		if (ft->flags & FT_READONLY)
-		{
-			ftDown(ft);
-			
-			ERRNO = EROFS;
-			return -1;
-		};
-		
-		ssize_t result = ftWrite(ft, buffer, size, pos);
-		ftDown(ft);
-		return result;
-	};
-	
-	return file->pwrite(file, buffer, size, pos);
-};
-
-void vfsDup(File *file)
-{
-	__sync_fetch_and_add(&file->refcount, 1);
-};
-
-void vfsClose(File *file)
-{	
-	int destroy = 1;
-	if (file->refcount != 0)
-	{
-		if (__sync_fetch_and_add(&file->refcount, -1) != 1)
-		{
-			// we decreased the refcount and it wasn't 1, so it is not
-			// zero yet, so we don't destroy
-			destroy = 0;
-		};
-	};
-	
-	if (destroy)
-	{
-		if (file->tree != NULL)
-		{
-			FileTree *ft = file->tree(file);
-			ftReleaseProcessLocks(ft);
-			ftDown(ft);
-		};
-		
-		if (file->close != NULL) file->close(file);
-		kfree(file);
-	};
-};
-
-void vfsLockCreation()
-{
-	mutexLock(&vfsMutexCreation);
-};
-
-void vfsUnlockCreation()
-{
-	mutexUnlock(&vfsMutexCreation);
-};
-
-Semaphore *vfsGetConstSem()
-{
-	return &semConst;
-};
-
-SysObject* vfsSysCreate()
-{
-	SysObject *sysobj = NEW(SysObject);
-	sysobj->data = NULL;
-	sysobj->remove = NULL;
-	sysobj->mode = 0;
-	sysobj->refcount = 1;
-	return sysobj;
-};
-
-void vfsSysIncref(SysObject *sysobj)
-{
-	__sync_fetch_and_add(&sysobj->refcount, 1);
-};
-
-void vfsSysDecref(SysObject *sysobj)
-{
-	if (__sync_add_and_fetch(&sysobj->refcount, -1) == 0)
-	{
-		if (sysobj->remove != NULL) sysobj->remove(sysobj);
-		kfree(sysobj);
-	};
-};
-
-int vfsSysLink(const char *path, SysObject *sysobj)
-{
-	char rpath[VFS_PATH_MAX];
-	if (realpath(path, rpath) == NULL)
-	{
-		return VFS_NO_FILE;
-	};
-
-	char parent[VFS_PATH_MAX];
-	char name[VFS_PATH_MAX];
-
-	size_t sz = strlen(rpath);
-	while (rpath[sz] != '/')
-	{
-		sz--;
-	};
-
-	memcpy(parent, rpath, sz);
-	parent[sz] = 0;
-	if (parent[0] == 0)
-	{
-		strcpy(parent, "/");
-	};
-
-	strcpy(name, &rpath[sz+1]);
-	if (strlen(name) >= 128)
-	{
-		return VFS_LONGNAME;
-	};
-
-	if (name[0] == 0)
-	{
-		return VFS_NO_FILE;
-	};
-	
-	vfsLockCreation();
-
-	struct kstat st;
-	int error;
-	if ((error = vfsStat(parent, &st)) != 0)
-	{
-		vfsUnlockCreation();
-		return error;
-	};
-
-	if (!vfsCanCurrentThread(&st, 2))
-	{
-		vfsUnlockCreation();
-		return VFS_PERM;
-	};
-
-	if (strcmp(parent, "/") != 0) strcat(parent, "/");
-
-	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
-	if (dir == NULL)
-	{
-		vfsUnlockCreation();
-		return error;
-	};
-	
-	int endYet = (error == VFS_EMPTY_DIRECTORY);
-	if (dir->linksys == NULL)
-	{
-		vfsUnlockCreation();
-		return VFS_IO_ERROR;
-	};
-
-	while (!endYet)
-	{
-		if (strcmp(dir->dirent.d_name, name) == 0)
-		{
-			if (dir->close != NULL) dir->close(dir);
-			kfree(dir);
-			vfsUnlockCreation();
-			return VFS_EXISTS;
-		};
-
-		if (dir->next(dir) == -1)
-		{
-			endYet = 1;
-		};
-	};
-
-	int status = dir->linksys(dir, name, sysobj);
-
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-	vfsUnlockCreation();
-
-	if (status != 0)
-	{
-		return VFS_IO_ERROR;
-	};
-
-	return 0;
-};
-
-SysObject* vfsSysGet(const char *path)
-{
-	if (path[strlen(path)-1] == '/')
-	{
-		return NULL;
-	};
-
-	int error;
-	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
-	if (dir == NULL)
-	{
-		return NULL;
-	};
-	
-	if (dir->getsys == NULL)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		return NULL;
-	};
-	
-	// getsys() increfs it
-	SysObject *obj = dir->getsys(dir);
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-	
-	return obj;
+	return NULL;
 };

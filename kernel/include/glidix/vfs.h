@@ -115,6 +115,12 @@
  */
 #define	VFS_INODE_DIRTY			(1 << 0)		/* inode changed since loading */
 
+/**
+ * Dentry flags.
+ */
+#define	VFS_DENTRY_TEMP			(1 << 0)		/* do not commit to disk */
+#define	VFS_DENTRY_MNTPOINT		(1 << 1)		/* dirent is a mountpoint */
+
 #define	VFS_MAX_LINK_DEPTH		8
 
 #define	VFS_ACL_SIZE			128
@@ -228,7 +234,14 @@ struct Inode_
 	FileSystem* fs;
 	
 	/**
-	 * The inode number on the filesystem.
+	 * If this is a directory inode, then this points to the dentry referring to it
+	 * (there is only one hard link to each directory). Used to find canonical paths
+	 * and for resolving "..".
+	 */
+	Dentry* parent;
+	
+	/**
+	 * The inode number on the filesystem. It is set to zero if the inode is dropped.
 	 */
 	ino_t ino;
 	
@@ -329,6 +342,26 @@ struct Inode_
 	 * If NULL, the filesystem is virtual and flushing is always reported successful.
 	 */
 	int (*flush)(Inode *inode);
+	
+	/**
+	 * Drop the inode - mark it as free on the disk. This is called when there are no
+	 * more links to the inode.
+	 */
+	void (*drop)(Inode *inode);
+	
+	/**
+	 * Get pollable event information. The 'sems' array is indexed by PEI_* macros, and all entries
+	 * are initialized to "always ready". It should set, for each event, a semaphore which becomes non-zero
+	 * when the event occurs. For example, if the array in PEI_READ becomes nonzero, then the file
+	 * is considered ready for reading (a read would not block). The waiting is done by semPoll().
+	 */
+	void (*pollinfo)(Inode *inode, void *filedata, struct Semaphore_ **sems);
+	
+	/**
+	 * This is called just before the inode is released from the cache. You may perform cleanup such as
+	 * releasing 'fsdata'.
+	 */
+	void (*free)(Inode *inode);
 };
 
 /**
@@ -336,6 +369,12 @@ struct Inode_
  */
 struct Dentry_
 {
+	/**
+	 * Links. Those are both NULL for the special "kernel root dentry".
+	 */
+	Dentry*					prev;
+	Dentry*					next;
+	
 	/**
 	 * Name of the entry. On the heap; create with kmalloc() or strdup(), release with kfree().
 	 */
@@ -362,6 +401,99 @@ struct Dentry_
 	 * function pointer is used to retrieve it.
 	 */
 	Inode*					target;
+	
+	/**
+	 * Dentry flags (VFS_DENTRY_*).
+	 */
+	int					flags;
+};
+
+/**
+ * Represents an open file description.
+ */
+struct File_
+{
+	/**
+	 * The inode we are operating on.
+	 */
+	Inode*					inode;
+	
+	/**
+	 * File data as returned by the inode's open(), or NULL if not implemented.
+	 */
+	void*					filedata;
+	
+	/**
+	 * Current file offset.
+	 */
+	off_t					offset;
+};
+
+/**
+ * Represents a mounted filesystem.
+ */
+struct FileSystem_
+{
+	/**
+	 * Driver-specific data.
+	 */
+	void*					fsdata;
+	
+	/**
+	 * Reference count.
+	 */
+	int					refcount;
+	
+	/**
+	 * Number of open inodes.
+	 */
+	int					numOpenInodes;
+	
+	/**
+	 * Filesystem ID.
+	 */
+	dev_t					fsid;
+
+	/**
+	 * Filesystem type. Constant string, somewhere in the driver's memory.
+	 */
+	const char*				fstype;
+	
+	/**
+	 * The canonical mountpoint path, detected during the mount. This is reported to userspace,
+	 * but not actually used by the kernel. On the heap; release using kfree().
+	 */
+	char*					path;
+	
+	/**
+	 * The filesystem image file. May be NULL. Release using kfree().
+	 */
+	char*					image;
+	
+	/**
+	 * The lock, for loading inodes and unmounting and stuff.
+	 */
+	Semaphore				lock;
+	
+	/**
+	 * This is called when the filesystem has been unmounted and is now detached from the VFS.
+	 * You may perform cleanup, such as freeing 'fsdata'.
+	 */
+	void (*unmount)(FileSystem *fs);
+	
+	/**
+	 * Load the inode referenced by the given dentry. This function shall fill out the metadata
+	 * in the inode. The refcount, lock, fs pointer, etc are all initialized by the kernel.
+	 * All fields are initially zeroed out. Return 0 on error, or -1 if an I/O error occured.
+	 */
+	int (*loadInode)(FileSystem *fs, Dentry *dent, Inode *inode);
+	
+	/**
+	 * Register an inode. The 'inode' structure is filled in with information about a new inode.
+	 * This function shall set its 'ino' field to the new inode number allocated on disk. Return 0
+	 * on success, or -1 on error, and set ERRNO.
+	 */
+	int (*regInode)(FileSystem *fs, Inode *inode);
 };
 
 struct fsinfo;
@@ -397,6 +529,47 @@ typedef struct
 	uint64_t				l_resv[8];
 } FLock;
 
+/**
+ * Initialize the VFS. This initializes locks, and also creates the kernel root inode.
+ */
+void vfsInit();
+
+/**
+ * Create a new inode of the given type and mode. It starts with a refcount of 1, and
+ * link count of 0. The general procedure is as follows:
+ *
+ *	1. Create the inode with vfsCreateInode().
+ *	2. If needed, change parameters from defaults.
+ *	3. Create a hard link to the inode (if applicable).
+ *	4. Remove your own reference once ready.
+ */
+Inode* vfsCreateInode(FileSystem *fs, mode_t mode);
+
+/**
+ * Upref and downref inodes.
+ */
+void vfsUprefInode(Inode *inode);
+void vfsDownrefInode(Inode *inode);
+
+/**
+ * Upref and downref filesystems.
+ */
+void vfsUprefFileSystem(FileSystem *fs);
+void vfsDownrefFileSystem(FileSystem *fs);
+
+/**
+ * Given a path, starting relative resolutions from 'startdir' inode, get the dentry
+ * corresponding to the path. The dentry will have its containing directory locked,
+ * and you must call one of the dentry-handling functions to perform an operation on
+ * it and unlock it. Alternatively, you may call vfsUnlockDentry() to unlock it
+ * without doing anything.
+ *
+ * On error, it returns NULL. If 'error' is non-NULL, an error number is stored there.
+ */
+Dentry* vfsGetDentry(Inode *startdir, const char *path, int *error);
+
+// === SNIP SNAP === //
+#if 0
 void dumpFS(FileSystem *fs);
 int vfsCanCurrentThread(struct kstat *st, mode_t mask);
 
@@ -422,7 +595,7 @@ void vfsClose(File *file);
 /**
  * This is used to ensure that 2 or more threads do not try to create files/directories simultaneously.
  */
-void vfsInit();
+//void vfsInit();
 void vfsLockCreation();
 void vfsUnlockCreation();
 
@@ -465,5 +638,6 @@ int vfsSysLink(const char *path, SysObject *sysobj);
  * not refer to a system object. This also increments the refcount.
  */
 SysObject* vfsSysGet(const char *path);
+#endif
 
 #endif
