@@ -44,6 +44,7 @@ size_t strlen(const char *str);
 int    memcmp(const void *a, const void *b, size_t size);
 int    strcmp(const char *a, const char *b);
 void   strcat(char *dst, const char *a);
+char*  strdup(const char *str);
 int    strncmp(const char *s1, const char *s2, size_t n);		/* init.c */
 int    isprint(int c);							/* init.c */
 char*  strncpy(char *s1, const char *s2, size_t n);			/* init.c */
