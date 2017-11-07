@@ -236,7 +236,8 @@ struct Inode_
 	/**
 	 * If this is a directory inode, then this points to the dentry referring to it
 	 * (there is only one hard link to each directory). Used to find canonical paths
-	 * and for resolving "..".
+	 * and for resolving "..". This counts towards the reference count of that dentry's
+	 * directory inode.
 	 */
 	Dentry* parent;
 	
@@ -320,22 +321,20 @@ struct Inode_
 	void (*close)(Inode *inode, void *filedata);
 	
 	/**
-	 * For non-random-access files, implementations of pread() and pwrite(). The 'filedata' argument
-	 * is the one returned by open() (above) for the file description in question.
+	 * For non-random-access files, implementations of pread() and pwrite().
 	 *
 	 * These functions, when returning -1 to indicate an error, must also set ERRNO.
 	 */
-	ssize_t (*pread)(Inode *inode, void *filedata, void *buffer, size_t size, off_t offset);
-	ssize_t (*pwrite)(Inode *inode, void *filedata, const void *buffer, size_t size, off_t offset);
+	ssize_t (*pread)(Inode *inode, File *fp, void *buffer, size_t size, off_t offset);
+	ssize_t (*pwrite)(Inode *inode, File *fp, const void *buffer, size_t size, off_t offset);
 	
 	/**
-	 * For files which support this, ioctl() implementation. 'filedata' is the data retuned by open()
-	 * for the file description in question. See <glidix/ioctl.h> for information on how commands and
-	 * ioctl() in general work.
+	 * For files which support this, ioctl() implementation. 'fp' is the file description being operated
+	 * on. See <glidix/ioctl.h> for information on how commands and ioctl() in general work.
 	 *
 	 * This function may set ERRNO.
 	 */
-	int (*ioctl)(Inode *inode, void *filedata, uint64_t cmd, void *argp);
+	int (*ioctl)(Inode *inode, File *fp, uint64_t cmd, void *argp);
 	
 	/**
 	 * Flush this inode to disk. Return 0 on success, or -1 on error (and set ERRNO).
@@ -355,7 +354,7 @@ struct Inode_
 	 * when the event occurs. For example, if the array in PEI_READ becomes nonzero, then the file
 	 * is considered ready for reading (a read would not block). The waiting is done by semPoll().
 	 */
-	void (*pollinfo)(Inode *inode, void *filedata, struct Semaphore_ **sems);
+	void (*pollinfo)(Inode *inode, File *fp, struct Semaphore_ **sems);
 	
 	/**
 	 * This is called just before the inode is released from the cache. You may perform cleanup such as
@@ -427,6 +426,11 @@ struct File_
 	 * Current file offset.
 	 */
 	off_t					offset;
+	
+	/**
+	 * Open file flags.
+	 */
+	int					oflags;
 };
 
 /**
@@ -564,9 +568,23 @@ void vfsDownrefFileSystem(FileSystem *fs);
  * it and unlock it. Alternatively, you may call vfsUnlockDentry() to unlock it
  * without doing anything.
  *
+ * The 'oflags' argument is the open flags. The following are taken into accotn by this
+ * function:
+ *	O_CREAT
+ *		If the entry doesn't exist, create it. In this case, the returned dentry
+ *		will have 'ino' set to 0, and flags indicating that it is temporary.
+ *		Amend these as necessary.
+ *	O_EXCL
+ *		Fail if the dentry already exists.
+ *
  * On error, it returns NULL. If 'error' is non-NULL, an error number is stored there.
  */
-Dentry* vfsGetDentry(Inode *startdir, const char *path, int *error);
+Dentry* vfsGetDentry(Inode *startdir, const char *path, int oflags, int *error);
+
+/**
+ * Unlock a dentry without doing anything.
+ */
+void vfsUnlockDentry(Dentry *dent);
 
 // === SNIP SNAP === //
 #if 0

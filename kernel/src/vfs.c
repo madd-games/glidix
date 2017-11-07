@@ -149,7 +149,189 @@ void vfsDownrefFileSystem(FileSystem *fs)
 	};
 };
 
-Dentry* vfsGetDentry(Inode *startdir, const char *path, int *error)
+Dentry* vfsGetDentry(Inode *startdir, const char *path, int oflags, int *error)
 {
-	return NULL;
+	// empty paths are not supposed to be resolved
+	if (path[0] == 0)
+	{
+		if (error != NULL) *error = ENOENT;
+		return NULL;
+	};
+	
+	char *pathbuf = strdup(path);
+	char *buffer = pathbuf;
+	if (buffer[0] == '/')
+	{
+		// TODO: process root directory
+		startdir = kernelRootInode;
+		buffer++;
+	}
+	else if (startdir == NULL)
+	{
+		// TODO: working directory
+		startdir = kernelRootInode;
+	};
+	
+	semWait(&startdir->lock);
+	Dentry *currentDent = startdir->parent;
+	vfsUprefInode(currentDent->dir);
+	semSignal(&startdir->lock);
+	
+	semWait(&currentDent->dir->lock);
+	
+	while (1)
+	{
+		int finalToken;
+		const char *token;
+		char *slashPos = strstr(buffer, "/");
+		if (slashPos == NULL)
+		{
+			token = buffer;
+			finalToken = 1;
+		}
+		else
+		{
+			*slashPos = 0;
+			token = buffer;
+			buffer = slashPos+1;
+			finalToken = 0;
+		};
+		
+		if (token[0] == 0)
+		{
+			if (!finalToken) continue;
+			else break;
+		}
+		else if (strcmp(token, ".") == 0)
+		{
+			if (!finalToken) continue;
+			else break;
+		}
+		else if (strcmp(token, "..") == 0)
+		{
+			// TODO
+		};
+		
+		// load the inode if necessary
+		if (currentDent->target == NULL)
+		{
+			Inode *inode = NEW(Inode);
+			memset(inode, 0, sizeof(Inode));
+			inode->refcount = 1;
+			semInit(&inode->lock);
+			inode->fs = currentDent->dir->fs;
+			vfsUprefFileSystem(inode->fs);
+			inode->parent = currentDent;
+			vfsUprefInode(currentDent->dir);
+			inode->ino = currentDent->ino;
+			
+			semWait(&inode->fs->lock);
+			int ok = 0;
+			if (inode->fs->loadInode != NULL)
+			{
+				if (inode->fs->loadInode(inode->fs, currentDent, inode) == 0)
+				{
+					ok = 1;
+				};
+			};
+			semSignal(&inode->fs->lock);
+			
+			if (!ok)
+			{
+				vfsDownrefInode(currentDent->dir);
+				vfsDownrefFileSystem(inode->fs);
+				semSignal(&currentDent->dir->lock);
+				vfsDownrefInode(currentDent->dir);
+				kfree(inode);
+				kfree(pathbuf);
+				if (error != NULL) *error = EIO;
+				return NULL;
+			};
+			
+			currentDent->target = inode;
+		};
+		
+		Inode *dirnode = currentDent->target;
+		vfsUprefInode(dirnode);
+		semSignal(&currentDent->dir->lock);
+		vfsDownrefInode(currentDent->dir);
+		
+		semWait(&dirnode->lock);
+		// TODO: follow symlinks
+		if ((dirnode->mode & 0xF000) != VFS_MODE_DIRECTORY)
+		{
+			semSignal(&dirnode->lock);
+			vfsDownrefInode(dirnode);
+			kfree(pathbuf);
+			if (error != NULL) *error = ENOTDIR;
+			return NULL;
+		};
+		
+		Dentry *dent;
+		for (dent=dirnode->dents; dent!=NULL; dent=dent->next)
+		{
+			if (strcmp(dent->name, token) == 0)
+			{
+				break;
+			};
+		};
+		
+		if (dent == NULL)
+		{
+			if (oflags & O_CREAT)
+			{
+				Dentry *newent = NEW(Dentry);
+				memset(newent, 0, sizeof(Dentry));
+				newent->name = strdup(token);
+				vfsUprefInode(dirnode);
+				newent->dir = dirnode;
+				// TODO: key allocation
+				newent->flags = VFS_DENTRY_TEMP;
+				
+				if (dirnode->dents == NULL)
+				{
+					newent->prev = newent->next = NULL;
+					dirnode->dents = newent;
+				}
+				else
+				{
+					Dentry *last = dirnode->dents;
+					while (last->next != NULL) last = last->next;
+					newent->prev = last;
+					last->next = newent;
+					newent->next = NULL;
+				};
+				
+				dent = newent;
+			}
+			else
+			{
+				semSignal(&dirnode->lock);
+				vfsDownrefInode(dirnode);
+				kfree(pathbuf);
+				if (error != NULL) *error = ENOENT;
+				return NULL;
+			};
+		}
+		else if (oflags & O_EXCL)
+		{
+			semSignal(&dirnode->lock);
+			vfsDownrefInode(dirnode);
+			kfree(pathbuf);
+			if (error != NULL) *error = EEXIST;
+			return NULL;
+		};
+		
+		currentDent = dent;
+		if (finalToken) break;
+	};
+	
+	// TODO: follow symlink if necessary
+	return currentDent;
+};
+
+void vfsUnlockDentry(Dentry *dent)
+{
+	semSignal(&dent->dir->lock);
+	vfsDownrefInode(dent->dir);
 };
