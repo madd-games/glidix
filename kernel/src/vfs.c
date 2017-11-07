@@ -209,7 +209,22 @@ Dentry* vfsGetDentry(Inode *startdir, const char *path, int oflags, int *error)
 		}
 		else if (strcmp(token, "..") == 0)
 		{
-			// TODO
+			if (currentDent == kernelRootDentry)
+			{
+				if (!finalToken) continue;
+				else break;
+			};
+			
+			// TODO: check if the directory is the process root directory
+			
+			Inode *dir = currentDent->dir;
+			vfsUprefInode(dir->parent->dir);
+			currentDent = dir->parent;
+			semSignal(&dir->lock);
+			semWait(&currentDent->dir->lock);
+			
+			if (!finalToken) continue;
+			else break;
 		};
 		
 		// load the inode if necessary
@@ -257,15 +272,6 @@ Dentry* vfsGetDentry(Inode *startdir, const char *path, int oflags, int *error)
 		vfsDownrefInode(currentDent->dir);
 		
 		semWait(&dirnode->lock);
-		// TODO: follow symlinks
-		if ((dirnode->mode & 0xF000) != VFS_MODE_DIRECTORY)
-		{
-			semSignal(&dirnode->lock);
-			vfsDownrefInode(dirnode);
-			kfree(pathbuf);
-			if (error != NULL) *error = ENOTDIR;
-			return NULL;
-		};
 		
 		Dentry *dent;
 		for (dent=dirnode->dents; dent!=NULL; dent=dent->next)
@@ -320,6 +326,20 @@ Dentry* vfsGetDentry(Inode *startdir, const char *path, int oflags, int *error)
 			kfree(pathbuf);
 			if (error != NULL) *error = EEXIST;
 			return NULL;
+		};
+		
+		// only enter directories (or symlinks to them)
+		if (!finalToken)
+		{
+			// TODO: follow symlinks
+			if ((dirnode->mode & 0xF000) != VFS_MODE_DIRECTORY)
+			{
+				semSignal(&dirnode->lock);
+				vfsDownrefInode(dirnode);
+				kfree(pathbuf);
+				if (error != NULL) *error = ENOTDIR;
+				return NULL;
+			};
 		};
 		
 		currentDent = dent;
