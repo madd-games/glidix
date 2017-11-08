@@ -303,8 +303,6 @@ static void ehci_connch(void *context)
 					ehci->reqSetAddr->setupData.wIndex = 0;
 					ehci->reqSetAddr->setupData.wLength = 0;
 					
-					kprintf_debug("GOOD TOKEN: 0x%08X\n", ehci->reqSetAddr->tdSetup.token);
-					
 					// send the request
 					ehci->qAsync->qh->overlay.horptr = transPhys;
 
@@ -364,16 +362,12 @@ static void ehci_qthread(void *context)
 	{
 		wcDown(&ehci->wcQueue);
 		
-		kprintf_debug("GOT THE USB INTERRUPT\n");
-		
 		// check the status of the current transaction if any
 		if (ehci->rqCurrent != NULL)
 		{
 			EhciTD *tdList = (EhciTD*) &ehci->rqCurrent->hwq->qh[1];
-			
-			if (ehci->rqCurrent->tdNext != ehci->rqCurrent->tdCount)
+			while (ehci->rqCurrent->tdNext != ehci->rqCurrent->tdCount)
 			{
-				kprintf_debug("CURRENT TOKEN: 0x%08X\n", tdList[ehci->rqCurrent->tdNext].token);
 				if ((tdList[ehci->rqCurrent->tdNext].token & EHCI_TD_ACTIVE) == 0)
 				{
 					// no longer active, this one is done
@@ -381,9 +375,20 @@ static void ehci_qthread(void *context)
 					{
 						// an error occured
 						ehci->rqCurrent->urb->header.status = -1;
+						
+						// cancel all transfers
+						ehci->rqCurrent->tdNext = ehci->rqCurrent->tdCount;
+						
+					}
+					else
+					{
+						// move onto the next transfer
+						ehci->rqCurrent->tdNext++;
 					};
-					
-					ehci->rqCurrent->tdNext++;
+				}
+				else
+				{
+					break;
 				};
 			};
 			
@@ -455,7 +460,7 @@ static void ehci_qthread(void *context)
 				EhciTD *tdCurrent = (EhciTD*) &rq->hwq->qh[1];
 				uint32_t currentPhys = rq->hwq->physQH + sizeof(EhciQH);
 				uint32_t bufCurrent = dmaGetPhys(&rq->dmabuf);
-				
+
 				for (info=rq->urb->control.packets; info->type!=USB_END; info++)
 				{
 					memset(tdCurrent, 0, sizeof(EhciTD));
@@ -496,8 +501,6 @@ static void ehci_qthread(void *context)
 						tdCurrent->token |= EHCI_TD_DT;
 					};
 					
-					kprintf_debug("INITIAL TOKEN: 0x%08X\n", tdCurrent->token);
-					
 					// buffer
 					tdCurrent->bufs[0] = bufCurrent;
 					bufCurrent += info->size;
@@ -506,9 +509,6 @@ static void ehci_qthread(void *context)
 				
 				// execute operation
 				rq->hwq->qh->overlay.horptr = rq->hwq->physQH + sizeof(EhciQH);
-				
-				//while (1) kprintf_debug("TOKEN: 0x%08X\n", ((EhciTD*) &rq->hwq->qh[1])->token);
-				
 			};
 			
 			// mark it as current

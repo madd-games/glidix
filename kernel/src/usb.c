@@ -86,7 +86,7 @@ void usbDevInitFunc(void *context)
 	memset(&req, 0, sizeof(req));
 	req.setup.bmRequestType = USB_REQ_DEVICE_TO_HOST | USB_REQ_STANDARD | USB_REQ_DEVICE;
 	req.setup.bRequest = USB_REQ_GET_DESCRIPTOR;
-	req.setup.wValue = 0x10;				// device descriptor zero
+	req.setup.wValue = 0x0100;				// device descriptor zero
 	req.setup.wIndex = 0;
 	req.setup.wLength = sizeof(USBDeviceDescriptor);
 	
@@ -111,9 +111,7 @@ void usbDevInitFunc(void *context)
 		return;
 	};
 	
-	kprintf_debug("i'm at the semaphore wait bit!!!!!!!!\n");
 	semWait(&semComplete);
-	kprintf_debug("finished waiting!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 	status = usbGetRequestStatus(urb);
 	if (status != 0)
 	{
