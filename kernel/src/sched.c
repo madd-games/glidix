@@ -246,16 +246,21 @@ void credsDownref(Creds *creds)
 		// send the SIGCHLD signal to the parent
 		siginfo_t siginfo;
 		siginfo.si_signo = SIGCHLD;
-		if (creds->status >= 0)
+
+		int termsig = creds->status & 0x7F;
+		if (termsig != 0)
 		{
-			siginfo.si_code = CLD_EXITED;
+			siginfo.si_code = CLD_KILLED;
+			if (creds->status & WS_CORE) siginfo.si_code = CLD_DUMPED;
+			siginfo.si_status = termsig;
 		}
 		else
 		{
-			siginfo.si_code = CLD_KILLED;
+			siginfo.si_code = CLD_EXITED;
+			siginfo.si_status = (creds->status >> 8) & 0xFF;
 		};
+		
 		siginfo.si_pid = creds->pid;
-		siginfo.si_status = creds->status;
 		siginfo.si_uid = creds->ruid;
 		signalPidEx(parentPid, &siginfo, SP_NOPERM);
 		
