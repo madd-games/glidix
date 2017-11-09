@@ -1,6 +1,5 @@
 >NAME
 
-TODO
 sigaction - get or set a signal disposition
 
 >SYNOPSIS
@@ -11,7 +10,7 @@ sigaction - get or set a signal disposition
 
 >DESCRIPTION
 
-This function gets or sets the signal dispoition for the signal 'signum'. If 'oldact' is not *NULL*, then the current disposition is first placed in the structure located at 'oldact'. Then, if 'act' is not *NULL*, the disposition is changed according to the structure at 'act'. The 'struct sigaction' structure is defined in '<signal.h>' and includes at least the following fields:
+This function gets or sets the signal dispoition for the signal 'signum'. It is impossible to set the signal disposition for *SIGKILL* and *SIGSTOP*; the setting for them is ignored and the default action is always taken. If 'oldact' is not *NULL*, then the current disposition is first placed in the structure located at 'oldact'. Then, if 'act' is not *NULL*, the disposition is changed according to the structure at 'act'. The 'struct sigaction' structure is defined in '<signal.h>' and includes at least the following fields:
 
 	struct sigaction
 	{
@@ -55,7 +54,84 @@ The 'siginfo_t' structure describes the signal, and is defiend in '<signal.h>' w
 		union sigval	'si_value';
 	} siginfo_t;
 
-It is impossible to set the signal disposition for *SIGKILL* and *SIGSTOP*. The setting for them is ignored.
+The 'si_siginfo' field contains the signal number which was delivered, and 'si_code' specifies the reason for the signal's delivery. Some of those values are independent of the signal, while others are signal-specific:
+
+\* *SI_USER* - signal sent with [kill.2].
+\* *SI_QUEUE* - signal sent by [sigqueue.2].
+\* *SI_TIMER* - signal sent by expiration of a timer.
+\* *SI_ASYNCIO* - signal sent due to completion of an asynchronous I/O request.
+\* *SI_MESGQ* - signal sent due to the reception of a message on an empty message queue.
+
+For the *SIGILL* signal, 'si_code' may also contain:
+
+\* *ILL_ILLOPC* - illegal opcode.
+\* *ILL_ILLOPN* - illegal operand.
+\* *ILL_ILLADR* - illegal addressing mode.
+\* *ILL_ILLTRP* - illegal trap.
+\* *ILL_PRVOPC* - privileged opcode.
+\* *ILL_PRVREG* - privileged register.
+\* *ILL_COPROC* - coprocessor error.
+\* *ILL_BADSTK* - stack broken.
+
+For the *SIGFPE* signal, 'si_code' may also contain:
+
+\* *FPE_INTDIV* - integer division by zero.
+\* *FPE_INTOVF* - integer overflow.
+\* *FPE_FLTDIV* - floating-point division by zero.
+\* *FPE_FLTOVF* - floating-point overflow.
+\* *FPE_FLTUND* - floating-point underflow.
+\* *FPE_FLTRES* - inexact floating-point result.
+\* *FPE_FLTINV* - invalid floating-point operation.
+\* *FPE_FLTSUB* - subscript out of range.
+
+For the *SIGSEGV* signal, 'si_code' may also contain:
+
+\* *SEGV_MAPERR* - no mapping exists at the requested address.
+\* *SEGV_ACCERR* - an object is mapped to the requested address, but the requested operation on it is not permitted.
+
+For the *SIGBUS* signal, 'si_code' may also contain:
+
+\* *BUS_ADRALN* - unaligned address.
+\* *BUS_ADRERR* - nonexistent physical address.
+\* *BUS_OBJERR* - object-specific hardware error.
+
+For the *SIGTRAP* signal, 'si_code' may also contain:
+
+\* *TRAP_BRKPT* - breakpoint encountered.
+\* *TRAP_TRACE* - trace trap encountered.
+
+For the *SIGCHLD* signal, 'si_code' may also contain:
+
+\* *CLD_EXITED* - child process has exited.
+\* *CLD_KILLED* - process terminated abnormally (by a signal), without making a [core.6] file.
+\* *CLD_DUMPED* - process terminated abnormally (by a signal) and produced a [core.6] file.
+\* *CLD_TRAPPED* - child has encountered a trap.
+\* *CLD_STOPPED* - child has stopped.
+\* *CLD_CONTINUED* - child has continued.
+
+For the *SIGPOLL* signal, 'si_code' may also contain:
+
+\* *POLL_IN* - data input available.
+\* *POLL_OUT* - output buffers available.
+\* *POLL_MSG* - input message available.
+\* *POLL_ERR* - I/O error.
+\* *POLL_PRI* - high-priority input available.
+\* *POLL_HUP* - device disconnected.
+
+The 'si_errno' field is always zero (on some implementations it may contain an error number associated with the signal; see [errno.6]).
+
+The 'si_pid' field contains the process ID of the process which sent the signal, the child process ID for *SIGCHLD*, and zero if not applicable.
+
+The 'si_uid' field contains the real user ID of the sending process (the child, if the signal is *SIGCHLD*), or zero ('root') if not applicable. See [creds.6].
+
+The 'si_addr' field contains the address of the illegal instruction for the *SIGILL* sginal, the address used for the invalid memory reference for the *SIGSEGV* signal, *NULL* otherwise.
+
+The 'si_status' field contains the exit status, or the signal causing the termination, for the *SIGCHLD* signal; zero otherwise.
+
+The 'si_band' field contains the band event for *SIGPOLL*. This is unused under Glidix and will be zero.
+
+The 'si_value' field is a union, such that it is interpreted either as an integer ('sival_int') or a pointer ('sival_ptr'). It may be specified by [sigqueue.2], otherwise it is zero (or *NULL*).
+
 >SEE ALSO
 
 [signal.6]
