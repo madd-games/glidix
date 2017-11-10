@@ -211,7 +211,7 @@ do
 done
 
 echo "generating Makefile..."
-echo >Makefile ".PHONY: all install clean mip $TARGETS"
+echo >Makefile ".PHONY: all install clean mip tests $TARGETS"
 
 ISO_PACKAGES="mbload shutils libc modules sh gxsetup gxboot dynld gxdbg"
 if [ "$iso_target" = "yes" ]
@@ -287,6 +287,8 @@ fi
 
 echo >>Makefile "mip:"
 echo >>Makefile "	export MIP_BINUTILS=\$(MIP_BINUTILS) export MIP_GCC=\$(MIP_GCC) && sh $srcdir/mip.sh \$(PKGDIR)"
+echo >>Makefile "tests:"
+echo >>Makefile "	sh $srcdir/tests.sh"
 
 echo "*** CONFIGURATION SUMMARY ***"
 echo "Build environment:	$build"
