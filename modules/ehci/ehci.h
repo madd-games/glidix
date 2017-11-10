@@ -114,6 +114,7 @@ typedef struct
 	volatile uint32_t		endpointCaps;
 	volatile uint32_t		addrTD;
 	volatile EhciTD			overlay;
+	uint8_t				padding[16];		/* make the structure a multiple of 32 bytes */
 } EhciQH;
 
 /**

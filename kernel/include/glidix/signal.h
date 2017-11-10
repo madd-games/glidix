@@ -76,51 +76,76 @@
 #ifndef _SIGNAL_H
 
 /**
+ * Generic si_codes.
+ */
+#define	SI_USER		0
+#define	SI_QUEUE	1
+#define	SI_TIMER	2
+#define	SI_ASYNCIO	3
+#define	SI_MESGQ	4
+
+/**
  * si_code for SIGSEGV
  */
-#define	SEGV_MAPERR	1
-#define	SEGV_ACCERR	2
+#define	SEGV_MAPERR	0x1001
+#define	SEGV_ACCERR	0x1002
 
 /**
  * si_code for SIGCHLD
  */
-#define	CLD_EXITED	0
-#define	CLD_KILLED	1
-#define	CLD_DUMPED	2		/* never returned by glidix */
-#define	CLD_TRAPPED	3
-#define	CLD_STOPPED	4
-#define	CLD_CONTINUED	5
+#define	CLD_EXITED	0x2001
+#define	CLD_KILLED	0x2002
+#define	CLD_DUMPED	0x2003		/* never returned by glidix */
+#define	CLD_TRAPPED	0x2004
+#define	CLD_STOPPED	0x2005
+#define	CLD_CONTINUED	0x2006
 
 /**
  * si_code for SIGFPE
  */
-#define	FPE_INTDIV	0
-#define	FPE_INTOVF	1
-#define	FPE_FLTDIV	2
-#define	FPE_FLTOVF	3
-#define	FPE_FLTUND	4
-#define	FPE_FLTRES	5
-#define	FPE_FLTINV	6
-#define	FPE_FLTSUB	7
+#define	FPE_INTDIV	0x3001
+#define	FPE_INTOVF	0x3002
+#define	FPE_FLTDIV	0x3003
+#define	FPE_FLTOVF	0x3004
+#define	FPE_FLTUND	0x3005
+#define	FPE_FLTRES	0x3006
+#define	FPE_FLTINV	0x3007
+#define	FPE_FLTSUB	0x3008
 
 /**
  * si_code for SIGBUS
  */
-#define	BUS_ADRALN	0
-#define	BUS_ADRERR	1
-#define	BUS_OBJERR	2
+#define	BUS_ADRALN	0x4001
+#define	BUS_ADRERR	0x4002
+#define	BUS_OBJERR	0x4003
 
 /**
  * si_code for SIGILL
  */
-#define	ILL_ILLOPC	0
-#define	ILL_ILLOPN	1
-#define	ILL_ILLADR	2
-#define	ILL_ILLTRP	3
-#define	ILL_PRVOPC	4
-#define	ILL_PRVREG	5
-#define	ILL_COPROC	6
-#define	ILL_BADSTK	7
+#define	ILL_ILLOPC	0x5001
+#define	ILL_ILLOPN	0x5002
+#define	ILL_ILLADR	0x5003
+#define	ILL_ILLTRP	0x5004
+#define	ILL_PRVOPC	0x5005
+#define	ILL_PRVREG	0x5006
+#define	ILL_COPROC	0x5007
+#define	ILL_BADSTK	0x5008
+
+/**
+ * si_code for SIGTRAP
+ */
+#define	TRAP_BRKPT	0x6001
+#define	TRAP_TRACE	0x6002
+
+/**
+ * si_code for SIGPOLL
+ */
+#define	POLL_IN		0x7001
+#define	POLL_OUT	0x7002
+#define	POLL_MSG	0x7003
+#define	POLL_ERR	0x7004
+#define	POLL_PRI	0x7005
+#define	POLL_HUP	0x7006
 
 /**
  * Max number of signals that can be sent at once to a process.
