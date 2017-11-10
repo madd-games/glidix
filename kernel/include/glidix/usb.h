@@ -118,6 +118,50 @@ typedef struct
 } USBDeviceDescriptor;
 
 /**
+ * Configuration descriptor.
+ */
+typedef struct
+{
+	uint8_t						bLength;
+	uint8_t						bDescriptorType;
+	uint16_t					wTotalLength;
+	uint8_t						bNumInterfaces;
+	uint8_t						bConfigurationValue;
+	uint8_t						iConfiguration;
+	uint8_t						bmAttributes;
+	uint8_t						bMaxPower;
+} USBConfigurationDescriptor;
+
+/**
+ * Interface descriptor.
+ */
+typedef struct
+{
+	uint8_t						bLength;
+	uint8_t						bDescriptorType;
+	uint8_t						bInterfaceNumber;
+	uint8_t						bAlternateSetting;
+	uint8_t						bNumEndpoints;
+	uint8_t						bInterfaceClass;
+	uint8_t						bInterfaceSubClass;
+	uint8_t						bInterfaceProtocol;
+	uint8_t						iInterface;
+} USBInterfaceDescriptor;
+
+/**
+ * Endpoint descriptor.
+ */
+typedef struct
+{
+	uint8_t						bLength;
+	uint8_t						bDescriptorType;
+	uint8_t						bEndpointAddress;
+	uint8_t						bmAttributes;
+	uint16_t					wMaxPacketSize;
+	uint8_t						bInterval;
+} USBEndpointDescriptor;
+
+/**
  * Describes an element of a transaction. Used for control and bulk transactions.
  */
 typedef struct
@@ -266,7 +310,9 @@ typedef struct USBDevice_
 	void*						data;
 	
 	/**
-	 * Version of USB that this device conforms to.
+	 * Version of USB that this device conforms to. This actually indicates which controller
+	 * driver the device is using (e.g. 2 means EHCI). For the actual USB version implemented
+	 * by the device, see the device descriptor.
 	 */
 	int						usbver;
 	
@@ -279,6 +325,16 @@ typedef struct USBDevice_
 	 * Device lock.
 	 */
 	Semaphore					lock;
+	
+	/**
+	 * The device descriptor.
+	 */
+	USBDeviceDescriptor				descDev;
+	
+	/**
+	 * Default control pipe.
+	 */
+	struct USBControlPipe_*				ctrlPipe;
 } USBDevice;
 
 /**
@@ -295,6 +351,11 @@ typedef struct USBControlPipe_
 	 * Controller driver data.
 	 */
 	void*						data;
+	
+	/**
+	 * Maximum packet size.
+	 */
+	size_t						maxPacketLen;
 } USBControlPipe;
 
 /**
@@ -356,6 +417,21 @@ int usbSubmitRequest(USBRequest *urb);
 void usbDeleteRequest(USBRequest *urb);
 
 /**
+ * A shorthand for performing control transfers. Do a control transfer on the given pipe, with the given packets
+ * and with the given buffer. Wait for completion, and return the status. The status is zero on success, and
+ * nonzero on error.
+ */
+int usbControlTransfer(USBControlPipe *pipe, USBTransferInfo *packets, void *buffer);
+
+/**
+ * Control input. Send the specified command, and input the specified number of bytes into the buffer. Returns the
+ * status.
+ */
+int usbControlIn(USBControlPipe *pipe, uint8_t bmRequestType, uint8_t bRequest,
+			uint16_t wValue, uint16_t wIndex, uint16_t wLength,
+			void *buffer);
+
+/**
  * Called by the controller driver. Mark a USB request as completed.
  */
 void usbPostComplete(USBRequest *urb);
@@ -364,5 +440,15 @@ void usbPostComplete(USBRequest *urb);
  * Get the request status. Call only after the request has been completed!
  */
 int usbGetRequestStatus(USBRequest *urb);
+
+/**
+ * Print a device descriptor, for debugging purposes.
+ */
+void usbPrintDeviceDescriptor(USBDeviceDescriptor *desc);
+
+/**
+ * Print a configuration descriptor, for debugging purposes.
+ */
+void usbPrintConfigurationDescriptor(USBConfigurationDescriptor *desc);
 
 #endif

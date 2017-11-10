@@ -376,6 +376,11 @@ static void ehci_qthread(void *context)
 						// an error occured
 						ehci->rqCurrent->urb->header.status = -1;
 						
+						// reset queue
+						ehci->rqCurrent->hwq->qh->overlay.horptr = EHCI_HORPTR_TERM;
+						ehci->rqCurrent->hwq->qh->overlay.altHorptr = EHCI_HORPTR_TERM;
+						ehci->rqCurrent->hwq->qh->overlay.token = 0;
+
 						// cancel all transfers
 						ehci->rqCurrent->tdNext = ehci->rqCurrent->tdCount;
 						
