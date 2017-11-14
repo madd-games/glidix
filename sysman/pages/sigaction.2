@@ -132,6 +132,26 @@ The 'si_band' field contains the band event for *SIGPOLL*. This is unused under 
 
 The 'si_value' field is a union, such that it is interpreted either as an integer ('sival_int') or a pointer ('sival_ptr'). It may be specified by [sigqueue.2], otherwise it is zero (or *NULL*).
 
+>RETURN VALUE
+
+On success, this function returns '0'. On error, it returns '-1' and sets [errno.6] appropriately.
+
+>ERRORS
+
+On failure, this function returns '-1' and sets [errno.6] to one of the following:
+
+\* *EFAULT* - one of the pointers ('act' or 'oldact') points outside the accessible address space. It is unspecified whether the disposition has been changed.
+\* *EINVAL* - 'signum' was invalid, or it was *SIGKILL* or *SIGSTOP*, for which the disposition cannot be set.
+
+>SAFETY
+
+When a signal handler is called, it may have interrupted any state. This means that, for example, attempting to lock a mutex could resolve in a deadlock, if the interrupted thread already holds it. This means that signal handlers are limited, and special care should be taken when writing code for them:
+
+\* Any global variables which are accessed must be 'volatile', and the only type that is guaranteed to be safely settable is 'sig_atomic_t', an integer type defined in '<signal.h>'.
+\* Only async-signal-safe functions can be called; these are reentrant functions do not use any locks, are fully atomic and will work no matter at which point they are interrupted. All system calls are async-signal-safe (as kernel mode cannot be interrupted), and so are some library functions (only if explicitly marked as such). All other functions may not be called.
+
+The typical behavior of a signal handler is to simply set some global variable and return; the interrupted code should be able to notice the change (by checking for it) and respond appropriately.
+
 >SEE ALSO
 
 [signal.6]
