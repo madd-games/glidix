@@ -1,0 +1,25 @@
+>NAME
+
+signal - set signal disposition
+
+>SYNOPSIS
+
+	#include <signal.h>
+	
+	void (*signal(int 'signum', void (*'func')(int)))(int);
+
+>DESCRIPTION
+
+This function changes the signal disposition of the signal 'signum' to 'func'. 'func' shall be a value that can be placed in the 'sa_handler' filed of 'struct sigaction' ('SIG_DFL', 'SIG_IGN', or a signal handler). Please note that this function has different semantics on different systems and so IS NOT PORTABLE. Use [sigaction.2] instead. Glidix implements this function on top of [sigaction.2].
+
+>RETURN VALUE
+
+On success, the old handler is returned, if possible (this will be an unspecified value if a signal disposition was established with the *SA_SIGINFO* flag by [sigaction.2]). On error, the special value *SIG_ERR* is returned, and [errno.6] is set appropriately.
+
+>ERRORS
+
+On error, this function returns *SIG_ERR*, and sets [errno.6]. Refer to [sigaction.2] for possible errors.
+
+>SEE ALSO
+
+[sigaction.2]
