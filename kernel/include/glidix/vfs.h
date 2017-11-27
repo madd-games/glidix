@@ -121,13 +121,25 @@
 #define	VFS_DENTRY_TEMP			(1 << 0)		/* do not commit to disk */
 #define	VFS_DENTRY_MNTPOINT		(1 << 1)		/* dirent is a mountpoint */
 
+/**
+ * Maximum depth of symbolic links.
+ */
 #define	VFS_MAX_LINK_DEPTH		8
+
+/**
+ * The AT_* flags.
+ */
+#define	VFS_AT_REMOVEDIR		(1 << 0)
 
 #define	VFS_ACL_SIZE			128
 
 #define	VFS_ACE_UNUSED			0
 #define	VFS_ACE_USER			1
 #define	VFS_ACE_GROUP			2
+
+#define	VFS_ACE_READ			4
+#define	VFS_ACE_WRITE			2
+#define	VFS_ACE_EXEC			1
 
 typedef struct
 {
@@ -209,6 +221,7 @@ typedef struct Inode_ Inode;
 typedef struct Dentry_ Dentry;
 typedef struct File_ File;
 typedef struct FileSystem_ FileSystem;
+typedef struct MountPoint_ MountPoint;
 
 /**
  * Describes a VFS inode.
@@ -238,6 +251,11 @@ struct Inode_
 	 * (there is only one hard link to each directory). Used to find canonical paths
 	 * and for resolving "..". This counts towards the reference count of that dentry's
 	 * directory inode.
+	 *
+	 * If this is a symbolic link inode, this is the dentry referring to it, since symbolic
+	 * links only have one hard link to them, and it is needed to follow the symlink.
+	 *
+	 * Do not trust this value for any other type of inode.
 	 */
 	Dentry* parent;
 	
@@ -247,7 +265,7 @@ struct Inode_
 	ino_t ino;
 	
 	/**
-	 * Access mode and permissions.
+	 * Access mode and inode type. The type is immutable.
 	 */
 	mode_t mode;
 	
@@ -290,7 +308,13 @@ struct Inode_
 	int flags;
 	
 	/**
-	 * The file tree, if this is a random-access file (else NULL).
+	 * Next dentry key to assign.
+	 */
+	int nextKey;
+	
+	/**
+	 * The file tree, if this is a random-access file (else NULL). When the file isn't open, this must
+	 * have a reference count of zero, i.e. "flushed".
 	 */
 	FileTree* ft;
 	
@@ -364,7 +388,10 @@ struct Inode_
 };
 
 /**
- * Describes a directory entry. Fields are protected by the directory inode lock.
+ * Describes a directory entry. Fields are protected by the directory inode lock. This does not need to be
+ * reference counted - the only case there would be multiple references to the same dentry without the directory
+ * being locked is if the dentry points to a directory (e.g. it's a mountpoint, the directory is open, etc), and
+ * it'll only be deleted if its target inode has no references other than this one.
  */
 struct Dentry_
 {
@@ -397,7 +424,7 @@ struct Dentry_
 	
 	/**
 	 * The target inode if already cached (else NULL). If uncached, the FileSystem's loadInode()
-	 * function pointer is used to retrieve it.
+	 * function pointer is used to retrieve it. For mountpoints, this points to the root directory.
 	 */
 	Inode*					target;
 	
@@ -405,32 +432,6 @@ struct Dentry_
 	 * Dentry flags (VFS_DENTRY_*).
 	 */
 	int					flags;
-};
-
-/**
- * Represents an open file description.
- */
-struct File_
-{
-	/**
-	 * The inode we are operating on.
-	 */
-	Inode*					inode;
-	
-	/**
-	 * File data as returned by the inode's open(), or NULL if not implemented.
-	 */
-	void*					filedata;
-	
-	/**
-	 * Current file offset.
-	 */
-	off_t					offset;
-	
-	/**
-	 * Open file flags.
-	 */
-	int					oflags;
 };
 
 /**
@@ -500,6 +501,92 @@ struct FileSystem_
 	int (*regInode)(FileSystem *fs, Inode *inode);
 };
 
+/**
+ * Describes a mountpoint traversed in path resolution.
+ */
+struct MountPoint_
+{
+	/**
+	 * The previously-traversed mountpoint. NULL for the kernel root.
+	 */
+	MountPoint*				prev;
+	
+	/**
+	 * The mountpoint dentry. This counts towards its directory's reference count, but is not
+	 * locked. Lock before use.
+	 */
+	Dentry*					dent;
+	
+	/**
+	 * Root inode of the mounted filesystem. This counts towards the reference count.
+	 */
+	Inode*					root;
+};
+
+/**
+ * A "dentry pointer". Specifies the dentry and the stack of mountpoints used to reach it (to help
+ * resolve ".." on roots).
+ */
+typedef struct
+{
+	/**
+	 * The dentry we are pointing to. It is locked by us.
+	 */
+	Dentry*					dent;
+	
+	/**
+	 * Top of the mountpoint stack used to reach this.
+	 */
+	MountPoint*				top;
+} DentryRef;
+
+/**
+ * Inode pointer. Same principle, but "top" might be NULL if the inode is neither a directory nor a
+ * symbolic link.
+ */
+typedef struct
+{
+	Inode*					inode;
+	MountPoint*				top;
+} InodeRef;
+
+/**
+ * Null references.
+ */
+extern DentryRef VFS_NULL_DREF;
+extern InodeRef VFS_NULL_IREF;
+
+/**
+ * Represents an open file description.
+ */
+struct File_
+{
+	/**
+	 * The inode we are operating on.
+	 */
+	InodeRef				iref;
+	
+	/**
+	 * File data as returned by the inode's open(), or NULL if not implemented.
+	 */
+	void*					filedata;
+	
+	/**
+	 * Current file offset.
+	 */
+	off_t					offset;
+	
+	/**
+	 * Open file flags.
+	 */
+	int					oflags;
+	
+	/**
+	 * Reference count.
+	 */
+	int					refcount;
+};
+
 struct fsinfo;
 
 /**
@@ -562,29 +649,154 @@ void vfsUprefFileSystem(FileSystem *fs);
 void vfsDownrefFileSystem(FileSystem *fs);
 
 /**
+ * Read the target of a symbolic link. This revokes your reference to the symlink inode
+ * (decrefs it) regardless of whether or not it succeeded. This temporarily locks the
+ * inode.
+ *
+ * The returned string is a copy on the heap, and you must call kfree() on it at some point.
+ *
+ * Returns NULL on I/O error.
+ */
+char* vfsReadLink(Inode *link);
+
+/**
+ * Get the parent dentry of the given inode. Returns NULL in 'dent' if the inode is not a
+ * directory (and hence has no parent dentry). The parent inode is then locked.
+ *
+ * This function locks the inode temporarily, so do not call it while holding the lock.
+ *
+ * The directory inode of the returned entry is upreffed, and the passed-in inode is
+ * decreffed. If NULL is returned, the passed-in inode is still decreffed.
+ */
+DentryRef vfsGetParentDentry(InodeRef inode);
+
+/**
+ * Return the directory containing the given dentry, and unlock the inode, without updating
+ * the refernce count of the inode. That is, you are withdrawing your reference to the dentry,
+ * and taking a reference to its directory.
+ */
+InodeRef vfsGetDentryContainer(DentryRef dent);
+
+/**
+ * Get the inode pointed to by the given dentry, loading it into memory if necessary.
+ * This unlock the dentry's directory inode, and revokes the reference, while returning a new
+ * reference to the target inode.
+ *
+ * If the inode could not be loaded, NULL is returned, but the reference is still revoked and
+ * hence lock removed. This error should be trated as EIO (I/O error).
+ */
+InodeRef vfsGetDentryTarget(DentryRef dref);
+
+/**
+ * Get an inode given its dentry. If 'follow' is 1, then symbolic links are followed; otherwise
+ * they're not.
+ */
+InodeRef vfsGetInode(DentryRef dent, int follow, int *error);
+
+/**
+ * Mark an inode as dirty, and perhaps flush it. Call this only when the inode is locked!
+ */
+void vfsDirtyInode(Inode *inode);
+
+/**
+ * Return the inode representing the current root directory, and upref it. You must call
+ * vfsDownrefInode() on this when done.
+ */
+InodeRef vfsGetRoot();
+
+/**
+ * Return the inode representing the current working directory, and upref it.  You must call
+ * vfsDownrefInode() on this when done.
+ */
+InodeRef vfsGetCurrentDir();
+
+/**
+ * Get the dentry corresponding to the given name on the given directory inode. This locks the
+ * inode and returns the named dentry. The dentry becomes your reference to the inode - a dentry
+ * call will revoke your reference while unlocking the inode. If this function fails, NULL is
+ * returned, and the reference revoked.
+ *
+ * If 'create' is nonzero, the dentry is created if it doesn't yet exist. In this case, the 'ino' field
+ * will be 0. It will also have the VFS_DENTRY_TEMP flag set, so won't be committed to disk. Other
+ * functions must be used to assign an inode and commit the dentry to disk.
+ */
+DentryRef vfsGetChildDentry(InodeRef dirnode, const char *entname, int create);
+
+/**
+ * Check if the specified user has the right to perform the given operations on the given inode.
+ * The 'perms' argument is a bitwise-OR of the VFS_ACE_* flags required. This function locks the
+ * inode.
+ *
+ * This function returns 0 if access was denied, or 1 if allowed. The reference count is unaffected.
+ */
+int vfsIsAllowed(Inode *inode, int perms);
+
+/**
  * Given a path, starting relative resolutions from 'startdir' inode, get the dentry
  * corresponding to the path. The dentry will have its containing directory locked,
  * and you must call one of the dentry-handling functions to perform an operation on
- * it and unlock it. Alternatively, you may call vfsUnlockDentry() to unlock it
+ * it and unlock it. Alternatively, you may call vfsUnrefDentry() to unlock it
  * without doing anything.
  *
- * The 'oflags' argument is the open flags. The following are taken into accotn by this
- * function:
- *	O_CREAT
- *		If the entry doesn't exist, create it. In this case, the returned dentry
- *		will have 'ino' set to 0, and flags indicating that it is temporary.
- *		Amend these as necessary.
- *	O_EXCL
- *		Fail if the dentry already exists.
+ * If the 'create' argument is nonzero, then the dentry is created if it does not exist (all parent
+ * directories must already exist, however). In this case, the 'ino' field will contain 0.
+ *
+ * If the final result is a symbolic link, this function does NOT follow it (but DOES follow symbolic
+ * links to directories on the way).
  *
  * On error, it returns NULL. If 'error' is non-NULL, an error number is stored there.
+ *
+ * The returned dentry is your reference to the inode. That is, the next operation on the
+ * dentry, which decrefs it, also revokes the reference of the inode that you passed in.
+ * If NULL is returned, the reference is revoked too.
  */
-Dentry* vfsGetDentry(Inode *startdir, const char *path, int oflags, int *error);
+DentryRef vfsGetDentry(InodeRef startdir, const char *path, int create, int *error);
 
 /**
- * Unlock a dentry without doing anything.
+ * Unlock a dentry and revoke the reference to its inode.
  */
-void vfsUnlockDentry(Dentry *dent);
+void vfsUnrefDentry(DentryRef dent);
+
+/**
+ * Remove a reference to the inode and clear the reference's moutn stack.
+ */
+void vfsUnrefInode(InodeRef iref);
+
+/**
+ * Link a new inode to an empty dentry (where 'ino' is 0). This unlocks the dentry and revokes your
+ * reference to it, but UPREFS the inserted inode. You must therefore later call vfsDownrefInode(),
+ * or another reference-revoking function, on the inode.
+ *
+ * The inode must be on the same filesystem as the dentry, and the dentry becomes permanent (committed
+ * to disk). To make a temporary entry (not necessarily on the same filesystem), use vfsBindInode().
+ *
+ * It is up to the caller to make sure the dentry is empty; in other cases, the kernel panics.
+ */
+void vfsLinkInode(DentryRef dent, Inode* target);
+
+/**
+ * Unlink the target inode of the dentry. This sets 'ino' to 0. Returns 0 on success, or an error number
+ * on error (e.g. if a directory is not empty).
+ *
+ * There is only one supported flag so far: VFS_AT_REMOVEDIR. If it is set, this function removes only
+ * directories (only possible if the directory is empty); otherwise, this function removes only
+ * non-directories.
+ *
+ * The dentry reference is revoked and the dentry is removed.
+ */
+int vfsUnlinkInode(DentryRef dent, int flags);
+
+/**
+ * Remove a directory entry. This assumes that the dentry does not point to any inode; use it only to
+ * cancel the addition of a dentry. This revokes the reference.
+ */
+void vfsRemoveDentry(DentryRef dent);
+
+/**
+ * Create a directory at the specified path. You must have write permission to the parent directory,
+ * and it must already exist. On success, return 0, else return an error number such as ENOENT.
+ */
+int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode);
 
 // === SNIP SNAP === //
 #if 0
