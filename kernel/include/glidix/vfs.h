@@ -235,6 +235,20 @@ struct Inode_
 	int refcount;
 	
 	/**
+	 * prev/next links on the filesystem's inode map.
+	 */
+	Inode* prev;
+	Inode* next;
+	 
+	/**
+	 * Number of times that this inode is mounted. Only relevant for directory inodes.
+	 * This is 1 for filesystem roots which are mounted in only one place, as well as
+	 * for normal directories (that are not mountpoints). Mount-binding a directory to
+	 * another location increments this value.
+	 */
+	int numMounts;
+	
+	/**
 	 * The lock. Protects all mutable fields of this structure. It is also held when
 	 * flushing.
 	 */
@@ -476,9 +490,19 @@ struct FileSystem_
 	char*					image;
 	
 	/**
-	 * The lock, for loading inodes and unmounting and stuff.
+	 * The lock, for loading inodes and unmounting and stuff, and for the inode map.
 	 */
 	Semaphore				lock;
+	
+	/**
+	 * The inode map - a linked list of all inodes loaded by this filesystem. This is used to look
+	 * up indes by number, to allow support for multiple hard links to the same inode. The entries
+	 * in this list DO NOT count as references to the inode; once the reference count of an inode
+	 * drops to zero, the filesystem lock will be acquired, and if inbetween the refcount dropping
+	 * to zero and the lock being acquired a thread tries to read it off this list, it will notice
+	 * that the refcount is zero, and will leave it alone.
+	 */
+	Inode*					imap;
 	
 	/**
 	 * This is called when the filesystem has been unmounted and is now detached from the VFS.
@@ -797,6 +821,15 @@ void vfsRemoveDentry(DentryRef dent);
  * and it must already exist. On success, return 0, else return an error number such as ENOENT.
  */
 int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode);
+
+/**
+ * Mount the given inode at the given dentry. The reference to the dentry is revoked, regardless of
+ * whether an error occured or not. The reference count of the inode is incremented if the mount was
+ * successful, and so is its mount count. Returns 0 on success or an error number on error.
+ *
+ * This application performs permission checks.
+ */
+int vfsMount(DentryRef dref, Inode *mntroot);
 
 // === SNIP SNAP === //
 #if 0

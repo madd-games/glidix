@@ -87,6 +87,7 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 	Inode *inode = NEW(Inode);
 	memset(inode, 0, sizeof(Inode));
 	inode->refcount = 1;
+	inode->numMounts = 1;
 	semInit(&inode->lock);
 	inode->fs = fs;
 	inode->mode = mode;
@@ -131,6 +132,17 @@ void vfsDownrefInode(Inode *inode)
 {
 	if (__sync_add_and_fetch(&inode->refcount, -1) == 0)
 	{
+		// make sure we are removed from the inode map
+		FileSystem *fs = inode->fs;
+		if (fs != NULL)
+		{
+			semWait(&fs->lock);
+			if (inode->prev != NULL) inode->prev->next = inode->next;
+			if (inode->next != NULL) inode->next->prev = inode->prev;
+			if (fs->imap == inode) fs->imap = inode->next;
+			semSignal(&fs->lock);
+		};
+		
 		if (inode->free != NULL)
 		{
 			inode->free(inode);
@@ -220,27 +232,54 @@ static void vfsCallInInode(Dentry *dent)
 			panic("dentry cache inconsistent: dentry without cached target inode or backing filesystem");
 		};
 		
-		Inode *inode = NEW(Inode);
-		memset(inode, 0, sizeof(Inode));
-		inode->refcount = 1;
-		semInit(&inode->lock);
-		inode->fs = fs;
-		inode->parent = dent;
-
 		semWait(&fs->lock);
-		if (fs->loadInode == NULL)
+		int found = 0;
+		
+		// first see if we have already loaded an inode with this number into the inode map
+		Inode *scan;
+		for (scan=fs->imap; scan!=NULL; scan=scan->next)
 		{
-			panic("dentry without cached target inode, and backing filesytem driver cannot load inodes");
+			if (scan->refcount != 0)
+			{
+				if (scan->ino == dent->ino)
+				{
+					vfsUprefInode(scan);
+					found = 1;
+					break;
+				};
+			};
 		};
 		
-		if (fs->loadInode(fs, dent, inode) != 0)
+		// if the inode is not in the map yet, load it from disk
+		if (!found)
 		{
-			semSignal(&fs->lock);
-			kfree(inode);
-			return;
+			Inode *inode = NEW(Inode);
+			memset(inode, 0, sizeof(Inode));
+			inode->refcount = 1;
+			semInit(&inode->lock);
+			inode->fs = fs;
+			inode->parent = dent;
+
+			if (fs->loadInode == NULL)
+			{
+				panic("dentry without cached target inode, and backing filesytem driver cannot load inodes");
+			};
+		
+			if (fs->loadInode(fs, dent, inode) != 0)
+			{
+				semSignal(&fs->lock);
+				kfree(inode);
+				return;
+			};
+			
+			dent->target = inode;
+		}
+		else
+		{
+			dent->target = scan;
 		};
 		
-		dent->target = inode;
+		semSignal(&fs->lock);
 	};
 };
 
@@ -782,7 +821,7 @@ int vfsUnlinkInode(DentryRef dref, int flags)
 		};
 	};
 	
-	// if we do not have the XP_FSADMIN permission, then make sure we are allowed to
+	// if we do not have the XP_FSADMIN permission, then make sure we are allowed to
 	// unlink this entry
 	if (!havePerm(XP_FSADMIN))
 	{
@@ -871,5 +910,42 @@ int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode)
 	
 	vfsLinkInode(dref, newdir);
 	vfsDownrefInode(newdir);
+	return 0;
+};
+
+int vfsMount(DentryRef dref, Inode *mntroot)
+{
+	if (!havePerm(XP_MOUNT))
+	{
+		vfsUnrefDentry(dref);
+		return EACCES;
+	};
+	
+	if (dref.dent->flags & VFS_DENTRY_MNTPOINT)
+	{
+		// already a mountpoint
+		vfsUnrefDentry(dref);
+		return EBUSY;
+	};
+	
+	if (dref.dent->target != NULL)
+	{
+		if (dref.dent->target->refcount != 1)
+		{
+			// mountpoints can only be made on unused dentries (empty directories or
+			// closed files)
+			vfsUnrefDentry(dref);
+			return EBUSY;
+		};
+	};
+	
+	Inode *oldTarget = dref.dent->target;
+	dref.dent->target = mntroot;
+	dref.dent->flags |= VFS_DENTRY_MNTPOINT;
+	vfsUprefInode(mntroot);
+	__sync_fetch_and_add(&mntroot->numMounts, 1);
+	
+	vfsUnrefDentry(dref);
+	if (oldTarget != NULL) vfsDownrefInode(oldTarget);
 	return 0;
 };
