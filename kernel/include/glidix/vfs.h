@@ -827,7 +827,7 @@ int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode);
  * whether an error occured or not. The reference count of the inode is incremented if the mount was
  * successful, and so is its mount count. Returns 0 on success or an error number on error.
  *
- * This application performs permission checks.
+ * This function performs permission checks.
  */
 int vfsMount(DentryRef dref, Inode *mntroot);
 
