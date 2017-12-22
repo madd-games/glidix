@@ -1023,6 +1023,7 @@ File* vfsOpenInode(InodeRef iref, int oflag, int *error)
 	memset(fp, 0, sizeof(File));
 	
 	fp->iref = iref;
+	semInit(&fp->lock);
 	fp->filedata = filedata;
 	fp->offset = 0;
 	fp->oflags = oflag;
@@ -1048,4 +1049,120 @@ void vfsClose(File *fp)
 		vfsUnrefInode(fp->iref);
 		kfree(fp);
 	};
+};
+
+static ssize_t vfsReadUnlocked(File *fp, void *buffer, size_t size, off_t offset)
+{
+	if (offset < 0)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if ((~size) > (size_t) offset)
+	{
+		ERRNO = EOVERFLOW;
+		return -1;
+	};
+	
+	if (fp->iref.inode->pread != NULL)
+	{
+		return fp->iref.inode->pread(fp->iref.inode, fp, buffer, size, offset);
+	}
+	else if (fp->iref.inode->ft != NULL)
+	{
+		return ftRead(fp->iref.inode->ft, buffer, size, offset);
+	};
+	
+	ERRNO = EPERM;
+	return -1;
+};
+
+static ssize_t vfsWriteUnlocked(File *fp, const void *buffer, size_t size, off_t offset)
+{
+	if (offset < 0)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if ((~size) > (size_t) offset)
+	{
+		ERRNO = EOVERFLOW;
+		return -1;
+	};
+	
+	if (fp->iref.inode->pwrite != NULL)
+	{
+		return fp->iref.inode->pwrite(fp->iref.inode, fp, buffer, size, offset);
+	}
+	else if (fp->iref.inode->ft != NULL)
+	{
+		return ftWrite(fp->iref.inode->ft, buffer, size, offset);
+	};
+	
+	ERRNO = EPERM;
+	return -1;
+};
+
+ssize_t vfsRead(File *fp, void *buffer, size_t size)
+{
+	if ((fp->oflags & O_RDONLY) == 0)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	semWait(&fp->lock);
+	ssize_t sz = vfsReadUnlocked(fp, buffer, size, fp->offset);
+	if (sz != -1) fp->offset += sz;
+	semSignal(&fp->lock);
+	return sz;
+};
+
+ssize_t vfsPRead(File *fp, void *buffer, size_t size, off_t offset)
+{
+	if ((fp->oflags & O_RDONLY) == 0)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+
+	semWait(&fp->lock);
+	ssize_t sz = vfsReadUnlocked(fp, buffer, size, offset);
+	semSignal(&fp->lock);
+	return sz;
+};
+
+ssize_t vfsWrite(File *fp, const void *buffer, size_t size)
+{
+	if ((fp->oflags & O_RDONLY) == 0)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+
+	semWait(&fp->lock);
+	off_t offset = fp->offset;
+	if (fp->oflags & O_APPEND)
+	{
+		if (fp->iref.inode->ft != NULL)
+		{
+			offset = (off_t) fp->iref.inode->ft->size;
+		};
+	};
+	
+	ssize_t sz = vfsWriteUnlocked(fp, buffer, size, offset);
+	if (sz != -1 && ((fp->oflags & O_APPEND) == 0)) fp->offset += sz;
+	
+	semSignal(&fp->lock);
+	return sz;
+};
+
+ssize_t vfsPWrite(File *fp, const void *buffer, size_t size, off_t offset)
+{
+	semWait(&fp->lock);
+	ssize_t sz = vfsWriteUnlocked(fp, buffer, size, offset);
+	semSignal(&fp->lock);
+	return sz;
 };

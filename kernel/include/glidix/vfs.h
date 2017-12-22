@@ -591,6 +591,11 @@ struct File_
 	InodeRef				iref;
 	
 	/**
+	 * The lock.
+	 */
+	Semaphore				lock;
+	
+	/**
 	 * File data as returned by the inode's open(), or NULL if not implemented.
 	 */
 	void*					filedata;
@@ -858,6 +863,14 @@ void vfsDup(File *fp);
  * Decrement the refcount of a file description.
  */
 void vfsClose(File *fp);
+
+/**
+ * Implementations of pread(), read(), write(), pwrite().
+ */
+ssize_t vfsRead(File *fp, void *buffer, size_t size);
+ssize_t vfsPRead(File *fp, void *buffer, size_t size, off_t offset);
+ssize_t vfsWrite(File *fp, const void *buffer, size_t size);
+ssize_t vfsPWrite(File *fp, const void *buffer, size_t size, off_t offset);
 
 // === SNIP SNAP === //
 #if 0
