@@ -657,6 +657,8 @@ void vfsInit();
  *	2. If needed, change parameters from defaults.
  *	3. Create a hard link to the inode (if applicable).
  *	4. Remove your own reference once ready.
+ *
+ * On error returns NULL and sets ERRNO.
  */
 Inode* vfsCreateInode(FileSystem *fs, mode_t mode);
 
@@ -830,6 +832,32 @@ int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode);
  * This function performs permission checks.
  */
 int vfsMount(DentryRef dref, Inode *mntroot);
+
+/**
+ * Open the named inode and return a new file handle. Symbolic links will be dereferenced. On success,
+ * a file handle is returned. On error, NULL is returned, and if 'error' is not NULL, it is set to the
+ * error number.
+ */
+File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *error);
+
+/**
+ * Open an inode reference - that is, create a file description around it. On success, it returns the
+ * file description, and the inode reference is transferred to it. On error, returns NULL and if 'error'
+ * is not NULL, sets it to the error number. Permission checking is NOT performed.
+ *
+ * Essentially your reference to the inode is revoked whether or not this function succeeds.
+ */
+File* vfsOpenInode(InodeRef iref, int oflag, int *error);
+
+/**
+ * Increase the refcount of a file description.
+ */
+void vfsDup(File *fp);
+
+/**
+ * Decrement the refcount of a file description.
+ */
+void vfsClose(File *fp);
 
 // === SNIP SNAP === //
 #if 0

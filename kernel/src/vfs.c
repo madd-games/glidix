@@ -656,7 +656,7 @@ static DentryRef vfsGetDentryRecur(InodeRef startdir, const char *path, int crea
 			return nulref;
 		};
 		
-		// now the inode must be a directory
+		// the inode must be a directory
 		if ((dir.inode->mode & 0xF000) != VFS_MODE_DIRECTORY)
 		{
 			vfsUnrefInode(dir);
@@ -948,4 +948,104 @@ int vfsMount(DentryRef dref, Inode *mntroot)
 	vfsUnrefDentry(dref);
 	if (oldTarget != NULL) vfsDownrefInode(oldTarget);
 	return 0;
+};
+
+File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *error)
+{
+	DentryRef dref = vfsGetDentry(startdir, path, oflag & O_CREAT, error);
+	if (dref.dent == NULL)
+	{
+		return NULL;
+	};
+	
+	if (dref.dent->ino != 0)
+	{
+		if (oflag & O_EXCL)
+		{
+			vfsRemoveDentry(dref);
+			if (error != NULL) *error = EEXIST;
+			return NULL;
+		};
+	}
+	else
+	{
+		// create the inode
+		Inode *newInode = vfsCreateInode(dref.dent->dir->fs, mode & 0x0FFF);
+		if (newInode == NULL)
+		{
+			if (error != NULL) *error = ERRNO;
+			vfsRemoveDentry(dref);
+			return NULL;
+		};
+		
+		vfsLinkInode(dref, newInode);
+		vfsDownrefInode(newInode);
+	};
+	
+	// get the inode
+	InodeRef iref = vfsGetInode(dref, 1, error);
+	if (iref.inode == NULL)
+	{
+		return NULL;
+	};
+	
+	// check permissions
+	int permsNeeded = 0;
+	if (oflag & O_RDONLY) permsNeeded |= VFS_ACE_READ;
+	if (oflag & O_WRONLY) permsNeeded |= VFS_ACE_WRITE;
+	
+	if (!vfsIsAllowed(iref.inode, permsNeeded))
+	{
+		vfsUnrefInode(iref);
+		if (error != NULL) *error = EACCES;
+		return NULL;
+	};
+	
+	// create the description
+	return vfsOpenInode(iref, oflag, error);
+};
+
+File* vfsOpenInode(InodeRef iref, int oflag, int *error)
+{
+	void *filedata = NULL;
+	if (iref.inode->open != NULL)
+	{
+		filedata = iref.inode->open(iref.inode, oflag);
+		if (filedata == NULL)
+		{
+			if (error != NULL) *error = ERRNO;
+			vfsUnrefInode(iref);
+			return NULL;
+		};
+	};
+
+	File *fp = NEW(File);
+	memset(fp, 0, sizeof(File));
+	
+	fp->iref = iref;
+	fp->filedata = filedata;
+	fp->offset = 0;
+	fp->oflags = oflag;
+	fp->refcount = 1;
+	
+	return fp;
+};
+
+void vfsDup(File *fp)
+{
+	__sync_fetch_and_add(&fp->refcount, 1);
+};
+
+void vfsClose(File *fp)
+{
+	if (__sync_add_and_fetch(&fp->refcount, -1) == 0)
+	{
+		if (fp->iref.inode->close != NULL)
+		{
+			fp->iref.inode->close(fp->iref.inode, fp->filedata);
+		};
+		
+		vfsUnrefInode(fp->iref);
+		kfree(fp);
+	};
 };
