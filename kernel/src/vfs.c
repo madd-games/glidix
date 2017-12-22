@@ -454,6 +454,16 @@ DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
 		// not found; create if needed else fail
 		if (create)
 		{
+			if (!vfsIsAllowed(diref.inode, VFS_ACE_WRITE))
+			{
+				semSignal(&diref.inode->lock);
+
+				DentryRef nulref;
+				nulref.dent = NULL;
+				nulref.top = NULL;
+				return nulref;
+			};
+			
 			dent = NEW(Dentry);
 			memset(dent, 0, sizeof(Dentry));
 			dent->name = strdup(entname);
