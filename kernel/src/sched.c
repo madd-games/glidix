@@ -31,6 +31,7 @@
 #include <glidix/string.h>
 #include <glidix/console.h>
 #include <glidix/spinlock.h>
+#include <glidix/semaphore.h>
 #include <glidix/errno.h>
 #include <glidix/apic.h>
 #include <glidix/time.h>
@@ -130,6 +131,7 @@ void dumpRunqueue()
 Creds *credsNew()
 {
 	Creds *creds = NEW(Creds);
+	memset(creds, 0, sizeof(Creds));
 	creds->refcount = 1;
 	creds->pid = 1;
 	creds->ppid = 1;
@@ -143,6 +145,9 @@ Creds *credsNew()
 	creds->ps.ps_ticks = 0;
 	creds->ps.ps_entries = 0;
 	creds->ps.ps_quantum = quantumTicks;
+	creds->rootdir = vfsGetRoot();
+	creds->cwd = vfsGetCurrentDir();
+	semInit(&creds->semDir);
 	return creds;
 };
 
@@ -154,6 +159,11 @@ Creds *credsDup(Creds *old)
 	new->ps.ps_ticks = 0;
 	new->ps.ps_entries = 0;
 	new->ps.ps_quantum = quantumTicks;
+	semWait(&old->semDir);
+	new->rootdir = vfsCopyInodeRef(old->rootdir);
+	new->cwd = vfsCopyInodeRef(old->cwd);
+	semSignal(&old->semDir);
+	semInit(&new->semDir);
 	return new;
 };
 
@@ -314,9 +324,6 @@ void initSched()
 	// no credentials for kernel threads
 	firstThread.creds = NULL;
 	firstThread.thid = 0;
-
-	// set the working directory to /initrd by default.
-	strcpy(firstThread.cwd, "/initrd");
 
 	// no error ptr
 	firstThread.errnoptr = NULL;
@@ -788,9 +795,6 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	
 	thread->oxperm = XP_ALL;
 	thread->dxperm = XP_ALL;
-	
-	// start all kernel threads in "/initrd"
-	strcpy(thread->cwd, "/initrd");
 
 	// no errnoptr
 	thread->errnoptr = NULL;
@@ -1040,9 +1044,6 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 			thread->ftab = ftabCreate();
 		};
 	};
-	
-	// inherit the working directory
-	strcpy(thread->cwd, currentThread->cwd);
 
 	// inherit signal mask
 	thread->sigmask = currentThread->sigmask;
@@ -1162,6 +1163,7 @@ void threadExitEx(uint64_t retval)
 	};
 	
 	vmUnmapThread();
+	kfree(currentThread->ktu);
 	
 	spinlockAcquire(&notifLock);
 	if ((currentThread->flags & THREAD_DETACHED) == 0)

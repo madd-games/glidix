@@ -39,7 +39,6 @@
 #include <glidix/procmem.h>
 #include <glidix/module.h>
 #include <glidix/console.h>
-#include <glidix/fdopendir.h>
 #include <glidix/fsdriver.h>
 #include <glidix/time.h>
 #include <glidix/pipe.h>
@@ -177,10 +176,10 @@ ssize_t sys_write(int fd, const void *buf, size_t size)
 		return -1;
 	};
 	
-	if ((fp->oflag & O_WRONLY) == 0)
+	if ((fp->oflags & O_WRONLY) == 0)
 	{
 		vfsClose(fp);
-		ERRNO = EACCES;
+		ERRNO = EBADF;
 		return -1;
 	}
 	else
@@ -218,10 +217,10 @@ uint64_t sys_pwrite(int fd, const void *buf, size_t size, off_t offset)
 		return -1;
 	};
 	
-	if ((fp->oflag & O_WRONLY) == 0)
+	if ((fp->oflags & O_WRONLY) == 0)
 	{
 		vfsClose(fp);
-		ERRNO = EACCES;
+		ERRNO = EBADF;
 		return -1;
 	}
 	else
@@ -259,10 +258,10 @@ ssize_t sys_read(int fd, void *buf, size_t size)
 		return -1;
 	};
 	
-	if ((fp->oflag & O_RDONLY) == 0)
+	if ((fp->oflags & O_RDONLY) == 0)
 	{
 		vfsClose(fp);
-		ERRNO = EACCES;
+		ERRNO = EBADF;
 		return -1;
 	}
 	else
@@ -300,10 +299,10 @@ ssize_t sys_pread(int fd, void *buf, size_t size, off_t offset)
 		return -1;
 	};
 	
-	if ((fp->oflag & O_RDONLY) == 0)
+	if ((fp->oflags & O_RDONLY) == 0)
 	{
 		vfsClose(fp);
-		ERRNO = EACCES;
+		ERRNO = EBADF;
 		return -1;
 	}
 	else
@@ -332,48 +331,6 @@ ssize_t sys_pread(int fd, void *buf, size_t size, off_t offset)
 	};
 };
 
-int sysOpenErrno(int vfsError)
-{
-	switch (vfsError)
-	{
-	case VFS_PERM:
-		ERRNO = EACCES;
-		break;
-	case VFS_EMPTY_DIRECTORY:
-		ERRNO = ENOENT;
-		break;
-	case VFS_NO_FILE:
-		ERRNO = ENOENT;
-		break;
-	case VFS_FILE_LIMIT_EXCEEDED:
-		ERRNO = EMFILE;
-		break;
-	case VFS_BUSY:
-		ERRNO = EBUSY;
-		break;
-	case VFS_NOT_DIR:
-		ERRNO = ENOTDIR;
-		break;
-	case VFS_LINK_LOOP:
-		ERRNO = ELOOP;
-		break;
-	case VFS_NO_MEMORY:
-		ERRNO = ENOMEM;
-		break;
-	case VFS_NO_SPACE:
-		ERRNO = ENOSPC;
-		break;
-	case VFS_READ_ONLY:
-		ERRNO = EROFS;
-		break;
-	default:
-		/* fallback in case there are some unhandled errors */
-		ERRNO = EIO;
-		break;
-	};
-	return -1;
-};
-
 int sys_open(const char *upath, int oflag, mode_t mode)
 {
 	char path[USER_STRING_MAX];
@@ -392,96 +349,32 @@ int sys_open(const char *upath, int oflag, mode_t mode)
 		ERRNO = EINVAL;
 		return -1;
 	};
-
-	vfsLockCreation();
-
-	struct kstat st;
-	int error = vfsStat(path, &st);
-	if (error != 0)
+	
+	if ((oflag & O_RDWR) == 0)
 	{
-		if (((error != VFS_NO_FILE) && (error != VFS_EMPTY_DIRECTORY)) || ((oflag & O_CREAT) == 0))
-		{
-			vfsUnlockCreation();
-			return sysOpenErrno(error);
-		}
-		else
-		{
-			// we're creating a new file, fake a stat.
-			st.st_uid = getCurrentThread()->creds->euid;
-			st.st_gid = getCurrentThread()->creds->egid;
-			st.st_mode = 0777;	// because mode shall not affect the open (see POSIX open() )
-		};
-	}
-	else if (oflag & O_EXCL)
-	{
-		// file exists
-		vfsUnlockCreation();
-		ERRNO = EEXIST;
+		/* neither O_RDONLY nor O_WRONLY (and hence not O_RDWR) were set */
+		ERRNO = EINVAL;
 		return -1;
 	};
-
-	if ((st.st_mode & 0xF000) == 0x1000)
+	
+	int fd = ftabAlloc(getCurrentThread()->ftab);
+	if (fd == -1)
 	{
-		// directory, do not open.
-		vfsUnlockCreation();
-		ERRNO = EISDIR;
+		ERRNO = EMFILE;
 		return -1;
 	};
-
-	int neededPerms = 0;
-	if (oflag & O_RDONLY)
-	{
-		neededPerms |= 4;
-	};
-	if (oflag & O_WRONLY)
-	{
-		neededPerms |= 2;
-	};
-
-	if (!vfsCanCurrentThread(&st, neededPerms))
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(VFS_PERM);
-	};
 	
-	int i = ftabAlloc(getCurrentThread()->ftab);
-	if (i == -1)
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(VFS_FILE_LIMIT_EXCEEDED);
-	};
-	
-	int flags = VFS_CHECK_ACCESS;
-	if (oflag & O_CREAT)
-	{
-		flags |= VFS_CREATE | (mode << 3);
-	};
-
-	File *fp = vfsOpen(path, flags, &error);
+	int error;
+	File *fp = vfsOpen(VFS_NULL_IREF, path, oflag, mode, &error);
 	if (fp == NULL)
 	{
-		vfsUnlockCreation();
-		ftabSet(getCurrentThread()->ftab, i, NULL, 0);
-		return sysOpenErrno(error);
+		ftabSet(getCurrentThread()->ftab, fd, NULL, 0);
+		ERRNO = error;
+		return -1;
 	};
-
-	vfsUnlockCreation();
-
-	if (oflag & O_TRUNC)
-	{
-		if (fp->truncate != NULL) fp->truncate(fp, 0);
-	};
-
-	if (oflag & O_APPEND)
-	{
-		if (fp->seek != NULL) fp->seek(fp, 0, SEEK_END);
-	};
-
-	fp->oflag |= oflag;
-	fp->refcount = 1;
-	ftabSet(getCurrentThread()->ftab, i, fp, oflag & O_CLOEXEC);	/* O_CLOEXEC = FD_CLOEXEC */
-
-	return i;
+	
+	ftabSet(getCurrentThread()->ftab, fd, fp, oflag & O_CLOEXEC);	/* O_CLOEXEC = FD_CLOEXEC */
+	return fd;
 };
 
 int sys_close(int fd)
@@ -504,7 +397,7 @@ int sys_ioctl(int fd, uint64_t cmd, void *argp)
 		return -1;
 	};
 	
-	if (fp->ioctl == NULL)
+	if (fp->iref.inode->ioctl == NULL)
 	{
 		vfsClose(fp);
 		ERRNO = ENODEV;
@@ -521,7 +414,7 @@ int sys_ioctl(int fd, uint64_t cmd, void *argp)
 		return -1;
 	};
 	
-	int ret = fp->ioctl(fp, cmd, argbuf);
+	int ret = fp->iref.inode->ioctl(fp->iref.inode, fp, cmd, argbuf);
 	memcpy_k2u(argp, argbuf, argsize);		// ignore error
 	kfree(argbuf);
 	vfsClose(fp);
@@ -530,12 +423,6 @@ int sys_ioctl(int fd, uint64_t cmd, void *argp)
 
 off_t sys_lseek(int fd, off_t offset, int whence)
 {
-	if ((whence != SEEK_SET) && (whence != SEEK_CUR) && (whence != SEEK_END))
-	{
-		ERRNO = EINVAL;
-		return (off_t)-1;
-	};
-
 	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
@@ -543,19 +430,7 @@ off_t sys_lseek(int fd, off_t offset, int whence)
 		return (off_t)-1;
 	};
 
-	if (fp->seek == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = ESPIPE;
-		return (off_t)-1;
-	};
-
-	off_t ret = fp->seek(fp, offset, whence);
-	if (ret == (off_t)-1)
-	{
-		ERRNO = EOVERFLOW;
-	};
-
+	off_t ret = vfsSeek(fp, offset, whence);
 	vfsClose(fp);
 	return ret;
 };
@@ -597,7 +472,7 @@ int sys_stat(const char *upath, struct kstat *buf, size_t bufsz)
 	};
 
 	struct kstat kbuf;
-	int status = vfsStat(path, &kbuf);
+	int status = vfsStat(VFS_NULL_IREF, path, 1, &kbuf);
 	if (status == 0)
 	{
 		if (memcpy_k2u(buf, &kbuf, bufsz) != 0)
@@ -610,7 +485,7 @@ int sys_stat(const char *upath, struct kstat *buf, size_t bufsz)
 	}
 	else
 	{
-		return sysOpenErrno(status);
+		return -1;
 	};
 };
 
@@ -629,7 +504,7 @@ int sys_lstat(const char *upath, struct kstat *buf, size_t bufsz)
 	};
 
 	struct kstat kbuf;
-	int status = vfsLinkStat(path, &kbuf);
+	int status = vfsStat(VFS_NULL_IREF, path, 0, &kbuf);
 	if (status == 0)
 	{
 		if (memcpy_k2u(buf, &kbuf, bufsz) != 0)
@@ -642,7 +517,7 @@ int sys_lstat(const char *upath, struct kstat *buf, size_t bufsz)
 	}
 	else
 	{
-		return sysOpenErrno(status);
+		return -1;
 	};
 };
 
@@ -673,21 +548,8 @@ int sys_fstat(int fd, struct kstat *buf, size_t bufsz)
 		return -1;
 	};
 
-	if (fp->fstat == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	memset(&kbuf, 0, sizeof(struct kstat));
-	int status = fp->fstat(fp, &kbuf);
+	vfsInodeStat(fp->iref.inode, &kbuf);
 	vfsClose(fp);
-	
-	if (status == -1)
-	{
-		ERRNO = EIO;
-	};
 	
 	if (memcpy_k2u(buf, &kbuf, bufsz) != 0)
 	{
@@ -695,7 +557,7 @@ int sys_fstat(int fd, struct kstat *buf, size_t bufsz)
 		return -1;
 	};
 
-	return status;
+	return 0;
 };
 
 int sys_chmod(const char *upath, mode_t mode)
@@ -707,37 +569,7 @@ int sys_chmod(const char *upath, mode_t mode)
 		return -1;
 	};
 	
-	int error;
-	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
-
-	if (dir == NULL)
-	{
-		return sysOpenErrno(error);
-	};
-
-	if (dir->chmod == NULL)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != dir->stat.st_uid)
-		&& !havePerm(XP_FSADMIN))
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EPERM;
-		return -1;
-	};
-
-	int status = dir->chmod(dir, mode);
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-
-	if (status != 0) ERRNO = EIO;
-	return status;
+	return vfsChangeMode(VFS_NULL_IREF, path, mode);
 };
 
 int sys_fchmod(int fd, mode_t mode)
@@ -750,47 +582,9 @@ int sys_fchmod(int fd, mode_t mode)
 		return -1;
 	};
 
-	if (fp->fstat == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	if (fp->fchmod == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	struct kstat st;
-	int status = fp->fstat(fp, &st);
-	
-	if (status == -1)
-	{
-		vfsClose(fp);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != st.st_uid)
-		&& !havePerm(XP_FSADMIN))
-	{
-		vfsClose(fp);
-		ERRNO = EPERM;
-		return -1;
-	};
-
-	status = fp->fchmod(fp, mode);
+	int ret = vfsInodeChangeMode(fp->iref.inode, mode);
 	vfsClose(fp);
-	if (status == -1)
-	{
-		ERRNO = EIO;
-		return -1;
-	};
-
-	return 0;
+	return ret;
 };
 
 static int sys_fsync(int fd)
@@ -802,26 +596,15 @@ static int sys_fsync(int fd)
 		return -1;
 	};
 
-	if (fp->fsync != NULL)
-	{
-		fp->fsync(fp);
-	};
+	int error = vfsFlush(fp->iref.inode);
 	vfsClose(fp);
 
-	return 0;
-};
-
-static int canChangeOwner(struct kstat *st, uid_t uid, gid_t gid)
-{
-	Thread *ct = getCurrentThread();
-	if (ct->creds->euid == 0) return 1;
-	if (havePerm(XP_FSADMIN)) return 1;
-	
-	if ((ct->creds->euid == uid) && (uid == st->st_uid))
+	if (error != 0)
 	{
-		return (ct->creds->egid == gid) || (ct->creds->sgid == gid) || (ct->creds->rgid == gid);
+		ERRNO = error;
+		return -1;
 	};
-
+	
 	return 0;
 };
 
@@ -833,105 +616,22 @@ int sys_chown(const char *upath, uid_t uid, gid_t gid)
 		ERRNO = EFAULT;
 		return -1;
 	};
-	
-	if ((uid == (uid_t)-1) && (gid == (gid_t)-1)) return 0;
 
-	int error;
-	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
-
-	if (dir == NULL)
-	{
-		return sysOpenErrno(error);
-	};
-
-	if (dir->chown == NULL)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	if (uid == (uid_t)-1)
-	{
-		uid = dir->stat.st_uid;
-	};
-
-	if (gid == (gid_t)-1)
-	{
-		gid = dir->stat.st_gid;
-	};
-
-	if (!canChangeOwner(&dir->stat, uid, gid))
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EPERM;
-		return -1;
-	};
-
-	int status = dir->chown(dir, uid, gid);
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-
-	if (status == -1)
-	{
-		ERRNO = EIO;
-	};
-
-	return status;
+	return vfsChangeOwner(VFS_NULL_IREF, path, uid, gid);
 };
 
 int sys_fchown(int fd, uid_t uid, gid_t gid)
 {
-	// fstat first.
 	File *fp = ftabGet(getCurrentThread()->ftab, fd);
 	if (fp == NULL)
 	{
 		ERRNO = EBADF;
 		return -1;
 	};
-
-	if (fp->fstat == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	if (fp->fchown == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	struct kstat st;
-	int status = fp->fstat(fp, &st);
-
-	if (status == -1)
-	{
-		ERRNO = EIO;
-		vfsClose(fp);
-		return -1;
-	};
-
-	if (!canChangeOwner(&st, uid, gid))
-	{
-		ERRNO = EPERM;
-		vfsClose(fp);
-		return -1;
-	};
-
-	status = fp->fchown(fp, uid, gid);
+	
+	int result = vfsInodeChangeOwner(fp->iref.inode, uid, gid);
 	vfsClose(fp);
-	if (status == -1)
-	{
-		ERRNO = EIO;
-		return -1;
-	};
-
-	return 0;
+	return result;
 };
 
 int sys_mkdir(const char *upath, mode_t mode)
@@ -943,108 +643,14 @@ int sys_mkdir(const char *upath, mode_t mode)
 		return -1;
 	};
 	
-	mode &= 0xFFF;
-	mode &= ~(getCurrentThread()->creds->umask);
-
-	char rpath[VFS_PATH_MAX];
-	if (realpath(path, rpath) == NULL)
+	int error = vfsMakeDir(VFS_NULL_IREF, path, mode);
+	if (error != 0)
 	{
-		ERRNO = ENOENT;
+		ERRNO = error;
 		return -1;
-	};
-
-	char parent[VFS_PATH_MAX];
-	char newdir[VFS_PATH_MAX];
-
-	size_t sz = strlen(rpath);
-	while (rpath[sz] != '/')
-	{
-		sz--;
-	};
-
-	memcpy(parent, rpath, sz);
-	parent[sz] = 0;
-	if (parent[0] == 0)
-	{
-		strcpy(parent, "/");
-	};
-
-	strcpy(newdir, &rpath[sz+1]);
-	if (strlen(newdir) >= 128)
-	{
-		ERRNO = ENAMETOOLONG;
-		return -1;
-	};
-
-	if (newdir[0] == 0)
-	{
-		ERRNO = ENOENT;
-		return -1;
-	};
-
-	vfsLockCreation();
-
-	struct kstat st;
-	int error;
-	if ((error = vfsStat(parent, &st)) != 0)
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
-	};
-
-	if (!vfsCanCurrentThread(&st, 2))
-	{
-		vfsUnlockCreation();
-		ERRNO = EPERM;
-		return -1;
-	};
-
-	if (strcmp(parent, "/") != 0) strcat(parent, "/");
-
-	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
-	if (dir == NULL)
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
 	};
 	
-	int endYet = (error == VFS_EMPTY_DIRECTORY);
-	if (dir->mkdir == NULL)
-	{
-		vfsUnlockCreation();
-		ERRNO = EROFS;
-		return -1;
-	};
-
-	while (!endYet)
-	{
-		if (strcmp(dir->dirent.d_name, newdir) == 0)
-		{
-			if (dir->close != NULL) dir->close(dir);
-			kfree(dir);
-			vfsUnlockCreation();
-			ERRNO = EEXIST;
-			return -1;
-		};
-
-		if (dir->next(dir) == -1)
-		{
-			endYet = 1;
-		};
-	};
-
-	int status = dir->mkdir(dir, newdir, mode & 0x0FFF, getCurrentThread()->creds->euid, getCurrentThread()->creds->egid);
-
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-	vfsUnlockCreation();
-
-	if (status != 0)
-	{
-		ERRNO = EIO;
-	};
-
-	return status;
+	return 0;
 };
 
 int sys_ftruncate(int fd, off_t length)
@@ -1056,22 +662,21 @@ int sys_ftruncate(int fd, off_t length)
 		return -1;
 	};
 
-	if ((fp->oflag & O_WRONLY) == 0)
+	if ((fp->oflags & O_WRONLY) == 0)
 	{
 		vfsClose(fp);
-		ERRNO = EPERM;
+		ERRNO = EBADF;
 		return -1;
 	};
 
-	if (fp->truncate == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	fp->truncate(fp, length);
+	int error = vfsTruncate(fp->iref.inode, length);
 	vfsClose(fp);
+	
+	if (error != 0)
+	{
+		ERRNO = error;
+		return -1;
+	};
 	
 	return 0;
 };
@@ -1085,112 +690,14 @@ int sys_unlink(const char *upath)
 		return -1;
 	};
 	
-	char rpath[256];
-	if (realpath(path, rpath) == NULL)
-	{
-		ERRNO = ENOENT;
-		return -1;
-	};
-
-	char parent[256];
-	char child[256];
-
-	size_t sz = strlen(rpath);
-	while (rpath[sz] != '/')
-	{
-		sz--;
-	};
-
-	memcpy(parent, rpath, sz);
-	parent[sz] = 0;
-	if (parent[0] == 0)
-	{
-		strcpy(parent, "/");
-	};
-
-	strcpy(child, &rpath[sz+1]);
-	if (strlen(child) >= 128)
-	{
-		ERRNO = ENOENT;
-		return -1;
-	};
-
-	if (child[0] == 0)
-	{
-		ERRNO = ENOENT;
-		return -1;
-	};
-
-	vfsLockCreation();
-
-	struct kstat st;
 	int error;
-	if ((error = vfsStat(parent, &st)) != 0)
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, path, 0, &error);
+	if (dref.dent == NULL)
 	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
-	};
-
-	Dir *dir = parsePath(rpath, VFS_NO_FOLLOW, &error);
-	if (dir == NULL)
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
-	};
-
-	if (((dir->stat.st_mode & 0xF000) == 0x1000) && (dir->stat.st_size != 0))
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		vfsUnlockCreation();
-		ERRNO = ENOTEMPTY;
+		ERRNO = error;
 		return -1;
 	};
-
-	if ((st.st_mode & VFS_MODE_STICKY))
-	{
-		uid_t uid = getCurrentThread()->creds->euid;
-		if ((st.st_uid != uid) && (dir->stat.st_uid != uid))
-		{
-			if (dir->close != NULL) dir->close(dir);
-			kfree(dir);
-			vfsUnlockCreation();
-			ERRNO = EACCES;
-			return -1;
-		};
-	};
-
-	if (!vfsCanCurrentThread(&st, 2))
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		vfsUnlockCreation();
-		ERRNO = EACCES;
-		return -1;
-	};
-
-	if (dir->unlink == NULL)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		vfsUnlockCreation();
-		ERRNO = EIO;
-		return -1;
-	};
-
-	if (dir->unlink(dir) != 0)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		vfsUnlockCreation();
-		ERRNO = EIO;
-		return -1;
-	};
-
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-
-	vfsUnlockCreation();
+	
 	return 0;
 };
 
@@ -1300,10 +807,9 @@ int sys_insmod(const char *umodname, const char *upath, const char *uopt, int fl
 		opt = NULL;
 	};
 	
-	if (getCurrentThread()->creds->euid != 0 && !havePerm(XP_MODULE))
+	if (!havePerm(XP_MODULE))
 	{
-		// only root can load modules.
-		ERRNO = EPERM;
+		ERRNO = EACCES;
 		return -1;
 	};
 
@@ -1319,45 +825,24 @@ int sys_chdir(const char *upath)
 		return -1;
 	};
 	
-	struct kstat st;
-	int error = vfsStat(path, &st);
+	int error = vfsChangeDir(VFS_NULL_IREF, path);
 	if (error != 0)
 	{
-		return sysOpenErrno(error);
-	};
-
-	char rpath[256];
-	if (realpath(path, rpath) == NULL)
-	{
-		ERRNO = EACCES;
+		ERRNO = error;
 		return -1;
 	};
-
-	if ((st.st_mode & VFS_MODE_DIRECTORY) == 0)
-	{
-		ERRNO = ENOTDIR;
-		return -1;
-	};
-
-	if (!vfsCanCurrentThread(&st, 1))
-	{
-		ERRNO = EACCES;
-		return -1;
-	};
-
-	strcpy(getCurrentThread()->cwd, rpath);
+	
 	return 0;
 };
 
-char *sys_getcwd(char *buf, size_t size)
+// TODO: update libc to this new signature
+size_t sys_getcwd()
 {
-	if (size > 256) size = 256;
-	if (memcpy_k2u(buf, getCurrentThread()->cwd, size) != 0)
-	{
-		ERRNO = EFAULT;
-		return NULL;
-	};
-	return buf;
+	char *cwd = vfsGetCurrentDirPath();
+	kfree(getCurrentThread()->ktu);
+	getCurrentThread()->ktu = cwd;
+	getCurrentThread()->ktusz = strlen(cwd)+1;
+	return strlen(cwd) + 1;
 };
 
 uint64_t sys_mmap(uint64_t addr, size_t len, int prot, int flags, int fd, off_t offset)
@@ -1544,8 +1029,7 @@ int sys_rmmod(const char *umodname, int flags)
 		return -1;
 	};
 	
-	// only root can remove modules!
-	if (getCurrentThread()->creds->euid != 0 && !havePerm(XP_MODULE))
+	if (!havePerm(XP_MODULE))
 	{
 		ERRNO = EPERM;
 		return -1;
@@ -1570,252 +1054,45 @@ int sys_link(const char *uoldname, const char *unewname)
 		return -1;
 	};
 	
-	char rpath[256];
-	if (realpath(newname, rpath) == NULL)
+	int error = vfsCreateLink(VFS_NULL_IREF, oldname, VFS_NULL_IREF, newname, VFS_AT_SYMLINK_FOLLOW);
+	if (error != 0)
 	{
-		ERRNO = ENOENT;
+		ERRNO = error;
 		return -1;
 	};
-
-	char parent[256];
-	char child[256];
-
-	size_t sz = strlen(rpath);
-	while (rpath[sz] != '/')
-	{
-		sz--;
-	};
-
-	memcpy(parent, rpath, sz);
-	parent[sz] = 0;
-	if (parent[0] == 0)
-	{
-		strcpy(parent, "/");
-	};
-
-	strcpy(child, &rpath[sz+1]);
-	if (strlen(child) >= 128)
-	{
-		ERRNO = ENOENT;
-		return -1;
-	};
-
-	if (child[0] == 0)
-	{
-		ERRNO = ENOENT;
-		return -1;
-	};
-
-	vfsLockCreation();
-
-	struct kstat stdir;
-	int error;
-	if ((error = vfsStat(parent, &stdir)) != 0)
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
-	};
-
-	struct kstat stold;
-	if ((error = vfsLinkStat(oldname, &stold)) != 0)
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
-	};
-
-	if ((stold.st_mode & 0xF000) == VFS_MODE_DIRECTORY)
-	{
-		vfsUnlockCreation();
-		ERRNO = EPERM;
-		return -1;
-	};
-
-	if (stold.st_dev != stdir.st_dev)
-	{
-		vfsUnlockCreation();
-		ERRNO = EXDEV;
-		return -1;
-	};
-
-	// make sure we can write to the directory
-	if (!vfsCanCurrentThread(&stold, 2))
-	{
-		vfsUnlockCreation();
-		ERRNO = EACCES;
-		return -1;
-	};
-
-	if (parent[strlen(parent-1)] != '/')
-	{
-		strcat(parent, "/");
-	};
-
-	if (strcmp(parent, "/") != 0) strcat(parent, "/");
-
-	error = 0;
-	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
-	if (dir == NULL)
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
-	};
-
-	if (error != VFS_EMPTY_DIRECTORY)
-	{
-		do
-		{
-			if (strcmp(dir->dirent.d_name, child) == 0)
-			{
-				if (dir->close != NULL) dir->close(dir);
-				kfree(dir);
-				vfsUnlockCreation();
-				ERRNO = EEXIST;
-				return -1;
-			};
-		} while (dir->next(dir) != -1);
-	};
-
-	if (dir->link == NULL)
-	{
-		vfsUnlockCreation();
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EMLINK;
-		return -1;
-	};
-
-	int status = dir->link(dir, child, stold.st_ino);
-
-	vfsUnlockCreation();
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-
-	if (status != 0)
-	{
-		ERRNO = EIO;
-	};
-
-	return status;
+	
+	return 0;
 };
 
 int sys_symlink(const char *utarget, const char *upath)
 {
-	char target[USER_STRING_MAX];
-	if (strcpy_u2k(target, utarget) != 0)
+	char oldname[USER_STRING_MAX];
+	if (strcpy_u2k(oldname, utarget) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	char path[USER_STRING_MAX];
-	if (strcpy_u2k(path, upath) != 0)
+	char newname[USER_STRING_MAX];
+	if (strcpy_u2k(newname, upath) != 0)
 	{
 		ERRNO = EFAULT;
 		return -1;
 	};
 	
-	if (strlen(target) > PATH_MAX)
+	int error = vfsCreateSymlink(oldname, VFS_NULL_IREF, newname);
+	if (error != 0)
 	{
-		ERRNO = ENAMETOOLONG;
+		ERRNO = error;
 		return -1;
 	};
-
-	char rpath[256];
-	if (realpath(path, rpath) == NULL)
-	{
-		ERRNO = ENOENT;
-		return -1;
-	};
-
-	char parent[256];
-	char newlink[256];
-
-	size_t sz = strlen(rpath);
-	while (rpath[sz] != '/')
-	{
-		sz--;
-	};
-
-	memcpy(parent, rpath, sz);
-	parent[sz] = 0;
-	if (parent[0] == 0)
-	{
-		strcpy(parent, "/");
-	};
-
-	strcpy(newlink, &rpath[sz+1]);
-	if (strlen(newlink) >= 128)
-	{
-		ERRNO = ENAMETOOLONG;
-		return -1;
-	};
-
-	if (newlink[0] == 0)
-	{
-		ERRNO = ENOENT;
-		return -1;
-	};
-
-	vfsLockCreation();
-
-	struct kstat st;
-	int error;
-	if ((error = vfsStat(parent, &st)) != 0)
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
-	};
-
-	if (!vfsCanCurrentThread(&st, 2))
-	{
-		vfsUnlockCreation();
-		ERRNO = EPERM;
-		return -1;
-	};
-
-	if (strcmp(parent, "/") != 0) strcat(parent, "/");
-
-	Dir *dir = parsePath(parent, VFS_STOP_ON_EMPTY, &error);
-	int endYet = (error == VFS_EMPTY_DIRECTORY);
-	if (dir->mkdir == NULL)
-	{
-		vfsUnlockCreation();
-		ERRNO = EIO;
-		return -1;
-	};
-
-	while (!endYet)
-	{
-		if (strcmp(dir->dirent.d_name, newlink) == 0)
-		{
-			if (dir->close != NULL) dir->close(dir);
-			kfree(dir);
-			vfsUnlockCreation();
-			ERRNO = EEXIST;
-			return -1;
-		};
-
-		if (dir->next(dir) == -1)
-		{
-			endYet = 1;
-		};
-	};
-
-	int status = dir->symlink(dir, newlink, target);
-
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-	vfsUnlockCreation();
-
-	if (status != 0)
-	{
-		ERRNO = EIO;
-	};
-
-	return status;
+	
+	return 0;
 };
 
-ssize_t sys_readlink(const char *upath, char *buf, size_t bufsize)
+
+// TODO: update libc
+size_t sys_readlink(const char *upath)
 {
 	char path[USER_STRING_MAX];
 	if (strcpy_u2k(path, upath) != 0)
@@ -1824,50 +1101,18 @@ ssize_t sys_readlink(const char *upath, char *buf, size_t bufsize)
 		return -1;
 	};
 	
-	char tmpbuf[PATH_MAX];
-	int error;
-	Dir *dir = parsePath(path, VFS_NO_FOLLOW | VFS_CHECK_ACCESS, &error);
-	if (dir == NULL)
+	char *buf = vfsReadLinkPath(VFS_NULL_IREF, path);
+	if (buf == NULL)
 	{
-		return sysOpenErrno(error);
-	};
-
-	if ((dir->stat.st_mode & 0xF000) != VFS_MODE_LINK)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EINVAL;
-		return -1;
-	};
-
-	ssize_t out = dir->readlink(dir, tmpbuf);
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-
-	if (out == -1)
-	{
-		ERRNO = EIO;
-		return -1;
-	};
-
-	if (bufsize > out)
-	{
-		bufsize = out;
-	};
-
-	if (bufsize > PATH_MAX)
-	{
-		ERRNO = ENAMETOOLONG;
-		return -1;
-	};
-
-	if (memcpy_k2u(buf, tmpbuf, bufsize) != 0)
-	{
-		ERRNO = EFAULT;
-		return -1;
+		return 0;	// error; size=0
 	};
 	
-	return out;
+	// POSIX readlink() doesn't return the terminating NUL, so we can safely ignore that here
+	kfree(getCurrentThread()->ktu);
+	getCurrentThread()->ktu = buf;
+	getCurrentThread()->ktusz = strlen(buf);
+	
+	return strlen(buf);
 };
 
 unsigned sys_sleep(unsigned seconds)
@@ -1909,7 +1154,8 @@ unsigned sys_sleep(unsigned seconds)
 	return secondsLeft;
 };
 
-int sys_utime(const char *upath, time_t atime, time_t mtime)
+// TODO: update libc
+int sys_utime(const char *upath, time_t atime, uint32_t anano, time_t mtime, uint32_t mnano)
 {
 	char path[USER_STRING_MAX];
 	if (strcpy_u2k(path, upath) != 0)
@@ -1918,48 +1164,7 @@ int sys_utime(const char *upath, time_t atime, time_t mtime)
 		return -1;
 	};
 	
-	int error;
-	Dir *dirp = parsePath(path, VFS_CHECK_ACCESS, &error);
-
-	if (dirp == NULL)
-	{
-		return sysOpenErrno(error);
-	};
-
-	if ((atime == 0) && (mtime == 0))
-	{
-		if (!vfsCanCurrentThread(&dirp->stat, 2))
-		{
-			ERRNO = EACCES;
-			return -1;
-		};
-
-		atime = time();
-		mtime = atime;
-	}
-	else
-	{
-		if (dirp->stat.st_uid != getCurrentThread()->creds->euid && getCurrentThread()->creds->euid != 0
-			&& !havePerm(XP_MODULE))
-		{
-			ERRNO = EACCES;
-			return -1;
-		};
-	};
-
-	if (dirp->utime == NULL)
-	{
-		ERRNO = EIO;
-		return -1;
-	};
-
-	if (dirp->utime(dirp, atime, mtime) != 0)
-	{
-		ERRNO = EIO;
-		return -1;
-	};
-
-	return 0;
+	return vfsChangeTimes(VFS_NULL_IREF, path, atime, anano, mtime, mnano);
 };
 
 mode_t sys_umask(mode_t cmask)
@@ -2398,7 +1603,7 @@ int sys_isatty(int fd)
 		return -1;
 	};
 	
-	int result = !!(fp->oflag & O_TERMINAL);
+	int result = !!(fp->oflags & O_TERMINAL);
 	vfsClose(fp);
 	return result;
 };
@@ -2808,23 +2013,30 @@ void sys_yield()
 	kyield();
 };
 
-char* sys_realpath(const char *upath, char *ubuffer)
+// TODO: update libc
+size_t sys_realpath(const char *upath)
 {
 	char path[USER_STRING_MAX];
 	if (strcpy_u2k(path, upath) != 0)
 	{
 		ERRNO = EFAULT;
-		return NULL;
+		return 0;
 	};
 	
-	char buffer[256];
+	int error;
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return 0;
+	};
 	
-	ERRNO = ENAMETOOLONG;
-	char *result = realpath(path, buffer);
-	if (result == NULL) return NULL;
-	
-	memcpy_k2u(ubuffer, buffer, 256);
-	return ubuffer;
+	char *result =  vfsRealPath(dref);
+	kfree(getCurrentThread()->ktu);
+	getCurrentThread()->ktu = result;
+	getCurrentThread()->ktusz = strlen(result) + 1;
+	return strlen(result) + 1;
 };
 
 void sys_seterrnoptr(int *ptr)
@@ -2837,7 +2049,8 @@ int* sys_geterrnoptr()
 	return getCurrentThread()->errnoptr;
 };
 
-int sys_unmount(const char *upath)
+// TODO: update libc
+int sys_unmount(const char *upath, int flags)
 {
 	char path[USER_STRING_MAX];
 	if (strcpy_u2k(path, upath) != 0)
@@ -2845,9 +2058,15 @@ int sys_unmount(const char *upath)
 		ERRNO = EFAULT;
 		return -1;
 	};
-
-	ERRNO = EIO;	
-	return unmount(path);
+	
+	int error = vfsUnmount(path, flags);
+	if (error != 0)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
+	return 0;
 };
 
 ssize_t sys_send(int socket, const void *buffer, size_t length, int flags)
@@ -3508,7 +2727,6 @@ int sys_fpoll(const uint8_t *ubitmapReq, uint8_t *ubitmapRes, int flags, uint64_
 	{
 		if (bitmapReq[i] != 0)
 		{
-			//File *fp = ftab->entries[i];
 			File *fp = ftabGet(getCurrentThread()->ftab, i);
 			if (fp == NULL)
 			{
@@ -3516,7 +2734,6 @@ int sys_fpoll(const uint8_t *ubitmapReq, uint8_t *ubitmapRes, int flags, uint64_
 			}
 			else
 			{
-				//vfsDup(fp);
 				workingFiles[i] = fp;
 			};
 		};
@@ -3527,9 +2744,9 @@ int sys_fpoll(const uint8_t *ubitmapReq, uint8_t *ubitmapRes, int flags, uint64_
 	{
 		if (workingFiles[i] != NULL)
 		{
-			if (workingFiles[i]->pollinfo != NULL)
+			if (workingFiles[i]->iref.inode->pollinfo != NULL)
 			{
-				workingFiles[i]->pollinfo(workingFiles[i], &sems[8*i]);
+				workingFiles[i]->iref.inode->pollinfo(workingFiles[i]->iref.inode, workingFiles[i], &sems[8*i]);
 				
 				// clear the entries which we don't want to occur
 				uint8_t pollFor = bitmapReq[i] | POLL_ERROR | POLL_INVALID | POLL_HANGUP;
@@ -3584,22 +2801,27 @@ uint64_t sys_dxperm()
 	return getCurrentThread()->dxperm;
 };
 
-size_t sys_fsinfo(FSInfo *ulist, size_t count)
+// TODO: update libc to add this system call and also remove fsinfo that it replaced
+int sys_fchxperm(int fd, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm)
 {
-	if (count > 256) count = 256;
-	
-	FSInfo list[256];
-	memset(list, 0, sizeof(FSInfo)*256);
-	
-	size_t result = getFSInfo(list, count);
-	
-	if (memcpy_k2u(ulist, list, sizeof(FSInfo)*256) != 0)
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
 	{
-		ERRNO = EFAULT;
-		return 0;
+		ERRNO = EBADF;
+		return -1;
 	};
 	
-	return result;
+	int result = vfsInodeChangeXPerm(fp->iref.inode, ixperm, oxperm, dxperm);
+	if (result == -1)
+	{
+		int error = ERRNO;
+		vfsClose(fp);
+		ERRNO = error;
+		return -1;
+	};
+	
+	vfsClose(fp);
+	return 0;
 };
 
 int sys_chxperm(const char *upath, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm)
@@ -3611,69 +2833,7 @@ int sys_chxperm(const char *upath, uint64_t ixperm, uint64_t oxperm, uint64_t dx
 		return -1;
 	};
 
-	if (!havePerm(XP_CHXPERM))
-	{
-		ERRNO = EPERM;
-		return -1;
-	};
-	
-	if (ixperm != XP_NCHG)
-	{
-		if ((getCurrentThread()->dxperm & ixperm) != ixperm)
-		{
-			ERRNO = EPERM;
-			return -1;
-		};
-	};
-
-	if (oxperm != XP_NCHG)
-	{
-		if ((getCurrentThread()->dxperm & oxperm) != oxperm)
-		{
-			ERRNO = EPERM;
-			return -1;
-		};
-	};
-
-	if (dxperm != XP_NCHG)
-	{
-		if ((getCurrentThread()->dxperm & dxperm) != dxperm)
-		{
-			ERRNO = EPERM;
-			return -1;
-		};
-	};
-
-	int error;
-	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
-
-	if (dir == NULL)
-	{
-		return sysOpenErrno(error);
-	};
-	
-	if ((dir->stat.st_mode & 0xF000) != 0)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EINVAL;
-		return -1;
-	};
-	
-	if (dir->chxperm == NULL)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EIO;
-		return -1;
-	};
-
-	int status = dir->chxperm(dir, ixperm, oxperm, dxperm);
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-
-	if (status != 0) ERRNO = EIO;
-	return status;
+	return vfsChangeXPerm(VFS_NULL_IREF, path, ixperm, oxperm, dxperm);
 };
 
 int sys_haveperm(uint64_t mask)
@@ -3803,7 +2963,7 @@ int sys_flock_set(int fd, FLock *ulock, int block)
 		return -1;
 	};
 	
-	if (klock.l_whence != SEEK_CUR && klock.l_whence != SEEK_SET && klock.l_whence != SEEK_END)
+	if (klock.l_whence != VFS_SEEK_CUR && klock.l_whence != VFS_SEEK_SET && klock.l_whence != VFS_SEEK_END)
 	{
 		ERRNO = EINVAL;
 		return -1;
@@ -3821,32 +2981,25 @@ int sys_flock_set(int fd, FLock *ulock, int block)
 		ERRNO = EBADF;
 		return -1;
 	};
-	
-	if (fp->tree == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EINVAL;
-		return -1;
-	};
-	
-	if (fp->seek == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EINVAL;
-		return -1;
-	};
 
-	FileTree *ft = fp->tree(fp);
+	FileTree *ft = fp->iref.inode->ft;
+	if (ft == NULL)
+	{
+		vfsClose(fp);
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
 	uint64_t start;
 	switch (klock.l_whence)
 	{
-	case SEEK_SET:
+	case VFS_SEEK_SET:
 		start = (uint64_t) klock.l_start;
 		break;
-	case SEEK_CUR:
-		start = (uint64_t) (fp->seek(fp, 0, SEEK_CUR) + klock.l_start);
+	case VFS_SEEK_CUR:
+		start = (uint64_t) (fp->offset + klock.l_start);
 		break;
-	case SEEK_END:
+	case VFS_SEEK_END:
 		start = (uint64_t) (ft->size + klock.l_start);
 		break;
 	};
@@ -3862,7 +3015,6 @@ int sys_flock_set(int fd, FLock *ulock, int block)
 	};
 	
 	int result = ftSetLock(ft, klock.l_type, start, size, block);
-	ftDown(ft);
 	vfsClose(fp);
 	
 	if (result != 0)
@@ -3883,7 +3035,7 @@ int sys_flock_get(int fd, FLock *ulock)
 		return -1;
 	};
 	
-	if (klock.l_whence != SEEK_SET && klock.l_whence != SEEK_CUR && klock.l_whence != SEEK_END)
+	if (klock.l_whence != VFS_SEEK_SET && klock.l_whence != VFS_SEEK_CUR && klock.l_whence != VFS_SEEK_END)
 	{
 		ERRNO = EINVAL;
 		return -1;
@@ -3895,32 +3047,25 @@ int sys_flock_get(int fd, FLock *ulock)
 		ERRNO = EBADF;
 		return -1;
 	};
-	
-	if (fp->tree == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EINVAL;
-		return -1;
-	};
-	
-	if (fp->seek == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EINVAL;
-		return -1;
-	};
 
-	FileTree *ft = fp->tree(fp);
+	FileTree *ft = fp->iref.inode->ft;
+	if (ft == NULL)
+	{
+		vfsClose(fp);
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
 	uint64_t start;
 	switch (klock.l_whence)
 	{
-	case SEEK_SET:
+	case VFS_SEEK_SET:
 		start = (uint64_t) klock.l_start;
 		break;
-	case SEEK_CUR:
-		start = (uint64_t) (fp->seek(fp, 0, SEEK_CUR) + klock.l_start);
+	case VFS_SEEK_CUR:
+		start = (uint64_t) (fp->offset + klock.l_start);
 		break;
-	case SEEK_END:
+	case VFS_SEEK_END:
 		start = (uint64_t) (ft->size + klock.l_start);
 		break;
 	};
@@ -3929,11 +3074,10 @@ int sys_flock_get(int fd, FLock *ulock)
 	int type;
 	
 	ftGetLock(ft, &type, &klock.l_pid, &start, &size);
-	ftDown(ft);
 	vfsClose(fp);
 	
 	klock.l_type = type;
-	klock.l_whence = SEEK_SET;
+	klock.l_whence = VFS_SEEK_SET;
 	klock.l_start = start;
 	klock.l_len = size;
 	
@@ -3956,7 +3100,7 @@ int sys_fcntl_setfl(int fd, int oflag)
 	};
 	
 	int allFlags = O_NONBLOCK;
-	fp->oflag = (fp->oflag & ~allFlags) | (oflag & allFlags);
+	fp->oflags = (fp->oflags & ~allFlags) | (oflag & allFlags);
 	vfsClose(fp);
 	return 0;
 };
@@ -3970,7 +3114,7 @@ int sys_fcntl_getfl(int fd)
 		return -1;
 	};
 	
-	int oflag = fp->oflag;
+	int oflag = fp->oflags;
 	vfsClose(fp);
 	return oflag;
 };
@@ -4002,37 +3146,75 @@ int sys_aclput(const char *upath, int type, int id, int perms)
 		ERRNO = EFAULT;
 		return -1;
 	};
-	
+
 	int error;
-	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
-
-	if (dir == NULL)
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, path, 0, &error);
+	if (dref.dent == NULL)
 	{
-		return sysOpenErrno(error);
-	};
-
-	if (dir->aclput == NULL)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EIO;
+		vfsUnrefDentry(dref);
+		ERRNO = error;
 		return -1;
 	};
-
-	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != dir->stat.st_uid)
-		&& !havePerm(XP_FSADMIN))
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
 	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EPERM;
+		ERRNO = error;
 		return -1;
 	};
-
-	int status = dir->aclput(dir, (uint8_t) type, (uint16_t) id, (uint8_t) perms);
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
-
-	return status;
+	
+	semWait(&iref.inode->lock);
+	if (iref.inode->uid != getCurrentThread()->creds->euid && !havePerm(XP_FSADMIN))
+	{
+		semSignal(&iref.inode->lock);
+		vfsUnrefInode(iref);
+		ERRNO = EACCES;
+		return -1;
+	};
+	
+	// first try to update the entry if it already exists
+	int found = 0;
+	int i;
+	for (i=0; i<VFS_ACL_SIZE; i++)
+	{
+		AccessControlEntry *ace = &iref.inode->acl[i];
+		if (ace->ace_type == type && ace->ace_id == id)
+		{
+			ace->ace_perms = perms;
+			found = 1;
+			break;
+		};
+	};
+	
+	if (!found)
+	{
+		// if not found, then find an empty slot and make a new entry
+		for (i=0; i<VFS_ACL_SIZE; i++)
+		{
+			AccessControlEntry *ace = &iref.inode->acl[i];
+			if (ace->ace_type == VFS_ACE_UNUSED)
+			{
+				ace->ace_id = id;
+				ace->ace_type = type;
+				found = 1;
+				break;
+			};
+		};
+	};
+	
+	if (!found)
+	{
+		// if still not found, then the ACL is overflowed
+		semSignal(&iref.inode->lock);
+		vfsUnrefInode(iref);
+		ERRNO = EOVERFLOW;
+		return -1;
+	};
+	
+	vfsDirtyInode(iref.inode);
+	semSignal(&iref.inode->lock);
+	vfsUnrefInode(iref);
+	return 0;
 };
 
 int sys_aclclear(const char *upath, int type, int id)
@@ -4055,44 +3237,100 @@ int sys_aclclear(const char *upath, int type, int id)
 		ERRNO = EFAULT;
 		return -1;
 	};
-	
+
 	int error;
-	Dir *dir = parsePath(path, VFS_CHECK_ACCESS, &error);
-
-	if (dir == NULL)
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, path, 0, &error);
+	if (dref.dent == NULL)
 	{
-		return sysOpenErrno(error);
-	};
-
-	if (dir->aclclear == NULL)
-	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EIO;
+		vfsUnrefDentry(dref);
+		ERRNO = error;
 		return -1;
 	};
-
-	if ((getCurrentThread()->creds->euid != 0) && (getCurrentThread()->creds->euid != dir->stat.st_uid)
-		&& !havePerm(XP_FSADMIN))
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
 	{
-		if (dir->close != NULL) dir->close(dir);
-		kfree(dir);
-		ERRNO = EPERM;
+		ERRNO = error;
 		return -1;
 	};
+	
+	semWait(&iref.inode->lock);
+	if (iref.inode->uid != getCurrentThread()->creds->euid && !havePerm(XP_FSADMIN))
+	{
+		semSignal(&iref.inode->lock);
+		vfsUnrefInode(iref);
+		ERRNO = EACCES;
+		return -1;
+	};
+	
+	int i;
+	for (i=0; i<VFS_ACL_SIZE; i++)
+	{
+		AccessControlEntry *ace = &iref.inode->acl[i];
+		if (ace->ace_type == type && ace->ace_id == id)
+		{
+			ace->ace_id = ace->ace_type = ace->ace_perms = 0;
+			break;
+		};
+	};
+	
+	vfsDirtyInode(iref.inode);
+	semSignal(&iref.inode->lock);
+	vfsUnrefInode(iref);
+	return 0;
+};
 
-	int status = dir->aclclear(dir, (uint8_t) type, (uint16_t) id);
-	if (dir->close != NULL) dir->close(dir);
-	kfree(dir);
+size_t sys_getdent(int fd, int key)
+{
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+	
+	struct kdirent *dirent;
+	ssize_t size = vfsReadDir(fp->iref.inode, key, &dirent);
+	if (size < 0)
+	{
+		vfsClose(fp);
+		ERRNO = -size;
+		return 0;
+	};
+	
+	vfsClose(fp);
+	
+	kfree(getCurrentThread()->ktu);
+	getCurrentThread()->ktu = dirent;
+	getCurrentThread()->ktusz = size;
+	return size;
+};
 
-	return status;
+int sys_getktu(void *buffer, size_t size)
+{
+	if (getCurrentThread()->ktusz != size)
+	{
+		ERRNO = EINVAL;
+		return -1;
+	};
+	
+	if (memcpy_k2u(buffer, getCurrentThread()->ktu, size) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	kfree(getCurrentThread()->ktu);
+	getCurrentThread()->ktu = NULL;
+	getCurrentThread()->ktusz = 0;
+	return 0;
 };
 
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 144
+#define SYSCALL_NUMBER 145
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -4123,7 +3361,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_kill,				// 26
 	&sys_insmod,				// 27
 	&sys_ioctl,				// 28
-	&sys_fdopendir,				// 29
+	&sys_getdent,				// 29
 	SYS_NULL,				// 30 (_glidix_diag())
 	&sys_mount,				// 31
 	&sys_yield,				// 32
@@ -4222,7 +3460,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_fpoll,				// 125
 	&sys_oxperm,				// 126
 	&sys_dxperm,				// 127
-	&sys_fsinfo,				// 128
+	&sys_fchxperm,				// 128
 	&sys_chxperm,				// 129
 	&sys_haveperm,				// 130
 	&sys_sync,				// 131
@@ -4238,6 +3476,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_fcntl_getfl,			// 141
 	&sys_aclput,				// 142
 	&sys_aclclear,				// 143
+	&sys_getktu,				// 144
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

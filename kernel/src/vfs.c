@@ -59,8 +59,7 @@ void vfsInit()
 	// but is the root of all kernel threads and the initial root of "init"
 	kernelRootFS = NEW(FileSystem);
 	memset(kernelRootFS, 0, sizeof(FileSystem));
-	kernelRootFS->refcount = 1;
-	kernelRootFS->numOpenInodes = 0;
+	kernelRootFS->numMounts = 1;
 	kernelRootFS->fsid = 0;
 	kernelRootFS->fstype = "krootfs";
 	kernelRootFS->regInode = rootRegInode;
@@ -87,7 +86,6 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 	Inode *inode = NEW(Inode);
 	memset(inode, 0, sizeof(Inode));
 	inode->refcount = 1;
-	inode->numMounts = 1;
 	semInit(&inode->lock);
 	inode->fs = fs;
 	inode->mode = mode;
@@ -123,6 +121,25 @@ void vfsDirtyInode(Inode *inode)
 	inode->flags |= VFS_INODE_DIRTY;
 };
 
+int vfsFlush(Inode *inode)
+{
+	// TODO: flush the file tree
+	
+	semWait(&inode->lock);
+	if (inode->flush != NULL)
+	{
+		if (inode->flush(inode) != 0)
+		{
+			int error = ERRNO;
+			semSignal(&inode->lock);
+			return error;
+		};
+	};
+	semSignal(&inode->lock);
+	
+	return 0;
+};
+
 void vfsUprefInode(Inode *inode)
 {
 	__sync_fetch_and_add(&inode->refcount, 1);
@@ -150,7 +167,6 @@ void vfsDownrefInode(Inode *inode)
 		
 		// having a refcount of zero implies that if this is a directory, its dentries are
 		// deleted too, so no need to free those.
-		if (inode->fs != NULL) vfsDownrefFileSystem(inode->fs);
 		if (inode->ft != NULL)
 		{
 			ftUp(inode->ft);
@@ -160,21 +176,6 @@ void vfsDownrefInode(Inode *inode)
 		
 		kfree(inode->target);
 		kfree(inode);
-	};
-};
-
-void vfsUprefFileSystem(FileSystem *fs)
-{
-	__sync_fetch_and_add(&fs->refcount, 1);
-};
-
-void vfsDownrefFileSystem(FileSystem *fs)
-{
-	if (__sync_add_and_fetch(&fs->refcount, -1) == 0)
-	{
-		kfree(fs->path);
-		kfree(fs->image);
-		kfree(fs);
 	};
 };
 
@@ -285,7 +286,6 @@ static void vfsCallInInode(Dentry *dent)
 
 InodeRef vfsGetDentryTarget(DentryRef dref)
 {
-	// TODO: cross mountpoints
 	vfsCallInInode(dref.dent);
 	if (dref.dent->target == NULL)
 	{
@@ -387,20 +387,40 @@ InodeRef vfsGetInode(DentryRef dref, int follow, int *error)
 
 InodeRef vfsGetRoot()
 {
-	// TODO: determine the current process root
-	vfsUprefInode(kernelRootInode);
+	Creds *creds = getCurrentThread()->creds;
+	if (creds == NULL)
+	{
+		vfsUprefInode(kernelRootInode);
 	
-	InodeRef iref;
-	iref.inode = kernelRootInode;
-	iref.top = NULL;
+		InodeRef iref;
+		iref.inode = kernelRootInode;
+		iref.top = NULL;
 	
-	return iref;
+		return iref;
+	}
+	else
+	{
+		semWait(&creds->semDir);
+		InodeRef iref = vfsCopyInodeRef(creds->rootdir);
+		semSignal(&creds->semDir);
+		return iref;
+	};
 };
 
 InodeRef vfsGetCurrentDir()
 {
-	// TODO: determine the current process working directory
-	return vfsGetRoot();
+	Creds *creds = getCurrentThread()->creds;
+	if (creds == NULL)
+	{
+		return vfsGetRoot();
+	}
+	else
+	{
+		semWait(&creds->semDir);
+		InodeRef iref = vfsCopyInodeRef(creds->cwd);
+		semSignal(&creds->semDir);
+		return iref;
+	};
 };
 
 DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
@@ -763,6 +783,28 @@ void vfsLinkInode(DentryRef dref, Inode *target)
 	semSignal(&target->lock);
 };
 
+void vfsBindInode(DentryRef dref, Inode *target)
+{
+	assert(dref.dent->ino == 0);
+	vfsUprefInode(target);
+	dref.dent->ino = target->ino;
+	dref.dent->target = target;
+	dref.dent->flags |= VFS_DENTRY_TEMP;
+	if (target->parent == NULL)
+	{
+		target->parent = dref.dent;
+		vfsUprefInode(dref.dent->dir);
+	};
+	
+	vfsDirtyInode(dref.dent->dir);
+	vfsUnrefDentry(dref);
+	
+	semWait(&target->lock);
+	target->links++;
+	vfsDirtyInode(target);
+	semSignal(&target->lock);
+};
+
 static void vfsLinkDown(Inode *inode)
 {
 	semWait(&inode->lock);
@@ -788,6 +830,13 @@ static void vfsLinkDown(Inode *inode)
 
 int vfsUnlinkInode(DentryRef dref, int flags)
 {
+	int allFlags = VFS_AT_REMOVEDIR;
+	if ((flags & ~allFlags) != 0)
+	{
+		vfsUnrefDentry(dref);
+		return EINVAL;
+	};
+	
 	if (dref.dent == kernelRootDentry || (dref.dent->flags & VFS_DENTRY_MNTPOINT))
 	{
 		vfsUnrefDentry(dref);
@@ -953,7 +1002,11 @@ int vfsMount(DentryRef dref, Inode *mntroot)
 	dref.dent->target = mntroot;
 	dref.dent->flags |= VFS_DENTRY_MNTPOINT;
 	vfsUprefInode(mntroot);
-	__sync_fetch_and_add(&mntroot->numMounts, 1);
+	__sync_fetch_and_add(&mntroot->fs->numMounts, 1);
+	
+	// increment the reference count of the inode holding the dentry. this will make it impossible
+	// to unmount a filesystem if there are other mountpoints under it (see vfsUnmount() ).
+	vfsUprefInode(dref.dent->dir);
 	
 	vfsUnrefDentry(dref);
 	if (oldTarget != NULL) vfsDownrefInode(oldTarget);
@@ -965,6 +1018,7 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 	DentryRef dref = vfsGetDentry(startdir, path, oflag & O_CREAT, error);
 	if (dref.dent == NULL)
 	{
+		vfsUnrefDentry(dref);
 		return NULL;
 	};
 	
@@ -1017,6 +1071,8 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 
 File* vfsOpenInode(InodeRef iref, int oflag, int *error)
 {
+	__sync_fetch_and_add(&iref.inode->numOpens, 1);
+		
 	void *filedata = NULL;
 	if (iref.inode->open != NULL)
 	{
@@ -1039,6 +1095,14 @@ File* vfsOpenInode(InodeRef iref, int oflag, int *error)
 	fp->oflags = oflag;
 	fp->refcount = 1;
 	
+	if (oflag & O_TRUNC)
+	{
+		if (iref.inode->ft != NULL)
+		{
+			ftTruncate(iref.inode->ft, 0);
+		};
+	};
+	
 	return fp;
 };
 
@@ -1056,6 +1120,7 @@ void vfsClose(File *fp)
 			fp->iref.inode->close(fp->iref.inode, fp->filedata);
 		};
 		
+		__sync_fetch_and_add(&fp->iref.inode->numOpens, -1);
 		vfsUnrefInode(fp->iref);
 		kfree(fp);
 	};
@@ -1175,4 +1240,833 @@ ssize_t vfsPWrite(File *fp, const void *buffer, size_t size, off_t offset)
 	ssize_t sz = vfsWriteUnlocked(fp, buffer, size, offset);
 	semSignal(&fp->lock);
 	return sz;
+};
+
+off_t vfsSeek(File *fp, off_t off, int whence)
+{
+	if (fp->iref.inode->ft == NULL)
+	{
+		ERRNO = ESPIPE;
+		return (off_t) -1;
+	};
+	
+	semWait(&fp->lock);
+	
+	off_t newOffset;
+	switch (whence)
+	{
+	case VFS_SEEK_CUR:
+		newOffset = fp->offset + off;
+		break;
+	case VFS_SEEK_END:
+		newOffset = fp->iref.inode->ft->size + off;
+		break;
+	case VFS_SEEK_SET:
+		newOffset = off;
+		break;
+	default:
+		semSignal(&fp->lock);
+		ERRNO = EINVAL;
+		return (off_t) -1;
+	};
+	
+	if (newOffset < 0)
+	{
+		semSignal(&fp->lock);
+		ERRNO = EINVAL;
+		return (off_t) -1;
+	};
+	
+	fp->offset = newOffset;
+	semSignal(&fp->lock);
+	return newOffset;
+};
+
+void vfsInodeStat(Inode *inode, struct kstat *st)
+{
+	semWait(&inode->lock);
+	if (inode->fs == NULL)
+	{
+		st->st_dev = 0;
+	}
+	else
+	{
+		st->st_dev = inode->fs->fsid;
+	};
+	
+	st->st_ino = inode->ino;
+	st->st_mode = inode->mode;
+	st->st_nlink = inode->links + inode->numOpens;
+	st->st_uid = inode->uid;
+	st->st_gid = inode->gid;
+	st->st_rdev = 0;
+	
+	if (inode->ft == NULL)
+	{
+		st->st_size = 0;
+	}
+	else
+	{
+		st->st_size = inode->ft->size;
+	};
+	
+	st->st_blksize = inode->blockSize;
+	st->st_blocks = inode->numBlocks;
+	st->st_atime = inode->atime;
+	st->st_mtime = inode->mtime;
+	st->st_ctime = inode->ctime;
+	st->st_ixperm = inode->ixperm;
+	st->st_oxperm = inode->oxperm;
+	st->st_dxperm = inode->dxperm;
+	st->st_btime = inode->btime;
+	memcpy(st->st_acl, inode->acl, sizeof(AccessControlEntry) * VFS_ACL_SIZE);
+	semSignal(&inode->lock);
+};
+
+int vfsStat(InodeRef startdir, const char *path, int follow, struct kstat *st)
+{
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, follow, &error);
+	if (iref.inode == NULL)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
+	vfsInodeStat(iref.inode, st);
+	vfsUnrefInode(iref);
+	return 0;
+};
+
+int vfsInodeChangeMode(Inode *inode, mode_t mode)
+{	
+	uid_t myUID;
+	if (getCurrentThread()->creds == NULL)
+	{
+		myUID = 0;
+	}
+	else
+	{
+		myUID = getCurrentThread()->creds->euid;
+	};
+
+	semWait(&inode->lock);	
+	if ((inode->uid != myUID) && !havePerm(XP_FSADMIN))
+	{
+		semSignal(&inode->lock);
+		ERRNO = EACCES;
+		return -1;
+	};
+	
+	inode->mode = (inode->mode & 0xF000) | (mode & 0x0FFF);
+	vfsDirtyInode(inode);
+	semSignal(&inode->lock);
+	return 0;
+};
+
+int vfsChangeMode(InodeRef startdir, const char *path, mode_t mode)
+{
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
+	int ret = vfsInodeChangeMode(iref.inode, mode);
+	error = ERRNO;
+	vfsUnrefInode(iref);
+	ERRNO = error;
+	return ret;
+};
+
+int vfsInodeChangeOwner(Inode *inode, uid_t uid, gid_t gid)
+{
+	semWait(&inode->lock);
+
+	uid_t myUID;
+	if (getCurrentThread()->creds == NULL)
+	{
+		myUID = 0;
+	}
+	else
+	{
+		myUID = getCurrentThread()->creds->euid;
+	};
+	
+	// check permissions
+	if (!havePerm(XP_FSADMIN))
+	{
+		if (uid != -1 || gid != -1)
+		{
+			if (uid != -1 && uid != inode->uid)
+			{
+				semSignal(&inode->lock);
+				ERRNO = EACCES;
+				return -1;
+			};
+			
+			if (gid != -1 && gid != inode->gid && myUID != inode->uid)
+			{
+				semSignal(&inode->lock);
+				ERRNO = EACCES;
+				return -1;
+			};
+		};
+	};
+	
+	// finally, change the owner/group
+	if (uid != -1) inode->uid = uid;
+	if (gid != -1) inode->gid = gid;
+	vfsDirtyInode(inode);
+	semSignal(&inode->lock);
+	return 0;
+};
+
+int vfsChangeOwner(InodeRef startdir, const char *path, uid_t uid, gid_t gid)
+{
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
+	int ret = vfsInodeChangeOwner(iref.inode, uid, gid);
+	error = ERRNO;
+	vfsUnrefInode(iref);
+	ERRNO = error;
+	return ret;
+};
+
+int vfsTruncate(Inode *inode, off_t size)
+{
+	if (size < -1)
+	{
+		return EINVAL;
+	};
+	
+	if (inode->ft == NULL)
+	{
+		return EINVAL;
+	};
+	
+	ftTruncate(inode->ft, (size_t) size);
+	return 0;
+};
+
+InodeRef vfsCopyInodeRef(InodeRef old)
+{
+	InodeRef new;
+	new.inode = old.inode;
+	new.top = NULL;
+	vfsUprefInode(new.inode);
+	
+	MountPoint *mnt;
+	MountPoint *bottom = NULL;
+	for (mnt=old.top; mnt!=NULL; mnt=mnt->prev)
+	{
+		MountPoint *copy = NEW(MountPoint);
+		copy->dent = mnt->dent;
+		vfsUprefInode(copy->dent->dir);
+		copy->root = mnt->root;
+		vfsUprefInode(copy->root);
+		copy->prev = NULL;
+		
+		if (bottom == NULL)
+		{
+			bottom = new.top = copy;
+		}
+		else
+		{
+			bottom->prev = copy;
+			bottom = copy;
+		};
+	};
+	
+	return new;
+};
+
+int vfsChangeDir(InodeRef startdir, const char *path)
+{
+	Creds *creds = getCurrentThread()->creds;
+	if (creds == NULL)
+	{
+		vfsUnrefInode(startdir);
+		return EPERM;
+	};
+	
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		return error;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
+	{
+		vfsUnrefInode(iref);
+		return error;
+	};
+	
+	if ((iref.inode->mode & VFS_MODE_TYPEMASK) != VFS_MODE_DIRECTORY)
+	{
+		vfsUnrefInode(iref);
+		return ENOTDIR;
+	};
+	
+	if (!vfsIsAllowed(iref.inode, VFS_ACE_EXEC))
+	{
+		vfsUnrefInode(iref);
+		return EACCES;
+	};
+	
+	semWait(&creds->semDir);
+	InodeRef old = creds->cwd;
+	creds->cwd = iref;
+	semSignal(&creds->semDir);
+	
+	vfsUnrefInode(old);
+	return 0;
+};
+
+typedef struct CompChain_
+{
+	char*			comp;
+	struct CompChain_*	next;
+} CompChain;
+
+static char* vfsRealPathRecur(InodeRef rootdir, CompChain *next, DentryRef dref)
+{
+	CompChain frame;
+	frame.comp = strdup(dref.dent->name);
+	frame.next = next;
+	
+	InodeRef parent = vfsGetDentryContainer(dref);
+	if (parent.inode == rootdir.inode)
+	{
+		// we reached the root directory and so we can now concatenate the
+		// components into a path.
+		size_t totalSize = 1;	// NUL byte
+		
+		CompChain *scan;
+		for (scan=frame.next; scan!=NULL; scan=scan->next)
+		{
+			totalSize += (1 + strlen(scan->comp));
+		};
+		
+		char *result = (char*) kmalloc(totalSize);
+		char *put = result;
+		for (scan=frame.next; scan!=NULL; scan=scan->next)
+		{
+			*put++ = '/';
+			strcpy(put, scan->comp);
+			put += strlen(scan->comp);
+		};
+		
+		*put = 0;
+		kfree(frame.comp);
+		return result;	
+	};
+	
+	if (parent.inode == kernelRootInode)
+	{
+		// we reached the kernel root without reaching the process root, meaning that the
+		// given dentry is unreachable.
+		kfree(frame.comp);
+		return strdup("(unreachable)");
+	};
+	
+	DentryRef updref = vfsGetParentDentry(parent);
+	char *result = vfsRealPathRecur(rootdir, &frame, updref);
+	kfree(frame.comp);
+	return result;
+};
+
+char* vfsRealPath(DentryRef dref)
+{
+	InodeRef rootdir = vfsGetRoot();
+	if (rootdir.inode == dref.dent->dir)
+	{
+		vfsUnrefInode(rootdir);
+		vfsUnrefDentry(dref);
+		return strdup("/");
+	};
+	
+	char *result = vfsRealPathRecur(rootdir, NULL, dref);
+	vfsUnrefInode(rootdir);
+	return result;
+};
+
+char* vfsGetCurrentDirPath()
+{
+	InodeRef cwd = vfsGetCurrentDir();
+	DentryRef dref = vfsGetParentDentry(cwd);
+	return vfsRealPath(dref);
+};
+
+int vfsCreateLink(InodeRef oldstart, const char *oldpath, InodeRef newstart, const char *newpath, int flags)
+{
+	int allFlags = VFS_AT_SYMLINK_FOLLOW;
+	if ((flags & ~allFlags) != 0)
+	{
+		vfsUnrefInode(oldstart);
+		vfsUnrefInode(newstart);
+		return EINVAL;
+	};
+	
+	int error;
+	DentryRef drefOld = vfsGetDentry(oldstart, oldpath, 0, &error);
+	if (drefOld.dent == NULL)
+	{
+		vfsUnrefDentry(drefOld);
+		vfsUnrefInode(newstart);
+		return error;
+	};
+	
+	int temp = drefOld.dent->flags & VFS_DENTRY_TEMP;
+	
+	InodeRef iref = vfsGetInode(drefOld, flags & VFS_AT_SYMLINK_FOLLOW, &error);
+	if (iref.inode == NULL)
+	{
+		vfsUnrefInode(newstart);
+		return error;
+	};
+	
+	if ((iref.inode->mode & VFS_MODE_TYPEMASK) == VFS_MODE_DIRECTORY)
+	{
+		vfsUnrefInode(newstart);
+		vfsUnrefInode(iref);
+		return EPERM;
+	};
+	
+	DentryRef drefNew = vfsGetDentry(newstart, newpath, 1, &error);
+	if (drefNew.dent == NULL)
+	{
+		vfsUnrefDentry(drefNew);
+		vfsUnrefInode(iref);
+		return error;
+	};
+	
+	if (drefNew.dent->ino != 0)
+	{
+		vfsUnrefInode(iref);
+		vfsUnrefDentry(drefNew);
+		return EEXIST;
+	};
+	
+	if (drefNew.dent->dir->fs != iref.inode->fs)
+	{
+		// cross-device link attempted
+		vfsRemoveDentry(drefNew);
+		vfsUnrefInode(iref);
+		return EXDEV;
+	};
+	
+	if (temp) vfsBindInode(drefNew, iref.inode);
+	else vfsLinkInode(drefNew, iref.inode);
+	vfsUnrefInode(iref);
+	return 0;
+};
+
+int vfsCreateSymlink(const char *oldpath, InodeRef newstart, const char *newpath)
+{
+	int error;
+	DentryRef dref = vfsGetDentry(newstart, newpath, 1, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		return error;
+	};
+	
+	if (dref.dent->ino != 0)
+	{
+		vfsUnrefDentry(dref);
+		return EEXIST;
+	};
+	
+	Inode *link = vfsCreateInode(dref.dent->dir->fs, VFS_MODE_LINK | 0777);
+	if (link == NULL)
+	{
+		vfsRemoveDentry(dref);
+		return ERRNO;
+	};
+	
+	link->target = strdup(oldpath);
+	
+	vfsLinkInode(dref, link);
+	vfsDownrefInode(link);
+	return 0;
+};
+
+char* vfsReadLinkPath(InodeRef startdir, const char *path)
+{
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return NULL;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 0, &error);
+	if (iref.inode == NULL)
+	{
+		ERRNO = error;
+		return NULL;
+	};
+	
+	if (iref.inode->target == NULL)
+	{
+		vfsUnrefInode(iref);
+		ERRNO = EINVAL;
+		return NULL;
+	};
+	
+	char *result = strdup(iref.inode->target);
+	vfsUnrefInode(iref);
+	return result;
+};
+
+int vfsInodeChangeTimes(Inode *inode, time_t atime, uint32_t anano, time_t mtime, uint32_t mnano)
+{
+	semWait(&inode->lock);
+
+	uid_t myUID;
+	if (getCurrentThread()->creds == NULL)
+	{
+		myUID = 0;
+	}
+	else
+	{
+		myUID = getCurrentThread()->creds->euid;
+	};
+
+	if (inode->uid == myUID || havePerm(XP_FSADMIN))
+	{
+		// the owner, or filesystem admin, can set any times they want
+		if (atime == 0)
+		{
+			atime = time();
+			anano = 0;
+		};
+		
+		if (mtime == 0)
+		{
+			mtime = time();
+			mnano = 0;
+		};
+		
+		inode->atime = atime;
+		inode->anano = anano;
+		inode->mtime = mtime;
+		inode->mnano = mnano;
+		inode->ctime = time();
+		inode->cnano = 0;
+	}
+	else if (vfsIsAllowed(inode, VFS_ACE_WRITE) && atime == 0 && mtime == 0)
+	{
+		inode->anano = inode->mnano = inode->cnano = 0;
+		inode->atime = inode->mtime = inode->ctime = time();
+	}
+	else
+	{
+		semSignal(&inode->lock);
+		if (atime == 0 && mtime == 0) ERRNO = EACCES;
+		else ERRNO = EPERM;
+		return -1;
+	};
+	
+	vfsDirtyInode(inode);
+	semSignal(&inode->lock);
+	return 0;
+};
+
+int vfsChangeTimes(InodeRef startdir, const char *path, time_t atime, uint32_t anano, time_t mtime, uint32_t mnano)
+{
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
+	int ret = vfsInodeChangeTimes(iref.inode, atime, anano, mtime, mnano);
+	error = ERRNO;
+	vfsUnrefInode(iref);
+	ERRNO = error;
+	return ret;
+};
+
+int vfsUnmount(const char *path, int flags)
+{
+	if (flags != 0)
+	{
+		return EINVAL;
+	};
+	
+	if (!havePerm(XP_MOUNT))
+	{
+		return EACCES;
+	};
+	
+	int error;
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		return error;
+	};
+	
+	if (dref.dent == kernelRootDentry)
+	{
+		// never unmount the kernel root or even try
+		vfsUnrefDentry(dref);
+		return EPERM;
+	};
+	
+	if ((dref.dent->flags & VFS_DENTRY_MNTPOINT) == 0)
+	{
+		vfsUnrefDentry(dref);
+		return EINVAL;
+	};
+	
+	FileSystem *fs = dref.dent->target->fs;
+	
+	if (fs->numMounts == 1)
+	{
+		// the last mount, we can safely lock it without causing a deadlock. also make sure
+		// that the inodes in this filesystem are all unused
+		semWait(&fs->lock);
+		
+		int foundBusy = 0;
+		Inode *scan;
+		for (scan=fs->imap; scan!=NULL; scan=scan->next)
+		{
+			// if the only reference to the inode is its placement and (for directories) all of its
+			// dentries, then nobody has it open.
+			int expectedCount = 1;
+			
+			if (semWaitGen(&scan->lock, 1, SEM_W_NONBLOCK, 0) != 1)
+			{
+				// if we couldn't immediately lock the inode, it means someone's using it
+				// (and we can't block waiting for them since most threads will lock the inode
+				// before locking the filesystem if necessary, so we could deadlock)
+				foundBusy = 1;
+				break;
+			};
+			
+			Dentry *dent;
+			for (dent=scan->dents; dent!=NULL; dent=dent->next)
+			{
+				expectedCount++;
+			};
+			
+			if (scan->refcount != expectedCount)
+			{
+				foundBusy = 1;
+				semSignal(&scan->lock);
+				break;
+			};
+			
+			semSignal(&scan->lock);
+		};
+		
+		if (foundBusy)
+		{
+			semSignal(&fs->lock);
+			vfsUnrefDentry(dref);
+			return EBUSY;
+		};
+		
+		// not busy, we can remove the filesystem.
+		// first flush and free all inodes
+		while (fs->imap != NULL)
+		{
+			scan = fs->imap;
+			fs->imap = scan->next;
+			
+			// TODO: perhaps offer some sort of flag that might allow for recovery when the flushing
+			// fails?
+			vfsFlush(scan);
+			
+			// delete all dentries
+			// do NOT downref their targets - they are on the imap and this loop will catch them.
+			// do not interfere with the loop!
+			while (scan->dents != NULL)
+			{
+				Dentry *dent = scan->dents;
+				scan->dents = dent->next;
+				
+				kfree(dent->name);
+				kfree(dent);
+				
+				vfsDownrefInode(scan);		// == dent->dir
+			};
+			
+			vfsDownrefInode(scan);
+		};
+		
+		if (fs->unmount != NULL) fs->unmount(fs);
+		kfree(fs->path);
+		kfree(fs->image);
+		kfree(fs);
+	}
+	else
+	{
+		__sync_fetch_and_add(&fs->numMounts, -1);
+	};
+
+	// making a mountpoint on a dentry uprefs its parent directory to ensure that filesystems holding other
+	// mountpoints cannot be unmounted (see vfsMount() ), so downref it here now that the mountpoint was removed
+	vfsDownrefInode(dref.dent->dir);
+	
+	dref.dent->target = NULL;
+	dref.dent->flags &= ~VFS_DENTRY_MNTPOINT;
+	vfsUnrefDentry(dref);
+	return 0;
+};
+
+struct Semaphore_* vfsGetConstSem()
+{
+	return &semConst;
+};
+
+int vfsInodeChangeXPerm(Inode *inode, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm)
+{
+	if (!havePerm(XP_CHXPERM))
+	{
+		ERRNO = EACCES;
+		return -1;
+	};
+	
+	if (ixperm != XP_NCHG)
+	{
+		if ((getCurrentThread()->dxperm & ixperm) != ixperm)
+		{
+			ERRNO = EACCES;
+			return -1;
+		};
+	};
+
+	if (oxperm != XP_NCHG)
+	{
+		if ((getCurrentThread()->dxperm & oxperm) != oxperm)
+		{
+			ERRNO = EACCES;
+			return -1;
+		};
+	};
+
+	if (dxperm != XP_NCHG)
+	{
+		if ((getCurrentThread()->dxperm & dxperm) != dxperm)
+		{
+			ERRNO = EACCES;
+			return -1;
+		};
+	};
+	
+	semWait(&inode->lock);
+	inode->ixperm = ixperm;
+	inode->oxperm = oxperm;
+	inode->dxperm = dxperm;
+	vfsDirtyInode(inode);
+	semSignal(&inode->lock);
+	
+	return 0;
+};
+
+int vfsChangeXPerm(InodeRef startdir, const char *path, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm)
+{
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
+	int ret = vfsInodeChangeXPerm(iref.inode, ixperm, oxperm, dxperm);
+	error = ERRNO;
+	vfsUnrefInode(iref);
+	ERRNO = error;
+	return ret;
+};
+
+ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out)
+{
+	semWait(&inode->lock);
+	
+	int haveHigher = 0;
+	Dentry *dent;
+	for (dent=inode->dents; dent!=NULL; dent=dent->next)
+	{
+		if (dent->key == key)
+		{
+			struct kdirent *dirent = (struct kdirent*) kmalloc(sizeof(struct kdirent) + strlen(dent->name) + 1);
+			memset(dirent, 0, sizeof(struct kdirent) + strlen(dent->name) + 1);
+			dirent->d_ino = dent->ino;
+			strcpy(dirent->d_name, dent->name);
+			*out = dirent;
+			semSignal(&inode->lock);
+			return sizeof(struct kdirent) + strlen(dirent->d_name) + 1;
+		};
+		
+		if (dent->key > key)
+		{
+			haveHigher = 1;
+		};
+	};
+	
+	semSignal(&inode->lock);
+	
+	if (haveHigher) return -ENOENT;
+	else return -EOVERFLOW;
 };

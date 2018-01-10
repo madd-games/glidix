@@ -38,9 +38,9 @@
 #include <glidix/ftree.h>
 #include <stddef.h>
 
-#define	SEEK_SET			0
-#define	SEEK_END			1
-#define	SEEK_CUR			2
+#define	VFS_SEEK_SET			0
+#define	VFS_SEEK_END			1
+#define	VFS_SEEK_CUR			2
 
 /**
  * Extra flags for st_mode (other than the permissions).
@@ -54,8 +54,13 @@
 #define	VFS_MODE_CHARDEV		0x2000
 #define	VFS_MODE_BLKDEV			0x3000
 #define	VFS_MODE_FIFO			0x4000
-#define	VFS_MODE_LINK			0x5000		/* soft link */
+#define	VFS_MODE_LINK			0x5000		/* symlink */
 #define	VFS_MODE_SOCKET			0x6000
+
+/**
+ * Mode type mask.
+ */
+#define	VFS_MODE_TYPEMASK		0xF000
 
 /**
  * Flags for the open() system call.
@@ -130,6 +135,7 @@
  * The AT_* flags.
  */
 #define	VFS_AT_REMOVEDIR		(1 << 0)
+#define	VFS_AT_SYMLINK_FOLLOW		(1 << 1)
 
 #define	VFS_ACL_SIZE			128
 
@@ -173,7 +179,8 @@ struct kstat
 struct kdirent
 {
 	ino_t				d_ino;
-	char				d_name[128];
+	char				d_resv[64];
+	char				d_name[];
 };
 
 /**
@@ -239,14 +246,13 @@ struct Inode_
 	 */
 	Inode* prev;
 	Inode* next;
-	 
+
 	/**
-	 * Number of times that this inode is mounted. Only relevant for directory inodes.
-	 * This is 1 for filesystem roots which are mounted in only one place, as well as
-	 * for normal directories (that are not mountpoints). Mount-binding a directory to
-	 * another location increments this value.
+	 * Number of file descriptions pointing at this inode. This is taken into account when
+	 * unmounting filesystems, to ensure that there are no open files when a filesystem is
+	 * being unmounted.
 	 */
-	int numMounts;
+	int numOpens;
 	
 	/**
 	 * The lock. Protects all mutable fields of this structure. It is also held when
@@ -284,8 +290,8 @@ struct Inode_
 	mode_t mode;
 	
 	/**
-	 * Number of links to this inode. This is the number of file descriptions referring
-	 * to it, plus the number of hard links on disk.
+	 * Number of links to this inode. This is the number of hard links on the disk; 'numOpens'
+	 * is for counting open file descriptors.
 	 */
 	nlink_t links;
 	
@@ -305,6 +311,11 @@ struct Inode_
 	 * File times.
 	 */
 	time_t atime, mtime, ctime, btime;
+	
+	/**
+	 * Nanosecond additions to the file times.
+	 */
+	uint32_t anano, mnano, cnano, bnano;
 	
 	/**
 	 * Executable permissions.
@@ -459,14 +470,9 @@ struct FileSystem_
 	void*					fsdata;
 	
 	/**
-	 * Reference count.
+	 * Number of mount points at which this filesystem is mounted.
 	 */
-	int					refcount;
-	
-	/**
-	 * Number of open inodes.
-	 */
-	int					numOpenInodes;
+	int					numMounts;
 	
 	/**
 	 * Filesystem ID.
@@ -720,7 +726,7 @@ InodeRef vfsGetDentryTarget(DentryRef dref);
 
 /**
  * Get an inode given its dentry. If 'follow' is 1, then symbolic links are followed; otherwise
- * they're not.
+ * they're not. The reference is revoked whether successful or not.
  */
 InodeRef vfsGetInode(DentryRef dent, int follow, int *error);
 
@@ -728,6 +734,13 @@ InodeRef vfsGetInode(DentryRef dent, int follow, int *error);
  * Mark an inode as dirty, and perhaps flush it. Call this only when the inode is locked!
  */
 void vfsDirtyInode(Inode *inode);
+
+/**
+ * Flush an inode. This commits it to disk, along with all of its data. Call this when the inode
+ * is NOT locked, as this function locks the inode. Returns 0 on success, or an error number on
+ * error. Flushing errors typically cannot be recovered from.
+ */
+int vfsFlush(Inode *inode);
 
 /**
  * Return the inode representing the current root directory, and upref it. You must call
@@ -806,6 +819,11 @@ void vfsUnrefInode(InodeRef iref);
 void vfsLinkInode(DentryRef dent, Inode* target);
 
 /**
+ * Similar to vfsLinkInode(), but the dentry is not committed to disk.
+ */
+void vfsBindInode(DentryRef dent, Inode* target);
+
+/**
  * Unlink the target inode of the dentry. This sets 'ino' to 0. Returns 0 on success, or an error number
  * on error (e.g. if a directory is not empty).
  *
@@ -871,6 +889,133 @@ ssize_t vfsRead(File *fp, void *buffer, size_t size);
 ssize_t vfsPRead(File *fp, void *buffer, size_t size, off_t offset);
 ssize_t vfsWrite(File *fp, const void *buffer, size_t size);
 ssize_t vfsPWrite(File *fp, const void *buffer, size_t size, off_t offset);
+
+/**
+ * Seek a file.
+ */
+off_t vfsSeek(File *fp, off_t off, int whence);
+
+/**
+ * Fill out the stat structure with information about an inode.
+ */
+void vfsInodeStat(Inode *inode, struct kstat *st);
+
+/**
+ * Get the stat about a path. Returns 0 on success (and 'st' is filled) or -1 on error and sets ERRNO.
+ *	startdir	Starting directory for searches (or VFS_NULL_IREF for default)
+ *	path		Path to the inode to retrieve information about.
+ *	follow		If 1, and 'path' refers to a symbolic link, follow it; otherwise return info about
+ *			the symbolic link itself.
+ *	st		The struct kstat to fill in.
+ */
+int vfsStat(InodeRef startdir, const char *path, int follow, struct kstat *st);
+
+/**
+ * Change the mode of an inode.
+ */
+int vfsInodeChangeMode(Inode *inode, mode_t mode);
+
+/**
+ * Change the mode of a file.
+ */
+int vfsChangeMode(InodeRef startdir, const char *path, mode_t mode);
+
+/**
+ * Change the owner/group of an inode.
+ */
+int vfsInodeChangeOwner(Inode *inode, uid_t uid, gid_t gid);
+
+/**
+ * Change the owner/group of a file.
+ */
+int vfsChangeOwner(InodeRef startdir, const char *path, uid_t uid, gid_t gid);
+
+/**
+ * Truncate/expand an inode to the specified size. Returns 0 on success or error number on error.
+ */
+int vfsTruncate(Inode *inode, off_t size);
+
+/**
+ * Make a copy of an inode reference.
+ */
+InodeRef vfsCopyInodeRef(InodeRef iref);
+
+/**
+ * Change working directory. Return 0 on success, error number on error.
+ */
+int vfsChangeDir(InodeRef iref, const char *path);
+
+/**
+ * Return the absolute path to the specified dentry, as a string on the heap. Remember to free
+ * it using kfree() later. This revokes the reference.
+ */
+char* vfsRealPath(DentryRef dref);
+
+/**
+ * Get the current working directory string, on the heap. Remember to release with kfree().
+ */
+char* vfsGetCurrentDirPath();
+
+/**
+ * Create a hard link to the "old" path at the "new" path. Implements linkat() from POSIX. Returns
+ * 0 on success, or an error number on error.
+ */
+int vfsCreateLink(InodeRef oldstart, const char *oldpath, InodeRef newstart, const char *newpath, int flags);
+
+/**
+ * Create a symbolic link to the "old" path at the "new" path. Implements symlinkat() from POSIX. Returns
+ * 0 on success, or an error number on error. Whatever the old path is, it is simply stored as-is in the
+ * symlink inode; no checking whether the file exists is actually performed.
+ */
+int vfsCreateSymlink(const char *oldpath, InodeRef newstart, const char *newpath);
+
+/**
+ * Read the target of a symbolic link, returning it as a string on the heap. Remember to free it using kfree().
+ * Returns NULL on error, and sets ERRNO.
+ */
+char* vfsReadLinkPath(InodeRef startdir, const char *path);
+
+/**
+ * Change the times associated with the specified inode. Performs all necessary permission checks. This implements
+ * POSIX utime(), utimes(), and all the related functions. Returns 0 on success or -1 on error and sets ERRNO.
+ */
+int vfsInodeChangeTimes(Inode *inode, time_t atime, uint32_t anano, time_t mtime, uint32_t mnano);
+
+/**
+ * Change the times associated with the file at the specified path. Indirectly used to implement POSIX utime()
+ * etc. Returns 0 on success, or -1 on error and sets ERRNO.
+ */
+int vfsChangeTimes(InodeRef startdir, const char *path, time_t atime, uint32_t anano, time_t mtime, uint32_t mnano);
+
+/**
+ * Unmount the filesystem from the mountpoint at the specified path. Return 0 on success or an error number on error.
+ */
+int vfsUnmount(const char *path, int flags);
+
+/**
+ * Returns a pointer to a semaphore which always has value 1.
+ */
+struct Semaphore_* vfsGetConstSem();
+
+/**
+ * Change the executable permissions on an inode. Returns 0 on success or -1 on error and sets ERRNO.
+ */
+int vfsInodeChangeXPerm(Inode *inode, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm);
+
+/**
+ * Change the executable permissions on a path.
+ */
+int vfsChangeXPerm(InodeRef startdir, const char *path, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm);
+
+/**
+ * Given an inode representing a directory, and a key for a dentry, return the 'struct kdirent' for it. On error,
+ * returns the error number as a negative, otherwise return the size of the 'struct kdirent', and store a pointer
+ * to it at *out. The pointer is on the heap; you must release it using kfree().
+ *
+ * Returns -ENOENT if there is no dentry for the key, but if there are dentries for higher keys (and you should try
+ * them). Returns -EOVERFLOW if there is no dentry for the given key, or any higher one.
+ */
+ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out);
 
 // === SNIP SNAP === //
 #if 0
