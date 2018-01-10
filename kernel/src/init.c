@@ -58,7 +58,6 @@
 #include <glidix/dma.h>
 #include <glidix/cpu.h>
 #include <glidix/ptty.h>
-#include <glidix/ramfs.h>
 #include <glidix/usb.h>
 #include <glidix/pageinfo.h>
 #include <glidix/ftree.h>
@@ -494,7 +493,14 @@ void kmain2()
 {	
 	initMount();
 	initSymtab();
-	ramfsInit();
+	
+	kprintf("Creating /run... \n");
+	if (vfsMakeDir(VFS_NULL_IREF, "/run", 0755) != 0)
+	{
+		FAILED();
+		panic("could not create /run");
+	};
+	DONE();
 	
 	kprintf("Initializing ACPICA...\n");
 	
