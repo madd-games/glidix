@@ -160,6 +160,13 @@ int vmNew()
 	return 0;
 };
 
+static FileTree* getTree(File *fp)
+{
+	FileTree *ft = fp->iref.inode->ft;
+	ftUp(ft);
+	return ft;
+};
+
 uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t off)
 {
 	//vmDump(getCurrentThread()->pm, addr);
@@ -195,14 +202,14 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 		// the creator of an anonymous mapipng may both read and write it
 		access = O_RDWR;
 	}
-	else if (fp->tree == NULL)
+	else if (fp->iref.inode->ft == NULL)
 	{
 		// this file cannot be mapped
 		return ENODEV;
 	}
 	else
 	{
-		access = fp->oflag & O_RDWR;
+		access = fp->oflags & O_RDWR;
 	};
 	
 	if (flags & MAP_ANON)
@@ -299,7 +306,7 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 			
 			// just modify the existing segment
 			seg->ft = NULL;
-			if (fp != NULL) seg->ft = fp->tree(fp);
+			if (fp != NULL) seg->ft = getTree(fp);
 			if (anonShared) seg->ft = ftCreate(FT_ANON);
 			seg->offset = off;
 			seg->creator = creator;
@@ -330,7 +337,7 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 			
 			newSeg->numPages = numPages;
 			newSeg->ft = NULL;
-			if (fp != NULL) newSeg->ft = fp->tree(fp);
+			if (fp != NULL) newSeg->ft = getTree(fp);
 			if (anonShared) seg->ft = ftCreate(FT_ANON);
 			newSeg->offset = off;
 			newSeg->creator = creator;
@@ -394,7 +401,7 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 			};
 			
 			seg->ft = NULL;
-			if (fp != NULL) seg->ft = fp->tree(fp);
+			if (fp != NULL) seg->ft = getTree(fp);
 			if (anonShared) seg->ft = ftCreate(FT_ANON);
 			seg->offset = off;
 			seg->creator = creator;
@@ -485,7 +492,7 @@ uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, File *fp, off_t o
 			
 			if (seg->ft != NULL) ftDown(seg->ft);
 			seg->ft = NULL;
-			if (fp != NULL) seg->ft = fp->tree(fp);
+			if (fp != NULL) seg->ft = getTree(fp);
 			if (anonShared) seg->ft = ftCreate(FT_ANON);
 			seg->offset = off;
 			seg->creator = creator;
