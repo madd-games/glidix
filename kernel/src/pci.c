@@ -424,40 +424,16 @@ void pciInit()
 
 void pciInitACPI()
 {
-	int error;
-	File *fp = vfsOpen("/initrd/pciroute", 0, &error);
-	if (fp == NULL)
+	void *retval;
+	ACPI_STATUS status = AcpiGetDevices(NULL, pciWalkCallback, NULL, &retval);
+	if (status != AE_OK)
 	{
-		void *retval;
-		ACPI_STATUS status = AcpiGetDevices(NULL, pciWalkCallback, NULL, &retval);
-		if (status != AE_OK)
-		{
-			panic("AcpiGetDevices failed");
-		};
-	
-		if (!foundRootBridge)
-		{
-			panic("failed to find PCI root bridge");
-		};
-	}
-	else
+		panic("AcpiGetDevices failed");
+	};
+
+	if (!foundRootBridge)
 	{
-		kprintf("PCI: Using manual routing from initrd!\n");
-		
-		PCIRouteEntry entry;
-		while (vfsRead(fp, &entry, sizeof(PCIRouteEntry)) == sizeof(PCIRouteEntry))
-		{
-			if (entry.pinAndType & 0x80)
-			{
-				pciMapInterruptFromIRQ(entry.bus, entry.dev, entry.pinAndType & 3, entry.intNo);
-			}
-			else
-			{
-				pciMapInterruptFromGSI(entry.bus, entry.dev, entry.pinAndType & 3, entry.intNo);
-			};
-		};
-		
-		vfsClose(fp);
+		panic("failed to find PCI root bridge");
 	};
 	
 	pciIntInitDone = 1;
