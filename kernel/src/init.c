@@ -494,7 +494,7 @@ void kmain2()
 	initMount();
 	initSymtab();
 	
-	kprintf("Creating /run... \n");
+	kprintf("Creating /run... ");
 	if (vfsMakeDir(VFS_NULL_IREF, "/run", 0755) != 0)
 	{
 		FAILED();
