@@ -698,7 +698,7 @@ int sys_unlink(const char *upath)
 		return -1;
 	};
 	
-	int status = vfsUnlinkDentry(dref, 0);
+	int status = vfsUnlinkInode(dref, 0);
 	if (status != 0)
 	{
 		ERRNO = status;
