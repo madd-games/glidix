@@ -1930,11 +1930,19 @@ int vfsUnmount(const char *path, int flags)
 			
 			// delete all dentries
 			// do NOT downref their targets - they are on the imap and this loop will catch them.
-			// do not interfere with the loop!
+			// do not interfere with the loop! except if they belong to another filesystem then yes
 			while (scan->dents != NULL)
 			{
 				Dentry *dent = scan->dents;
 				scan->dents = dent->next;
+				
+				if (dent->target != NULL)
+				{
+					if (dent->target->fs != fs)
+					{
+						vfsDownrefInode(dent->target);
+					};
+				};
 				
 				kfree(dent->name);
 				kfree(dent);
