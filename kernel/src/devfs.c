@@ -35,6 +35,70 @@
 #include <glidix/random.h>
 #include <glidix/console.h>
 
+static ssize_t null_pread(Inode *inode, File *fp, void *buffer, size_t size, off_t offset)
+{
+	return 0;
+};
+
+static ssize_t null_pwrite(Inode *inode, File *fp, const void *buffer, size_t size, off_t offset)
+{
+	return (ssize_t) size;
+};
+
+static ssize_t zero_pread(Inode *inode, File *fp, void *buffer, size_t size, off_t offset)
+{
+	memset(buffer, 0, size);
+	return (ssize_t) size;
+};
+
+static ssize_t zero_pwrite(Inode *inode, File *fp, const void *buffer, size_t size, off_t offset)
+{
+	return (ssize_t) size;
+};
+
+static ssize_t random_pread(Inode *inode, File *fp, void *buffer, size_t size, off_t offset)
+{
+	uint64_t *put = (uint64_t*) buffer;
+	ssize_t out = 0;
+	while (size >= 8)
+	{
+		*put++ = getRandom();
+		size -= 8;
+		out += 8;
+	};
+	
+	if (size != 0)
+	{
+		uint64_t final = getRandom();
+		memcpy(put, &final, size);
+		out += size;
+	};
+	
+	return out;
+};
+
+static ssize_t random_pwrite(Inode *inode, File *fp, const void *buffer, size_t size, off_t offset)
+{
+	const uint64_t *scan = (const uint64_t*) buffer;
+	ssize_t out = 0;
+	while (size >= 8)
+	{
+		feedRandom(*scan++);
+		size -= 8;
+		out += 8;
+	};
+	
+	if (size != 0)
+	{
+		uint64_t final = getRandom();
+		memcpy(&final, scan, size);
+		feedRandom(final);
+		out += size;
+	};
+	
+	return out;
+};
+
 void initDevfs()
 {
 	kprintf("Creating /dev... ");
@@ -44,6 +108,44 @@ void initDevfs()
 		panic("could not create /dev");
 	};
 	
+	DONE();
+	
+	kprintf("Creating /dev/null... ");
+	Inode *inodeNull = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0666);
+	inodeNull->pread = null_pread;
+	inodeNull->pwrite = null_pwrite;
+	if (devfsAdd("null", inodeNull) != 0)
+	{
+		FAILED();
+		panic("could not register /dev/null");
+	};
+	DONE();
+	
+	kprintf("Creating /dev/zero... ");
+	Inode *inodeZero = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0666);
+	inodeZero->pread = zero_pread;
+	inodeZero->pwrite = zero_pwrite;
+	if (devfsAdd("zero", inodeZero) != 0)
+	{
+		FAILED();
+		panic("could not register /dev/null");
+	};
+	DONE();
+	
+	kprintf("Creating /dev/random and /dev/urandom... ");
+	Inode *inodeRandom = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0644);
+	inodeRandom->pread = random_pread;
+	inodeRandom->pwrite = random_pwrite;
+	if (devfsAdd("random", inodeRandom) != 0)
+	{
+		FAILED();
+		panic("could not register /dev/random");
+	};
+	if (devfsAdd("urandom", inodeRandom) != 0)
+	{
+		FAILED();
+		panic("could not register /dev/urandom");
+	};
 	DONE();
 };
 
