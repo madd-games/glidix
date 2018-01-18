@@ -48,6 +48,13 @@ InodeRef VFS_NULL_IREF = {NULL, NULL};
 static int rootRegInode(FileSystem *fs, Inode *inode)
 {
 	inode->ino = __sync_fetch_and_add(&nextRootIno, 1);
+	
+	if ((inode->mode & VFS_MODE_TYPEMASK) == 0)
+	{
+		// create caches for regular files
+		inode->ft = ftCreate(0);
+	};
+	
 	return 0;
 };
 
