@@ -187,7 +187,8 @@ void devfsRemove(const char *name)
 	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, fullpath, 0, &error);
 	if (dref.dent == NULL)
 	{
-		panic("devfsRemove: unexpected attempt to remove nonexistent device file `%s'", name);
+		vfsUnrefDentry(dref);
+		return;
 	};
 	
 	vfsUnlinkInode(dref, 0);

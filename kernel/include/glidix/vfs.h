@@ -366,7 +366,7 @@ struct Inode_
 	 * If open() is implemented, it must return non-NULL on success. If it returns NULL, it must
 	 * also set ERRNO, and the open is rejected in this case.
 	 */
-	void* (*open)(Inode *inode, int oflag);
+	void* (*open)(Inode *inode, int oflags);
 	void (*close)(Inode *inode, void *filedata);
 	
 	/**

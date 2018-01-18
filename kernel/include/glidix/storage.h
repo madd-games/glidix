@@ -184,7 +184,8 @@ typedef struct
 	 * Device letter (a-z), needs to be freed when we hang up.
 	 */
 	char					letter;
-	
+
+#if 0
 	/**
 	 * Master device file (which represents the whole disk).
 	 */
@@ -195,7 +196,8 @@ typedef struct
 	 */
 	size_t					numSubs;
 	Device*					devSubs;
-	
+#endif
+
 	/**
 	 * Command queue.
 	 */
