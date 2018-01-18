@@ -45,6 +45,12 @@ static ino_t nextRootIno = 2;
 DentryRef VFS_NULL_DREF = {NULL, NULL};
 InodeRef VFS_NULL_IREF = {NULL, NULL};
 
+static int rootfs_load(FileTree *ft, off_t pos, void *buffer)
+{
+	// do nothing; leave zeroed out
+	return 0;
+};
+
 static int rootRegInode(FileSystem *fs, Inode *inode)
 {
 	inode->ino = __sync_fetch_and_add(&nextRootIno, 1);
@@ -53,6 +59,7 @@ static int rootRegInode(FileSystem *fs, Inode *inode)
 	{
 		// create caches for regular files
 		inode->ft = ftCreate(0);
+		inode->ft->load = rootfs_load;
 	};
 	
 	return 0;
