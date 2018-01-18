@@ -33,6 +33,5 @@
 #include <glidix/vfs.h>
 
 void initInitrdfs(KernelBootInfo *info);
-FileSystem *getInitrdfs();
 
 #endif
