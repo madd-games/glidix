@@ -354,6 +354,12 @@ typedef struct
 	 * 8 pixels from the sprite.
 	 */
 	uint32_t				imgButton;
+	
+	/**
+	 * Checkbox graphics. It's a grid of 20x20 cells. The rows are: normal, hovered, clicked,
+	 * disabled. The columns are: unchcked, checked, mixed/tristate.
+	 */
+	uint32_t				imgCheckbox;
 } GWMInfo;
 
 /**
@@ -1385,6 +1391,16 @@ void gwmSetListenWindow(GWMWindow *win);
  * Creates a new checkbox in the specified window.
  */
 GWMWindow *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int flags);
+
+/**
+ * Creates a checkbox in the specified window. This call should be followed by property-setting functions.
+ */
+GWMWindow *gwmNewCheckbox(GWMWindow *parent);
+
+/**
+ * Set the label on a checkbox.
+ */
+void gwmSetCheckboxLabel(GWMWindow *checkbox, const char *text);
 
 /**
  * Destroys a checkbox.

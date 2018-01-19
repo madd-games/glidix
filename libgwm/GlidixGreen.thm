@@ -45,5 +45,6 @@ namespace gwm {
 	namespace toolkit {
 		image mbicons /usr/share/images/mbicons.png
 		image button /usr/share/images/button.png
+		image checkbox /usr/share/images/checkbox.png
 	}
 }

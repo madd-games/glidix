@@ -61,6 +61,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.tools.shutdown",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgShutdown)},
 	{"gwm.toolkit.mbicons",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgMessageIcons)},
 	{"gwm.toolkit.button",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgButton)},
+	{"gwm.toolkit.checkbox",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCheckbox)},
 	
 	// LIST TERMINATOR
 	{NULL, 0, 0}
@@ -210,6 +211,25 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawButton(surf, 0, 60, 17, 30, &buttonNormal, 1);
 	drawButton(surf, 0, 90, 17, 30, &buttonDisabled, 0);
 	
+	// checkbox
+	surf = surfaceSetup(format, &info->imgCheckbox, 60, 80);
+	if (surf == NULL) return -1;
+	static DDIColor cbUnchecked = {0xFF, 0x00, 0x00, 0xFF};
+	static DDIColor cbChecked = {0x00, 0xFF, 0x00, 0xFF};
+	static DDIColor cbTristate = {0x00, 0x00, 0xFF, 0xFF};
+	drawButton(surf, 0, 0, 20, 20, &cbUnchecked, 0);
+	drawButton(surf, 0, 20, 20, 20, &cbUnchecked, 0);
+	drawButton(surf, 0, 40, 20, 20, &cbUnchecked, 1);
+	drawButton(surf, 0, 60, 20, 20, &buttonDisabled, 1);
+	drawButton(surf, 20, 0, 20, 20, &cbChecked, 0);
+	drawButton(surf, 20, 20, 20, 20, &cbChecked, 0);
+	drawButton(surf, 20, 40, 20, 20, &cbChecked, 1);
+	drawButton(surf, 20, 60, 20, 20, &buttonDisabled, 1);
+	drawButton(surf, 40, 0, 20, 20, &cbTristate, 0);
+	drawButton(surf, 40, 20, 20, 20, &cbTristate, 0);
+	drawButton(surf, 40, 40, 20, 20, &cbTristate, 1);
+	drawButton(surf, 40, 60, 20, 20, &buttonDisabled, 1);
+
 	munmap(addr, sizeof(GWMInfo));
 	return 0;
 };

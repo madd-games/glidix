@@ -32,9 +32,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define	CB_WIDTH				20
-#define	CB_HEIGHT				20
-
 enum
 {
 	CB_MSTATE_NORMAL,
@@ -49,11 +46,15 @@ typedef struct
 	int					state;
 	int					mstate;
 	int					flags;
+	char*					text;
+	int					minWidth;
 } GWMCheckboxData;
+
+int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox, void *context);
 
 static void gwmRedrawCheckbox(GWMWindow *checkbox)
 {
-	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
+	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(checkbox);
 	
 	static DDIColor transparent = {0, 0, 0, 0};
@@ -67,22 +68,34 @@ static void gwmRedrawCheckbox(GWMWindow *checkbox)
 	
 	if (imgCheckbox == NULL)
 	{
-		const char *error;
-		imgCheckbox = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/checkbox.png", &error);
+		imgCheckbox = (DDISurface*) gwmGetThemeProp("gwm.toolkit.checkbox", GWM_TYPE_SURFACE, NULL);
 		if (imgCheckbox == NULL)
 		{
-			fprintf(stderr, "Failed to load checkbox image (/usr/share/images/checkbox.png): %s\n", error);
+			fprintf(stderr, "Failed to load checkbox image\n");
 			abort();
 		};
 	};
 	
-	ddiBlit(imgCheckbox, CB_WIDTH*data->state, CB_HEIGHT*whichY, canvas, 0, 0, CB_WIDTH, CB_HEIGHT);
+	ddiBlit(imgCheckbox, 20*data->state, 20*whichY, canvas, 0, 0, 20, 20);
+
+	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height, 0, 0, NULL);
+	ddiSetPenWrap(pen, 0);
+	ddiWritePen(pen, data->text);
+	
+	int txtWidth, txtHeight;
+	ddiGetPenSize(pen, &txtWidth, &txtHeight);
+	ddiSetPenPosition(pen, 22, 10-(txtHeight/2));
+	ddiExecutePen(pen, canvas);
+	ddiDeletePen(pen);
+	
+	data->minWidth = txtWidth + 22;
+
 	gwmPostDirty(checkbox);
 };
 
 int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox, void *context)
 {
-	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
+	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
 	
 	switch (ev->type)
 	{
@@ -124,45 +137,76 @@ int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox, void *context)
 	};
 };
 
+static void gwmSizeCheckbox(GWMWindow *checkbox, int *width, int *height)
+{
+	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
+	*width = data->minWidth;
+	*height = 20;
+};
+
+static void gwmPositionCheckbox(GWMWindow *checkbox, int x, int y, int width, int height)
+{
+	y += (height - 20) / 2;
+	gwmMoveWindow(checkbox, x, y);
+	gwmResizeWindow(checkbox, width, 20);
+	gwmRedrawCheckbox(checkbox);
+};
+
 GWMWindow *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int flags)
 {
-	GWMWindow *checkbox = gwmCreateWindow(parent, "GWMCheckbox", x, y, CB_WIDTH, CB_HEIGHT, 0);
+	GWMWindow *checkbox = gwmCreateWindow(parent, "GWMCheckbox", x, y, 0, 0, 0);
 	if (checkbox == NULL) return NULL;
 	
 	GWMCheckboxData *data = (GWMCheckboxData*) malloc(sizeof(GWMCheckboxData));
-	checkbox->data = data;
-	
 	data->flags = flags;
 	data->state = state;
 	data->mstate = CB_MSTATE_NORMAL;
+	data->text = strdup("");
+	data->minWidth = 20;
 	
+	checkbox->getMinSize = checkbox->getPrefSize = gwmSizeCheckbox;
+	checkbox->position = gwmPositionCheckbox;
+
+	gwmPushEventHandler(checkbox, gwmCheckboxHandler, data);
 	gwmRedrawCheckbox(checkbox);
-	gwmPushEventHandler(checkbox, gwmCheckboxHandler, NULL);
 	return checkbox;
+};
+
+GWMWindow *gwmNewCheckbox(GWMWindow *parent)
+{
+	return gwmCreateCheckbox(parent, 0, 0, 0, 0);
+};
+
+void gwmSetCheckboxLabel(GWMWindow *checkbox, const char *text)
+{
+	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
+	free(data->text);
+	data->text = strdup(text);
+	gwmRedrawCheckbox(checkbox);
 };
 
 void gwmDestroyCheckbox(GWMWindow *checkbox)
 {
-	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
+	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
 	free(data);
 	gwmDestroyWindow(checkbox);
 };
 
 void gwmSetCheckboxFlags(GWMWindow *checkbox, int flags)
 {
-	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
+	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
 	data->flags = flags;
 	gwmRedrawCheckbox(checkbox);
 };
 
 int gwmGetCheckboxState(GWMWindow *checkbox)
 {
-	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
+	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
 	return data->state;
 };
 
 void gwmSetCheckboxState(GWMWindow *checkbox, int state)
 {
-	GWMCheckboxData *data = (GWMCheckboxData*) checkbox->data;
+	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
 	data->state = state;
 };
