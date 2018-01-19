@@ -26,8 +26,17 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <libddi.h>
 #include <libgwm.h>
 #include <stdio.h>
+#include <assert.h>
+
+enum
+{
+	SYM_BUTTON1 = GWM_SYM_USER,
+	SYM_BUTTON2,
+	SYM_BUTTON3,
+};
 
 int main()
 {
@@ -36,52 +45,51 @@ int main()
 		fprintf(stderr, "Failed to initialize GWM!\n");
 		return 1;
 	};
-#if 0
-	GWMWindow *win = gwmCreateWindow(NULL, "GWM Test", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0,
-					GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
-	DDISurface *canvas = gwmGetWindowCanvas(win);
 	
-	GWMLayout *box = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
-	gwmSetWindowLayout(win, box);
+	GWMWindow *topWindow = gwmCreateWindow(
+		NULL,						// window parent (none)
+		"Tutorial Part 3",				// window caption
+		GWM_POS_UNSPEC, GWM_POS_UNSPEC,			// window coordinates unspecified
+		0, 0,						// window size (will be set later by gwmFit() )
+		GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR	// hidden, no taskbar icon
+	);
+	assert(topWindow != NULL);
 	
-	DDISurface *testSurf = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/mbicons.png", NULL);
-	
-	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_YES), 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
-	gwmBoxLayoutAddWindow(box, gwmCreateImage(win, testSurf, 32, 0, 32, 32), 0, 5, GWM_BOX_ALL);
-	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_NO), 1, 5, GWM_BOX_ALL | GWM_BOX_FILL);
-	gwmBoxLayoutAddWindow(box, gwmCreateLabel(win, "Hello world", 0), 0, 5, GWM_BOX_ALL);
-	gwmBoxLayoutAddWindow(box, gwmCreateStockButton(win, GWM_SYM_CANCEL), 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
+	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(topWindow, boxLayout);
 
-	gwmFit(win);
-	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
-	
-	GWMGlobWinRef ref;
-	gwmGetGlobRef(win, &ref);
-	DDISurface *shot = gwmScreenshotWindow(&ref);
-	if (shot == NULL)
-	{
-		fprintf(stderr, "screenshot failed!\n");
-	}
-	else
-	{
-		ddiSavePNG(shot, "shot.png", NULL);
-	};
-#endif
+	GWMWindow *button1 = gwmCreateButtonWithLabel(
+		topWindow,			// the parent window
+		SYM_BUTTON1,			// the symbol
+		"Button 1"			// and finally the label
+	);
 
-#if 0
-	GWMWindow *msg = gwmNewMessageDialog(NULL);
-	gwmSetMessageText(msg, "Hello, world!");
-	gwmSetMessageIconStd(msg, GWM_MBICON_WARN);
-	gwmMessageAddStockButton(msg, GWM_SYM_YES);
-	gwmMessageAddStockButton(msg, GWM_SYM_NO);
-	gwmSetWindowCaption(msg, "Test caption");
-	int answer = gwmRunMessageDialog(msg);
-	printf("Answer: %d\n", answer);
-#endif
+	gwmBoxLayoutAddWindow(
+		boxLayout,			// the layout to add the button to
+		button1,			// the button
+		0,				// the proportion (use minimum size)
+		0,				// the border width
+		0				// flags
+	);
 
-	printf("Answer: %d\n", gwmMessageBox(NULL, "Caption this", "Hello world", GWM_MBUT_OKCANCEL | GWM_MBICON_SUCCESS));
+	GWMWindow *button2, *button3;
+	gwmBoxLayoutAddWindow(boxLayout, button2 = gwmCreateButtonWithLabel(topWindow, SYM_BUTTON2, "Button 2"), 0, 0, 0);
+	gwmBoxLayoutAddWindow(boxLayout, button3 = gwmCreateButtonWithLabel(topWindow, SYM_BUTTON3, "Button 3"), 0, 0, 0);
+
+	GWMWindow *checkbox = gwmNewCheckbox(topWindow);
+	gwmSetCheckboxLabel(checkbox, "Play with me");
+	gwmBoxLayoutAddWindow(boxLayout, checkbox, 0, 0, 0);
 	
-	//gwmMainLoop();
+	gwmFit(topWindow);
+	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED);
+
+	gwmMainLoop();
+	gwmDestroyButton(button1);
+	gwmDestroyButton(button2);
+	gwmDestroyButton(button3);
+	gwmDestroyCheckbox(checkbox);
+	gwmDestroyBoxLayout(boxLayout);
+	gwmDestroyWindow(topWindow);
 	gwmQuit();
 	return 0;
 };
