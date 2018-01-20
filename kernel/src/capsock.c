@@ -112,7 +112,7 @@ static ssize_t capsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 {
 	CapSocket *capsock = (CapSocket*) sock;
 
-	int status = semWaitGen(&capsock->counter, 1, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+	int status = semWaitGen(&capsock->counter, 1, SEM_W_FILE(sock->fp->oflags), sock->options[GSO_RCVTIMEO]);
 	if (status < 0)
 	{
 		ERRNO = -status;

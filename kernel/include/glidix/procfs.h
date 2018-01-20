@@ -32,14 +32,6 @@
 #include <glidix/common.h>
 #include <glidix/vfs.h>
 
-typedef struct
-{
-	off_t				ppi_offset;
-	size_t				ppi_length;
-	uint64_t			ppi_flags;
-} ProcPageInfo;
-
 void initProcfs();
-FileSystem *getProcfs();
 
 #endif
