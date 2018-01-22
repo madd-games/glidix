@@ -623,7 +623,7 @@ static ssize_t udpsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 {
 	UDPSocket *udpsock = (UDPSocket*) sock;
 
-	int status = semWaitGen(&udpsock->counter, 1, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+	int status = semWaitGen(&udpsock->counter, 1, SEM_W_FILE(sock->fp->oflags), sock->options[GSO_RCVTIMEO]);
 	if (status < 0)
 	{
 		ERRNO = -status;
