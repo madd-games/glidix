@@ -56,30 +56,6 @@ void videoDeleteDriver(VideoDriver *drv)
 	kfree(drv);
 };
 
-#if 0
-void videoDisplayDownref(VideoDisplay *disp)
-{
-	if (__sync_add_and_fetch(&disp->refcount, -1) == 0)
-	{
-		kfree(disp);
-	};
-};
-#endif
-
-#if 0
-void video_close(File *fp)
-{
-	VideoDisplay *disp = fp->fsdata;
-	if (disp->fpModeSetter == fp)
-	{
-		disp->fpModeSetter = NULL;
-		disp->ops->exitmode(disp);
-		enableConsole();
-	};
-	videoDisplayDownref(disp);
-};
-#endif
-
 void video_free(Inode *inode)
 {
 	kfree(inode->fsdata);
@@ -87,10 +63,6 @@ void video_free(Inode *inode)
 
 uint64_t video_getpage(FileTree *ft, off_t pos)
 {
-	//uint64_t base = (uint64_t) ft->data;
-	//if (pos > ft->size) return 0;
-	//return (base + pos) >> 12;
-	
 	VideoDisplay *disp = (VideoDisplay*) ft->data;
 	return disp->ops->getpage(disp, pos);
 };
@@ -123,22 +95,6 @@ int video_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 		return -1;
 	};
 };
-
-#if 0
-int video_open(void *data, File *fp, size_t szFile)
-{
-	VideoDeviceData *vdata = (VideoDeviceData*) data;
-	VideoDisplay *disp = vdata->disp;
-	
-	__sync_fetch_and_add(&disp->refcount, 1);
-	fp->fsdata = disp;
-	fp->ioctl = video_ioctl;
-	fp->tree = video_tree;
-	fp->close = video_close;
-	
-	return 0;
-};
-#endif
 
 VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops)
 {

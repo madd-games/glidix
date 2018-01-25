@@ -55,48 +55,14 @@ typedef struct
 	int						posY;
 } PtrState;
 
-typedef struct
-{
-	/**
-	 * Current state of the device.
-	 */
-	PtrState					state;
-	
-	/**
-	 * The semaphore which counts the number of updates. This should only ever go up
-	 * to one, but may be more due to races, which is acceptable.
-	 */
-	Semaphore					semUpdate;
-	
-	/**
-	 * Lock used to access the state.
-	 */
-	Semaphore					lock;
-	
-	/**
-	 * The device file handle representing this pointing device.
-	 */
-	Device						dev;
-	
-	/**
-	 * Reference count.
-	 */
-	int						refcount;
-} PointDevice;
-
 /**
- * Creates a new pointer device and returns a handle, or NULL on error.
+ * Initialize the pointer device subsystem.
  */
-PointDevice *ptrCreate();
-
-/**
- * Called by the driver to indicate that it no longer supports the device (e.g. when unloading driver).
- */
-void ptrDelete(PointDevice *ptr);
+void ptrInit();
 
 /**
  * Report relative motion.
  */
-void ptrRelMotion(PointDevice *ptr, int deltaX, int deltaY);
+void ptrRelMotion(int deltaX, int deltaY);
 
 #endif

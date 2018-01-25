@@ -62,6 +62,7 @@
 #include <glidix/pageinfo.h>
 #include <glidix/ftree.h>
 #include <glidix/msr.h>
+#include <glidix/ptr.h>
 
 #define ACPI_OSC_QUERY_INDEX				0
 #define ACPI_OSC_SUPPORT_INDEX				1
@@ -383,6 +384,10 @@ void kmain(KernelBootInfo *info)
 	initDevfs();
 	DONE();
 
+	kprintf("Initializing the pointer device interface... ");
+	ptrInit();
+	DONE();
+	
 	kprintf("Initializing PCI... ");
 	pciInit();
 	DONE();

@@ -159,6 +159,10 @@ int devfsAdd(const char *name, Inode *inode)
 	char fullpath[256];
 	strformat(fullpath, 256, "/dev/%s", name);
 	
+	// make this independent of root
+	Creds *creds = getCurrentThread()->creds;
+	getCurrentThread()->creds = NULL;
+	
 	int error;
 	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, fullpath, 1, &error);
 	if (dref.dent == NULL)
@@ -175,6 +179,8 @@ int devfsAdd(const char *name, Inode *inode)
 	
 	vfsBindInode(dref, inode);
 	vfsDownrefInode(inode);		// since the above uprefs it, and we want to take the reference
+	
+	getCurrentThread()->creds = creds;
 	return 0;
 };
 

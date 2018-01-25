@@ -181,39 +181,6 @@ static ssize_t pts_read(Inode *inode, File *fp, void *buffer, size_t size, off_t
 	return outsz;
 };
 
-#if 0
-static int pts_open(void *data, File *fp, size_t szFile)
-{
-	PttyDevice *devinfo = (PttyDevice*) data;
-	PseudoTerm *ptty = devinfo->handle;
-	
-	semWait(&ptty->sem);
-	if ((ptty->sid != 0) && (ptty->sid != getCurrentThread()->creds->sid))
-	{
-		semSignal(&ptty->sem);
-		return VFS_BUSY;
-	};
-	
-	__sync_fetch_and_add(&ptty->refcount, 1);
-	if (ptty->sid == 0)
-	{
-		ptty->sid = getCurrentThread()->creds->sid;
-		ptty->pgid = getCurrentThread()->creds->pgid;
-	};
-	semSignal(&ptty->sem);
-	
-	memset(fp, 0, szFile);
-	fp->fsdata = ptty;
-	fp->oflag = O_TERMINAL;
-	fp->write = pts_write;
-	fp->read = pts_read;
-	fp->ioctl = pts_ioctl;
-	fp->close = pts_close;
-	
-	return 0;
-};
-#endif
-
 static ssize_t ptm_read(Inode *inode, File *fp, void *buffer, size_t size, off_t offset)
 {
 	PseudoTerm *ptty = (PseudoTerm*) fp->filedata;
@@ -403,58 +370,6 @@ static int ptm_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 	};
 };
 
-#if 0
-static int ptmx_open(void *ignore, File *fp, size_t szFile)
-{
-	(void)ignore;
-	memset(fp, 0, szFile);
-	
-	PseudoTerm *ptty = NEW(PseudoTerm);
-	semInit(&ptty->sem);
-	
-	semInit2(&ptty->masterCounter, 0);
-	semInit2(&ptty->slaveCounter, 0);
-	
-	ptty->state.c_iflag = ICRNL;
-	ptty->state.c_oflag = 0;
-	ptty->state.c_cflag = 0;
-	ptty->state.c_lflag = ECHO | ECHOE | ECHOK | ECHONL | ICANON | ISIG;
-
-	int i;
-	for (i=0; i<NCCS; i++)
-	{
-		ptty->state.c_cc[i] = i+0x80;
-	};
-	
-	ptty->masterPut = 0;
-	ptty->masterFetch = 0;
-	
-	ptty->slavePut = 0;
-	ptty->slaveFetch = 0;
-	
-	ptty->lineSize = 0;
-	
-	ptty->sid = 0;
-	ptty->pgid = 0;
-	ptty->refcount = 1;
-	
-	semWait(&ptty->sem);
-	strformat(ptty->slaveName, 256, "pts%d", __sync_fetch_and_add(&ptsNextNo, 1));
-	PttyDevice *devinfo = NEW(PttyDevice);
-	devinfo->handle = ptty;
-	ptty->devSlave = AddDevice(ptty->slaveName, devinfo, pts_open, 0600);
-	semSignal(&ptty->sem);
-	
-	fp->fsdata = ptty;
-	fp->read = ptm_read;
-	fp->write = ptm_write;
-	fp->ioctl = ptm_ioctl;
-	fp->close = ptm_close;
-	
-	return 0;
-};
-#endif
-
 static void* ptmx_open(Inode *inode, int oflags)
 {
 	PseudoTerm *ptty = NEW(PseudoTerm);
@@ -487,9 +402,6 @@ static void* ptmx_open(Inode *inode, int oflags)
 	ptty->sides = PTTY_MASTER | PTTY_SLAVE;
 	
 	strformat(ptty->slaveName, 256, "pts%d", __sync_fetch_and_add(&ptsNextNo, 1));
-
-	Creds *creds = getCurrentThread()->creds;
-	getCurrentThread()->creds = NULL;
 	
 	Inode *slave = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0600);
 	slave->fsdata = ptty;
@@ -506,21 +418,11 @@ static void* ptmx_open(Inode *inode, int oflags)
 		panic("unexpected failure in adding pseudoterminal slave");
 	};
 	
-	getCurrentThread()->creds = creds;
 	return ptty;
 };
 
 void pttyInit()
 {
-#if 0
-	Device ptmx = AddDevice("ptmx", NULL, ptmx_open, 0666);
-	if (ptmx == NULL)
-	{
-		FAILED();
-		panic("failed to create /dev/ptmx");
-	};
-#endif
-
 	Inode *ptmx = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0666);
 	ptmx->open = ptmx_open;
 	ptmx->pread = ptm_read;

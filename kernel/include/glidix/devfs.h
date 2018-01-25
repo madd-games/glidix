@@ -36,6 +36,8 @@ void initDevfs();
 /**
  * Attach an inode to a name under /dev. This takes away your reference to the inode. Returns 0
  * on success, or an error number on error.
+ *
+ * This works even without root permissions and is accessible only to the kernel.
  */
 int devfsAdd(const char *name, Inode *inode);
 
