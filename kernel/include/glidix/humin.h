@@ -244,9 +244,10 @@ typedef struct
 	HuminEvQueue*				last;
 	
 	/**
-	 * The device file that represents this device.
+	 * The device file that represents this device, and its name.
 	 */
-	Device					dev;
+	Inode*					inode;
+	char*					iname;
 	
 	/**
 	 * Whether or not the device is currently in use (opened by a process).

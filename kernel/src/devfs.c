@@ -186,6 +186,10 @@ int devfsAdd(const char *name, Inode *inode)
 
 void devfsRemove(const char *name)
 {
+	// make this independent of root
+	Creds *creds = getCurrentThread()->creds;
+	getCurrentThread()->creds = NULL;
+	
 	char fullpath[256];
 	strformat(fullpath, 256, "/dev/%s", name);
 	
@@ -198,4 +202,5 @@ void devfsRemove(const char *name)
 	};
 	
 	vfsUnlinkInode(dref, 0);
+	getCurrentThread()->creds = creds;
 };

@@ -39,37 +39,12 @@
 
 static int huminNextID = 0;
 
-static void hudev_close(File *fp)
-{
-	HuminDevice *hudev = (HuminDevice*) fp->fsdata;
-	semWait(&hudev->sem);
-	hudev->inUse = 0;
-	
-	HuminEvQueue *ev = hudev->first;
-	while (ev != NULL)
-	{
-		HuminEvQueue *next = ev->next;
-		kfree(ev);
-		ev = next;
-	};
-	hudev->first = NULL;
-	
-	if (!hudev->active)
-	{
-		DeleteDevice(hudev->dev);
-	}
-	else
-	{
-		semSignal(&hudev->sem);
-	};
-};
-
-static ssize_t hudev_read(File *fp, void *buffer, size_t size)
+static ssize_t hudev_read(Inode *inode, File *fp, void *buffer, size_t size, off_t off)
 {
 	if (size > sizeof(HuminEvent)) size = sizeof(HuminEvent);
 	
-	HuminDevice *hudev = (HuminDevice*) fp->fsdata;
-	if (semWaitGen(&hudev->evCount, 1, SEM_W_FILE(fp->oflag), 0) < 0)
+	HuminDevice *hudev = (HuminDevice*) inode->fsdata;
+	if (semWaitGen(&hudev->evCount, 1, SEM_W_FILE(fp->oflags), 0) < 0)
 	{
 		ERRNO = EINTR;
 		return -1;
@@ -85,36 +60,41 @@ static ssize_t hudev_read(File *fp, void *buffer, size_t size)
 	return (ssize_t) size;
 };
 
-static void hudev_pollinfo(File *fp, Semaphore **sems)
+static void hudev_pollinfo(Inode *inode, File *fp, Semaphore **sems)
 {
-	HuminDevice *hudev = (HuminDevice*) fp->fsdata;
+	HuminDevice *hudev = (HuminDevice*) inode->fsdata;
 	sems[PEI_READ] = &hudev->evCount;
 };
 
-static int hudev_open(void *data, File *fp, size_t szfile)
+static void* hudev_open(Inode *inode, int oflags)
 {
-	HuminDevice *hudev = (HuminDevice*) data;
+	HuminDevice *hudev = (HuminDevice*) inode->fsdata;
+	
 	semWait(&hudev->sem);
 	if (hudev->inUse)
 	{
 		semSignal(&hudev->sem);
-		return VFS_BUSY;
-	};
-	
-	if (!hudev->active)
+		return NULL;
+	}
+	else
 	{
+		hudev->inUse = 1;
 		semSignal(&hudev->sem);
-		return VFS_BUSY;
+		return hudev;
 	};
-	
-	hudev->inUse = 1;
+};
+
+static void hudev_close(Inode *inode, void *filedata)
+{
+	HuminDevice *hudev = (HuminDevice*) filedata;
+	semWait(&hudev->sem);
+	hudev->inUse = 0;
 	semSignal(&hudev->sem);
-	
-	fp->fsdata = hudev;
-	fp->read = hudev_read;
-	fp->close = hudev_close;
-	fp->pollinfo = hudev_pollinfo;
-	return 0;
+};
+
+static void hudev_free(Inode *inode)
+{
+	kfree(inode->fsdata);
 };
 
 HuminDevice* huminCreateDevice(const char *devname)
@@ -131,8 +111,16 @@ HuminDevice* huminCreateDevice(const char *devname)
 	
 	char filename[256];
 	strformat(filename, 256, "humin%d", hudev->id);
-	hudev->dev = AddDevice(filename, hudev, hudev_open, 0600);
-
+	//hudev->dev = AddDevice(filename, hudev, hudev_open, 0600);
+	hudev->inode = vfsCreateInode(NULL, 0600);
+	hudev->inode->fsdata = hudev;
+	hudev->inode->free = hudev_free;
+	hudev->inode->open = hudev_open;
+	hudev->inode->close = hudev_close;
+	hudev->inode->pread = hudev_read;
+	hudev->inode->pollinfo = hudev_pollinfo;
+	hudev->iname = strdup(filename);
+	
 	hudev->inUse = 0;
 	hudev->active = 1;
 	
@@ -155,7 +143,9 @@ void huminDeleteDevice(HuminDevice *hudev)
 		};
 		
 		// also frees hudev
-		DeleteDevice(hudev->dev);
+		devfsRemove(hudev->iname);
+		kfree(hudev->iname);
+		vfsDownrefInode(hudev->inode);
 	}
 	else
 	{
