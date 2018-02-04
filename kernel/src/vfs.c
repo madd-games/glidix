@@ -97,12 +97,15 @@ void vfsInit()
 
 Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 {
+	mode_t umask = 0;
+	if (getCurrentThread()->creds != NULL) umask = getCurrentThread()->creds->umask;
+	
 	Inode *inode = NEW(Inode);
 	memset(inode, 0, sizeof(Inode));
 	inode->refcount = 1;
 	semInit(&inode->lock);
 	inode->fs = fs;
-	inode->mode = mode;
+	inode->mode = mode & ~umask;
 	
 	if (getCurrentThread()->creds != NULL)
 	{
@@ -1072,12 +1075,14 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 	if (oflag & O_RDONLY) permsNeeded |= VFS_ACE_READ;
 	if (oflag & O_WRONLY) permsNeeded |= VFS_ACE_WRITE;
 	
+	semWait(&iref.inode->lock);
 	if (!vfsIsAllowed(iref.inode, permsNeeded))
 	{
 		vfsUnrefInode(iref);
 		if (error != NULL) *error = EACCES;
 		return NULL;
 	};
+	semSignal(&iref.inode->lock);
 	
 	// create the description
 	return vfsOpenInode(iref, oflag, error);

@@ -3337,7 +3337,7 @@ int sys_getktu(void *buffer, size_t size)
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 145
+#define SYSCALL_NUMBER 146
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3370,7 +3370,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_ioctl,				// 28
 	&sys_getdent,				// 29
 	SYS_NULL,				// 30 (_glidix_diag())
-	&sys_mount,				// 31
+	&sys_mount,				// 31 [TODO: update signature in libc]
 	&sys_yield,				// 32
 	&sys_time,				// 33
 	&sys_realpath,				// 34
@@ -3402,7 +3402,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_setregid,				// 60
 	&sys_rmmod,				// 61
 	&sys_link,				// 62
-	&sys_unmount,				// 63
+	&sys_unmount,				// 63 [TODO: update signature in libc]
 	&sys_lstat,				// 64
 	&sys_symlink,				// 65
 	&sys_readlink,				// 66
@@ -3484,6 +3484,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_aclput,				// 142
 	&sys_aclclear,				// 143
 	&sys_getktu,				// 144
+	&sys_mkfifo,				// 145 [TODO: add to libc]
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

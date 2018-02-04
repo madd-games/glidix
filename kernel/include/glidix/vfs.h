@@ -400,7 +400,7 @@ struct Inode_
 	/**
 	 * Get pollable event information. The 'sems' array is indexed by PEI_* macros, and all entries
 	 * are initialized to "always ready". It should set, for each event, a semaphore which becomes non-zero
-	 * when the event occurs. For example, if the array in PEI_READ becomes nonzero, then the file
+	 * when the event occurs. For example, if the semaphore in PEI_READ becomes nonzero, then the file
 	 * is considered ready for reading (a read would not block). The waiting is done by semPoll().
 	 */
 	void (*pollinfo)(Inode *inode, File *fp, struct Semaphore_ **sems);

@@ -27,77 +27,143 @@
 */
 
 #include <glidix/pipe.h>
-#include <glidix/sched.h>
 #include <glidix/memory.h>
-#include <glidix/errno.h>
+#include <glidix/sched.h>
 #include <glidix/string.h>
 #include <glidix/syscall.h>
-#include <glidix/signal.h>
-#include <glidix/console.h>
 
-static File *openPipe(Pipe *pipe, int mode);
-
-static ssize_t pipe_read(File *fp, void *buffer, size_t size)
+static void* pipe_open(Inode *inode, int oflags)
 {
-	if (size == 0) return 0;
+	Pipe *pipe = (Pipe*) inode->fsdata;
+	
+	if ((oflags & O_RDWR) == O_RDWR)
+	{
+		// cannot open in read/write mode
+		ERRNO = EINVAL;
+		return NULL;
+	};
+	
+	if (oflags & O_RDONLY)
+	{
+		if (oflags & O_NONBLOCK)
+		{
+			semSignal(&pipe->semReadOpen);
+			return (void*) 1;
+		}
+		else
+		{
+			semSignal(&pipe->semReadOpen);
+			
+			uint8_t bitmap = 0;
+			Semaphore *sem = &pipe->semWriteOpen;
+			int error = semPoll(1, &sem, &bitmap, SEM_W_INTR, 0);
+			
+			if (error < 0)
+			{
+				ERRNO = error;
+				return NULL;
+			};
+			
+			__sync_fetch_and_add(&pipe->cntRead, 1);
+			return PIPE_READ;
+		};
+	}
+	else
+	{
+		// opening for write
+		semSignal(&pipe->semWriteOpen);
+		
+		uint8_t bitmap = 0;
+		Semaphore *sem = &pipe->semReadOpen;
+		int error = semPoll(1, &sem, &bitmap, SEM_W_FILE(oflags), 0);
+		
+		if (error < 0)
+		{
+			ERRNO = -error;
+			return NULL;
+		};
+		
+		if (error == 0)
+		{
+			ERRNO = ENXIO;
+			return NULL;
+		};
+		
+		__sync_fetch_and_add(&pipe->cntWrite, 1);
+		return PIPE_WRITE;
+	};
+};
 
-	Pipe *pipe = (Pipe*) fp->fsdata;
+static void pipe_close(Inode *inode, void *filedata)
+{
+	Pipe *pipe = (Pipe*) inode->fsdata;
+	
+	if (filedata == PIPE_READ)
+	{
+		if (__sync_add_and_fetch(&pipe->cntRead, -1) == 0)
+		{
+			semTerminate(&pipe->semBufferFree);
+		};
+	}
+	else
+	{
+		if (__sync_add_and_fetch(&pipe->cntWrite, -1) == 0)
+		{
+			semTerminate(&pipe->semBufferRead);
+			semSignal(&pipe->semHangup);
+		};
+	};
+};
 
-	int count = semWaitGen(&pipe->counter, (int) size, SEM_W_FILE(fp->oflag), 0);
+static ssize_t pipe_read(Inode *inode, File *fp, void *buffer, size_t size, off_t off)
+{
+	Pipe *pipe = (Pipe*) inode->fsdata;
+	
+	int count = semWaitGen(&pipe->semBufferRead, (int) size, SEM_W_FILE(fp->oflags), 0);
 	if (count < 0)
 	{
 		ERRNO = -count;
 		return -1;
 	};
 	
-	ssize_t sizeCanRead = (ssize_t) count;
-	if (sizeCanRead == 0)
-	{
-		// EOF
-		return sizeCanRead;
-	};
-	
-	semWait(&pipe->sem);
-
 	char *put = (char*) buffer;
-	ssize_t bytesLeft = (ssize_t)size;
-	if (bytesLeft > sizeCanRead) bytesLeft = sizeCanRead;
-	ssize_t willRead = bytesLeft;
-	while (bytesLeft--)
-	{
-		*put++ = pipe->buffer[pipe->roff];
-		pipe->roff = (pipe->roff + 1) % PIPE_BUFFER_SIZE;
-	};
+	ssize_t out = 0;
 	
-	semSignal2(&pipe->semWriteBuffer, (int) willRead);
-	semSignal(&pipe->sem);
-	return sizeCanRead;
+	semWait(&pipe->lock);
+	while (count--)
+	{
+		*put++ = pipe->buffer[pipe->offRead];
+		pipe->offRead = (pipe->offRead + 1) % PIPE_BUFFER_SIZE;
+		out++;
+	};
+	semSignal(&pipe->lock);
+	
+	return out;
 };
 
-static ssize_t pipe_write(File *fp, const void *buffer, size_t size)
+static ssize_t pipe_write(Inode *inode, File *fp, const void *buffer, size_t size, off_t off)
 {
-	Pipe *pipe = (Pipe*) fp->fsdata;
+	Pipe *pipe = (Pipe*) inode->fsdata;
 	
-	// determine the maximum amount of data we can currently write.
-	ssize_t haveWritten = 0;
-	while (haveWritten < size)
+	ssize_t out = 0;
+	const char *scan = (const char*) buffer;
+	
+	while (size > 0)
 	{
-		ssize_t willWrite = semWaitGen(&pipe->semWriteBuffer, (int) (size - haveWritten), SEM_W_FILE(fp->oflag), 0);
-		if (willWrite < 0)
+		int count = semWaitGen(&pipe->semBufferFree, (int) size, SEM_W_FILE(fp->oflags), 0);
+		if (count < 0)
 		{
-			ERRNO = -willWrite;
-			if (haveWritten == 0) return -1;
-			else return haveWritten;
+			ERRNO = -count;
+			if (out == 0) return -1;
+			else return out;
 		};
-
-		haveWritten += willWrite;
-			
-		semWait(&pipe->sem);
-
-		if ((pipe->sides & SIDE_READ) == 0)
+		
+		if (pipe->cntRead == 0 || count == 0)
 		{
-			// the pipe is not readable!
+			// no read end is open
 			siginfo_t siginfo;
+			memset(&siginfo, 0, sizeof(siginfo_t));
+			
 			siginfo.si_signo = SIGPIPE;
 			siginfo.si_code = 0;
 
@@ -108,110 +174,58 @@ static ssize_t pipe_write(File *fp, const void *buffer, size_t size)
 			sti();
 		
 			ERRNO = EPIPE;
-			semSignal(&pipe->sem);
 			return -1;
-		};	
-	
-		// write it
-		const char *scan = (const char*) buffer;
-		ssize_t bytesLeft = willWrite;
-		while (bytesLeft--)
-		{
-			pipe->buffer[pipe->woff] = *scan++;
-			pipe->woff = (pipe->woff + 1) % PIPE_BUFFER_SIZE;
 		};
-	
-		// wake up waiting threads
-		semSignal2(&pipe->counter, (int) willWrite);
-	
-		semSignal(&pipe->sem);
+		
+		semWait(&pipe->lock);
+		while (count--)
+		{
+			pipe->buffer[pipe->offWrite] = *scan++;
+			pipe->offWrite = (pipe->offWrite + 1) % PIPE_BUFFER_SIZE;
+			out++;
+			size--;
+		};
+		semSignal(&pipe->lock);
 	};
 	
-	return haveWritten;
+	return out;
 };
 
-static void pipe_close(File *fp)
+static void pipe_pollinfo(Inode *inode, File *fp, Semaphore **sems)
 {
-	Pipe *pipe = (Pipe*) fp->fsdata;
-	semWait(&pipe->sem);
-
-	if (fp->oflag & O_WRONLY)
-	{
-		pipe->sides &= ~SIDE_WRITE;
-		semTerminate(&pipe->counter);
-		semSignal(&pipe->semHangup);
-	}
-	else
-	{
-		pipe->sides &= ~SIDE_READ;
-		semTerminate(&pipe->semWriteBuffer);
-	};
-	
-	if (pipe->sides == 0)
-	{
-		kfree(pipe);
-	}
-	else
-	{
-		semSignal(&pipe->sem);
-	};
-};
-
-static int pipe_fstat(File *fp, struct kstat *st)
-{
-	Pipe *pipe = (Pipe*) fp->fsdata;
-	semWait(&pipe->sem);
-
-	st->st_dev = 0;
-	st->st_ino = (ino_t) fp->fsdata;
-	st->st_mode = 0600 | VFS_MODE_FIFO;
-	st->st_nlink = ((pipe->sides >> 1) & 1) + (pipe->sides & 1);
-	st->st_uid = 0;
-	st->st_gid = 0;
-	st->st_rdev = 0;
-	st->st_size = PIPE_BUFFER_SIZE;
-	st->st_blksize = 1;
-	st->st_blocks = PIPE_BUFFER_SIZE;
-	st->st_atime = 0;
-	st->st_mtime = 0;
-	st->st_ctime = 0;
-
-	semSignal(&pipe->sem);
-	return 0;
-};
-
-static void pipe_pollinfo(File *fp, Semaphore **sems)
-{
-	Pipe *pipe = (Pipe*) fp->fsdata;
-	sems[PEI_READ] = &pipe->counter;
-	sems[PEI_WRITE] = vfsGetConstSem();
+	Pipe *pipe = (Pipe*) inode->fsdata;
+	sems[PEI_READ] = &pipe->semBufferRead;
+	sems[PEI_WRITE] = &pipe->semBufferFree;
 	sems[PEI_HANGUP] = &pipe->semHangup;
 };
 
-static File *openPipe(Pipe *pipe, int mode)
+static Inode* pipeCreate(mode_t mode)
 {
-	semWait(&pipe->sem);
-	File *fp = (File*) kmalloc(sizeof(File));
-	memset(fp, 0, sizeof(File));
+	Inode *inode = vfsCreateInode(NULL, (mode & 0xFFF) | VFS_MODE_FIFO);
+	Pipe *pipe = NEW(Pipe);
+	
+	semInit2(&pipe->semReadOpen, 0);
+	semInit2(&pipe->semWriteOpen, 0);
+	semInit2(&pipe->semBufferRead, 0);
+	semInit2(&pipe->semBufferFree, PIPE_BUFFER_SIZE);
 
-	fp->oflag = mode;
-	fp->fsdata = pipe;
-	fp->oflag = mode;
-	if (mode == O_RDONLY)
-	{
-		fp->read = pipe_read;
-	}
-	else
-	{
-		fp->write = pipe_write;
-	};
-	fp->close = pipe_close;
-	fp->fstat = pipe_fstat;
-	fp->pollinfo = pipe_pollinfo;
-	fp->refcount = 1;
+	pipe->offRead = 0;
+	pipe->offWrite = 0;
+	
+	pipe->cntRead = 0;
+	pipe->cntWrite = 0;
 
-	semSignal(&pipe->sem);
-	return fp;
+	semInit2(&pipe->semHangup, 0);	
+	semInit(&pipe->lock);
+	
+	inode->fsdata = pipe;
+	inode->pread = pipe_read;
+	inode->pwrite = pipe_write;
+	inode->open = pipe_open;
+	inode->close = pipe_close;
+	inode->pollinfo = pipe_pollinfo;
+	
+	return inode;
 };
 
 int sys_pipe(int *upipefd)
@@ -221,7 +235,7 @@ int sys_pipe(int *upipefd)
 
 int sys_pipe2(int *upipefd, int flags)
 {
-	int allFlags = O_CLOEXEC;
+	int allFlags = O_CLOEXEC | O_NONBLOCK;
 	if ((flags & ~allFlags) != 0)
 	{
 		ERRNO = EINVAL;
@@ -245,18 +259,25 @@ int sys_pipe2(int *upipefd, int flags)
 		return -1;
 	};
 	
-	Pipe *pipe = (Pipe*) kmalloc(sizeof(Pipe));
-	semInit(&pipe->sem);
-	semInit2(&pipe->counter, 0);
-	semInit2(&pipe->semWriteBuffer, PIPE_BUFFER_SIZE);
-	semInit2(&pipe->semHangup, 0);
-	pipe->roff = 0;
-	pipe->woff = 0;
-	pipe->sides = SIDE_READ | SIDE_WRITE;
+	Inode *inode = pipeCreate(0600);
+	Pipe *pipe = (Pipe*) inode->fsdata;
+	semSignal(&pipe->semReadOpen);
+	semSignal(&pipe->semWriteOpen);
+	
+	InodeRef iref;
+	iref.inode = inode;
+	iref.top = NULL;
+	
+	int error;
+	File *rfp = vfsOpenInode(iref, O_RDONLY | flags, &error);
+	File *wfp = vfsOpenInode(iref, O_WRONLY | flags, &error);
+	assert(rfp != NULL);
+	assert(wfp != NULL);
+	vfsDownrefInode(inode);
 
 	// O_CLOEXEC == FD_CLOEXEC
-	ftabSet(getCurrentThread()->ftab, rfd, openPipe(pipe, O_RDONLY), flags);
-	ftabSet(getCurrentThread()->ftab, wfd, openPipe(pipe, O_WRONLY), flags);
+	ftabSet(getCurrentThread()->ftab, rfd, rfp, flags & O_CLOEXEC);
+	ftabSet(getCurrentThread()->ftab, wfd, wfp, flags & O_CLOEXEC);
 	
 	pipefd[0] = rfd;
 	pipefd[1] = wfd;
@@ -266,6 +287,38 @@ int sys_pipe2(int *upipefd, int flags)
 		ERRNO = EFAULT;
 		return -1;
 	};
+	
+	return 0;
+};
+
+int sys_mkfifo(const char *upath, mode_t mode)
+{
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	int error;
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, path, 1, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	if (dref.dent->ino != 0)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = EEXIST;
+		return -1;
+	};
+	
+	Inode *pipe = pipeCreate(mode);
+	vfsBindInode(dref, pipe);
+	vfsDownrefInode(pipe);
 	
 	return 0;
 };

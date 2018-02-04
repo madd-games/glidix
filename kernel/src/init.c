@@ -36,7 +36,6 @@
 #include <glidix/string.h>
 #include <glidix/port.h>
 #include <glidix/sched.h>
-#include <glidix/mount.h>
 #include <glidix/initrdfs.h>
 #include <glidix/procfs.h>
 #include <glidix/procmem.h>
@@ -496,7 +495,6 @@ static void str2uuid(char *InString, UINT8 *UuidBuffer)
 
 void kmain2()
 {	
-	initMount();
 	initSymtab();
 	
 	kprintf("Creating /run... ");

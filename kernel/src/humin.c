@@ -74,6 +74,7 @@ static void* hudev_open(Inode *inode, int oflags)
 	if (hudev->inUse)
 	{
 		semSignal(&hudev->sem);
+		ERRNO = EBUSY;
 		return NULL;
 	}
 	else
