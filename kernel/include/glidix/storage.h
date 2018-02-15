@@ -184,19 +184,11 @@ typedef struct
 	 * Device letter (a-z), needs to be freed when we hang up.
 	 */
 	char					letter;
-
-#if 0
-	/**
-	 * Master device file (which represents the whole disk).
-	 */
-	Device					devMaster;
 	
 	/**
-	 * Subordinate device files (sub-files) which represent partitions, and the number of them.
+	 * Number of subordinate device files (sub-files) which represent partitions.
 	 */
 	size_t					numSubs;
-	Device*					devSubs;
-#endif
 
 	/**
 	 * Command queue.
@@ -255,7 +247,6 @@ typedef struct
 	StorageDevice*				sd;
 	size_t					offset;
 	size_t					size;
-	size_t					pos;
 	int					partIndex;
 } SDHandle;
 
