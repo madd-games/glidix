@@ -96,10 +96,10 @@ void vfsInit()
 };
 
 Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
-{
+{	
 	mode_t umask = 0;
-	if (getCurrentThread()->creds != NULL) umask = getCurrentThread()->creds->umask;
-	
+	if (getCurrentThread() != NULL && getCurrentThread()->creds != NULL) umask = getCurrentThread()->creds->umask;
+		
 	Inode *inode = NEW(Inode);
 	memset(inode, 0, sizeof(Inode));
 	inode->refcount = 1;
@@ -107,7 +107,7 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 	inode->fs = fs;
 	inode->mode = mode & ~umask;
 	
-	if (getCurrentThread()->creds != NULL)
+	if (getCurrentThread() != NULL && getCurrentThread()->creds != NULL)
 	{
 		inode->uid = getCurrentThread()->creds->euid;
 		inode->gid = getCurrentThread()->creds->egid;
