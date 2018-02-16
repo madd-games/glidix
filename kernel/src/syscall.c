@@ -1601,6 +1601,7 @@ int sys_fcntl_setfd(int fd, int flags)
 	return 0;
 };
 
+// TODO: O_TERMINAL is not actually used anymore
 int sys_isatty(int fd)
 {
 	File *fp = ftabGet(getCurrentThread()->ftab, fd);

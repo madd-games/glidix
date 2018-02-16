@@ -430,10 +430,6 @@ static void spawnProc(void *stack)
 {
 	DONE();
 
-	kprintf("Setting up the terminal... ");
-	setupTerminal(getCurrentThread()->ftab);
-	DONE();
-
 	tssPrepare();
 	
 	getCurrentThread()->creds->sid = 1;
@@ -651,7 +647,11 @@ void kmain2()
 	kprintf("Initializing the ptty interface... ");
 	pttyInit();
 	DONE();
-	
+
+	kprintf("Setting up the terminal... ");
+	initTerminal();
+	DONE();
+
 	kprintf("Starting the spawn process... ");
 	MachineState state;
 	memset(&state.fpuRegs, 0, 512);

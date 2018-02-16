@@ -50,69 +50,6 @@ static Spinlock modLock;
 static Module *firstModule;
 static Module *lastModule;
 
-static FileSystem *moduleFileSystem;
-
-static int getModule(Dir *dir)
-{
-	spinlockAcquire(&modLock);
-	Module *mod = firstModule;
-
-	while (mod != NULL)
-	{
-		if (mod->block == (int)(dir->stat.st_ino-1))
-		{
-			strcpy(dir->dirent.d_name, mod->name);
-			dir->dirent.d_ino = dir->stat.st_ino;
-			dir->stat.st_mode = 0;
-			dir->stat.st_nlink = 1;
-			dir->stat.st_uid = 0;
-			dir->stat.st_gid = 0;
-			dir->stat.st_rdev = 0;
-			dir->stat.st_size = mod->numSectors * MODULE_SECTOR_SIZE;
-			dir->stat.st_blksize = MODULE_SECTOR_SIZE;
-			dir->stat.st_blocks = mod->numSectors;
-			spinlockRelease(&modLock);
-			return 0;
-		};
-
-		mod = mod->next;
-	};
-
-	spinlockRelease(&modLock);
-	return -1;
-};
-
-static int modfs_next(Dir *dir)
-{
-	while (1)
-	{
-		dir->stat.st_ino++;
-		if (dir->stat.st_ino == 513) return -1;
-		if (getModule(dir) == 0) return 0;
-	};
-
-	return -1;
-};
-
-static int modfs_unlink(Dir *dir)
-{
-	return rmmod(dir->dirent.d_name, 0);
-};
-
-static int modfs_openroot(FileSystem *fs, Dir *dir, size_t szdir)
-{
-	dir->next = modfs_next;
-	dir->unlink = modfs_unlink;
-	dir->stat.st_ino = 1;
-
-	while (1)
-	{
-		if (dir->stat.st_ino == 513) return VFS_EMPTY_DIRECTORY;
-		if (getModule(dir) == 0) return 0;
-		dir->stat.st_ino++;
-	};
-};
-
 void initModuleInterface()
 {
 	kprintf("Initializing the module interface... ");
@@ -134,12 +71,6 @@ void initModuleInterface()
 	pml4->entries[259].pdptPhysAddr = (pdptPhysAddr >> 12);
 
 	refreshAddrSpace();
-
-	moduleFileSystem = (FileSystem*) kmalloc(sizeof(FileSystem));
-	memset(moduleFileSystem, 0, sizeof(FileSystem));
-
-	moduleFileSystem->fsname = "modfs";
-	moduleFileSystem->openroot = modfs_openroot;
 
 	DONE();
 };
@@ -254,7 +185,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	};
 
 	int error;
-	File *fp = vfsOpen(path, 0, &error);
+	File *fp = vfsOpen(VFS_NULL_IREF, path, O_RDONLY, 0, &error);
 	if (fp == NULL)
 	{
 		kprintf("insmod(%s): failed to open %s: %d\n", modname, path, error);
@@ -262,7 +193,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		return -1;
 	};
 
-	if (fp->seek == NULL)
+	if (fp->iref.inode->ft == NULL)
 	{
 		kprintf("insmod(%s): %s: cannot seek\n", modname, path);
 		vfsClose(fp);
@@ -328,7 +259,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	};
 
 	Elf64_Shdr shstr;
-	fp->seek(fp, elfHeader.e_shoff + elfHeader.e_shstrndx * sizeof(Elf64_Shdr), SEEK_SET);
+	vfsSeek(fp, elfHeader.e_shoff + elfHeader.e_shstrndx * sizeof(Elf64_Shdr), VFS_SEEK_SET);
 	if (vfsRead(fp, &shstr, sizeof(Elf64_Shdr)) < sizeof(Elf64_Shdr))
 	{
 		kprintf("insmod(%s): %s: EOF while reading string section header\n", modname, path);
@@ -337,7 +268,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		return -1;
 	};
 
-	fp->seek(fp, shstr.sh_offset, SEEK_SET);
+	vfsSeek(fp, shstr.sh_offset, VFS_SEEK_SET);
 	char *strings = (char*) kmalloc(shstr.sh_size);
 	if (vfsRead(fp, strings, shstr.sh_size) < shstr.sh_size)
 	{
@@ -355,7 +286,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	};
 
 	Elf64_Shdr section;
-	fp->seek(fp, elfHeader.e_shoff, SEEK_SET);
+	vfsSeek(fp, elfHeader.e_shoff, VFS_SEEK_SET);
 	Elf64_Half i;
 
 	Elf64_Word shModbody = 0;
@@ -479,9 +410,9 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	};
 
 	Elf64_Shdr strtabSection;
-	fp->seek(fp, elfHeader.e_shoff + shStrtab * sizeof(Elf64_Shdr), SEEK_SET);
+	vfsSeek(fp, elfHeader.e_shoff + shStrtab * sizeof(Elf64_Shdr), VFS_SEEK_SET);
 	vfsRead(fp, &strtabSection, sizeof(Elf64_Shdr));
-	fp->seek(fp, strtabSection.sh_offset, SEEK_SET);
+	vfsSeek(fp, strtabSection.sh_offset, VFS_SEEK_SET);
 	strings = (char*) kmalloc(strtabSection.sh_size);
 	vfsRead(fp, strings, strtabSection.sh_size);
 	
@@ -502,7 +433,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	};
 
 	Elf64_Shdr modbodySection;
-	fp->seek(fp, elfHeader.e_shoff + shModbody * sizeof(Elf64_Shdr), SEEK_SET);
+	vfsSeek(fp, elfHeader.e_shoff + shModbody * sizeof(Elf64_Shdr), VFS_SEEK_SET);
 	vfsRead(fp, &modbodySection, sizeof(Elf64_Shdr));
 
 	if (flags & INSMOD_VERBOSE)
@@ -528,16 +459,16 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 
 	// not all of the section may be in the file, so read as much as possible and zero the rest.
 	memset((void*)baseAddr, 0, modbodySection.sh_size);
-	fp->seek(fp, modbodySection.sh_offset, SEEK_SET);
+	vfsSeek(fp, modbodySection.sh_offset, VFS_SEEK_SET);
 	vfsRead(fp, (void*)baseAddr, modbodySection.sh_size);
 
 	// load the symbol table into memory
 	Elf64_Shdr symtabSection;
-	fp->seek(fp, elfHeader.e_shoff + shSymtab * sizeof(Elf64_Shdr), SEEK_SET);
+	vfsSeek(fp, elfHeader.e_shoff + shSymtab * sizeof(Elf64_Shdr), VFS_SEEK_SET);
 	vfsRead(fp, &symtabSection, sizeof(Elf64_Shdr));
 	Elf64_Sym *symtab = (Elf64_Sym*) kmalloc(symtabSection.sh_size);
 	module->numSymbols = symtabSection.sh_size / sizeof(Elf64_Sym);
-	fp->seek(fp, symtabSection.sh_offset, SEEK_SET);
+	vfsSeek(fp, symtabSection.sh_offset, VFS_SEEK_SET);
 	vfsRead(fp, symtab, symtabSection.sh_size);
 
 	// search for necessary symbols
@@ -585,7 +516,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 
 	// parse the relocations
 	Elf64_Shdr relaSection;
-	fp->seek(fp, elfHeader.e_shoff + shRela * sizeof(Elf64_Shdr), SEEK_SET);
+	vfsSeek(fp, elfHeader.e_shoff + shRela * sizeof(Elf64_Shdr), VFS_SEEK_SET);
 	vfsRead(fp, &relaSection, sizeof(Elf64_Shdr));
 	uint64_t numRelocs = relaSection.sh_size / sizeof(Elf64_Rela);
 
@@ -594,7 +525,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): the module body has %lu relocation entries\n", modname, numRelocs);
 	};
 
-	fp->seek(fp, relaSection.sh_offset, SEEK_SET);
+	vfsSeek(fp, relaSection.sh_offset, VFS_SEEK_SET);
 	Elf64_Rela rela;
 	for (i=0; i<numRelocs; i++)
 	{
@@ -924,9 +855,4 @@ void rmmodAll()
 
 		mod = mod->next;
 	};
-};
-
-FileSystem *getModulefs()
-{
-	return moduleFileSystem;
 };

@@ -36,7 +36,7 @@
 
 #include <glidix/ftab.h>
 
-void setupTerminal(FileTable *ftab);
+void initTerminal();
 void termPutChar(char c);
 
 #endif
