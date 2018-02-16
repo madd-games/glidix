@@ -54,7 +54,6 @@
 static IRQHandler oldHandler;
 static IRQHandler oldHandler12;
 static HuminDevice *hups;
-static PointDevice *ptrps;
 
 static volatile ATOMIC(uint8_t)	kbdbuf[64];
 static volatile ATOMIC(int)	kbdput = 0;
@@ -112,7 +111,7 @@ static void kbdThread(void *data)
 				};
 				
 				rely = -rely;
-				ptrRelMotion(ptrps, relx, rely);
+				ptrRelMotion(relx, rely);
 			};
 			
 			// check each of the buttons
@@ -252,7 +251,6 @@ MODULE_INIT()
 	oldHandler = registerIRQHandler(1, onKeyboardIRQ);
 	oldHandler12 = registerIRQHandler(12, onMouseIRQ);
 	hups = huminCreateDevice("PS/2 Keyboard and Mouse");
-	ptrps = ptrCreate();
 	
 	// initialize the mouse
 	mouse_install();
@@ -279,6 +277,5 @@ MODULE_FINI()
 	registerIRQHandler(1, oldHandler);
 	registerIRQHandler(12, oldHandler12);
 	huminDeleteDevice(hups);
-	ptrDelete(ptrps);
 	return 0;
 };
