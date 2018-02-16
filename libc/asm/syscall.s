@@ -50,14 +50,14 @@ GLIDIX_SYSCALL	25,	waitpid
 GLIDIX_SYSCALL	26,	kill
 GLIDIX_SYSCALL	27,	_glidix_insmod
 GLIDIX_SYSCALL	28,	_glidix_ioctl
-GLIDIX_SYSCALL	29,	_glidix_fdopendir
+
 GLIDIX_SYSCALL	30,	_glidix_diag
 GLIDIX_SYSCALL	31,	_glidix_mount
 GLIDIX_SYSCALL	32,	_glidix_yield
 GLIDIX_SYSCALL	33,	_glidix_time
-GLIDIX_SYSCALL	34,	realpath
+
 GLIDIX_SYSCALL	35,	chdir
-GLIDIX_SYSCALL	36,	getcwd
+
 GLIDIX_SYSCALL	37,	_glidix_fstat
 GLIDIX_SYSCALL	38,	chmod
 GLIDIX_SYSCALL	39,	fchmod
@@ -87,10 +87,10 @@ GLIDIX_SYSCALL	62,	link
 GLIDIX_SYSCALL	63,	_glidix_unmount
 GLIDIX_SYSCALL	64,	_glidix_lstat
 GLIDIX_SYSCALL	65,	symlink
-GLIDIX_SYSCALL	66,	readlink
+
 GLIDIX_SYSCALL	67,	_glidix_down
 GLIDIX_SYSCALL	68,	sleep
-GLIDIX_SYSCALL	69,	_glidix_utime
+
 GLIDIX_SYSCALL	70,	umask
 GLIDIX_SYSCALL	71,	_glidix_routetab
 GLIDIX_SYSCALL	72,	socket
@@ -117,7 +117,7 @@ GLIDIX_SYSCALL	92,	_glidix_netconf_addr
 GLIDIX_SYSCALL	93,	_glidix_fcntl_getfd
 GLIDIX_SYSCALL	94,	_glidix_fcntl_setfd
 GLIDIX_SYSCALL	95,	_glidix_unique
-GLIDIX_SYSCALL	96,	isatty
+GLIDIX_SYSCALL	96,	mkfifo
 GLIDIX_SYSCALL	97,	_glidix_bindif
 GLIDIX_SYSCALL	98,	_glidix_route_clear
 GLIDIX_SYSCALL	99,	munmap
@@ -146,7 +146,7 @@ GLIDIX_SYSCALL	124,	_glidix_mcast
 GLIDIX_SYSCALL	125,	_glidix_fpoll
 GLIDIX_SYSCALL	126,	_glidix_oxperm
 GLIDIX_SYSCALL	127,	_glidix_dxperm
-GLIDIX_SYSCALL	128,	_glidix_fsinfo
+GLIDIX_SYSCALL	128,	_glidix_fchxperm
 GLIDIX_SYSCALL	129,	_glidix_chxperm
 GLIDIX_SYSCALL	130,	_glidix_haveperm
 GLIDIX_SYSCALL	131,	sync

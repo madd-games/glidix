@@ -172,8 +172,10 @@ int termIoctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 		sti();
 		termGroup = pgid;
 		return 0;
+	case IOCTL_TTY_ISATTY:
+		return 0;
 	default:
-		ERRNO = EINVAL;
+		ERRNO = ENODEV;
 		return -1;
 	};
 };

@@ -107,8 +107,6 @@ int			grantpt(int fd);
 int			unlockpt(int fd);
 char*			ptsname(int fd);
 int			ptsname_r(int fd, char *buffer, size_t buflen);
-
-/* implemented by libglidix directly */
 char*			realpath(const char*, char*);
 
 #ifdef __cplusplus

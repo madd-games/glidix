@@ -148,6 +148,8 @@ static int pts_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 		ptty->pgid = pgid;
 		semSignal(&ptty->sem);
 		return 0;
+	case IOCTL_TTY_ISATTY:
+		return 0;
 	default:
 		ERRNO = EINVAL;
 		semSignal(&ptty->sem);

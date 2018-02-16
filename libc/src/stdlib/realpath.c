@@ -26,54 +26,32 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <dirent.h>
-#include <sys/glidix.h>
+#include <sys/call.h>
 #include <stdlib.h>
-#include <limits.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
 
-DIR *fdopendir(int fd)
+char* realpath(const char *path, char *buffer)
 {
-	struct stat st;
-	if (fstat(fd, &st) != 0)
-	{
-		int errnum = errno;
-		close(fd);
-		errno = errnum;
-		return NULL;
-	};
-	
-	if (!S_ISDIR(st.st_mode))
-	{
-		close(fd);
-		errno = ENOTDIR;
-		return NULL;
-	};
-	
-	DIR *dirp = (DIR*) malloc(sizeof(DIR));
-	if (dirp == NULL)
-	{
-		close(fd);
-		errno = ENOMEM;
-		return NULL;
-	};
-	
-	dirp->__fd = fd;
-	dirp->__current = NULL;
-	dirp->__key = 0;
-	
-	return dirp;
-};
-
-DIR *opendir(const char *dirname)
-{
-	int fd = open(dirname, O_RDONLY | O_CLOEXEC);
-	if (fd == -1)
+	uint64_t size = __syscall(__SYS_realpath, path);
+	if (size == 0)
 	{
 		return NULL;
 	};
 	
-	return fdopendir(fd);
+	if (buffer == NULL)
+	{
+		buffer = (char*) malloc(size);
+		__syscall(__SYS_getktu, buffer, size);
+		return buffer;
+	}
+	else if (size > 256)
+	{
+		errno = ENAMETOOLONG;
+		return NULL;
+	}
+	else
+	{
+		__syscall(__SYS_getktu, buffer, size);
+		return buffer;
+	};
 };

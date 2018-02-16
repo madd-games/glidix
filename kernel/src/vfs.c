@@ -58,7 +58,7 @@ static int rootRegInode(FileSystem *fs, Inode *inode)
 	if ((inode->mode & VFS_MODE_TYPEMASK) == 0)
 	{
 		// create caches for regular files
-		inode->ft = ftCreate(0);
+		inode->ft = ftCreate(FT_ANON);
 		inode->ft->load = rootfs_load;
 	};
 	
@@ -106,7 +106,8 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 	semInit(&inode->lock);
 	inode->fs = fs;
 	inode->mode = mode & ~umask;
-	
+	inode->nextKey = 2;		/* 0 and 1 are for "." and ".." */
+
 	if (getCurrentThread() != NULL && getCurrentThread()->creds != NULL)
 	{
 		inode->uid = getCurrentThread()->creds->euid;
@@ -277,6 +278,7 @@ static void vfsCallInInode(Dentry *dent)
 			semInit(&inode->lock);
 			inode->fs = fs;
 			inode->parent = dent;
+			inode->nextKey = 2;
 
 			if (fs->loadInode == NULL)
 			{
@@ -2069,7 +2071,34 @@ int vfsChangeXPerm(InodeRef startdir, const char *path, uint64_t ixperm, uint64_
 
 ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out)
 {
+	if ((inode->mode & VFS_MODE_TYPEMASK) != VFS_MODE_DIRECTORY)
+	{
+		return -ENOTDIR;
+	};
+	
 	semWait(&inode->lock);
+	
+	if (key >= 0 && key < 2)
+	{
+		struct kdirent *dirent = (struct kdirent*) kmalloc(sizeof(struct kdirent) + 3);
+		memset(dirent, 0, sizeof(struct kdirent) + 3);
+		
+		switch (key)
+		{
+		case 0:
+			dirent->d_ino = inode->ino;
+			strcpy(dirent->d_name, ".");
+			break;
+		case 1:
+			dirent->d_ino = inode->parent->dir->ino;
+			strcpy(dirent->d_name, "..");
+			break;
+		};
+		
+		*out = dirent;
+		semSignal(&inode->lock);
+		return sizeof(struct kdirent) + 3;
+	};
 	
 	int haveHigher = 0;
 	Dentry *dent;

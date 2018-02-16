@@ -34,10 +34,6 @@
 
 void rewinddir(DIR *dirp)
 {
-	if (dirp->_fd != -2) close(dirp->_fd);
-	int fd = _glidix_fdopendir(dirp->_rpath);
-
-	dirp->_fd = fd;
-	dirp->_idx = 0;
+	dirp->__key = 0;
 };
 

@@ -26,7 +26,8 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <sys/glidix.h>
+#include <sys/call.h>
+#include <sys/time.h>
 #include <utime.h>
 
 int utime(const char *path, const struct utimbuf *times)
@@ -43,5 +44,18 @@ int utime(const char *path, const struct utimbuf *times)
 		mtime = times->modtime;
 	};
 
-	return _glidix_utime(path, atime, mtime);
+	return (int) __syscall(__SYS_utime, path, atime, 0, mtime, 0);
+};
+
+int utimes(const char *path, const struct timeval times[2])
+{
+	if (times == NULL)
+	{
+		return __syscall(__SYS_utime, path, 0, 0, 0, 0);
+	}
+	else
+	{
+		return __syscall(__SYS_utime, path, times[0].tv_sec, times[0].tv_sec * 1000000UL,
+							times[1].tv_sec, times[1].tv_sec * 1000000UL);
+	};
 };

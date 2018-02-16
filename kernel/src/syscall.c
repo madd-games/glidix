@@ -842,7 +842,6 @@ int sys_chdir(const char *upath)
 	return 0;
 };
 
-// TODO: update libc to this new signature
 size_t sys_getcwd()
 {
 	char *cwd = vfsGetCurrentDirPath();
@@ -1097,8 +1096,6 @@ int sys_symlink(const char *utarget, const char *upath)
 	return 0;
 };
 
-
-// TODO: update libc
 size_t sys_readlink(const char *upath)
 {
 	char path[USER_STRING_MAX];
@@ -1161,7 +1158,6 @@ unsigned sys_sleep(unsigned seconds)
 	return secondsLeft;
 };
 
-// TODO: update libc
 int sys_utime(const char *upath, time_t atime, uint32_t anano, time_t mtime, uint32_t mnano)
 {
 	char path[USER_STRING_MAX];
@@ -1601,21 +1597,6 @@ int sys_fcntl_setfd(int fd, int flags)
 	return 0;
 };
 
-// TODO: O_TERMINAL is not actually used anymore
-int sys_isatty(int fd)
-{
-	File *fp = ftabGet(getCurrentThread()->ftab, fd);
-	if (fp == NULL)
-	{
-		ERRNO = EBADF;
-		return -1;
-	};
-	
-	int result = !!(fp->oflags & O_TERMINAL);
-	vfsClose(fp);
-	return result;
-};
-
 int sys_bindif(int fd, const char *uifname)
 {
 	char ifname[USER_STRING_MAX];
@@ -2021,7 +2002,6 @@ void sys_yield()
 	kyield();
 };
 
-// TODO: update libc
 size_t sys_realpath(const char *upath)
 {
 	char path[USER_STRING_MAX];
@@ -2057,7 +2037,6 @@ int* sys_geterrnoptr()
 	return getCurrentThread()->errnoptr;
 };
 
-// TODO: update libc
 int sys_unmount(const char *upath, int flags)
 {
 	char path[USER_STRING_MAX];
@@ -2809,7 +2788,6 @@ uint64_t sys_dxperm()
 	return getCurrentThread()->dxperm;
 };
 
-// TODO: update libc to add this system call and also remove fsinfo that it replaced
 int sys_fchxperm(int fd, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm)
 {
 	File *fp = ftabGet(getCurrentThread()->ftab, fd);
@@ -3294,7 +3272,7 @@ size_t sys_getdent(int fd, int key)
 	if (fp == NULL)
 	{
 		ERRNO = EBADF;
-		return -1;
+		return 0;
 	};
 	
 	struct kdirent *dirent;
@@ -3316,7 +3294,7 @@ size_t sys_getdent(int fd, int key)
 
 int sys_getktu(void *buffer, size_t size)
 {
-	if (getCurrentThread()->ktusz != size)
+	if (getCurrentThread()->ktusz < size)
 	{
 		ERRNO = EINVAL;
 		return -1;
@@ -3338,7 +3316,7 @@ int sys_getktu(void *buffer, size_t size)
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 146
+#define SYSCALL_NUMBER 145
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3371,7 +3349,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_ioctl,				// 28
 	&sys_getdent,				// 29
 	SYS_NULL,				// 30 (_glidix_diag())
-	&sys_mount,				// 31 [TODO: update signature in libc]
+	&sys_mount,				// 31
 	&sys_yield,				// 32
 	&sys_time,				// 33
 	&sys_realpath,				// 34
@@ -3403,7 +3381,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_setregid,				// 60
 	&sys_rmmod,				// 61
 	&sys_link,				// 62
-	&sys_unmount,				// 63 [TODO: update signature in libc]
+	&sys_unmount,				// 63
 	&sys_lstat,				// 64
 	&sys_symlink,				// 65
 	&sys_readlink,				// 66
@@ -3436,7 +3414,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_fcntl_getfd,			// 93
 	&sys_fcntl_setfd,			// 94
 	&sys_unique,				// 95
-	&sys_isatty,				// 96
+	&sys_mkfifo,				// 96
 	&sys_bindif,				// 97
 	&sys_route_clear,			// 98
 	&sys_munmap,				// 99
@@ -3485,7 +3463,6 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_aclput,				// 142
 	&sys_aclclear,				// 143
 	&sys_getktu,				// 144
-	&sys_mkfifo,				// 145 [TODO: add to libc]
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

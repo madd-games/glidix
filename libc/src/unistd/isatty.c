@@ -26,54 +26,11 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <dirent.h>
-#include <sys/glidix.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <errno.h>
-#include <fcntl.h>
 #include <unistd.h>
+#include <termios.h>
+#include <errno.h>
 
-DIR *fdopendir(int fd)
+int isatty(int fd)
 {
-	struct stat st;
-	if (fstat(fd, &st) != 0)
-	{
-		int errnum = errno;
-		close(fd);
-		errno = errnum;
-		return NULL;
-	};
-	
-	if (!S_ISDIR(st.st_mode))
-	{
-		close(fd);
-		errno = ENOTDIR;
-		return NULL;
-	};
-	
-	DIR *dirp = (DIR*) malloc(sizeof(DIR));
-	if (dirp == NULL)
-	{
-		close(fd);
-		errno = ENOMEM;
-		return NULL;
-	};
-	
-	dirp->__fd = fd;
-	dirp->__current = NULL;
-	dirp->__key = 0;
-	
-	return dirp;
-};
-
-DIR *opendir(const char *dirname)
-{
-	int fd = open(dirname, O_RDONLY | O_CLOEXEC);
-	if (fd == -1)
-	{
-		return NULL;
-	};
-	
-	return fdopendir(fd);
+	return ioctl(fd, __IOCTL_TTY_ISATTY) == 0;
 };

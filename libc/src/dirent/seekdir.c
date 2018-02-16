@@ -27,53 +27,13 @@
 */
 
 #include <dirent.h>
-#include <sys/glidix.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
 
-DIR *fdopendir(int fd)
+long telldir(DIR *dirp)
 {
-	struct stat st;
-	if (fstat(fd, &st) != 0)
-	{
-		int errnum = errno;
-		close(fd);
-		errno = errnum;
-		return NULL;
-	};
-	
-	if (!S_ISDIR(st.st_mode))
-	{
-		close(fd);
-		errno = ENOTDIR;
-		return NULL;
-	};
-	
-	DIR *dirp = (DIR*) malloc(sizeof(DIR));
-	if (dirp == NULL)
-	{
-		close(fd);
-		errno = ENOMEM;
-		return NULL;
-	};
-	
-	dirp->__fd = fd;
-	dirp->__current = NULL;
-	dirp->__key = 0;
-	
-	return dirp;
+	return (long) dirp->__key;
 };
 
-DIR *opendir(const char *dirname)
+void seekdir(DIR *dirp, long loc)
 {
-	int fd = open(dirname, O_RDONLY | O_CLOEXEC);
-	if (fd == -1)
-	{
-		return NULL;
-	};
-	
-	return fdopendir(fd);
+	dirp->__key = (int) loc;
 };

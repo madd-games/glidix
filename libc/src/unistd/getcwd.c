@@ -1,6 +1,5 @@
 /*
 	Glidix Runtime
-
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
@@ -26,54 +25,27 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <dirent.h>
-#include <sys/glidix.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <errno.h>
-#include <fcntl.h>
+#include <sys/call.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <errno.h>
 
-DIR *fdopendir(int fd)
+char* getcwd(char *buf, size_t size)
 {
-	struct stat st;
-	if (fstat(fd, &st) != 0)
+	uint64_t realsize = __syscall(__SYS_getcwd);
+	if (buf == NULL)
 	{
-		int errnum = errno;
-		close(fd);
-		errno = errnum;
+		buf = (char*) malloc(realsize);
+		__syscall(__SYS_getktu, buf, realsize);
+		return buf;
+	};
+	
+	if (realsize > size)
+	{
+		errno = ERANGE;
 		return NULL;
 	};
 	
-	if (!S_ISDIR(st.st_mode))
-	{
-		close(fd);
-		errno = ENOTDIR;
-		return NULL;
-	};
-	
-	DIR *dirp = (DIR*) malloc(sizeof(DIR));
-	if (dirp == NULL)
-	{
-		close(fd);
-		errno = ENOMEM;
-		return NULL;
-	};
-	
-	dirp->__fd = fd;
-	dirp->__current = NULL;
-	dirp->__key = 0;
-	
-	return dirp;
-};
-
-DIR *opendir(const char *dirname)
-{
-	int fd = open(dirname, O_RDONLY | O_CLOEXEC);
-	if (fd == -1)
-	{
-		return NULL;
-	};
-	
-	return fdopendir(fd);
+	__syscall(__SYS_getktu, buf, realsize);
+	return buf;
 };
