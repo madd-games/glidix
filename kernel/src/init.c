@@ -333,10 +333,6 @@ void kmain(KernelBootInfo *info)
 	ispInit();
 	DONE();
 	
-	//kprintf("Initializing per-CPU variable area... ");
-	//initPerCPU();
-	//DONE();
-	
 	localTSSPtr = &_tss;
 	localGDTPtr = &GDT64;
 	
@@ -365,38 +361,6 @@ void kmain(KernelBootInfo *info)
 
 	kprintf("Initializing the FPU... ");
 	fpuInit();
-	DONE();
-
-	kprintf("Initializing the VFS... ");
-	vfsInit();
-	DONE();
-
-	kprintf("Initializing the initrdfs... ");
-	initInitrdfs(info);
-	DONE();
-
-	kprintf("Initializing the procfs... ");
-	initProcfs();
-	DONE();
-
-	kprintf("Initializing the devfs... ");
-	initDevfs();
-	DONE();
-
-	kprintf("Initializing the pointer device interface... ");
-	ptrInit();
-	DONE();
-	
-	kprintf("Initializing PCI... ");
-	pciInit();
-	DONE();
-
-	kprintf("Initializing USB...");
-	usbInit();
-	DONE();
-	
-	kprintf("Initializing the FS driver interface... ");
-	initFSDrivers();
 	DONE();
 
 	kprintf("Initializing the PIT... ");
@@ -490,7 +454,39 @@ static void str2uuid(char *InString, UINT8 *UuidBuffer)
 };
 
 void kmain2()
-{	
+{
+	kprintf("Initializing the VFS... ");
+	vfsInit();
+	DONE();
+
+	kprintf("Initializing the initrdfs... ");
+	initInitrdfs(bootInfo);
+	DONE();
+
+	kprintf("Initializing the procfs... ");
+	initProcfs();
+	DONE();
+
+	kprintf("Initializing the devfs... ");
+	initDevfs();
+	DONE();
+
+	kprintf("Initializing the pointer device interface... ");
+	ptrInit();
+	DONE();
+	
+	kprintf("Initializing PCI... ");
+	pciInit();
+	DONE();
+
+	kprintf("Initializing USB...");
+	usbInit();
+	DONE();
+	
+	kprintf("Initializing the FS driver interface... ");
+	initFSDrivers();
+	DONE();
+
 	initSymtab();
 	
 	kprintf("Creating /run... ");

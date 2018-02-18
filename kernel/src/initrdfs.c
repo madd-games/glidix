@@ -58,7 +58,6 @@ typedef struct
 TarHeader *masterHeader;
 SECTION(".initrd") uint8_t initrdImage[8*1024*1024];
 
-#if 0
 static uint64_t parseOct(const char *data)
 {
 	uint64_t out = 0;
@@ -68,12 +67,41 @@ static uint64_t parseOct(const char *data)
 	};
 	return out;
 };
-#endif
 
 void initInitrdfs(KernelBootInfo *info)
 {
+	assert(sizeof(TarHeader) == 512);
 	masterHeader = (TarHeader*) initrdImage;
 
-	//TarHeader *header = masterHeader;
-	panic("this is TODO");
+	assert(vfsMakeDir(VFS_NULL_IREF, "/initrd", 0755) == 0);
+	
+	TarHeader *header = masterHeader;
+	TarHeader *end = (TarHeader*) ((uint64_t)initrdImage + info->initrdSize);
+	
+	while (header < end)
+	{
+		char *data = (char*) &header[1];
+		uint64_t size = parseOct(header->size);
+		uint64_t asize = (size + 511) & ~511;
+		
+		char fullpath[256];
+		strcpy(fullpath, "/initrd/");
+		strcat(fullpath, header->filename);
+		
+		if (fullpath[strlen(fullpath)-1] == '/')
+		{
+			fullpath[strlen(fullpath)-1] = 0;
+			assert(vfsMakeDir(VFS_NULL_IREF, fullpath, 0755) == 0);
+		}
+		else
+		{
+			int error;
+			File *fp = vfsOpen(VFS_NULL_IREF, fullpath, O_WRONLY | O_CREAT | O_EXCL, 0755, &error);
+			assert(fp != NULL);
+			vfsWrite(fp, data, size);
+			vfsClose(fp);
+		};
+		
+		header = (TarHeader*) (data + asize);
+	};
 };

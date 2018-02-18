@@ -406,7 +406,9 @@ InodeRef vfsGetInode(DentryRef dref, int follow, int *error)
 
 InodeRef vfsGetRoot()
 {
-	Creds *creds = getCurrentThread()->creds;
+	Creds *creds = NULL;
+	if (getCurrentThread() != NULL) creds = getCurrentThread()->creds;
+	
 	if (creds == NULL)
 	{
 		vfsUprefInode(kernelRootInode);
@@ -428,7 +430,9 @@ InodeRef vfsGetRoot()
 
 InodeRef vfsGetCurrentDir()
 {
-	Creds *creds = getCurrentThread()->creds;
+	Creds *creds = NULL;
+	if (getCurrentThread() != NULL) creds = getCurrentThread()->creds;
+	
 	if (creds == NULL)
 	{
 		return vfsGetRoot();
@@ -908,7 +912,7 @@ int vfsUnlinkInode(DentryRef dref, int flags)
 			// if the parent directory has the sticky bit set, then the owner of either
 			// the parent directory or the entry itself may delete it
 			uid_t uid = 0;
-			if (getCurrentThread()->creds != NULL) uid = getCurrentThread()->creds->euid;
+			if (getCurrentThread() != NULL && getCurrentThread()->creds != NULL) uid = getCurrentThread()->creds->euid;
 			
 			if (dref.dent->dir->uid != uid && dref.dent->target->uid != uid)
 			{
@@ -1155,7 +1159,7 @@ static ssize_t vfsReadUnlocked(File *fp, void *buffer, size_t size, off_t offset
 		return -1;
 	};
 	
-	if ((~size) > (size_t) offset)
+	if ((~size) < (size_t) offset)
 	{
 		ERRNO = EOVERFLOW;
 		return -1;
@@ -1182,7 +1186,7 @@ static ssize_t vfsWriteUnlocked(File *fp, const void *buffer, size_t size, off_t
 		return -1;
 	};
 	
-	if ((~size) > (size_t) offset)
+	if ((~size) < (size_t) offset)
 	{
 		ERRNO = EOVERFLOW;
 		return -1;
@@ -1232,7 +1236,7 @@ ssize_t vfsPRead(File *fp, void *buffer, size_t size, off_t offset)
 
 ssize_t vfsWrite(File *fp, const void *buffer, size_t size)
 {
-	if ((fp->oflags & O_RDONLY) == 0)
+	if ((fp->oflags & O_WRONLY) == 0)
 	{
 		ERRNO = EBADF;
 		return -1;
@@ -1370,7 +1374,7 @@ int vfsStat(InodeRef startdir, const char *path, int follow, struct kstat *st)
 int vfsInodeChangeMode(Inode *inode, mode_t mode)
 {	
 	uid_t myUID;
-	if (getCurrentThread()->creds == NULL)
+	if (getCurrentThread() == NULL || getCurrentThread()->creds == NULL)
 	{
 		myUID = 0;
 	}
@@ -1423,7 +1427,7 @@ int vfsInodeChangeOwner(Inode *inode, uid_t uid, gid_t gid)
 	semWait(&inode->lock);
 
 	uid_t myUID;
-	if (getCurrentThread()->creds == NULL)
+	if (getCurrentThread() == NULL || getCurrentThread()->creds == NULL)
 	{
 		myUID = 0;
 	}

@@ -1785,6 +1785,8 @@ int signalThid(int thid, int sig)
 
 int havePerm(uint64_t xperm)
 {
+	if (currentThread == NULL) return 1;
+	
 	if (currentThread->creds == NULL)
 	{
 		// the kernel can do anything

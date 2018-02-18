@@ -212,6 +212,8 @@ int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 
 void semWait(Semaphore *sem)
 {
+	if (getCurrentThread() == NULL) return;
+	
 	int result = semWaitGen(sem, 1, 0, 0);
 	if (result != 1)
 	{
@@ -222,6 +224,7 @@ void semWait(Semaphore *sem)
 
 void semSignal(Semaphore *sem)
 {
+	if (getCurrentThread() == NULL) return;
 	semSignal2(sem, 1);
 };
 
