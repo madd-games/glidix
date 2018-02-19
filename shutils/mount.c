@@ -64,7 +64,7 @@ int parseFstabLine(char *line)
 	strcpy(mountPrefix, mountpoint);
 	if (mountPrefix[strlen(mountPrefix)-1] != '/') strcat(mountPrefix, "/");
 
-	if (_glidix_mount(type, device, mountPrefix, 0) != 0)
+	if (_glidix_mount(type, device, mountPrefix, 0, NULL, 0) != 0)
 	{
 		perror(progName);
 		return 1;
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
 	strcpy(mountPrefix, mountpoint);
 	if (mountPrefix[strlen(mountPrefix)-1] != '/') strcat(mountPrefix, "/");
 
-	if (_glidix_mount(fstype, device, mountPrefix, 0) != 0)
+	if (_glidix_mount(fstype, device, mountPrefix, 0, NULL, 0) != 0)
 	{
 		perror(argv[0]);
 		return 1;

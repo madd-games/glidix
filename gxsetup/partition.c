@@ -1247,7 +1247,7 @@ void partFlush()
 	for (idx=0; idx<fsnum; idx++)
 	{
 		makeMountPointDirs(fstab[idx].mntpoint);
-		if (_glidix_mount(fstab[idx].type, fstab[idx].device, fstab[idx].mntpoint, 0) != 0)
+		if (_glidix_mount(fstab[idx].type, fstab[idx].device, fstab[idx].mntpoint, 0, NULL, 0) != 0)
 		{
 			char errmsg[256];
 			sprintf(errmsg, "Cannot mount %s at %s: %s", fstab[idx].device, fstab[idx].mntpoint, strerror(errno));

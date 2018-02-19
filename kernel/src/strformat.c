@@ -114,5 +114,6 @@ int strformat(char *buffer, size_t bufsize, const char *format, ...)
 	};
 	
 	va_end(ap);
+	*buffer = 0;
 	return 0;
 };

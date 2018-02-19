@@ -128,6 +128,11 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 			};
 		};
 		semSignal(&fs->lock);
+	}
+	else
+	{
+		static ino_t fsLessInoNext = 10;
+		inode->ino = __sync_fetch_and_add(&fsLessInoNext, 1);
 	};
 	
 	inode->flags |= VFS_INODE_DIRTY;

@@ -390,6 +390,7 @@ void kmain(KernelBootInfo *info)
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
 };
 
+extern Inode *inodeTTY0;
 static void spawnProc(void *stack)
 {
 	DONE();
@@ -467,9 +468,7 @@ void kmain2()
 	initProcfs();
 	DONE();
 
-	kprintf("Initializing the devfs... ");
 	initDevfs();
-	DONE();
 
 	kprintf("Initializing the pointer device interface... ");
 	ptrInit();

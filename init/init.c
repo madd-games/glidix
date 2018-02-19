@@ -49,10 +49,6 @@ int shouldHalt = 0;
 int shouldRunPoweroff = 0;
 int ranPoweroff = 0;
 
-//char* confRootType = NULL;
-//char* confRootDevice = NULL;
-//char** confExec = NULL;
-
 struct fsinfo startupFSList[256];
 size_t startupFSCount;
 
@@ -279,7 +275,7 @@ void shutdownSystem(int action)
 	{
 		if (!isStartupFS(&currentFSList[i]))
 		{
-			if (_glidix_unmount(currentFSList[i].fs_mntpoint) != 0)
+			if (_glidix_unmount(currentFSList[i].fs_mntpoint, 0) != 0)
 			{
 				printf("init: failed to unmount %s: %s\n", currentFSList[i].fs_mntpoint, strerror(errno));
 				printf("init: waiting 5 seconds and skipping this filesystem\n");
@@ -335,7 +331,7 @@ char **devList = NULL;
 int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *bootid)
 {
 	// try mounting it first
-	if (_glidix_mount(fstype, image, "/", 0) != 0)
+	if (_glidix_mount(fstype, image, "/", 0, NULL, 0) != 0)
 	{
 		return -1;
 	};
@@ -366,7 +362,7 @@ int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *boo
 	};
 	
 	// not the correct ID, unmount
-	_glidix_unmount("/");
+	_glidix_unmount("/", 0);
 	return -1;
 };
 
@@ -447,6 +443,10 @@ int main(int argc, char *argv[])
 {	
 	if (getpid() == 1)
 	{
+		if (open("/dev/tty0", O_RDWR) != 0) return 1;
+		if (dup(0) != 1) return 1;
+		if (dup(1) != 2) return 1;
+		
 		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
 		setenv("HOME", "/root", 1);
 		setenv("LD_LIBRARY_PATH", "/usr/local/lib:/usr/lib:/lib", 1);
@@ -480,10 +480,10 @@ int main(int argc, char *argv[])
 		// get the list of "startup filesystems", which shall not be unmounted when shutting down
 		startupFSCount = _glidix_fsinfo(startupFSList, 256);
 		
-		_glidix_mount("ramfs", ".tmp", "/tmp/", 0);
-		_glidix_mount("ramfs", ".run", "/run/", 0);
-		_glidix_mount("ramfs", ".run", "/var/run/", 0);
-		_glidix_mount("ramfs", ".run", "/", 0);
+		//_glidix_mount("ramfs", ".tmp", "/tmp/", 0);
+		//_glidix_mount("ramfs", ".run", "/run/", 0);
+		//_glidix_mount("ramfs", ".run", "/var/run/", 0);
+		//_glidix_mount("ramfs", ".run", "/", 0);
 		
 		if (mkdir("/sem", 01777) != 0)
 		{
@@ -491,7 +491,7 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 		
-		_glidix_unmount("/");
+		_glidix_unmount("/", 0);
 		loadmods();
 		
 		printf("init: initializing partitions...\n");

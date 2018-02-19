@@ -289,9 +289,24 @@ void setupTerminal(FileTable *ftab)
 };
 #endif
 
+Inode *inodeTTY0;
 void initTerminal()
 {
+	inputWrite = 0;
+	inputRead = 0;
+	lineBufferSize = 0;
+
+	termState.c_iflag = ICRNL;
+	termState.c_oflag = 0;
+	termState.c_cflag = 0;
+	termState.c_lflag = ECHO | ECHOE | ECHOK | ECHONL | ICANON | ISIG;
+
+	semInit2(&semCount, 0);
+	semInit(&semInput);
+	semInit(&semLineBuffer);
+
 	Inode *inode = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0620);
+	inodeTTY0 = inode;
 	inode->pread = termRead;
 	inode->pwrite = termWrite;
 	inode->ioctl = termIoctl;

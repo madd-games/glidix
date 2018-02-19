@@ -33,5 +33,6 @@
 
 void initProcfs()
 {
-	panic("TODO");
+	assert(vfsMakeDir(VFS_NULL_IREF, "/proc", 0755) == 0);
+	assert(vfsCreateSymlink("DANGLING", VFS_NULL_IREF, "/proc/self") == 0);
 };
