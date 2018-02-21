@@ -1,7 +1,11 @@
 Glidix
 ======
 
-Glidix is an experimental UNIX-clone OS, designed to run on x86_64. It is made mainly for experiments, and is designed to be easy to build and run on 64-bit x86-family processors. We are aiming to make it very customizable and therefore optimizeable for anyone's needs.
+Glidix is an operating system for the x86_64 platform. The custom-made kernel and C library work together to implement the POSIX API, while cleaning up or removing the messy parts, and adding more high-level frameworks on top of that. It is a modernized, graphical operating system which tries to follow UNIX principles to a reasonable degree. It is designed to be easy to use for users, and easy to program for for developers.
+
+## Status
+
+The operating system is currently in _alpha_ state. It is currently therefore _not_ guaranteed to be ABI-compatible between versions. In fact, the ABI gets constantly revised, and recompilation is required a lot. We are hoping to move onto a _beta_ version in the next few months, and from there onwards, ABI compatibility will be guaranteed, and binary releases of applications will be possible.
 
 ## Requirements
 
