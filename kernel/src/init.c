@@ -390,7 +390,6 @@ void kmain(KernelBootInfo *info)
 	// "Done" will be displayed by initSched(), and then kmain2() will be called.
 };
 
-extern Inode *inodeTTY0;
 static void spawnProc(void *stack)
 {
 	DONE();

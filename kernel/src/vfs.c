@@ -123,6 +123,7 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 		{
 			if (fs->regInode(fs, inode) != 0)
 			{
+				semSignal(&fs->lock);
 				kfree(inode);
 				return NULL;
 			};
@@ -726,13 +727,16 @@ static DentryRef vfsGetDentryRecur(InodeRef startdir, const char *path, int crea
 		// check if we have the required permissions
 		int neededPerms = VFS_ACE_EXEC;
 		if (create) neededPerms |= VFS_ACE_WRITE;
+		semWait(&dir.inode->lock);
 		if (!vfsIsAllowed(dir.inode, neededPerms))
 		{
+			semSignal(&dir.inode->lock);
 			vfsUnrefInode(dir);
 			kfree(pathbuf);
 			if (error != NULL) *error = EACCES;
 			return nulref;
 		};
+		semSignal(&dir.inode->lock);
 		
 		// all good
 		currentDent = vfsGetChildDentry(dir, token, (create) && (isFinal));
@@ -1078,6 +1082,7 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 	InodeRef iref = vfsGetInode(dref, 1, error);
 	if (iref.inode == NULL)
 	{
+		vfsUnrefInode(iref);
 		return NULL;
 	};
 	
@@ -1089,6 +1094,7 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 	semWait(&iref.inode->lock);
 	if (!vfsIsAllowed(iref.inode, permsNeeded))
 	{
+		semSignal(&iref.inode->lock);
 		vfsUnrefInode(iref);
 		if (error != NULL) *error = EACCES;
 		return NULL;
@@ -1573,11 +1579,14 @@ int vfsChangeDir(InodeRef startdir, const char *path)
 		return ENOTDIR;
 	};
 	
+	semWait(&iref.inode->lock);
 	if (!vfsIsAllowed(iref.inode, VFS_ACE_EXEC))
 	{
+		semSignal(&iref.inode->lock);
 		vfsUnrefInode(iref);
 		return EACCES;
 	};
+	semSignal(&iref.inode->lock);
 	
 	semWait(&creds->semDir);
 	InodeRef old = creds->cwd;
@@ -1646,8 +1655,8 @@ char* vfsRealPath(DentryRef dref)
 	InodeRef rootdir = vfsGetRoot();
 	if (rootdir.inode == dref.dent->dir)
 	{
-		vfsUnrefInode(rootdir);
 		vfsUnrefDentry(dref);
+		vfsUnrefInode(rootdir);
 		return strdup("/");
 	};
 	

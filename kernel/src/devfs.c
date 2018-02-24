@@ -179,7 +179,7 @@ int devfsAdd(const char *name, Inode *inode)
 	
 	vfsBindInode(dref, inode);
 	vfsDownrefInode(inode);		// since the above uprefs it, and we want to take the reference
-	
+
 	getCurrentThread()->creds = creds;
 	return 0;
 };

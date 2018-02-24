@@ -57,6 +57,12 @@
 #define	SEM_W_FILE(oflag)			(((oflag) & (SEM_W_NONBLOCK)) | SEM_W_INTR)
 
 /**
+ * Semaphore flags (for the 'flags' field).
+ */
+#define	SEM_TERMINATED				(1 << 0)		/* terminated semaphore */
+#define	SEM_DEBUG				(1 << 1)		/* debugged semaphore */
+
+/**
  * Represents an entry in the semaphore wait queue.
  */
 typedef struct SemWaitThread_
@@ -97,9 +103,9 @@ typedef struct Semaphore_
 	int					count;
 	
 	/**
-	 * Set to 1 when the semaphore is terminated.
+	 * Semaphore flags.
 	 */
-	int					terminated;
+	int					flags;
 	
 	/**
 	 * Queue of waiting threads.
@@ -189,5 +195,14 @@ void semTerminate(Semaphore *sem);
  * called semWait() or semWaitGen(). To handle this case, semWaitGen() must be called with the SEM_W_NONBLOCK flag.
  */
 int semPoll(int numSems, Semaphore **sems, uint8_t *bitmap, int flags, uint64_t nanotimeout);
+
+/**
+ * Switch the given semaphore to debug mode. This enables the debug terminal, and also causes semWait() and semSignal()
+ * to print a stack trace and other information whenever they are called on this semaphore. Useful for debugging
+ * deadlocks and stuff.
+ *
+ * NOTE: You must call this straight after semInit() or semInit2(), before any concurrency begins.
+ */
+void semDebug(Semaphore *sem);
 
 #endif

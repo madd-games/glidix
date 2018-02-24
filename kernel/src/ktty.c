@@ -289,7 +289,6 @@ void setupTerminal(FileTable *ftab)
 };
 #endif
 
-Inode *inodeTTY0;
 void initTerminal()
 {
 	inputWrite = 0;
@@ -306,7 +305,6 @@ void initTerminal()
 	semInit(&semLineBuffer);
 
 	Inode *inode = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0620);
-	inodeTTY0 = inode;
 	inode->pread = termRead;
 	inode->pwrite = termWrite;
 	inode->ioctl = termIoctl;

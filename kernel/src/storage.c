@@ -588,7 +588,6 @@ static Inode* sdCreateInode(SDDeviceFile *fdev)
 	inode->pwrite = sdfile_pwrite;
 	inode->flush = sdfile_flush;
 	inode->ioctl = sdfile_ioctl;
-	
 	return inode;
 };
 
@@ -785,8 +784,6 @@ StorageDevice* sdCreate(SDParams *params)
 		vfsDownrefInode(inode);
 		return NULL;
 	};
-	
-	vfsDownrefInode(inode);
 
 	mutexUnlock(&sd->cacheLock);
 	mutexUnlock(&sd->lock);

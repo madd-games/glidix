@@ -43,13 +43,19 @@ void semInit2(Semaphore *sem, int count)
 {
 	spinlockRelease(&sem->lock);
 	sem->count = count;
-	sem->terminated = 0;
+	sem->flags = 0;
 	sem->first = NULL;
 	sem->last = NULL;
 };
 
 int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 {
+	if (sem->flags & SEM_DEBUG)
+	{
+		kprintf("[DEBUG] semWait(%p), count before=%d\n", sem, sem->count);
+		stackTraceHere();
+	};
+	
 	if (count == 0)
 	{
 		return -EAGAIN;
@@ -199,7 +205,7 @@ int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 			unlockSched();
 		};
 	}
-	else if (sem->terminated)
+	else if (sem->flags & SEM_TERMINATED)
 	{
 		sem->count = -1;
 	};
@@ -207,6 +213,7 @@ int semWaitGen(Semaphore *sem, int count, int flags, uint64_t nanotimeout)
 	spinlockRelease(&sem->lock);
 	if (doResched) kyield();
 	sti();
+	
 	return result;
 };
 
@@ -218,7 +225,7 @@ void semWait(Semaphore *sem)
 	if (result != 1)
 	{
 		stackTraceHere();
-		panic("semWaitGen() did not return 1 in semWait(); it returned %d (count=%d, terminated=%d, first=%p, last=%p)", result, sem->count, sem->terminated, sem->first, sem->last);
+		panic("semWaitGen() did not return 1 in semWait(); it returned %d (count=%d, flags=%d, first=%p, last=%p)", result, sem->count, sem->flags, sem->first, sem->last);
 	};
 };
 
@@ -230,6 +237,12 @@ void semSignal(Semaphore *sem)
 
 void semSignal2(Semaphore *sem, int count)
 {
+	if (sem->flags & SEM_DEBUG)
+	{
+		kprintf("[DEBUG] semSignal(%p), count before=%d\n", sem, sem->count);
+		stackTraceHere();
+	};
+
 	if (count < 0)
 	{
 		stackTraceHere();
@@ -241,7 +254,7 @@ void semSignal2(Semaphore *sem, int count)
 	cli();
 	spinlockAcquire(&sem->lock);
 	
-	if (sem->terminated)
+	if (sem->flags & SEM_TERMINATED)
 	{
 		// terminated
 		spinlockRelease(&sem->lock);
@@ -274,14 +287,14 @@ void semTerminate(Semaphore *sem)
 	cli();
 	spinlockAcquire(&sem->lock);
 	
-	if (sem->terminated)
+	if (sem->flags & SEM_TERMINATED)
 	{
 		stackTraceHere();
 		panic("attempted to terminate an already-terminated semaphore");
 	};
 	
 	int doResched = 0;
-	sem->terminated = 1;
+	sem->flags |= SEM_TERMINATED;
 	if (sem->count == 0)
 	{
 		sem->count = -1;
@@ -490,4 +503,10 @@ int semPoll(int numSems, Semaphore **sems, uint8_t *bitmap, int flags, uint64_t 
 	if (doResched) kyield();
 	sti();
 	return numFreeSems;
+};
+
+void semDebug(Semaphore *sem)
+{
+	enableDebugTerm();
+	sem->flags |= SEM_DEBUG;
 };
