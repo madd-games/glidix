@@ -3312,11 +3312,86 @@ int sys_getktu(void *buffer, size_t size)
 	return 0;
 };
 
+int sys_statvfs(const char *upath, struct kstatvfs *buf)
+{
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+
+	struct kstatvfs kbuf;
+	int status = vfsStatVFS(VFS_NULL_IREF, path, &kbuf);
+	if (status == 0)
+	{
+		if (memcpy_k2u(buf, &kbuf, sizeof(struct kstatvfs)) != 0)
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+		
+		return 0;
+	}
+	else
+	{
+		return -1;
+	};
+};
+
+int sys_fstatvfs(int fd, struct kstatvfs *buf)
+{
+	struct kstatvfs kbuf;
+
+	File *fp = ftabGet(getCurrentThread()->ftab, fd);
+	if (fp == NULL)
+	{
+		ERRNO = EBADF;
+		return -1;
+	};
+
+	vfsInodeStatVFS(fp->iref.inode, &kbuf);
+	vfsClose(fp);
+	
+	if (memcpy_k2u(buf, &kbuf, sizeof(struct kstatvfs)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+
+	return 0;
+};
+
+int sys_chroot(const char *upath)
+{
+	if (!havePerm(XP_FSADMIN))
+	{
+		ERRNO = EACCES;
+		return -1;
+	};
+	
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	int error = vfsChangeRoot(VFS_NULL_IREF, path);
+	if (error != 0)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
+	return 0;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 145
+#define SYSCALL_NUMBER 148
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3463,6 +3538,9 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_aclput,				// 142
 	&sys_aclclear,				// 143
 	&sys_getktu,				// 144
+	&sys_statvfs,				// 145
+	&sys_fstatvfs,				// 146
+	&sys_chroot,				// 147
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

@@ -62,6 +62,15 @@ void registerFSDriver(FSDriver *drv)
 	semSignal(&semFS);
 };
 
+void unregisterFSDriver(FSDriver *drv)
+{
+	semWait(&semFS);
+	if (firstDriver == drv) firstDriver = drv->next;
+	if (drv->prev != NULL) drv->prev->next = drv->next;
+	if (drv->next != NULL) drv->next->prev = drv->prev;
+	semSignal(&semFS);
+};
+
 int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, int flags, const void *uoptions, size_t optlen)
 {
 	char fsname[USER_STRING_MAX];

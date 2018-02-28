@@ -59,7 +59,7 @@ struct _FSDriver
 	 * it must set it to an error number.
 	 *
 	 * 'options' and 'optlen' defines a range of memory where a filesystem-driver-specific options
-	 * structure is stored, specifies by the application. Each driver defines their own option structure.
+	 * structure is stored, specified by the application. Each driver defines its own option structure.
 	 */
 	Inode* (*openroot)(const char *image, const void *options, size_t optlen, int *error);
 };
@@ -73,6 +73,11 @@ void initFSDrivers();
  * Register a new filesystem driver.
  */
 void registerFSDriver(FSDriver *drv);
+
+/**
+ * Un-register a filesystem driver.
+ */
+void unregisterFSDriver(FSDriver *drv);
 
 /**
  * Implements the system call for mounting a filesystem.

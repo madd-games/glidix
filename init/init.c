@@ -44,6 +44,8 @@
 #include <dirent.h>
 #include <time.h>
 #include <errno.h>
+#include <sys/mount.h>
+#include <sys/statvfs.h>
 
 int shouldHalt = 0;
 int shouldRunPoweroff = 0;
@@ -331,38 +333,23 @@ char **devList = NULL;
 int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *bootid)
 {
 	// try mounting it first
-	if (_glidix_mount(fstype, image, "/", 0, NULL, 0) != 0)
+	if (mount(fstype, image, "/rootfs", 0, NULL, 0) != 0)
 	{
 		return -1;
 	};
 	
 	// if it mounted correctly, verify that the boot ID is as expected
-	struct fsinfo list[256];
-	size_t count = _glidix_fsinfo(list, 256);
-
-	size_t i;
-	for (i=0; i<count; i++)
+	struct statvfs st;
+	if (statvfs("/rootfs", &st) == 0)
 	{
-		if (strcmp(list[i].fs_mntpoint, "/") == 0)
+		if (memcmp(bootid, st.f_bootid, 16) == 0)
 		{
-			char idbuf[33];
-			id_to_string(idbuf, list[i].fs_bootid);
-
-			printf("init: boot ID of %s on %s is %s\n", fstype, image, idbuf);
-			if (memcmp(list[i].fs_bootid, bootid, 16) == 0)
-			{
-				printf("init: root filesystem detected as %s on %s\n", fstype, image);
-				return 0;
-			}
-			else
-			{
-				break;
-			};
+			return 0;
 		};
 	};
 	
-	// not the correct ID, unmount
-	_glidix_unmount("/", 0);
+	// not the right boot ID, unmount
+	unmount("/rootfs", 0);
 	return -1;
 };
 
@@ -380,6 +367,13 @@ int try_mount_root_with_type(const char *fstype, uint8_t *bootid)
 
 int try_mount_root()
 {
+	// create the /rootfs directory
+	if (mkdir("/rootfs", 0755) != 0)
+	{
+		fprintf(stderr, "init: failed to create /rootfs: %s\n", strerror(errno));
+		return -1;
+	};
+	
 	// get the list of devices
 	size_t numDevs = 0;
 	DIR *dirp = opendir("/dev");
@@ -480,11 +474,6 @@ int main(int argc, char *argv[])
 		// get the list of "startup filesystems", which shall not be unmounted when shutting down
 		startupFSCount = _glidix_fsinfo(startupFSList, 256);
 		
-		//_glidix_mount("ramfs", ".tmp", "/tmp/", 0);
-		//_glidix_mount("ramfs", ".run", "/run/", 0);
-		//_glidix_mount("ramfs", ".run", "/var/run/", 0);
-		//_glidix_mount("ramfs", ".run", "/", 0);
-		
 		if (mkdir("/sem", 01777) != 0)
 		{
 			perror("mkdir /run/sem");
@@ -507,6 +496,18 @@ int main(int argc, char *argv[])
 		printf("init: executing startup script...\n");
 		if (fork() == 0)
 		{
+			if (chdir("/rootfs") != 0)
+			{
+				fprintf(stderr, "init: cannot switch to /rootfs: %s\n", strerror(errno));
+				_exit(1);
+			};
+			
+			if (chroot("/rootfs") != 0)
+			{
+				fprintf(stderr, "init: failed to set root directory to /rootfs: %s\n", strerror(errno));
+				_exit(1);
+			};
+			
 			execl("/bin/sh", "/bin/sh", "/etc/init/startup.sh", NULL);
 			perror("init: exec");
 			_exit(1);

@@ -156,3 +156,7 @@ GLIDIX_SYSCALL	134,	_glidix_cpuno
 
 GLIDIX_SYSCALL	142,	_glidix_aclput
 GLIDIX_SYSCALL	143,	_glidix_aclclear
+
+GLIDIX_SYSCALL	145,	statvfs
+GLIDIX_SYSCALL	146,	fstatvfs
+GLIDIX_SYSCALL	147,	chroot

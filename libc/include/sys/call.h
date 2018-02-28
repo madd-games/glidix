@@ -174,6 +174,9 @@
 #define	__SYS_aclput				142
 #define	__SYS_aclclear				143
 #define	__SYS_getktu				144
+#define	__SYS_statvfs				145
+#define	__SYS_fstatvfs				146
+#define	__SYS_chroot				147
 
 #ifdef __cplusplus
 extern "C" {

@@ -95,6 +95,19 @@ void vfsInit()
 	kernelRootInode->parent = kernelRootDentry;
 };
 
+FileSystem* vfsCreateFileSystem(const char *fstype)
+{
+	static dev_t nextFSID = 1;
+	
+	FileSystem *fs = NEW(FileSystem);
+	memset(fs, 0, sizeof(FileSystem));
+	fs->fsid = __sync_fetch_and_add(&nextFSID, 1);
+	fs->fstype = fstype;
+	semInit(&fs->lock);
+	
+	return fs;
+};
+
 Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 {	
 	mode_t umask = 0;
@@ -247,7 +260,7 @@ InodeRef vfsGetDentryContainer(DentryRef dref)
 	return iref;
 };
 
-static void vfsCallInInode(Dentry *dent)
+void vfsCallInInode(Dentry *dent)
 {
 	if (dent->target == NULL)
 	{
@@ -285,13 +298,14 @@ static void vfsCallInInode(Dentry *dent)
 			inode->fs = fs;
 			inode->parent = dent;
 			inode->nextKey = 2;
+			inode->ino = dent->ino;
 
 			if (fs->loadInode == NULL)
 			{
 				panic("dentry without cached target inode, and backing filesytem driver cannot load inodes");
 			};
 		
-			if (fs->loadInode(fs, dent, inode) != 0)
+			if (fs->loadInode(fs, inode) != 0)
 			{
 				semSignal(&fs->lock);
 				kfree(inode);
@@ -553,6 +567,33 @@ DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
 			return nulref;
 		};
 	};
+};
+
+void vfsAppendDentry(Inode *dir, const char *name, ino_t ino)
+{
+	semWait(&dir->lock);
+	
+	Dentry *dent = NEW(Dentry);
+	memset(dent, 0, sizeof(Dentry));
+	dent->name = strdup(name);
+	dent->dir = dir;
+	vfsUprefInode(dir);
+	dent->ino = ino;
+	dent->key = __sync_fetch_and_add(&dir->nextKey, 1);
+	
+	if (dir->dents == NULL)
+	{
+		dir->dents = dent;
+	}
+	else
+	{
+		Dentry *last = dir->dents;
+		while (last->next != NULL) last = last->next;
+		last->next = dent;
+		dent->prev = last;
+	};
+	
+	semSignal(&dir->lock);
 };
 
 int vfsIsAllowed(Inode *inode, int perms)
@@ -1346,7 +1387,9 @@ void vfsInodeStat(Inode *inode, struct kstat *st)
 		st->st_size = inode->ft->size;
 	};
 	
-	st->st_blksize = inode->blockSize;
+	if (inode->fs != NULL) st->st_blksize = inode->fs->blockSize;
+	else st->st_blksize = 0;
+	
 	st->st_blocks = inode->numBlocks;
 	st->st_atime = inode->atime;
 	st->st_mtime = inode->mtime;
@@ -1357,6 +1400,26 @@ void vfsInodeStat(Inode *inode, struct kstat *st)
 	st->st_btime = inode->btime;
 	memcpy(st->st_acl, inode->acl, sizeof(AccessControlEntry) * VFS_ACL_SIZE);
 	semSignal(&inode->lock);
+};
+
+void vfsInodeStatVFS(Inode *inode, struct kstatvfs *st)
+{
+	memset(st, 0, sizeof(struct kstatvfs));
+	if (inode->fs == NULL) return;
+	
+	st->f_bsize = inode->fs->blockSize;
+	st->f_frsize = inode->fs->blockSize;
+	st->f_blocks = inode->fs->blocks;
+	st->f_bfree = inode->fs->freeBlocks;
+	st->f_bavail = st->f_bfree;
+	st->f_files = inode->fs->inodes;
+	st->f_ffree = inode->fs->freeInodes;
+	st->f_favail = st->f_ffree;
+	st->f_fsid = inode->fs->fsid;
+	st->f_flag = inode->fs->flags;
+	st->f_namemax = inode->fs->maxnamelen;
+	strcpy(st->f_fstype, inode->fs->fstype);
+	memcpy(st->f_bootid, inode->fs->bootid, 16);
 };
 
 int vfsStat(InodeRef startdir, const char *path, int follow, struct kstat *st)
@@ -1378,6 +1441,29 @@ int vfsStat(InodeRef startdir, const char *path, int follow, struct kstat *st)
 	};
 	
 	vfsInodeStat(iref.inode, st);
+	vfsUnrefInode(iref);
+	return 0;
+};
+
+int vfsStatVFS(InodeRef startdir, const char *path, struct kstatvfs *st)
+{
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 0, &error);
+	if (iref.inode == NULL)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
+	vfsInodeStatVFS(iref.inode, st);
 	vfsUnrefInode(iref);
 	return 0;
 };
@@ -1591,6 +1677,54 @@ int vfsChangeDir(InodeRef startdir, const char *path)
 	semWait(&creds->semDir);
 	InodeRef old = creds->cwd;
 	creds->cwd = iref;
+	semSignal(&creds->semDir);
+	
+	vfsUnrefInode(old);
+	return 0;
+};
+
+int vfsChangeRoot(InodeRef startdir, const char *path)
+{
+	Creds *creds = getCurrentThread()->creds;
+	if (creds == NULL)
+	{
+		vfsUnrefInode(startdir);
+		return EPERM;
+	};
+	
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		return error;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
+	{
+		vfsUnrefInode(iref);
+		return error;
+	};
+	
+	if ((iref.inode->mode & VFS_MODE_TYPEMASK) != VFS_MODE_DIRECTORY)
+	{
+		vfsUnrefInode(iref);
+		return ENOTDIR;
+	};
+	
+	semWait(&iref.inode->lock);
+	if (!vfsIsAllowed(iref.inode, VFS_ACE_EXEC))
+	{
+		semSignal(&iref.inode->lock);
+		vfsUnrefInode(iref);
+		return EACCES;
+	};
+	semSignal(&iref.inode->lock);
+	
+	semWait(&creds->semDir);
+	InodeRef old = creds->rootdir;
+	creds->rootdir = iref;
 	semSignal(&creds->semDir);
 	
 	vfsUnrefInode(old);
@@ -1993,8 +2127,6 @@ int vfsUnmount(const char *path, int flags)
 		};
 		
 		if (fs->unmount != NULL) fs->unmount(fs);
-		kfree(fs->path);
-		kfree(fs->image);
 		kfree(fs);
 	}
 	else
@@ -2108,7 +2240,8 @@ ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out)
 			strcpy(dirent->d_name, ".");
 			break;
 		case 1:
-			dirent->d_ino = inode->parent->dir->ino;
+			if (inode->parent != NULL) dirent->d_ino = inode->parent->dir->ino;
+			else dirent->d_ino = inode->ino;
 			strcpy(dirent->d_name, "..");
 			break;
 		};

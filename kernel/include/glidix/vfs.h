@@ -132,6 +132,12 @@
 #define	VFS_MAX_LINK_DEPTH		8
 
 /**
+ * Flags for struct kstatvfs.
+ */
+#define	VFS_ST_RDONLY			(1 << 0)
+#define	VFS_ST_NOSUID			(1 << 1)
+
+/**
  * The AT_* flags.
  */
 #define	VFS_AT_REMOVEDIR		(1 << 0)
@@ -176,50 +182,37 @@ struct kstat
 	AccessControlEntry		st_acl[VFS_ACL_SIZE];
 };
 
+struct kstatvfs
+{
+	union
+	{
+		struct
+		{
+			unsigned long	f_bsize;
+			unsigned long	f_frsize;
+			unsigned long	f_blocks;
+			unsigned long	f_bfree;
+			unsigned long	f_bavail;
+			unsigned long	f_files;
+			unsigned long	f_ffree;
+			unsigned long	f_favail;
+			unsigned long	f_fsid;
+			unsigned long	f_flag;
+			unsigned long	f_namemax;
+			char		f_fstype[16];
+			char		f_bootid[16];
+		};
+		
+		char __size[1024];
+	};
+};
+
 struct kdirent
 {
 	ino_t				d_ino;
 	char				d_resv[64];
 	char				d_name[];
 };
-
-/**
- * Describes a "system object". It's an object with a name in the filesystem, which may be
- * retrieved and stored by the kernel, and keeps a reference count and a value. This is used
- * for example for local (UNIX) sockets.
- *
- * The reference count shall be incremented when link() is called on the object, and decremented
- * when unlink() is called. When linksys() is called, it also increases the refcount. When the
- * refcount is decremented and reaches 0, the remove() pointer below is called, indicating the
- * value can be safely deleted. The structure itself is deleted by vfsSysDecref().
- *
- * The 'data' and 'remove' fields belong to the creator; everything else must be manipulated with
- * the VFS functions specified later in this file. The 'mode' field is read-only, and shall be
- * used to determine the type of object.
- */
-typedef struct SysObject_
-{
-	/**
-	 * Arbitrary data.
-	 */
-	void*				data;
-	
-	/**
-	 * Called when refcount reaches zero, just before freeing this object.
-	 */
-	void (*remove)(struct SysObject_ *sysobj);
-	
-	/**
-	 * Mode; including the type (used to determine what this object is, and hence the meaning
-	 * of 'data'!)
-	 */
-	mode_t				mode;
-	
-	/**
-	 * Reference count.
-	 */
-	int				refcount;
-} SysObject;
 
 /**
  * All the structure typedefs here, definitions below.
@@ -302,9 +295,8 @@ struct Inode_
 	gid_t gid;
 	
 	/**
-	 * Block size and number of blocks currently taken on disk.
+	 * Number of blocks currently taken on disk.
 	 */
-	blksize_t blockSize;
 	blkcnt_t numBlocks;
 	
 	/**
@@ -485,17 +477,6 @@ struct FileSystem_
 	const char*				fstype;
 	
 	/**
-	 * The canonical mountpoint path, detected during the mount. This is reported to userspace,
-	 * but not actually used by the kernel. On the heap; release using kfree().
-	 */
-	char*					path;
-	
-	/**
-	 * The filesystem image file. May be NULL. Release using kfree().
-	 */
-	char*					image;
-	
-	/**
 	 * The lock, for loading inodes and unmounting and stuff, and for the inode map.
 	 */
 	Semaphore				lock;
@@ -517,11 +498,11 @@ struct FileSystem_
 	void (*unmount)(FileSystem *fs);
 	
 	/**
-	 * Load the inode referenced by the given dentry. This function shall fill out the metadata
+	 * Load the inode with the given number (inode->ino). This function shall fill out the metadata
 	 * in the inode. The refcount, lock, fs pointer, etc are all initialized by the kernel.
 	 * All fields are initially zeroed out. Return 0 on error, or -1 if an I/O error occured.
 	 */
-	int (*loadInode)(FileSystem *fs, Dentry *dent, Inode *inode);
+	int (*loadInode)(FileSystem *fs, Inode *inode);
 	
 	/**
 	 * Register an inode. The 'inode' structure is filled in with information about a new inode.
@@ -529,6 +510,46 @@ struct FileSystem_
 	 * on success, or -1 on error, and set ERRNO.
 	 */
 	int (*regInode)(FileSystem *fs, Inode *inode);
+	
+	/**
+	 * Size of a block on this filesystem. Zero means unknown.
+	 */
+	uint64_t blockSize;
+	
+	/**
+	 * Total number of blocks available on this filesystem. Zero means unknown.
+	 */
+	uint64_t blocks;
+	
+	/**
+	 * Number of free blocks on this filesystem.
+	 */
+	uint64_t freeBlocks;
+	
+	/**
+	 * Total number of inodes on this filesystem. Zero means unknown.
+	 */
+	uint64_t inodes;
+	
+	/**
+	 * Number of free inodes on this filesystem.
+	 */
+	uint64_t freeInodes;
+	
+	/**
+	 * Filesystem flags.
+	 */
+	unsigned long flags;
+	
+	/**
+	 * Maximum length of a file name on this filesystem. Zero means unlimited.
+	 */
+	uint64_t maxnamelen;
+	
+	/**
+	 * Boot ID of this filesystem.
+	 */
+	uint8_t bootid[16];
 };
 
 /**
@@ -622,26 +643,6 @@ struct File_
 	int					refcount;
 };
 
-struct fsinfo;
-
-/**
- * Filesystem information structure, for _glidix_fsinfo().
- */
-typedef struct fsinfo
-{
-	dev_t					fs_dev;
-	char					fs_image[256];
-	char					fs_mntpoint[256];
-	char					fs_name[64];
-	size_t					fs_usedino;
-	size_t					fs_inodes;
-	size_t					fs_usedblk;
-	size_t					fs_blocks;
-	size_t					fs_blksize;
-	uint8_t					fs_bootid[16];
-	char					fs_pad[968];
-} FSInfo;
-
 /**
  * File lock description structure, matching with "struct flock" from the C library.
  */
@@ -659,6 +660,14 @@ typedef struct
  * Initialize the VFS. This initializes locks, and also creates the kernel root inode.
  */
 void vfsInit();
+
+/**
+ * Create a new filesystem. A filesystem ID is automatically assigned. 'fstype' is the name of
+ * the filesystem, for example "gxfs". After calling this function, you must set all necessary
+ * callbacks in the new filesystem. The new filesystem will have numMounts set to zero, and so
+ * must be mounted somewhere.
+ */
+FileSystem* vfsCreateFileSystem(const char *fstype);
 
 /**
  * Create a new inode of the given type and mode. It starts with a refcount of 1, and
@@ -765,6 +774,12 @@ InodeRef vfsGetCurrentDir();
  * functions must be used to assign an inode and commit the dentry to disk.
  */
 DentryRef vfsGetChildDentry(InodeRef dirnode, const char *entname, int create);
+
+/**
+ * Append a dentry to the inode. This is called when loading a directory inode from disk, by the filesystem
+ * driver.
+ */
+void vfsAppendDentry(Inode *dir, const char *name, ino_t ino);
 
 /**
  * Check if the specified user has the right to perform the given operations on the given inode.
@@ -911,6 +926,16 @@ void vfsInodeStat(Inode *inode, struct kstat *st);
 int vfsStat(InodeRef startdir, const char *path, int follow, struct kstat *st);
 
 /**
+ * Get VFS information about an inode.
+ */
+void vfsInodeStatVFS(Inode *inode, struct kstatvfs *st);
+
+/**
+ * Get VFS information related to a path.
+ */
+int vfsStatVFS(InodeRef startdir, const char *path, struct kstatvfs *st);
+
+/**
  * Change the mode of an inode.
  */
 int vfsInodeChangeMode(Inode *inode, mode_t mode);
@@ -944,6 +969,11 @@ InodeRef vfsCopyInodeRef(InodeRef iref);
  * Change working directory. Return 0 on success, error number on error.
  */
 int vfsChangeDir(InodeRef iref, const char *path);
+
+/**
+ * Change the root directory. Return 0 on success, error number on error.
+ */
+int vfsChangeRoot(InodeRef iref, const char *path);
 
 /**
  * Return the absolute path to the specified dentry, as a string on the heap. Remember to free
