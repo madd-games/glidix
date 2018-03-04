@@ -36,6 +36,13 @@
 #include <glidix/vfs.h>
 
 /**
+ * Mount flags.
+ */
+#define	MNT_RDONLY					(1 << 0)
+
+#define	MNT_ALL						((1 << 1)-1)
+
+/**
  * Represents a linked list of filesystem drivers.
  */
 typedef struct _FSDriver FSDriver;
@@ -58,10 +65,13 @@ struct _FSDriver
 	 * inode and then return it. If that fails, it shall return NULL, and if 'error' is not NULL,
 	 * it must set it to an error number.
 	 *
+	 * 'flags' are the mount flags (MNT_*). Most notably, take into account MNT_RDONLY, and open the
+	 * image in read-only mode if it is set, and set the VFS_ST_RDONLY flag on the filesystem.
+	 *
 	 * 'options' and 'optlen' defines a range of memory where a filesystem-driver-specific options
 	 * structure is stored, specified by the application. Each driver defines its own option structure.
 	 */
-	Inode* (*openroot)(const char *image, const void *options, size_t optlen, int *error);
+	Inode* (*openroot)(const char *image, int flags, const void *options, size_t optlen, int *error);
 };
 
 /**

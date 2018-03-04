@@ -219,7 +219,7 @@ static void isoUnmount(FileSystem *fs)
 	kfree(isofs);
 };
 
-static Inode* isofs_openroot(const char *image, const void *options, size_t optlen, int *error)
+static Inode* isofs_openroot(const char *image, int flags, const void *options, size_t optlen, int *error)
 {
 	kprintf("isofs: trying to mount %s\n", image);
 	File *fp = vfsOpen(VFS_NULL_IREF, image, O_RDONLY, 0, error);

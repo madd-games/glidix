@@ -1056,6 +1056,12 @@ int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode)
 		return EEXIST;
 	};
 	
+	if (dref.dent->dir->fs->flags & VFS_ST_RDONLY)
+	{
+		vfsRemoveDentry(dref);
+		return EROFS;
+	};
+	
 	Inode *newdir = vfsCreateInode(dref.dent->dir->fs, VFS_MODE_DIRECTORY | (mode & 0x0FFF));
 	if (newdir == NULL)
 	{
@@ -1123,15 +1129,32 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 	{
 		if (oflag & O_EXCL)
 		{
-			vfsRemoveDentry(dref);
+			vfsUnrefDentry(dref);
 			if (error != NULL) *error = EEXIST;
 			return NULL;
+		};
+		
+		if (dref.dent->dir->fs->flags & VFS_ST_RDONLY)
+		{
+			if (oflag & O_WRONLY)
+			{
+				vfsUnrefDentry(dref);
+				if (error != NULL) *error = EROFS;
+				return NULL;
+			};
 		};
 		
 		iref = vfsGetInode(dref, 1, error);
 	}
 	else
 	{
+		if (dref.dent->dir->fs->flags & VFS_ST_RDONLY)
+		{
+			vfsRemoveDentry(dref);
+			if (error != NULL) *error = EROFS;
+			return NULL;
+		};
+		
 		// create the inode
 		Inode *newInode = vfsCreateInode(dref.dent->dir->fs, mode & 0x0FFF);
 		if (newInode == NULL)
@@ -1506,6 +1529,12 @@ int vfsInodeChangeMode(Inode *inode, mode_t mode)
 	};
 
 	semWait(&inode->lock);	
+	if (inode->fs->flags & VFS_ST_RDONLY)
+	{
+		semSignal(&inode->lock);
+		ERRNO = EROFS;
+		return -1;
+	};
 	if ((inode->uid != myUID) && !havePerm(XP_FSADMIN))
 	{
 		semSignal(&inode->lock);
@@ -1547,6 +1576,12 @@ int vfsChangeMode(InodeRef startdir, const char *path, mode_t mode)
 int vfsInodeChangeOwner(Inode *inode, uid_t uid, gid_t gid)
 {
 	semWait(&inode->lock);
+	if (inode->fs->flags & VFS_ST_RDONLY)
+	{
+		semSignal(&inode->lock);
+		ERRNO = EROFS;
+		return -1;
+	};
 
 	uid_t myUID;
 	if (getCurrentThread() == NULL || getCurrentThread()->creds == NULL)
@@ -1614,6 +1649,13 @@ int vfsChangeOwner(InodeRef startdir, const char *path, uid_t uid, gid_t gid)
 
 int vfsTruncate(Inode *inode, off_t size)
 {
+	if (inode->fs->flags & VFS_ST_RDONLY)
+	{
+		semSignal(&inode->lock);
+		ERRNO = EROFS;
+		return -1;
+	};
+
 	if (size < -1)
 	{
 		return EINVAL;
@@ -1881,6 +1923,13 @@ int vfsCreateLink(InodeRef oldstart, const char *oldpath, InodeRef newstart, con
 		return EEXIST;
 	};
 	
+	if (drefNew.dent->dir->fs->flags & VFS_ST_RDONLY)
+	{
+		vfsUnrefInode(iref);
+		vfsRemoveDentry(drefNew);
+		return EROFS;
+	};
+	
 	if (drefNew.dent->dir->fs != iref.inode->fs)
 	{
 		// cross-device link attempted
@@ -1909,6 +1958,12 @@ int vfsCreateSymlink(const char *oldpath, InodeRef newstart, const char *newpath
 	{
 		vfsUnrefDentry(dref);
 		return EEXIST;
+	};
+	
+	if (dref.dent->dir->fs->flags & VFS_ST_RDONLY)
+	{
+		vfsRemoveDentry(dref);
+		return EROFS;
 	};
 	
 	Inode *link = vfsCreateInode(dref.dent->dir->fs, VFS_MODE_LINK | 0777);

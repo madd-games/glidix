@@ -36,7 +36,7 @@
 static Semaphore semFS;
 static FSDriver *firstDriver;
 
-static Inode* fsbind(const char *image, const void *options, size_t optlen, int *error)
+static Inode* fsbind(const char *image, int flags, const void *options, size_t optlen, int *error)
 {
 	File *fp = vfsOpen(VFS_NULL_IREF, image, O_RDWR | O_NONBLOCK, 0, error);
 	if (fp == NULL)
@@ -143,7 +143,7 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 		return -1;
 	};
 
-	if (flags != 0)
+	if ((flags & ~MNT_ALL) != 0)
 	{
 		ERRNO = EINVAL;
 		return -1;
@@ -164,7 +164,7 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 	};
 	
 	int error;
-	Inode *inode = drv->openroot(image, options, optlen, &error);
+	Inode *inode = drv->openroot(image, flags, options, optlen, &error);
 	semSignal(&semFS);
 	
 	if (inode == NULL)
