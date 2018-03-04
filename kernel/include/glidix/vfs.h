@@ -834,6 +834,11 @@ void vfsUnrefInode(InodeRef iref);
 void vfsLinkInode(DentryRef dent, Inode* target);
 
 /**
+ * Similar to vfsLinkInode(), except that the InodeRef is returned afterwards.
+ */
+InodeRef vfsLinkAndGetInode(DentryRef dent, Inode *target);
+
+/**
  * Similar to vfsLinkInode(), but the dentry is not committed to disk.
  */
 void vfsBindInode(DentryRef dent, Inode* target);

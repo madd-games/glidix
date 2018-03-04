@@ -856,6 +856,29 @@ void vfsLinkInode(DentryRef dref, Inode *target)
 	semSignal(&target->lock);
 };
 
+InodeRef vfsLinkAndGetInode(DentryRef dref, Inode *target)
+{
+	assert(dref.dent->ino == 0);
+	vfsUprefInode(target);
+	dref.dent->ino = target->ino;
+	dref.dent->target = target;
+	dref.dent->flags &= ~VFS_DENTRY_TEMP;
+	if (target->parent == NULL)
+	{
+		target->parent = dref.dent;
+		vfsUprefInode(dref.dent->dir);
+	};
+	
+	vfsDirtyInode(dref.dent->dir);
+	
+	semWait(&target->lock);
+	target->links++;
+	vfsDirtyInode(target);
+	semSignal(&target->lock);
+	
+	return vfsGetDentryTarget(dref);
+};
+
 void vfsBindInode(DentryRef dref, Inode *target)
 {
 	assert(dref.dent->ino == 0);
@@ -1095,6 +1118,7 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 		return NULL;
 	};
 	
+	InodeRef iref;
 	if (dref.dent->ino != 0)
 	{
 		if (oflag & O_EXCL)
@@ -1103,6 +1127,8 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 			if (error != NULL) *error = EEXIST;
 			return NULL;
 		};
+		
+		iref = vfsGetInode(dref, 1, error);
 	}
 	else
 	{
@@ -1115,12 +1141,11 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 			return NULL;
 		};
 		
-		vfsLinkInode(dref, newInode);
+		iref = vfsLinkAndGetInode(dref, newInode);
 		vfsDownrefInode(newInode);
 	};
 	
 	// get the inode
-	InodeRef iref = vfsGetInode(dref, 1, error);
 	if (iref.inode == NULL)
 	{
 		vfsUnrefInode(iref);

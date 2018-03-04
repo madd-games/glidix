@@ -160,7 +160,10 @@ int ftabClose(FileTable *ftab, int fd)
 	ftab->list[fd].fp = NULL;
 	semSignal(&ftab->lock);
 	
-	if (old != NULL) vfsClose(old);
+	if (old != NULL)
+	{
+		vfsClose(old);
+	}
 	else return EBADF;
 	
 	return 0;
