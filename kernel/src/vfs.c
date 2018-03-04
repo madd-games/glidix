@@ -1074,8 +1074,18 @@ int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode)
 	return 0;
 };
 
-int vfsMount(DentryRef dref, Inode *mntroot)
+int vfsMount(DentryRef dref, Inode *mntroot, int flags)
 {
+	if (mntroot->fs != NULL)
+	{
+		if (mntroot->fs->numMounts == 0)
+		{
+			// new filesystem; apply flags
+			if (flags & MNT_RDONLY) mntroot->fs->flags |= VFS_ST_RDONLY;
+			if (flags & MNT_NOSUID) mntroot->fs->flags |= VFS_ST_NOSUID;
+		};
+	};
+	
 	if (!havePerm(XP_MOUNT))
 	{
 		vfsUnrefDentry(dref);

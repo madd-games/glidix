@@ -233,6 +233,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	semWait(&fp->iref.inode->lock);
 	int execAllowed = vfsIsAllowed(fp->iref.inode, VFS_ACE_EXEC);
 	mode_t execmode = fp->iref.inode->mode;
+	if (fp->iref.inode->fs->flags & VFS_ST_NOSUID) execmode &= 0777;	// no suid/sgid
 	uid_t execuid = fp->iref.inode->uid;
 	gid_t execgid = fp->iref.inode->gid;
 	uint64_t exec_ixperm = fp->iref.inode->ixperm;

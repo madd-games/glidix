@@ -36,13 +36,6 @@
 #include <glidix/vfs.h>
 
 /**
- * Mount flags.
- */
-#define	MNT_RDONLY					(1 << 0)
-
-#define	MNT_ALL						((1 << 1)-1)
-
-/**
  * Represents a linked list of filesystem drivers.
  */
 typedef struct _FSDriver FSDriver;

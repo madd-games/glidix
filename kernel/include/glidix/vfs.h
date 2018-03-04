@@ -138,6 +138,14 @@
 #define	VFS_ST_NOSUID			(1 << 1)
 
 /**
+ * Mount flags.
+ */
+#define	MNT_RDONLY			(1 << 0)
+#define	MNT_NOSUID			(1 << 1)
+
+#define	MNT_ALL				((1 << 2)-1)
+
+/**
  * The AT_* flags.
  */
 #define	VFS_AT_REMOVEDIR		(1 << 0)
@@ -874,7 +882,7 @@ int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode);
  *
  * This function performs permission checks.
  */
-int vfsMount(DentryRef dref, Inode *mntroot);
+int vfsMount(DentryRef dref, Inode *mntroot, int flags);
 
 /**
  * Open the named inode and return a new file handle. Symbolic links will be dereferenced. On success,
