@@ -27,9 +27,72 @@
 */
 
 #include <sys/fsinfo.h>
+#include <sys/statvfs.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 
-// TODO
 size_t _glidix_fsinfo(struct fsinfo *list, size_t count)
 {
-	return 0;
+	struct statvfs st;
+	size_t countOut = 0;
+
+	int fd = open("/run/fsinfo", O_RDONLY);
+	if (fd == -1)
+	{
+		errno = EAGAIN;
+		return 0;
+	};
+	
+	struct flock lock;
+	memset(&lock, 0, sizeof(struct flock));
+	lock.l_type = F_RDLCK;
+	lock.l_whence = SEEK_SET;
+	lock.l_start = 0;
+	lock.l_len = 0;
+	
+	int status;
+	do
+	{
+		status = fcntl(fd, F_SETLKW, &lock);
+	} while (status != 0 && errno == EINTR);
+	
+	if (status != 0)
+	{
+		close(fd);
+		errno = EAGAIN;
+		return 0;
+	};
+	
+	while (count--)
+	{
+		struct __fsinfo_record record;
+		if (read(fd, &record, sizeof(struct __fsinfo_record)) != sizeof(struct __fsinfo_record))
+		{
+			break;
+		};
+		
+		if (statvfs(record.__mntpoint, &st) != 0)
+		{
+			break;
+		};
+		
+		memset(&list[countOut], 0, sizeof(struct fsinfo));
+		list[countOut].fs_dev = st.f_fsid;
+		strcpy(list[countOut].fs_image, record.__image);
+		strcpy(list[countOut].fs_mntpoint, record.__mntpoint);
+		strcpy(list[countOut].fs_name, st.f_fstype);
+		list[countOut].fs_usedino = st.f_files - st.f_ffree;
+		list[countOut].fs_inodes = st.f_files;
+		list[countOut].fs_usedblk = st.f_blocks - st.f_bfree;
+		list[countOut].fs_blocks = st.f_blocks;
+		list[countOut].fs_blksize = st.f_frsize;
+		memcpy(list[countOut].fs_bootid, st.f_bootid, 16);
+		
+		countOut++;
+	};
+	
+	close(fd);
+	errno = EAGAIN;	// in case we didn't return anything for some reason
+	return countOut;
 };

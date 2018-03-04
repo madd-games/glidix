@@ -50,7 +50,13 @@ struct fsinfo
 	char					fs_pad[968];
 };
 
-/* implemented by libglidix directly */
+struct __fsinfo_record
+{
+	char					__image[256];
+	char					__mntpoint[256];
+};
+
+/* implemented by the runtime */
 size_t _glidix_fsinfo(struct fsinfo *list, size_t count);
 
 #ifdef __cplusplus

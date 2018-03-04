@@ -282,6 +282,7 @@ static Inode* isofs_openroot(const char *image, int flags, const void *options, 
 	fs->loadInode = isoLoadInode;
 	fs->unmount = isoUnmount;
 	fs->flags = VFS_ST_RDONLY;
+	fs->blockSize = isofs->blockSize;
 	memcpy(fs->bootid, "\0\0" "ISOBOOT" "\0\0\0\0\0\xF0\x0D", 16);
 	
 	// load the root inode

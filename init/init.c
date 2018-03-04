@@ -51,23 +51,6 @@ int shouldHalt = 0;
 int shouldRunPoweroff = 0;
 int ranPoweroff = 0;
 
-struct fsinfo startupFSList[256];
-size_t startupFSCount;
-
-int isStartupFS(struct fsinfo *info)
-{
-	size_t i;
-	for (i=0; i<256; i++)
-	{
-		if (info->fs_dev == startupFSList[i].fs_dev)
-		{
-			return 1;
-		};
-	};
-	
-	return 0;
-};
-
 void loadmods()
 {
 	DIR *dirp = opendir("/initrd/initmod");
@@ -268,21 +251,18 @@ void shutdownSystem(int action)
 		close(fd);
 	};
 	
-	printf("init: unmounting non-startup filesystems...\n");
+	printf("init: unmounting filesystems...\n");
 	struct fsinfo currentFSList[256];
 	size_t count = _glidix_fsinfo(currentFSList, 256);
 	
 	size_t i;
 	for (i=0; i<count; i++)
 	{
-		if (!isStartupFS(&currentFSList[i]))
+		if (unmount(currentFSList[i].fs_mntpoint, 0) != 0)
 		{
-			if (_glidix_unmount(currentFSList[i].fs_mntpoint, 0) != 0)
-			{
-				printf("init: failed to unmount %s: %s\n", currentFSList[i].fs_mntpoint, strerror(errno));
-				printf("init: waiting 5 seconds and skipping this filesystem\n");
-				sleep(5);
-			};
+			printf("init: failed to unmount %s: %s\n", currentFSList[i].fs_mntpoint, strerror(errno));
+			printf("init: waiting 5 seconds and skipping this filesystem\n");
+			sleep(5);
 		};
 	};
 	
@@ -329,6 +309,7 @@ void id_to_string(char *buffer, uint8_t *bootid)
 };
 
 char **devList = NULL;
+char *rootImage = NULL;
 
 int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *bootid)
 {
@@ -344,6 +325,7 @@ int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *boo
 	{
 		if (memcmp(bootid, st.f_bootid, 16) == 0)
 		{
+			rootImage = strdup(image);
 			return 0;
 		};
 	};
@@ -470,9 +452,6 @@ int main(int argc, char *argv[])
 			perror("sigaction SIGHUP");
 			return 1;
 		};
-
-		// get the list of "startup filesystems", which shall not be unmounted when shutting down
-		startupFSCount = _glidix_fsinfo(startupFSList, 256);
 		
 		if (mkdir("/sem", 01777) != 0)
 		{
@@ -524,6 +503,21 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 
+		printf("init: setting up fsinfo...\n");
+		int fd = open("/run/fsinfo", O_WRONLY | O_CREAT | O_EXCL, 0644);
+		if (fd == -1)
+		{
+			perror("init: open /run/fsinfo");
+			return 1;
+		};
+		
+		struct __fsinfo_record record;
+		memset(&record, 0, sizeof(struct __fsinfo_record));
+		strcpy(record.__image, rootImage);
+		strcpy(record.__mntpoint, "/");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		close(fd);
+		
 		printf("init: executing startup script...\n");
 		if (fork() == 0)
 		{
