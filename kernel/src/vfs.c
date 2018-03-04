@@ -1818,14 +1818,14 @@ static char* vfsRealPathRecur(InodeRef rootdir, CompChain *next, DentryRef dref)
 		size_t totalSize = 1;	// NUL byte
 		
 		CompChain *scan;
-		for (scan=frame.next; scan!=NULL; scan=scan->next)
+		for (scan=&frame; scan!=NULL; scan=scan->next)
 		{
 			totalSize += (1 + strlen(scan->comp));
 		};
 		
 		char *result = (char*) kmalloc(totalSize);
 		char *put = result;
-		for (scan=frame.next; scan!=NULL; scan=scan->next)
+		for (scan=&frame; scan!=NULL; scan=scan->next)
 		{
 			*put++ = '/';
 			strcpy(put, scan->comp);
@@ -1854,7 +1854,7 @@ static char* vfsRealPathRecur(InodeRef rootdir, CompChain *next, DentryRef dref)
 char* vfsRealPath(DentryRef dref)
 {
 	InodeRef rootdir = vfsGetRoot();
-	if (rootdir.inode == dref.dent->dir)
+	if (rootdir.inode == dref.dent->target)
 	{
 		vfsUnrefDentry(dref);
 		vfsUnrefInode(rootdir);
