@@ -87,6 +87,7 @@ static int isoLoad(FileTree *ft, off_t pos, void *buffer)
 static int isoLoadInode(FileSystem *fs, Inode *inode)
 {
 	Isofs *isofs = (Isofs*) fs->fsdata;
+	inode->links = 1;
 	
 	ISODirentHeader head;
 	if (vfsPRead(isofs->fp, &head, sizeof(ISODirentHeader), (off_t) inode->ino) != sizeof(ISODirentHeader))

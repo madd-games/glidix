@@ -23,6 +23,7 @@ install:
 	@mkdir -p $(DESTDIR)/proc
 	@mkdir -p $(DESTDIR)/mnt
 	@mkdir -p $(DESTDIR)/sys/mod
+	@mkdir -p $(DESTDIR)/initrd
 	cp gxsetup $(DESTDIR)/bin/gxsetup
 	cp $(SRCDIR)/startup.sh $(DESTDIR)/etc/init/startup.sh
 	cp $(SRCDIR)/passwd $(DESTDIR)/etc/passwd

@@ -493,6 +493,37 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 		
+		printf("init: setting up second-level filesystem...\n");
+		if (mount("bind", "/dev", "/rootfs/dev", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /dev");
+			return 1;
+		};
+
+		if (mount("bind", "/proc", "/rootfs/proc", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /proc");
+			return 1;
+		};
+
+		if (mount("bind", "/initrd", "/rootfs/initrd", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /initrd");
+			return 1;
+		};
+
+		if (mount("bind", "/run", "/rootfs/run", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /run");
+			return 1;
+		};
+
+		if (mount("bind", "/run", "/rootfs/var/run", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /var/run");
+			return 1;
+		};
+
 		printf("init: executing startup script...\n");
 		if (fork() == 0)
 		{

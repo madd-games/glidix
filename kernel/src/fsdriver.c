@@ -36,10 +36,39 @@
 static Semaphore semFS;
 static FSDriver *firstDriver;
 
+static Inode* fsbind(const char *image, const void *options, size_t optlen, int *error)
+{
+	File *fp = vfsOpen(VFS_NULL_IREF, image, O_RDWR | O_NONBLOCK, 0, error);
+	if (fp == NULL)
+	{
+		return NULL;
+	};
+	
+	Inode *inode = fp->iref.inode;
+	vfsUprefInode(inode);
+	vfsClose(fp);
+	
+	if ((inode->mode & VFS_MODE_TYPEMASK) != VFS_MODE_DIRECTORY)
+	{
+		vfsDownrefInode(inode);
+		*error = ENOTDIR;
+		return NULL;
+	};
+	
+	return inode;
+};
+
+static FSDriver drvBind = {
+	.fsname = "bind",
+	.openroot = fsbind
+};
+
 void initFSDrivers()
 {
 	firstDriver = NULL;
 	semInit(&semFS);
+	
+	registerFSDriver(&drvBind);
 };
 
 void registerFSDriver(FSDriver *drv)
