@@ -181,7 +181,7 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 		return -1;
 	};
 	
-	int status = vfsMount(dref, inode);
+	int status = vfsMount(dref, inode, flags);
 	vfsDownrefInode(inode);
 	if (status != 0)
 	{
