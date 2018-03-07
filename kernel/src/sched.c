@@ -1010,7 +1010,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 			thread->creds = credsNew();
 		};
 	};
-
+	
 	// assign pid/thid
 	cli();
 	spinlockAcquire(&schedLock);

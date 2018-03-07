@@ -46,6 +46,7 @@
 #include <errno.h>
 #include <sys/mount.h>
 #include <sys/statvfs.h>
+#include <sys/module.h>
 
 int shouldHalt = 0;
 int shouldRunPoweroff = 0;
@@ -276,6 +277,7 @@ void shutdownSystem(int action)
 	};
 	
 	printf("init: removing all kernel modules...\n");
+#if 0
 	DIR *dirp = opendir("/sys/mod");
 	if (dirp == NULL)
 	{
@@ -302,6 +304,23 @@ void shutdownSystem(int action)
 		};
 		
 		closedir(dirp);
+	};
+#endif
+	
+	struct modstat ms;
+	for (i=0; i<512; i++)
+	{
+		if (modstat(i, &ms) == 0)
+		{
+			if (rmmod(ms.mod_name, 0) != 0)
+			{
+				printf("init: failed to rmmod %s: %s\n", ms.mod_name, strerror(errno));
+				printf("Report this problem to the module developer.\n");
+				printf("I will now hang, you may turn off power manually.\n");
+				printf("If the problem persists, remove the module for your safety.\n");
+				while (1) pause();
+			};
+		};
 	};
 	
 	printf("init: bringing the system down...\n");

@@ -83,6 +83,16 @@ typedef struct _Module
 	int (*modfini)(void);
 } Module;
 
+/**
+ * Information about a module as presented by sys_modstat().
+ */
+typedef struct
+{
+	char				mod_name[128];
+	int				mod_block;
+	char				mod_resv[64];
+} ModuleState;
+
 typedef struct
 {
 	const char*			modname;
@@ -98,13 +108,15 @@ void findDebugSymbolInModules(uint64_t addr, SymbolInfo *symInfo);
 void rmmodAll();
 
 /**
+ * Get information about a module in block 'block'. If successful, 0 is returned. If the module does
+ * not exist, ENOENT is returned. Other errors could also be possible in the future - the error number
+ * is returned on error.
+ */
+int modStat(int block, ModuleState *state);
+
+/**
  * See above (THIS_MODULE).
  */
 extern Module __this_module;
-
-/**
- * The filesystem mounted under /sys/mod.
- */
-FileSystem *getModulefs();
 
 #endif

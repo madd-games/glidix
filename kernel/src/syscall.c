@@ -3387,11 +3387,33 @@ int sys_chroot(const char *upath)
 	return 0;
 };
 
+int sys_modstat(int block, ModuleState *ustate)
+{
+	ModuleState state;
+	int error = modStat(block, &state);
+	
+	if (error == 0)
+	{
+		if (memcpy_k2u(ustate, &state, sizeof(ModuleState)) != 0)
+		{
+			ERRNO = EFAULT;
+			return -1;
+		};
+		
+		return 0;
+	}
+	else
+	{
+		ERRNO = error;
+		return -1;
+	};
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 148
+#define SYSCALL_NUMBER 149
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3541,6 +3563,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_statvfs,				// 145
 	&sys_fstatvfs,				// 146
 	&sys_chroot,				// 147
+	&sys_modstat,				// 148
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

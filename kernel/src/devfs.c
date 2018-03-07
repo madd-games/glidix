@@ -168,12 +168,14 @@ int devfsAdd(const char *name, Inode *inode)
 	if (dref.dent == NULL)
 	{
 		vfsUnrefDentry(dref);
+		getCurrentThread()->creds = creds;
 		return error;
 	};
 	
 	if (dref.dent->ino != 0)
 	{
 		vfsRemoveDentry(dref);
+		getCurrentThread()->creds = creds;
 		return EEXIST;
 	};
 	
@@ -198,6 +200,7 @@ void devfsRemove(const char *name)
 	if (dref.dent == NULL)
 	{
 		vfsUnrefDentry(dref);
+		getCurrentThread()->creds = creds;
 		return;
 	};
 	

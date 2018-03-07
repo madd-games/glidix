@@ -160,3 +160,4 @@ GLIDIX_SYSCALL	143,	_glidix_aclclear
 GLIDIX_SYSCALL	145,	statvfs
 GLIDIX_SYSCALL	146,	fstatvfs
 GLIDIX_SYSCALL	147,	chroot
+GLIDIX_SYSCALL	148,	_glidix_modstat

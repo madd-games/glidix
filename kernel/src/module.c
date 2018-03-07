@@ -133,15 +133,14 @@ static uint64_t *mapModuleArea(int modblock, int numSectors)
 	};
 
 	ispUnlock();
-	//kfree(ptFrames);
 
 	// now map that into the address space
-	ASM("cli");
+	cli();
 	pdptModuleSpace.entries[modblock].present = 1;
 	pdptModuleSpace.entries[modblock].rw = 1;
 	pdptModuleSpace.entries[modblock].pdPhysAddr = pdPhysFrame;
 	refreshAddrSpace();
-	ASM("sti");
+	sti();
 
 	return ptFrames;
 };
@@ -855,4 +854,26 @@ void rmmodAll()
 
 		mod = mod->next;
 	};
+};
+
+int modStat(int block, ModuleState *state)
+{
+	memset(state, 0, sizeof(ModuleState));
+	
+	spinlockAcquire(&modLock);
+
+	Module *module;
+	for (module=firstModule; module!=NULL; module=module->next)
+	{
+		if (module->block == block)
+		{
+			strcpy(state->mod_name, module->name);
+			state->mod_block = module->block;
+			spinlockRelease(&modLock);
+			return 0;
+		};
+	};
+
+	spinlockRelease(&modLock);
+	return ENOENT;
 };
