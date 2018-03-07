@@ -161,6 +161,13 @@ void ftDown(FileTree *ft)
 	};
 };
 
+void ftFlush(FileTree *ft)
+{
+	semWait(&ft->lock);
+	flushTree(ft, 0, &ft->top, 0);
+	semSignal(&ft->lock);
+};
+
 static uint64_t getPageUnlocked(FileTree *ft, off_t pos)
 {
 	if (ft->getpage != NULL)

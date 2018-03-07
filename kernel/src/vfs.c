@@ -164,9 +164,8 @@ void vfsDirtyInode(Inode *inode)
 
 int vfsFlush(Inode *inode)
 {
-	// TODO: flush the file tree
-	
 	semWait(&inode->lock);
+	ftFlush(inode->ft);
 	if (inode->flush != NULL)
 	{
 		if (inode->flush(inode) != 0)

@@ -156,6 +156,11 @@ void ftDown(FileTree *ft);
 uint64_t ftGetPage(FileTree *ft, off_t pos);
 
 /**
+ * Commit the contents of the file tree to disk.
+ */
+void ftFlush(FileTree *ft);
+
+/**
  * Read data from a file tree at the specified position.
  */
 ssize_t ftRead(FileTree *ft, void *buffer, size_t size, off_t pos);
