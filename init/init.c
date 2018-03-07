@@ -264,8 +264,8 @@ void shutdownSystem(int action)
 	struct fsinfo currentFSList[256];
 	size_t count = _glidix_fsinfo(currentFSList, 256);
 	
-	size_t i;
-	for (i=0; i<count; i++)
+	int i;
+	for (i=count; i<=0; i--)
 	{
 		if (unmount(currentFSList[i].fs_mntpoint, 0) != 0)
 		{
@@ -524,6 +524,17 @@ int main(int argc, char *argv[])
 		memset(&record, 0, sizeof(struct __fsinfo_record));
 		strcpy(record.__image, rootImage);
 		strcpy(record.__mntpoint, "/");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__image, "none");
+		strcpy(record.__mntpoint, "/dev");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__mntpoint, "/proc");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__mntpoint, "/initrd");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__mntpoint, "/run");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__mntpoint, "/var/run");
 		write(fd, &record, sizeof(struct __fsinfo_record));
 		close(fd);
 		
