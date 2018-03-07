@@ -30,6 +30,9 @@
 
 #include <sys/glidix.h>
 
+#define	MNT_RDONLY			(1 << 0)
+#define	MNT_NOSUID			(1 << 1)
+
 #define	mount _glidix_mount
 #define	unmount _glidix_unmount
 

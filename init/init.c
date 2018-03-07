@@ -163,18 +163,27 @@ int killNextProcess()
 			char parentPath[256];
 			char exePath[256];
 			char procName[256];
+			char parentLink[256];
 			sprintf(parentPath, "/proc/%s/parent", ent->d_name);
 			sprintf(exePath, "/proc/%s/exe", ent->d_name);
 			procName[readlink(exePath, procName, 256)] = 0;
 			
+			int iAmParent = 0;
 			if (stat(parentPath, &st) != 0)
 			{
-				printf("init: failed to stat %s: %s\n", parentPath, strerror(errno));
-				printf("init: assuming process terminated\n");
-				continue;
+				// if the 'parent' link is broken, it means 'init' is indeed the parent
+				iAmParent = 1;
+			}
+			else
+			{
+				parentLink[readlink(parentPath, parentLink, 256)] = 0;
+				if (strcmp(parentLink, "../1") == 0)
+				{
+					iAmParent = 1;
+				};
 			};
 			
-			if (st.st_rdev == 1)
+			if (iAmParent)
 			{
 				int pid;
 				sscanf(ent->d_name, "%d", &pid);

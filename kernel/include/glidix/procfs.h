@@ -34,4 +34,19 @@
 
 void initProcfs();
 
+/**
+ * Change the current PID. Called by switchTask().
+ */
+void procfsSetPid(int pid);
+
+/**
+ * Create a new entry under /proc for process with pid 'new', whose parent is 'old'.
+ */
+void procfsCreate(int old, int new);
+
+/**
+ * Delete an entry under /proc.
+ */
+void procfsDelete(int pid);
+
 #endif

@@ -119,6 +119,7 @@
  * Inode flags.
  */
 #define	VFS_INODE_DIRTY			(1 << 0)		/* inode changed since loading */
+#define	VFS_INODE_NOUNLINK		(1 << 1)		/* inode cannot be unlinked */
 
 /**
  * Dentry flags.
@@ -138,6 +139,11 @@
 #define	VFS_ST_NOSUID			(1 << 1)
 
 /**
+ * vfsMakeDirEx() flags.
+ */
+#define	VFS_MKDIR_NOVALID		(1 << 0)		/* do not validate (ignore ROFS etc) */
+
+/**
  * Mount flags.
  */
 #define	MNT_RDONLY			(1 << 0)
@@ -150,6 +156,8 @@
  */
 #define	VFS_AT_REMOVEDIR		(1 << 0)
 #define	VFS_AT_SYMLINK_FOLLOW		(1 << 1)
+
+#define	VFS_AT_NOVALID			(1 << 16)		/* do not validate (ignore ROFS) */
 
 #define	VFS_ACL_SIZE			128
 
@@ -876,6 +884,11 @@ void vfsRemoveDentry(DentryRef dent);
 int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode);
 
 /**
+ * Like vfsMakeDir() but accepts some flags.
+ */
+int vfsMakeDirEx(InodeRef startdir, const char *path, mode_t mode, int flags);
+
+/**
  * Mount the given inode at the given dentry. The reference to the dentry is revoked, regardless of
  * whether an error occured or not. The reference count of the inode is incremented if the mount was
  * successful, and so is its mount count. Returns 0 on success or an error number on error.
@@ -1011,6 +1024,11 @@ int vfsCreateLink(InodeRef oldstart, const char *oldpath, InodeRef newstart, con
  * symlink inode; no checking whether the file exists is actually performed.
  */
 int vfsCreateSymlink(const char *oldpath, InodeRef newstart, const char *newpath);
+
+/**
+ * Same as above but with flags.
+ */
+int vfsCreateSymlinkEx(const char *oldpath, InodeRef newstart, const char *newpath, int flags);
 
 /**
  * Read the target of a symbolic link, returning it as a string on the heap. Remember to free it using kfree().

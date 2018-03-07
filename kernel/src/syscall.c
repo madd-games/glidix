@@ -2020,7 +2020,7 @@ size_t sys_realpath(const char *upath)
 		return 0;
 	};
 	
-	char *result =  vfsRealPath(dref);
+	char *result = vfsRealPath(dref);
 	kfree(getCurrentThread()->ktu);
 	getCurrentThread()->ktu = result;
 	getCurrentThread()->ktusz = strlen(result) + 1;

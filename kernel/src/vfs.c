@@ -140,6 +140,10 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 				kfree(inode);
 				return NULL;
 			};
+		}
+		else
+		{
+			panic("inode creation attempted on a filesystem that can't register inodes");
 		};
 		semSignal(&fs->lock);
 	}
@@ -520,7 +524,8 @@ DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
 			if (!vfsIsAllowed(diref.inode, VFS_ACE_WRITE))
 			{
 				semSignal(&diref.inode->lock);
-
+				vfsUnrefInode(diref);
+				
 				DentryRef nulref;
 				nulref.dent = NULL;
 				nulref.top = NULL;
@@ -844,7 +849,6 @@ void vfsLinkInode(DentryRef dref, Inode *target)
 	if (target->parent == NULL)
 	{
 		target->parent = dref.dent;
-		vfsUprefInode(dref.dent->dir);
 	};
 	
 	vfsDirtyInode(dref.dent->dir);
@@ -926,11 +930,10 @@ static void vfsLinkDown(Inode *inode)
 
 int vfsUnlinkInode(DentryRef dref, int flags)
 {
-	int allFlags = VFS_AT_REMOVEDIR;
-	if ((flags & ~allFlags) != 0)
+	if ((dref.dent->dir->fs->flags & VFS_ST_RDONLY) && ((flags & VFS_AT_NOVALID) == 0))
 	{
 		vfsUnrefDentry(dref);
-		return EINVAL;
+		return EROFS;
 	};
 	
 	if (dref.dent == kernelRootDentry || (dref.dent->flags & VFS_DENTRY_MNTPOINT))
@@ -944,6 +947,12 @@ int vfsUnlinkInode(DentryRef dref, int flags)
 	{
 		vfsUnrefDentry(dref);
 		return EIO;
+	};
+	
+	if (dref.dent->target->flags & VFS_INODE_NOUNLINK)
+	{
+		vfsUnrefDentry(dref);
+		return EPERM;
 	};
 	
 	if (flags & VFS_AT_REMOVEDIR)
@@ -962,6 +971,7 @@ int vfsUnlinkInode(DentryRef dref, int flags)
 		
 		if (dref.dent->target->refcount != 1)
 		{
+			kprintf("refcountof %p is %d\n", dref.dent->target, dref.dent->target->refcount);
 			vfsUnrefDentry(dref);
 			return EBUSY;
 		};
@@ -1042,6 +1052,11 @@ void vfsRemoveDentry(DentryRef dref)
 
 int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode)
 {
+	return vfsMakeDirEx(startdir, path, mode, 0);
+};
+
+int vfsMakeDirEx(InodeRef startdir, const char *path, mode_t mode, int flags)
+{
 	int error;
 	DentryRef dref = vfsGetDentry(startdir, path, 1, &error);
 	if (dref.dent == NULL)
@@ -1056,7 +1071,7 @@ int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode)
 		return EEXIST;
 	};
 	
-	if (dref.dent->dir->fs->flags & VFS_ST_RDONLY)
+	if ((dref.dent->dir->fs->flags & VFS_ST_RDONLY) && ((flags & VFS_MKDIR_NOVALID) == 0))
 	{
 		vfsRemoveDentry(dref);
 		return EROFS;
@@ -1935,7 +1950,7 @@ int vfsCreateLink(InodeRef oldstart, const char *oldpath, InodeRef newstart, con
 		return EEXIST;
 	};
 	
-	if (drefNew.dent->dir->fs->flags & VFS_ST_RDONLY)
+	if ((drefNew.dent->dir->fs->flags & VFS_ST_RDONLY) && ((flags & VFS_AT_NOVALID) == 0))
 	{
 		vfsUnrefInode(iref);
 		vfsRemoveDentry(drefNew);
@@ -1958,6 +1973,11 @@ int vfsCreateLink(InodeRef oldstart, const char *oldpath, InodeRef newstart, con
 
 int vfsCreateSymlink(const char *oldpath, InodeRef newstart, const char *newpath)
 {
+	return vfsCreateSymlinkEx(oldpath, newstart, newpath, 0);
+};
+
+int vfsCreateSymlinkEx(const char *oldpath, InodeRef newstart, const char *newpath, int flags)
+{
 	int error;
 	DentryRef dref = vfsGetDentry(newstart, newpath, 1, &error);
 	if (dref.dent == NULL)
@@ -1972,7 +1992,7 @@ int vfsCreateSymlink(const char *oldpath, InodeRef newstart, const char *newpath
 		return EEXIST;
 	};
 	
-	if (dref.dent->dir->fs->flags & VFS_ST_RDONLY)
+	if ((dref.dent->dir->fs->flags & VFS_ST_RDONLY) && ((flags & VFS_AT_NOVALID) == 0))
 	{
 		vfsRemoveDentry(dref);
 		return EROFS;

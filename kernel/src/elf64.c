@@ -516,8 +516,42 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	getCurrentThread()->sigdisp = sigdispExec(getCurrentThread()->sigdisp);
 
 	// thread name
-	strcpy(getCurrentThread()->name, path);
+	if (strlen(path) < 256)
+	{
+		strcpy(getCurrentThread()->name, path);
+	}
+	else
+	{
+		strcpy(getCurrentThread()->name, "<TOO LONG>");
+	};
 
+	// /proc/<pid>/exe
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, path, 0, NULL);
+	if (dref.dent != NULL)
+	{
+		char *rpath = vfsRealPath(dref);
+		dref = vfsGetDentry(VFS_NULL_IREF, "/proc/self/exe", 0, NULL);
+		if (dref.dent != NULL)
+		{
+			InodeRef iref = vfsGetInode(dref, 0, NULL);
+			if (iref.inode != NULL)
+			{
+				semWait(&iref.inode->lock);
+				kfree(iref.inode->target);
+				iref.inode->target = rpath;
+				semSignal(&iref.inode->lock);
+			}
+			else
+			{
+				kfree(rpath);
+			};
+		}
+		else
+		{
+			kfree(rpath);
+		};
+	};
+	
 	// set the execPars
 	Thread *thread = getCurrentThread();
 	if (thread->execPars != NULL) kfree(thread->execPars);

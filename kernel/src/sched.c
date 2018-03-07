@@ -42,6 +42,7 @@
 #include <glidix/signal.h>
 #include <glidix/trace.h>
 #include <glidix/ftree.h>
+#include <glidix/procfs.h>
 
 Thread firstThread;
 PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
@@ -148,6 +149,7 @@ Creds *credsNew()
 	creds->rootdir = vfsGetRoot();
 	creds->cwd = vfsGetCurrentDir();
 	semInit(&creds->semDir);
+	procfsCreate(1, creds->pid);
 	return creds;
 };
 
@@ -159,11 +161,13 @@ Creds *credsDup(Creds *old)
 	new->ps.ps_ticks = 0;
 	new->ps.ps_entries = 0;
 	new->ps.ps_quantum = quantumTicks;
+	new->pid = __sync_fetch_and_add(&nextPid, 1);
 	semWait(&old->semDir);
 	new->rootdir = vfsCopyInodeRef(old->rootdir);
 	new->cwd = vfsCopyInodeRef(old->cwd);
 	semSignal(&old->semDir);
 	semInit(&new->semDir);
+	procfsCreate(old->pid, new->pid);
 	return new;
 };
 
@@ -177,6 +181,7 @@ void credsDownref(Creds *creds)
 	int oldCount = __sync_fetch_and_add(&creds->refcount, -1);
 	if (oldCount == 1)
 	{
+		procfsDelete(creds->pid);
 		spinlockAcquire(&notifLock);
 		
 		// orphanate all children of this process
@@ -514,6 +519,9 @@ extern void reloadTR();
 
 static void jumpToTask()
 {
+	// set /proc/self target on current CPU
+	if (currentThread->creds != NULL) procfsSetPid(currentThread->creds->pid);
+	
 	// switch kernel stack
 	cli();
 	localTSSPtr->rsp0 = ((uint64_t) currentThread->stack + currentThread->stackSize) & ~0xFUL;
@@ -1006,11 +1014,7 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 	// assign pid/thid
 	cli();
 	spinlockAcquire(&schedLock);
-	if ((flags & CLONE_THREAD) == 0)
-	{
-		thread->creds->pid = nextPid++;
-	};
-	thread->thid = nextPid++;
+	thread->thid = __sync_fetch_and_add(&nextPid, 1);
 	spinlockRelease(&schedLock);
 	sti();
 	

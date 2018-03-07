@@ -32,6 +32,7 @@
 #include <glidix/memory.h>
 #include <glidix/string.h>
 #include <glidix/syscall.h>
+#include <glidix/console.h>
 
 static Semaphore semFS;
 static FSDriver *firstDriver;
