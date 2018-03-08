@@ -1601,6 +1601,24 @@ int vfsChangeMode(InodeRef startdir, const char *path, mode_t mode)
 
 int vfsInodeChangeOwner(Inode *inode, uid_t uid, gid_t gid)
 {
+	if (uid != -1)
+	{
+		if ((uid & 0xFFFF) != uid)
+		{
+			ERRNO = EINVAL;
+			return -1;
+		};
+	};
+	
+	if (gid != -1)
+	{
+		if ((gid & 0xFFFF) != gid)
+		{
+			ERRNO = EINVAL;
+			return -1;
+		};
+	};
+	
 	semWait(&inode->lock);
 	if (inode->fs->flags & VFS_ST_RDONLY)
 	{
