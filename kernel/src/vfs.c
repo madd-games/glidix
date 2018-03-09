@@ -1395,7 +1395,18 @@ ssize_t vfsPWrite(File *fp, const void *buffer, size_t size, off_t offset)
 
 off_t vfsSeek(File *fp, off_t off, int whence)
 {
-	if (fp->iref.inode->ft == NULL)
+	size_t size;
+	if (fp->iref.inode->ft != NULL)
+	{
+		size = fp->iref.inode->ft->size;
+	}
+	else if (fp->iref.inode->getsize != NULL)
+	{
+		semWait(&fp->iref.inode->lock);
+		size = fp->iref.inode->getsize(fp->iref.inode);
+		semSignal(&fp->iref.inode->lock);
+	}
+	else
 	{
 		ERRNO = ESPIPE;
 		return (off_t) -1;
@@ -1410,7 +1421,7 @@ off_t vfsSeek(File *fp, off_t off, int whence)
 		newOffset = fp->offset + off;
 		break;
 	case VFS_SEEK_END:
-		newOffset = fp->iref.inode->ft->size + off;
+		newOffset = size + off;
 		break;
 	case VFS_SEEK_SET:
 		newOffset = off;
@@ -1452,7 +1463,11 @@ void vfsInodeStat(Inode *inode, struct kstat *st)
 	st->st_gid = inode->gid;
 	st->st_rdev = 0;
 	
-	if (inode->ft == NULL)
+	if (inode->getsize != NULL)
+	{
+		st->st_size = inode->getsize(inode);
+	}
+	else if (inode->ft == NULL)
 	{
 		st->st_size = 0;
 	}

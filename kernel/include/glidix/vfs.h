@@ -418,6 +418,12 @@ struct Inode_
 	 * releasing 'fsdata'.
 	 */
 	void (*free)(Inode *inode);
+	
+	/**
+	 * This is called by stat() if there is no file tree. If this function pointer is NULL, the size is
+	 * reported as 0; if is defined, then this function shall return the size to be reported.
+	 */
+	size_t (*getsize)(Inode *inode);
 };
 
 /**

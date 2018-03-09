@@ -578,6 +578,43 @@ static void* sdfile_open(Inode *inode, int oflags)
 	return handle;
 };
 
+static size_t sdfile_getsize(Inode *inode)
+{
+	SDDeviceFile *fdev = (SDDeviceFile*) inode->fsdata;
+	mutexLock(&fdev->sd->lock);
+	
+	size_t size = fdev->sd->totalSize;
+	if (fdev->size != 0)
+	{
+		size = fdev->size;
+		mutexUnlock(&fdev->sd->lock);
+	}
+	else
+	{
+		if (size == 0)
+		{
+			Semaphore lock;
+			semInit2(&lock, 0);
+
+			SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
+			cmd->type = SD_CMD_GET_SIZE;
+			cmd->block = &size;
+			cmd->cmdlock = &lock;
+			cmd->flags = 0;
+
+			sdPush(fdev->sd, cmd);
+			mutexUnlock(&fdev->sd->lock);
+			semWait(&lock);		// cmd freed by the driver
+		}
+		else
+		{
+			mutexUnlock(&fdev->sd->lock);
+		};
+	};
+	
+	return size;
+};
+
 static Inode* sdCreateInode(SDDeviceFile *fdev)
 {
 	Inode *inode = vfsCreateInode(NULL, VFS_MODE_BLKDEV | 0600);
@@ -588,6 +625,7 @@ static Inode* sdCreateInode(SDDeviceFile *fdev)
 	inode->pwrite = sdfile_pwrite;
 	inode->flush = sdfile_flush;
 	inode->ioctl = sdfile_ioctl;
+	inode->getsize = sdfile_getsize;
 	return inode;
 };
 
