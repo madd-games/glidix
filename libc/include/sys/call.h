@@ -178,6 +178,7 @@
 #define	__SYS_fstatvfs				146
 #define	__SYS_chroot				147
 #define	__SYS_modstat				148
+#define	__SYS_rmdir				149
 
 #ifdef __cplusplus
 extern "C" {

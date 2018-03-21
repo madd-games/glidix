@@ -197,6 +197,7 @@ static int isoLoadInode(FileSystem *fs, Inode *inode)
 	{
 		inode->mode = isofs->opt.mode;
 		inode->ft = ftCreate(FT_READONLY);
+		ftDown(inode->ft);
 		inode->ft->data = inode;
 		inode->ft->load = isoLoad;
 		inode->ft->size = head.fileSize;
@@ -288,11 +289,14 @@ static Inode* isofs_openroot(const char *image, int flags, const void *options, 
 	// load the root inode
 	Inode *root = vfsCreateInode(NULL, isofs->opt.mode | VFS_MODE_DIRECTORY);
 	root->fs = fs;
+	fs->imap = root;
 	root->ino = (ino_t) (0x8000 + 156);	// the root dirent in the PVD
 	if (isoLoadInode(fs, root) != 0)
 	{
 		vfsDownrefInode(root);
 		kfree(fs);
+		kfree(isofs);
+		vfsClose(fp);
 		*error = EIO;
 		return NULL;
 	};

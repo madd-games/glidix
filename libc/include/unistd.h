@@ -89,7 +89,6 @@ int		truncate(const char *path, off_t length);
 long		fpathconf(int fd, int name);
 long		pathconf(const char *path, int name);
 long		sysconf(int name);
-int		rmdir(const char *path);
 int		access(const char *path, int amode);
 int		getdtablesize(void);
 int		getopt(int argc, char* const argv[], const char* optstring);
@@ -150,6 +149,7 @@ ssize_t		pwrite(int fd, const void *buf, size_t count, off_t offset);
 void		sync();
 int		nice(int incr);
 int		chroot(const char *path);
+int		rmdir(const char *path);
 
 /* libcrypt */
 char*		crypt(const char *key, const char *salt);

@@ -708,6 +708,33 @@ int sys_unlink(const char *upath)
 	return 0;
 };
 
+int sys_rmdir(const char *upath)
+{
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	int error;
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		ERRNO = error;
+		return -1;
+	};
+	
+	int status = vfsUnlinkInode(dref, VFS_AT_REMOVEDIR);
+	if (status != 0)
+	{
+		ERRNO = status;
+		return -1;
+	};
+	
+	return 0;
+};
+
 int sys_dup(int fd)
 {
 	File *fp = ftabGet(getCurrentThread()->ftab, fd);
@@ -3182,6 +3209,7 @@ int sys_aclput(const char *upath, int type, int id, int perms)
 			{
 				ace->ace_id = id;
 				ace->ace_type = type;
+				ace->ace_perms = perms;
 				found = 1;
 				break;
 			};
@@ -3413,7 +3441,7 @@ int sys_modstat(int block, ModuleState *ustate)
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 149
+#define SYSCALL_NUMBER 150
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3564,6 +3592,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_fstatvfs,				// 146
 	&sys_chroot,				// 147
 	&sys_modstat,				// 148
+	&sys_rmdir,				// 149
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

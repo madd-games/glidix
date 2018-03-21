@@ -522,7 +522,7 @@ struct FileSystem_
 	/**
 	 * Load the inode with the given number (inode->ino). This function shall fill out the metadata
 	 * in the inode. The refcount, lock, fs pointer, etc are all initialized by the kernel.
-	 * All fields are initially zeroed out. Return 0 on error, or -1 if an I/O error occured.
+	 * All other fields are initially zeroed out. Return 0 on error, or -1 if an I/O error occured.
 	 */
 	int (*loadInode)(FileSystem *fs, Inode *inode);
 	
@@ -572,6 +572,11 @@ struct FileSystem_
 	 * Boot ID of this filesystem.
 	 */
 	uint8_t bootid[16];
+	
+	/**
+	 * Set to 1 if currently unmounting.
+	 */
+	int unmounting;
 };
 
 /**

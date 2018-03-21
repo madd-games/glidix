@@ -145,6 +145,9 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 		{
 			panic("inode creation attempted on a filesystem that can't register inodes");
 		};
+		inode->next = fs->imap;
+		if (fs->imap != NULL) fs->imap->prev = inode;
+		fs->imap = inode;
 		semSignal(&fs->lock);
 	}
 	else
@@ -164,8 +167,15 @@ void vfsDirtyInode(Inode *inode)
 
 int vfsFlush(Inode *inode)
 {
+	if (inode->ino == 0)
+	{
+		// inode has been dropped
+		ERRNO = EPERM;
+		return -1;
+	};
+	
 	semWait(&inode->lock);
-	ftFlush(inode->ft);
+	if (inode->ft != NULL) ftFlush(inode->ft);
 	if (inode->flush != NULL)
 	{
 		if (inode->flush(inode) != 0)
@@ -191,7 +201,7 @@ void vfsDownrefInode(Inode *inode)
 	{
 		// make sure we are removed from the inode map
 		FileSystem *fs = inode->fs;
-		if (fs != NULL)
+		if (fs != NULL && !fs->unmounting)
 		{
 			semWait(&fs->lock);
 			if (inode->prev != NULL) inode->prev->next = inode->next;
@@ -315,6 +325,10 @@ void vfsCallInInode(Dentry *dent)
 				return;
 			};
 			
+			inode->next = fs->imap;
+			if (fs->imap != NULL) fs->imap->prev = inode;
+			fs->imap = inode;
+
 			dent->target = inode;
 		}
 		else
@@ -530,6 +544,9 @@ DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
 				nulref.top = NULL;
 				return nulref;
 			};
+			
+			diref.inode->mtime = time();
+			vfsDirtyInode(diref.inode);
 			
 			dent = NEW(Dentry);
 			memset(dent, 0, sizeof(Dentry));
@@ -869,7 +886,6 @@ InodeRef vfsLinkAndGetInode(DentryRef dref, Inode *target)
 	if (target->parent == NULL)
 	{
 		target->parent = dref.dent;
-		vfsUprefInode(dref.dent->dir);
 	};
 	
 	vfsDirtyInode(dref.dent->dir);
@@ -908,7 +924,12 @@ static void vfsLinkDown(Inode *inode)
 {
 	semWait(&inode->lock);
 	if ((--inode->links) == 0)
-	{
+	{	
+		if (inode->drop != NULL)
+		{
+			inode->drop(inode);
+		};
+		
 		if (inode->ft != NULL)
 		{
 			ftUp(inode->ft);
@@ -916,11 +937,8 @@ static void vfsLinkDown(Inode *inode)
 			ftDown(inode->ft);
 			inode->ft = NULL;
 		};
-		
-		if (inode->drop != NULL)
-		{
-			inode->drop(inode);
-		};
+
+		inode->ino = 0;
 	};
 	
 	semSignal(&inode->lock);
@@ -1221,6 +1239,7 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 File* vfsOpenInode(InodeRef iref, int oflag, int *error)
 {
 	__sync_fetch_and_add(&iref.inode->numOpens, 1);
+	iref.inode->atime = time();
 		
 	void *filedata = NULL;
 	if (iref.inode->open != NULL)
@@ -1249,9 +1268,12 @@ File* vfsOpenInode(InodeRef iref, int oflag, int *error)
 		if (iref.inode->ft != NULL)
 		{
 			ftTruncate(iref.inode->ft, 0);
+			iref.inode->mtime = iref.inode->ctime = time();
 		};
 	};
-	
+
+	if (iref.inode->ft != NULL) ftUp(iref.inode->ft);
+	vfsDirtyInode(fp->iref.inode);
 	return fp;
 };
 
@@ -1271,6 +1293,7 @@ void vfsClose(File *fp)
 			fp->iref.inode->close(fp->iref.inode, fp->filedata);
 		};
 		
+		if (fp->iref.inode->ft != NULL) ftDown(fp->iref.inode->ft);
 		__sync_fetch_and_add(&fp->iref.inode->numOpens, -1);
 		vfsUnrefInode(fp->iref);
 		kfree(fp);
@@ -2236,6 +2259,7 @@ int vfsUnmount(const char *path, int flags)
 		
 		// not busy, we can remove the filesystem.
 		// first flush and free all inodes
+		fs->unmounting = 1;
 		while (fs->imap != NULL)
 		{
 			scan = fs->imap;
