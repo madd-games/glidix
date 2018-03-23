@@ -299,8 +299,20 @@ ssize_t ftWrite(FileTree *ft, const void *buffer, size_t size, off_t pos)
 	
 	if ((pos+size) >= ft->size)
 	{
-		ft->size = pos + size;
-		if (ft->update != NULL) ft->update(ft);
+		if ((ft->flags & FT_FIXED_SIZE) == 0)
+		{
+			ft->size = pos + size;
+			if (ft->update != NULL) ft->update(ft);
+		}
+		else if (pos >= ft->size)
+		{
+			semSignal(&ft->lock);
+			return 0;
+		}
+		else
+		{
+			size = ft->size - pos;
+		};
 	};
 	
 	ssize_t sizeWritten = 0;
@@ -339,6 +351,11 @@ ssize_t ftWrite(FileTree *ft, const void *buffer, size_t size, off_t pos)
 
 int ftTruncate(FileTree *ft, size_t size)
 {
+	if (ft->flags & FT_FIXED_SIZE)
+	{
+		return -1;
+	};
+	
 	semWait(&ft->lock);
 	if (ft->flags & FT_READONLY)
 	{

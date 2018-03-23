@@ -1323,6 +1323,8 @@ static ssize_t vfsReadUnlocked(File *fp, void *buffer, size_t size, off_t offset
 		return ftRead(fp->iref.inode->ft, buffer, size, offset);
 	};
 	
+	fp->iref.inode->atime = time();
+	
 	ERRNO = EPERM;
 	return -1;
 };
@@ -1350,6 +1352,8 @@ static ssize_t vfsWriteUnlocked(File *fp, const void *buffer, size_t size, off_t
 		return ftWrite(fp->iref.inode->ft, buffer, size, offset);
 	};
 	
+	fp->iref.inode->mtime = fp->iref.inode->ctime = time();
+
 	ERRNO = EPERM;
 	return -1;
 };
@@ -1749,6 +1753,8 @@ int vfsTruncate(Inode *inode, off_t size)
 	};
 	
 	ftTruncate(inode->ft, (size_t) size);
+	inode->mtime = inode->ctime = time();
+	
 	return 0;
 };
 

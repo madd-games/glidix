@@ -88,6 +88,23 @@ typedef struct
 	uint64_t arDXPerm;
 } GXFS_AttrRecord;
 
+typedef struct
+{
+	uint32_t drType;	/* "DENT" */
+	uint32_t drRecordSize;	/* sizeof(GXFS_DentRecord) + strlen(filename), 8-byte-aligned */
+	uint64_t drInode;
+	uint8_t drInoType;
+	char drName[];
+} GXFS_DentRecord;
+
+typedef struct
+{
+	uint32_t trType;	/* "TREE" */
+	uint32_t trSize;	/* sizeof(GXFS_TreeRecord) */
+	uint64_t trDepth;
+	uint64_t trHead;
+} GXFS_TreeRecord;
+
 void generateMGSID(uint8_t *buffer)
 {
 	uint64_t timestamp = (uint64_t) time(NULL);
@@ -235,7 +252,7 @@ int main(int argc, char *argv[])
 	doChecksum((uint64_t*) sbh);
 
 	sbb->sbbResvBlocks = 8;
-	sbb->sbbUsedBlocks = 8;
+	sbb->sbbUsedBlocks = 9;			/* reserved + /boot (inode 8) */
 	sbb->sbbTotalBlocks = (st.st_size - 0x200000) >> 12;
 	sbb->sbbFreeHead = 0;
 	sbb->sbbLastMountTime = formatTime;
@@ -252,7 +269,7 @@ int main(int argc, char *argv[])
 	ar->arType = (*((const uint32_t*)"ATTR"));
 	ar->arRecordSize = sizeof(GXFS_AttrRecord);
 	ar->arLinks = 1;
-	ar->arFlags = 0600;	// regular files, only accessible to root
+	ar->arFlags = 0600;	// regular file, only accessible to root
 	ar->arOwner = 0;
 	ar->arGroup = 0;
 	ar->arSize = 0;
@@ -262,8 +279,52 @@ int main(int argc, char *argv[])
 	
 	// create the root directory inode (again, skip inode header, ihNext=0)
 	// ar already set to the right place
+	// also create a "/boot" entry
 	ar->arFlags = 0x1000 | 01755;	// directory, sticky, mode 755
+	GXFS_DentRecord *dr = (GXFS_DentRecord*) &ar[1];
+	dr->drType = (*((const uint32_t*)"DENT"));
+	dr->drRecordSize = 24;
+	dr->drInode = 8;		/* use inode 8 for the /boot directory */
+	dr->drInoType = 1;		/* type = directory */
+	strcpy(dr->drName, "boot");
 	pwrite(fd, block, 4096, 0x202000);
+	
+	// inode 8 (/boot) is almost the same
+	ar->arFlags = 0x1000 | 0755;
+	// size the same
+	dr->drInode = 3;
+	dr->drInoType = 3;		/* "block device" */
+	strcpy(dr->drName, "loader");
+	pwrite(fd, block, 4096, 0x208000);
+	
+	// now onto inode 3
+	memset(block, 0, 4096);
+	ar->arType = (*((const uint32_t*)"ATTR"));
+	ar->arRecordSize = sizeof(GXFS_AttrRecord);
+	ar->arLinks = 1;
+	ar->arFlags = 0x13000 | 0600;	// fixed size, block device, only accessible to root
+	ar->arOwner = 0;
+	ar->arGroup = 0;
+	ar->arSize = 2 * 1024 * 1024;	// 2MB
+	ar->arATime = ar->arMTime = ar->arCTime = ar->arBTime = formatTime;
+	
+	GXFS_TreeRecord *tr = (GXFS_TreeRecord*) &ar[1];
+	tr->trType = (*((const uint32_t*)"TREE"));
+	tr->trSize = sizeof(GXFS_TreeRecord);
+	tr->trDepth = 1;
+	tr->trHead = 4;
+	
+	pwrite(fd, block, 4096, 0x203000);
+	
+	// finally the pointer block (4)
+	uint64_t *table = (uint64_t*) block;
+	int i;
+	for (i=0; i<512; i++)
+	{
+		table[i] = (uint64_t) (i-512);
+	};
+	
+	pwrite(fd, block, 4096, 0x204000);
 	
 	// thanks
 	close(fd);

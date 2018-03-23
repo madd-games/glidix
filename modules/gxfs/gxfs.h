@@ -45,6 +45,9 @@
 /* record types */
 #define	GXFS_RT(s)					(*((const uint32_t*)s))
 
+/* inode flags (must start with bit 16 as low 16 bits = mode) */
+#define	GXFS_INODE_FIXED_SIZE				(1 << 16)
+
 typedef struct
 {
 	uint64_t sbhMagic;

@@ -1223,7 +1223,7 @@ void partFlush()
 		open("/dev/null", O_RDWR);
 		dup(0);
 		dup(1);
-		execl("/usr/bin/gxboot-i", "gxboot-install", bootdev, NULL);
+		execl("/usr/bin/gxboot-install", "gxboot-install", bootdev, NULL);
 		exit(1);
 	};
 	

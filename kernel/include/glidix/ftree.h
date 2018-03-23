@@ -38,6 +38,7 @@
  */
 #define	FT_ANON					(1 << 0)
 #define	FT_READONLY				(1 << 1)
+#define	FT_FIXED_SIZE				(1 << 2)
 
 /**
  * Describes a single node on a file page tree. There are 16 entries, indexed by each 4

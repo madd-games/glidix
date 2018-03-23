@@ -77,8 +77,10 @@ static void gxfsUnmount(FileSystem *fs)
 static int gxfsReadBlock(GXFS *gxfs, uint64_t blockno, void *buffer)
 {
 	uint64_t off = 0x200000 + (blockno << 12);
-	if (vfsPRead(gxfs->fp, buffer, 4096, off) != 4096)
+	ssize_t size = vfsPRead(gxfs->fp, buffer, 4096, off);
+	if (size != 4096)
 	{
+		kprintf("gxfs: block read failure: size=%ld, errno=%d\n", size, ERRNO);
 		return -1;
 	}
 	else
@@ -265,6 +267,13 @@ static int gxfsFlushInode(Inode *inode)
 	ar.arRecordSize = sizeof(GXFS_AttrRecord);
 	ar.arLinks = inode->links;
 	ar.arFlags = inode->mode;
+	if (inode->ft != NULL)
+	{
+		if (inode->ft->flags & FT_FIXED_SIZE)
+		{
+			ar.arFlags |= GXFS_INODE_FIXED_SIZE;
+		};
+	};
 	ar.arOwner = inode->uid;
 	ar.arGroup = inode->gid;
 	ar.arSize = 0;
@@ -372,9 +381,10 @@ static void gxfsDeleteTreeRecur(FileSystem *fs, uint64_t depth, uint64_t head)
 	else
 	{
 		uint64_t table[512];
-		if (gxfsReadBlock((GXFS*) fs, head, table) != 0)
+		if (gxfsReadBlock((GXFS*) fs->fsdata, head, table) != 0)
 		{
-			kprintf("gxfs: failed to read a tree node: corruption likely\n");
+			enableDebugTerm();
+			kprintf("gxfs: failed to read a tree node %lu: corruption likely\n", head);
 			return;
 		};
 		
@@ -412,6 +422,8 @@ static void gxfsSetInodeCallbacks(Inode *inode)
 
 static int gxfsTreeLoad(FileTree *ft, off_t pos, void *buffer)
 {
+	//enableDebugTerm();
+	//if (pos == 2097152) kprintf("gxfs: loading offset %lu of %p\n", pos, ft);
 	GXFS_Tree *data = (GXFS_Tree*) ft->data;
 	
 	uint64_t sizeLimit = (1UL << 57) - 1;
@@ -441,11 +453,11 @@ static int gxfsTreeLoad(FileTree *ft, off_t pos, void *buffer)
 	};
 	
 	uint64_t lvl[5];
-	lvl[4] = (pos >> 12);
-	lvl[3] = (pos >> 21);
-	lvl[2] = (pos >> 30);
-	lvl[1] = (pos >> 39);
-	lvl[0] = (pos >> 48);
+	lvl[4] = (pos >> 12) & 0x1F;
+	lvl[3] = (pos >> 21) & 0x1F;
+	lvl[2] = (pos >> 30) & 0x1F;
+	lvl[1] = (pos >> 39) & 0x1F;
+	lvl[0] = (pos >> 48) & 0x1F;
 	
 	// get to the data block
 	uint64_t datablock = data->head;
@@ -482,6 +494,7 @@ static int gxfsTreeLoad(FileTree *ft, off_t pos, void *buffer)
 	};
 	
 	// finally, load the data
+	//if (pos == 2097152) kprintf("offset %lu mapped to block %lu\n", pos, datablock);
 	if (gxfsReadBlock((GXFS*) data->fs->fsdata, datablock, buffer) != 0)
 	{
 		return -1;
@@ -492,6 +505,8 @@ static int gxfsTreeLoad(FileTree *ft, off_t pos, void *buffer)
 
 static int gxfsTreeFlush(FileTree *ft, off_t pos, const void *buffer)
 {
+	//enableDebugTerm();
+	//if (pos == 2097152) kprintf("gxfs: flushing offset %lu of %p\n", pos, ft);
 	GXFS_Tree *data = (GXFS_Tree*) ft->data;
 	if (data->fs->flags & VFS_ST_RDONLY)
 	{
@@ -510,11 +525,11 @@ static int gxfsTreeFlush(FileTree *ft, off_t pos, const void *buffer)
 	};
 	
 	uint64_t lvl[5];
-	lvl[4] = (pos >> 12);
-	lvl[3] = (pos >> 21);
-	lvl[2] = (pos >> 30);
-	lvl[1] = (pos >> 39);
-	lvl[0] = (pos >> 48);
+	lvl[4] = (pos >> 12) & 0x1F;
+	lvl[3] = (pos >> 21) & 0x1F;
+	lvl[2] = (pos >> 30) & 0x1F;
+	lvl[1] = (pos >> 39) & 0x1F;
+	lvl[0] = (pos >> 48) & 0x1F;
 	
 	// get to the data block
 	uint64_t datablock = data->head;
@@ -598,7 +613,7 @@ static void gxfsTreeUpdate(FileTree *ft)
 	gxfsTruncateRecur(data->fs, data->depth, data->head, 0, (ft->size >> 12) + (!!(ft->size & 0xFFF)));
 };
 
-static FileTree* gxfsTree(FileSystem *fs, uint64_t depth, uint64_t head, size_t size)
+static FileTree* gxfsTree(FileSystem *fs, uint64_t depth, uint64_t head, size_t size, uint32_t iflags)
 {
 	GXFS_Tree *data = NEW(GXFS_Tree);
 	data->fs = fs;
@@ -609,6 +624,11 @@ static FileTree* gxfsTree(FileSystem *fs, uint64_t depth, uint64_t head, size_t 
 	if (fs->flags & VFS_ST_RDONLY)
 	{
 		treeFlags = FT_READONLY;
+	};
+	
+	if (iflags & GXFS_INODE_FIXED_SIZE)
+	{
+		treeFlags |= FT_FIXED_SIZE;
 	};
 	
 	FileTree *ft = ftCreate(treeFlags);
@@ -644,7 +664,7 @@ static int gxfsRegInode(FileSystem *fs, Inode *inode)
 			return -1;
 		};
 		
-		inode->ft = gxfsTree(fs, 0, head, 0);
+		inode->ft = gxfsTree(fs, 0, head, 0, 0);
 	};
 	
 	GXFS_Inode *idata = NEW(GXFS_Inode);
@@ -675,6 +695,7 @@ static int gxfsLoadInode(FileSystem *fs, Inode *inode)
 	
 	int foundAttr = 0;
 	size_t fileSize = 0;
+	uint32_t fileFlags = 0;
 	
 	uint64_t *blocks = (uint64_t*) kmalloc(8);
 	size_t numBlocks = 1;
@@ -805,6 +826,7 @@ static int gxfsLoadInode(FileSystem *fs, Inode *inode)
 			inode->oxperm = ar->arOXPerm;
 			inode->dxperm = ar->arDXPerm;
 			fileSize = ar->arSize;
+			fileFlags = ar->arFlags;
 		}
 		else if (rh->rhType == GXFS_RT("DENT"))
 		{
@@ -838,7 +860,7 @@ static int gxfsLoadInode(FileSystem *fs, Inode *inode)
 				return -1;
 			};
 			
-			inode->ft = gxfsTree(fs, tr->trDepth, tr->trHead, fileSize);
+			inode->ft = gxfsTree(fs, tr->trDepth, tr->trHead, fileSize, fileFlags);
 		}
 		else if (rh->rhType == GXFS_RT("LINK"))
 		{
