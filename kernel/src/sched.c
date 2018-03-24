@@ -258,6 +258,10 @@ void credsDownref(Creds *creds)
 
 		spinlockRelease(&notifLock);
 		
+		// release directories
+		vfsUnrefInode(creds->rootdir);
+		vfsUnrefInode(creds->cwd);
+		
 		// send the SIGCHLD signal to the parent
 		siginfo_t siginfo;
 		siginfo.si_signo = SIGCHLD;
