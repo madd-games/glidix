@@ -116,6 +116,7 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 	Inode *inode = NEW(Inode);
 	memset(inode, 0, sizeof(Inode));
 	inode->refcount = 1;
+	if (fs == NULL) inode->dups = 1;
 	semInit(&inode->lock);
 	inode->fs = fs;
 	inode->mode = mode & ~umask;
@@ -294,6 +295,7 @@ void vfsCallInInode(Dentry *dent)
 			{
 				if (scan->ino == dent->ino)
 				{
+					__sync_fetch_and_add(&scan->dups, 1);
 					vfsUprefInode(scan);
 					found = 1;
 					break;
@@ -307,6 +309,7 @@ void vfsCallInInode(Dentry *dent)
 			Inode *inode = NEW(Inode);
 			memset(inode, 0, sizeof(Inode));
 			inode->refcount = 1;
+			inode->dups = 1;
 			semInit(&inode->lock);
 			inode->fs = fs;
 			inode->parent = dent;
@@ -872,6 +875,7 @@ void vfsLinkInode(DentryRef dref, Inode *target)
 	
 	semWait(&target->lock);
 	target->links++;
+	__sync_fetch_and_add(&target->dups, 1);
 	vfsDirtyInode(target);
 	semSignal(&target->lock);
 };
@@ -892,6 +896,7 @@ InodeRef vfsLinkAndGetInode(DentryRef dref, Inode *target)
 	
 	semWait(&target->lock);
 	target->links++;
+	__sync_fetch_and_add(&target->dups, 1);
 	vfsDirtyInode(target);
 	semSignal(&target->lock);
 	
@@ -941,6 +946,7 @@ static void vfsLinkDown(Inode *inode)
 		inode->ino = 0;
 	};
 	
+	__sync_fetch_and_add(&inode->dups, -1);
 	semSignal(&inode->lock);
 	vfsDownrefInode(inode);
 };
@@ -988,7 +994,6 @@ int vfsUnlinkInode(DentryRef dref, int flags)
 		
 		if (dref.dent->target->refcount != 1)
 		{
-			kprintf("refcountof %p is %d\n", dref.dent->target, dref.dent->target->refcount);
 			vfsUnrefDentry(dref);
 			return EBUSY;
 		};
@@ -2229,7 +2234,7 @@ int vfsUnmount(const char *path, int flags)
 		{
 			// if the only reference to the inode is its placement and (for directories) all of its
 			// dentries, then nobody has it open.
-			int expectedCount = 1;
+			int expectedCount = scan->dups;
 			
 			if (semWaitGen(&scan->lock, 1, SEM_W_NONBLOCK, 0) != 1)
 			{

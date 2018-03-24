@@ -422,8 +422,6 @@ static void gxfsSetInodeCallbacks(Inode *inode)
 
 static int gxfsTreeLoad(FileTree *ft, off_t pos, void *buffer)
 {
-	//enableDebugTerm();
-	//if (pos == 2097152) kprintf("gxfs: loading offset %lu of %p\n", pos, ft);
 	GXFS_Tree *data = (GXFS_Tree*) ft->data;
 	
 	uint64_t sizeLimit = (1UL << 57) - 1;
@@ -494,7 +492,6 @@ static int gxfsTreeLoad(FileTree *ft, off_t pos, void *buffer)
 	};
 	
 	// finally, load the data
-	//if (pos == 2097152) kprintf("offset %lu mapped to block %lu\n", pos, datablock);
 	if (gxfsReadBlock((GXFS*) data->fs->fsdata, datablock, buffer) != 0)
 	{
 		return -1;
@@ -505,8 +502,6 @@ static int gxfsTreeLoad(FileTree *ft, off_t pos, void *buffer)
 
 static int gxfsTreeFlush(FileTree *ft, off_t pos, const void *buffer)
 {
-	//enableDebugTerm();
-	//if (pos == 2097152) kprintf("gxfs: flushing offset %lu of %p\n", pos, ft);
 	GXFS_Tree *data = (GXFS_Tree*) ft->data;
 	if (data->fs->flags & VFS_ST_RDONLY)
 	{

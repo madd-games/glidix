@@ -159,6 +159,9 @@
 
 #define	VFS_AT_NOVALID			(1 << 16)		/* do not validate (ignore ROFS) */
 
+/**
+ * Access control list stuff.
+ */
 #define	VFS_ACL_SIZE			128
 
 #define	VFS_ACE_UNUSED			0
@@ -424,6 +427,11 @@ struct Inode_
 	 * reported as 0; if is defined, then this function shall return the size to be reported.
 	 */
 	size_t (*getsize)(Inode *inode);
+	
+	/**
+	 * Duplicate counter. This is the number of times the inode has been called in.
+	 */
+	int dups;
 };
 
 /**
