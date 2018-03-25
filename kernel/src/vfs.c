@@ -1288,11 +1288,11 @@ void vfsDup(File *fp)
 };
 
 void vfsClose(File *fp)
-{
-	if (fp->iref.inode->ft != NULL) ftReleaseProcessLocks(fp->iref.inode->ft);
-	
+{	
 	if (__sync_add_and_fetch(&fp->refcount, -1) == 0)
 	{
+		if (fp->iref.inode->ft != NULL) ftReleaseProcessLocks(fp->iref.inode->ft);	
+		
 		if (fp->iref.inode->close != NULL)
 		{
 			fp->iref.inode->close(fp->iref.inode, fp->filedata);

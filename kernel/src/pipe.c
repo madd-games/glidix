@@ -273,7 +273,8 @@ int sys_pipe2(int *upipefd, int flags)
 	File *wfp = vfsOpenInode(iref, O_WRONLY | flags, &error);
 	assert(rfp != NULL);
 	assert(wfp != NULL);
-	vfsDownrefInode(inode);
+	
+	inode->refcount = 2;	// both the open descriptors (vfsOpenInode does not update the refcount)
 
 	// O_CLOEXEC == FD_CLOEXEC
 	ftabSet(getCurrentThread()->ftab, rfd, rfp, flags & O_CLOEXEC);
