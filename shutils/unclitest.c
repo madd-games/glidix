@@ -36,6 +36,9 @@
 
 int main()
 {
+	printf("Waiting 5 seconds...\n");
+	sleep(5);
+	
 	printf("Creating socket...\n");
 	int sockfd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (sockfd == -1)

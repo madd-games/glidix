@@ -181,6 +181,7 @@ static int unixsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrl
 		};
 		
 		vfsBindInode(dref, unixsock->seq.sysobj);
+		return 0;
 	};
 	
 	ERRNO = EINVAL;
