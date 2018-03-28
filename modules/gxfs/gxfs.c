@@ -63,7 +63,6 @@ static void gxfsFlushSuperblock(GXFS *gxfs)
 
 static void gxfsUnmount(FileSystem *fs)
 {
-	kprintf("gxfs: unmounting\n");
 	GXFS *gxfs = (GXFS*) fs->fsdata;
 	if ((gxfs->flags & MNT_RDONLY) == 0)
 	{
@@ -451,11 +450,11 @@ static int gxfsTreeLoad(FileTree *ft, off_t pos, void *buffer)
 	};
 	
 	uint64_t lvl[5];
-	lvl[4] = (pos >> 12) & 0x1F;
-	lvl[3] = (pos >> 21) & 0x1F;
-	lvl[2] = (pos >> 30) & 0x1F;
-	lvl[1] = (pos >> 39) & 0x1F;
-	lvl[0] = (pos >> 48) & 0x1F;
+	lvl[4] = (pos >> 12) & 0x1FF;
+	lvl[3] = (pos >> 21) & 0x1FF;
+	lvl[2] = (pos >> 30) & 0x1FF;
+	lvl[1] = (pos >> 39) & 0x1FF;
+	lvl[0] = (pos >> 48) & 0x1FF;
 	
 	// get to the data block
 	uint64_t datablock = data->head;
@@ -482,7 +481,7 @@ static int gxfsTreeLoad(FileTree *ft, off_t pos, void *buffer)
 				gxfsFreeBlock(data->fs, newblock);
 				return -1;
 			};
-			
+
 			datablock = newblock;
 		}
 		else
@@ -520,11 +519,11 @@ static int gxfsTreeFlush(FileTree *ft, off_t pos, const void *buffer)
 	};
 	
 	uint64_t lvl[5];
-	lvl[4] = (pos >> 12) & 0x1F;
-	lvl[3] = (pos >> 21) & 0x1F;
-	lvl[2] = (pos >> 30) & 0x1F;
-	lvl[1] = (pos >> 39) & 0x1F;
-	lvl[0] = (pos >> 48) & 0x1F;
+	lvl[4] = (pos >> 12) & 0x1FF;
+	lvl[3] = (pos >> 21) & 0x1FF;
+	lvl[2] = (pos >> 30) & 0x1FF;
+	lvl[1] = (pos >> 39) & 0x1FF;
+	lvl[0] = (pos >> 48) & 0x1FF;
 	
 	// get to the data block
 	uint64_t datablock = data->head;
@@ -913,8 +912,6 @@ static int gxfsLoadInode(FileSystem *fs, Inode *inode)
 
 static Inode* gxfsOpenRoot(const char *image, int flags, const void *options, size_t optlen, int *error)
 {
-	kprintf("gxfs: trying to mount %s\n", image);
-	
 	int oflags;
 	if (flags & MNT_RDONLY)
 	{

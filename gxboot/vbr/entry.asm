@@ -226,7 +226,7 @@ hlt
 jmp crash_loop
 
 sectorBuffer:
-times 512 db 0
+times 4096 db 0
 
 biosRead:
 	; preserve registers
@@ -294,7 +294,7 @@ _biosGetMap_pm:
 	ret
 
 go64:
-	; edit segment selection 0x08 to be 64-bit
+	; edit segment selector 0x08 to be 64-bit
 	mov esi, GDT32 + 0x20
 	mov edi, GDT32 + 0x08
 	mov ecx, 8

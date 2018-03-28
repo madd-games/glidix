@@ -1,5 +1,5 @@
 TOOLS_CFLAGS := -Wall -Werror -L../libc
-GXBOOT_CFLAGS := -Wall -Werror -m32 -ffreestanding -fno-builtin
+GXBOOT_CFLAGS := -Wall -Werror -m32 -ffreestanding -fno-builtin -DGXBOOT_FS_GXFS
 GXBOOT_LDFLAGS := -T $(SRCDIR)/vbr.ld -m32 -ffreestanding -nostdlib -lgcc
 
 C_SRC := $(shell find $(SRCDIR)/vbr -name '*.c')
@@ -38,7 +38,7 @@ asm/%.o: $(SRCDIR)/vbr/%.asm stub64.bin
 
 vbr/%.d: $(SRCDIR)/vbr/%.c
 	@mkdir -p vbr
-	$(HOST_GCC) -c $< -MM -MT $(subst .d,.o,$@) -o $@ $(CFLAGS)
+	$(HOST_GCC) -c $< -MM -MT $(subst .d,.o,$@) -o $@ $(GXBOOT_CFLAGS)
 
 # NOTE: The file must have the *.asmb extension because asm is compiled to ELF32!
 stub64.bin: $(SRCDIR)/vbr/stub64.asmb

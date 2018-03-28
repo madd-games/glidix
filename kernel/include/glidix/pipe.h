@@ -34,7 +34,7 @@
 #include <glidix/semaphore.h>
 
 #define	PIPE_READ			((void*)1)
-#define	PIPE_WRITE			((void*)1)
+#define	PIPE_WRITE			((void*)2)
 
 #define	PIPE_BUFFER_SIZE		1024
 
