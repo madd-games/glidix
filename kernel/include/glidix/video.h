@@ -124,10 +124,10 @@ typedef struct
 	void (*getinfo)(struct VideoDisplay_ *display, VideoInfo *info);
 	
 	/**
-	 * Return the physical base address of the framebuffer in current video mode, and store
-	 * the size in *sizeOut.
+	 * Return the physical frame number corresponding to the page-aligned position 'pos' in video
+	 * memory (this is the offset used with mmap()). Return 0 if no such page exists.
 	 */
-	uint64_t (*getfbuf)(struct VideoDisplay_ *display, size_t *sizeOut);
+	uint64_t (*getpage)(struct VideoDisplay_ *display, off_t off);
 	
 	/**
 	 * Exit graphics mode. This function must return to VGA-compatible 80x25 text mode.
@@ -153,12 +153,8 @@ typedef struct VideoDisplay_
 	/**
 	 * The device file representing this display.
 	 */
-	Device					dev;
-	
-	/**
-	 * Reference count.
-	 */
-	int					refcount;
+	Inode*					dev;
+	char*					devname;
 	
 	/**
 	 * The file handle which set the mode on this device.

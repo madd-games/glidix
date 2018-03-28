@@ -113,11 +113,11 @@ void sdInit()
 	mutexInit(&mtxList);
 };
 
-static int sdfile_ioctl(File *fp, uint64_t cmd, void *params)
+static int sdfile_ioctl(Inode *inode, File *fp, uint64_t cmd, void *params)
 {
 	if (cmd == IOCTL_SDI_IDENTITY)
 	{
-		SDHandle *data = (SDHandle*) fp->fsdata;
+		SDHandle *data = (SDHandle*) fp->filedata;
 		mutexLock(&data->sd->lock);
 		SDParams *sdpars = (SDParams*) params;
 		sdpars->flags = data->sd->flags;
@@ -128,7 +128,7 @@ static int sdfile_ioctl(File *fp, uint64_t cmd, void *params)
 	}
 	else if (cmd == IOCTL_SDI_EJECT)
 	{
-		SDHandle *data = (SDHandle*) fp->fsdata;
+		SDHandle *data = (SDHandle*) fp->filedata;
 		if (data->sd->totalSize != 0)
 		{
 			// non-removable
@@ -151,49 +151,8 @@ static int sdfile_ioctl(File *fp, uint64_t cmd, void *params)
 		return 0;
 	};
 
+	ERRNO = ENODEV;
 	return -1;
-};
-
-int sdfile_fstat(File *fp, struct stat *st)
-{
-	SDHandle *data = (SDHandle*) fp->fsdata;
-	mutexLock(&data->sd->lock);
-	st->st_dev = 0;
-	st->st_ino = 0;
-	st->st_mode = 0;
-	st->st_nlink = data->sd->refcount;
-	st->st_uid = 0;
-	st->st_gid = 0;
-	st->st_rdev = 0;
-	st->st_size = data->sd->totalSize;
-	if (data->size != 0) st->st_size = data->size;
-	st->st_blksize = data->sd->blockSize;
-	st->st_blocks = st->st_size / st->st_blksize;
-	st->st_atime = 0;
-	st->st_mtime = 0;
-	st->st_ctime = 0;
-	
-	if (data->sd->totalSize == 0)
-	{
-		Semaphore lock;
-		semInit2(&lock, 0);
-
-		SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
-		cmd->type = SD_CMD_GET_SIZE;
-		cmd->block = &st->st_size;
-		cmd->cmdlock = &lock;
-		cmd->flags = 0;
-
-		sdPush(data->sd, cmd);
-		mutexUnlock(&data->sd->lock);
-		semWait(&lock);		// cmd freed by the driver
-	}
-	else
-	{
-		mutexUnlock(&data->sd->lock);
-	};
-	
-	return 0;
 };
 
 static void sdFlushTree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t pos)
@@ -239,19 +198,21 @@ static void sdFlush(StorageDevice *sd)
 	sdFlushTree(sd, &sd->cacheTop, 0, 0);
 };
 
-static void sdfile_fsync(File *fp)
+static int sdfile_flush(Inode *inode)
 {
-	SDHandle *handle = (SDHandle*) fp->fsdata;
-	mutexLock(&handle->sd->cacheLock);
-	sdFlush(handle->sd);
-	mutexUnlock(&handle->sd->cacheLock);
+	SDDeviceFile *fdev = (SDDeviceFile*) inode->fsdata;
+	mutexLock(&fdev->sd->cacheLock);
+	sdFlush(fdev->sd);
+	mutexUnlock(&fdev->sd->cacheLock);
+	
+	return 0;
 };
 
-static void sdfile_close(File *fp)
+static void sdfile_close(Inode *inode, void *filedata)
 {
-	sdfile_fsync(fp);
+	sdfile_flush(inode);
 	
-	SDHandle *handle = (SDHandle*) fp->fsdata;
+	SDHandle *handle = (SDHandle*) filedata;
 	mutexLock(&handle->sd->lock);
 	
 	if (handle->partIndex == -1)
@@ -529,9 +490,9 @@ static ssize_t sdWrite(StorageDevice *sd, uint64_t pos, const void *buf, size_t 
 	return sizeWritten;
 };
 
-static ssize_t sdfile_pread(File *fp, void *buf, size_t size, off_t offset)
+static ssize_t sdfile_pread(Inode *inode, File *fp, void *buf, size_t size, off_t offset)
 {
-	SDHandle *handle = (SDHandle*) fp->fsdata;
+	SDHandle *handle = (SDHandle*) fp->filedata;
 	uint64_t actualStart = handle->offset + (uint64_t) offset;
 	if (handle->size != 0)
 	{
@@ -548,20 +509,9 @@ static ssize_t sdfile_pread(File *fp, void *buf, size_t size, off_t offset)
 	return sdRead(handle->sd, actualStart, buf, size);
 };
 
-static ssize_t sdfile_read(File *fp, void *buf, size_t size)
+static ssize_t sdfile_pwrite(Inode *inode, File *fp, const void *buf, size_t size, off_t offset)
 {
-	SDHandle *handle = (SDHandle*) fp->fsdata;
-	
-	off_t offset = (off_t) handle->pos;
-	ssize_t rsize = sdfile_pread(fp, buf, size, offset);
-	if (rsize == -1) return -1;
-	handle->pos = (size_t) (offset + rsize);
-	return rsize;
-};
-
-static ssize_t sdfile_pwrite(File *fp, const void *buf, size_t size, off_t offset)
-{
-	SDHandle *handle = (SDHandle*) fp->fsdata;
+	SDHandle *handle = (SDHandle*) fp->filedata;
 	uint64_t actualStart = (uint64_t) handle->offset + (uint64_t) offset;
 	if (handle->size != 0)
 	{
@@ -578,59 +528,24 @@ static ssize_t sdfile_pwrite(File *fp, const void *buf, size_t size, off_t offse
 	return sdWrite(handle->sd, actualStart, buf, size);
 };
 
-static ssize_t sdfile_write(File *fp, const void *buf, size_t size)
-{
-	SDHandle *handle = (SDHandle*) fp->fsdata;
-	
-	off_t offset = (off_t) handle->pos;
-	ssize_t rsize = sdfile_pwrite(fp, buf, size, offset);
-	if (rsize == -1) return -1;
-	handle->pos = (size_t) (offset + rsize);
-	return rsize;
-};
-
-static off_t sdfile_seek(File *fp, off_t off, int whence)
-{
-	SDHandle *handle = (SDHandle*) fp->fsdata;
-	if (whence == SEEK_SET)
-	{
-		handle->pos = (size_t) off;
-	}
-	else if (whence == SEEK_CUR)
-	{
-		handle->pos += (size_t) off;
-	}
-	else if (whence == SEEK_END)
-	{
-		mutexLock(&handle->sd->lock);
-		size_t end = handle->size;
-		if (end == 0)
-		{
-			end = handle->sd->totalSize;
-		};
-		mutexUnlock(&handle->sd->lock);
-		handle->pos = (size_t) end + off;
-	};
-	
-	return (off_t) handle->pos;
-};
-
-static int sdfile_open(void *data, File *fp, size_t szfile)
+static void* sdfile_open(Inode *inode, int oflags)
 {
 	SDHandle *handle = NEW(SDHandle);
 	if (handle == NULL)
 	{
-		return VFS_NO_MEMORY;
+		ERRNO = ENOMEM;
+		return NULL;
 	};
 	
-	SDDeviceFile *fdev = (SDDeviceFile*) data;
+	SDDeviceFile *fdev = (SDDeviceFile*) inode->fsdata;
 	mutexLock(&fdev->sd->lock);
 	if (fdev->partIndex == -1)
 	{
 		if (fdev->sd->openParts != 0)
 		{
 			mutexUnlock(&fdev->sd->lock);
-			return VFS_BUSY;
+			ERRNO = EBUSY;
+			return NULL;
 		}
 		else
 		{
@@ -643,7 +558,8 @@ static int sdfile_open(void *data, File *fp, size_t szfile)
 		if (fdev->sd->openParts & mask)
 		{
 			mutexUnlock(&fdev->sd->lock);
-			return VFS_BUSY;
+			ERRNO = EBUSY;
+			return NULL;
 		}
 		else
 		{
@@ -657,21 +573,60 @@ static int sdfile_open(void *data, File *fp, size_t szfile)
 	handle->sd = fdev->sd;
 	handle->offset = fdev->offset;
 	handle->size = fdev->size;
-	handle->pos = 0;
 	handle->partIndex = fdev->partIndex;
 	
-	fp->fsdata = handle;
-	fp->ioctl = sdfile_ioctl;
-	fp->fstat = sdfile_fstat;
-	fp->pread = sdfile_pread;
-	fp->read = sdfile_read;
-	fp->seek = sdfile_seek;
-	fp->pwrite = sdfile_pwrite;
-	fp->write = sdfile_write;
-	fp->fsync = sdfile_fsync;
-	fp->close = sdfile_close;
+	return handle;
+};
+
+static size_t sdfile_getsize(Inode *inode)
+{
+	SDDeviceFile *fdev = (SDDeviceFile*) inode->fsdata;
+	mutexLock(&fdev->sd->lock);
 	
-	return 0;
+	size_t size = fdev->sd->totalSize;
+	if (fdev->size != 0)
+	{
+		size = fdev->size;
+		mutexUnlock(&fdev->sd->lock);
+	}
+	else
+	{
+		if (size == 0)
+		{
+			Semaphore lock;
+			semInit2(&lock, 0);
+
+			SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
+			cmd->type = SD_CMD_GET_SIZE;
+			cmd->block = &size;
+			cmd->cmdlock = &lock;
+			cmd->flags = 0;
+
+			sdPush(fdev->sd, cmd);
+			mutexUnlock(&fdev->sd->lock);
+			semWait(&lock);		// cmd freed by the driver
+		}
+		else
+		{
+			mutexUnlock(&fdev->sd->lock);
+		};
+	};
+	
+	return size;
+};
+
+static Inode* sdCreateInode(SDDeviceFile *fdev)
+{
+	Inode *inode = vfsCreateInode(NULL, VFS_MODE_BLKDEV | 0600);
+	inode->fsdata = fdev;
+	inode->open = sdfile_open;
+	inode->close = sdfile_close;
+	inode->pread = sdfile_pread;
+	inode->pwrite = sdfile_pwrite;
+	inode->flush = sdfile_flush;
+	inode->ioctl = sdfile_ioctl;
+	inode->getsize = sdfile_getsize;
+	return inode;
 };
 
 static void reloadPartTable(StorageDevice *sd)
@@ -683,11 +638,14 @@ static void reloadPartTable(StorageDevice *sd)
 	int i;
 	for (i=0; i<sd->numSubs; i++)
 	{
-		DeleteDevice(sd->devSubs[i]);
+		//DeleteDevice(sd->devSubs[i]);
+		char subname[256];
+		strformat(subname, 256, "sd%c%d", sd->letter, (int) i);
+		devfsRemove(subname);
 	};
 	
-	kfree(sd->devSubs);
-	sd->devSubs = NULL;
+	//kfree(sd->devSubs);
+	//sd->devSubs = NULL;
 	sd->numSubs = 0;
 
 	while (numRefs--)
@@ -712,7 +670,7 @@ static void reloadPartTable(StorageDevice *sd)
 	
 	// we preallocate an array of 4 partition descriptions, even if they won't all be used
 	mutexLock(&sd->lock);
-	sd->devSubs = (Device*) kmalloc(sizeof(Device)*4);
+	//sd->devSubs = (Device*) kmalloc(sizeof(Device)*4);
 	sd->numSubs = 0;
 	mutexUnlock(&sd->lock);
 	
@@ -733,6 +691,8 @@ static void reloadPartTable(StorageDevice *sd)
 			strformat(devName, 16, "sd%c%d", sd->letter, nextSubIndex);
 	
 			mutexLock(&sd->lock);
+			
+			#if 0
 			sd->devSubs[nextSubIndex] = AddDevice(devName, fdev, sdfile_open, 0600);
 			if (sd->devMaster == NULL)
 			{
@@ -742,6 +702,19 @@ static void reloadPartTable(StorageDevice *sd)
 			{
 				nextSubIndex++;
 			};
+			#endif
+			
+			Inode *inode = /*vfsCreateInode(NULL, VFS_MODE_BLKDEV | 0600)*/ sdCreateInode(fdev);
+			
+			if (devfsAdd(devName, inode) != 0)
+			{
+				kfree(fdev);
+			}
+			else
+			{
+				nextSubIndex++;
+			};
+			
 			mutexUnlock(&sd->lock);
 		};
 	}; 
@@ -794,7 +767,7 @@ StorageDevice* sdCreate(SDParams *params)
 	sd->totalSize = params->totalSize;
 	sd->letter = letter;
 	sd->numSubs = 0;
-	sd->devSubs = NULL;
+	//sd->devSubs = NULL;
 	sd->cmdq = NULL;
 	semInit2(&sd->semCommands, 0);
 	sd->openParts = 0;
@@ -829,12 +802,24 @@ StorageDevice* sdCreate(SDParams *params)
 	
 	mutexLock(&sd->lock);
 	mutexLock(&sd->cacheLock);
-	sd->devMaster = AddDevice(masterName, fdev, sdfile_open, 0600);
-	if (sd->devMaster == NULL)
+	
+	//sd->devMaster = AddDevice(masterName, fdev, sdfile_open, 0600);
+	//if (sd->devMaster == NULL)
+	//{
+	//	kfree(sd);
+	//	kfree(fdev);
+	//	sdFreeLetter(letter);
+	//	return NULL;
+	//};
+	
+	Inode *inode = /*vfsCreateInode(NULL, VFS_MODE_BLKDEV | 0600) */ sdCreateInode(fdev);
+	
+	if (devfsAdd(masterName, inode) != 0)
 	{
 		kfree(sd);
 		kfree(fdev);
 		sdFreeLetter(letter);
+		vfsDownrefInode(inode);
 		return NULL;
 	};
 
@@ -852,19 +837,28 @@ void sdHangup(StorageDevice *sd)
 {	
 	mutexLock(&sd->lock);
 	
-	DeleteDevice(sd->devMaster);
+	char masterName[256];
+	strformat(masterName, 256, "sd%c", sd->letter);
+	
+	//DeleteDevice(sd->devMaster);
+	devfsRemove(masterName);
 	size_t numRefs = 1 + sd->numSubs;
 	
 	size_t i;
 	for (i=0; i<sd->numSubs; i++)
 	{
-		DeleteDevice(sd->devSubs[i]);
+		//DeleteDevice(sd->devSubs[i]);
+		
+		char subname[256];
+		strformat(subname, 256, "sd%c%d", sd->letter, (int) i);
+		
+		devfsRemove(subname);
 	};
 	
-	kfree(sd->devSubs);
-	sd->devSubs = NULL;
+	//kfree(sd->devSubs);
+	//sd->devSubs = NULL;
 	sd->numSubs = 0;
-	sd->devMaster = NULL;
+	//sd->devMaster = NULL;
 	sdFreeLetter(sd->letter);
 	sd->letter = 0;
 

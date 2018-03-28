@@ -32,28 +32,11 @@
 #include <glidix/errno.h>
 #include <glidix/sched.h>
 
-static void ptrDownref(PointDevice *ptr)
-{
-	if (__sync_and_and_fetch(&ptr->refcount, -1) == 0)
-	{
-		kfree(ptr);
-	};
-};
+static Semaphore semUpdate;
+static Semaphore semLock;
+static PtrState ptrState;
 
-static void ptrdev_close(File *fp)
-{
-	PointDevice *ptr = (PointDevice*) fp->fsdata;
-	ptrDownref(ptr);
-};
-
-static void ptrdev_pollinfo(File *fp, Semaphore **sems)
-{
-	PointDevice *ptr = (PointDevice*) fp->fsdata;
-	sems[PEI_READ] = &ptr->semUpdate;
-	sems[PEI_WRITE] = vfsGetConstSem();
-};
-
-static ssize_t ptrdev_read(File *fp, void *buffer, size_t size)
+static ssize_t ptr_pread(Inode *inode, File *fp, void *buffer, size_t size, off_t off)
 {
 	if (size != sizeof(PtrState))
 	{
@@ -61,24 +44,23 @@ static ssize_t ptrdev_read(File *fp, void *buffer, size_t size)
 		return -1;
 	};
 	
-	PointDevice *ptr = (PointDevice*) fp->fsdata;
-	int status = semWaitGen(&ptr->semUpdate, 1, SEM_W_FILE(fp->oflag), 0);
+	int status = semWaitGen(&semUpdate, 1, SEM_W_FILE(fp->oflags), 0);
 	if (status < 0)
 	{
 		ERRNO = -status;
 		return -1;
 	};
 	
-	semWaitGen(&ptr->semUpdate, -1, 0, 0);
+	semWaitGen(&semUpdate, -1, 0, 0);
 	
-	semWait(&ptr->lock);
-	memcpy(buffer, &ptr->state, sizeof(PtrState));
-	semSignal(&ptr->lock);
+	semWait(&semLock);
+	memcpy(buffer, &ptrState, sizeof(PtrState));
+	semSignal(&semLock);
 	
 	return sizeof(PtrState);
 };
 
-static ssize_t ptrdev_write(File *fp, const void *buffer, size_t size)
+static ssize_t ptr_pwrite(Inode *inode, File *fp, const void *buffer, size_t size, off_t off)
 {
 	if (size != sizeof(PtrState))
 	{
@@ -86,84 +68,55 @@ static ssize_t ptrdev_write(File *fp, const void *buffer, size_t size)
 		return -1;
 	};
 	
-	PointDevice *ptr = (PointDevice*) fp->fsdata;
-	semWait(&ptr->lock);
-	memcpy(&ptr->state, buffer, sizeof(PtrState));
-	semSignal(&ptr->lock);
-	semSignal(&ptr->semUpdate);
+	semWait(&semLock);
+	memcpy(&ptrState, buffer, sizeof(PtrState));
+	semSignal(&semLock);
+	semSignal(&semUpdate);
 	
 	return sizeof(PtrState);
 };
 
-static int ptrdev_open(void *context, File *fp, size_t szfile)
+static void ptr_pollinfo(Inode *inode, File *fp, Semaphore **sems)
 {
-	PointDevice *ptr = (PointDevice*) context;
-	__sync_fetch_and_add(&ptr->refcount, 1);
-	
-	fp->fsdata = ptr;
-	fp->write = ptrdev_write;
-	fp->read = ptrdev_read;
-	fp->close = ptrdev_close;
-	fp->pollinfo = ptrdev_pollinfo;
-	return 0;
+	sems[PEI_READ] = &semUpdate;
+	sems[PEI_WRITE] = vfsGetConstSem();
 };
 
-static int nextPtrID = 0;
-PointDevice *ptrCreate()
+void ptrInit()
 {
-	PointDevice *ptr = NEW(PointDevice);
-	if (ptr == NULL)
+	semInit(&semLock);
+	semInit2(&semUpdate, 0);
+	
+	Inode *inode = vfsCreateInode(NULL, 0600);
+	inode->pread = ptr_pread;
+	inode->pwrite = ptr_pwrite;
+	inode->pollinfo = ptr_pollinfo;
+	
+	if (devfsAdd("ptr", inode) != 0)
 	{
-		return NULL;
+		panic("failed to create /dev/ptr");
 	};
 	
-	ptr->state.width = 0;
-	ptr->state.height = 0;
-	ptr->state.posX = 0;
-	ptr->state.posY = 0;
-	
-	semInit2(&ptr->semUpdate, 0);
-	semInit(&ptr->lock);
-	
-	ptr->refcount = 1;
-	
-	char devname[256];
-	strformat(devname, 256, "ptr%d", __sync_fetch_and_add(&nextPtrID, 1));
-	
-	ptr->dev = AddDevice(devname, ptr, ptrdev_open, 0600 | VFS_MODE_CHARDEV);
-	if (ptr->dev == NULL)
-	{
-		kfree(ptr);
-		return NULL;
-	};
-	
-	return ptr;
+	vfsDownrefInode(inode);
 };
 
-void ptrDelete(PointDevice *ptr)
+void ptrRelMotion(int deltaX, int deltaY)
 {
-	DeleteDevice(ptr->dev);
-	ptr->dev = NULL;
-	ptrDownref(ptr);
-};
-
-void ptrRelMotion(PointDevice *ptr, int deltaX, int deltaY)
-{
-	semWait(&ptr->lock);
-	if ((ptr->state.width != 0) && (ptr->state.height != 0))
+	semWait(&semLock);
+	if ((ptrState.width != 0) && (ptrState.height != 0))
 	{
-		int newX = ptr->state.posX + deltaX;
-		int newY = ptr->state.posY + deltaY;
+		int newX = ptrState.posX + deltaX;
+		int newY = ptrState.posY + deltaY;
 		
 		if (newX < 0) newX = 0;
 		if (newY < 0) newY = 0;
 		
-		if (newX >= ptr->state.width) newX = ptr->state.width - 1;
-		if (newY >= ptr->state.height) newY = ptr->state.height - 1;
+		if (newX >= ptrState.width) newX = ptrState.width - 1;
+		if (newY >= ptrState.height) newY = ptrState.height - 1;
 		
-		ptr->state.posX = newX;
-		ptr->state.posY = newY;
+		ptrState.posX = newX;
+		ptrState.posY = newY;
 	};
-	semSignal(&ptr->lock);
-	semSignal(&ptr->semUpdate);
+	semSignal(&semLock);
+	semSignal(&semUpdate);
 };

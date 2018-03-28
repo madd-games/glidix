@@ -51,6 +51,7 @@ extern "C" {
 xperm_t _glidix_oxperm();
 xperm_t _glidix_dxperm();
 int     _glidix_chxperm(const char *path, xperm_t ixperm, xperm_t oxperm, xperm_t dxperm);
+int     _glidix_fchxperm(int fd, xperm_t ixperm, xperm_t oxperm, xperm_t dxperm);
 int	_glidix_haveperm(xperm_t perm);
 
 #ifdef __cplusplus

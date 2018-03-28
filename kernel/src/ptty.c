@@ -36,40 +36,32 @@
 
 static int ptsNextNo = 0;
 
-/**
- * DeleteDevice() frees associated data so we wrap the terminal description inside
- * a temporary container that can be safely freed by the device being destroyed.
- */
-typedef struct
+static void ptm_close(Inode *inode, void *data)
 {
-	PseudoTerm			*handle;
-} PttyDevice;
-
-static void ptty_downref(PseudoTerm *ptty)
-{
-	if (__sync_fetch_and_add(&ptty->refcount, -1) == 1)
+	PseudoTerm *ptty = (PseudoTerm*) data;
+	signalPid(-ptty->pgid, SIGHUP);
+	devfsRemove(ptty->slaveName);
+	vfsDownrefInode(ptty->devSlave);
+	
+	if (__sync_and_and_fetch(&ptty->sides, ~PTTY_MASTER) == 0)
 	{
-		semWait(&ptty->sem);
 		kfree(ptty);
 	};
 };
 
-static void ptm_close(File *fp)
+static void pts_free(Inode *inode)
 {
-	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
-	signalPid(-ptty->pgid, SIGHUP);
-	DeleteDevice(ptty->devSlave);
-	ptty_downref(ptty);
+	PseudoTerm *ptty = (PseudoTerm*) inode->fsdata;
+	
+	if (__sync_and_and_fetch(&ptty->sides, ~PTTY_SLAVE) == 0)
+	{
+		kfree(ptty);
+	};
 };
 
-static void pts_close(File *fp)
+static ssize_t pts_write(Inode *inode, File *fp, const void *buffer, size_t size, off_t off)
 {
-	ptty_downref((PseudoTerm*)fp->fsdata);
-};
-
-static ssize_t pts_write(File *fp, const void *buffer, size_t size)
-{
-	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
+	PseudoTerm *ptty = (PseudoTerm*) inode->fsdata;
 	semWait(&ptty->sem);
 	
 	const char *scan = (const char*) buffer;
@@ -85,9 +77,9 @@ static ssize_t pts_write(File *fp, const void *buffer, size_t size)
 	return outsz;
 };
 
-static int pts_ioctl(File *fp, uint64_t cmd, void *argp)
+static int pts_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 {
-	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
+	PseudoTerm *ptty = (PseudoTerm*) inode->fsdata;
 	semWait(&ptty->sem);
 
 	int pgid;
@@ -156,6 +148,8 @@ static int pts_ioctl(File *fp, uint64_t cmd, void *argp)
 		ptty->pgid = pgid;
 		semSignal(&ptty->sem);
 		return 0;
+	case IOCTL_TTY_ISATTY:
+		return 0;
 	default:
 		ERRNO = EINVAL;
 		semSignal(&ptty->sem);
@@ -163,10 +157,10 @@ static int pts_ioctl(File *fp, uint64_t cmd, void *argp)
 	};
 };
 
-static ssize_t pts_read(File *fp, void *buffer, size_t size)
+static ssize_t pts_read(Inode *inode, File *fp, void *buffer, size_t size, off_t off)
 {
-	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
-	int count = semWaitGen(&ptty->slaveCounter, (int)size, SEM_W_FILE(fp->oflag), 0);
+	PseudoTerm *ptty = (PseudoTerm*) inode->fsdata;
+	int count = semWaitGen(&ptty->slaveCounter, (int)size, SEM_W_FILE(fp->oflags), 0);
 	if (count < 0)
 	{
 		ERRNO = -count;
@@ -189,41 +183,10 @@ static ssize_t pts_read(File *fp, void *buffer, size_t size)
 	return outsz;
 };
 
-static int pts_open(void *data, File *fp, size_t szFile)
+static ssize_t ptm_read(Inode *inode, File *fp, void *buffer, size_t size, off_t offset)
 {
-	PttyDevice *devinfo = (PttyDevice*) data;
-	PseudoTerm *ptty = devinfo->handle;
-	
-	semWait(&ptty->sem);
-	if ((ptty->sid != 0) && (ptty->sid != getCurrentThread()->creds->sid))
-	{
-		semSignal(&ptty->sem);
-		return VFS_BUSY;
-	};
-	
-	__sync_fetch_and_add(&ptty->refcount, 1);
-	if (ptty->sid == 0)
-	{
-		ptty->sid = getCurrentThread()->creds->sid;
-		ptty->pgid = getCurrentThread()->creds->pgid;
-	};
-	semSignal(&ptty->sem);
-	
-	memset(fp, 0, szFile);
-	fp->fsdata = ptty;
-	fp->oflag = O_TERMINAL;
-	fp->write = pts_write;
-	fp->read = pts_read;
-	fp->ioctl = pts_ioctl;
-	fp->close = pts_close;
-	
-	return 0;
-};
-
-static ssize_t ptm_read(File *fp, void *buffer, size_t size)
-{
-	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
-	int count = semWaitGen(&ptty->masterCounter, (int)size, SEM_W_FILE(fp->oflag), 0);
+	PseudoTerm *ptty = (PseudoTerm*) fp->filedata;
+	int count = semWaitGen(&ptty->masterCounter, (int)size, SEM_W_FILE(fp->oflags), 0);
 	if (count < 0)
 	{
 		ERRNO = -count;
@@ -246,9 +209,9 @@ static ssize_t ptm_read(File *fp, void *buffer, size_t size)
 	return outsz;
 };
 
-static ssize_t ptm_write(File *fp, const void *buffer, size_t size)
+static ssize_t ptm_write(Inode *inode, File *fp, const void *buffer, size_t size, off_t offset)
 {
-	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
+	PseudoTerm *ptty = (PseudoTerm*) fp->filedata;
 	semWait(&ptty->sem);
 	
 	int numPutMaster = 0;
@@ -384,14 +347,18 @@ static ssize_t ptm_write(File *fp, const void *buffer, size_t size)
 	return wroteTotal;
 };
 
-static int ptm_ioctl(File *fp, uint64_t cmd, void *argp)
+static int ptm_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 {
-	PseudoTerm *ptty = (PseudoTerm*) fp->fsdata;
+	PseudoTerm *ptty = (PseudoTerm*) fp->filedata;
 	
 	switch (cmd)
 	{
 	case IOCTL_TTY_GRANTPT:
-		SetDeviceCreds(ptty->devSlave, getCurrentThread()->creds->ruid, getCurrentThread()->creds->rgid);
+		//SetDeviceCreds(ptty->devSlave, getCurrentThread()->creds->ruid, getCurrentThread()->creds->rgid);
+		semWait(&ptty->devSlave->lock);
+		ptty->devSlave->uid = getCurrentThread()->creds->ruid;
+		ptty->devSlave->gid = getCurrentThread()->creds->rgid;
+		semSignal(&ptty->devSlave->lock);
 		return 0;
 	case IOCTL_TTY_UNLOCKPT:
 		// i see no point
@@ -405,11 +372,8 @@ static int ptm_ioctl(File *fp, uint64_t cmd, void *argp)
 	};
 };
 
-static int ptmx_open(void *ignore, File *fp, size_t szFile)
+static void* ptmx_open(Inode *inode, int oflags)
 {
-	(void)ignore;
-	memset(fp, 0, szFile);
-	
 	PseudoTerm *ptty = NEW(PseudoTerm);
 	semInit(&ptty->sem);
 	
@@ -437,28 +401,38 @@ static int ptmx_open(void *ignore, File *fp, size_t szFile)
 	
 	ptty->sid = 0;
 	ptty->pgid = 0;
-	ptty->refcount = 1;
+	ptty->sides = PTTY_MASTER | PTTY_SLAVE;
 	
-	semWait(&ptty->sem);
 	strformat(ptty->slaveName, 256, "pts%d", __sync_fetch_and_add(&ptsNextNo, 1));
-	PttyDevice *devinfo = NEW(PttyDevice);
-	devinfo->handle = ptty;
-	ptty->devSlave = AddDevice(ptty->slaveName, devinfo, pts_open, 0600);
-	semSignal(&ptty->sem);
 	
-	fp->fsdata = ptty;
-	fp->read = ptm_read;
-	fp->write = ptm_write;
-	fp->ioctl = ptm_ioctl;
-	fp->close = ptm_close;
+	Inode *slave = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0600);
+	slave->fsdata = ptty;
+	slave->pread = pts_read;
+	slave->pwrite = pts_write;
+	slave->ioctl = pts_ioctl;
+	slave->free = pts_free;
 	
-	return 0;
+	vfsUprefInode(slave);
+	ptty->devSlave = slave;
+	
+	if (devfsAdd(ptty->slaveName, slave) != 0)
+	{
+		panic("unexpected failure in adding pseudoterminal slave");
+	};
+	
+	return ptty;
 };
 
 void pttyInit()
 {
-	Device ptmx = AddDevice("ptmx", NULL, ptmx_open, 0666);
-	if (ptmx == NULL)
+	Inode *ptmx = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0666);
+	ptmx->open = ptmx_open;
+	ptmx->pread = ptm_read;
+	ptmx->pwrite = ptm_write;
+	ptmx->ioctl = ptm_ioctl;
+	ptmx->close = ptm_close;
+	
+	if (devfsAdd("ptmx", ptmx) != 0)
 	{
 		FAILED();
 		panic("failed to create /dev/ptmx");

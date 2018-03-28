@@ -34,6 +34,8 @@
 int panicking = 0;
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...)
 {
+	stackTraceHere();
+	
 	va_list ap;
 	va_start(ap, fmt);
 

@@ -50,6 +50,7 @@ void doInstall()
 	partFlush();
 	userSetup();
 	pkgInstall();
+	partUnmount();
 	
 	msgbox("COMPLETED", "Glidix has been installed. Press ENTER to reboot");
 	

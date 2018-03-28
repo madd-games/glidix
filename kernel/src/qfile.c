@@ -30,12 +30,12 @@
 #include <glidix/memory.h>
 #include <glidix/string.h>
 
-static QFileEntry *nextEntry(File *fp)
+static QFileEntry *nextEntry(Inode *inode)
 {
-	QFileEntry *entry = (QFileEntry*) fp->fsdata;
+	QFileEntry *entry = (QFileEntry*) inode->fsdata;
 	if (entry != NULL)
 	{
-		fp->fsdata = entry->next;
+		inode->fsdata = entry->next;
 		// remove the link to prevent disasters
 		entry->next = NULL;
 	};
@@ -43,19 +43,19 @@ static QFileEntry *nextEntry(File *fp)
 	return entry;
 };
 
-void qfileClose(File *fp)
+void qfileFree(Inode *inode)
 {
 	while (1)
 	{
-		QFileEntry *entry = nextEntry(fp);
+		QFileEntry *entry = nextEntry(inode);
 		if (entry == NULL) break;
 		kfree(entry);
 	};
 };
 
-ssize_t qfileRead(File *fp, void *buffer, size_t size)
+ssize_t qfileRead(Inode *inode, File *fp, void *buffer, size_t size, off_t off)
 {
-	QFileEntry *entry = nextEntry(fp);
+	QFileEntry *entry = nextEntry(inode);
 	if (entry == 0) return 0;
 	
 	if (size > entry->size)
@@ -70,6 +70,7 @@ ssize_t qfileRead(File *fp, void *buffer, size_t size)
 
 File *qfileCreate(QFileEntry *head)
 {
+#if 0
 	File *fp = (File*) kmalloc(sizeof(File));
 	memset(fp, 0, sizeof(File));
 	fp->oflag = O_RDONLY;
@@ -77,6 +78,16 @@ File *qfileCreate(QFileEntry *head)
 	fp->fsdata = head;
 	fp->read = qfileRead;
 	fp->close = qfileClose;
+#endif
+
+	Inode *inode = vfsCreateInode(NULL, VFS_MODE_FIFO | 0400);
+	inode->fsdata = head;
+	inode->pread = qfileRead;
+	inode->free = qfileFree;
 	
-	return fp;
+	InodeRef iref;
+	iref.top = NULL;
+	iref.inode = inode;
+	
+	return vfsOpenInode(iref, O_RDONLY, NULL);	/* no error can happen when the inode doesn't implement open() */
 };

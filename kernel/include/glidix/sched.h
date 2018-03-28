@@ -270,6 +270,21 @@ typedef struct
 	 * Process-wide statistics.
 	 */
 	ProcStat			ps;
+	
+	/**
+	 * Root of the filesystem for this process.
+	 */
+	InodeRef			rootdir;
+	
+	/**
+	 * Current working directory of this process.
+	 */
+	InodeRef			cwd;
+	
+	/**
+	 * Semaphore to protect the directories (root and working directory).
+	 */
+	struct Semaphore_		semDir;
 } Creds;
 
 Creds*	credsNew();
@@ -389,11 +404,6 @@ typedef struct _Thread
 	int				status;
 
 	/**
-	 * The current working directory. Does not end with a slash unless it's the root directory.
-	 */
-	char				cwd[256];
-
-	/**
 	 * Pointer to where the errno shall be stored after syscalls complete.
 	 */
 	int				*errnoptr;
@@ -473,6 +483,14 @@ typedef struct _Thread
 	 * it guarantees that there aren't multiple threads coredumping all at once.
 	 */
 	Spinlock			slCore;
+	
+	/**
+	 * "Kernel-to-userspace (KTU) buffer" and its size. If NULL, there is no buffer. If there is
+	 * a buffer, it must be allocated on the heap such that it can be freed with kfree().
+	 * A userspace application can obtain the contents using sys_getktu().
+	 */
+	void*				ktu;
+	size_t				ktusz;
 	
 	/**
 	 * Previous and next thread. Threads are stored in a circular list; this is never NULL.

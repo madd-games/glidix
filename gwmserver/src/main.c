@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
 	};
 	fclose(fp);
 	
-	int logfd = open(logdest, O_WRONLY | O_CREAT | O_APPEND);
+	int logfd = open(logdest, O_WRONLY | O_CREAT | O_APPEND, 0644);
 	if (logfd == -1)
 	{
 		fprintf(stderr, "[gwmserver] could not open log file %s: %s\n", logdest, strerror(errno));

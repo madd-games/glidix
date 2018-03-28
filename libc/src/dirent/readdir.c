@@ -27,52 +27,49 @@
 */
 
 #include <sys/stat.h>
+#include <sys/call.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 
 struct dirent *readdir(DIR *dirp)
 {
-	struct dirent *out;
-	readdir_r(dirp, &dirp->_dirbuf, &out);
-	return out;
-};
-
-int readdir_r(DIR *dirp, struct dirent *entry, struct dirent **result)
-{
-	if (dirp->_idx == 0)
+	int errnum = errno;
+	
+	free(dirp->__current);
+	dirp->__current = NULL;
+	
+	while (dirp->__current == NULL)
 	{
-		struct stat st;
-		st.st_ino = 2;
-		stat(".", &st);
-		strcpy(entry->d_name, ".");
-		entry->d_ino = st.st_ino;
-		dirp->_idx = 1;
-		*result = entry;
-		return 0;
-	}
-	else if (dirp->_idx == 1)
-	{
-		struct stat st;
-		st.st_ino = 2;
-		stat("..", &st);
-		strcpy(entry->d_name, "..");
-		entry->d_ino = st.st_ino;
-		dirp->_idx = 2;
-		*result = entry;
-		return 0;
+		uint64_t size = __syscall(__SYS_getdent, dirp->__fd, dirp->__key++);
+		if (size == 0)
+		{
+			if (errno == ENOENT)
+			{
+				continue;
+			}
+			else if (errno == EOVERFLOW)
+			{
+				errno = errnum;
+				return NULL;
+			}
+			else
+			{
+				return NULL;
+			};
+		};
+		
+		dirp->__current = (struct dirent*) malloc(sizeof(struct dirent));
+		if (dirp->__current == NULL)
+		{
+			errno = ENOMEM;
+			return NULL;
+		};
+		
+		__syscall(__SYS_getktu, dirp->__current, size);
 	};
-
-	ssize_t ret = 0;
-	if (dirp->_fd != -2) ret = read(dirp->_fd, entry, sizeof(struct dirent));
-	if (ret == 0)
-	{
-		*result = NULL;
-		errno = ENOENT;
-		return -1;
-	};
-
-	*result = entry;
-	return 0;
+	
+	return dirp->__current;
 };

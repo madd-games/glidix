@@ -32,14 +32,21 @@
 #include <glidix/common.h>
 #include <glidix/vfs.h>
 
-typedef struct
-{
-	off_t				ppi_offset;
-	size_t				ppi_length;
-	uint64_t			ppi_flags;
-} ProcPageInfo;
-
 void initProcfs();
-FileSystem *getProcfs();
+
+/**
+ * Change the current PID. Called by switchTask().
+ */
+void procfsSetPid(int pid);
+
+/**
+ * Create a new entry under /proc for process with pid 'new', whose parent is 'old'.
+ */
+void procfsCreate(int old, int new);
+
+/**
+ * Delete an entry under /proc.
+ */
+void procfsDelete(int pid);
 
 #endif

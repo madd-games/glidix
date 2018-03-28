@@ -36,6 +36,7 @@
 #include <glidix/errno.h>
 #include <glidix/waitcnt.h>
 #include <glidix/term.h>
+#include <glidix/devfs.h>
 
 #define	INPUT_BUFFER_SIZE			4096
 
@@ -49,7 +50,7 @@ static volatile int				lineBufferSize;
 static struct termios				termState;
 static int					termGroup = 1;
 
-static ssize_t termWrite(File *file, const void *buffer, size_t size)
+static ssize_t termWrite(Inode *inode, File *file, const void *buffer, size_t size, off_t pos)
 {
 	if (getCurrentThread()->creds->pgid != termGroup)
 	{
@@ -68,7 +69,7 @@ static ssize_t termWrite(File *file, const void *buffer, size_t size)
 	return size;
 };
 
-static ssize_t termRead(File *fp, void *buffer, size_t size)
+static ssize_t termRead(Inode *inode, File *fp, void *buffer, size_t size, off_t pos)
 {
 	if (getCurrentThread()->creds->pgid != termGroup)
 	{
@@ -109,7 +110,7 @@ static ssize_t termRead(File *fp, void *buffer, size_t size)
 	return out;
 };
 
-int termIoctl(File *fp, uint64_t cmd, void *argp)
+int termIoctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 {
 	Thread *target = NULL;
 	Thread *scan;
@@ -171,8 +172,10 @@ int termIoctl(File *fp, uint64_t cmd, void *argp)
 		sti();
 		termGroup = pgid;
 		return 0;
+	case IOCTL_TTY_ISATTY:
+		return 0;
 	default:
-		ERRNO = EINVAL;
+		ERRNO = ENODEV;
 		return -1;
 	};
 };
@@ -236,6 +239,7 @@ void termPutChar(char c)
 	semSignal(&semLineBuffer);
 };
 
+#if 0
 void setupTerminal(FileTable *ftab)
 {
 	File *termout = (File*) kmalloc(sizeof(File));
@@ -282,4 +286,31 @@ void setupTerminal(FileTable *ftab)
 	semInit2(&semCount, 0);
 	semInit(&semInput);
 	semInit(&semLineBuffer);
+};
+#endif
+
+void initTerminal()
+{
+	inputWrite = 0;
+	inputRead = 0;
+	lineBufferSize = 0;
+
+	termState.c_iflag = ICRNL;
+	termState.c_oflag = 0;
+	termState.c_cflag = 0;
+	termState.c_lflag = ECHO | ECHOE | ECHOK | ECHONL | ICANON | ISIG;
+
+	semInit2(&semCount, 0);
+	semInit(&semInput);
+	semInit(&semLineBuffer);
+
+	Inode *inode = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0620);
+	inode->pread = termRead;
+	inode->pwrite = termWrite;
+	inode->ioctl = termIoctl;
+	
+	if (devfsAdd("tty0", inode) != 0)
+	{
+		panic("failed to create /dev/tty0");
+	};
 };

@@ -43,6 +43,7 @@ extern "C" {
 #define	__IOCTL_TTY_GRANTPT	__IOCTL_NOARG(5, 4)
 #define	__IOCTL_TTY_UNLOCKPT	__IOCTL_NOARG(5, 5)
 #define	__IOCTL_TTY_PTSNAME	__IOCTL_ARG(__ptsname, 5, 6)
+#define	__IOCTL_TTY_ISATTY	__IOCTL_NOARG(5, 7)
 
 typedef struct
 {

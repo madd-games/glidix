@@ -753,7 +753,7 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 	
 	uint8_t bitmap = 0;
 	Semaphore *semConn = &tcpsock->semConnected;
-	if (semPoll(1, &semConn, &bitmap, SEM_W_FILE(sock->fp->oflag), 0) == 0)
+	if (semPoll(1, &semConn, &bitmap, SEM_W_FILE(sock->fp->oflags), 0) == 0)
 	{
 		// we caught an interrupt before the connection was completed
 		ERRNO = EINPROGRESS;
@@ -1096,7 +1096,7 @@ static ssize_t tcpsock_sendto(Socket *sock, const void *buffer, size_t size, int
 	uint8_t bitmap = 0;
 	Semaphore *semConn = &tcpsock->semConnected;
 	
-	int status = semPoll(1, &semConn, &bitmap, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_SNDTIMEO]);
+	int status = semPoll(1, &semConn, &bitmap, SEM_W_FILE(sock->fp->oflags), sock->options[GSO_SNDTIMEO]);
 	
 	if (status < 0)
 	{
@@ -1120,7 +1120,7 @@ static ssize_t tcpsock_sendto(Socket *sock, const void *buffer, size_t size, int
 			count = TCP_BUFFER_SIZE;
 		};
 		
-		status = semWaitGen(&tcpsock->semSendPut, count, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_SNDTIMEO]);
+		status = semWaitGen(&tcpsock->semSendPut, count, SEM_W_FILE(sock->fp->oflags), sock->options[GSO_SNDTIMEO]);
 		if (status < 0)
 		{
 			if (sizeWritten == 0)
@@ -1185,7 +1185,7 @@ static ssize_t tcpsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 		return -1;
 	};
 
-	int size = semWaitGen(&tcpsock->semRecvFetch, (int)len, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+	int size = semWaitGen(&tcpsock->semRecvFetch, (int)len, SEM_W_FILE(sock->fp->oflags), sock->options[GSO_RCVTIMEO]);
 	if (size < 0)
 	{
 		if (size == -ETIMEDOUT)
@@ -1347,7 +1347,7 @@ static Socket* tcpsock_accept(Socket *sock, struct sockaddr *addr, size_t *addrl
 		};
 	};
 	
-	int count = semWaitGen(&tcpsock->semConnWaiting, 1, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+	int count = semWaitGen(&tcpsock->semConnWaiting, 1, SEM_W_FILE(sock->fp->oflags), sock->options[GSO_RCVTIMEO]);
 	if (count < 0)
 	{
 		ERRNO = -count;

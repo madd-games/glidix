@@ -36,7 +36,6 @@
 #include <glidix/string.h>
 #include <glidix/port.h>
 #include <glidix/sched.h>
-#include <glidix/mount.h>
 #include <glidix/initrdfs.h>
 #include <glidix/procfs.h>
 #include <glidix/procmem.h>
@@ -58,11 +57,11 @@
 #include <glidix/dma.h>
 #include <glidix/cpu.h>
 #include <glidix/ptty.h>
-#include <glidix/ramfs.h>
 #include <glidix/usb.h>
 #include <glidix/pageinfo.h>
 #include <glidix/ftree.h>
 #include <glidix/msr.h>
+#include <glidix/ptr.h>
 
 #define ACPI_OSC_QUERY_INDEX				0
 #define ACPI_OSC_SUPPORT_INDEX				1
@@ -334,10 +333,6 @@ void kmain(KernelBootInfo *info)
 	ispInit();
 	DONE();
 	
-	//kprintf("Initializing per-CPU variable area... ");
-	//initPerCPU();
-	//DONE();
-	
 	localTSSPtr = &_tss;
 	localGDTPtr = &GDT64;
 	
@@ -366,34 +361,6 @@ void kmain(KernelBootInfo *info)
 
 	kprintf("Initializing the FPU... ");
 	fpuInit();
-	DONE();
-
-	kprintf("Initializing the VFS... ");
-	vfsInit();
-	DONE();
-
-	kprintf("Initializing the initrdfs... ");
-	initInitrdfs(info);
-	DONE();
-
-	kprintf("Initializing the procfs... ");
-	initProcfs();
-	DONE();
-
-	kprintf("Initializing the devfs... ");
-	initDevfs();
-	DONE();
-
-	kprintf("Initializing PCI... ");
-	pciInit();
-	DONE();
-
-	kprintf("Initializing USB...");
-	usbInit();
-	DONE();
-	
-	kprintf("Initializing the FS driver interface... ");
-	initFSDrivers();
 	DONE();
 
 	kprintf("Initializing the PIT... ");
@@ -425,10 +392,6 @@ void kmain(KernelBootInfo *info)
 
 static void spawnProc(void *stack)
 {
-	DONE();
-
-	kprintf("Setting up the terminal... ");
-	setupTerminal(getCurrentThread()->ftab);
 	DONE();
 
 	tssPrepare();
@@ -491,10 +454,46 @@ static void str2uuid(char *InString, UINT8 *UuidBuffer)
 };
 
 void kmain2()
-{	
-	initMount();
+{
+	kprintf("Initializing the VFS... ");
+	vfsInit();
+	DONE();
+
+	kprintf("Initializing the initrdfs... ");
+	initInitrdfs(bootInfo);
+	DONE();
+
+	kprintf("Initializing the procfs... ");
+	initProcfs();
+	DONE();
+
+	initDevfs();
+
+	kprintf("Initializing the pointer device interface... ");
+	ptrInit();
+	DONE();
+	
+	kprintf("Initializing PCI... ");
+	pciInit();
+	DONE();
+
+	kprintf("Initializing USB...");
+	usbInit();
+	DONE();
+	
+	kprintf("Initializing the FS driver interface... ");
+	initFSDrivers();
+	DONE();
+
 	initSymtab();
-	ramfsInit();
+	
+	kprintf("Creating /run... ");
+	if (vfsMakeDir(VFS_NULL_IREF, "/run", 0755) != 0)
+	{
+		FAILED();
+		panic("could not create /run");
+	};
+	DONE();
 	
 	kprintf("Initializing ACPICA...\n");
 	
@@ -642,7 +641,11 @@ void kmain2()
 	kprintf("Initializing the ptty interface... ");
 	pttyInit();
 	DONE();
-	
+
+	kprintf("Setting up the terminal... ");
+	initTerminal();
+	DONE();
+
 	kprintf("Starting the spawn process... ");
 	MachineState state;
 	memset(&state.fpuRegs, 0, 512);

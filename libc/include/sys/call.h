@@ -59,7 +59,7 @@
 #define __SYS_kill				26
 #define __SYS_insmod				27
 #define __SYS_ioctl				28
-#define __SYS_fdopendir				29
+#define __SYS_getdent				29
 #define __SYS_mount				31
 #define __SYS_yield				32
 #define __SYS_time				33
@@ -125,7 +125,7 @@
 #define __SYS_fcntl_getfd			93
 #define __SYS_fcntl_setfd			94
 #define __SYS_unique				95
-#define __SYS_isatty				96
+#define __SYS_mkfifo				96
 #define __SYS_bindif				97
 #define __SYS_route_clear			98
 #define __SYS_munmap				99
@@ -157,7 +157,7 @@
 #define __SYS_fpoll				125
 #define __SYS_oxperm				126
 #define __SYS_dxperm				127
-#define __SYS_fsinfo				128
+#define __SYS_fchxperm				128
 #define __SYS_chxperm				129
 #define __SYS_haveperm				130
 #define __SYS_sync				131
@@ -173,6 +173,12 @@
 #define	__SYS_fcntl_getfl			141
 #define	__SYS_aclput				142
 #define	__SYS_aclclear				143
+#define	__SYS_getktu				144
+#define	__SYS_statvfs				145
+#define	__SYS_fstatvfs				146
+#define	__SYS_chroot				147
+#define	__SYS_modstat				148
+#define	__SYS_rmdir				149
 
 #ifdef __cplusplus
 extern "C" {

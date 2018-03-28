@@ -149,8 +149,8 @@ int vmNew();
  * On success, returns an address larger than or equal to ADDR_MIN, otherwise an error number,
  * e.g. ENODEV.
  */
-struct _File;
-uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, struct _File *fp, off_t off);
+struct File_;
+uint64_t vmMap(uint64_t addr, size_t len, int prot, int flags, struct File_ *fp, off_t off);
 
 /**
  * Handle a page fault. Simply returns on success; on error, it sets 'regs' as the return state,

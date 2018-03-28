@@ -34,31 +34,72 @@
  */
 
 #include <glidix/vfs.h>
-#include <glidix/mount.h>
-#include <glidix/errno.h>
 
-typedef struct _FSDriver
+/**
+ * Represents a linked list of filesystem drivers.
+ */
+typedef struct _FSDriver FSDriver;
+struct _FSDriver
 {
 	/**
-	 * This is called when mounting a filesystem. It has to fill the passed FileSystem structure with file pointers
-	 * to appropriate driver functions. 0 is returned on success, -1 on error.
-	 * 'image' is the path to the filesystem image, which could be a physical drive.
-	 * 'szfs' is sizeof(FileSystem).
+	 * Links.
 	 */
-	int (*onMount)(const char *image, FileSystem *fs, size_t szfs);
-
+	FSDriver*					prev;
+	FSDriver*					next;
+	
 	/**
-	 * The name of this filesystem, as used by sys_mount(). Maximum 16 characters, including the terminator (NUL).
+	 * Name of the filesystem, as used by mount() etc.
 	 */
-	const char *name;
+	const char*					fsname;
+	
+	/**
+	 * This function is called when someone attempts to mount the filesystem. This function shall
+	 * look at the filesystem image, 'image', and set up the filesystem structure, and load the root
+	 * inode and then return it. If that fails, it shall return NULL, and if 'error' is not NULL,
+	 * it must set it to an error number.
+	 *
+	 * 'flags' are the mount flags (MNT_*). Most notably, take into account MNT_RDONLY, and open the
+	 * image in read-only mode if it is set, and set the VFS_ST_RDONLY flag on the filesystem.
+	 *
+	 * 'options' and 'optlen' defines a range of memory where a filesystem-driver-specific options
+	 * structure is stored, specified by the application. Each driver defines its own option structure.
+	 */
+	Inode* (*openroot)(const char *image, int flags, const void *options, size_t optlen, int *error);
+};
 
-	struct _FSDriver *prev;
-	struct _FSDriver *next;
-} FSDriver;
-
+/**
+ * Initialize the filesystem driver subsystem.
+ */
 void initFSDrivers();
+
+/**
+ * Register a new filesystem driver.
+ */
 void registerFSDriver(FSDriver *drv);
-int sys_mount(const char *fsname, const char *image, const char *mountpoint, int flags);
+
+/**
+ * Un-register a filesystem driver.
+ */
+void unregisterFSDriver(FSDriver *drv);
+
+/**
+ * Implements the system call for mounting a filesystem.
+ *	fsname		Name of the filesystem e.g. "isofs"
+ *	image		Path to the filesystem image, if the driver takes this into account.
+ *	mountpoint	Path to the mountpoint. Must be an already-existing directory or file.
+ *	flags		Mount flags. Currently none accepted.
+ *	options		Pointer to an "options" structure, specific to the filesystem type. May be NULL (and optlen would
+ *			then have to be 0)
+ *	optlen		Size of the options structure.
+ *
+ * Returns 0 on success, or -1 on error and sets ERRNO.
+ */
+int sys_mount(const char *fsname, const char *image, const char *mountpoint, int flags, const void *options, size_t optlen);
+
+/**
+ * Return a list of filesystem drivers. Takes an array of "num" names (each an array of 16 bytes) which will be filled
+ * with strings naming filesystem drivers. Returns the amount of drivers actually returned.
+ */
 int sys_fsdrv(char *buffer, int num);
 
 #endif

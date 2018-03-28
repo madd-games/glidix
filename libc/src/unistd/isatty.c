@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Runtime
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,50 +26,11 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_mount_h
-#define __glidix_mount_h
+#include <unistd.h>
+#include <termios.h>
+#include <errno.h>
 
-/**
- * Managing a list of mount points.
- */
-
-#include <glidix/vfs.h>
-
-/**
- * Errors returned by mount() and unmount().
- */
-#define	MOUNT_BAD_FLAGS		-1
-#define MOUNT_BAD_PREFIX	-2
-
-typedef struct _MountPoint
+int isatty(int fd)
 {
-	// mountpoint prefix (the directory in which the filesystem is mounted), must start and end
-	// with "/".
-	char			prefix[512];
-
-	// The filesystem mounted here.
-	FileSystem		*fs;
-
-	// Previous and next mountpoint.
-	// They are sorted from longest prefix to shortest prefix btw.
-	struct _MountPoint	*prev;
-	struct _MountPoint	*next;
-} MountPoint;
-
-typedef struct
-{
-	FileSystem		*fs;
-	char			parent[512];
-	char			filename[512];
-} SplitPath;
-
-void initMount();
-int mount(const char *prefix, FileSystem *fs, int flags);
-int unmount(const char *prefix);
-int resolveMounts(const char *path, SplitPath *out);
-int isMountPoint(const char *dirpath);
-void dumpMountTable();
-void unmountAll();
-size_t getFSInfo(FSInfo *list, size_t max);
-
-#endif
+	return ioctl(fd, __IOCTL_TTY_ISATTY) == 0;
+};

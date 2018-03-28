@@ -195,7 +195,7 @@ void pkgInstall()
 				open("/run/mip-log", O_RDWR | O_CREAT | O_TRUNC);
 				dup(0);
 				dup(1);
-				execl("/usr/bin/mip-inst", "mip-install", path, "--dest=/mnt", NULL);
+				execl("/usr/bin/mip-install", "mip-install", path, "--dest=/mnt", NULL);
 				exit(1);
 			};
 		

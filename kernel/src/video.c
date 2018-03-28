@@ -56,46 +56,20 @@ void videoDeleteDriver(VideoDriver *drv)
 	kfree(drv);
 };
 
-void videoDisplayDownref(VideoDisplay *disp)
+void video_free(Inode *inode)
 {
-	if (__sync_add_and_fetch(&disp->refcount, -1) == 0)
-	{
-		kfree(disp);
-	};
-};
-
-void video_close(File *fp)
-{
-	VideoDisplay *disp = fp->fsdata;
-	if (disp->fpModeSetter == fp)
-	{
-		disp->fpModeSetter = NULL;
-		disp->ops->exitmode(disp);
-		enableConsole();
-	};
-	videoDisplayDownref(disp);
+	kfree(inode->fsdata);
 };
 
 uint64_t video_getpage(FileTree *ft, off_t pos)
 {
-	uint64_t base = (uint64_t) ft->data;
-	if (pos > ft->size) return 0;
-	return (base + pos) >> 12;
+	VideoDisplay *disp = (VideoDisplay*) ft->data;
+	return disp->ops->getpage(disp, pos);
 };
 
-FileTree* video_tree(File *fp)
+int video_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 {
-	VideoDisplay *disp = fp->fsdata;
-	
-	FileTree *ft = ftCreate(FT_ANON);
-	ft->data = (void*) disp->ops->getfbuf(disp, &ft->size);
-	ft->getpage = video_getpage;
-	return ft;
-};
-
-int video_ioctl(File *fp, uint64_t cmd, void *argp)
-{
-	VideoDisplay *disp = fp->fsdata;
+	VideoDisplay *disp = inode->fsdata;
 	
 	switch (cmd)
 	{
@@ -122,20 +96,6 @@ int video_ioctl(File *fp, uint64_t cmd, void *argp)
 	};
 };
 
-int video_open(void *data, File *fp, size_t szFile)
-{
-	VideoDeviceData *vdata = (VideoDeviceData*) data;
-	VideoDisplay *disp = vdata->disp;
-	
-	__sync_fetch_and_add(&disp->refcount, 1);
-	fp->fsdata = disp;
-	fp->ioctl = video_ioctl;
-	fp->tree = video_tree;
-	fp->close = video_close;
-	
-	return 0;
-};
-
 VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops)
 {
 	VideoDisplay *disp = NEW(VideoDisplay);
@@ -143,7 +103,6 @@ VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops)
 	
 	disp->data = data;
 	disp->ops = ops;
-	disp->refcount = 1;
 	disp->fpModeSetter = NULL;
 	
 	char devname[64];
@@ -158,19 +117,30 @@ VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops)
 	
 	devdata->disp = disp;
 	
-	disp->dev = AddDevice(devname, devdata, video_open, 0644);
-	if (disp->dev == NULL)
+	Inode *inode = vfsCreateInode(NULL, 0644);
+	inode->fsdata = devdata;
+	inode->ioctl = video_ioctl;
+	inode->free = video_free;
+	inode->ft = ftCreate(FT_ANON);
+	inode->ft->data = disp;
+	inode->ft->getpage = video_getpage;
+	
+	disp->dev = inode;
+	disp->devname = strdup(devname);
+	
+	if (devfsAdd(devname, inode) != 0)
 	{
 		kfree(data);
+		kfree(disp->devname);
 		kfree(disp);
 		return NULL;
 	};
-	
+
 	return disp;
 };
 
 void videoDeleteDisplay(VideoDisplay *disp)
 {
-	DeleteDevice(disp->dev);
-	videoDisplayDownref(disp);
+	devfsRemove(disp->devname);
+	kfree(disp->devname);
 };

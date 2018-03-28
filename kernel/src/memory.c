@@ -296,14 +296,8 @@ static void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno
 
 	HeapFooter *foot = heapFooterFromHeader(head);
 	foot->flags |= HEAP_BLOCK_TAKEN;
-	
-	//if (head == lowestFreeHeader)
-	//{
-	//	lowestFreeHeader = findFreeHeader(head);
-	//};
 
 	mutexUnlock(&heapLock);
-	//ASM("sti");
 	return retAddr;
 };
 
@@ -383,7 +377,7 @@ void _kfree(void *block, const char *who, int line)
 {
 	// kfree()ing NULL is perfectly acceptable.
 	if (block == NULL) return;
-	//ASM("cli");
+	
 	mutexLock(&heapLock);
 
 	// all blocks are at least 16 bytes in size because of the alignment magic; so we can safely
@@ -414,7 +408,8 @@ void _kfree(void *block, const char *who, int line)
 	{
 		//heapDump();
 		stackTraceHere();
-		panic("%s:%d: invalid pointer passed to kfree(): %p: already free", who, line, (void*)addr);
+		panic("%s:%d: invalid pointer passed to kfree(): %p: already free (this thread=%s)", who, line, (void*)addr,
+			getCurrentThread()->name);
 	};
 
 	if (foot->size != head->size)

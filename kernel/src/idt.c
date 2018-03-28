@@ -291,6 +291,7 @@ static void onPageFault(Regs *regs)
 	{
 		throw(EX_PAGE_FAULT);
 		
+		enableDebugTerm();
 		cli();
 		kernelDead = 1;
 		//heapDump();
@@ -330,7 +331,6 @@ static void onPageFault(Regs *regs)
 		};
 
 		kprintf("\nVirtual address: 0x%016lX\n", faultAddr);
-		stackTraceHere();
 		debugKernel(regs);
 	}
 	else
@@ -376,6 +376,7 @@ static void onGPF(Regs *regs)
 	
 	if ((regs->cs & 3) == 0)
 	{
+		enableDebugTerm();
 		cli();
 		haltAllCPU();
 		kernelDead = 1;

@@ -29,6 +29,7 @@
 #include <sys/glidix.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/mount.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -119,7 +120,7 @@ echo \"Starting level 2 services...\"\n\
 service state 2\n\
 echo \"Starting login manager...\"\n\
 cd /root\n\
-exec $logmgr\n\
+$logmgr || logmgr\n\
 ";
 
 static const char *loginScript = "\
@@ -1223,7 +1224,7 @@ void partFlush()
 		open("/dev/null", O_RDWR);
 		dup(0);
 		dup(1);
-		execl("/usr/bin/gxboot-i", "gxboot-install", bootdev, NULL);
+		execl("/usr/bin/gxboot-install", "gxboot-install", bootdev, NULL);
 		exit(1);
 	};
 	
@@ -1247,7 +1248,7 @@ void partFlush()
 	for (idx=0; idx<fsnum; idx++)
 	{
 		makeMountPointDirs(fstab[idx].mntpoint);
-		if (_glidix_mount(fstab[idx].type, fstab[idx].device, fstab[idx].mntpoint, 0) != 0)
+		if (mount(fstab[idx].type, fstab[idx].device, fstab[idx].mntpoint, 0, NULL, 0) != 0)
 		{
 			char errmsg[256];
 			sprintf(errmsg, "Cannot mount %s at %s: %s", fstab[idx].device, fstab[idx].mntpoint, strerror(errno));
@@ -1362,4 +1363,20 @@ void partFlush()
 	fp = fopen("/mnt/etc/init/startup.conf", "w");
 	fprintf(fp, startupConf, logmgr);
 	fclose(fp);
+};
+
+void partUnmount()
+{
+	// unmount all partitions
+	drawProgress("SETUP", "Unmounting filesystems...", 1, 1);
+	int idx;
+	for (idx=fsnum-1; idx>=0; idx--)
+	{
+		if (unmount(fstab[idx].mntpoint, 0) != 0)
+		{
+			char errmsg[256];
+			sprintf(errmsg, "Cannot unmount %s: %s", fstab[idx].mntpoint, strerror(errno));
+			msgbox("ERROR", errmsg);
+		};
+	};
 };

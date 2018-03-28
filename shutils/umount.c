@@ -59,17 +59,7 @@ void usage()
 
 void doUnmount(const char *prefix)
 {
-	if (strlen(prefix) > 255)
-	{
-		fprintf(stderr, "%s: name too long\n", prefix);
-		if (!force) exit(1);
-	};
-
-	char realPrefix[256];
-	strcpy(realPrefix, prefix);
-	if (realPrefix[strlen(realPrefix)-1] != '/') strcat(realPrefix, "/");
-
-	if (_glidix_unmount(realPrefix) != 0)
+	if (_glidix_unmount(prefix, 0) != 0)
 	{
 		perror(prefix);
 		if (!force) exit(1);

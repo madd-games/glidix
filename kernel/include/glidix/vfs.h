@@ -38,9 +38,9 @@
 #include <glidix/ftree.h>
 #include <stddef.h>
 
-#define	SEEK_SET			0
-#define	SEEK_END			1
-#define	SEEK_CUR			2
+#define	VFS_SEEK_SET			0
+#define	VFS_SEEK_END			1
+#define	VFS_SEEK_CUR			2
 
 /**
  * Extra flags for st_mode (other than the permissions).
@@ -50,43 +50,17 @@
 #define	VFS_MODE_STICKY			01000
 
 #define	VFS_MODE_REGULAR		0		/* 0, so default */
-#define	VFS_MODE_DIRECTORY		010000
-#define	VFS_MODE_CHARDEV		020000
-#define	VFS_MODE_BLKDEV			030000
-#define	VFS_MODE_FIFO			040000
-#define	VFS_MODE_LINK			050000		/* soft link */
-#define	VFS_MODE_SOCKET			060000
+#define	VFS_MODE_DIRECTORY		0x1000
+#define	VFS_MODE_CHARDEV		0x2000
+#define	VFS_MODE_BLKDEV			0x3000
+#define	VFS_MODE_FIFO			0x4000
+#define	VFS_MODE_LINK			0x5000		/* symlink */
+#define	VFS_MODE_SOCKET			0x6000
 
 /**
- * Errors.
+ * Mode type mask.
  */
-#define	VFS_EMPTY_DIRECTORY		-1		/* the directory was empty */
-#define	VFS_BAD_FD			-2		/* bad file descriptor */
-#define	VFS_PERM			-3		/* permission denied */
-#define	VFS_NO_FILE			-4
-#define	VFS_FILE_LIMIT_EXCEEDED		-5		/* MAX_OPEN_FILES limit exceeded */
-#define	VFS_BUSY			-6		/* a file is busy */
-#define	VFS_NOT_DIR			-7		/* not a directory */
-#define	VFS_LINK_LOOP			-8		/* symbolic link depth too high */
-#define	VFS_IO_ERROR			-9		/* other, unknown problem (e.g. readlink failed) */
-#define	VFS_NO_MEMORY			-10		/* not enough memory */
-#define	VFS_NO_SPACE			-11		/* insufficient storage space */
-#define	VFS_READ_ONLY			-12		/* read-only filesystem */
-#define	VFS_EXISTS			-13		/* name already exists */
-#define	VFS_LONGNAME			-14		/* name too long */
-
-/**
- * Flags to parsePath()/vfsOpen().
- */
-#define	VFS_CHECK_ACCESS		(1 << 0)
-// if set, and parsePath() finds an empty directory while searching, it will return the end directory pointer
-// for it, and set *error to VFS_EMPTY_DIRECTORY.
-#define	VFS_STOP_ON_EMPTY		(1 << 1)
-// if set, parsePath() will create a regular file if it does not exist.
-#define	VFS_CREATE			(1 << 2)
-/* next 12 bits reserved */
-// if final component is a symlink, do not follow
-#define	VFS_NO_FOLLOW			(1 << 14)
+#define	VFS_MODE_TYPEMASK		0xF000
 
 /**
  * Flags for the open() system call.
@@ -115,8 +89,7 @@
 #define	O_TERMINAL			(1 << 18)
 
 /**
- * File descriptor flags settable with fcntl(). They share space with the O_* flags because
- * they are stored in the same field. Some match up with the O_* flags.
+ * File descriptor flags settable with fcntl().
  */
 #define	FD_CLOEXEC			O_CLOEXEC
 #define	FD_ALL				(FD_CLOEXEC)
@@ -142,19 +115,62 @@
 #define	POLL_HANGUP			(1 << PEI_HANGUP)
 #define	POLL_INVALID			(1 << PEI_INVALID)
 
-#define	FILENAME_MAX			128
-#define	PATH_MAX			256
+/**
+ * Inode flags.
+ */
+#define	VFS_INODE_DIRTY			(1 << 0)		/* inode changed since loading */
+#define	VFS_INODE_NOUNLINK		(1 << 1)		/* inode cannot be unlinked */
+
+/**
+ * Dentry flags.
+ */
+#define	VFS_DENTRY_TEMP			(1 << 0)		/* do not commit to disk */
+#define	VFS_DENTRY_MNTPOINT		(1 << 1)		/* dirent is a mountpoint */
+
+/**
+ * Maximum depth of symbolic links.
+ */
 #define	VFS_MAX_LINK_DEPTH		8
-#define	VFS_MAX_LOCKS_PER_FILE		32
 
-#define	VFS_NAME_MAX			128
-#define	VFS_PATH_MAX			256
+/**
+ * Flags for struct kstatvfs.
+ */
+#define	VFS_ST_RDONLY			(1 << 0)
+#define	VFS_ST_NOSUID			(1 << 1)
 
+/**
+ * vfsMakeDirEx() flags.
+ */
+#define	VFS_MKDIR_NOVALID		(1 << 0)		/* do not validate (ignore ROFS etc) */
+
+/**
+ * Mount flags.
+ */
+#define	MNT_RDONLY			(1 << 0)
+#define	MNT_NOSUID			(1 << 1)
+
+#define	MNT_ALL				((1 << 2)-1)
+
+/**
+ * The AT_* flags.
+ */
+#define	VFS_AT_REMOVEDIR		(1 << 0)
+#define	VFS_AT_SYMLINK_FOLLOW		(1 << 1)
+
+#define	VFS_AT_NOVALID			(1 << 16)		/* do not validate (ignore ROFS) */
+
+/**
+ * Access control list stuff.
+ */
 #define	VFS_ACL_SIZE			128
 
 #define	VFS_ACE_UNUSED			0
 #define	VFS_ACE_USER			1
 #define	VFS_ACE_GROUP			2
+
+#define	VFS_ACE_READ			4
+#define	VFS_ACE_WRITE			2
+#define	VFS_ACE_EXEC			1
 
 typedef struct
 {
@@ -163,8 +179,7 @@ typedef struct
 	uint8_t				ace_perms;
 } AccessControlEntry;
 
-#ifndef _SYS_STAT_H
-struct stat
+struct kstat
 {
 	dev_t				st_dev;
 	ino_t				st_ino;
@@ -185,384 +200,483 @@ struct stat
 	time_t				st_btime;
 	AccessControlEntry		st_acl[VFS_ACL_SIZE];
 };
-#endif
 
-#ifndef _DIRENT_H
-struct dirent
+struct kstatvfs
+{
+	union
+	{
+		struct
+		{
+			unsigned long	f_bsize;
+			unsigned long	f_frsize;
+			unsigned long	f_blocks;
+			unsigned long	f_bfree;
+			unsigned long	f_bavail;
+			unsigned long	f_files;
+			unsigned long	f_ffree;
+			unsigned long	f_favail;
+			unsigned long	f_fsid;
+			unsigned long	f_flag;
+			unsigned long	f_namemax;
+			char		f_fstype[16];
+			char		f_bootid[16];
+		};
+		
+		char __size[1024];
+	};
+};
+
+struct kdirent
 {
 	ino_t				d_ino;
-	char				d_name[128];
+	char				d_resv[64];
+	char				d_name[];
 };
-#endif
 
 /**
- * Describes a "system object". It's an object with a name in the filesystem, which may be
- * retrieved and stored by the kernel, and keeps a reference count and a value. This is used
- * for example for local (UNIX) sockets.
- *
- * The reference count shall be incremented when link() is called on the object, and decremented
- * when unlink() is called. When linksys() is called, it also increases the refcount. When the
- * refcount is decremented and reaches 0, the remove() pointer below is called, indicating the
- * value can be safely deleted. The structure itself is deleted by vfsSysDecref().
- *
- * The 'data' and 'remove' fields belong to the creator; everything else must be manipulated with
- * the VFS functions specified later in this file. The 'mode' field is read-only, and shall be
- * used to determine the type of object.
+ * All the structure typedefs here, definitions below.
  */
-typedef struct SysObject_
-{
-	/**
-	 * Arbitrary data.
-	 */
-	void*				data;
-	
-	/**
-	 * Called when refcount reaches zero, just before freeing this object.
-	 */
-	void (*remove)(struct SysObject_ *sysobj);
-	
-	/**
-	 * Mode; including the type (used to determine what this object is, and hence the meaning
-	 * of 'data'!)
-	 */
-	mode_t				mode;
-	
-	/**
-	 * Reference count.
-	 */
-	int				refcount;
-} SysObject;
+typedef struct Inode_ Inode;
+typedef struct Dentry_ Dentry;
+typedef struct File_ File;
+typedef struct FileSystem_ FileSystem;
+typedef struct MountPoint_ MountPoint;
 
 /**
- * Describes an open file. All of its member functions may be NULL.
+ * Describes a VFS inode.
  */
-typedef struct _File
+struct Inode_
 {
 	/**
-	 * Private, filesystem-specific structure.
-	 */
-	void *fsdata;
-
-	/**
-	 * oflag used to open the file.
-	 */
-	int oflag;
-
-	/**
-	 * File reference count. The file is closed and the memory is released once this reaches
-	 * zero. Use vfsDup() and vfsClose() to manage this.
-	 *
-	 * For files opened by the kernel, this is allowed to be zero. In this case, you must have
-	 * only one reference, and it may be destroyed with vfsClose().
+	 * Reference count. This is the number of references to this inode which exist
+	 * in memory (not necessarily on disk; "links" is for that).
 	 */
 	int refcount;
 	
 	/**
-	 * Read the file.
+	 * prev/next links on the filesystem's inode map.
 	 */
-	ssize_t (*read)(struct _File *file, void *buffer, size_t size);
+	Inode* prev;
+	Inode* next;
 
 	/**
-	 * Write to the file.
+	 * Number of file descriptions pointing at this inode. This is taken into account when
+	 * unmounting filesystems, to ensure that there are no open files when a filesystem is
+	 * being unmounted.
 	 */
-	ssize_t (*write)(struct _File *file, const void *buffer, size_t size);
-
-	/**
-	 * Seek to a different position in the file. Return the old position.
-	 */
-	off_t (*seek)(struct _File *file, off_t offset, int whence);
-
-	/**
-	 * Close the file. Do not free this structure! The kernel will do that for you.
-	 * This is called when refcounts go to zero.
-	 */
-	void (*close)(struct _File *file);
-
-	/* we're gonna remove this soon when we revamp the VFS */
-	void *resv;
-
-	/**
-	 * This is used to implement the ioctl() interface. The 'cmd' argument must be constructed
-	 * according to the rules from <glidix/ioctl.h>. The last argument is undefined for 0-sized
-	 * commands. Return 0 on success, -1 on error. All ioctl() calls will fail with EINVAL if
-	 * this entry is NULL.
-	 */
-	int (*ioctl)(struct _File *file, uint64_t cmd, void *argp);
-
-	/**
-	 * Get the file state. Returns 0 on success, -1 on failure. If this is NULL then fstat() on
-	 * this file description always fails, which is a bad thing. If -1 is returned or this function
-	 * pointer is NULL, then EIO is returned to the caller.
-	 */
-	int (*fstat)(struct _File *file, struct stat *st);
-
-	/**
-	 * Like chmod() in DIR, except takes a file description instead of a directory pointer.
-	 */
-	int (*fchmod)(struct _File *file, mode_t mode);
-
-	/**
-	 * Like chown() in DIR, except takes a file description instead of a directory pointer.
-	 */
-	int (*fchown)(struct _File *file, uid_t uid, gid_t gid);
-
-	/**
-	 * Synchronise file contents with the disk. This function shall wait until all data modified in the
-	 * file has been written to disk. It cannot fail.
-	 */
-	void (*fsync)(struct _File *file);
-
-	/**
-	 * Truncate the file to the specified size. If the size is actually larger than the current size, then
-	 * zero-pad the file until it is the specified size. This can never fail if defined.
-	 */
-	void (*truncate)(struct _File *file, off_t length);
-
-	/**
-	 * Returns the FileTree representing this file, if it is random-access. The reference count of the tree
-	 * shall be incremented, and it is the caller's responsibility to decrement it later.
-	 */
-	FileTree* (*tree)(struct _File *file);
+	int numOpens;
 	
 	/**
-	 * Reading/writing at arbitrary offsets, thread-safe calls for random-access files. Most importantly,
-	 * this is used by memory-mapped files.
+	 * The lock. Protects all mutable fields of this structure. It is also held when
+	 * flushing.
 	 */
-	ssize_t (*pread)(struct _File *file, void *buf, size_t count, off_t offset);
-	ssize_t (*pwrite)(struct _File *file, const void *buffer, size_t count, off_t offset);
+	Semaphore lock;
 	
 	/**
-	 * Get pollable event information about this file. 'sems' points to an array of pointers to 8 semaphores,
-	 * each index by an PEI_* macro. An event is said to occur when its semaphore value becomes nonzero.
-	 * For example, if the semaphore indexed by PEI_READ has a nonzero value (i.e. a semWait() on it would
-	 * not block), the file is considered ready for reading. The array is initialized by the system to hold 8
-	 * NULL pointers. A NULL pointer indicates that an event will never occur; so if the PEI_WRITE entry is
-	 * set to NULL, the file is never considered writeable. If you want a file to always be considered, for
-	 * example, readable, you must set PEI_READ (or whatever event is always "occuring") to the return value
-	 * of vfsGetConstSem() - which is a semaphore that always has value 1. If this function is not present,
-	 * then all entries in that array will remain NULL and will never occur. If present, it shall always
-	 * be successful as it should only fill in pointers to static per-file variables.
+	 * Specifies which filesystem this inode belongs to. This may be NULL if the
+	 * inode is not on any filesystem (e.g. a socket or a pipe).
 	 */
-	void (*pollinfo)(struct _File *file, struct Semaphore_ **sems);
-} File;
-
-/**
- * This structure is used to describe an open directory scanner.
- */
-typedef struct _Dir
-{
+	FileSystem* fs;
+	
 	/**
-	 * Private, filesystem-specific structure.
+	 * If this is a directory inode, then this points to the dentry referring to it
+	 * (there is only one hard link to each directory). Used to find canonical paths
+	 * and for resolving "..". This counts towards the reference count of that dentry's
+	 * directory inode.
+	 *
+	 * If this is a symbolic link inode, this is the dentry referring to it, since symbolic
+	 * links only have one hard link to them, and it is needed to follow the symlink.
+	 *
+	 * Do not trust this value for any other type of inode.
+	 */
+	Dentry* parent;
+	
+	/**
+	 * The inode number on the filesystem. It is set to zero if the inode is dropped.
+	 */
+	ino_t ino;
+	
+	/**
+	 * Access mode and inode type. The type is immutable.
+	 */
+	mode_t mode;
+	
+	/**
+	 * Number of links to this inode. This is the number of hard links on the disk; 'numOpens'
+	 * is for counting open file descriptors.
+	 */
+	nlink_t links;
+	
+	/**
+	 * Owner and associated group.
+	 */
+	uid_t uid;
+	gid_t gid;
+	
+	/**
+	 * Number of blocks currently taken on disk.
+	 */
+	blkcnt_t numBlocks;
+	
+	/**
+	 * File times.
+	 */
+	time_t atime, mtime, ctime, btime;
+	
+	/**
+	 * Nanosecond additions to the file times.
+	 */
+	uint32_t anano, mnano, cnano, bnano;
+	
+	/**
+	 * Executable permissions.
+	 */
+	uint64_t ixperm, oxperm, dxperm;
+	
+	/**
+	 * Access control list.
+	 */
+	AccessControlEntry acl[VFS_ACL_SIZE];
+	
+	/**
+	 * Inode flags (VFS_INODE_*).
+	 */
+	int flags;
+	
+	/**
+	 * Next dentry key to assign.
+	 */
+	int nextKey;
+	
+	/**
+	 * The file tree, if this is a random-access file (else NULL). When the file isn't open, this must
+	 * have a reference count of zero, i.e. "flushed".
+	 */
+	FileTree* ft;
+	
+	/**
+	 * Driver-specific inode info.
 	 */
 	void *fsdata;
-
-	/**
-	 * Description of the current entry and its stat().
-	 */
-	struct dirent			dirent;
-	struct stat			stat;
-	char				_pad[1024 - sizeof(struct stat) - sizeof(struct dirent)];
 	
 	/**
-	 * If this entry points to a file, open the file. Return 0 on success, -1 on error.
-	 * The passed File structure was initialized to default values; please only change
-	 * the values that you need to. Also, the size was passed in case there is a mismatch
-	 * between the target kernel version of a module and the actual kernel version.
+	 * If this is a symlink, this is the target path.
 	 */
-	int (*openfile)(struct _Dir *me, File *file, size_t szFile);
-
-	/**
-	 * Same as openfile(), except opens a directory. It may return error codes as described above.
-	 */
-	int (*opendir)(struct _Dir *me, struct _Dir *dir, size_t szDir);
-
-	/**
-	 * Close this scanner. Do not free the Dir structure! The kernel will do that for you.
-	 */
-	void (*close)(struct _Dir *dir);
-
-	/**
-	 * Advance to the next entry in this directory. Return 0 on success, -1 on end of list.
-	 * If this is the last entry, and the filesystem is not read-only, this structure shall
-	 * remain valid so that mkdir() or mkreg() can be called to add a new entry.
-	 */
-	int (*next)(struct _Dir *dir);
-
-	/**
-	 * Change the bottom 12 bits of st_mode, and save that change to disk. Do not perform any security
-	 * checks. If the change cannot be saved, then this function shall return -1; else the function
-	 * shall return 0. Please note that the top 4 bits of mode shall be ignored and the top 4 bits of
-	 * st_mode shall remain unchanged!
-	 */
-	int (*chmod)(struct _Dir *dir, mode_t mode);
-
-	/**
-	 * Change the value of st_uid and st_gid, and save that change to disk. Do not perform any security
-	 * checks. If the change cannot be saved, then this function shall return -1; else the function
-	 * shall return 0.
-	 */
-	int (*chown)(struct _Dir *dir, uid_t uid, gid_t gid);
-
-	/**
-	 * Create a new directory. 'dir' is guaranteed to be a directory end pointer (i.e. the state of a DIR
-	 * structure after a call to next() that returned -1). This function shall add a new directory entry
-	 * to 'dir', which shall represent a directory with name 'name' and access mode 'mode'. It is guaranteed
-	 * that this directory does not already contain an entry with the specified name. It is also guaranteed
-	 * that 2 mkdir() (or other creation or removal) requests do not happen at the same time.
-	 */
-	int (*mkdir)(struct _Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t gid);
-
-	/**
-	 * Create a new regular file. 'dir' is guaranteed to be a directory end pointer. This function shall add
-	 * a new directory entry to 'dir', which shall represent a new file with name 'name', and have the specified
-	 * mode, owner and group. It is guaranteed that this direcotry does not already contain an entry with the
-	 * specified name, and 2 mkreg() (or other creation or removal) requests do not happen at the same time.
-	 * Return -1 on failure, or 0 on success; if successful, 'dir' shall be modified to point to this new file.
-	 */
-	int (*mkreg)(struct _Dir *dir, const char *name, mode_t mode, uid_t uid, gid_t gid);
-
-	/**
-	 * Remove the directory entry pointed to by this directory pointer. If the entry is the only link to the inode
-	 * left, then the inode is also removed, along with all its contents. If the file is currently open, then the
-	 * inode shall be removed after all file desctipions referring to it are closed. It is guaranteed that 2 calls
-	 * to unlink() or any other creation/deletion function do not happen at the same time. Return 0 on success, or
-	 * -1 on error. This function will only be called on empty directories; the kernel will assume that a directory
-	 * is empty if st_size is 0.
-	 */
-	int (*unlink)(struct _Dir *dir);
-
-	/**
-	 * Create a hard link in this directory to an already-existing file. 'dir' is guaranteed to be a directory end pointer.
-	 * It is guranteed that this directory does not already contain an entry with the given name, and 2 link() (or other
-	 * creation or removal) requests do not happen at the same time. Return -1 on error (EIO) or 0 on success.
-	 * 'ino' is guranteed to be the inode number of a file on the same filesystem (i.e. with st_dev matching that of this
-	 * directory).
-	 */
-	int (*link)(struct _Dir *dir, const char *name, ino_t ino);
-
-	/**
-	 * Create a symbolic/soft link with the specified name, and store the specified path. See mkreg() for more info on
-	 * file-creation semantics. Returns 0 on success, or -1 on error (EIO).
-	 */
-	int (*symlink)(struct _Dir *dir, const char *name, const char *path);
-
-	/**
-	 * Read the path of a symbolic link pointed to by this directory pointer. The path shall be stored in 'buffer', which
-	 * has a length of at least PATH_MAX. On failure, return -1; otherwise, return the actual size of the path, which must
-	 * be smaller than PATH_MAX. Also, the path must be NUL-terminated.
-	 */
-	ssize_t (*readlink)(struct _Dir *dir, char *buffer);
-
-	/**
-	 * Used to implement efficient stat(). If this function is NULL, then it is expected that opendir(), openroot() and
-	 * next() will automatically set the 'stat' field to a valid value. If this function IS implemented, then the stat
-	 * field should only be filled in when this is called.
-	 */
-	void (*getstat)(struct _Dir *dir);
-
-	/**
-	 * Change the access and modification times of this file. Return 0 on success, -1 on failure.
-	 */
-	int (*utime)(struct _Dir *dir, time_t atime, time_t mtime);
+	char *target;
 	
 	/**
-	 * Change the executable permissions on this file. If an argument is XP_NCHG, it means that this field shall
-	 * not be set. Return 0 on success, -1 on I/O error.
+	 * Head of the dentry cache, if this is a directory inode.
 	 */
-	int (*chxperm)(struct _Dir *dir, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm);
+	Dentry* dents;
 	
 	/**
-	 * Link a system object into the specified name in this directory. The owner and group are set according
-	 * to the EUID and EGID. This function increments the reference count of the object. Return 0 on success,
-	 * -1 on error (which then gets reported as EIO). System objects do not persist after reboot or unmount.
+	 * If these function pointers are not NULL, then it is called every time this inode is opened,
+	 * and may return additional data to be associated with the file description, and to release
+	 * this data, respectively.
+	 *
+	 * If open() is implemented, it must return non-NULL on success. If it returns NULL, it must
+	 * also set ERRNO, and the open is rejected in this case.
 	 */
-	int (*linksys)(struct _Dir *dir, const char *name, SysObject *sysobj);
+	void* (*open)(Inode *inode, int oflags);
+	void (*close)(Inode *inode, void *filedata);
 	
 	/**
-	 * If the current entry is a system object, increment the reference count and return it. Otherwise, return
-	 * NULL.
+	 * For non-random-access files, implementations of pread() and pwrite().
+	 *
+	 * These functions, when returning -1 to indicate an error, must also set ERRNO.
 	 */
-	SysObject* (*getsys)(struct _Dir *dir);
-
-	/**
-	 * Set the permissions of a given user (type == VFS_ACE_USER) or group (VFS_ACE_GROUP) in the access control
-	 * list. If an entry for this entity already exists, it is updated, otherwise, it is added (if there is space).
-	 * Return 0 on success or -1 on error (and set ERRNO). ERRNO shall be set to EOVERFLOW if there is no space on
-	 * the list, ENOSPC if the filesystem needs to allocate space on disk for the ACL and it was not possible.
-	 * Other errors may also be returned.
-	 */
-	int (*aclput)(struct _Dir *dir, uint8_t type, uint16_t id, uint8_t perms);
+	ssize_t (*pread)(Inode *inode, File *fp, void *buffer, size_t size, off_t offset);
+	ssize_t (*pwrite)(Inode *inode, File *fp, const void *buffer, size_t size, off_t offset);
 	
 	/**
-	 * Remove the specified entry from the ACL. Return 0 on success, or -1 on error (and set ERRNO). ERRNO shall be
-	 * set to EINVAL if the entry does not exist.
+	 * For files which support this, ioctl() implementation. 'fp' is the file description being operated
+	 * on. See <glidix/ioctl.h> for information on how commands and ioctl() in general work.
+	 *
+	 * This function may set ERRNO.
 	 */
-	int (*aclclear)(struct _Dir *dir, uint8_t type, uint16_t id);
-} Dir;
-
-struct fsinfo;
+	int (*ioctl)(Inode *inode, File *fp, uint64_t cmd, void *argp);
+	
+	/**
+	 * Flush this inode to disk. Return 0 on success, or -1 on error (and set ERRNO).
+	 * If NULL, the filesystem is virtual and flushing is always reported successful.
+	 */
+	int (*flush)(Inode *inode);
+	
+	/**
+	 * Drop the inode - mark it as free on the disk. This is called when there are no
+	 * more links to the inode.
+	 */
+	void (*drop)(Inode *inode);
+	
+	/**
+	 * Get pollable event information. The 'sems' array is indexed by PEI_* macros, and all entries
+	 * are initialized to "always ready". It should set, for each event, a semaphore which becomes non-zero
+	 * when the event occurs. For example, if the semaphore in PEI_READ becomes nonzero, then the file
+	 * is considered ready for reading (a read would not block). The waiting is done by semPoll().
+	 */
+	void (*pollinfo)(Inode *inode, File *fp, struct Semaphore_ **sems);
+	
+	/**
+	 * This is called just before the inode is released from the cache. You may perform cleanup such as
+	 * releasing 'fsdata'.
+	 */
+	void (*free)(Inode *inode);
+	
+	/**
+	 * This is called by stat() if there is no file tree. If this function pointer is NULL, the size is
+	 * reported as 0; if is defined, then this function shall return the size to be reported.
+	 */
+	size_t (*getsize)(Inode *inode);
+	
+	/**
+	 * Duplicate counter. This is the number of times the inode has been called in.
+	 */
+	int dups;
+};
 
 /**
- * Describes a mounted instance of a filesystem, perhaps attached to a storage device.
+ * Describes a directory entry. Fields are protected by the directory inode lock. This does not need to be
+ * reference counted - the only case there would be multiple references to the same dentry without the directory
+ * being locked is if the dentry points to a directory (e.g. it's a mountpoint, the directory is open, etc), and
+ * it'll only be deleted if its target inode has no references other than this one.
  */
-typedef struct _FileSystem
+struct Dentry_
 {
 	/**
-	 * Private, filesystem-specific data structure.
+	 * Links. Those are both NULL for the special "kernel root dentry".
 	 */
-	void *fsdata;
-
-	/**
-	 * Open the root directory of this filesystem. Return 0 on success, a negative number
-	 * on error; see above for more info.
-	 */
-	int (*openroot)(struct _FileSystem *fs, Dir *dir, size_t szDir);
-
-	/**
-	 * Unmount this filesystem. Do not free this structure! The kernel does that for you.
-	 * Return 0 on success, -1 on error (reported as EBUSY).
-	 */
-	int (*unmount)(struct _FileSystem *fs);
-
-	/**
-	 * The name of this filesystem.
-	 */
-	const char *fsname;
+	Dentry*					prev;
+	Dentry*					next;
 	
 	/**
-	 * Device ID, assigned during mount.
+	 * Name of the entry. On the heap; create with kmalloc() or strdup(), release with kfree().
 	 */
-	dev_t dev;
+	char*					name;
 	
 	/**
-	 * The image with which this filesystem was mounted; assigned during mount.
+	 * The containing directory inode. This counts as a reference of the inode.
 	 */
-	char imagename[256];
+	Inode*					dir;
 	
 	/**
-	 * Get filesystem statistics. This must fill in the fs_usedino, fs_inodes, fs_usedblk, fs_blocks,
-	 * and fs_blksize members of the 'info' structure, if known.
+	 * Inode number of the target.
 	 */
-	void (*getinfo)(struct _FileSystem *fs, struct fsinfo *info);
-} FileSystem;
+	ino_t					ino;
+	
+	/**
+	 * A unique "key" assigned to each dirent. It is unique within each directory, not globally.
+	 * Used for race-free directory reading from userspace.
+	 */
+	int					key;
+	
+	/**
+	 * The target inode if already cached (else NULL). If uncached, the FileSystem's loadInode()
+	 * function pointer is used to retrieve it. For mountpoints, this points to the root directory.
+	 */
+	Inode*					target;
+	
+	/**
+	 * Dentry flags (VFS_DENTRY_*).
+	 */
+	int					flags;
+};
 
 /**
- * Filesystem information structure, for _glidix_fsinfo().
+ * Represents a mounted filesystem.
  */
-typedef struct fsinfo
+struct FileSystem_
 {
-	dev_t					fs_dev;
-	char					fs_image[256];
-	char					fs_mntpoint[256];
-	char					fs_name[64];
-	size_t					fs_usedino;
-	size_t					fs_inodes;
-	size_t					fs_usedblk;
-	size_t					fs_blocks;
-	size_t					fs_blksize;
-	uint8_t					fs_bootid[16];
-	char					fs_pad[968];
-} FSInfo;
+	/**
+	 * Driver-specific data.
+	 */
+	void*					fsdata;
+	
+	/**
+	 * Number of mount points at which this filesystem is mounted.
+	 */
+	int					numMounts;
+	
+	/**
+	 * Filesystem ID.
+	 */
+	dev_t					fsid;
+
+	/**
+	 * Filesystem type. Constant string, somewhere in the driver's memory.
+	 */
+	const char*				fstype;
+	
+	/**
+	 * The lock, for loading inodes and unmounting and stuff, and for the inode map.
+	 */
+	Semaphore				lock;
+	
+	/**
+	 * The inode map - a linked list of all inodes loaded by this filesystem. This is used to look
+	 * up indes by number, to allow support for multiple hard links to the same inode. The entries
+	 * in this list DO NOT count as references to the inode; once the reference count of an inode
+	 * drops to zero, the filesystem lock will be acquired, and if inbetween the refcount dropping
+	 * to zero and the lock being acquired a thread tries to read it off this list, it will notice
+	 * that the refcount is zero, and will leave it alone.
+	 */
+	Inode*					imap;
+	
+	/**
+	 * This is called when the filesystem has been unmounted and is now detached from the VFS.
+	 * You may perform cleanup, such as freeing 'fsdata'.
+	 */
+	void (*unmount)(FileSystem *fs);
+	
+	/**
+	 * Load the inode with the given number (inode->ino). This function shall fill out the metadata
+	 * in the inode. The refcount, lock, fs pointer, etc are all initialized by the kernel.
+	 * All other fields are initially zeroed out. Return 0 on error, or -1 if an I/O error occured.
+	 */
+	int (*loadInode)(FileSystem *fs, Inode *inode);
+	
+	/**
+	 * Register an inode. The 'inode' structure is filled in with information about a new inode.
+	 * This function shall set its 'ino' field to the new inode number allocated on disk. Return 0
+	 * on success, or -1 on error, and set ERRNO.
+	 */
+	int (*regInode)(FileSystem *fs, Inode *inode);
+	
+	/**
+	 * Size of a block on this filesystem. Zero means unknown.
+	 */
+	uint64_t blockSize;
+	
+	/**
+	 * Total number of blocks available on this filesystem. Zero means unknown.
+	 */
+	uint64_t blocks;
+	
+	/**
+	 * Number of free blocks on this filesystem.
+	 */
+	uint64_t freeBlocks;
+	
+	/**
+	 * Total number of inodes on this filesystem. Zero means unknown.
+	 */
+	uint64_t inodes;
+	
+	/**
+	 * Number of free inodes on this filesystem.
+	 */
+	uint64_t freeInodes;
+	
+	/**
+	 * Filesystem flags.
+	 */
+	unsigned long flags;
+	
+	/**
+	 * Maximum length of a file name on this filesystem. Zero means unlimited.
+	 */
+	uint64_t maxnamelen;
+	
+	/**
+	 * Boot ID of this filesystem.
+	 */
+	uint8_t bootid[16];
+	
+	/**
+	 * Set to 1 if currently unmounting.
+	 */
+	int unmounting;
+};
+
+/**
+ * Describes a mountpoint traversed in path resolution.
+ */
+struct MountPoint_
+{
+	/**
+	 * The previously-traversed mountpoint. NULL for the kernel root.
+	 */
+	MountPoint*				prev;
+	
+	/**
+	 * The mountpoint dentry. This counts towards its directory's reference count, but is not
+	 * locked. Lock before use.
+	 */
+	Dentry*					dent;
+	
+	/**
+	 * Root inode of the mounted filesystem. This counts towards the reference count.
+	 */
+	Inode*					root;
+};
+
+/**
+ * A "dentry pointer". Specifies the dentry and the stack of mountpoints used to reach it (to help
+ * resolve ".." on roots).
+ */
+typedef struct
+{
+	/**
+	 * The dentry we are pointing to. It is locked by us.
+	 */
+	Dentry*					dent;
+	
+	/**
+	 * Top of the mountpoint stack used to reach this.
+	 */
+	MountPoint*				top;
+} DentryRef;
+
+/**
+ * Inode pointer. Same principle, but "top" might be NULL if the inode is neither a directory nor a
+ * symbolic link.
+ */
+typedef struct
+{
+	Inode*					inode;
+	MountPoint*				top;
+} InodeRef;
+
+/**
+ * Null references.
+ */
+extern DentryRef VFS_NULL_DREF;
+extern InodeRef VFS_NULL_IREF;
+
+/**
+ * Represents an open file description.
+ */
+struct File_
+{
+	/**
+	 * The inode we are operating on.
+	 */
+	InodeRef				iref;
+	
+	/**
+	 * The lock.
+	 */
+	Semaphore				lock;
+	
+	/**
+	 * File data as returned by the inode's open(), or NULL if not implemented.
+	 */
+	void*					filedata;
+	
+	/**
+	 * Current file offset.
+	 */
+	off_t					offset;
+	
+	/**
+	 * Open file flags.
+	 */
+	int					oflags;
+	
+	/**
+	 * Reference count.
+	 */
+	int					refcount;
+};
 
 /**
  * File lock description structure, matching with "struct flock" from the C library.
@@ -577,34 +691,386 @@ typedef struct
 	uint64_t				l_resv[8];
 } FLock;
 
-void dumpFS(FileSystem *fs);
-int vfsCanCurrentThread(struct stat *st, mode_t mask);
-
-char *realpath(const char *relpath, char *buffer);
-
 /**
- * Construct the Dir such that it points to the file of the specified path. Returns NULL on error.
- * If the pathname ends with a slash ('/'), then the returned Dir is the actual directory opened,
- * i.e. it's the first entry in the specified directory.
- */
-Dir *parsePath(const char *path, int flags, int *error);
-
-int vfsStat(const char *path, struct stat *st);
-int vfsLinkStat(const char *path, struct stat *st);
-File *vfsOpen(const char *path, int flags, int *error);
-ssize_t vfsRead(File *file, void *buffer, size_t size);
-ssize_t vfsWrite(File *file, const void *buffer, size_t size);
-ssize_t vfsPRead(File *file, void *buffer, size_t size, off_t pos);
-ssize_t vfsPWrite(File *file, const void *buffer, size_t size, off_t pos);
-void vfsDup(File *file);
-void vfsClose(File *file);
-
-/**
- * This is used to ensure that 2 or more threads do not try to create files/directories simultaneously.
+ * Initialize the VFS. This initializes locks, and also creates the kernel root inode.
  */
 void vfsInit();
-void vfsLockCreation();
-void vfsUnlockCreation();
+
+/**
+ * Create a new filesystem. A filesystem ID is automatically assigned. 'fstype' is the name of
+ * the filesystem, for example "gxfs". After calling this function, you must set all necessary
+ * callbacks in the new filesystem. The new filesystem will have numMounts set to zero, and so
+ * must be mounted somewhere.
+ */
+FileSystem* vfsCreateFileSystem(const char *fstype);
+
+/**
+ * Create a new inode of the given type and mode. It starts with a refcount of 1, and
+ * link count of 0. The general procedure is as follows:
+ *
+ *	1. Create the inode with vfsCreateInode().
+ *	2. If needed, change parameters from defaults.
+ *	3. Create a hard link to the inode (if applicable).
+ *	4. Remove your own reference once ready.
+ *
+ * On error returns NULL and sets ERRNO.
+ */
+Inode* vfsCreateInode(FileSystem *fs, mode_t mode);
+
+/**
+ * Upref and downref inodes.
+ */
+void vfsUprefInode(Inode *inode);
+void vfsDownrefInode(Inode *inode);
+
+/**
+ * Upref and downref filesystems.
+ */
+void vfsUprefFileSystem(FileSystem *fs);
+void vfsDownrefFileSystem(FileSystem *fs);
+
+/**
+ * Read the target of a symbolic link. This revokes your reference to the symlink inode
+ * (decrefs it) regardless of whether or not it succeeded. This temporarily locks the
+ * inode.
+ *
+ * The returned string is a copy on the heap, and you must call kfree() on it at some point.
+ *
+ * Returns NULL on I/O error.
+ */
+char* vfsReadLink(Inode *link);
+
+/**
+ * Get the parent dentry of the given inode. Returns NULL in 'dent' if the inode is not a
+ * directory (and hence has no parent dentry). The parent inode is then locked.
+ *
+ * This function locks the inode temporarily, so do not call it while holding the lock.
+ *
+ * The directory inode of the returned entry is upreffed, and the passed-in inode is
+ * decreffed. If NULL is returned, the passed-in inode is still decreffed.
+ */
+DentryRef vfsGetParentDentry(InodeRef inode);
+
+/**
+ * Return the directory containing the given dentry, and unlock the inode, without updating
+ * the refernce count of the inode. That is, you are withdrawing your reference to the dentry,
+ * and taking a reference to its directory.
+ */
+InodeRef vfsGetDentryContainer(DentryRef dent);
+
+/**
+ * Get the inode pointed to by the given dentry, loading it into memory if necessary.
+ * This unlock the dentry's directory inode, and revokes the reference, while returning a new
+ * reference to the target inode.
+ *
+ * If the inode could not be loaded, NULL is returned, but the reference is still revoked and
+ * hence lock removed. This error should be trated as EIO (I/O error).
+ */
+InodeRef vfsGetDentryTarget(DentryRef dref);
+
+/**
+ * Get an inode given its dentry. If 'follow' is 1, then symbolic links are followed; otherwise
+ * they're not. The reference is revoked whether successful or not.
+ */
+InodeRef vfsGetInode(DentryRef dent, int follow, int *error);
+
+/**
+ * Mark an inode as dirty, and perhaps flush it. Call this only when the inode is locked!
+ */
+void vfsDirtyInode(Inode *inode);
+
+/**
+ * Flush an inode. This commits it to disk, along with all of its data. Call this when the inode
+ * is NOT locked, as this function locks the inode. Returns 0 on success, or an error number on
+ * error. Flushing errors typically cannot be recovered from.
+ */
+int vfsFlush(Inode *inode);
+
+/**
+ * Return the inode representing the current root directory, and upref it. You must call
+ * vfsDownrefInode() on this when done.
+ */
+InodeRef vfsGetRoot();
+
+/**
+ * Return the inode representing the current working directory, and upref it.  You must call
+ * vfsDownrefInode() on this when done.
+ */
+InodeRef vfsGetCurrentDir();
+
+/**
+ * Get the dentry corresponding to the given name on the given directory inode. This locks the
+ * inode and returns the named dentry. The dentry becomes your reference to the inode - a dentry
+ * call will revoke your reference while unlocking the inode. If this function fails, NULL is
+ * returned, and the reference revoked.
+ *
+ * If 'create' is nonzero, the dentry is created if it doesn't yet exist. In this case, the 'ino' field
+ * will be 0. It will also have the VFS_DENTRY_TEMP flag set, so won't be committed to disk. Other
+ * functions must be used to assign an inode and commit the dentry to disk.
+ */
+DentryRef vfsGetChildDentry(InodeRef dirnode, const char *entname, int create);
+
+/**
+ * Append a dentry to the inode. This is called when loading a directory inode from disk, by the filesystem
+ * driver.
+ */
+void vfsAppendDentry(Inode *dir, const char *name, ino_t ino);
+
+/**
+ * Check if the specified user has the right to perform the given operations on the given inode.
+ * The 'perms' argument is a bitwise-OR of the VFS_ACE_* flags required. This function does not
+ * lock the inode.
+ *
+ * This function returns 0 if access was denied, or 1 if allowed. The reference count is unaffected.
+ */
+int vfsIsAllowed(Inode *inode, int perms);
+
+/**
+ * Given a path, starting relative resolutions from 'startdir' inode, get the dentry
+ * corresponding to the path. The dentry will have its containing directory locked,
+ * and you must call one of the dentry-handling functions to perform an operation on
+ * it and unlock it. Alternatively, you may call vfsUnrefDentry() to unlock it
+ * without doing anything.
+ *
+ * If the 'create' argument is nonzero, then the dentry is created if it does not exist (all parent
+ * directories must already exist, however). In this case, the 'ino' field will contain 0.
+ *
+ * If the final result is a symbolic link, this function does NOT follow it (but DOES follow symbolic
+ * links to directories on the way).
+ *
+ * On error, it returns NULL. If 'error' is non-NULL, an error number is stored there.
+ *
+ * The returned dentry is your reference to the inode. That is, the next operation on the
+ * dentry, which decrefs it, also revokes the reference of the inode that you passed in.
+ * If NULL is returned, the reference is revoked too.
+ */
+DentryRef vfsGetDentry(InodeRef startdir, const char *path, int create, int *error);
+
+/**
+ * Unlock a dentry and revoke the reference to its inode.
+ */
+void vfsUnrefDentry(DentryRef dent);
+
+/**
+ * Remove a reference to the inode and clear the reference's moutn stack.
+ */
+void vfsUnrefInode(InodeRef iref);
+
+/**
+ * Link a new inode to an empty dentry (where 'ino' is 0). This unlocks the dentry and revokes your
+ * reference to it, but UPREFS the inserted inode. You must therefore later call vfsDownrefInode(),
+ * or another reference-revoking function, on the inode.
+ *
+ * The inode must be on the same filesystem as the dentry, and the dentry becomes permanent (committed
+ * to disk). To make a temporary entry (not necessarily on the same filesystem), use vfsBindInode().
+ *
+ * It is up to the caller to make sure the dentry is empty; in other cases, the kernel panics.
+ */
+void vfsLinkInode(DentryRef dent, Inode* target);
+
+/**
+ * Similar to vfsLinkInode(), except that the InodeRef is returned afterwards.
+ */
+InodeRef vfsLinkAndGetInode(DentryRef dent, Inode *target);
+
+/**
+ * Similar to vfsLinkInode(), but the dentry is not committed to disk.
+ */
+void vfsBindInode(DentryRef dent, Inode* target);
+
+/**
+ * Unlink the target inode of the dentry. This sets 'ino' to 0. Returns 0 on success, or an error number
+ * on error (e.g. if a directory is not empty).
+ *
+ * There is only one supported flag so far: VFS_AT_REMOVEDIR. If it is set, this function removes only
+ * directories (only possible if the directory is empty); otherwise, this function removes only
+ * non-directories.
+ *
+ * The dentry reference is revoked and the dentry is removed.
+ */
+int vfsUnlinkInode(DentryRef dent, int flags);
+
+/**
+ * Remove a directory entry. This assumes that the dentry does not point to any inode; use it only to
+ * cancel the addition of a dentry. This revokes the reference.
+ */
+void vfsRemoveDentry(DentryRef dent);
+
+/**
+ * Create a directory at the specified path. You must have write permission to the parent directory,
+ * and it must already exist. On success, return 0, else return an error number such as ENOENT.
+ */
+int vfsMakeDir(InodeRef startdir, const char *path, mode_t mode);
+
+/**
+ * Like vfsMakeDir() but accepts some flags.
+ */
+int vfsMakeDirEx(InodeRef startdir, const char *path, mode_t mode, int flags);
+
+/**
+ * Mount the given inode at the given dentry. The reference to the dentry is revoked, regardless of
+ * whether an error occured or not. The reference count of the inode is incremented if the mount was
+ * successful, and so is its mount count. Returns 0 on success or an error number on error.
+ *
+ * This function performs permission checks.
+ */
+int vfsMount(DentryRef dref, Inode *mntroot, int flags);
+
+/**
+ * Open the named inode and return a new file handle. Symbolic links will be dereferenced. On success,
+ * a file handle is returned. On error, NULL is returned, and if 'error' is not NULL, it is set to the
+ * error number.
+ */
+File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *error);
+
+/**
+ * Open an inode reference - that is, create a file description around it. On success, it returns the
+ * file description, and the inode reference is transferred to it. On error, returns NULL and if 'error'
+ * is not NULL, sets it to the error number. Permission checking is NOT performed.
+ *
+ * Essentially your reference to the inode is revoked whether or not this function succeeds.
+ */
+File* vfsOpenInode(InodeRef iref, int oflag, int *error);
+
+/**
+ * Increase the refcount of a file description.
+ */
+void vfsDup(File *fp);
+
+/**
+ * Decrement the refcount of a file description.
+ */
+void vfsClose(File *fp);
+
+/**
+ * Implementations of pread(), read(), write(), pwrite().
+ */
+ssize_t vfsRead(File *fp, void *buffer, size_t size);
+ssize_t vfsPRead(File *fp, void *buffer, size_t size, off_t offset);
+ssize_t vfsWrite(File *fp, const void *buffer, size_t size);
+ssize_t vfsPWrite(File *fp, const void *buffer, size_t size, off_t offset);
+
+/**
+ * Seek a file.
+ */
+off_t vfsSeek(File *fp, off_t off, int whence);
+
+/**
+ * Fill out the stat structure with information about an inode.
+ */
+void vfsInodeStat(Inode *inode, struct kstat *st);
+
+/**
+ * Get the stat about a path. Returns 0 on success (and 'st' is filled) or -1 on error and sets ERRNO.
+ *	startdir	Starting directory for searches (or VFS_NULL_IREF for default)
+ *	path		Path to the inode to retrieve information about.
+ *	follow		If 1, and 'path' refers to a symbolic link, follow it; otherwise return info about
+ *			the symbolic link itself.
+ *	st		The struct kstat to fill in.
+ */
+int vfsStat(InodeRef startdir, const char *path, int follow, struct kstat *st);
+
+/**
+ * Get VFS information about an inode.
+ */
+void vfsInodeStatVFS(Inode *inode, struct kstatvfs *st);
+
+/**
+ * Get VFS information related to a path.
+ */
+int vfsStatVFS(InodeRef startdir, const char *path, struct kstatvfs *st);
+
+/**
+ * Change the mode of an inode.
+ */
+int vfsInodeChangeMode(Inode *inode, mode_t mode);
+
+/**
+ * Change the mode of a file.
+ */
+int vfsChangeMode(InodeRef startdir, const char *path, mode_t mode);
+
+/**
+ * Change the owner/group of an inode.
+ */
+int vfsInodeChangeOwner(Inode *inode, uid_t uid, gid_t gid);
+
+/**
+ * Change the owner/group of a file.
+ */
+int vfsChangeOwner(InodeRef startdir, const char *path, uid_t uid, gid_t gid);
+
+/**
+ * Truncate/expand an inode to the specified size. Returns 0 on success or error number on error.
+ */
+int vfsTruncate(Inode *inode, off_t size);
+
+/**
+ * Make a copy of an inode reference.
+ */
+InodeRef vfsCopyInodeRef(InodeRef iref);
+
+/**
+ * Change working directory. Return 0 on success, error number on error.
+ */
+int vfsChangeDir(InodeRef iref, const char *path);
+
+/**
+ * Change the root directory. Return 0 on success, error number on error.
+ */
+int vfsChangeRoot(InodeRef iref, const char *path);
+
+/**
+ * Return the absolute path to the specified dentry, as a string on the heap. Remember to free
+ * it using kfree() later. This revokes the reference.
+ */
+char* vfsRealPath(DentryRef dref);
+
+/**
+ * Get the current working directory string, on the heap. Remember to release with kfree().
+ */
+char* vfsGetCurrentDirPath();
+
+/**
+ * Create a hard link to the "old" path at the "new" path. Implements linkat() from POSIX. Returns
+ * 0 on success, or an error number on error.
+ */
+int vfsCreateLink(InodeRef oldstart, const char *oldpath, InodeRef newstart, const char *newpath, int flags);
+
+/**
+ * Create a symbolic link to the "old" path at the "new" path. Implements symlinkat() from POSIX. Returns
+ * 0 on success, or an error number on error. Whatever the old path is, it is simply stored as-is in the
+ * symlink inode; no checking whether the file exists is actually performed.
+ */
+int vfsCreateSymlink(const char *oldpath, InodeRef newstart, const char *newpath);
+
+/**
+ * Same as above but with flags.
+ */
+int vfsCreateSymlinkEx(const char *oldpath, InodeRef newstart, const char *newpath, int flags);
+
+/**
+ * Read the target of a symbolic link, returning it as a string on the heap. Remember to free it using kfree().
+ * Returns NULL on error, and sets ERRNO.
+ */
+char* vfsReadLinkPath(InodeRef startdir, const char *path);
+
+/**
+ * Change the times associated with the specified inode. Performs all necessary permission checks. This implements
+ * POSIX utime(), utimes(), and all the related functions. Returns 0 on success or -1 on error and sets ERRNO.
+ */
+int vfsInodeChangeTimes(Inode *inode, time_t atime, uint32_t anano, time_t mtime, uint32_t mnano);
+
+/**
+ * Change the times associated with the file at the specified path. Indirectly used to implement POSIX utime()
+ * etc. Returns 0 on success, or -1 on error and sets ERRNO.
+ */
+int vfsChangeTimes(InodeRef startdir, const char *path, time_t atime, uint32_t anano, time_t mtime, uint32_t mnano);
+
+/**
+ * Unmount the filesystem from the mountpoint at the specified path. Return 0 on success or an error number on error.
+ */
+int vfsUnmount(const char *path, int flags);
 
 /**
  * Returns a pointer to a semaphore which always has value 1.
@@ -612,38 +1078,23 @@ void vfsUnlockCreation();
 struct Semaphore_* vfsGetConstSem();
 
 /**
- * Create a system object, reference count 1.
+ * Change the executable permissions on an inode. Returns 0 on success or -1 on error and sets ERRNO.
  */
-SysObject* vfsSysCreate();
+int vfsInodeChangeXPerm(Inode *inode, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm);
 
 /**
- * Increment the reference count of a system object.
+ * Change the executable permissions on a path.
  */
-void vfsSysIncref(SysObject *sysobj);
+int vfsChangeXPerm(InodeRef startdir, const char *path, uint64_t ixperm, uint64_t oxperm, uint64_t dxperm);
 
 /**
- * Decrement the reference count of a system object, and delete it if it becomes zero.
- */
-void vfsSysDecref(SysObject *sysobj);
-
-/**
- * Link a system object into the filesystem under the given name. Returns 0 on success,
- * and increments the refcount. On error, returns one of the following errors (they may
- * be translated to different errno numbers depending on context):
+ * Given an inode representing a directory, and a key for a dentry, return the 'struct kdirent' for it. On error,
+ * returns the error number as a negative, otherwise return the size of the 'struct kdirent', and store a pointer
+ * to it at *out. The pointer is on the heap; you must release it using kfree().
  *
- * VFS_EXISTS - This file name already exists.
- * VFS_IO_ERROR - Operation not supported on the target filesystem.
- * VFS_PERM - Access to the directory was denied.
- * VFS_NO_FILE - Parent directory does not exist.
- * VFS_LONGNAME - Name is too long.
- * Other errors may come from parsePath().
+ * Returns -ENOENT if there is no dentry for the key, but if there are dentries for higher keys (and you should try
+ * them). Returns -EOVERFLOW if there is no dentry for the given key, or any higher one.
  */
-int vfsSysLink(const char *path, SysObject *sysobj);
-
-/**
- * Get a system object at the specified location. Returns NULL if the specified path does
- * not refer to a system object. This also increments the refcount.
- */
-SysObject* vfsSysGet(const char *path);
+ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out);
 
 #endif

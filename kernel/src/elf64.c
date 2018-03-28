@@ -214,43 +214,37 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	
 	Regs regs;
 	initUserRegs(&regs);
-	
-	vfsLockCreation();
-	struct stat st;
-	int error = vfsStat(path, &st);
-	if (error != 0)
+
+	int error;
+	File *fp = vfsOpen(VFS_NULL_IREF, path, O_RDONLY, 0, &error);
+	if (fp == NULL)
 	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
+		ERRNO = error;
+		return -1;
 	};
 
-	if (!vfsCanCurrentThread(&st, 1))
+	if (fp->iref.inode->ft == NULL)
 	{
-		vfsUnlockCreation();
+		vfsClose(fp);
 		ERRNO = EACCES;
 		return -1;
 	};
-
-	File *fp = vfsOpen(path, VFS_CHECK_ACCESS, &error);
-	if (fp == NULL)
-	{
-		vfsUnlockCreation();
-		return sysOpenErrno(error);
-	};
-	fp->refcount = 1;
-	vfsUnlockCreation();
-
-	if (fp->seek == NULL)
-	{
-		vfsClose(fp);
-		ERRNO = EIO;
-		return -1;
-	};
 	
-	if (fp->tree == NULL)
+	semWait(&fp->iref.inode->lock);
+	int execAllowed = vfsIsAllowed(fp->iref.inode, VFS_ACE_EXEC);
+	mode_t execmode = fp->iref.inode->mode;
+	if (fp->iref.inode->fs->flags & VFS_ST_NOSUID) execmode &= 0777;	// no suid/sgid
+	uid_t execuid = fp->iref.inode->uid;
+	gid_t execgid = fp->iref.inode->gid;
+	uint64_t exec_ixperm = fp->iref.inode->ixperm;
+	uint64_t exec_oxperm = fp->iref.inode->oxperm;
+	uint64_t exec_dxperm = fp->iref.inode->dxperm;
+	semSignal(&fp->iref.inode->lock);
+	
+	if (!execAllowed)
 	{
 		vfsClose(fp);
-		ERRNO = EIO;
+		ERRNO = EACCES;
 		return -1;
 	};
 	
@@ -262,7 +256,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		return -1;
 	};
 	
-	fp->seek(fp, 0, SEEK_SET);	// seek back to start
+	vfsSeek(fp, 0, VFS_SEEK_SET);	// seek back to start
 	
 	if (memcmp(shebang, "#!", 2) == 0)
 	{
@@ -291,7 +285,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	unsigned int i;
 	for (i=0; i<elfHeader.e_phnum; i++)
 	{
-		fp->seek(fp, elfHeader.e_phoff + i * elfHeader.e_phentsize, SEEK_SET);
+		vfsSeek(fp, elfHeader.e_phoff + i * elfHeader.e_phentsize, VFS_SEEK_SET);
 		Elf64_Phdr proghead;
 		if (vfsRead(fp, &proghead, sizeof(Elf64_Phdr)) < sizeof(Elf64_Phdr))
 		{
@@ -359,9 +353,9 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		else if (proghead.p_type == PT_INTERP)
 		{
 			// execute the interpreter instead of the requested executable
-			char interpPath[PATH_MAX];
-			memset(interpPath, 0, PATH_MAX);
-			if (proghead.p_filesz >= PATH_MAX)
+			char interpPath[256];
+			memset(interpPath, 0, 256);
+			if (proghead.p_filesz >= 256)
 			{
 				vfsClose(fp);
 				kfree(segments);
@@ -369,7 +363,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 				return -1;
 			};
 			
-			fp->seek(fp, proghead.p_offset, SEEK_SET);
+			vfsSeek(fp, proghead.p_offset, VFS_SEEK_SET);
 			if (vfsRead(fp, interpPath, proghead.p_filesz) != proghead.p_filesz)
 			{
 				vfsClose(fp);
@@ -379,8 +373,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			};
 			
 			File *execfp = fp;
-			fp = vfsOpen(interpPath, VFS_CHECK_ACCESS, &error);
-			fp->refcount = 1;
+			fp = vfsOpen(VFS_NULL_IREF, interpPath, O_RDONLY, 0, &error);
 			if (fp == NULL)
 			{
 				vfsClose(execfp);
@@ -389,7 +382,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 				return -1;
 			};
 			
-			if (fp->seek == NULL)
+			if (fp->iref.inode->ft == NULL)
 			{
 				vfsClose(execfp);
 				vfsClose(fp);
@@ -422,7 +415,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 
 			for (i=0; i<elfHeader.e_phnum; i++)
 			{
-				fp->seek(fp, elfHeader.e_phoff + i * elfHeader.e_phentsize, SEEK_SET);
+				vfsSeek(fp, elfHeader.e_phoff + i * elfHeader.e_phentsize, VFS_SEEK_SET);
 				Elf64_Phdr proghead;
 				if (vfsRead(fp, &proghead, sizeof(Elf64_Phdr)) < sizeof(Elf64_Phdr))
 				{
@@ -500,7 +493,6 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 				return -1;
 			};
 			
-			execfp->oflag = O_RDONLY;
 			ftabSet(getCurrentThread()->ftab, i, execfp, 0);
 			auxv[0].a_type = AT_EXECFD;
 			auxv[0].a_un.a_val = i;
@@ -524,8 +516,42 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	getCurrentThread()->sigdisp = sigdispExec(getCurrentThread()->sigdisp);
 
 	// thread name
-	strcpy(getCurrentThread()->name, path);
+	if (strlen(path) < 256)
+	{
+		strcpy(getCurrentThread()->name, path);
+	}
+	else
+	{
+		strcpy(getCurrentThread()->name, "<TOO LONG>");
+	};
 
+	// /proc/<pid>/exe
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, path, 0, NULL);
+	if (dref.dent != NULL)
+	{
+		char *rpath = vfsRealPath(dref);
+		dref = vfsGetDentry(VFS_NULL_IREF, "/proc/self/exe", 0, NULL);
+		if (dref.dent != NULL)
+		{
+			InodeRef iref = vfsGetInode(dref, 0, NULL);
+			if (iref.inode != NULL)
+			{
+				semWait(&iref.inode->lock);
+				kfree(iref.inode->target);
+				iref.inode->target = rpath;
+				semSignal(&iref.inode->lock);
+			}
+			else
+			{
+				kfree(rpath);
+			};
+		}
+		else
+		{
+			kfree(rpath);
+		};
+	};
+	
 	// set the execPars
 	Thread *thread = getCurrentThread();
 	if (thread->execPars != NULL) kfree(thread->execPars);
@@ -581,23 +607,23 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	ftabCloseOnExec(getCurrentThread()->ftab);
 	
 	// suid/sgid stuff
-	if (st.st_mode & VFS_MODE_SETUID)
+	if (execmode & VFS_MODE_SETUID)
 	{
 		thread->debugFlags = 0;
-		thread->creds->euid = st.st_uid;
+		thread->creds->euid = execuid;
 		thread->flags |= THREAD_REBEL;
 	};
 
-	if (st.st_mode & VFS_MODE_SETGID)
+	if (execmode & VFS_MODE_SETGID)
 	{
 		thread->debugFlags = 0;
-		thread->creds->egid = st.st_gid;
+		thread->creds->egid = execgid;
 		thread->flags |= THREAD_REBEL;
 	};
 	
 	// permissions
-	getCurrentThread()->oxperm = (getCurrentThread()->oxperm & (getCurrentThread()->dxperm & st.st_ixperm)) | st.st_oxperm;
-	getCurrentThread()->dxperm = st.st_dxperm;
+	getCurrentThread()->oxperm = (getCurrentThread()->oxperm & (getCurrentThread()->dxperm & exec_ixperm)) | exec_oxperm;
+	getCurrentThread()->dxperm = exec_dxperm;
 	
 	if (memcpy_k2u((void*)uptrPars, pars, parsz) != 0)
 	{

@@ -32,6 +32,8 @@
 
 #include <sys/glidix.h>
 #include <sys/stat.h>
+#include <sys/mount.h>
+#include <sys/fsinfo.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,7 +66,7 @@ int parseFstabLine(char *line)
 	strcpy(mountPrefix, mountpoint);
 	if (mountPrefix[strlen(mountPrefix)-1] != '/') strcat(mountPrefix, "/");
 
-	if (_glidix_mount(type, device, mountPrefix, 0) != 0)
+	if (_glidix_mount(type, device, mountPrefix, 0, NULL, 0) != 0)
 	{
 		perror(progName);
 		return 1;
@@ -158,11 +160,21 @@ int main(int argc, char *argv[])
 		}
 		else if (device == NULL)
 		{
-			device = argv[i];
+			device = realpath(argv[i], NULL);
+			if (device == NULL)
+			{
+				fprintf(stderr, "%s: cannot find %s: %s\n", argv[0], argv[i], strerror(errno));
+				return 1;
+			};
 		}
 		else
 		{
-			mountpoint = argv[i];
+			mountpoint = realpath(argv[i], NULL);
+			if (mountpoint == NULL)
+			{
+				fprintf(stderr, "%s: cannot find %s: %s\n", argv[0], argv[i], strerror(errno));
+				return 1;
+			};
 		};
 	};
 
@@ -183,30 +195,46 @@ int main(int argc, char *argv[])
 		fstype = "gxfs";
 	};
 
-	struct stat st;
-	if (stat(mountpoint, &st) == 0)
-	{
-		if (!S_ISDIR(st.st_mode))
-		{
-			fprintf(stderr, "%s: %s is not a directory\n", argv[0], mountpoint);
-			return 1;
-		};
-	}
-	else
-	{
-		fprintf(stderr, "%s: %s: %s\n", argv[0], mountpoint, strerror(errno));
-		return 1;
-	};
-
-	char mountPrefix[256];
-	strcpy(mountPrefix, mountpoint);
-	if (mountPrefix[strlen(mountPrefix)-1] != '/') strcat(mountPrefix, "/");
-
-	if (_glidix_mount(fstype, device, mountPrefix, 0) != 0)
+	if (mount(fstype, device, mountpoint, 0, NULL, 0) != 0)
 	{
 		perror(argv[0]);
 		return 1;
 	};
 
+	int fd = open("/run/fsinfo", O_WRONLY | O_APPEND);
+	if (fd == -1)
+	{
+		fprintf(stderr, "%s: warning: failed to add to /run/fsinfo: cannot open: %s\n", argv[0], strerror(errno));
+		return 1;
+	};
+	
+	struct flock lock;
+	memset(&lock, 0, sizeof(struct flock));
+	lock.l_type = F_WRLCK;
+	lock.l_whence = SEEK_SET;
+	lock.l_start = 0;
+	lock.l_len = 0;
+	
+	int status;
+	do
+	{
+		status = fcntl(fd, F_SETLKW, &lock);
+	} while (status != 0 && errno == EINTR);
+	
+	if (status != 0)
+	{
+		fprintf(stderr, "%s: warning: failed to add to /run/fsinfo: cannot acquire lock: %s\n",
+					argv[0], strerror(errno));
+		close(fd);
+		return 1;
+	};
+	
+	struct __fsinfo_record record;
+	memset(&record, 0, sizeof(struct __fsinfo_record));
+	strcpy(record.__image, device);
+	strcpy(record.__mntpoint, mountpoint);
+	write(fd, &record, sizeof(struct __fsinfo_record));
+	close(fd);
+	
 	return 0;
 };

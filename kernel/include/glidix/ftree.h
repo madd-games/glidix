@@ -38,6 +38,7 @@
  */
 #define	FT_ANON					(1 << 0)
 #define	FT_READONLY				(1 << 1)
+#define	FT_FIXED_SIZE				(1 << 2)
 
 /**
  * Describes a single node on a file page tree. There are 16 entries, indexed by each 4
@@ -105,7 +106,8 @@ typedef struct FileTree_
 	/**
 	 * Return a frame number for the specified position. If this is not NULL, it overrides the
 	 * normal behaviour, and no tree is actually in use. 'pos' is page-aligned. The returned page
-	 * will be marked as cached in pageinfo, and will never be uncached or freed.
+	 * will be marked as cached in pageinfo, and will never be uncached or freed. Return 0 if no
+	 * page exists.
 	 */
 	uint64_t (*getpage)(struct FileTree_ *ft, off_t pos);
 	
@@ -153,6 +155,11 @@ void ftDown(FileTree *ft);
  * frame has its reference count incremented.
  */
 uint64_t ftGetPage(FileTree *ft, off_t pos);
+
+/**
+ * Commit the contents of the file tree to disk.
+ */
+void ftFlush(FileTree *ft);
 
 /**
  * Read data from a file tree at the specified position.

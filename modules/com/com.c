@@ -36,53 +36,25 @@
 #include <glidix/port.h>
 #include <glidix/memory.h>
 #include <glidix/string.h>
+#include <glidix/console.h>
 
 uint16_t comPorts[4] = {0x3F8, 0x2F8, 0x3E8, 0x2E8};
 const char *comNames[4] = {"com1", "com2", "com3", "com4"};
-Device comDevs[4];
+Inode* comDevs[4];
 
-static void com_close(File *fp)
-{
-	// NOP
-};
-
-static ssize_t com_write(File *fp, const void *buffer, size_t size)
-{
-	const uint8_t *fetch = (const uint8_t*) buffer;
-	ssize_t sizeOut = 0;
-	while (size--)
-	{
-		while ((inb(*((uint16_t*)fp->fsdata) + 5) & 0x20) == 0);
-		outb(*((uint16_t*)fp->fsdata), *fetch++);
-		sizeOut++;
-	};
-	
-	return sizeOut;
-};
-
-static ssize_t com_pwrite(File *fp, const void *buffer, size_t size, off_t pos)
+static ssize_t com_pwrite(Inode *inode, File *fp, const void *buffer, size_t size, off_t pos)
 {
 	(void)pos;
 	const uint8_t *fetch = (const uint8_t*) buffer;
 	ssize_t sizeOut = 0;
 	while (size--)
 	{
-		while ((inb(*((uint16_t*)fp->fsdata) + 5) & 0x20) == 0);
-		outb(*((uint16_t*)fp->fsdata), *fetch++);
+		while ((inb(((uint16_t)(uint64_t)inode->fsdata) + 5) & 0x20) == 0);
+		outb(((uint16_t)(uint64_t)inode->fsdata), *fetch++);
 		sizeOut++;
 	};
 	
 	return sizeOut;
-};
-
-static int com_open(void *data, File *fp, size_t szFile)
-{
-	fp->fsdata = data;
-	fp->write = com_write;
-	fp->pwrite = com_pwrite;
-	fp->close = com_close;
-	
-	return 0;
 };
 
 MODULE_INIT()
@@ -101,10 +73,10 @@ MODULE_INIT()
 	
 	for (i=0; i<4; i++)
 	{
-		// because devfs frees the 'data' pointer...
-		uint16_t *ptr = NEW(uint16_t);
-		*ptr = comPorts[i];
-		comDevs[i] = AddDevice(comNames[i], ptr, com_open, 0666);
+		Inode *inode = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0666);
+		inode->fsdata = (void*) (uint64_t) comPorts[i];
+		inode->pwrite = com_pwrite;
+		devfsAdd(comNames[i], inode);
 	};
 	
 	return MODINIT_OK;
@@ -113,10 +85,10 @@ MODULE_INIT()
 MODULE_FINI()
 {
 	int i;
-	
+
 	for (i=0; i<4; i++)
 	{
-		DeleteDevice(comDevs[i]);
+		devfsRemove(comNames[i]);
 	};
 	
 	return 0;

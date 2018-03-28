@@ -72,9 +72,9 @@ typedef union
 		Socket				header_;
 		
 		/**
-		 * The system object representing the socket.
+		 * The inode representing the socket.
 		 */
-		SysObject*			sysobj;
+		Inode*				sysobj;
 		
 		/**
 		 * Socket state (see above).
@@ -107,9 +107,9 @@ typedef union
 		Message*			msgLast;
 		
 		/**
-		 * System object for the other side of the connection.
+		 * Inode for the other side of the connection.
 		 */
-		SysObject*			peer;
+		Inode*				peer;
 	} seq;
 } UnixSocket;
 
@@ -164,22 +164,24 @@ static int unixsock_bind(Socket *sock, const struct sockaddr *addr, size_t addrl
 			return -1;
 		};
 		
-		int status = vfsSysLink(unaddr->sun_path, unixsock->seq.sysobj);
-		if (status == 0)
+		int error;
+		DentryRef dref = vfsGetDentry(VFS_NULL_IREF, unaddr->sun_path, 1, &error);
+		if (dref.dent == NULL)
 		{
-			memcpy(&unixsock->seq.name, unaddr, addrlen);
-			return 0;
-		}
-		else if (status == VFS_EXISTS)
-		{
-			ERRNO = EADDRINUSE;
-			return -1;
-		}
-		else
-		{
+			vfsUnrefDentry(dref);
 			ERRNO = EADDRNOTAVAIL;
 			return -1;
 		};
+		
+		if (dref.dent->ino != 0)
+		{
+			vfsUnrefDentry(dref);
+			ERRNO = EADDRINUSE;
+			return -1;
+		};
+		
+		vfsBindInode(dref, unixsock->seq.sysobj);
+		return 0;
 	};
 	
 	ERRNO = EINVAL;
@@ -201,21 +203,21 @@ static ssize_t unixsock_sendto(Socket *sock, const void *message, size_t size, i
 			return -1;
 		};
 		
-		SysObject *sysobj = unixsock->seq.peer;
-		vfsSysIncref(sysobj);
+		Inode *sysobj = unixsock->seq.peer;
+		vfsUprefInode(sysobj);
 		
 		struct sockaddr_un myName;
 		memcpy(&myName, &unixsock->seq.name, sizeof(struct sockaddr_un));
 		semSignal(&unixsock->seq.lock);
 		
-		UnixSocket *peer = (UnixSocket*) sysobj->data;
+		UnixSocket *peer = (UnixSocket*) sysobj->fsdata;
 		semWait(&peer->seq.lock);
 		
 		if (peer->seq.state != STATE_CONNECTED)
 		{
 			// it dropped the connection
 			semSignal(&peer->seq.lock);
-			vfsSysDecref(sysobj);
+			vfsDownrefInode(sysobj);
 			ERRNO = ECONNRESET;
 			return -1;
 		};
@@ -239,7 +241,7 @@ static ssize_t unixsock_sendto(Socket *sock, const void *message, size_t size, i
 		semSignal2(&peer->seq.semMsgIn, 1);
 		semSignal(&peer->seq.lock);
 		
-		vfsSysDecref(sysobj);
+		vfsDownrefInode(sysobj);
 		return (ssize_t) size;
 	};
 	
@@ -259,7 +261,7 @@ static ssize_t unixsock_recvfrom(Socket *sock, void *buffer, size_t len, int fla
 			return -1;
 		};
 		
-		int status = semWaitGen(&unixsock->seq.semMsgIn, 1, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+		int status = semWaitGen(&unixsock->seq.semMsgIn, 1, SEM_W_FILE(sock->fp->oflags), sock->options[GSO_RCVTIMEO]);
 		if (status < 0)
 		{
 			ERRNO = -status;
@@ -330,13 +332,13 @@ static ssize_t unixsock_recvfrom(Socket *sock, void *buffer, size_t len, int fla
 	};
 };
 
-static void unixsock_remove(SysObject *sysobj)
+static void unixsock_free(Inode *sysobj)
 {
 	// we can safely free the socket now
 	// (the file descriptor for it is definitely closed, because otherwise the reference
 	// count of the sysobj would not drop to zero)
 	// TODO: clean up the queue and stuff
-	Socket *sock = (Socket*) sysobj->data;
+	Socket *sock = (Socket*) sysobj->fsdata;
 	FreeSocket(sock);
 };
 
@@ -350,20 +352,20 @@ static void unixsock_close(Socket *sock)
 			semWait(&unixsock->seq.lock);
 			unixsock->seq.state = STATE_CLOSED;
 			
-			SysObject *sysobj = unixsock->seq.peer;
+			Inode *sysobj = unixsock->seq.peer;
 			// don't incref: we're destroying the refrence
 			
 			semSignal(&unixsock->seq.lock);
 			
-			UnixSocket *peer = (UnixSocket*) sysobj->data;
+			UnixSocket *peer = (UnixSocket*) sysobj->fsdata;
 			semWait(&peer->seq.lock);
 			semTerminate(&peer->seq.semMsgIn);
 			semSignal(&peer->seq.lock);
 			
-			vfsSysDecref(sysobj);
+			vfsDownrefInode(sysobj);
 		};
 		
-		vfsSysDecref(unixsock->seq.sysobj);
+		vfsDownrefInode(unixsock->seq.sysobj);
 	};
 };
 
@@ -402,18 +404,18 @@ static int unixsock_getpeername(Socket *sock, struct sockaddr *addr, size_t *add
 		};
 		
 		// 'peer' is never NULL if the state is STATE_CONNECTED
-		SysObject *sysobj = unixsock->seq.peer;
-		vfsSysIncref(sysobj);
+		Inode *sysobj = unixsock->seq.peer;
+		vfsUprefInode(sysobj);
 		
 		semSignal(&unixsock->seq.lock);
 		
-		UnixSocket *peer = (UnixSocket*) sysobj->data;
+		UnixSocket *peer = (UnixSocket*) sysobj->fsdata;
 		semWait(&peer->seq.lock);
 		
 		memcpy(addr, &peer->seq.name, addrlen);
 		semSignal(&peer->seq.lock);
 		
-		vfsSysDecref(sysobj);
+		vfsDownrefInode(sysobj);
 		return 0;
 	};
 	
@@ -511,24 +513,29 @@ static int unixsock_connect(Socket *sock, const struct sockaddr *addr, size_t ad
 			return -1;
 		};
 		
-		SysObject *sysobj = vfsSysGet(unaddr->sun_path);
-		if (sysobj == NULL)
+		int error;
+		File *fp = vfsOpen(VFS_NULL_IREF, unaddr->sun_path, O_RDWR, 0644, &error);
+		if (fp == NULL)
 		{
 			ERRNO = ECONNREFUSED;
 			return -1;
 		};
+		
+		Inode *sysobj = fp->iref.inode;
+		vfsUprefInode(sysobj);
+		vfsClose(fp);
 		
 		if ((sysobj->mode & 0xF000) != VFS_MODE_SOCKET)
 		{
-			vfsSysDecref(sysobj);
+			vfsDownrefInode(sysobj);
 			ERRNO = ECONNREFUSED;
 			return -1;
 		};
 		
-		Socket *listensock = (Socket*) sysobj->data;
+		Socket *listensock = (Socket*) sysobj->fsdata;
 		if ((listensock->domain != AF_UNIX) || (listensock->type != SOCK_SEQPACKET))
 		{
-			vfsSysDecref(sysobj);
+			vfsDownrefInode(sysobj);
 			ERRNO = ECONNREFUSED;
 			return -1;
 		};
@@ -539,7 +546,7 @@ static int unixsock_connect(Socket *sock, const struct sockaddr *addr, size_t ad
 		if (unixlisten->seq.state != STATE_LISTENING)
 		{
 			semSignal(&unixlisten->seq.lock);
-			vfsSysDecref(sysobj);
+			vfsDownrefInode(sysobj);
 			ERRNO = ECONNREFUSED;
 			return -1;
 		};
@@ -548,8 +555,8 @@ static int unixsock_connect(Socket *sock, const struct sockaddr *addr, size_t ad
 		UnixSocket *newunix = CreateUnixSocket(SOCK_SEQPACKET);
 		newunix->seq.state = STATE_CONNECTED;
 		newunix->seq.peer = unixsock->seq.sysobj;
-		vfsSysIncref(unixsock->seq.sysobj);
-		vfsSysIncref(newunix->seq.sysobj);	// it's now in the queue and connected to us (refcount 2)
+		vfsUprefInode(unixsock->seq.sysobj);
+		vfsUprefInode(newunix->seq.sysobj);	// it's now in the queue and connected to us (refcount 2)
 		
 		Socket *newsock = (Socket*) newunix;
 		newsock->domain = AF_UNIX;
@@ -611,7 +618,7 @@ Socket* unixsock_accept(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 			unaddr->sun_path[0] = 0;
 		};
 		
-		int status = semWaitGen(&unixsock->seq.semConnWaiting, 1, SEM_W_FILE(sock->fp->oflag),
+		int status = semWaitGen(&unixsock->seq.semConnWaiting, 1, SEM_W_FILE(sock->fp->oflags),
 						sock->options[GSO_RCVTIMEO]);
 		if (status < 0)
 		{
@@ -649,10 +656,9 @@ UnixSocket* CreateUnixSocket(int type)
 	
 	if (type == SOCK_SEQPACKET)
 	{
-		unixsock->seq.sysobj = vfsSysCreate();
-		unixsock->seq.sysobj->data = unixsock;
-		unixsock->seq.sysobj->mode = VFS_MODE_SOCKET | 0644;
-		unixsock->seq.sysobj->remove = unixsock_remove;
+		unixsock->seq.sysobj = vfsCreateInode(NULL, VFS_MODE_SOCKET | 0644);
+		unixsock->seq.sysobj->fsdata = unixsock;
+		unixsock->seq.sysobj->free = unixsock_free;
 		unixsock->seq.state = STATE_CLOSED;
 		semInit(&unixsock->seq.lock);
 		semInit2(&unixsock->seq.semMsgIn, 0);

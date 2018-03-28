@@ -8,11 +8,11 @@
 	modification, are permitted provided that the following conditions are met:
 	
 	* Redistributions of source code must retain the above copyright notice, this
-	  list of conditions and the following disclaimer.
+		list of conditions and the following disclaimer.
 	
 	* Redistributions in binary form must reproduce the above copyright notice,
-	  this list of conditions and the following disclaimer in the documentation
-	  and/or other materials provided with the distribution.
+		this list of conditions and the following disclaimer in the documentation
+		and/or other materials provided with the distribution.
 	
 	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -36,47 +36,74 @@
 #include <fcntl.h>
 
 /**
- * Formats a disk or partition to the Glidix V2 filesystem (GXFS2).
+ * Formats a disk or partition to the Glidix V3 filesystem (GXFS3).
  */
 
-#define	GXFS_MAGIC				(*((const uint64_t*)"GLIDIXFS"))
+#define	GXFS_MAGIC				(*((const uint64_t*)"__GXFS__"))
+
+#define	GXFS_FEATURE_BASE			(1 << 0)
 
 typedef struct
 {
-	uint64_t				sbMagic;
-	uint8_t					sbMGSID[16];
-	uint64_t				sbFormatTime;
-	uint64_t				sbTotalBlocks;
-	uint64_t				sbChecksum;
-	uint64_t				sbUsedBlocks;
-	uint64_t				sbFreeHead;
-	uint8_t					sbPad[512-0x40];
-} Superblock;
+	uint64_t sbhMagic;
+	uint8_t  sbhBootID[16];
+	uint64_t sbhFormatTime;
+	uint64_t sbhWriteFeatures;
+	uint64_t sbhReadFeatures;
+	uint64_t sbhOptionalFeatures;
+	uint64_t sbhResv[2];
+	uint64_t sbhChecksum;
+} GXFS_SuperblockHeader;
 
 typedef struct
 {
-	uint16_t				inoOwner;
-	uint16_t				inoGroup;
-	uint16_t				inoMode;
-	uint16_t				inoTreeDepth;
-	uint64_t				inoLinks;
-	uint64_t				inoSize;
-	uint64_t				inoBirthTime;
-	uint64_t				inoChangeTime;
-	uint64_t				inoModTime;
-	uint64_t				inoAccessTime;
-	uint32_t				inoBirthNano;
-	uint32_t				inoChangeNano;
-	uint32_t				inoModNano;
-	uint32_t				inoAccessNano;
-	uint64_t				inoIXPerm;
-	uint64_t				inoOXPerm;
-	uint64_t				inoDXPerm;
-	uint64_t				inoRoot;
-	uint64_t				inoACL;
-	char					inoPath[256];
-	uint8_t					inoPad[512-0x170];
-} Inode;
+	uint64_t sbbResvBlocks;
+	uint64_t sbbUsedBlocks;
+	uint64_t sbbTotalBlocks;
+	uint64_t sbbFreeHead;
+	uint64_t sbbLastMountTime;
+	uint64_t sbbLastCheckTime;
+	uint64_t sbbRuntimeFlags;
+} GXFS_SuperblockBody;
+
+typedef struct
+{
+	uint32_t arType;	/* "ATTR" */
+	uint32_t arRecordSize;	/* sizeof(GXFS_AttrRecord) */
+	uint64_t arLinks;
+	uint32_t arFlags;
+	uint16_t arOwner;
+	uint16_t arGroup;
+	uint64_t arSize;
+	uint64_t arATime;
+	uint64_t arMTime;
+	uint64_t arCTime;
+	uint64_t arBTime;
+	uint32_t arANano;
+	uint32_t arMNano;
+	uint32_t arCNano;
+	uint32_t arBNano;
+	uint64_t arIXPerm;
+	uint64_t arOXPerm;
+	uint64_t arDXPerm;
+} GXFS_AttrRecord;
+
+typedef struct
+{
+	uint32_t drType;	/* "DENT" */
+	uint32_t drRecordSize;	/* sizeof(GXFS_DentRecord) + strlen(filename), 8-byte-aligned */
+	uint64_t drInode;
+	uint8_t drInoType;
+	char drName[];
+} GXFS_DentRecord;
+
+typedef struct
+{
+	uint32_t trType;	/* "TREE" */
+	uint32_t trSize;	/* sizeof(GXFS_TreeRecord) */
+	uint64_t trDepth;
+	uint64_t trHead;
+} GXFS_TreeRecord;
 
 void generateMGSID(uint8_t *buffer)
 {
@@ -136,10 +163,17 @@ void generateMGSID(uint8_t *buffer)
 	};
 };
 
-void doSuperblockChecksum(Superblock *sb)
+void doChecksum(uint64_t *ptr)
 {
-	uint64_t *scan = (uint64_t*) sb;
-	sb->sbChecksum = -(scan[0] + scan[1] + scan[2] + scan[3] + scan[4]);
+	size_t count = 9;		/* 9 quadwords before the sbhChecksum field */
+	uint64_t state = 0xF00D1234BEEFCAFEUL;
+	
+	while (count--)
+	{
+		state = (state << 1) ^ (*ptr++);
+	};
+	
+	*ptr = state;
 };
 
 int main(int argc, char *argv[])
@@ -201,46 +235,96 @@ int main(int argc, char *argv[])
 	// after formatting, you should install the bootloader if that is necessary
 	write(fd, "\xCD\x18", 2);
 	
-	uint64_t numBlocks = (st.st_size - 0x200000)/512;
-	uint64_t formatTime = (uint64_t) time(NULL);
+	// create the superblock
+	char block[4096];
+	memset(block, 0, 4096);
 	
-	Superblock sb;
-	memset(&sb, 0, 512);
-	sb.sbMagic = GXFS_MAGIC;
-	generateMGSID(sb.sbMGSID);
-	sb.sbFormatTime = formatTime;
-	sb.sbTotalBlocks = numBlocks;
-	doSuperblockChecksum(&sb);
-	sb.sbUsedBlocks = 3;
-	sb.sbFreeHead = 0;
+	GXFS_SuperblockHeader *sbh = (GXFS_SuperblockHeader*) block;
+	GXFS_SuperblockBody *sbb = (GXFS_SuperblockBody*) &sbh[1];
 	
-	// block 0
-	lseek(fd, 0x200000, SEEK_SET);
-	write(fd, &sb, 512);
+	time_t formatTime = time(NULL);
+	sbh->sbhMagic = GXFS_MAGIC;
+	generateMGSID(sbh->sbhBootID);
+	sbh->sbhFormatTime = formatTime;
+	sbh->sbhWriteFeatures = GXFS_FEATURE_BASE;
+	sbh->sbhReadFeatures = GXFS_FEATURE_BASE;
+	sbh->sbhOptionalFeatures = 0;
+	doChecksum((uint64_t*) sbh);
+
+	sbb->sbbResvBlocks = 8;
+	sbb->sbbUsedBlocks = 9;			/* reserved + /boot (inode 8) */
+	sbb->sbbTotalBlocks = (st.st_size - 0x200000) >> 12;
+	sbb->sbbFreeHead = 0;
+	sbb->sbbLastMountTime = formatTime;
+	sbb->sbbLastCheckTime = formatTime;
+	sbb->sbbRuntimeFlags = 0;
 	
-	// block 1; zero it all out. we allocate it to the root directory
-	char zeroes[512];
-	memset(zeroes, 0, 512);
-	write(fd, zeroes, 512);
+	pwrite(fd, block, 4096, 0x200000);
 	
-	// block 2: root directory inode
-	Inode ino;
-	memset(&ino, 0, 512);
-	ino.inoOwner = 0;
-	ino.inoGroup = 0;
-	ino.inoMode = 011775;	/* directory, sticky, owner RWX, group RWX, world RX */
-	ino.inoTreeDepth = 0;
-	ino.inoLinks = 1;
-	ino.inoSize = 0;
-	ino.inoBirthTime = formatTime;
-	ino.inoChangeTime = formatTime;
-	ino.inoModTime = formatTime;
-	ino.inoAccessTime = formatTime;
-	// leave the nanotimes as zero
-	// leave executable permissions as zero
-	ino.inoRoot = 1;
-	// ACL and path zero
-	write(fd, &ino, 512);
+	// create the "bad blocks" inode
+	memset(block, 0, 4096);
+	
+	// (skip over the inode header, ihNext=0)
+	GXFS_AttrRecord *ar = (GXFS_AttrRecord*) &block[8];
+	ar->arType = (*((const uint32_t*)"ATTR"));
+	ar->arRecordSize = sizeof(GXFS_AttrRecord);
+	ar->arLinks = 1;
+	ar->arFlags = 0600;	// regular file, only accessible to root
+	ar->arOwner = 0;
+	ar->arGroup = 0;
+	ar->arSize = 0;
+	ar->arATime = ar->arMTime = ar->arCTime = ar->arBTime = formatTime;
+	
+	pwrite(fd, block, 4096, 0x201000);
+	
+	// create the root directory inode (again, skip inode header, ihNext=0)
+	// ar already set to the right place
+	// also create a "/boot" entry
+	ar->arFlags = 0x1000 | 01755;	// directory, sticky, mode 755
+	GXFS_DentRecord *dr = (GXFS_DentRecord*) &ar[1];
+	dr->drType = (*((const uint32_t*)"DENT"));
+	dr->drRecordSize = 24;
+	dr->drInode = 8;		/* use inode 8 for the /boot directory */
+	dr->drInoType = 1;		/* type = directory */
+	strcpy(dr->drName, "boot");
+	pwrite(fd, block, 4096, 0x202000);
+	
+	// inode 8 (/boot) is almost the same
+	ar->arFlags = 0x1000 | 0755;
+	// size the same
+	dr->drInode = 3;
+	dr->drInoType = 3;		/* "block device" */
+	strcpy(dr->drName, "loader");
+	pwrite(fd, block, 4096, 0x208000);
+	
+	// now onto inode 3
+	memset(block, 0, 4096);
+	ar->arType = (*((const uint32_t*)"ATTR"));
+	ar->arRecordSize = sizeof(GXFS_AttrRecord);
+	ar->arLinks = 1;
+	ar->arFlags = 0x13000 | 0600;	// fixed size, block device, only accessible to root
+	ar->arOwner = 0;
+	ar->arGroup = 0;
+	ar->arSize = 2 * 1024 * 1024;	// 2MB
+	ar->arATime = ar->arMTime = ar->arCTime = ar->arBTime = formatTime;
+	
+	GXFS_TreeRecord *tr = (GXFS_TreeRecord*) &ar[1];
+	tr->trType = (*((const uint32_t*)"TREE"));
+	tr->trSize = sizeof(GXFS_TreeRecord);
+	tr->trDepth = 1;
+	tr->trHead = 4;
+	
+	pwrite(fd, block, 4096, 0x203000);
+	
+	// finally the pointer block (4)
+	uint64_t *table = (uint64_t*) block;
+	int i;
+	for (i=0; i<512; i++)
+	{
+		table[i] = (uint64_t) (i-512);
+	};
+	
+	pwrite(fd, block, 4096, 0x204000);
 	
 	// thanks
 	close(fd);

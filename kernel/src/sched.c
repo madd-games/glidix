@@ -31,6 +31,7 @@
 #include <glidix/string.h>
 #include <glidix/console.h>
 #include <glidix/spinlock.h>
+#include <glidix/semaphore.h>
 #include <glidix/errno.h>
 #include <glidix/apic.h>
 #include <glidix/time.h>
@@ -41,6 +42,7 @@
 #include <glidix/signal.h>
 #include <glidix/trace.h>
 #include <glidix/ftree.h>
+#include <glidix/procfs.h>
 
 Thread firstThread;
 PER_CPU Thread *currentThread;		// don't make it static; used by syscall.asm
@@ -130,6 +132,7 @@ void dumpRunqueue()
 Creds *credsNew()
 {
 	Creds *creds = NEW(Creds);
+	memset(creds, 0, sizeof(Creds));
 	creds->refcount = 1;
 	creds->pid = 1;
 	creds->ppid = 1;
@@ -143,6 +146,10 @@ Creds *credsNew()
 	creds->ps.ps_ticks = 0;
 	creds->ps.ps_entries = 0;
 	creds->ps.ps_quantum = quantumTicks;
+	creds->rootdir = vfsGetRoot();
+	creds->cwd = vfsGetCurrentDir();
+	semInit(&creds->semDir);
+	procfsCreate(1, creds->pid);
 	return creds;
 };
 
@@ -154,6 +161,13 @@ Creds *credsDup(Creds *old)
 	new->ps.ps_ticks = 0;
 	new->ps.ps_entries = 0;
 	new->ps.ps_quantum = quantumTicks;
+	new->pid = __sync_fetch_and_add(&nextPid, 1);
+	semWait(&old->semDir);
+	new->rootdir = vfsCopyInodeRef(old->rootdir);
+	new->cwd = vfsCopyInodeRef(old->cwd);
+	semSignal(&old->semDir);
+	semInit(&new->semDir);
+	procfsCreate(old->pid, new->pid);
 	return new;
 };
 
@@ -167,6 +181,7 @@ void credsDownref(Creds *creds)
 	int oldCount = __sync_fetch_and_add(&creds->refcount, -1);
 	if (oldCount == 1)
 	{
+		procfsDelete(creds->pid);
 		spinlockAcquire(&notifLock);
 		
 		// orphanate all children of this process
@@ -243,6 +258,10 @@ void credsDownref(Creds *creds)
 
 		spinlockRelease(&notifLock);
 		
+		// release directories
+		vfsUnrefInode(creds->rootdir);
+		vfsUnrefInode(creds->cwd);
+		
 		// send the SIGCHLD signal to the parent
 		siginfo_t siginfo;
 		siginfo.si_signo = SIGCHLD;
@@ -314,9 +333,6 @@ void initSched()
 	// no credentials for kernel threads
 	firstThread.creds = NULL;
 	firstThread.thid = 0;
-
-	// set the working directory to /initrd by default.
-	strcpy(firstThread.cwd, "/initrd");
 
 	// no error ptr
 	firstThread.errnoptr = NULL;
@@ -507,6 +523,9 @@ extern void reloadTR();
 
 static void jumpToTask()
 {
+	// set /proc/self target on current CPU
+	if (currentThread->creds != NULL) procfsSetPid(currentThread->creds->pid);
+	
 	// switch kernel stack
 	cli();
 	localTSSPtr->rsp0 = ((uint64_t) currentThread->stack + currentThread->stackSize) & ~0xFUL;
@@ -788,9 +807,6 @@ Thread* CreateKernelThread(KernelThreadEntry entry, KernelThreadParams *params, 
 	
 	thread->oxperm = XP_ALL;
 	thread->dxperm = XP_ALL;
-	
-	// start all kernel threads in "/initrd"
-	strcpy(thread->cwd, "/initrd");
 
 	// no errnoptr
 	thread->errnoptr = NULL;
@@ -998,15 +1014,11 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 			thread->creds = credsNew();
 		};
 	};
-
+	
 	// assign pid/thid
 	cli();
 	spinlockAcquire(&schedLock);
-	if ((flags & CLONE_THREAD) == 0)
-	{
-		thread->creds->pid = nextPid++;
-	};
-	thread->thid = nextPid++;
+	thread->thid = __sync_fetch_and_add(&nextPid, 1);
 	spinlockRelease(&schedLock);
 	sti();
 	
@@ -1040,9 +1052,6 @@ int threadClone(Regs *regs, int flags, MachineState *state)
 			thread->ftab = ftabCreate();
 		};
 	};
-	
-	// inherit the working directory
-	strcpy(thread->cwd, currentThread->cwd);
 
 	// inherit signal mask
 	thread->sigmask = currentThread->sigmask;
@@ -1162,6 +1171,7 @@ void threadExitEx(uint64_t retval)
 	};
 	
 	vmUnmapThread();
+	kfree(currentThread->ktu);
 	
 	spinlockAcquire(&notifLock);
 	if ((currentThread->flags & THREAD_DETACHED) == 0)
@@ -1783,6 +1793,8 @@ int signalThid(int thid, int sig)
 
 int havePerm(uint64_t xperm)
 {
+	if (currentThread == NULL) return 1;
+	
 	if (currentThread->creds == NULL)
 	{
 		// the kernel can do anything

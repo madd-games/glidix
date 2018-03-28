@@ -44,31 +44,13 @@
 #include <dirent.h>
 #include <time.h>
 #include <errno.h>
+#include <sys/mount.h>
+#include <sys/statvfs.h>
+#include <sys/module.h>
 
 int shouldHalt = 0;
 int shouldRunPoweroff = 0;
 int ranPoweroff = 0;
-
-//char* confRootType = NULL;
-//char* confRootDevice = NULL;
-//char** confExec = NULL;
-
-struct fsinfo startupFSList[256];
-size_t startupFSCount;
-
-int isStartupFS(struct fsinfo *info)
-{
-	size_t i;
-	for (i=0; i<256; i++)
-	{
-		if (info->fs_dev == startupFSList[i].fs_dev)
-		{
-			return 1;
-		};
-	};
-	
-	return 0;
-};
 
 void loadmods()
 {
@@ -182,18 +164,27 @@ int killNextProcess()
 			char parentPath[256];
 			char exePath[256];
 			char procName[256];
+			char parentLink[256];
 			sprintf(parentPath, "/proc/%s/parent", ent->d_name);
 			sprintf(exePath, "/proc/%s/exe", ent->d_name);
 			procName[readlink(exePath, procName, 256)] = 0;
 			
+			int iAmParent = 0;
 			if (stat(parentPath, &st) != 0)
 			{
-				printf("init: failed to stat %s: %s\n", parentPath, strerror(errno));
-				printf("init: assuming process terminated\n");
-				continue;
+				// if the 'parent' link is broken, it means 'init' is indeed the parent
+				iAmParent = 1;
+			}
+			else
+			{
+				parentLink[readlink(parentPath, parentLink, 256)] = 0;
+				if (strcmp(parentLink, "../1") == 0)
+				{
+					iAmParent = 1;
+				};
 			};
 			
-			if (st.st_rdev == 1)
+			if (iAmParent)
 			{
 				int pid;
 				sscanf(ent->d_name, "%d", &pid);
@@ -270,25 +261,23 @@ void shutdownSystem(int action)
 		close(fd);
 	};
 	
-	printf("init: unmounting non-startup filesystems...\n");
+	printf("init: unmounting filesystems...\n");
 	struct fsinfo currentFSList[256];
 	size_t count = _glidix_fsinfo(currentFSList, 256);
 	
-	size_t i;
-	for (i=0; i<count; i++)
+	int i;
+	for (i=count; i<=0; i--)
 	{
-		if (!isStartupFS(&currentFSList[i]))
+		if (unmount(currentFSList[i].fs_mntpoint, 0) != 0)
 		{
-			if (_glidix_unmount(currentFSList[i].fs_mntpoint) != 0)
-			{
-				printf("init: failed to unmount %s: %s\n", currentFSList[i].fs_mntpoint, strerror(errno));
-				printf("init: waiting 5 seconds and skipping this filesystem\n");
-				sleep(5);
-			};
+			printf("init: failed to unmount %s: %s\n", currentFSList[i].fs_mntpoint, strerror(errno));
+			printf("init: waiting 5 seconds and skipping this filesystem\n");
+			sleep(5);
 		};
 	};
 	
 	printf("init: removing all kernel modules...\n");
+#if 0
 	DIR *dirp = opendir("/sys/mod");
 	if (dirp == NULL)
 	{
@@ -316,6 +305,23 @@ void shutdownSystem(int action)
 		
 		closedir(dirp);
 	};
+#endif
+	
+	struct modstat ms;
+	for (i=0; i<512; i++)
+	{
+		if (modstat(i, &ms) == 0)
+		{
+			if (rmmod(ms.mod_name, 0) != 0)
+			{
+				printf("init: failed to rmmod %s: %s\n", ms.mod_name, strerror(errno));
+				printf("Report this problem to the module developer.\n");
+				printf("I will now hang, you may turn off power manually.\n");
+				printf("If the problem persists, remove the module for your safety.\n");
+				while (1) pause();
+			};
+		};
+	};
 	
 	printf("init: bringing the system down...\n");
 	_glidix_down(action);
@@ -331,42 +337,29 @@ void id_to_string(char *buffer, uint8_t *bootid)
 };
 
 char **devList = NULL;
+char *rootImage = NULL;
 
 int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *bootid)
 {
 	// try mounting it first
-	if (_glidix_mount(fstype, image, "/", 0) != 0)
+	if (mount(fstype, image, "/rootfs", 0, NULL, 0) != 0)
 	{
 		return -1;
 	};
 	
 	// if it mounted correctly, verify that the boot ID is as expected
-	struct fsinfo list[256];
-	size_t count = _glidix_fsinfo(list, 256);
-
-	size_t i;
-	for (i=0; i<count; i++)
+	struct statvfs st;
+	if (statvfs("/rootfs", &st) == 0)
 	{
-		if (strcmp(list[i].fs_mntpoint, "/") == 0)
+		if (memcmp(bootid, st.f_bootid, 16) == 0)
 		{
-			char idbuf[33];
-			id_to_string(idbuf, list[i].fs_bootid);
-
-			printf("init: boot ID of %s on %s is %s\n", fstype, image, idbuf);
-			if (memcmp(list[i].fs_bootid, bootid, 16) == 0)
-			{
-				printf("init: root filesystem detected as %s on %s\n", fstype, image);
-				return 0;
-			}
-			else
-			{
-				break;
-			};
+			rootImage = strdup(image);
+			return 0;
 		};
 	};
 	
-	// not the correct ID, unmount
-	_glidix_unmount("/");
+	// not the right boot ID, unmount
+	unmount("/rootfs", 0);
 	return -1;
 };
 
@@ -384,6 +377,13 @@ int try_mount_root_with_type(const char *fstype, uint8_t *bootid)
 
 int try_mount_root()
 {
+	// create the /rootfs directory
+	if (mkdir("/rootfs", 0755) != 0)
+	{
+		fprintf(stderr, "init: failed to create /rootfs: %s\n", strerror(errno));
+		return -1;
+	};
+	
 	// get the list of devices
 	size_t numDevs = 0;
 	DIR *dirp = opendir("/dev");
@@ -447,6 +447,10 @@ int main(int argc, char *argv[])
 {	
 	if (getpid() == 1)
 	{
+		if (open("/dev/tty0", O_RDWR) != 0) return 1;
+		if (dup(0) != 1) return 1;
+		if (dup(1) != 2) return 1;
+		
 		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
 		setenv("HOME", "/root", 1);
 		setenv("LD_LIBRARY_PATH", "/usr/local/lib:/usr/lib:/lib", 1);
@@ -476,14 +480,6 @@ int main(int argc, char *argv[])
 			perror("sigaction SIGHUP");
 			return 1;
 		};
-
-		// get the list of "startup filesystems", which shall not be unmounted when shutting down
-		startupFSCount = _glidix_fsinfo(startupFSList, 256);
-		
-		_glidix_mount("ramfs", ".tmp", "/tmp/", 0);
-		_glidix_mount("ramfs", ".run", "/run/", 0);
-		_glidix_mount("ramfs", ".run", "/var/run/", 0);
-		_glidix_mount("ramfs", ".run", "/", 0);
 		
 		if (mkdir("/sem", 01777) != 0)
 		{
@@ -491,7 +487,7 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 		
-		_glidix_unmount("/");
+		_glidix_unmount("/", 0);
 		loadmods();
 		
 		printf("init: initializing partitions...\n");
@@ -504,9 +500,78 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 		
+		printf("init: setting up second-level filesystem...\n");
+		if (mount("bind", "/dev", "/rootfs/dev", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /dev");
+			return 1;
+		};
+
+		if (mount("bind", "/proc", "/rootfs/proc", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /proc");
+			return 1;
+		};
+
+		if (mount("bind", "/initrd", "/rootfs/initrd", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /initrd");
+			return 1;
+		};
+
+		if (mount("bind", "/run", "/rootfs/run", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /run");
+			return 1;
+		};
+
+		if (mount("bind", "/run", "/rootfs/var/run", 0, NULL, 0) != 0)
+		{
+			perror("init: bind /var/run");
+			return 1;
+		};
+
+		printf("init: setting up fsinfo...\n");
+		int fd = open("/run/fsinfo", O_WRONLY | O_CREAT | O_EXCL, 0644);
+		if (fd == -1)
+		{
+			perror("init: open /run/fsinfo");
+			return 1;
+		};
+		
+		struct __fsinfo_record record;
+		memset(&record, 0, sizeof(struct __fsinfo_record));
+		strcpy(record.__image, rootImage);
+		strcpy(record.__mntpoint, "/");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__image, "none");
+		strcpy(record.__mntpoint, "/dev");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__mntpoint, "/proc");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__mntpoint, "/initrd");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__mntpoint, "/run");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		strcpy(record.__mntpoint, "/var/run");
+		write(fd, &record, sizeof(struct __fsinfo_record));
+		close(fd);
+		
 		printf("init: executing startup script...\n");
 		if (fork() == 0)
 		{
+			if (chdir("/rootfs") != 0)
+			{
+				fprintf(stderr, "init: cannot switch to /rootfs: %s\n", strerror(errno));
+				_exit(1);
+			};
+			
+			if (chroot("/rootfs") != 0)
+			{
+				fprintf(stderr, "init: failed to set root directory to /rootfs: %s\n", strerror(errno));
+				_exit(1);
+			};
+			
 			execl("/bin/sh", "/bin/sh", "/etc/init/startup.sh", NULL);
 			perror("init: exec");
 			_exit(1);

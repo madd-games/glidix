@@ -28,14 +28,6 @@
 
 #include "gxboot.h"
 
-#define	GXBOOT_DEBUG
-
-#ifdef GXBOOT_DEBUG
-#	define	dtermput		termput
-#else
-#	define	dtermput(...)
-#endif
-
 int consoleX, consoleY;
 char *vidmem = (char*) 0xB8000;
 extern dword_t part_start;
@@ -223,37 +215,7 @@ void bmain()
 	consoleY = 0;
 	memset(vidmem, 0, 80*25*2);
 	
-	dtermput("Validating superblock... ");
-	blockBase = (qword_t) part_start + 0x1000;
-	dap.offset = (word_t) (dword_t) sectorBuffer;
-	dap.numSectors = 1;
-	
-	Superblock sb;
-	readBlock(0, &sb);
-	
-	if (memcmp(sb.sbMagic, "GLIDIXFS", 8) != 0)
-	{
-		dtermput("FAILED\n");
-		termput("ERROR: Superblock invalid (no GLIDIXFS magic value)\n");
-		return;
-	};
-	
-	qword_t sum = 0;
-	qword_t *scan;
-	
-	for (scan=(qword_t*)&sb; scan<=&sb.sbChecksum; scan++)
-	{
-		sum += *scan;
-	};
-	
-	if (sum != 0)
-	{
-		dtermput("FAILED\n");
-		termput("ERROR: Superblock invalid (bad checksum)\n");
-		return;
-	};
-	
-	dtermput("OK\n");
+	fsInit();
 	
 	dtermput("Finding /boot/vmglidix.tar... ");
 	FileHandle initrd;
@@ -271,7 +233,7 @@ void bmain()
 	qword_t size;
 	int found = 0;
 	
-	while (pos < initrd.inode.inoSize)
+	while (pos < initrd.size)
 	{
 		TARFileHeader header;
 		
@@ -375,7 +337,7 @@ void bmain()
 		return;
 	};
 	
-	readFile(&initrd, initrdStart, initrd.inode.inoSize, 0);
+	readFile(&initrd, initrdStart, initrd.size, 0);
 	dtermput("OK\n");
 	
 	char *elfPtr = (char*) initrdStart + pos;
@@ -526,12 +488,12 @@ void bmain()
 	kinfo->pml4Phys = (dword_t) pml4;
 	kinfo->mmapSize = mmapSize;
 	kinfo->mmapVirt = mmapBase;
-	kinfo->initrdSize = initrd.inode.inoSize;
+	kinfo->initrdSize = initrd.size;
 	kinfo->end = (qword_t) (dword_t) balloc(0x1000, 0);
 	kinfo->initrdSymtabOffset = (qword_t) (dword_t) ((char*) symtab - (char*) initrdStart);
 	kinfo->initrdStrtabOffset = (qword_t) (dword_t) ((char*) strings - (char*) initrdStart);
 	kinfo->numSymbols = numSyms;
-	memcpy(kinfo->bootID, sb.sbMGSID, 16);
+	memcpy(kinfo->bootID, fsBootID, 16);
 	
 	// identity-map our area
 	// we allocate this AFTER passing the end pointer to the kernel, because it's temporary.

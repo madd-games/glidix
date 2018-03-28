@@ -89,7 +89,6 @@ int		truncate(const char *path, off_t length);
 long		fpathconf(int fd, int name);
 long		pathconf(const char *path, int name);
 long		sysconf(int name);
-int		rmdir(const char *path);
 int		access(const char *path, int amode);
 int		getdtablesize(void);
 int		getopt(int argc, char* const argv[], const char* optstring);
@@ -101,6 +100,9 @@ int		tcsetpgrp(int fd, pid_t pgrp);
 int		lockf(int fd, int cmd, off_t len);
 char*		getlogin();
 int		getlogin_r(char *buf, size_t bufsize);
+int		isatty(int fd);
+char*		getcwd(char*, size_t);
+ssize_t		readlink(const char *path, char *buf, size_t bufsiz);
 
 /* implemented by libglidix directly */
 ssize_t		write(int fildes, const void *buf, size_t nbyte);
@@ -110,7 +112,6 @@ off_t		lseek(int fildes, off_t pos, int whence);
 void		_exit(int status);
 int		pause();
 int		chdir(const char *path);
-char*		getcwd(char*, size_t);
 int		fsync(int fd);
 int		chown(const char *path, uid_t uid, gid_t gid);
 int		fchown(int fd, uid_t uid, gid_t gid);
@@ -132,11 +133,9 @@ int		setegid(gid_t);
 int		setgid(gid_t);
 int		setregid(gid_t, gid_t);
 int		link(const char *oldname, const char *newname);
-ssize_t		readlink(const char *path, char *buf, size_t bufsiz);
 int		symlink(const char *oldname, const char *newname);
 unsigned	sleep(unsigned seconds);
 int		getgroups(int count, gid_t *out);
-int		isatty(int fd);
 int		getpid();
 void		_exit(int status);
 int		getppid();
@@ -149,6 +148,8 @@ ssize_t		pread(int fd, void *buf, size_t count, off_t offset);
 ssize_t		pwrite(int fd, const void *buf, size_t count, off_t offset);
 void		sync();
 int		nice(int incr);
+int		chroot(const char *path);
+int		rmdir(const char *path);
 
 /* libcrypt */
 char*		crypt(const char *key, const char *salt);

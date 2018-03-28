@@ -40,6 +40,9 @@
 
 #define	TERM_BUFFER_SIZE			4096
 
+#define	PTTY_MASTER				(1 << 0)
+#define	PTTY_SLAVE				(1 << 1)
+
 typedef struct
 {
 	/**
@@ -88,7 +91,7 @@ typedef struct
 	/**
 	 * Device file handle representing the slave.
 	 */
-	Device					devSlave;
+	Inode*					devSlave;
 	
 	/**
 	 * Path to the slave.
@@ -96,9 +99,9 @@ typedef struct
 	char					slaveName[256];
 	
 	/**
-	 * Reference count.
+	 * Bitwise-OR of the sides of the terminal (PTTY_MASTER, PTTY_SLAVE) which still have an inode.
 	 */
-	int					refcount;
+	int					sides;
 } PseudoTerm;
 
 void pttyInit();

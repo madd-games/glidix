@@ -125,6 +125,7 @@ int	mkdir(const char *path, mode_t mode);
 mode_t	umask(mode_t cmask);
 int	_glidix_aclput(const char *path, int type, int id, int perms);
 int	_glidix_aclclear(const char *path, int type, int id);
+int	mkfifo(const char *path, mode_t mode);
 
 #define	stat(a, b)	_glidix_stat((a), (b), sizeof(struct stat))
 #define	fstat(a, b)	_glidix_fstat((a), (b), sizeof(struct stat))

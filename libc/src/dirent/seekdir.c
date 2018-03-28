@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Runtime
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,16 +26,14 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_fdopendir_h
-#define __glidix_fdopendir_h
+#include <dirent.h>
 
-/**
- * Implements the _glidix_fdopendir() system call, which allows the userspace to
- * implement opendir()/readdir()/closedir().
- */
+long telldir(DIR *dirp)
+{
+	return (long) dirp->__key;
+};
 
-#include <glidix/vfs.h>
-
-int sys_fdopendir(const char *dirname);
-
-#endif
+void seekdir(DIR *dirp, long loc)
+{
+	dirp->__key = (int) loc;
+};

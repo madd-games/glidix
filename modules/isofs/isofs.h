@@ -26,13 +26,16 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ISOFS_H
-#define ISOFS_H
+#ifndef ISOFS_H_
+#define ISOFS_H_
 
 #include <glidix/common.h>
 #include <glidix/vfs.h>
-#include <glidix/semaphore.h>
-#include <glidix/ftree.h>
+
+/**
+ * If set in mount options, do not use Rock Ridge names.
+ */
+#define	ISOFS_MNT_NORRNAME			(1 << 0)
 
 typedef struct
 {
@@ -65,7 +68,7 @@ typedef struct
 	uint16_t				blockSize;
 	uint16_t				ignore5;
 	uint8_t					ignore6[24];			// path table, we don't care
-	uint8_t					rootDir[34];			// cast contents to ISODirent.
+	uint8_t					rootDir[34];			// cast contents to ISODirentHeader.
 	char					volumeSetID[128];
 	char					publisherID[128];
 	char					dataPreparerID[128];
@@ -102,28 +105,74 @@ typedef struct
 	uint8_t					filenameLen;
 } PACKED ISODirentHeader;
 
-struct ISOFileSystem_;
-typedef struct ISOFileMeta_
+typedef struct
 {
-	struct ISOFileMeta_*			next;
-	uint64_t				start;
-	uint64_t				size;
-	FileTree*				ft;
-	struct ISOFileSystem_*			fs;
-} ISOFileMeta;
+	uint16_t				type;
+	uint8_t					len;
+	uint8_t					ver;
+} PACKED SUSPHeader;
 
-typedef struct ISOFileSystem_
+typedef struct
 {
-	File*					fp;				// the filesystem image file
-	Semaphore				sem;
-	uint64_t				rootStart;			// byte offset
-	uint64_t				rootEnd;			// first byte NOT part of the root directory
-	uint64_t				blockSize;
-	int					numOpenInodes;
-	ISOFileMeta*				metaFirst;
-	ISOFileMeta*				metaLast;
-} ISOFileSystem;
+	uint16_t				type;				// "SP"
+	uint8_t					len;
+	uint8_t					ver;
+	uint16_t				check;
+	uint8_t					bskip;
+} PACKED SUSP_SP;
 
-FileTree* isoGetTree(ISOFileSystem *isofs, uint64_t start, uint64_t size);		// call only when isofs locked
+/**
+ * Mount options for isofs.
+ */
+typedef struct
+{
+	/**
+	 * isofs mount flags (ISOFS_MNT_*).
+	 */
+	int flags;
+	
+	/**
+	 * The user and group to which inodes shall be assigned (root by default for both).
+	 */
+	uid_t uid;
+	gid_t gid;
+	
+	/**
+	 * Permission bits to assign to each inode (0755 by default).
+	 */
+	mode_t mode;
+	
+	/**
+	 * Executable permissions. "Own" permissions default to all zeroes, others to all ones.
+	 */
+	uint64_t ixperm, oxperm, dxperm;
+} IsofsOptions;
+
+/**
+ * isofs-specific data (in FileSystem).
+ */
+typedef struct
+{
+	/**
+	 * Filesystem image handle.
+	 */
+	File *fp;
+	
+	/**
+	 * Filesystem options.
+	 */
+	IsofsOptions opt;
+	
+	/**
+	 * Block size.
+	 */
+	uint64_t blockSize;
+	
+	/**
+	 * System Use Area stuff.
+	 */
+	int foundSP;
+	uint8_t bytesSkipped;
+} Isofs;
 
 #endif

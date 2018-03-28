@@ -224,16 +224,11 @@ void coredump(siginfo_t *si, Regs *regs)
 	
 	// open the core file
 	int error;
-	File *fp = vfsOpen("core", VFS_CHECK_ACCESS | VFS_CREATE | (0600 << 3), &error);
+	File *fp = vfsOpen(VFS_NULL_IREF, "core", O_WRONLY | O_CREAT | O_TRUNC, 0600, &error);
 	if (fp == NULL)
 	{
 		// failed to make a coredump!
 		processExit(WS_SIG(si->si_signo));
-	};
-	
-	if (fp->truncate != NULL)
-	{
-		fp->truncate(fp, 0);
 	};
 	
 	// keep track of the highest-used offset in the file (start by skipping the header)

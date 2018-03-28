@@ -34,15 +34,15 @@
 struct dirent
 {
 	ino_t				d_ino;
-	char				d_name[128];
+	char				__d_resv[64];
+	char				d_name[];
 };
 
 typedef struct
 {
-	int _fd;
-	struct dirent _dirbuf;
-	int _idx;
-	char _rpath[256];
+	int __fd;
+	struct dirent* __current;
+	int __key;
 } DIR;
 
 #ifdef __cplusplus
@@ -50,10 +50,12 @@ extern "C" {
 #endif
 
 DIR *opendir(const char *dirname);
+DIR *fdopendir(int fd);
 struct dirent *readdir(DIR *dirp);
-int readdir_r(DIR *dirp, struct dirent *entry, struct dirent **result);
 int closedir(DIR *dirp);
 void rewinddir(DIR *dirp);
+long telldir(DIR *dirp);
+void seekdir(DIR *dirp, long loc);
 
 #ifdef __cplusplus
 };	/* extern "C" */

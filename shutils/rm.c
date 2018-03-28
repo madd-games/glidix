@@ -134,9 +134,17 @@ void doRemove(const char *name)
 		{
 			doRemoveRecur(name);
 		};
-	};
-
-	if (unlink(name) != 0)
+		
+		if (rmdir(name) != 0)
+		{
+			if ((errno != ENOENT) || (!force))
+			{
+				perror(name);
+				exit(1);
+			};
+		};
+	}
+	else if (unlink(name) != 0)
 	{
 		if ((errno != ENOENT) || (!force))
 		{

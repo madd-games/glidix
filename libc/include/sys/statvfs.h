@@ -1,6 +1,5 @@
 /*
-	Glidix kernel
-
+	Glidix Runtime
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
@@ -26,11 +25,48 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ISODIR_H
-#define	ISODIR_H
+#ifndef _SYS_STATVFS_H
+#define	_SYS_STATVFS_H_
 
-#include "isofs.h"
+#define	ST_RDONLY			(1 << 0)
+#define	ST_NOSUID			(1 << 1)
 
-int isodirOpen(ISOFileSystem *isofs, uint64_t start, uint64_t end, Dir *dir, size_t szdir);
+struct statvfs
+{
+	union
+	{
+		struct
+		{
+			unsigned long	f_bsize;
+			unsigned long	f_frsize;
+			fsblkcnt_t	f_blocks;
+			fsblkcnt_t	f_bfree;
+			fsblkcnt_t	f_bavail;
+			fsfilcnt_t	f_files;
+			fsfilcnt_t	f_ffree;
+			fsfilcnt_t	f_favail;
+			unsigned long	f_fsid;
+			unsigned long	f_flag;
+			unsigned long	f_namemax;
+#ifdef _GLIDIX_SOURCE
+			char		f_fstype[16];
+			char		f_bootid[16];
+#endif
+		};
+		
+		char __pad[1024];
+	};
+};
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int statvfs(const char *path, struct statvfs *buf);
+int fstatvfs(int fd, struct statvfs *buf);
+
+#ifdef __cplusplus
+}	/* extern "C" */
+#endif
 
 #endif

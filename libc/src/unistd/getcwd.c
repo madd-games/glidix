@@ -1,6 +1,5 @@
 /*
-	Glidix kernel
-
+	Glidix Runtime
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
@@ -26,11 +25,27 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ISOFILE_H
-#define ISOFILE_H
+#include <sys/call.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <errno.h>
 
-#include "isofs.h"
-
-int isoOpenFile(ISOFileSystem *isofs, uint64_t start, uint64_t size, File *fp, struct stat *st);
-
-#endif
+char* getcwd(char *buf, size_t size)
+{
+	uint64_t realsize = __syscall(__SYS_getcwd);
+	if (buf == NULL)
+	{
+		buf = (char*) malloc(realsize);
+		__syscall(__SYS_getktu, buf, realsize);
+		return buf;
+	};
+	
+	if (realsize > size)
+	{
+		errno = ERANGE;
+		return NULL;
+	};
+	
+	__syscall(__SYS_getktu, buf, realsize);
+	return buf;
+};

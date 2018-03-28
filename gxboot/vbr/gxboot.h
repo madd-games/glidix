@@ -29,6 +29,14 @@
 #ifndef GXBOOT_H
 #define GXBOOT_H
 
+#define	GXBOOT_DEBUG
+
+#ifdef GXBOOT_DEBUG
+#	define	dtermput		termput
+#else
+#	define	dtermput(...)
+#endif
+
 #define	NULL				((void*)0)
 
 #define	PT_PRESENT			(1 << 0)
@@ -152,6 +160,68 @@ typedef	unsigned long long		qword_t;
 
 typedef struct
 {
+	qword_t sbhMagic;
+	byte_t  sbhBootID[16];
+	qword_t sbhFormatTime;
+	qword_t sbhWriteFeatures;
+	qword_t sbhReadFeatures;
+	qword_t sbhOptionalFeatures;
+	qword_t sbhResv[2];
+	qword_t sbhChecksum;
+} GXFS_SuperblockHeader;
+
+typedef struct
+{
+	qword_t ihNext;
+} GXFS_InodeHeader;
+
+typedef struct
+{
+	dword_t rhType;
+	dword_t rhSize;
+} GXFS_RecordHeader;
+
+typedef struct
+{
+	dword_t drType;
+	dword_t drRecordSize;
+	qword_t drInode;
+	byte_t drInoType;
+	char drName[];
+} GXFS_DentRecord;
+
+typedef struct
+{
+	dword_t arType;
+	dword_t arRecordSize;
+	qword_t arLinks;
+	dword_t arFlags;
+	word_t arOwner;
+	word_t arGroup;
+	qword_t arSize;
+	qword_t arATime;
+	qword_t arMTime;
+	qword_t arCTime;
+	qword_t arBTime;
+	dword_t arANano;
+	dword_t arMNano;
+	dword_t arCNano;
+	dword_t arBNano;
+	qword_t arIXPerm;
+	qword_t arOXPerm;
+	qword_t arDXPerm;
+} GXFS_AttrRecord;
+
+typedef struct
+{
+	dword_t trType;
+	dword_t trSize;
+	qword_t trDepth;
+	qword_t trHead;
+} GXFS_TreeRecord;
+
+typedef struct
+{
 	byte_t				size;
 	byte_t				unused;
 	word_t				numSectors;
@@ -162,63 +232,37 @@ typedef struct
 
 typedef struct
 {
-	byte_t				sbMagic[8];
-	byte_t				sbMGSID[16];
-	qword_t				sbFormatTime;
-	qword_t				sbTotalBlocks;
-	qword_t				sbChecksum;
-	qword_t				sbUsedBlocks;
-	qword_t				sbFreeHead;
-	byte_t				sbPad[512-0x40];
-} Superblock;
-
-typedef struct
-{
-	word_t				inoOwner;
-	word_t				inoGroup;
-	word_t				inoMode;
-	word_t				inoTreeDepth;
-	qword_t				inoLinks;
-	qword_t				inoSize;
-	qword_t				inoBirthTime;
-	qword_t				inoChangeTime;
-	qword_t				inoModTime;
-	qword_t				inoAccessTime;
-	dword_t				inoBirthNano;
-	dword_t				inoChangeNano;
-	dword_t				inoModNano;
-	dword_t				inoAccessNano;
-	qword_t				inoIXPerm;
-	qword_t				inoOXPerm;
-	qword_t				inoDXPerm;
-	qword_t				inoRoot;
-	qword_t				inoACL;
-	char				inoPath[256];
-	byte_t				inoPad[512-0x170];
-} Inode;
-
-typedef struct
-{
-	qword_t				deInode;
-	byte_t				deOpt;
-	char				deName[256];
-} Dirent;
-
-typedef struct
-{
-	Inode				inode;
-	qword_t				bufIndex;
-	byte_t				buffer[512];
-} FileHandle;
-
-typedef struct
-{
 	char				filename[100];
 	char				mode[8];
 	char				uid[8];
 	char				gid[8];
 	char				size[12];
 } TARFileHeader;
+
+typedef struct
+{
+	/**
+	 * Start with stuff defined for all filesystems.
+	 */
+	qword_t				size;
+	
+	/**
+	 * Now filesystem-specific stuff.
+	 */
+#if defined(GXBOOT_FS_GXFS)
+	qword_t				depth;
+	qword_t				head;
+	qword_t				bufferBase;
+	byte_t				buffer[4096];
+#else
+#error Unknown boot filesystem!
+#endif
+} FileHandle;
+
+/**
+ * A buffer filled with the boot ID by fsInit().
+ */
+extern byte_t fsBootID[16];
 
 typedef	qword_t				Elf64_Addr;
 typedef	word_t				Elf64_Half;
@@ -343,24 +387,19 @@ int  strcmp(const char *a, const char *b);
 void biosRead();
 
 /**
- * Read a block from the block table.
+ * Initialize the filesystem driver.
  */
-void readBlock(qword_t index, void *buffer);
+void fsInit();
 
 /**
- * Open a file by inode number, and fill in the file handle.
+ * Open a file. Returns 0 on success, -1 on error.
  */
-void openFileByIno(FileHandle *fh, qword_t ino);
+int openFile(FileHandle *fh, const char *path);
 
 /**
  * Read a file.
  */
 void readFile(FileHandle *fh, void *buffer, qword_t size, qword_t offset);
-
-/**
- * Open a file by path. Return 0 on success, -1 if the file does not exist.
- */
-int openFile(FileHandle *fh, const char *path);
 
 /**
  * Get a BIOS memory map entry. Returns the index of the next entry. Sets 'ok' to 0 if the
@@ -372,5 +411,15 @@ dword_t biosGetMap(dword_t index, void *put, int *ok);
  * Jump to the 64-bit kernel.
  */
 void go64(KernelInfo *kinfo, qword_t kinfoVirt);
+
+/**
+ * Write to the terminal.
+ */
+void termput(const char *str);
+
+/**
+ * Print a 64-bit hex number.
+ */
+void termputp64(qword_t addr);
 
 #endif

@@ -38,7 +38,7 @@
 
 #define	ASM			__asm__ __volatile__
 #define	panic(...)		_panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
-#define	assert(expr)		if (!(expr)) panic("assertion ##expr failed")
+#define	assert(expr)		if (!(expr)) panic("%s:%d: assertion %s failed", __FILE__, __LINE__, #expr)
 #define	PACKED			__attribute__ ((packed))
 #define	BREAKPOINT()		ASM ("xchg %bx, %bx")
 #define	ALIGN(x)		__attribute__ ((aligned(x)))

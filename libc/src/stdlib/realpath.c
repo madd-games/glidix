@@ -26,23 +26,32 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <sys/stat.h>
-#include <unistd.h>
+#include <sys/call.h>
+#include <stdlib.h>
 #include <errno.h>
 
-int rmdir(const char *path)
+char* realpath(const char *path, char *buffer)
 {
-	struct stat st;
-	if (lstat(path, &st) != 0)
+	uint64_t size = __syscall(__SYS_realpath, path);
+	if (size == 0)
 	{
-		return -1;
+		return NULL;
 	};
-
-	if (!S_ISDIR(st.st_mode))
+	
+	if (buffer == NULL)
 	{
-		errno = ENOTDIR;
-		return -1;
+		buffer = (char*) malloc(size);
+		__syscall(__SYS_getktu, buffer, size);
+		return buffer;
+	}
+	else if (size > 256)
+	{
+		errno = ENAMETOOLONG;
+		return NULL;
+	}
+	else
+	{
+		__syscall(__SYS_getktu, buffer, size);
+		return buffer;
 	};
-
-	return unlink(path);
 };

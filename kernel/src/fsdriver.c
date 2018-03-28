@@ -30,17 +30,46 @@
 #include <glidix/semaphore.h>
 #include <glidix/sched.h>
 #include <glidix/memory.h>
-#include <glidix/mount.h>
 #include <glidix/string.h>
 #include <glidix/syscall.h>
+#include <glidix/console.h>
 
 static Semaphore semFS;
 static FSDriver *firstDriver;
+
+static Inode* fsbind(const char *image, int flags, const void *options, size_t optlen, int *error)
+{
+	File *fp = vfsOpen(VFS_NULL_IREF, image, O_RDWR | O_NONBLOCK, 0, error);
+	if (fp == NULL)
+	{
+		return NULL;
+	};
+	
+	Inode *inode = fp->iref.inode;
+	vfsUprefInode(inode);
+	vfsClose(fp);
+	
+	if ((inode->mode & VFS_MODE_TYPEMASK) != VFS_MODE_DIRECTORY)
+	{
+		vfsDownrefInode(inode);
+		*error = ENOTDIR;
+		return NULL;
+	};
+	
+	return inode;
+};
+
+static FSDriver drvBind = {
+	.fsname = "bind",
+	.openroot = fsbind
+};
 
 void initFSDrivers()
 {
 	firstDriver = NULL;
 	semInit(&semFS);
+	
+	registerFSDriver(&drvBind);
 };
 
 void registerFSDriver(FSDriver *drv)
@@ -63,11 +92,33 @@ void registerFSDriver(FSDriver *drv)
 	semSignal(&semFS);
 };
 
-int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, int flags)
+void unregisterFSDriver(FSDriver *drv)
+{
+	semWait(&semFS);
+	if (firstDriver == drv) firstDriver = drv->next;
+	if (drv->prev != NULL) drv->prev->next = drv->next;
+	if (drv->next != NULL) drv->next->prev = drv->prev;
+	semSignal(&semFS);
+};
+
+int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, int flags, const void *uoptions, size_t optlen)
 {
 	char fsname[USER_STRING_MAX];
 	char image[USER_STRING_MAX];
 	char mountpoint[USER_STRING_MAX];
+	char options[1024];
+	
+	if (optlen > 1024)
+	{
+		ERRNO = EOVERFLOW;
+		return -1;
+	};
+	
+	if (memcpy_u2k(options, uoptions, optlen) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
 	
 	if (strcpy_u2k(fsname, ufsname) != 0)
 	{
@@ -87,77 +138,55 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 		return -1;
 	};
 	
-	if (strlen(mountpoint) >= 256)
+	if (!havePerm(XP_MOUNT))
 	{
-		ERRNO = ENAMETOOLONG;
-		return -1;
-	};
-	
-	if (strlen(image) >= 256)
-	{
-		ERRNO = ENAMETOOLONG;
-		return -1;
-	};
-	
-	Thread *ct = getCurrentThread();
-	if (ct->creds->euid != 0)
-	{
-		ERRNO = EPERM;
+		ERRNO = EACCES;
 		return -1;
 	};
 
-	if (flags != 0)
-	{
-		ERRNO = EINVAL;
-		return -1;
-	};
-
-	if (mountpoint[strlen(mountpoint)-1] != '/')
+	if ((flags & ~MNT_ALL) != 0)
 	{
 		ERRNO = EINVAL;
 		return -1;
 	};
 
 	semWait(&semFS);
-	if (firstDriver == NULL)
+	FSDriver *drv;
+	for (drv=firstDriver; drv!=NULL; drv=drv->next)
+	{
+		if (strcmp(drv->fsname, fsname) == 0) break;
+	};
+	
+	if (drv == NULL)
 	{
 		semSignal(&semFS);
 		ERRNO = EINVAL;
 		return -1;
 	};
-
-	FSDriver *scan = firstDriver;
-	while (strcmp(scan->name, fsname) != 0)
-	{
-		if (scan->next == NULL)
-		{
-			semSignal(&semFS);
-			ERRNO = EINVAL;
-			return -1;
-		};
-		scan = scan->next;
-	};
-
-	FileSystem *fs = (FileSystem*) kmalloc(sizeof(FileSystem));
-	memset(fs, 0, sizeof(FileSystem));
-	int status = scan->onMount(image, fs, sizeof(FileSystem));
+	
+	int error;
+	Inode *inode = drv->openroot(image, flags, options, optlen, &error);
 	semSignal(&semFS);
-
-	if (status != 0)
+	
+	if (inode == NULL)
 	{
-		kfree(fs);
-		ERRNO = EILSEQ;
+		ERRNO = error;
 		return -1;
 	};
-
-	strcpy(fs->imagename, image);
-	status = mount(mountpoint, fs, flags);
-
+	
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, mountpoint, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsDownrefInode(inode);
+		ERRNO = error;
+		return -1;
+	};
+	
+	int status = vfsMount(dref, inode, flags);
+	vfsDownrefInode(inode);
 	if (status != 0)
 	{
-		if (fs->unmount != NULL) fs->unmount(fs);
-		kfree(fs);
-		ERRNO = EIO;
+		ERRNO = status;
 		return -1;
 	};
 
@@ -181,7 +210,7 @@ int sys_fsdrv(char *buffer, int num)
 		{
 			char entry[16];
 			memset(entry, 16, 0);
-			strcpy(entry, drv->name);
+			strcpy(entry, drv->fsname);
 			
 			if (memcpy_k2u(buffer, entry, 16) != 0)
 			{

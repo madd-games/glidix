@@ -31,13 +31,19 @@
 
 #include <glidix/vfs.h>
 
-typedef void*			Device;
-
 void initDevfs();
-FileSystem *getDevfs();
 
-Device	AddDevice(const char *name, void *data, int (*open)(void *data, File *fp, size_t szFile), int flags);
-void	DeleteDevice(Device dev);
-void	SetDeviceCreds(Device dev, uid_t uid, gid_t gid);
+/**
+ * Attach an inode to a name under /dev. This takes away your reference to the inode. Returns 0
+ * on success, or an error number on error.
+ *
+ * This works even without root permissions and is accessible only to the kernel.
+ */
+int devfsAdd(const char *name, Inode *inode);
+
+/**
+ * Remove the specified device.
+ */
+void devfsRemove(const char *name);
 
 #endif

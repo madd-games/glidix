@@ -34,7 +34,6 @@
 #include <glidix/console.h>
 #include <glidix/time.h>
 #include <glidix/errno.h>
-#include <glidix/mount.h>
 #include <glidix/idt.h>
 #include <glidix/acpi.h>
 #include <glidix/port.h>

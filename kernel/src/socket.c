@@ -37,6 +37,7 @@
 #include <glidix/mutex.h>
 #include <glidix/icmp.h>
 #include <glidix/ipreasm.h>
+#include <glidix/vfs.h>
 
 Socket* CreateRawSocket();				/* rawsock.c */
 Socket* CreateUDPSocket();				/* udpsock.c */
@@ -64,15 +65,15 @@ void initSocket()
 	ephports = (uint8_t*) kmalloc(2048);		// 16384 ports, 1 byte for each 8
 };
 
-static void sock_close(File *fp)
+static void sock_free(Inode *inode)
 {
-	if (fp->fsdata == NULL)
+	if (inode->fsdata == NULL)
 	{
 		return;
 	};
 
-	Socket *sock = (Socket*) fp->fsdata;
-	fp->fsdata = NULL;
+	Socket *sock = (Socket*) inode->fsdata;
+	inode->fsdata = NULL;
 	
 	if (sock->shutdown != NULL)
 	{
@@ -89,19 +90,19 @@ static void sock_close(File *fp)
 	};
 };
 
-static ssize_t sock_write(File *fp, const void *buffer, size_t len)
+static ssize_t sock_write(Inode *inode, File *fp, const void *buffer, size_t len, off_t off)
 {
 	return SendtoSocket(fp, buffer, len, 0, NULL, 0);
 };
 
-static ssize_t sock_read(File *fp, void *buffer, size_t len)
+static ssize_t sock_read(Inode *inode, File *fp, void *buffer, size_t len, off_t off)
 {
 	return RecvfromSocket(fp, buffer, len, 0, NULL, NULL);
 };
 
-static void sock_pollinfo(File *fp, Semaphore **sems)
+static void sock_pollinfo(Inode *inode, File *fp, Semaphore **sems)
 {	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) inode->fsdata;
 	if (sock->pollinfo == NULL)
 	{
 		return;
@@ -112,17 +113,32 @@ static void sock_pollinfo(File *fp, Semaphore **sems)
 
 File* MakeSocketFile(Socket *sock)
 {
+#if 0
 	File *fp = (File*) kmalloc(sizeof(File));
 	memset(fp, 0, sizeof(File));
 	fp->refcount = 1;
-	fp->fsdata = sock;
-	fp->oflag = O_RDWR | O_SOCKET;
+	fp->iref.inode->fsdata = sock;
+	fp->oflags = O_RDWR | O_SOCKET;
 	fp->close = sock_close;
 	fp->write = sock_write;
 	fp->read = sock_read;
 	fp->pollinfo = sock_pollinfo;
 	
 	return fp;
+#endif
+
+	Inode *inode = vfsCreateInode(NULL, VFS_MODE_SOCKET | 0700);
+	inode->fsdata = sock;
+	inode->free = sock_free;
+	inode->pwrite = sock_write;
+	inode->pread = sock_read;
+	inode->pollinfo = sock_pollinfo;
+	
+	InodeRef iref;
+	iref.top = NULL;
+	iref.inode = inode;
+	
+	return vfsOpenInode(iref, O_RDWR | O_SOCKET, NULL);
 };
 
 File* CreateSocket(int domain, int type, int proto)
@@ -239,13 +255,13 @@ int BindSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
 		return -1;
 	};
 	
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->bind == NULL)
 	{
 		ERRNO = EOPNOTSUPP;
@@ -258,13 +274,13 @@ int BindSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
 
 int SocketListen(File *fp, int backlog)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->listen == NULL)
 	{
 		ERRNO = EOPNOTSUPP;
@@ -283,13 +299,13 @@ File* SocketAccept(File *fp, struct sockaddr *addr, size_t *addrlenptr)
 		return NULL;
 	};
 	
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return NULL;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->accept == NULL)
 	{
 		ERRNO = EOPNOTSUPP;
@@ -321,13 +337,13 @@ File* SocketAccept(File *fp, struct sockaddr *addr, size_t *addrlenptr)
 
 int SocketGetError(File *fp)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->geterr == NULL)
 	{
 		return 0;
@@ -338,13 +354,13 @@ int SocketGetError(File *fp)
 
 ssize_t SendtoSocket(File *fp, const void *message, size_t len, int flags, const struct sockaddr *addr, size_t addrlen)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->sendto == NULL)
 	{
 		ERRNO = EOPNOTSUPP;
@@ -358,13 +374,13 @@ ssize_t SendtoSocket(File *fp, const void *message, size_t len, int flags, const
 
 ssize_t RecvfromSocket(File *fp, void *message, size_t len, int flags, struct sockaddr *addr, size_t *addrlen)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->recvfrom == NULL)
 	{
 		ERRNO = EOPNOTSUPP;
@@ -378,13 +394,13 @@ ssize_t RecvfromSocket(File *fp, void *message, size_t len, int flags, struct so
 
 int SocketGetsockname(File *fp, struct sockaddr *addr, size_t *addrlen)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->getsockname == NULL)
 	{
 		ERRNO = EOPNOTSUPP;
@@ -396,13 +412,13 @@ int SocketGetsockname(File *fp, struct sockaddr *addr, size_t *addrlen)
 
 int ShutdownSocket(File *fp, int how)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->shutdown == NULL)
 	{
 		ERRNO = EOPNOTSUPP;
@@ -415,13 +431,13 @@ int ShutdownSocket(File *fp, int how)
 
 int ConnectSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->connect == NULL)
 	{
 		ERRNO = EOPNOTSUPP;
@@ -433,13 +449,13 @@ int ConnectSocket(File *fp, const struct sockaddr *addr, size_t addrlen)
 
 int SocketGetpeername(File *fp, struct sockaddr *addr, size_t *addrlen)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->getpeername == NULL)
 	{
 		ERRNO = EOPNOTSUPP;
@@ -460,13 +476,13 @@ int SocketBindif(File *fp, const char *ifname)
 		};
 	};
 	
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (ifname != NULL) strcpy(sock->ifname, ifname);
 	else sock->ifname[0] = 0;
 	return 0;
@@ -847,13 +863,13 @@ void FreePort(uint16_t port)
 
 int SetSocketOption(File *fp, int proto, int option, uint64_t value)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (proto != 0)
 	{
 		// not SOL_SOCKET
@@ -873,13 +889,13 @@ int SetSocketOption(File *fp, int proto, int option, uint64_t value)
 
 uint64_t GetSocketOption(File *fp, int proto, int option)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return 0;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (proto != 0)
 	{
 		// not SOL_SOCKET
@@ -899,13 +915,13 @@ uint64_t GetSocketOption(File *fp, int proto, int option)
 
 int SocketMulticast(File *fp, int op, const struct in6_addr *addr, uint32_t scope)
 {
-	if ((fp->oflag & O_SOCKET) == 0)
+	if ((fp->oflags & O_SOCKET) == 0)
 	{
 		ERRNO = ENOTSOCK;
 		return -1;
 	};
 	
-	Socket *sock = (Socket*) fp->fsdata;
+	Socket *sock = (Socket*) fp->iref.inode->fsdata;
 	if (sock->domain != AF_INET6)
 	{
 		ERRNO = EPROTONOSUPPORT;

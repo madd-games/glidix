@@ -33,48 +33,56 @@
 #include <glidix/vfs.h>
 #include <glidix/semaphore.h>
 
-#define	SIDE_READ			1
-#define	SIDE_WRITE			2
+#define	PIPE_READ			((void*)1)
+#define	PIPE_WRITE			((void*)2)
 
 #define	PIPE_BUFFER_SIZE		1024
 
+/**
+ * Describes a pipe.
+ */
 typedef struct
 {
 	/**
-	 * The semaphore which protects the pipe.
+	 * These semaphores are signalled when the pipe/FIFO is opened for read or write, respectively.
+	 * They are never waited (only polled) and are used to block opens until the pipe is ready.
 	 */
-	Semaphore			sem;
+	Semaphore semReadOpen;
+	Semaphore semWriteOpen;
 	
 	/**
-	 * The semaphore which counts the number of bytes in the pipe.
+	 * Semaphores counting the number of unread bytes, and the number of free bytes, in the pipe buffer,
+	 * respectively.
 	 */
-	Semaphore			counter;
+	Semaphore semBufferRead;
+	Semaphore semBufferFree;
 	
 	/**
-	 * The semaphore which counts how many more bytes may be written
-	 * to the pipe.
+	 * Pipe buffer, and offsets.
 	 */
-	Semaphore			semWriteBuffer;
+	char buffer[PIPE_BUFFER_SIZE];
+	off_t offRead;
+	off_t offWrite;
 	
 	/**
-	 * This semaphore gets signalled when the pipe is terminated.
+	 * Atomic counters for the number of times the pipe was opened in read or write mode.
 	 */
-	Semaphore			semHangup;
+	int cntRead;
+	int cntWrite;
 	
 	/**
-	 * Buffer and read/write pointers.
+	 * Signalled when all writers of the pipe have been closed.
 	 */
-	char				buffer[PIPE_BUFFER_SIZE];
-	off_t				roff;
-	off_t				woff;
+	Semaphore semHangup;
 	
 	/**
-	 * Which sides are open (OR of SIDE_READ and/or SIDE_WRITE or 0).
+	 * Lock to protect the pipe.
 	 */
-	int				sides;
+	Semaphore lock;
 } Pipe;
 
 int sys_pipe(int *pipefd);
 int sys_pipe2(int *pipefd, int flags);
+int sys_mkfifo(const char *upath, mode_t mode);
 
 #endif

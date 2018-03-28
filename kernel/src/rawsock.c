@@ -242,7 +242,7 @@ static ssize_t rawsock_recvfrom(Socket *sock, void *buffer, size_t len, int flag
 {
 	RawSocket *rawsock = (RawSocket*) sock;
 
-	int status = semWaitGen(&rawsock->packetCounter, 1, SEM_W_FILE(sock->fp->oflag), sock->options[GSO_RCVTIMEO]);
+	int status = semWaitGen(&rawsock->packetCounter, 1, SEM_W_FILE(sock->fp->oflags), sock->options[GSO_RCVTIMEO]);
 	if (status < 0)
 	{
 		ERRNO = -status;
