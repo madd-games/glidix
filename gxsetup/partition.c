@@ -120,7 +120,7 @@ echo \"Starting level 2 services...\"\n\
 service state 2\n\
 echo \"Starting login manager...\"\n\
 cd /root\n\
-exec $logmgr\n\
+$logmgr || logmgr\n\
 ";
 
 static const char *loginScript = "\
