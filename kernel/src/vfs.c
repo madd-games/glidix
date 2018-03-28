@@ -634,15 +634,12 @@ int vfsIsAllowed(Inode *inode, int perms)
 	gid_t groups[numGroups];
 	memcpy(groups, getCurrentThread()->creds->groups, sizeof(gid_t) * numGroups);
 	
-	semWait(&inode->lock);
-	
 	// check if the current user is listed in the ACL
 	int i;
 	for (i=0; i<VFS_ACL_SIZE; i++)
 	{
 		if (inode->acl[i].ace_type == VFS_ACE_USER && inode->acl[i].ace_id == uid)
 		{
-			semSignal(&inode->lock);
 			return (inode->acl[i].ace_perms & perms) == perms;
 		};
 	};
@@ -698,7 +695,6 @@ int vfsIsAllowed(Inode *inode, int perms)
 	};
 	
 	// release the lock then just make sure we have the permissions
-	semSignal(&inode->lock);
 	return (totalPerms & perms) == perms;
 };
 

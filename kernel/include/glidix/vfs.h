@@ -818,8 +818,8 @@ void vfsAppendDentry(Inode *dir, const char *name, ino_t ino);
 
 /**
  * Check if the specified user has the right to perform the given operations on the given inode.
- * The 'perms' argument is a bitwise-OR of the VFS_ACE_* flags required. This function locks the
- * inode.
+ * The 'perms' argument is a bitwise-OR of the VFS_ACE_* flags required. This function does not
+ * lock the inode.
  *
  * This function returns 0 if access was denied, or 1 if allowed. The reference count is unaffected.
  */
