@@ -222,6 +222,74 @@ typedef struct
 
 typedef struct
 {
+	char					year[4];
+	char					month[2];			// 1-12
+	char					day[2];				// 1-31
+	char					hour[2];			// 0-23
+	char					minute[2];			// 0-59
+	char					second[2];			// 0-59
+	char					centiseconds[2];		// 0-99		(ignored really)
+	byte_t					timezone;			// from 0=GMT-12, to 100=GMT+13, in 15-minute intervals
+} __attribute__ ((packed)) ISOPrimaryDateTime;
+
+typedef struct
+{
+	byte_t					type;				// == 1
+	char					magic[5];			// "CD001"
+	byte_t					version;			// == 1
+	byte_t					unused;				// == 0
+	char					bootsysname[32];		// ignore this
+	char					volumeID[32];
+	byte_t					zeroes[8];			// why? -_-
+	dword_t					volumeBlockCount;
+	dword_t					ignore1;
+	byte_t					ignore2[32];
+	word_t					volumeCount;
+	word_t					ignore3;
+	word_t					volumeIndex;
+	word_t					ignore4;
+	word_t					blockSize;
+	word_t					ignore5;
+	byte_t					ignore6[24];			// path table, we don't care
+	byte_t					rootDir[34];			// cast contents to ISODirentHeader.
+	char					volumeSetID[128];
+	char					publisherID[128];
+	char					dataPreparerID[128];
+	char					appID[128];
+	char					copyrightFile[38];
+	char					abstractFile[36];
+	char					biblioFile[37];
+	ISOPrimaryDateTime			dtCreation;
+	ISOPrimaryDateTime			dtModification;
+	ISOPrimaryDateTime			dtObsolete;
+	ISOPrimaryDateTime			dtCanBeUsed;
+	byte_t					fileStructVersion;		// == 1
+	byte_t					ignore7;
+} __attribute__ ((packed)) ISOPrimaryVolumeDescriptor;
+
+typedef struct
+{
+	byte_t					size;
+	byte_t					xattrSize;
+	dword_t					startLBA;
+	dword_t					ignore1;
+	dword_t					fileSize;
+	dword_t					ignore2;
+	byte_t					year;				// since 1990
+	byte_t					month;				// 1-12
+	byte_t					day;				// 1-31
+	byte_t					hour;				// 0-23
+	byte_t					minute;				// 0-59
+	byte_t					second;				// 0-59
+	byte_t					timezone;
+	byte_t					flags;
+	byte_t					zeroes[2];
+	dword_t					ignore3;
+	byte_t					filenameLen;
+} __attribute__ ((packed)) ISODirentHeader;
+
+typedef struct
+{
 	byte_t				size;
 	byte_t				unused;
 	word_t				numSectors;
@@ -254,6 +322,10 @@ typedef struct
 	qword_t				head;
 	qword_t				bufferBase;
 	byte_t				buffer[4096];
+#elif defined(GXBOOT_FS_ELTORITO)
+	qword_t				startLBA;
+	qword_t				currentLBA;
+	byte_t				buffer[2048];
 #else
 #error Unknown boot filesystem!
 #endif

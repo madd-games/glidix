@@ -56,7 +56,7 @@ void fsInit()
 	{
 		dtermput("FAILED\n");
 		termput("ERROR: Superblock has invalid magic number (should be __GXFS__)\n");
-		return;
+		while (1) asm ("cli; hlt");
 	};
 	
 	qword_t state = 0xF00D1234BEEFCAFE;
@@ -72,7 +72,7 @@ void fsInit()
 	{
 		dtermput("FAILED\n");
 		termput("ERROR: Superblock has invalid checksum\n");
-		return;
+		while (1) asm ("cli; hlt");
 	};
 	
 	memcpy(fsBootID, sbh->sbhBootID, 16);

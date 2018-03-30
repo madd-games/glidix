@@ -1,3 +1,31 @@
+;	Glidix bootloader (gxboot)
+;
+;	Copyright (c) 2014-2017, Madd Games.
+;	All rights reserved.
+;	
+;	Redistribution and use in source and binary forms, with or without
+;	modification, are permitted provided that the following conditions are met:
+;	
+;	* Redistributions of source code must retain the above copyright notice, this
+;	  list of conditions and the following disclaimer.
+;	
+;	* Redistributions in binary form must reproduce the above copyright notice,
+;	  this list of conditions and the following disclaimer in the documentation
+;	  and/or other materials provided with the distribution.
+;	
+;	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+;	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+;	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+;	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+;	FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+;	DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+;	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+;	CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+;	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+;	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+; entry code for GXFS boot
+
 extern vbr_end
 extern bmain
 
@@ -13,6 +41,7 @@ global go64
 section .entry_text
 bits 16
 
+%ifdef GXBOOT_FS_GXFS
 _start:
 cli
 
@@ -42,6 +71,15 @@ mov ah, 0x42
 mov si, dap
 int 0x13
 jc boot_failed
+%endif
+
+; this is the starting point for El Torito. the first stage already loaded the whole VBR,
+; now we just need to go to protected mode and stuff. but we do still need to switch the stack
+; and save the disk number
+%ifdef GXBOOT_FS_ELTORITO
+mov [boot_disk], dl
+mov sp, 0x7C00
+%endif
 
 ; enable A20
 mov ax, 0x2401
@@ -63,6 +101,9 @@ jmp 0x08:goto32
 
 size dd vbr_end - 0x7C00
 
+boot_failed:
+int 0x18
+
 dap:
 db 0x10				; size
 db 0				; unused
@@ -74,9 +115,6 @@ dd 0				; high 32 bits of LBA, unused
 
 boot_disk db 0
 part_start dd 0
-
-boot_failed:
-int 0x18
 
 _biosRead_rm:
 	; disable protected mode

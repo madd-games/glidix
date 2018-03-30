@@ -162,7 +162,7 @@ done
 
 # targets
 # NOTE: Those need to be in order; a target must come AFTER all the targets that it depends on.
-TARGETS="kernel build-tools libc dynld shutils init modules mbload sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libz libpng freetype libddi fstools libgwm gwmserver guiapps netman sysinfo minipad gxdbg ddi-drivers gpm"
+TARGETS="kernel build-tools libc dynld shutils init modules sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libz libpng freetype libddi fstools libgwm gwmserver guiapps netman sysinfo minipad gxdbg ddi-drivers gpm"
 
 # determine build parameters
 export GLIDIX_SYSROOT="$sysroot"
@@ -198,7 +198,7 @@ test_command tar
 
 if [ "$iso_target" = "yes" ]
 then
-	test_command grub-mkrescue
+	test_command mkisofs
 fi
 
 for target in $TARGETS
@@ -213,7 +213,7 @@ done
 echo "generating Makefile..."
 echo >Makefile ".PHONY: all install clean mip tests $TARGETS"
 
-ISO_PACKAGES="mbload shutils libc modules sh gxsetup gxboot dynld gxdbg"
+ISO_PACKAGES="shutils libc modules sh gxsetup gxboot dynld gxdbg"
 if [ "$iso_target" = "yes" ]
 then
 	mkdir -p isodir
@@ -235,12 +235,14 @@ then
 	echo >>Makefile "	mkdir -p isodir/run"
 	echo >>Makefile "	mkdir -p isodir/sys/mod"
 	echo >>Makefile "	mkdir -p isodir/proc"
-	echo >>Makefile "	grub-mkrescue -o \$@ isodir"
+	echo >>Makefile "	mkdir -p isodir/boot"
+	echo >>Makefile "	cp gxboot/eltorito.img isodir/boot/loader.sys"
+	echo >>Makefile "	mkisofs -R -V 'Glidix Installer' -b boot/loader.sys -no-emul-boot -boot-load-size 4 -boot-info-table -o \$@ isodir"
 fi
 
 echo >>Makefile "all: $TARGETS"
 
-echo >>Makefile "install: install-libc install-kernel install-modules install-shutils install-mbload install-sh"
+echo >>Makefile "install: install-libc install-kernel install-modules install-shutils install-sh"
 
 for target in $TARGETS
 do
