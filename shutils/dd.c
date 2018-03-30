@@ -151,7 +151,15 @@ int main(int argc, char *argv[])
 		
 		if (sz == 0) break;
 		
-		write(outfd, buffer, sz);
+		sz = write(outfd, buffer, sz);
+
+		if (sz == 0) break;
+		
+		if (sz == -1)
+		{
+			fprintf(stderr, "%s: cannot write: %s\n", argv[0], strerror(errno));
+			return 1;
+		};
 	};
 	
 	close(infd);
