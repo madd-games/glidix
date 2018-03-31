@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <termios.h>
 #include "render.h"
 
 void setCursor(uint8_t x, uint8_t y)
@@ -49,27 +50,33 @@ void setColor(uint8_t col)
 
 void clearScreen()
 {
+	struct winsize winsz;
+	ioctl(1, TIOCGWINSZ, &winsz);
+
 	setCursor(0, 0);
 	setColor(COLOR_BACKGROUND);
 	
-	char screen[80*25];
-	memset(screen, ' ', 80*25);
+	char screen[winsz.ws_row*winsz.ws_col];
+	memset(screen, ' ', winsz.ws_row*winsz.ws_col);
 	
-	write(1, screen, 80*25);
+	write(1, screen, winsz.ws_row*winsz.ws_col);
 };
 
 void renderWindow(const char *status, const char *caption, int width, int height, int *startX, int *startY)
 {
+	struct winsize winsz;
+	ioctl(1, TIOCGWINSZ, &winsz);
+	
 	clearScreen();
 	
 	setCursor(0, 0);
 	printf("Glidix Installer");
 	
-	setCursor(0, 24);
+	setCursor(0, winsz.ws_row-1);
 	printf("%s", status);
 	
-	int windowX = (80 - width - 2)/2;
-	int windowY = (25 - height - 2)/2;
+	int windowX = (winsz.ws_col - width - 2)/2;
+	int windowY = (winsz.ws_row - height - 2)/2;
 	
 	setCursor((uint8_t)windowX, (uint8_t)windowY);
 	

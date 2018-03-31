@@ -51,7 +51,7 @@ static void displayPrompt(const char *prompt, char *buffer, char mask)
 	int startX, startY;
 	renderWindow("<ENTER> Accept entered text",
 			"ACCOUNT SETUP",
-			70, 5,
+			60, 5,
 			&startX, &startY);
 	
 	setCursor((uint8_t)(startX), (uint8_t)(startY+1));
@@ -68,13 +68,13 @@ static void displayPrompt(const char *prompt, char *buffer, char mask)
 		{
 			char temp[80];
 			memset(temp, 0, 80);
-			memset(temp, ' ', 70);
+			memset(temp, ' ', 60);
 			memset(temp, mask, strlen(buffer));
-			printf("%-70s", temp);
+			printf("%-60s", temp);
 		}
 		else
 		{
-			printf("%-70s", buffer);
+			printf("%-60s", buffer);
 		};
 		
 		setCursor((uint8_t)(startX+strlen(buffer)), (uint8_t)(startY+3));

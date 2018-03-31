@@ -354,7 +354,7 @@ static void drawTable()
 	
 	setCursor((uint8_t)startX, (uint8_t)startY);
 	setColor(COLOR_WINDOW);
-	printf("%-12s|%-19s|%-6s|%-20s|%-9s", "NAME", "SIZE (MB)", "USE AS", "MOUNT POINT", "FORMAT?");
+	printf("%-12s|%-10s|%-6s|%-20s|%-8s", "NAME", "SIZE (MB)", "USE AS", "MOUNT POINT", "FORMAT?");
 	
 	int i = 0;
 	Drive *drive;
@@ -373,7 +373,7 @@ static void drawTable()
 			setColor(COLOR_WINDOW);
 		};
 		
-		char label[70];
+		char label[60];
 		if (drive->dirty)
 		{
 			sprintf(label, "%s*", drive->name);
@@ -383,7 +383,7 @@ static void drawTable()
 			strcpy(label, drive->name);
 		};
 		
-		printf("%-70s", label);
+		printf("%-60s", label);
 		i++;
 		
 		Partition *part;
@@ -429,7 +429,7 @@ static void drawTable()
 				setColor(COLOR_WINDOW);
 			};;
 			
-			printf("%c%-11s %-19lu %-6s %-20s [%c]      ",
+			printf("%c%-11s %-10lu %-6s %-20s [%c]     ",
 				prefix, name, part->size, useLabel, part->mntpoint, format);
 			i++;
 		};
@@ -890,7 +890,7 @@ void partEditor()
 	{
 		renderWindow("\30" "\31" " Select partition\t<ENTER> Edit partition\t" "\x1A" " Save and continue",
 				"PARTITIONING",
-				70, 20,
+				60, 20,
 				&startX, &startY);
 		drawTable();
 		
