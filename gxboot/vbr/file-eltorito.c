@@ -75,7 +75,7 @@ void fsInit()
 	if (!checkPVD(&pvd))
 	{
 		dtermput("FAILED\n");
-		dtermput("ERROR: invalid PVD\n");
+		termput("ERROR: invalid PVD\n");
 		while (1) asm ("cli; hlt");
 	};
 	

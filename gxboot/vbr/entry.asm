@@ -37,6 +37,10 @@ global dap
 global sectorBuffer
 global biosGetMap
 global go64
+global vbeInfoBlock
+global vbeModeInfo
+global vbeGetModeInfo
+global vbeSwitchMode
 
 section .entry_text
 bits 16
@@ -85,6 +89,14 @@ mov sp, 0x7C00
 mov ax, 0x2401
 int 0x15
 
+; get VBE information
+mov ax, 0x4F00
+mov di, vbeInfoBlock
+int 0x10
+
+test ah, ah
+jnz boot_failed
+
 ; disable interrupts again, we're going to PMode
 cli
 
@@ -115,6 +127,13 @@ dd 0				; high 32 bits of LBA, unused
 
 boot_disk db 0
 part_start dd 0
+
+vbeInfoBlock:
+db 'VBE2'			; needed, apparently?
+resb 512
+
+vbeModeInfo:
+resb 256
 
 _biosRead_rm:
 	; disable protected mode
@@ -148,6 +167,74 @@ _biosRead_switch:
 	
 	; jump to the protected mode part
 	jmp 0x08:_biosRead_pm
+
+_vbeGetModeInfo_rm:
+	; disable protected mode
+	mov eax, cr0
+	and eax, ~1
+	mov cr0, eax
+	
+	; go to real mode
+	jmp 0:_vbeGetModeInfo_switch
+
+_vbeGetModeInfo_switch:
+	; load real mode segments
+	xor ax, ax
+	mov ds, ax
+	mov es, ax
+	mov ss, ax
+	
+	; call the BIOS
+	sti
+	mov ax, 0x4F01
+	; mode already in CX
+	mov di, vbeModeInfo
+	int 0x10
+	xor ecx, ecx
+	mov cl, ah			; preserve return value in CL
+	cli
+	
+	; enable protected mode again
+	mov eax, cr0
+	or eax, 1
+	mov cr0, eax
+	
+	; jump to the protected mode part
+	jmp 0x08:_vbeGetModeInfo_pm
+
+_vbeSwitchMode_rm:
+	; disable protected mode
+	mov eax, cr0
+	and eax, ~1
+	mov cr0, eax
+	
+	; go to real mode
+	jmp 0:_vbeSwitchMode_switch
+
+_vbeSwitchMode_switch:
+	; load real mode segments
+	xor ax, ax
+	mov ds, ax
+	mov es, ax
+	mov ss, ax
+	
+	; call the BIOS
+	sti
+	mov ax, 0x4F02
+	mov bx, cx
+	or bx, (1 << 14)
+	int 0x10
+	xor ecx, ecx
+	mov cl, ah			; preserve return value in CL
+	cli
+	
+	; enable protected mode again
+	mov eax, cr0
+	or eax, 1
+	mov cr0, eax
+	
+	; jump to the protected mode part
+	jmp 0x08:_vbeSwitchMode_pm
 
 _biosGetMap_rm:
 	; disable protected mode
@@ -294,7 +381,51 @@ _biosRead_pm:
 	; return
 	cld
 	ret
+
+_vbeGetModeInfo_pm:
+	; load protected mode segments
+	mov ax, 0x10
+	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
+	mov ss, ax
 	
+	; restore registers
+	pop edi
+	pop esi
+	pop ebx
+	pop ebp
+	
+	; restore the VBE return value in EAX
+	mov eax, ecx
+	
+	; return
+	cld
+	ret
+
+_vbeSwitchMode_pm:
+	; load protected mode segments
+	mov ax, 0x10
+	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
+	mov ss, ax
+	
+	; restore registers
+	pop edi
+	pop esi
+	pop ebx
+	pop ebp
+	
+	; restore the VBE return value in EAX
+	mov eax, ecx
+	
+	; return
+	cld
+	ret
+
 biosGetMap:
 	push ebp
 	mov ebp, esp
@@ -310,6 +441,30 @@ biosGetMap:
 	; go to 16-bit protected mode
 	jmp 0x18:_biosGetMap_rm
 
+vbeGetModeInfo:
+	push ebp
+	mov ebp, esp
+	push ebx
+	push esi
+	push edi
+	
+	mov ecx, [ebp+8]		; mode into ECX
+	
+	; go to 16-bit protected mode
+	jmp 0x18:_vbeGetModeInfo_rm
+
+vbeSwitchMode:
+	push ebp
+	mov ebp, esp
+	push ebx
+	push esi
+	push edi
+	
+	mov ecx, [ebp+8]		; mode into ECX (for now)
+	
+	; go to 16-bit protected mode
+	jmp 0x18:_vbeSwitchMode_rm
+	
 _biosGetMap_pm:
 	; restore 32-bit segments
 	mov bx, 0x10

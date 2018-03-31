@@ -331,6 +331,45 @@ typedef struct
 #endif
 } FileHandle;
 
+typedef struct
+{
+	dword_t				sig;
+	word_t				version;
+	dword_t				oemStrFar;
+	byte_t				caps[4];
+	word_t				modeListOffset;
+	word_t				modeListSegment;
+	word_t				totalMemory;
+} __attribute__ ((packed)) VbeInfoBlock;
+extern VbeInfoBlock vbeInfoBlock;
+
+typedef struct
+{
+	word_t				attributes;
+	byte_t				winA, winB;
+	word_t				granularity;
+	word_t				winsize;
+	word_t				segA, segB;
+	dword_t				realFctPtr;
+	word_t				pitch;
+
+	word_t				width, height;
+	byte_t				Wchar, Ychar, planes, bpp, banks;
+	byte_t				memory_model, bank_size, image_pages;
+	byte_t				reserved0;
+
+	byte_t				red_mask, red_position;
+	byte_t				green_mask, green_position;
+	byte_t				blue_mask, blue_position;
+	byte_t				rsv_mask, rsv_position;
+	byte_t				directcolor_attributes;
+ 
+	dword_t				physbase;
+	dword_t				reserved1;
+	word_t				reserved2;
+} __attribute__ ((packed)) VbeModeInfo;
+extern VbeModeInfo vbeModeInfo;
+
 /**
  * A buffer filled with the boot ID by fsInit().
  */
@@ -424,9 +463,37 @@ typedef struct
 } __attribute__ ((packed)) MemoryMap;
 
 /**
+ * Pixel format as defined by DDI and the kernel; passed to describe the framebuffer.
+ */
+typedef struct
+{
+	/**
+	 * BYTES per pixel (1, 2, 3 or 4).
+	 */
+	dword_t					bpp;
+	
+	/**
+	 * Red, green, blue and alpha masks. For less than 32 bits per pixel,
+	 * only the low bits shall be used. If a mask is zero, that means the
+	 * component is missing. For example, alpha may not be supported.
+	 */
+	dword_t					redMask;
+	dword_t					greenMask;
+	dword_t					blueMask;
+	dword_t					alphaMask;
+	
+	/**
+	 * Number of unused bytes between pixels and scanlines.
+	 */
+	dword_t					pixelSpacing;
+	dword_t					scanlineSpacing;
+} PixelFormat;
+
+/**
  * Kernel information structure; this is passed to the kernel.
  */
 #define	KB_FEATURE_BOOTID		(1 << 0)
+#define	KB_FEATURE_VIDEO		(1 << 1)
 typedef struct
 {
 	qword_t				features;			/* 0x00 */
@@ -440,7 +507,15 @@ typedef struct
 	qword_t				initrdSymtabOffset;		/* 0x38 */
 	qword_t				initrdStrtabOffset;		/* 0x40 */
 	qword_t				numSymbols;			/* 0x48 */
+	
+	/* only when KB_FEATURE_BOOTID is set */
 	byte_t				bootID[16];			/* 0x50 */
+	
+	/* only when KB_FEATURE_VIDEO is set */
+	qword_t				framebuffer;			/* 0x60 */
+	dword_t				screenWidth;			/* 0x68 */
+	dword_t				screenHeight;			/* 0x6C */
+	PixelFormat			pixelFormat;			/* 0x70 */
 } KernelInfo;
 
 extern DAP dap;
@@ -457,6 +532,18 @@ int  strcmp(const char *a, const char *b);
  * read failed.
  */
 void biosRead();
+
+/**
+ * Get information about a video mode. Implemented in entry.asm
+ * Returns 0 on success, VBE error number (AH) on error.
+ */
+int vbeGetModeInfo(word_t modeNumber);
+
+/**
+ * Switch VBE mode. Implemented in entry.asm. Returns 0 on success, VBE
+ * error number (AH) on error.
+ */
+int vbeSwitchMode(word_t modeNumber);
 
 /**
  * Initialize the filesystem driver.

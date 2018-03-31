@@ -41,6 +41,23 @@ void termput(const char *str)
 		{
 			consoleX = 0;
 			consoleY++;
+	
+			if (consoleY == 25)
+			{
+				consoleY--;
+				
+				int i;
+				for (i=0; i<80*24*2; i++)
+				{
+					vidmem[i] = vidmem[i+80*2];
+				};
+				
+				for (i=80*24*2; i<80*25*2; i+=2)
+				{
+					vidmem[i] = 0x20;
+					vidmem[i+1] = 0x07;
+				};
+			};
 		}
 		else
 		{
@@ -51,6 +68,23 @@ void termput(const char *str)
 			{
 				consoleX = 0;
 				consoleY++;
+			};
+			
+			if (consoleY == 25)
+			{
+				consoleY--;
+				
+				int i;
+				for (i=0; i<80*24*2; i++)
+				{
+					vidmem[i] = vidmem[i+80*2];
+				};
+				
+				for (i=80*24*2; i<80*25*2; i+=2)
+				{
+					vidmem[i] = 0x20;
+					vidmem[i+1] = 0x07;
+				};
 			};
 		};
 	};
@@ -209,11 +243,108 @@ void* virt2phys(qword_t virt)
 	return (void*) addr;
 };
 
+typedef struct
+{
+	word_t width, height;
+} ScreenSize;
+
+// video modes that we accept; those are the safe modes that all monitors should support
+static ScreenSize okSizes[] = {
+	{720, 480},
+	{640, 480},
+	
+	// LIST TERMINATOR
+	{0, 0}
+};
+
+static int isOkSize(word_t width, word_t height)
+{
+	ScreenSize *scan;
+	for (scan=okSizes; scan->width!=0; scan++)
+	{
+		if (scan->width == width && scan->height == height)
+		{
+			return 1;
+		};
+	};
+	
+	return 0;
+};
+
 void bmain()
 {
 	consoleX = 0;
 	consoleY = 0;
 	memset(vidmem, 0, 80*25*2);
+	
+	if (vbeInfoBlock.sig != (*((const dword_t*)"VESA")))
+	{
+		termput("ERROR: Invalid VBE information block");
+		return;
+	};
+	
+	if (vbeInfoBlock.version < 0x0200)
+	{
+		termput("ERROR: VBE 2.0 not supported");
+		return;
+	};
+	
+	// find the desired video mode
+	word_t videoMode = 0xFFFF;
+	word_t bestWidth = 0;
+	dword_t modesAddr = ((dword_t) vbeInfoBlock.modeListSegment << 4) + (dword_t) vbeInfoBlock.modeListOffset;
+	word_t *modes;
+	
+	for (modes=(word_t*)modesAddr; *modes!=0xFFFF; modes++)
+	{
+		if (vbeGetModeInfo(*modes) != 0)
+		{
+			continue;
+		};
+		
+		if ((vbeModeInfo.attributes & 0x90) != 0x90)
+		{
+			// this is not a graphics mode with LFB
+			continue;
+		};
+		
+		if (vbeModeInfo.memory_model != 6)
+		{
+			// not a direct color mode
+			continue;
+		};
+
+		if (vbeModeInfo.bpp != 32)
+		{
+			// not 32-bit
+			continue;
+		};
+
+		if (vbeModeInfo.red_mask != 8 || vbeModeInfo.green_mask != 8 || vbeModeInfo.blue_mask != 8 || vbeModeInfo.rsv_mask != 8)
+		{
+			// channels are not all 8-bit
+			continue;
+		};
+		
+		if (!isOkSize(vbeModeInfo.width, vbeModeInfo.height))
+		{
+			// wrong resolution
+			continue;
+		};
+
+		// all good
+		if (vbeModeInfo.width > bestWidth)
+		{
+			videoMode = *modes;
+			bestWidth = vbeModeInfo.width;
+		};
+	};
+	
+	if (videoMode == 0xFFFF)
+	{
+		termput("ERROR: No acceptable video mode found\n");
+		return;
+	};
 	
 	fsInit();
 	
@@ -470,7 +601,7 @@ void bmain()
 		return;
 	};
 	
-	kinfo->features = KB_FEATURE_BOOTID;
+	kinfo->features = KB_FEATURE_BOOTID | KB_FEATURE_VIDEO;
 	kinfo->kernelMain = getSymbol("kmain");
 	if (kinfo->kernelMain == 0)
 	{
@@ -495,6 +626,31 @@ void bmain()
 	kinfo->numSymbols = numSyms;
 	memcpy(kinfo->bootID, fsBootID, 16);
 	
+	// fill out information about the video mode and set it
+	if (vbeGetModeInfo(videoMode) != 0)
+	{
+		termput("ERROR: Failed to read video mode information!\n");
+		return;
+	};
+	
+	kinfo->framebuffer = (qword_t) vbeModeInfo.physbase;
+	kinfo->screenWidth = (dword_t) vbeModeInfo.width;
+	kinfo->screenHeight = (dword_t) vbeModeInfo.height;
+	kinfo->pixelFormat.bpp = 4;
+	kinfo->pixelFormat.redMask = (0xFF << vbeModeInfo.red_position);
+	kinfo->pixelFormat.greenMask = (0xFF << vbeModeInfo.green_position);
+	kinfo->pixelFormat.blueMask = (0xFF << vbeModeInfo.blue_position);
+	kinfo->pixelFormat.alphaMask = (0xFF << vbeModeInfo.rsv_position);
+	kinfo->pixelFormat.pixelSpacing = 0;
+	kinfo->pixelFormat.scanlineSpacing = vbeModeInfo.pitch - vbeModeInfo.width * 4;
+	
+	// switch modes
+	if (vbeSwitchMode(videoMode) != 0)
+	{
+		termput("ERROR: Failed to switch video mode!\n");
+		return;
+	};
+
 	// identity-map our area
 	// we allocate this AFTER passing the end pointer to the kernel, because it's temporary.
 	// the kernel will destroy those page tables once we pass control to it, and they are no
