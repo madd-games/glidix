@@ -205,7 +205,7 @@ static void updateVGACursor()
 	while (count--)
 	{
 		*put++ = *((uint32_t*)buf);
-		*((uint32_t*)buf) = 0x55555555;
+		*((uint32_t*)buf) = 0x66666666;
 		
 		buf += consoleState.pitch;
 	};
