@@ -281,6 +281,7 @@ void kmain(KernelBootInfo *info)
 	bootInfo = info;
 	kernelStatus = KERNEL_RUNNING;
 	initConsole();
+	
 	kprintf("Successfully booted into 64-bit mode\n");
 	
 	kprintf_debug(" *** TO TRAP THE KERNEL *** \n");
@@ -288,7 +289,7 @@ void kmain(KernelBootInfo *info)
 	kprintf_debug(" set rip=0x%p\n", &trapKernel);
 	kprintf_debug(" *** END OF INFO *** \n");
 
-	// make sure that we were given the boto ID (an old bootloader might not do it)
+	// make sure that we were given the boot ID (an old bootloader might not do it)
 	// this is required to detect the boot device
 	if ((info->features & KB_FEATURE_BOOTID) == 0)
 	{

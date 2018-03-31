@@ -616,6 +616,16 @@ void bmain()
 		return;
 	};
 	
+	// get information on the chosen mode.
+	if (vbeGetModeInfo(videoMode) != 0)
+	{
+		termput("ERROR: Failed to read video mode information!\n");
+		return;
+	};
+
+	// map the framebuffer
+	mmap(0xFFFF840000000000, vbeModeInfo.physbase & ~0xFFF, vbeModeInfo.height * vbeModeInfo.pitch);
+	
 	kinfo->pml4Phys = (dword_t) pml4;
 	kinfo->mmapSize = mmapSize;
 	kinfo->mmapVirt = mmapBase;
@@ -626,14 +636,7 @@ void bmain()
 	kinfo->numSymbols = numSyms;
 	memcpy(kinfo->bootID, fsBootID, 16);
 	
-	// fill out information about the video mode and set it
-	if (vbeGetModeInfo(videoMode) != 0)
-	{
-		termput("ERROR: Failed to read video mode information!\n");
-		return;
-	};
-	
-	kinfo->framebuffer = (qword_t) vbeModeInfo.physbase;
+	kinfo->framebuffer = 0xFFFF840000000000 + (vbeModeInfo.physbase & 0xFFF);
 	kinfo->screenWidth = (dword_t) vbeModeInfo.width;
 	kinfo->screenHeight = (dword_t) vbeModeInfo.height;
 	kinfo->pixelFormat.bpp = 4;

@@ -63,50 +63,148 @@ static struct
 	uint64_t curX, curY;
 	uint64_t curColor;
 	uint8_t putcon;
-	unsigned char *buffer;
-	int usingSoftware;
+	uint8_t *fb;
+	size_t fbSize;
+	size_t pitch;
 	int width, height;
-	int gfxterm;
+	int enabled;
+	PixelFormat format;
+	int cursorDrawn;
+	uint32_t behindCursor[16];
+	uint8_t *cursorPtr;
 } consoleState;
 
 static Mutex consoleLock;
-SECTION(".videoram") unsigned char initVideoRAM[2*80*25];
-unsigned char tempVideoRAM[2*80*25];
+
+/**
+ * Console colors (RGB).
+ */
+unsigned char consoleColors[16*3] = {
+	0x00, 0x00, 0x00,		/* 0 */
+	0x00, 0x00, 0xAA,		/* 1 */
+	0x00, 0xAA, 0x00,		/* 2 */
+	0x00, 0xAA, 0xAA,		/* 3 */
+	0xAA, 0x00, 0x00,		/* 4 */
+	0xAA, 0x00, 0xAA,		/* 5 */
+	0xAA, 0x55, 0x00,		/* 6 */
+	0xAA, 0xAA, 0xAA,		/* 7 */
+	0x55, 0x55, 0x55,		/* 8 */
+	0x55, 0x55, 0xFF,		/* 9 */
+	0x55, 0xFF, 0x55,		/* A */
+	0x55, 0xFF, 0xFF,		/* B */
+	0xFF, 0x55, 0x55,		/* C */
+	0xFF, 0x55, 0xFF,		/* D */
+	0xFF, 0xFF, 0x55,		/* E */
+	0xFF, 0xFF, 0xFF,		/* F */
+};
+
+/**
+ * Console colors converted to framebuffer pixel format.
+ */
+uint32_t consolePixels[16];
 
 /**
  * Whether the console should be outputting to COM1.
  */
 int conOutCom = 0;
 
+/**
+ * Console font defined in confont.c.
+ */
+extern const unsigned char confont[16*256];
+
 void enableDebugTerm()
 {
 	conOutCom = 1;
 };
 
+static uint32_t maskToPixel(uint8_t value, uint32_t mask)
+{
+	uint32_t pixel = (uint32_t) value;
+	while ((mask & 1) == 0)
+	{
+		pixel <<= 1;
+		mask >>= 1;
+	};
+	
+	return pixel;
+};
+
+static void undrawCursor()
+{
+	if (consoleState.cursorDrawn)
+	{
+		const uint32_t *fetch = consoleState.behindCursor;
+		uint8_t *put = consoleState.cursorPtr;
+		
+		int count = 16;
+		while (count--)
+		{
+			*((uint32_t*)put) = *fetch++;
+			put += consoleState.pitch;
+		};
+		
+		consoleState.cursorDrawn = 0;
+	};
+};
+
 void initConsole()
 {
+	if ((bootInfo->features & KB_FEATURE_VIDEO) == 0)
+	{
+		// what can we possibly do?
+		while (1)
+		{
+			cli();
+			hlt();
+		};
+	};
+	
+	// convert console colors to pixel format
+	int i;
+	for (i=0; i<16; i++)
+	{
+		uint32_t redPart = maskToPixel(consoleColors[i*3+0], bootInfo->fbFormat.redMask);
+		uint32_t greenPart = maskToPixel(consoleColors[i*3+1], bootInfo->fbFormat.greenMask);
+		uint32_t bluePart = maskToPixel(consoleColors[i*3+2], bootInfo->fbFormat.blueMask);
+		
+		consolePixels[i] = redPart | greenPart | bluePart;
+	};
+	
 	mutexInit(&consoleLock);
-	consoleState.buffer = initVideoRAM;
-	consoleState.usingSoftware = 0;
-	consoleState.width = 80;
-	consoleState.height = 25;
-	consoleState.gfxterm = 0;
+	consoleState.width = bootInfo->fbWidth / 9;
+	consoleState.height = bootInfo->fbHeight / 16;
+	consoleState.enabled = 1;
+	consoleState.fb = bootInfo->framebuffer;
+	consoleState.fbSize = bootInfo->fbHeight * (bootInfo->fbWidth * (bootInfo->fbFormat.bpp + bootInfo->fbFormat.pixelSpacing) + bootInfo->fbFormat.scanlineSpacing);
+	consoleState.pitch = bootInfo->fbFormat.bpp * bootInfo->fbWidth + bootInfo->fbFormat.scanlineSpacing;
+	memcpy(&consoleState.format, &bootInfo->fbFormat, sizeof(PixelFormat));
+	consoleState.cursorDrawn = 0;
 	clearScreen();
 };
 
+
 static void updateVGACursor()
 {
-	if (consoleState.gfxterm)
+	if (!consoleState.enabled) return;
+	undrawCursor();
+	
+	if (consoleState.curY >= consoleState.height || consoleState.curX >= consoleState.width) return;
+
+	consoleState.cursorPtr = consoleState.fb + 16 * consoleState.curY * consoleState.pitch + 4 * 9 * consoleState.curX;
+	uint32_t *put = consoleState.behindCursor;
+	uint8_t *buf = consoleState.cursorPtr;
+	
+	int count = 16;
+	while (count--)
 	{
-		//lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
+		*put++ = *((uint32_t*)buf);
+		*((uint32_t*)buf) = 0x55555555;
+		
+		buf += consoleState.pitch;
 	};
 	
-	if (consoleState.usingSoftware) return;
-	uint64_t pos = consoleState.curY * consoleState.width + consoleState.curX;
-	outb(0x3D4, 0x0F);
-	outb(0x3D5, pos & 0xFF);
-	outb(0x3D4, 0x0E);
-	outb(0x3D5, (pos >> 8) & 0xFF);
+	consoleState.cursorDrawn = 1;
 };
 
 void clearScreen()
@@ -117,14 +215,7 @@ void clearScreen()
 	consoleState.curColor = 0x07;
 	consoleState.putcon = 1;
 	
-	uint8_t *videoram = consoleState.buffer;
-	uint64_t i;
-	
-	for (i=0; i<consoleState.width*consoleState.height; i++)
-	{
-		videoram[2*i+0] = 0;
-		videoram[2*i+1] = 0x07;
-	};
+	memset(consoleState.fb, 0, consoleState.fbSize);
 	
 	updateVGACursor();
 	mutexUnlock(&consoleLock);
@@ -157,22 +248,62 @@ static void kputbuf_unlocked(const char *buf, size_t size)
 
 static void scroll()
 {
-	uint8_t *vidmem = consoleState.buffer;
-
-	uint64_t i;
-	for (i=0; i<2*consoleState.width*(consoleState.height-1); i++)
+	if (!consoleState.enabled) return;
+	undrawCursor();
+	
+	int y;
+	for (y=0; y<consoleState.height-1; y++)
 	{
-		vidmem[i] = vidmem[i+consoleState.width*2];
+		uint8_t *thisLine = consoleState.fb + (16*y) * consoleState.pitch;
+		uint8_t *nextLine = thisLine + 16 * consoleState.pitch;
+		
+		memcpy(thisLine, nextLine, 16 * consoleState.pitch);
 	};
-
-	for (i=consoleState.width*(consoleState.height-1); i<consoleState.width*consoleState.height; i++)
-	{
-		vidmem[2*i+0] = 0;
-		vidmem[2*i+1] = 0x07;
-	};
+	
+	uint8_t *end = consoleState.fb + 16*(consoleState.height - 1) * consoleState.pitch;
+	memset(end, 0, 16 * consoleState.pitch);
 
 	consoleState.curY--;
 	updateVGACursor();
+};
+
+static void renderChar(int x, int y, char c)
+{
+	const uint8_t *fetch = &confont[16*(unsigned int)(unsigned char)c];
+	uint8_t *put = consoleState.fb + (16*y) * consoleState.pitch + (9*x) * 4;
+	
+	if (put == consoleState.cursorPtr)
+	{
+		consoleState.cursorDrawn = 0;
+	};
+	
+	int height = 16;
+	while (height--)
+	{
+		uint32_t *put32 = (uint32_t*) put;
+		
+		int i;
+		for (i=0; i<9; i++)
+		{
+			// when expanding to 9x16, the last column is repeated. i found this through
+			// trial and error. JUST TRUST ME OK ?!
+			int index = i;
+			if (index == 8) index = 7;
+			
+			uint8_t masks[8] = {128, 64, 32, 16, 8, 4, 2, 1};
+			if ((*fetch) & masks[index])
+			{
+				*put32++ = consolePixels[consoleState.curColor & 0xF];
+			}
+			else
+			{
+				*put32++ = consolePixels[consoleState.curColor >> 4];
+			};
+		};
+		
+		fetch++;
+		put += consoleState.pitch;
+	};
 };
 
 static void kputch(char c)
@@ -185,9 +316,10 @@ static void kputch(char c)
 	};
 	
 	if (!consoleState.putcon) return;
-
-	if (consoleState.curY == consoleState.height) scroll();
+	if (!consoleState.enabled) return;
 	
+	if (consoleState.curY == consoleState.height) scroll();
+
 	if (c == '\n')
 	{
 		consoleState.curX = 0;
@@ -207,9 +339,7 @@ static void kputch(char c)
 			consoleState.curX = consoleState.width;
 		};
 		consoleState.curX--;
-		uint8_t *vidmem = &consoleState.buffer[2 * (consoleState.curY * consoleState.width + consoleState.curX)];
-		*vidmem++ = 0;
-		*vidmem++ = consoleState.curColor;
+		renderChar(consoleState.curX, consoleState.curY, 0);
 	}
 	else if (c == '\t')
 	{
@@ -223,9 +353,7 @@ static void kputch(char c)
 	}
 	else
 	{
-		uint8_t *vidmem = &consoleState.buffer[2 * (consoleState.curY * consoleState.width + consoleState.curX)];
-		*vidmem++ = c;
-		*vidmem++ = consoleState.curColor;
+		renderChar(consoleState.curX, consoleState.curY, c);
 		consoleState.curX++;
 
 		if (consoleState.curX == consoleState.width)
@@ -542,7 +670,7 @@ static void __printf_conv_s(int flags, int lenmod, int fieldWidth, int precision
 
 void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 {
-	/*if (putcon)*/ mutexLock(&consoleLock);
+	mutexLock(&consoleLock);
 	consoleState.putcon = putcon;
 
 	while ((*fmt) != 0)
@@ -673,7 +801,7 @@ void kvprintf_gen(uint8_t putcon, const char *fmt, va_list ap)
 
 	updateVGACursor();
 
-	/*if (putcon)*/ mutexUnlock(&consoleLock);
+	mutexUnlock(&consoleLock);
 };
 
 void kvprintf(const char *fmt, va_list ap)
@@ -826,46 +954,22 @@ void unlockConsole()
 	mutexUnlock(&consoleLock);
 };
 
-#if 0
-void switchConsoleToSoftwareBuffer(unsigned char *buffer, int width, int height)
-{
-	memcpy(buffer, consoleState.buffer,
-	mutexLock(&consoleLock);
-	consoleState.buffer = buffer;
-	consoleState.width = width;
-	consoleState.height = height;
-	mutexUnlock(&consoleLock);
-	clearScreen();
-};
-
-void renderConsoleToScreen()
-{
-	mutexLock(&consoleLock);
-	if (consoleState.usingSoftware)
-	{
-		//lgiRenderConsole(consoleState.buffer, consoleState.width, consoleState.height);
-	}
-	mutexUnlock(&consoleLock);
-};
-#endif
-
 void disableConsole()
 {
 	mutexLock(&consoleLock);
-	memcpy(tempVideoRAM, consoleState.buffer, 2 * 80 * 25);
-	consoleState.buffer = tempVideoRAM;
+	consoleState.enabled = 0;
 	mutexUnlock(&consoleLock);
 };
 
 void enableConsole()
 {
 	mutexLock(&consoleLock);
-	memcpy(initVideoRAM, consoleState.buffer, 2 * 80 * 25);
-	consoleState.buffer = initVideoRAM;
+	consoleState.enabled = 1;
 	mutexUnlock(&consoleLock);
+	
+	clearScreen();
 };
 
 void setGfxTerm(int value)
 {
-	consoleState.gfxterm = value;
 };

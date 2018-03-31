@@ -6,7 +6,6 @@ PHDRS
 	lowmem 0x60000000;			/* tells bootloader to map memory, but not load */
 	text PT_LOAD;
 	data PT_LOAD;
-	videoram 0x60000000;			/* tells bootloader to map memory, but not load */
 	initrd 0x60000001;			/* tells bootloader to load the initrd here */
 	percpu PT_LOAD;
 }
@@ -59,11 +58,6 @@ SECTIONS
 	} :initrd
 
 	. = ALIGN(4096);
-	
-	.videoram (NOLOAD) : AT(0xB8000) ALIGN(0x1000)
-	{
-		*(.videoram)
-	} :videoram
 
 	. = ALIGN(4096);
 	per_cpu_phys_start = .;

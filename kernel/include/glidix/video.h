@@ -52,6 +52,7 @@
 
 /**
  * Pixel format description - compatible with DDI (see libddi.h)
+ * TODO: remove from here; it's already in common.h now, because of VESA in bootloader.
  */
 typedef struct
 {

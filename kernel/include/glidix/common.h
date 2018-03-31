@@ -109,7 +109,19 @@ typedef struct
 	uint32_t		type;
 } PACKED MultibootMemoryMap;
 
+typedef struct
+{
+	int					bpp;
+	uint32_t				redMask;
+	uint32_t				greenMask;
+	uint32_t				blueMask;
+	uint32_t				alphaMask;
+	unsigned int				pixelSpacing;
+	unsigned int				scanlineSpacing;
+} PixelFormat;
+
 #define	KB_FEATURE_BOOTID		(1 << 0)
+#define	KB_FEATURE_VIDEO		(1 << 1)
 typedef struct
 {
 	uint64_t			features;
@@ -123,7 +135,15 @@ typedef struct
 	uint64_t			initrdSymtabOffset;
 	uint64_t			initrdStrtabOffset;
 	uint64_t			numSymbols;
+	
+	/* only when KB_FEATURE_BOOTID is set */
 	uint8_t				bootID[16];
+	
+	/* only when KB_FEATURE_VIDEO is set */
+	uint8_t*			framebuffer;
+	uint32_t			fbWidth;
+	uint32_t			fbHeight;
+	PixelFormat			fbFormat;
 } KernelBootInfo;
 
 typedef struct
