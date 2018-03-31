@@ -39,7 +39,7 @@
 #include "window.h"
 
 // kernel headers must always come last
-#include <glidix/humin.h>
+#include <glidix/humin/humin.h>
 
 static void* inputThreadFunc(void *context)
 {

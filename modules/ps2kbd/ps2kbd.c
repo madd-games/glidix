@@ -26,18 +26,18 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/module.h>
-#include <glidix/console.h>
-#include <glidix/idt.h>
-#include <glidix/common.h>
-#include <glidix/port.h>
-#include <glidix/sched.h>
-#include <glidix/ktty.h>
-#include <glidix/waitcnt.h>
-#include <glidix/term.h>
-#include <glidix/string.h>
-#include <glidix/humin.h>
-#include <glidix/ptr.h>
+#include <glidix/module/module.h>
+#include <glidix/display/console.h>
+#include <glidix/hw/idt.h>
+#include <glidix/util/common.h>
+#include <glidix/hw/port.h>
+#include <glidix/thread/sched.h>
+#include <glidix/term/ktty.h>
+#include <glidix/thread/waitcnt.h>
+#include <glidix/term/term.h>
+#include <glidix/util/string.h>
+#include <glidix/humin/humin.h>
+#include <glidix/humin/ptr.h>
 
 #include "scancodes.h"
 

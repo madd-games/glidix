@@ -29,8 +29,8 @@
 #ifndef __glidix_sdahci_h
 #define __glidix_sdahci_h
 
-#include <glidix/common.h>
-#include <glidix/pci.h>
+#include <glidix/util/common.h>
+#include <glidix/hw/pci.h>
 
 #define	AHCI_SIG_ATA	0x00000101
 #define	AHCI_SIG_ATAPI	0xEB140101

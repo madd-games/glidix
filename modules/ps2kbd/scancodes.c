@@ -26,7 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/humin.h>
+#include <glidix/humin/humin.h>
 
 /**
  * 0 = main page

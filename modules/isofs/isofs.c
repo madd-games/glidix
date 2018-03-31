@@ -26,15 +26,15 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/console.h>
-#include <glidix/module.h>
-#include <glidix/fsdriver.h>
-#include <glidix/vfs.h>
-#include <glidix/common.h>
-#include <glidix/memory.h>
-#include <glidix/string.h>
-#include <glidix/sched.h>
-#include <glidix/errno.h>
+#include <glidix/display/console.h>
+#include <glidix/module/module.h>
+#include <glidix/fs/fsdriver.h>
+#include <glidix/fs/vfs.h>
+#include <glidix/util/common.h>
+#include <glidix/util/memory.h>
+#include <glidix/util/string.h>
+#include <glidix/thread/sched.h>
+#include <glidix/util/errno.h>
 
 #include "isofs.h"
 

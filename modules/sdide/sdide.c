@@ -26,20 +26,20 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/common.h>
-#include <glidix/module.h>
-#include <glidix/console.h>
-#include <glidix/port.h>
-#include <glidix/string.h>
-#include <glidix/memory.h>
-#include <glidix/pci.h>
-#include <glidix/storage.h>
-#include <glidix/semaphore.h>
-#include <glidix/time.h>
-#include <glidix/sched.h>
-#include <glidix/waitcnt.h>
-#include <glidix/idt.h>
-#include <glidix/pagetab.h>
+#include <glidix/util/common.h>
+#include <glidix/module/module.h>
+#include <glidix/display/console.h>
+#include <glidix/hw/port.h>
+#include <glidix/util/string.h>
+#include <glidix/util/memory.h>
+#include <glidix/hw/pci.h>
+#include <glidix/storage/storage.h>
+#include <glidix/thread/semaphore.h>
+#include <glidix/util/time.h>
+#include <glidix/thread/sched.h>
+#include <glidix/thread/waitcnt.h>
+#include <glidix/hw/idt.h>
+#include <glidix/hw/pagetab.h>
 
 #include "sdide.h"
 

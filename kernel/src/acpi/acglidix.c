@@ -27,19 +27,19 @@
 */
 
 #include <acpi/acpi.h>
-#include <glidix/memory.h>
-#include <glidix/console.h>
-#include <glidix/time.h>
-#include <glidix/port.h>
-#include <glidix/isp.h>
-#include <glidix/string.h>
-#include <glidix/sched.h>
-#include <glidix/common.h>
-#include <glidix/pci.h>
-#include <glidix/pagetab.h>
-#include <glidix/physmem.h>
-#include <glidix/idt.h>
-#include <glidix/mutex.h>
+#include <glidix/util/memory.h>
+#include <glidix/display/console.h>
+#include <glidix/util/time.h>
+#include <glidix/hw/port.h>
+#include <glidix/util/isp.h>
+#include <glidix/util/string.h>
+#include <glidix/thread/sched.h>
+#include <glidix/util/common.h>
+#include <glidix/hw/pci.h>
+#include <glidix/hw/pagetab.h>
+#include <glidix/hw/physmem.h>
+#include <glidix/hw/idt.h>
+#include <glidix/thread/mutex.h>
 
 /**
  * Implements the ACPICA Operating System Layer (OSL) functions.

@@ -30,13 +30,13 @@
  * Serial port driver.
  */
 
-#include <glidix/devfs.h>
-#include <glidix/common.h>
-#include <glidix/module.h>
-#include <glidix/port.h>
-#include <glidix/memory.h>
-#include <glidix/string.h>
-#include <glidix/console.h>
+#include <glidix/fs/devfs.h>
+#include <glidix/util/common.h>
+#include <glidix/module/module.h>
+#include <glidix/hw/port.h>
+#include <glidix/util/memory.h>
+#include <glidix/util/string.h>
+#include <glidix/display/console.h>
 
 uint16_t comPorts[4] = {0x3F8, 0x2F8, 0x3E8, 0x2E8};
 const char *comNames[4] = {"com1", "com2", "com3", "com4"};

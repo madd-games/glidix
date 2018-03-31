@@ -29,8 +29,8 @@
 #ifndef ISOFS_H_
 #define ISOFS_H_
 
-#include <glidix/common.h>
-#include <glidix/vfs.h>
+#include <glidix/util/common.h>
+#include <glidix/fs/vfs.h>
 
 /**
  * If set in mount options, do not use Rock Ridge names.

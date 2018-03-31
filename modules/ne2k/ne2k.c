@@ -26,18 +26,18 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/module.h>
-#include <glidix/console.h>
-#include <glidix/pci.h>
-#include <glidix/string.h>
-#include <glidix/netif.h>
-#include <glidix/memory.h>
-#include <glidix/port.h>
-#include <glidix/spinlock.h>
-#include <glidix/sched.h>
-#include <glidix/idt.h>
-#include <glidix/ethernet.h>
-#include <glidix/waitcnt.h>
+#include <glidix/module/module.h>
+#include <glidix/display/console.h>
+#include <glidix/hw/pci.h>
+#include <glidix/util/string.h>
+#include <glidix/net/netif.h>
+#include <glidix/util/memory.h>
+#include <glidix/hw/port.h>
+#include <glidix/thread/spinlock.h>
+#include <glidix/thread/sched.h>
+#include <glidix/hw/idt.h>
+#include <glidix/net/ethernet.h>
+#include <glidix/thread/waitcnt.h>
 
 #define	RX_BUFFER_START			((16*1024)/256+6)
 #define	RX_BUFFER_END			((32*1024)/256)

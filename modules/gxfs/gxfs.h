@@ -29,7 +29,7 @@
 #ifndef __gxfs_h
 #define __gxfs_h
 
-#include <glidix/common.h>
+#include <glidix/util/common.h>
 
 #define	GXFS_SBH_MAGIC					(*((const uint64_t*)"__GXFS__"))
 

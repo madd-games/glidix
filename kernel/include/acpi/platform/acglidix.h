@@ -123,11 +123,11 @@
 #define ACPI_USE_SYSTEM_CLIBRARY
 #define ACPI_USE_DO_WHILE_0
 
-#include <glidix/string.h>
-#include <glidix/common.h>
-#include <glidix/sched.h>
-#include <glidix/spinlock.h>
-#include <glidix/semaphore.h>
+#include <glidix/util/string.h>
+#include <glidix/util/common.h>
+#include <glidix/thread/sched.h>
+#include <glidix/thread/spinlock.h>
+#include <glidix/thread/semaphore.h>
 #include <stdarg.h>
 
 /* Host-dependent types and defines for in-kernel ACPICA */

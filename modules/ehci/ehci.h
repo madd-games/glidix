@@ -29,9 +29,9 @@
 #ifndef EHCI_H_
 #define EHCI_H_
 
-#include <glidix/common.h> 
-#include <glidix/dma.h>
-#include <glidix/semaphore.h>
+#include <glidix/util/common.h> 
+#include <glidix/hw/dma.h>
+#include <glidix/thread/semaphore.h>
 
 #define	EHCI_LEGSUP_OWN_OS		(1 << 24)
 #define	EHCI_LEGSUP_OWN_BIOS		(1 << 16)

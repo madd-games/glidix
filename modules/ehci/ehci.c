@@ -26,16 +26,16 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <glidix/usb.h>
-#include <glidix/pci.h>
-#include <glidix/sched.h>
-#include <glidix/module.h>
-#include <glidix/common.h>
-#include <glidix/console.h>
-#include <glidix/string.h>
-#include <glidix/dma.h>
-#include <glidix/waitcnt.h>
-#include <glidix/memory.h>
+#include <glidix/usb/usb.h>
+#include <glidix/hw/pci.h>
+#include <glidix/thread/sched.h>
+#include <glidix/module/module.h>
+#include <glidix/util/common.h>
+#include <glidix/display/console.h>
+#include <glidix/util/string.h>
+#include <glidix/hw/dma.h>
+#include <glidix/thread/waitcnt.h>
+#include <glidix/util/memory.h>
 
 #include "ehci.h"
 

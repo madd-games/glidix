@@ -27,17 +27,17 @@
 */
 
 
-#include <glidix/module.h>
-#include <glidix/console.h>
-#include <glidix/pci.h>
-#include <glidix/string.h>
-#include <glidix/netif.h>
-#include <glidix/memory.h>
-#include <glidix/port.h>
-#include <glidix/semaphore.h>
-#include <glidix/sched.h>
-#include <glidix/dma.h>
-#include <glidix/waitcnt.h>
+#include <glidix/module/module.h>
+#include <glidix/display/console.h>
+#include <glidix/hw/pci.h>
+#include <glidix/util/string.h>
+#include <glidix/net/netif.h>
+#include <glidix/util/memory.h>
+#include <glidix/hw/port.h>
+#include <glidix/thread/semaphore.h>
+#include <glidix/thread/sched.h>
+#include <glidix/hw/dma.h>
+#include <glidix/thread/waitcnt.h>
 
 #define NUM_TX_DESC_LOG2 3
 #define NUM_RX_DESC_LOG2 3

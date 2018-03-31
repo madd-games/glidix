@@ -29,7 +29,7 @@
 #ifndef SDIDE_H_
 #define SDIDE_H_
 
-#include <glidix/common.h>
+#include <glidix/util/common.h>
 
 /* status register */
 #define ATA_SR_BSY			0x80    // Busy

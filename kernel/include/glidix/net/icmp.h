@@ -1,0 +1,67 @@
+/*
+	Glidix kernel
+
+	Copyright (c) 2014-2017, Madd Games.
+	All rights reserved.
+	
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions are met:
+	
+	* Redistributions of source code must retain the above copyright notice, this
+	  list of conditions and the following disclaimer.
+	
+	* Redistributions in binary form must reproduce the above copyright notice,
+	  this list of conditions and the following disclaimer in the documentation
+	  and/or other materials provided with the distribution.
+	
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+	FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+	DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+	CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+#ifndef __glidix_icmp_h
+#define __glidix_icmp_h
+
+#include <glidix/util/errno.h>
+#include <glidix/net/netif.h>
+
+typedef struct
+{
+	uint8_t			type;
+	uint8_t			code;
+	uint16_t		checksum;
+	uint32_t		zero;
+	uint8_t			payload[28];
+} ErrorPacket4;
+
+typedef struct
+{
+	uint8_t			type;
+	uint8_t			code;
+	uint16_t		checksum;
+	uint16_t		id;
+	uint16_t		seq;
+} PingPong6Packet;
+
+typedef struct
+{
+	uint8_t			src[16];
+	uint8_t			dest[16];
+	uint32_t		len;
+	uint8_t			zeroes[3];
+	uint8_t			proto;			// IPPROTO_ICMPV6
+	char			payload[];
+} PseudoHeaderICMPv6;
+
+int sendErrorPacket(struct sockaddr *src, const struct sockaddr *dest, int errnum, const void *packet, size_t packetlen);
+void onICMPPacket(const struct sockaddr *src, const struct sockaddr *dest, const void *msg, size_t size);
+void onICMP6Packet(const struct sockaddr *src, const struct sockaddr *dest, const void *msg, size_t size);
+
+#endif
