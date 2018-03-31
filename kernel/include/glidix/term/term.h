@@ -44,6 +44,7 @@
 #define	IOCTL_TTY_UNLOCKPT	IOCTL_NOARG(IOCTL_INT_TERM, 5)
 #define	IOCTL_TTY_PTSNAME	IOCTL_ARG(PTSName, IOCTL_INT_TERM, 6)
 #define	IOCTL_TTY_ISATTY	IOCTL_NOARG(IOCTL_INT_TERM, 7)
+#define	IOCTL_TTY_GETSIZE	IOCTL_ARG(TermWinSize, IOCTL_INT_TERM, 8)
 
 // input modes
 #define	BRKINT			(1 << 0)
@@ -133,5 +134,13 @@ typedef struct
 {
 	char			name[256];
 } PTSName;
+
+typedef struct
+{
+	unsigned short		ws_row;
+	unsigned short		ws_col;
+	unsigned short		ws_xpixel;
+	unsigned short		ws_ypixel;
+} TermWinSize;
 
 #endif

@@ -116,7 +116,8 @@ int termIoctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 	Thread *scan;
 	int pgid;
 	struct termios *tc = (struct termios*) argp;
-
+	TermWinSize *winsz = (TermWinSize*) argp;
+	
 	switch (cmd)
 	{
 	case IOCTL_TTY_GETATTR:
@@ -173,6 +174,11 @@ int termIoctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 		termGroup = pgid;
 		return 0;
 	case IOCTL_TTY_ISATTY:
+		return 0;
+	case IOCTL_TTY_GETSIZE:
+		getConsoleSize(&winsz->ws_col, &winsz->ws_row);
+		winsz->ws_xpixel = 0;
+		winsz->ws_ypixel = 0;
 		return 0;
 	default:
 		ERRNO = ENODEV;
@@ -238,56 +244,6 @@ void termPutChar(char c)
 
 	semSignal(&semLineBuffer);
 };
-
-#if 0
-void setupTerminal(FileTable *ftab)
-{
-	File *termout = (File*) kmalloc(sizeof(File));
-	memset(termout, 0, sizeof(File));
-
-	termout->write = &termWrite;
-	termout->oflag = O_WRONLY | O_TERMINAL;
-	termout->ioctl = &termIoctl;
-	termout->refcount = 1;
-
-	inputWrite = 0;
-	inputRead = 0;
-	lineBufferSize = 0;
-
-	File *termin = (File*) kmalloc(sizeof(File));
-	memset(termin, 0, sizeof(File));
-	termin->oflag = O_RDONLY | O_TERMINAL;
-	termin->read = &termRead;
-	termin->ioctl = &termIoctl;
-	termin->refcount = 1;
-
-	vfsDup(termout);
-	File *termerr = termout;
-	
-	if (ftabAlloc(ftab) != 0) panic("ftabAlloc did not return 0!");
-	if (ftabAlloc(ftab) != 1) panic("ftabAlloc did not return 1!");
-	if (ftabAlloc(ftab) != 2) panic("ftabAlloc did not return 2!");
-
-	ftabSet(ftab, 0, termin, 0);
-	ftabSet(ftab, 1, termout, 0);
-	ftabSet(ftab, 2, termerr, 0);
-
-	termState.c_iflag = ICRNL;
-	termState.c_oflag = 0;
-	termState.c_cflag = 0;
-	termState.c_lflag = ECHO | ECHOE | ECHOK | ECHONL | ICANON | ISIG;
-
-	int i;
-	for (i=0; i<NCCS; i++)
-	{
-		termState.c_cc[i] = i+0x80;
-	};
-
-	semInit2(&semCount, 0);
-	semInit(&semInput);
-	semInit(&semLineBuffer);
-};
-#endif
 
 void initTerminal()
 {

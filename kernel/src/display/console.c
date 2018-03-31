@@ -113,6 +113,12 @@ int conOutCom = 0;
  */
 extern const unsigned char confont[16*256];
 
+void getConsoleSize(unsigned short *width, unsigned short *height)
+{
+	*width = (unsigned short) consoleState.width;
+	*height = (unsigned short) consoleState.height;
+};
+
 void enableDebugTerm()
 {
 	conOutCom = 1;

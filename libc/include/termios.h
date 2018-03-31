@@ -44,6 +44,9 @@ extern "C" {
 #define	__IOCTL_TTY_UNLOCKPT	__IOCTL_NOARG(5, 5)
 #define	__IOCTL_TTY_PTSNAME	__IOCTL_ARG(__ptsname, 5, 6)
 #define	__IOCTL_TTY_ISATTY	__IOCTL_NOARG(5, 7)
+#define	__IOCTL_TTY_GETSIZE	__IOCTL_ARG(struct winsize, 5, 8)
+
+#define	TIOCGWINSZ		__IOCTL_TTY_GETSIZE
 
 typedef struct
 {
@@ -130,6 +133,14 @@ struct termios
 	tcflag_t		c_cflag;
 	tcflag_t		c_lflag;
 	cc_t			c_cc[NCCS];
+};
+
+struct winsize
+{
+	unsigned short		ws_row;
+	unsigned short		ws_col;
+	unsigned short		ws_xpixel;
+	unsigned short		ws_ypixel;
 };
 
 int tcgetattr(int fildes, struct termios *tc);
