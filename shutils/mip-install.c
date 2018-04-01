@@ -184,6 +184,7 @@ int installPackage(const char *path)
 	};
 	
 	printf("installation of %s complete\n", path);
+	fclose(fp);
 	return 0;
 };
 
