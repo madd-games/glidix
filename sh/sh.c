@@ -43,6 +43,7 @@
 #include "preproc.h"
 #include "command.h"
 #include "sh.h"
+#include "colorize.h"
 
 #define	MAX_STACK_DEPTH			32
 #define	MAX_BRACKET_DEPTH		24
@@ -193,7 +194,7 @@ static char *shGetLine(int cont)
 		size_t numChars = 0;
 		CmdHistory *currCmd = NULL;
 		
-		while(1)
+		while (1)
 		{	
 			ssize_t retval = read(0, &c, 1);
 			
@@ -236,7 +237,8 @@ static char *shGetLine(int cont)
 						while (numChars--) printf("\b");
 						numChars = strlen(currCmd->line);
 						strcpy(linbuff, currCmd->line);
-						printf("%s", linbuff);
+						//printf("%s", linbuff);
+						printColored(linbuff, strlen(linbuff));
 					}
 					else if(currCmd != NULL)
 					{
@@ -246,7 +248,8 @@ static char *shGetLine(int cont)
 							while (numChars--) printf("\b");
 							numChars = strlen(currCmd->line);
 							strcpy(linbuff, currCmd->line);
-							printf("%s", linbuff);
+							//printf("%s", linbuff);
+							printColored(linbuff, strlen(linbuff));
 						}
 					}
 				}
@@ -260,28 +263,36 @@ static char *shGetLine(int cont)
 						{
 							strcpy(linbuff, pendbuff);
 							numChars = strlen(linbuff);
-							printf("%s", linbuff);
+							//printf("%s", linbuff);
+							printColored(linbuff, strlen(linbuff));
 						}
 						else
 						{
 							numChars = strlen(currCmd->line);
 							strcpy(linbuff, currCmd->line);
-							printf("%s", linbuff);
+							//printf("%s", linbuff);
+							printColored(linbuff, strlen(linbuff));
 						}
 					}
 				}
 				else if(c == '\b')
 				{
-					if(numChars > 0)
+					if (numChars != 0)
 					{
+						int count = numChars;
+						while (count--) printf("\b");
+					
 						numChars--;
-						printf("\b");
-					}
+						printColored(linbuff, numChars);
+					};
 				}
 				else if(numChars < 1023) 
 				{
+					int count = numChars;
+					while (count--) printf("\b");
+					
 					linbuff[numChars++] = c;
-					write(1, &c, 1);
+					printColored(linbuff, numChars);
 				} 
 			}
 		}
