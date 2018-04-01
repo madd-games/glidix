@@ -62,6 +62,7 @@
 #include <glidix/fs/ftree.h>
 #include <glidix/hw/msr.h>
 #include <glidix/humin/ptr.h>
+#include <glidix/display/bootfb.h>
 
 #define ACPI_OSC_QUERY_INDEX				0
 #define ACPI_OSC_SUPPORT_INDEX				1
@@ -647,6 +648,10 @@ void kmain2()
 	initTerminal();
 	DONE();
 
+	kprintf("Initializing bootfb... ");
+	bootfbInit();
+	DONE();
+	
 	kprintf("Starting the spawn process... ");
 	MachineState state;
 	memset(&state.fpuRegs, 0, 512);

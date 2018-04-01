@@ -35,11 +35,6 @@
 #include <glidix/util/errno.h>
 #include <glidix/display/console.h>
 
-typedef struct
-{
-	VideoDisplay *disp;
-} VideoDeviceData;
-
 VideoDriver *videoCreateDriver(const char *name)
 {
 	VideoDriver *drv = NEW(VideoDriver);
@@ -58,7 +53,6 @@ void videoDeleteDriver(VideoDriver *drv)
 
 void video_free(Inode *inode)
 {
-	kfree(inode->fsdata);
 };
 
 uint64_t video_getpage(FileTree *ft, off_t pos)
@@ -76,7 +70,7 @@ int video_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 	case IOCTL_VIDEO_MODESET:
 		if (!havePerm(XP_DISPCONF))
 		{
-			ERRNO = EPERM;
+			ERRNO = EACCES;
 			return -1;
 		};
 		disableConsole();
@@ -108,17 +102,8 @@ VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops)
 	char devname[64];
 	strformat(devname, 64, "%s%d", drv->name, __sync_fetch_and_add(&drv->nextNum, 1));
 	
-	VideoDeviceData *devdata = NEW(VideoDeviceData);
-	if (devdata == NULL)
-	{
-		kfree(disp);
-		return NULL;
-	};
-	
-	devdata->disp = disp;
-	
 	Inode *inode = vfsCreateInode(NULL, 0644);
-	inode->fsdata = devdata;
+	inode->fsdata = disp;
 	inode->ioctl = video_ioctl;
 	inode->free = video_free;
 	inode->ft = ftCreate(FT_ANON);

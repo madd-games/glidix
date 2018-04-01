@@ -64,6 +64,11 @@
 #define	CANON_MASK		0xFFFF800000000000
 
 /**
+ * Virtual address (pointer) to physical frame number.
+ */
+#define	VIRT_TO_FRAME(ptr)	(((PTe*)((((uint64_t)ptr) >> 9) | 0xFFFFFC0000000000))->framePhysAddr)
+
+/**
  * Special traps. If a userspace process jumps to one of these, it will trigger
  * a page fault with a faultAddr equal to the given trap, and with the "fetch" flag
  * set. The kernel will then perform a specific job, as if a function was called.

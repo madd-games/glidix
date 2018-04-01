@@ -114,8 +114,8 @@ int main(int argc, char *argv[])
 	
 	if (devname[0] == 0)
 	{
-		fprintf(stderr, "%s: no display device detected\n", argv[0]);
-		return 1;
+		// no native graphics device detected; just use the boot framebuffer
+		strcpy(devname, "bootfb");
 	};
 	
 	fp = fopen(argv[1], "w");

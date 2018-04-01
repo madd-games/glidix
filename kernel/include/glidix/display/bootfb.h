@@ -26,51 +26,14 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
+#ifndef __glidix_bootfb_h
+#define __glidix_bootfb_h
 
-#include <glidix/util/common.h>
-#include <stdarg.h>
-#include <stddef.h>
-
-typedef struct
-{
-	uint64_t curX, curY;
-	uint64_t curColor;
-	uint8_t putcon;
-	uint8_t *fb;
-	size_t fbSize;
-	size_t pitch;
-	int width, height;
-	int enabled;
-	PixelFormat format;
-	int cursorDrawn;
-	uint32_t behindCursor[16];
-	uint8_t *cursorPtr;
-	uint64_t pixelWidth, pixelHeight;		/* framebuffer size in pixels */
-} ConsoleState;
-extern ConsoleState consoleState;
-
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-FORMAT(printf, 1, 2) void kprintf(const char *fmt, ...);
-void kputbuf(const char *buf, size_t size);
-void kputbuf_debug(const char *buf, size_t size);
-void kdumpregs(Regs *regs);
-FORMAT(printf, 1, 2) void kprintf_debug(const char *fmt, ...);
-void unlockConsole();
-void clearScreen();
-void setConsoleColor(uint8_t col);
-void setCursorPos(uint8_t x, uint8_t y);
-void setGfxTerm(int value);
-void enableDebugTerm();
-void disableConsole();
-void enableConsole();
-void getConsoleSize(unsigned short *width, unsigned short *height);
-
-#define	DONE()						kprintf("Done\n")
-#define	FAILED()					kprintf("Failed\n")
-
-#define	PRINTFLAG(cond, c)	if (cond) {kprintf("%c", c);} else {kprintf("%c", c-'A'+'a');}
+/**
+ * Initialize the boot framebuffer device. It's the special device /dev/bootfb, which gives
+ * DDI access to the bootloader-supplied framebuffer, without the need for graphics drivers,
+ * but without the ability to set modes.
+ */
+void bootfbInit();
 
 #endif

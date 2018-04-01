@@ -58,21 +58,7 @@ enum
 	_LM_L,
 };
 
-static struct
-{
-	uint64_t curX, curY;
-	uint64_t curColor;
-	uint8_t putcon;
-	uint8_t *fb;
-	size_t fbSize;
-	size_t pitch;
-	int width, height;
-	int enabled;
-	PixelFormat format;
-	int cursorDrawn;
-	uint32_t behindCursor[16];
-	uint8_t *cursorPtr;
-} consoleState;
+ConsoleState consoleState;
 
 static Mutex consoleLock;
 
@@ -186,9 +172,10 @@ void initConsole()
 	consoleState.pitch = bootInfo->fbFormat.bpp * bootInfo->fbWidth + bootInfo->fbFormat.scanlineSpacing;
 	memcpy(&consoleState.format, &bootInfo->fbFormat, sizeof(PixelFormat));
 	consoleState.cursorDrawn = 0;
+	consoleState.pixelWidth = bootInfo->fbWidth;
+	consoleState.pixelHeight = bootInfo->fbHeight;
 	clearScreen();
 };
-
 
 static void updateVGACursor()
 {
@@ -220,6 +207,7 @@ void clearScreen()
 	consoleState.curY = 0;
 	consoleState.curColor = 0x07;
 	consoleState.putcon = 1;
+	consoleState.cursorDrawn = 0;
 	
 	memset(consoleState.fb, 0, consoleState.fbSize);
 	

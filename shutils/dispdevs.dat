@@ -6,5 +6,5 @@
 # NAME - the 'driver name', prefixed to the device names under /dev.
 
 # Bochs Graphics Adapter (BGA), used in VirtualBox too
-1234:1111 bga
-80EE:BEEF bga
+#1234:1111 bga
+#80EE:BEEF bga

@@ -26,51 +26,54 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __glidix_console_h
-#define __glidix_console_h
-
 #include <glidix/util/common.h>
-#include <stdarg.h>
-#include <stddef.h>
+#include <glidix/util/string.h>
+#include <glidix/display/video.h>
+#include <glidix/display/bootfb.h>
+#include <glidix/display/console.h>
+#include <glidix/hw/pagetab.h>
 
-typedef struct
+static int bootfbSetMode(VideoDisplay *disp, VideoModeRequest *req)
 {
-	uint64_t curX, curY;
-	uint64_t curColor;
-	uint8_t putcon;
-	uint8_t *fb;
-	size_t fbSize;
-	size_t pitch;
-	int width, height;
-	int enabled;
-	PixelFormat format;
-	int cursorDrawn;
-	uint32_t behindCursor[16];
-	uint8_t *cursorPtr;
-	uint64_t pixelWidth, pixelHeight;		/* framebuffer size in pixels */
-} ConsoleState;
-extern ConsoleState consoleState;
+	if (req->res != VIDEO_RES_AUTO)
+	{
+		return -1;
+	};
+	
+	disableConsole();
+	memcpy(&req->format, &consoleState.format, sizeof(PixelFormat));
+	req->res = VIDEO_RES_SPECIFIC(consoleState.pixelWidth, consoleState.pixelHeight);
+	return 0;
+};
 
-void initConsole();
-void kvprintf(const char *fmt, va_list ap);
-FORMAT(printf, 1, 2) void kprintf(const char *fmt, ...);
-void kputbuf(const char *buf, size_t size);
-void kputbuf_debug(const char *buf, size_t size);
-void kdumpregs(Regs *regs);
-FORMAT(printf, 1, 2) void kprintf_debug(const char *fmt, ...);
-void unlockConsole();
-void clearScreen();
-void setConsoleColor(uint8_t col);
-void setCursorPos(uint8_t x, uint8_t y);
-void setGfxTerm(int value);
-void enableDebugTerm();
-void disableConsole();
-void enableConsole();
-void getConsoleSize(unsigned short *width, unsigned short *height);
+static void bootfbGetInfo(VideoDisplay *disp, VideoInfo *info)
+{
+	strcpy(info->renderer, "softrender");
+	info->numPresentable = 1;
+	info->features = 0;
+};
 
-#define	DONE()						kprintf("Done\n")
-#define	FAILED()					kprintf("Failed\n")
+static uint64_t bootfbGetPage(VideoDisplay *disp, off_t off)
+{
+	if (off >= consoleState.fbSize)
+	{
+		return 0;
+	};
+	
+	uint64_t base = VIRT_TO_FRAME(consoleState.fb);
+	return base + (off >> 12);
+};
 
-#define	PRINTFLAG(cond, c)	if (cond) {kprintf("%c", c);} else {kprintf("%c", c-'A'+'a');}
+static VideoOps bootfbOps = {
+	.setmode = bootfbSetMode,
+	.getinfo = bootfbGetInfo,
+	.getpage = bootfbGetPage,
+};
 
-#endif
+void bootfbInit()
+{
+	VideoDriver *drv = videoCreateDriver("bootfb");
+	assert(drv != NULL);
+	VideoDisplay *disp = videoCreateDisplay(drv, NULL, &bootfbOps);
+	assert(disp != NULL);
+};

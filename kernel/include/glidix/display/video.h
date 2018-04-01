@@ -51,21 +51,6 @@
 #define	VIDEO_RES_HEIGHT(s)			(((s) >> 32) & 0xFFFF)
 
 /**
- * Pixel format description - compatible with DDI (see libddi.h)
- * TODO: remove from here; it's already in common.h now, because of VESA in bootloader.
- */
-typedef struct
-{
-	int					bpp;
-	uint32_t				redMask;
-	uint32_t				greenMask;
-	uint32_t				blueMask;
-	uint32_t				alphaMask;
-	unsigned int				pixelSpacing;
-	unsigned int				scanlineSpacing;
-} VideoPixelFormat;
-
-/**
  * Graphics information structure - compatible with DDI (see libddi.h)
  */
 typedef struct
@@ -105,7 +90,7 @@ typedef struct
 	/**
 	 * (Out) The pixel format of the display. The framebuffer is placed at virtual offset 0.
 	 */
-	VideoPixelFormat			format;
+	PixelFormat				format;
 } VideoModeRequest;
 
 /**
@@ -129,11 +114,6 @@ typedef struct
 	 * memory (this is the offset used with mmap()). Return 0 if no such page exists.
 	 */
 	uint64_t (*getpage)(struct VideoDisplay_ *display, off_t off);
-	
-	/**
-	 * Exit graphics mode. This function must return to VGA-compatible 80x25 text mode.
-	 */
-	void (*exitmode)(struct VideoDisplay_ *display);
 } VideoOps;
 
 /**
@@ -185,7 +165,7 @@ void videoDeleteDriver(VideoDriver *drv);
 
 /**
  * Create a new display object. 'data' is an arbitrary pointer set by the driver, and 'ops' points to a filled-in
- * VideoOps structure. 'dr'v is the video driver to which this display is attached.
+ * VideoOps structure. 'drv' is the video driver to which this display is attached.
  */
 VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops);
 
