@@ -178,6 +178,7 @@ static ssize_t pipe_write(Inode *inode, File *fp, const void *buffer, size_t siz
 		};
 		
 		semWait(&pipe->lock);
+		semSignal2(&pipe->semBufferRead, count);
 		while (count--)
 		{
 			pipe->buffer[pipe->offWrite] = *scan++;

@@ -41,14 +41,7 @@ void catFile(int fd)
 		ssize_t count = read(fd, buffer, 1024);
 		if (count == -1)
 		{
-			if (errno == EINTR)
-			{
-				close(fd);
-			}
-			else
-			{
-				perror("read");
-			};
+			perror("read");
 			exit(1);
 		};
 
