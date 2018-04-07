@@ -38,5 +38,6 @@ void* malloc(size_t len)
 	pthread_mutex_lock(&__heap_lock);
 	void *out = _heap_malloc(len);
 	pthread_mutex_unlock(&__heap_lock);
+	
 	return out;
 };

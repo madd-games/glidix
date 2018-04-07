@@ -66,7 +66,7 @@ static void fastCopy(void *dest_, const void *src_, size_t sz)
 	while (sz--) *destChar++ = *srcChar++;
 };
 
-static uint8_t* ddiCreateSharedFile(uint32_t *idOut, DDISurface *target)
+static uint8_t* srCreateSharedFile(uint32_t *idOut, DDISurface *target)
 {	
 	while (1)
 	{
@@ -91,6 +91,7 @@ static uint8_t* ddiCreateSharedFile(uint32_t *idOut, DDISurface *target)
 			}
 			else
 			{
+				perror("srCreateSharedFile");
 				return NULL;
 			};
 		};
@@ -123,7 +124,11 @@ int srCreateSurface(void *drvctx, DDISurface *surface, char *data)
 	
 	if (surface->flags & DDI_SHARED)
 	{
-		surface->data = ddiCreateSharedFile(&surface->id, surface);
+		surface->data = srCreateSharedFile(&surface->id, surface);
+		if (surface->data == NULL)
+		{
+			return -1;
+		};
 	}
 	else
 	{

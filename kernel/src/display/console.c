@@ -202,6 +202,8 @@ static void updateVGACursor()
 
 void clearScreen()
 {
+	if (!consoleState.enabled) return;
+	
 	mutexLock(&consoleLock);
 	consoleState.curX = 0;
 	consoleState.curY = 0;

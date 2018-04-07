@@ -257,8 +257,12 @@ static ScreenSize okSizes[] = {
 	{0, 0}
 };
 
+static int safeMode = 0;
+
 static int isOkSize(word_t width, word_t height)
 {
+	if (!safeMode) return 1;
+	
 	ScreenSize *scan;
 	for (scan=okSizes; scan->width!=0; scan++)
 	{

@@ -263,12 +263,19 @@ void shutdownSystem(int action)
 	
 	printf("init: unmounting filesystems...\n");
 	struct fsinfo currentFSList[256];
+	chdir("/");
+	chroot("rootfs");
 	size_t count = _glidix_fsinfo(currentFSList, 256);
+	chroot(".");
 	
 	int i;
-	for (i=count; i<=0; i--)
+	for (i=count-1; i>=0; i--)
 	{
-		if (unmount(currentFSList[i].fs_mntpoint, 0) != 0)
+		char actual_mntpoint[512];
+		sprintf(actual_mntpoint, "/rootfs/%s", currentFSList[i].fs_mntpoint);
+		
+		printf("init: unmount %s\n", actual_mntpoint);
+		if (unmount(actual_mntpoint, 0) != 0)
 		{
 			printf("init: failed to unmount %s: %s\n", currentFSList[i].fs_mntpoint, strerror(errno));
 			printf("init: waiting 5 seconds and skipping this filesystem\n");
@@ -277,36 +284,6 @@ void shutdownSystem(int action)
 	};
 	
 	printf("init: removing all kernel modules...\n");
-#if 0
-	DIR *dirp = opendir("/sys/mod");
-	if (dirp == NULL)
-	{
-		printf("init: failed to open /sys/mod: %s\n", strerror(errno));
-		printf("init: waiting 5 seconds and assuming modules don't need unloading\n");
-		sleep(5);
-	}
-	else
-	{
-		struct dirent *ent;
-		while ((ent = readdir(dirp)) != NULL)
-		{
-			if (ent->d_name[0] != '.')
-			{
-				if (_glidix_rmmod(ent->d_name, 0) != 0)
-				{
-					printf("init: failed to rmmod %s: %s\n", ent->d_name, strerror(errno));
-					printf("Report this problem to the module developer.\n");
-					printf("I will now hang, you may turn off power manually.\n");
-					printf("If the problem persists, remove the module for your safety.\n");
-					while (1) pause();
-				};
-			};
-		};
-		
-		closedir(dirp);
-	};
-#endif
-	
 	struct modstat ms;
 	for (i=0; i<512; i++)
 	{
@@ -487,7 +464,6 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 		
-		_glidix_unmount("/", 0);
 		loadmods();
 		
 		printf("init: initializing partitions...\n");

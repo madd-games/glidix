@@ -745,6 +745,10 @@ void runServer(int sockfd)
 				// TODO: error reporting
 				close(client);
 			};
+		}
+		else
+		{
+			perror("[gwmserver] accept\n");
 		};
 	};
 };

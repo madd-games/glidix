@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
 	if (fork() == 0)
 	{
 		execl("/usr/bin/gui-login", "gui-login", NULL);
-		perror("exec terminal");
+		perror("exec gui-login");
 		_exit(1);
 	};
 	
@@ -263,7 +263,6 @@ int main(int argc, char *argv[])
 	signal(SIGALRM, SIG_CORE);
 	
 	kblSet("/usr/share/kblayout/en_US/int", stderr);
-	printf("[gwmserver] starting.\n");
 	wndInit();
 	ptrInit();
 	inputInit();

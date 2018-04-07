@@ -96,8 +96,6 @@ void ptrInit()
 	{
 		panic("failed to create /dev/ptr");
 	};
-	
-	vfsDownrefInode(inode);
 };
 
 void ptrRelMotion(int deltaX, int deltaY)

@@ -47,8 +47,6 @@ typedef struct
 	int			flags;
 } ProgramSegment;
 
-int sysOpenErrno(int error);			// syscall.c
-
 int execScript(File *fp, const char *path, const char *pars, size_t parsz)
 {
 	char intline[1024];
@@ -545,11 +543,17 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			{
 				kfree(rpath);
 			};
+			vfsUnrefInode(iref);
 		}
 		else
 		{
 			kfree(rpath);
+			vfsUnrefDentry(dref);
 		};
+	}
+	else
+	{
+		vfsUnrefDentry(dref);
 	};
 	
 	// set the execPars
@@ -678,7 +682,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	{
 		traceTrap(&regs, TR_EXEC);
 	};
-	
+
 	switchContext(&regs);
 	return 0;
 };

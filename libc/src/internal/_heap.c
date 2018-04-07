@@ -172,7 +172,7 @@ void *_heap_realloc(void *block, size_t newsize)
 void _heap_free(void *block)
 {
 	if (block == NULL) return;
-
+	
 	uint64_t addr = (uint64_t) block - sizeof(__heap_header);
 	__heap_header *header = (__heap_header*) addr;
 	if (addr < (uint64_t)firstHead)

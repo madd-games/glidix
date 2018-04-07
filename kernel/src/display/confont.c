@@ -2458,7 +2458,7 @@ const unsigned char confont[16*256] = {
 	XX___XX_,
 	_XX_XX__,
 	__XXX___,
-	__XXX___,
+	___X____,
 	__XXX___,
 	_XX_XX__,
 	XX___XX_,

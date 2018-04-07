@@ -618,6 +618,7 @@ Socket* unixsock_accept(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 			unaddr->sun_path[0] = 0;
 		};
 		
+		enableDebugTerm();
 		int status = semWaitGen(&unixsock->seq.semConnWaiting, 1, SEM_W_FILE(sock->fp->oflags),
 						sock->options[GSO_RCVTIMEO]);
 		if (status < 0)
@@ -656,7 +657,7 @@ UnixSocket* CreateUnixSocket(int type)
 	
 	if (type == SOCK_SEQPACKET)
 	{
-		unixsock->seq.sysobj = vfsCreateInode(NULL, VFS_MODE_SOCKET | 0644);
+		unixsock->seq.sysobj = vfsCreateInode(NULL, VFS_MODE_SOCKET | 0666);
 		unixsock->seq.sysobj->fsdata = unixsock;
 		unixsock->seq.sysobj->free = unixsock_free;
 		unixsock->seq.state = STATE_CLOSED;

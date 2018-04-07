@@ -107,6 +107,7 @@ static int pts_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 	case IOCTL_TTY_SETPGID:
 		if (getCurrentThread()->creds->sid != ptty->sid)
 		{
+			semSignal(&ptty->sem);
 			ERRNO = ENOTTY;
 			return -1;
 		};
@@ -131,16 +132,16 @@ static int pts_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 		{
 			unlockSched();
 			sti();
-			ERRNO = EPERM;
 			semSignal(&ptty->sem);
+			ERRNO = EPERM;
 			return -1;
 		};
 		if (target->creds->sid != ptty->sid)
 		{
 			unlockSched();
 			sti();
-			ERRNO = EPERM;
 			semSignal(&ptty->sem);
+			ERRNO = EPERM;
 			return -1;
 		};
 		unlockSched();
@@ -149,10 +150,11 @@ static int pts_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 		semSignal(&ptty->sem);
 		return 0;
 	case IOCTL_TTY_ISATTY:
+		semSignal(&ptty->sem);
 		return 0;
 	default:
-		ERRNO = EINVAL;
 		semSignal(&ptty->sem);
+		ERRNO = EINVAL;
 		return -1;
 	};
 };
@@ -213,6 +215,13 @@ static ssize_t ptm_write(Inode *inode, File *fp, const void *buffer, size_t size
 {
 	PseudoTerm *ptty = (PseudoTerm*) fp->filedata;
 	semWait(&ptty->sem);
+	
+	if (ptty->sid == 0)
+	{
+		semSignal(&ptty->sem);
+		ERRNO = EAGAIN;
+		return -1;
+	};
 	
 	int numPutMaster = 0;
 	int numPutSlave = 0;
@@ -354,7 +363,6 @@ static int ptm_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 	switch (cmd)
 	{
 	case IOCTL_TTY_GRANTPT:
-		//SetDeviceCreds(ptty->devSlave, getCurrentThread()->creds->ruid, getCurrentThread()->creds->rgid);
 		semWait(&ptty->devSlave->lock);
 		ptty->devSlave->uid = getCurrentThread()->creds->ruid;
 		ptty->devSlave->gid = getCurrentThread()->creds->rgid;
@@ -370,6 +378,28 @@ static int ptm_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 		ERRNO = EINVAL;
 		return -1;
 	};
+};
+
+static void* pts_open(Inode *inode, int oflags)
+{
+	if ((oflags & O_NOCTTY) == 0)
+	{
+		PseudoTerm *ptty = (PseudoTerm*) inode->fsdata;
+		
+		semWait(&ptty->sem);
+		if (ptty->sid != 0 && ptty->sid != getCurrentThread()->creds->sid)
+		{
+			semSignal(&ptty->sem);
+			ERRNO = EBUSY;
+			return NULL;
+		};
+			
+		ptty->sid = getCurrentThread()->creds->sid;
+		ptty->pgid = getCurrentThread()->creds->pgid;
+		semSignal(&ptty->sem);
+	};
+	
+	return (void*) 1;		/* can't return NULL cause that's an error */
 };
 
 static void* ptmx_open(Inode *inode, int oflags)
@@ -407,6 +437,7 @@ static void* ptmx_open(Inode *inode, int oflags)
 	
 	Inode *slave = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0600);
 	slave->fsdata = ptty;
+	slave->open = pts_open;
 	slave->pread = pts_read;
 	slave->pwrite = pts_write;
 	slave->ioctl = pts_ioctl;

@@ -140,7 +140,7 @@ typedef struct VideoDisplay_
 	/**
 	 * The file handle which set the mode on this device.
 	 */
-	File*					fpModeSetter;
+	void*					modeSetter;
 } VideoDisplay;
 
 /**

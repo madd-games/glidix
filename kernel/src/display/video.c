@@ -76,7 +76,7 @@ int video_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 		disableConsole();
 		if (disp->ops->setmode(disp, (VideoModeRequest*)argp) == 0)
 		{
-			disp->fpModeSetter = fp;
+			disp->modeSetter = fp->filedata;
 			return 0;
 		};
 		enableConsole();
@@ -90,6 +90,21 @@ int video_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 	};
 };
 
+static void* video_open(Inode *inode, int oflags)
+{
+	static uint64_t nextHandle = 1;
+	return (void*) __sync_fetch_and_add(&nextHandle, 1);
+};
+
+static void video_close(Inode *inode, void *filedata)
+{
+	VideoDisplay *disp = inode->fsdata;
+	if (disp->modeSetter == filedata)
+	{
+		enableConsole();
+	};
+};
+
 VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops)
 {
 	VideoDisplay *disp = NEW(VideoDisplay);
@@ -97,7 +112,7 @@ VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops)
 	
 	disp->data = data;
 	disp->ops = ops;
-	disp->fpModeSetter = NULL;
+	disp->modeSetter = NULL;
 	
 	char devname[64];
 	strformat(devname, 64, "%s%d", drv->name, __sync_fetch_and_add(&drv->nextNum, 1));
@@ -105,6 +120,8 @@ VideoDisplay* videoCreateDisplay(VideoDriver *drv, void *data, VideoOps *ops)
 	Inode *inode = vfsCreateInode(NULL, 0644);
 	inode->fsdata = disp;
 	inode->ioctl = video_ioctl;
+	inode->open = video_open;
+	inode->close = video_close;
 	inode->free = video_free;
 	inode->ft = ftCreate(FT_ANON);
 	inode->ft->data = disp;

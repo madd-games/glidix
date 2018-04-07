@@ -54,6 +54,7 @@ void initProcfs()
 {
 	FileSystem *procfs = vfsCreateFileSystem("procfs");
 	assert(procfs != NULL);
+	procfs->numMounts = 1;
 	procfs->regInode = procfsRegInode;
 	
 	Inode *inoProc = vfsCreateInode(procfs, 0755 | VFS_MODE_DIRECTORY);
@@ -109,7 +110,7 @@ void procfsCreate(int old, int new)
 	error = vfsCreateSymlinkEx(parentpath, VFS_NULL_IREF, fullpath, VFS_AT_NOVALID);
 	if (error != 0)
 	{
-		panic("could not create %s poiting to %s: errno %d", fullpath, parentpath, error);
+		panic("could not create %s pointing to %s: errno %d", fullpath, parentpath, error);
 	};
 	
 	// get the EXE path

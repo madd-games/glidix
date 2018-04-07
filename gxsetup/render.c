@@ -127,7 +127,7 @@ void renderWindow(const char *status, const char *caption, int width, int height
 	memset(shadowBar, 220, width+2);
 	write(1, shadowBar, width+2);
 	
-	setCursor(79, 24);
+	setCursor(winsz.ws_col - 1, winsz.ws_row - 1);
 	*startX = windowX + 1;
 	*startY = windowY + 1;
 };

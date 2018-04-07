@@ -125,7 +125,11 @@ HuminDevice* huminCreateDevice(const char *devname)
 	hudev->inUse = 0;
 	hudev->active = 1;
 	
+	vfsUprefInode(hudev->inode);
+	
 	semSignal(&hudev->sem);
+	devfsAdd(filename, hudev->inode);
+	
 	return hudev;
 };
 

@@ -783,6 +783,8 @@ static int gxfsLoadInode(FileSystem *fs, Inode *inode)
 			sizeLeft -= readNow;
 		};
 		
+		rh = (GXFS_RecordHeader*) buffer;
+		
 		// process the record as necessary
 		if (rh->rhType == GXFS_RT("ATTR"))
 		{
@@ -888,6 +890,14 @@ static int gxfsLoadInode(FileSystem *fs, Inode *inode)
 			};
 			
 			memcpy(inode->acl, cr->acl, sizeof(AccessControlEntry)*VFS_ACL_SIZE);
+		}
+		else
+		{
+			char str[5];
+			memcpy(str, &rh->rhType, 4);
+			str[4] = 0;
+			
+			kprintf("gxfs: undefined record type `%s'\n", str);
 		};
 		
 		// next!

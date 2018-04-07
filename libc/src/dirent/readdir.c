@@ -61,7 +61,7 @@ struct dirent *readdir(DIR *dirp)
 			};
 		};
 		
-		dirp->__current = (struct dirent*) malloc(sizeof(struct dirent));
+		dirp->__current = (struct dirent*) malloc(size);
 		if (dirp->__current == NULL)
 		{
 			errno = ENOMEM;

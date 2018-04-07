@@ -60,6 +60,8 @@ static const char *keywords[] = {
 	"fsinfo",
 	"gxpad",
 	"halt",
+	"reboot",
+	"poweroff",
 	"insmod",
 	"kill",
 	"ldmods",

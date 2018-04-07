@@ -563,7 +563,7 @@ int main()
 	gwmMenuAddEntry(menuSys, "Shut down...", sysbarShutdown, NULL);
 	
 	loadApps();
-
+	
 	const char *error;
 	imgSysBar = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/sysbar.png", &error);
 	if (imgSysBar == NULL)

@@ -787,7 +787,7 @@ static DentryRef vfsGetDentryRecur(InodeRef startdir, const char *path, int crea
 		
 		// check if we have the required permissions
 		int neededPerms = VFS_ACE_EXEC;
-		if (create) neededPerms |= VFS_ACE_WRITE;
+		if (create && isFinal) neededPerms |= VFS_ACE_WRITE;
 		semWait(&dir.inode->lock);
 		if (!vfsIsAllowed(dir.inode, neededPerms))
 		{
@@ -1167,6 +1167,7 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 		return NULL;
 	};
 	
+	int justCreated = 0;
 	InodeRef iref;
 	if (dref.dent->ino != 0)
 	{
@@ -1209,9 +1210,10 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 		
 		iref = vfsLinkAndGetInode(dref, newInode);
 		vfsDownrefInode(newInode);
+		justCreated = 1;
 	};
 	
-	// get the inode
+	// check the inode
 	if (iref.inode == NULL)
 	{
 		vfsUnrefInode(iref);
@@ -1219,19 +1221,22 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 	};
 	
 	// check permissions
-	int permsNeeded = 0;
-	if (oflag & O_RDONLY) permsNeeded |= VFS_ACE_READ;
-	if (oflag & O_WRONLY) permsNeeded |= VFS_ACE_WRITE;
-	
-	semWait(&iref.inode->lock);
-	if (!vfsIsAllowed(iref.inode, permsNeeded))
+	if (!justCreated)
 	{
+		int permsNeeded = 0;
+		if (oflag & O_RDONLY) permsNeeded |= VFS_ACE_READ;
+		if (oflag & O_WRONLY) permsNeeded |= VFS_ACE_WRITE;
+	
+		semWait(&iref.inode->lock);
+		if (!vfsIsAllowed(iref.inode, permsNeeded))
+		{
+			semSignal(&iref.inode->lock);
+			vfsUnrefInode(iref);
+			if (error != NULL) *error = EACCES;
+			return NULL;
+		};
 		semSignal(&iref.inode->lock);
-		vfsUnrefInode(iref);
-		if (error != NULL) *error = EACCES;
-		return NULL;
 	};
-	semSignal(&iref.inode->lock);
 	
 	// create the description
 	return vfsOpenInode(iref, oflag, error);
@@ -1314,7 +1319,9 @@ static ssize_t vfsReadUnlocked(File *fp, void *buffer, size_t size, off_t offset
 		ERRNO = EOVERFLOW;
 		return -1;
 	};
-	
+
+	fp->iref.inode->atime = time();
+
 	if (fp->iref.inode->pread != NULL)
 	{
 		return fp->iref.inode->pread(fp->iref.inode, fp, buffer, size, offset);
@@ -1323,8 +1330,6 @@ static ssize_t vfsReadUnlocked(File *fp, void *buffer, size_t size, off_t offset
 	{
 		return ftRead(fp->iref.inode->ft, buffer, size, offset);
 	};
-	
-	fp->iref.inode->atime = time();
 	
 	ERRNO = EPERM;
 	return -1;
@@ -1343,6 +1348,8 @@ static ssize_t vfsWriteUnlocked(File *fp, const void *buffer, size_t size, off_t
 		ERRNO = EOVERFLOW;
 		return -1;
 	};
+
+	fp->iref.inode->mtime = fp->iref.inode->ctime = time();
 	
 	if (fp->iref.inode->pwrite != NULL)
 	{
@@ -1352,8 +1359,6 @@ static ssize_t vfsWriteUnlocked(File *fp, const void *buffer, size_t size, off_t
 	{
 		return ftWrite(fp->iref.inode->ft, buffer, size, offset);
 	};
-	
-	fp->iref.inode->mtime = fp->iref.inode->ctime = time();
 
 	ERRNO = EPERM;
 	return -1;
@@ -1365,6 +1370,11 @@ ssize_t vfsRead(File *fp, void *buffer, size_t size)
 	{
 		ERRNO = EBADF;
 		return -1;
+	};
+	
+	if (fp->iref.inode->ft == NULL)
+	{
+		return vfsReadUnlocked(fp, buffer, size, 0);
 	};
 	
 	semWait(&fp->lock);
@@ -1382,6 +1392,11 @@ ssize_t vfsPRead(File *fp, void *buffer, size_t size, off_t offset)
 		return -1;
 	};
 
+	if (fp->iref.inode->ft == NULL)
+	{
+		return vfsReadUnlocked(fp, buffer, size, offset);
+	};
+	
 	semWait(&fp->lock);
 	ssize_t sz = vfsReadUnlocked(fp, buffer, size, offset);
 	semSignal(&fp->lock);
@@ -1396,6 +1411,11 @@ ssize_t vfsWrite(File *fp, const void *buffer, size_t size)
 		return -1;
 	};
 
+	if (fp->iref.inode->ft == NULL)
+	{
+		return vfsWriteUnlocked(fp, buffer, size, 0);
+	};
+	
 	semWait(&fp->lock);
 	off_t offset = fp->offset;
 	if (fp->oflags & O_APPEND)
@@ -1415,6 +1435,11 @@ ssize_t vfsWrite(File *fp, const void *buffer, size_t size)
 
 ssize_t vfsPWrite(File *fp, const void *buffer, size_t size, off_t offset)
 {
+	if (fp->iref.inode->ft == NULL)
+	{
+		return vfsWriteUnlocked(fp, buffer, size, offset);
+	};
+
 	semWait(&fp->lock);
 	ssize_t sz = vfsWriteUnlocked(fp, buffer, size, offset);
 	semSignal(&fp->lock);
@@ -1923,6 +1948,7 @@ static char* vfsRealPathRecur(InodeRef rootdir, CompChain *next, DentryRef dref)
 		
 		*put = 0;
 		kfree(frame.comp);
+		vfsUnrefDentry(dref);
 		return result;	
 	};
 	
@@ -2250,6 +2276,7 @@ int vfsUnmount(const char *path, int flags)
 			if (scan->refcount != expectedCount)
 			{
 				foundBusy = 1;
+				kprintf("vfs: inode %lu is busy (refcount=%d, expected %d)\n", scan->ino, scan->refcount, expectedCount);
 				semSignal(&scan->lock);
 				break;
 			};
