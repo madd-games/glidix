@@ -349,8 +349,9 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 		if (ev->type & GWM_EVENT_CASCADING)
 		{
 			if (win->parent != NULL) return gwmPostEvent(ev, win->parent);
+			else return GWM_EVSTATUS_DEFAULT;
 		};
-		return GWM_EVSTATUS_OK;
+		return GWM_EVSTATUS_CONT;
 	};
 };
 
@@ -586,7 +587,8 @@ static int gwmPostEventByWindowID(GWMEvent *ev, uint64_t modalID)
 			
 			GWMWindow *winWas = info->win;
 			gwmHandlerDecref(info);
-			if (status == GWM_EVSTATUS_OK) break;
+			if (status == GWM_EVSTATUS_OK) return GWM_EVSTATUS_OK;
+			if (status == GWM_EVSTATUS_DEFAULT) return GWM_EVSTATUS_DEFAULT;
 			if (winWas == NULL) break;
 		};
 	};

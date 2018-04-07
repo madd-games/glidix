@@ -59,6 +59,7 @@
 #define	GWM_EVSTATUS_OK				0
 #define	GWM_EVSTATUS_BREAK			-1
 #define	GWM_EVSTATUS_CONT			-2
+#define	GWM_EVSTATUS_DEFAULT			-3
 
 /**
  * Colors.
@@ -1421,6 +1422,11 @@ int gwmGetCheckboxState(GWMWindow *checkbox);
  * Set the state of a checkbox (GWM_CB_OFF, GWM_CB_ON or GWM_CB_TRI).
  */
 void gwmSetCheckboxState(GWMWindow *checkbox, int state);
+
+/**
+ * Set the symbol of a checkbox.
+ */
+void gwmSetCheckboxSymbol(GWMWindow *checkbox, int symbol);
 
 /**
  * Create a scrollbar.

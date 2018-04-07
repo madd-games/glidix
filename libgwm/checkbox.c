@@ -48,6 +48,7 @@ typedef struct
 	int					flags;
 	char*					text;
 	int					minWidth;
+	int					symbol;
 } GWMCheckboxData;
 
 int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox, void *context);
@@ -121,7 +122,13 @@ int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox, void *context)
 			{
 				if ((data->flags & GWM_CB_DISABLED) == 0)
 				{
-					data->state = !data->state;
+					GWMCommandEvent cmdev;
+					memset(&cmdev, 0, sizeof(GWMCommandEvent));
+					cmdev.header.type = GWM_EVENT_COMMAND;
+					cmdev.symbol = data->symbol;
+					
+					if (gwmPostEvent((GWMEvent*) &cmdev, checkbox) == GWM_EVSTATUS_DEFAULT)
+						data->state = !data->state;
 				};
 				data->mstate = CB_MSTATE_HOVERING;
 			}
@@ -163,6 +170,7 @@ GWMWindow *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int fla
 	data->mstate = CB_MSTATE_NORMAL;
 	data->text = strdup("");
 	data->minWidth = 20;
+	data->symbol = 0;
 	
 	checkbox->getMinSize = checkbox->getPrefSize = gwmSizeCheckbox;
 	checkbox->position = gwmPositionCheckbox;
@@ -209,4 +217,10 @@ void gwmSetCheckboxState(GWMWindow *checkbox, int state)
 {
 	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
 	data->state = state;
+};
+
+void gwmSetCheckboxSymbol(GWMWindow *checkbox, int symbol)
+{
+	GWMCheckboxData *data = (GWMCheckboxData*) gwmGetData(checkbox, gwmCheckboxHandler);
+	data->symbol = symbol;
 };

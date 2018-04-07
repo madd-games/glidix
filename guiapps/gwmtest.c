@@ -36,6 +36,37 @@ enum
 	SYM_BUTTON1 = GWM_SYM_USER,
 	SYM_BUTTON2,
 	SYM_BUTTON3,
+	
+	SYM_CHECKBOX,
+};
+
+int myCommandHandler(GWMCommandEvent *ev)
+{
+	switch (ev->symbol)
+	{
+	case SYM_BUTTON2:
+		gwmMessageBox(NULL, "Example", "You clicked button 2!", GWM_MBUT_OK);
+		return GWM_EVSTATUS_CONT;
+	case SYM_CHECKBOX:
+		if (gwmMessageBox(NULL, "Example", "Are you sure you want to flip this checkbox?", GWM_MBUT_YESNO | GWM_MBICON_QUEST) == GWM_SYM_YES)
+		{
+			return GWM_EVSTATUS_CONT;
+		};
+		return GWM_EVSTATUS_OK;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
+};
+
+int myHandler(GWMEvent *ev, GWMWindow *win, void *context)
+{
+	switch (ev->type)
+	{
+	case GWM_EVENT_COMMAND:
+		return myCommandHandler((GWMCommandEvent*) ev);
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
 };
 
 int main()
@@ -54,6 +85,8 @@ int main()
 		GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR	// hidden, no taskbar icon
 	);
 	assert(topWindow != NULL);
+	
+	gwmPushEventHandler(topWindow, myHandler, NULL);
 	
 	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	gwmSetWindowLayout(topWindow, boxLayout);
@@ -78,6 +111,7 @@ int main()
 
 	GWMWindow *checkbox = gwmNewCheckbox(topWindow);
 	gwmSetCheckboxLabel(checkbox, "Play with me");
+	gwmSetCheckboxSymbol(checkbox, SYM_CHECKBOX);
 	gwmBoxLayoutAddWindow(boxLayout, checkbox, 0, 0, 0);
 	
 	gwmFit(topWindow);
