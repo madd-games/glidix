@@ -46,8 +46,10 @@
 GWMWindow *txtUsername;
 GWMWindow *txtPassword;
 
-char username[128];
-char password[128];
+//char username[128];
+//char password[128];
+const char *username;
+const char *password;
 char passcrypt[128];
 char shname[128];
 
@@ -163,13 +165,13 @@ int findPassword(const char *username)
 
 int logInCallback(void *ignore)
 {
-	gwmReadTextField(txtUsername, username, 0, 127);
-	gwmReadTextField(txtPassword, password, 0, 127);
+	username = gwmReadTextField(txtUsername);
+	password = gwmReadTextField(txtPassword);
 	
 	struct passwd *pwd = getpwnam(username);
 	if (pwd == NULL)
 	{
-		//sleep(5);
+		sleep(3);
 		gwmMessageBox(NULL, "Error", "Invalid username or password.", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		return 0;
 	};

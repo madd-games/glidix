@@ -461,6 +461,7 @@ typedef struct
  * Cascading events.
  */
 #define	GWM_EVENT_COMMAND			(GWM_EVENT_CASCADING + 1)
+#define	GWM_EVENT_TOGGLED			(GWM_EVENT_CASCADING + 2)
 
 /**
  * General event structure.
@@ -1299,7 +1300,12 @@ int gwmSetWindowFlags(GWMWindow *win, int flags);
 /**
  * Creates a new text field in the specified window.
  */
-GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
+GWMWindow* gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
+
+/**
+ * Creates a new text field in the specified window.
+ */
+GWMWindow* gwmNewTextField(GWMWindow *parent);
 
 /**
  * Destroys a text field.
@@ -1307,18 +1313,19 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 void gwmDestroyTextField(GWMWindow *txt);
 
 /**
- * Gets the current number of characters in a text field. You may use it to get the full text by
+ * Gets the current number of bytes in a text field. You may use it to get the full text by
  * calling gwmReadTextField().
+ *
+ * DEPRECATED; how can this work with unicode?
  */
 size_t gwmGetTextFieldSize(GWMWindow *field);
 
 /**
- * Reads from the specified position, up to and excluding the specified end position, into the
- * specified buffer. Returns the number of characters that were actually read.
- * Note that this also adds a terminator to the end of the string! So the size of the buffer
- * must be 1 larger than the number of charaters to store.
+ * Returns a READ-ONLY NUL-terminated UTF-8 string containing the text field text. This string must
+ * not be used after further calls to text field functions are made, or if the main loop is used!
+ * The text field continues to won this function.
  */
-size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t endPos);
+const char* gwmReadTextField(GWMWindow *field);
 
 /**
  * Set the width of a text field.
@@ -1326,7 +1333,7 @@ size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t en
 void gwmResizeTextField(GWMWindow *field, int width);
 
 /**
- * Change the text in a text field.
+ * Change the text in a text field. The expected encoding is UTF-8.
  */
 void gwmWriteTextField(GWMWindow *field, const char *newText);
 
@@ -1340,6 +1347,11 @@ void gwmTextFieldSelectAll(GWMWindow *field);
  */
 typedef int (*GWMTextFieldCallback)(void *param);
 void gwmSetTextFieldAcceptCallback(GWMWindow *field, GWMTextFieldCallback callback, void *param);
+
+/**
+ * Set the flags of a text field.
+ */
+void gwmSetTextFieldFlags(GWMWindow *field, int flags);
 
 /**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
@@ -1538,9 +1550,9 @@ void gwmMenubarAdjust(GWMWindow *menubar);
 void gwmMenubarAdd(GWMWindow *menubar, const char *label, GWMMenu *menu);
 
 /**
- * Classify the character 'c' as either a whitespace (0) or other character (1).
+ * Classify the character 'c' as either a whitespace (0) or other character (1). 'c' is a unicode codepoint.
  */
-int gwmClassifyChar(char c);
+int gwmClassifyChar(long c);
 
 /**
  * Create a new notebook widget.

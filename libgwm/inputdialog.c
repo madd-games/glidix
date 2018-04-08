@@ -41,11 +41,11 @@ int inputOK(void *context)
 	size_t size = gwmGetTextFieldSize(txtInput);
 	if (size == 0) return 0;
 	
-	char *buffer = (char*) malloc(size+1);
-	buffer[size] = 0;
-	gwmReadTextField(txtInput, buffer, 0, (off_t)size);
+	//char *buffer = (char*) malloc(size+1);
+	//buffer[size] = 0;
+	//gwmReadTextField(txtInput, buffer, 0, (off_t)size);
 	
-	dialog->data = buffer;
+	dialog->data = strdup(gwmReadTextField(txtInput));
 	return -1;
 };
 

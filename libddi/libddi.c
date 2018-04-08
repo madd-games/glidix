@@ -754,6 +754,57 @@ long ddiReadUTF8(const char **strptr)
 	return result;
 };
 
+void ddiWriteUTF8(char *buffer, long codepoint)
+{
+	if (codepoint < 128)
+	{
+		*buffer++ = (char) codepoint;
+		*buffer = 0;
+	}
+	else
+	{
+		uint8_t temp[9];
+		uint8_t *put = &temp[8];
+		*put = 0;
+		
+		uint64_t len = 0;
+		while (codepoint != 0)
+		{
+			// calculate the number of bits that we could now encode using only 2 bytes
+			uint64_t maxBits = 6 + (6 - (len+1));
+			long mask = (1L << maxBits)-1;
+			
+			if ((codepoint & mask) == codepoint)
+			{
+				// finishing sequence
+				*--put = (uint8_t) ((codepoint & 0x3F) | 0x80);
+				codepoint >>= 6;
+				
+				uint8_t mask = ~((1 << (8-(len+2)))-1);
+				*--put = (uint8_t) (codepoint | mask);
+				
+				break;
+			}
+			else
+			{
+				// not yet; encode the next 6 bits
+				*--put = (uint8_t) ((codepoint & 0x3F) | 0x80);
+				codepoint >>= 6;
+				len++;
+			};
+		};
+		
+		strcpy(buffer, (char*) put);
+	};
+};
+
+size_t ddiCountUTF8(const char *str)
+{
+	size_t out = 0;
+	while (ddiReadUTF8(&str) != 0) out++;
+	return out;
+};
+
 DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error)
 {
 	DDIFont *font = (DDIFont*) malloc(sizeof(DDIFont));
@@ -968,7 +1019,7 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 		
 		if (pen->mask == 1)
 		{
-			point = '*';
+			point = 0x25CF;
 		}
 		else if (pen->mask != 0)
 		{
@@ -1122,7 +1173,7 @@ void ddiWritePen(DDIPen *pen, const char *text)
 			long point = ddiReadUTF8(&text);
 			if (pen->mask == 1)
 			{
-				point = '*';
+				point = 0x25CF;
 			}
 			else if (pen->mask != 0)
 			{

@@ -31,13 +31,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#define	TEXTFIELD_MIN_WIDTH	30
+#define	TEXTFIELD_MIN_WIDTH	100
 #define	TEXTFIELD_HEIGHT	20
 
 typedef struct
 {
 	char			*text;
-	size_t			textSize;
 	off_t			cursorPos;
 	int			focused;
 	int			flags;
@@ -63,17 +62,13 @@ typedef struct
 	 * The right-click menu.
 	 */
 	GWMMenu*		menu;
-	
-	/**
-	 * Accept callback.
-	 */
-	GWMTextFieldCallback	acceptCallback;
-	void*			acceptParam;
 } GWMTextFieldData;
+
+int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context);
 
 void gwmRedrawTextField(GWMWindow *field)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(field);
 	
 	static DDIColor transparent = {0, 0, 0, 0};
@@ -103,32 +98,48 @@ void gwmRedrawTextField(GWMWindow *field)
 		ddiSetPenWrap(data->pen, 0);
 		if (data->flags & GWM_TXT_MASKED) ddiPenSetMask(data->pen, 1);
 		if (data->focused) ddiSetPenCursor(data->pen, data->cursorPos);
-
-		char *buffer = malloc(data->textSize+1);
+		
 		if (data->selectStart == data->selectEnd)
 		{
-			memcpy(buffer, data->text, data->textSize);
-			buffer[data->textSize] = 0;
-			ddiWritePen(data->pen, buffer);
+			ddiWritePen(data->pen, data->text);
 		}
 		else
 		{
-			memcpy(buffer, data->text, data->selectStart);
-			buffer[data->selectStart] = 0;
+			char *buffer = (char*) malloc(strlen(data->text)+1);
+			buffer[0] = 0;
+			
+			const char *scan = data->text;
+			
+			// first print the text before selection
+			size_t count = data->selectStart;
+			while (count--)
+			{
+				long codepoint = ddiReadUTF8(&scan);
+				if (codepoint == 0) break;
+				ddiWriteUTF8(&buffer[strlen(buffer)], codepoint);
+			};
+			
 			ddiWritePen(data->pen, buffer);
 			
-			memcpy(buffer, &data->text[data->selectStart], data->selectEnd-data->selectStart);
-			buffer[data->selectEnd-data->selectStart] = 0;
+			// now the selection part
 			ddiSetPenBackground(data->pen, GWM_COLOR_SELECTION);
+			buffer[0] = 0;
+			count = data->selectEnd - data->selectStart;
+			while (count--)
+			{
+				long codepoint = ddiReadUTF8(&scan);
+				if (codepoint == 0) break;
+				ddiWriteUTF8(&buffer[strlen(buffer)], codepoint);
+			};
 			ddiWritePen(data->pen, buffer);
-			ddiSetPenBackground(data->pen, &transparent);
 			
-			memcpy(buffer, &data->text[data->selectEnd], data->textSize-data->selectEnd);
-			buffer[data->textSize-data->selectEnd] = 0;
-			ddiWritePen(data->pen, buffer);
+			// write the rest
+			ddiSetPenBackground(data->pen, &transparent);
+			ddiWritePen(data->pen, scan);
+			
+			free(buffer);
 		};
 		
-		free(buffer);
 		ddiExecutePen(data->pen, canvas);
 	};
 	
@@ -137,11 +148,38 @@ void gwmRedrawTextField(GWMWindow *field)
 
 static void gwmTextFieldDeleteSelection(GWMWindow *field)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
-	char *newBuffer = (char*) malloc(data->textSize - (data->selectEnd - data->selectStart));
-	memcpy(newBuffer, data->text, data->selectStart);
-	memcpy(&newBuffer[data->selectStart], &data->text[data->selectEnd], data->textSize - data->selectEnd);
-	data->textSize -= (data->selectEnd - data->selectStart);
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	
+	char *newBuffer = (char*) malloc(strlen(data->text)+1);
+	newBuffer[0] = 0;
+	
+	const char *scan = data->text;
+	
+	// copy the part before selection
+	size_t count = data->selectStart;
+	while (count--)
+	{
+		long codepoint = ddiReadUTF8(&scan);
+		if (codepoint == 0) break;
+		ddiWriteUTF8(&newBuffer[strlen(newBuffer)], codepoint);
+	};
+	
+	// skip selection
+	count = data->selectEnd - data->selectStart;
+	while (count--)
+	{
+		ddiReadUTF8(&scan);
+	};
+	
+	// write the part after selection
+	while (1)
+	{
+		long codepoint = ddiReadUTF8(&scan);
+		if (codepoint == 0) break;
+		ddiWriteUTF8(&newBuffer[strlen(newBuffer)], codepoint);
+	};
+	
+	// update
 	data->cursorPos = data->selectStart;
 	data->selectStart = data->selectEnd = 0;
 	free(data->text);
@@ -150,85 +188,145 @@ static void gwmTextFieldDeleteSelection(GWMWindow *field)
 
 void gwmTextFieldBackspace(GWMWindow *field)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	if (data->selectStart != data->selectEnd)
 	{
 		gwmTextFieldDeleteSelection(field);
 		gwmRedrawTextField(field);
 		return;
 	};
-	if (data->cursorPos == 0) return;
 	
-	char *newBuffer = (char*) malloc(data->textSize - 1);
-	data->cursorPos--;
-	data->textSize--;
-	memcpy(newBuffer, data->text, data->cursorPos);
-	memcpy(&newBuffer[data->cursorPos], &data->text[data->cursorPos+1], data->textSize - data->cursorPos);
+	if (data->cursorPos == 0) return;
+
+	char *newBuffer = (char*) malloc(strlen(data->text) + 1);
+	newBuffer[0] = 0;
+	
+	const char *scan = data->text;
+	
+	// copy the data before the cursor except the last one
+	// (the case where cursorPos == 0 is already handled above)
+	size_t count = data->cursorPos - 1;
+	while (count--)
+	{
+		long codepoint = ddiReadUTF8(&scan);
+		if (codepoint == 0) break;
+		ddiWriteUTF8(&newBuffer[strlen(newBuffer)], codepoint);
+	};
+	
+	// discard one character
+	ddiReadUTF8(&scan);
+	
+	// write out the rest
+	while (1)
+	{
+		long codepoint = ddiReadUTF8(&scan);
+		if (codepoint == 0) break;
+		ddiWriteUTF8(&newBuffer[strlen(newBuffer)], codepoint);
+	};
+	
 	free(data->text);
 	data->text = newBuffer;
+	data->cursorPos--;
+	
 	gwmRedrawTextField(field);
 };
 
 void gwmTextFieldInsert(GWMWindow *field, const char *str)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	if (data->selectStart != data->selectEnd)
 	{
 		gwmTextFieldDeleteSelection(field);
 	};
-	char *newBuffer = (char*) malloc(data->textSize + strlen(str));
-	memcpy(newBuffer, data->text, data->cursorPos);
-	memcpy(&newBuffer[data->cursorPos], str, strlen(str));
-	memcpy(&newBuffer[data->cursorPos + strlen(str)], &data->text[data->cursorPos], data->textSize - data->cursorPos);
+	
+	char *newBuffer = (char*) malloc(strlen(data->text) + strlen(str) + 1);
+	newBuffer[0] = 0;
+	
+	const char *scan = data->text;
+	
+	// copy up to the cursor first
+	size_t count = data->cursorPos;
+	while (count--)
+	{
+		long codepoint = ddiReadUTF8(&scan);
+		if (codepoint == 0) break;
+		ddiWriteUTF8(&newBuffer[strlen(newBuffer)], codepoint);
+	};
+	
+	// now copy the string, incrementing the cursor as necessary
+	while (1)
+	{
+		long codepoint = ddiReadUTF8(&str);
+		if (codepoint == 0) break;
+		ddiWriteUTF8(&newBuffer[strlen(newBuffer)], codepoint);
+		data->cursorPos++;
+	};
+	
+	// finish off
+	strcat(newBuffer, scan);
+	
 	free(data->text);
 	data->text = newBuffer;
-	data->textSize += strlen(str);
-	data->cursorPos += strlen(str);
+	
 	gwmRedrawTextField(field);
 };
 
 void gwmTextFieldSelectWord(GWMWindow *field)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
-	if (data->textSize == 0) return;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	
-	data->selectStart = data->cursorPos;
-	data->selectEnd = data->cursorPos;
+	const char *scan = data->text;
+	int lastClass = -1;
+	off_t lastPos;
 	
-	int charClass;
-	if (data->cursorPos == data->textSize)
+	// read up to the cursor position, classifying characters on the way, remembering each position where
+	// the classification changed.
+	size_t count = data->cursorPos;
+	off_t curPos = 0;
+	while (count--)
 	{
-		charClass = gwmClassifyChar(data->text[data->cursorPos-1]);
-		data->selectEnd--;
-		data->selectStart--;
+		long codepoint = ddiReadUTF8(&scan);
+		int cls = gwmClassifyChar(codepoint);
+		
+		if (cls != lastClass)
+		{
+			lastClass = cls;
+			lastPos = curPos;
+		};
+		
+		curPos++;
+	};
+	
+	// figure out where to stop
+	off_t endPos = curPos;
+	while (1)
+	{
+		long codepoint = ddiReadUTF8(&scan);
+		if (codepoint == 0) break;
+		int cls = gwmClassifyChar(codepoint);
+		
+		if (lastClass == -1)
+		{
+			lastClass = cls;
+			lastPos = endPos;
+		};
+		
+		if (cls != lastClass) break;
+		endPos++;
+	};
+	
+	// results
+	if (lastClass == -1)
+	{
+		data->selectStart = data->selectEnd = 0;
 	}
 	else
 	{
-		charClass = gwmClassifyChar(data->text[data->cursorPos]);
+		data->selectStart = lastPos;
+		data->selectEnd = endPos;
 	};
 	
-	while (data->selectStart != 0)
-	{
-		if (gwmClassifyChar(data->text[data->selectStart-1]) != charClass)
-		{
-			break;
-		};
-		
-		data->selectStart--;
-	};
-	
-	while (data->selectEnd != (data->textSize-1))
-	{
-		if (gwmClassifyChar(data->text[data->selectEnd+1]) != charClass)
-		{
-			break;
-		};
-		
-		data->selectEnd++;
-	};
-	
-	data->selectEnd++;
-	data->cursorPos = data->selectEnd;
+	gwmRedrawTextField(field);
 };
 
 int txtPaste(void *context)
@@ -249,29 +347,76 @@ int txtPaste(void *context)
 int txtCut(void *context)
 {
 	GWMWindow *field = (GWMWindow*) context;
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	
 	if (data->selectStart != data->selectEnd)
 	{
-		gwmClipboardPutText(&data->text[data->selectStart], data->selectEnd - data->selectStart);
+		char *temp = (char*) malloc(strlen(data->text) + 1);
+		temp[0] = 0;
+		
+		const char *scan = data->text;
+		
+		// skip the text before selection
+		size_t count = data->selectStart;
+		while (count--)
+		{
+			ddiReadUTF8(&scan);
+		};
+		
+		// now copy selection into buffer
+		count = data->selectEnd - data->selectStart;
+		while (count--)
+		{
+			long codepoint = ddiReadUTF8(&scan);
+			if (codepoint == 0) break;
+			ddiWriteUTF8(&temp[strlen(temp)], codepoint);
+		};
+		
+		// store in the clipboard
+		gwmClipboardPutText(temp, strlen(temp));
+		free(temp);
 	};
 	
 	gwmTextFieldDeleteSelection(field);
 	gwmRedrawTextField(field);
 	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
+
 	return 0;
 };
 
 int txtCopy(void *context)
 {
 	GWMWindow *field = (GWMWindow*) context;
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	
 	if (data->selectStart != data->selectEnd)
 	{
-		gwmClipboardPutText(&data->text[data->selectStart], data->selectEnd - data->selectStart);
+		char *temp = (char*) malloc(strlen(data->text) + 1);
+		temp[0] = 0;
+		
+		const char *scan = data->text;
+		
+		// skip the text before selection
+		size_t count = data->selectStart;
+		while (count--)
+		{
+			ddiReadUTF8(&scan);
+		};
+		
+		// now copy selection into buffer
+		count = data->selectEnd - data->selectStart;
+		while (count--)
+		{
+			long codepoint = ddiReadUTF8(&scan);
+			if (codepoint == 0) break;
+			ddiWriteUTF8(&temp[strlen(temp)], codepoint);
+		};
+		
+		// store in the clipboard
+		gwmClipboardPutText(temp, strlen(temp));
+		free(temp);
 	};
-
+	
 	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
 	return 0;
 };
@@ -279,10 +424,10 @@ int txtCopy(void *context)
 int txtSelectAll(void *context)
 {
 	GWMWindow *field = (GWMWindow*) context;
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->selectStart = 0;
-	data->selectEnd = data->textSize;
-	data->cursorPos = data->textSize;
+	data->selectEnd = ddiCountUTF8(data->text);
+	data->cursorPos = data->selectEnd;
 	gwmRedrawTextField(field);
 	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
 	return 0;
@@ -290,10 +435,10 @@ int txtSelectAll(void *context)
 
 int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	off_t newCursorPos;
 	int disabled = data->flags & GWM_TXT_DISABLED;
-	char buf[2];
+	char buf[9];
 	
 	switch (ev->type)
 	{
@@ -313,9 +458,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
 			newCursorPos = ddiPenCoordsToPos(data->pen, ev->x, ev->y);
-			if (newCursorPos < 0) data->cursorPos = 0;
-			else if (newCursorPos > data->textSize) data->cursorPos = data->textSize;
-			else data->cursorPos = newCursorPos;
+			data->cursorPos = newCursorPos;
 			data->clickPos = data->cursorPos;
 			data->selectStart = 0;
 			data->selectEnd = 0;
@@ -333,7 +476,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 		else if (ev->keycode == GWM_KC_RIGHT)
 		{
 			data->selectStart = data->selectEnd = 0;
-			if (data->cursorPos != (off_t)data->textSize)
+			if (data->cursorPos != (off_t)ddiCountUTF8(data->text))
 			{
 				data->cursorPos++;
 				gwmRedrawTextField(field);
@@ -358,12 +501,13 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 				txtSelectAll(field);
 			};
 		}
-		else if (ev->keycode == '\n')
+		else if (ev->keycode == '\r')
 		{
-			if (data->acceptCallback != NULL)
-			{
-				return data->acceptCallback(data->acceptParam);
-			};
+			GWMCommandEvent cmdev;
+			memset(&cmdev, 0, sizeof(GWMCommandEvent));
+			cmdev.header.type = GWM_EVENT_COMMAND;
+			cmdev.symbol = GWM_SYM_OK;
+			return gwmPostEvent((GWMEvent*) &cmdev, field);
 		}
 		else if ((ev->keycode == '\b') && (!disabled))
 		{
@@ -371,7 +515,8 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 		}
 		else if ((ev->keychar != 0) && (!disabled))
 		{
-			sprintf(buf, "%c", (char)ev->keychar);
+			//sprintf(buf, "%c", (char)ev->keychar);
+			ddiWriteUTF8(buf, ev->keychar);
 			gwmTextFieldInsert(field, buf);
 		};
 		return GWM_EVSTATUS_OK;
@@ -389,8 +534,6 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 		if (data->clickPos != -1)
 		{
 			newCursorPos = ddiPenCoordsToPos(data->pen, ev->x, ev->y);
-			if (newCursorPos < 0) newCursorPos = 0;
-			else if (newCursorPos > data->textSize) newCursorPos = data->textSize;
 			data->cursorPos = newCursorPos;
 			if (newCursorPos < data->clickPos)
 			{
@@ -410,21 +553,28 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 	};
 };
 
+static void txtGetSize(GWMWindow *field, int *width, int *height)
+{
+	*width = TEXTFIELD_MIN_WIDTH;
+	*height = TEXTFIELD_HEIGHT;
+};
+
+static void txtPosition(GWMWindow *field, int x, int y, int width, int height)
+{
+	y += (height - TEXTFIELD_HEIGHT) / 2;
+	gwmMoveWindow(field, x, y);
+	gwmResizeWindow(field, width, TEXTFIELD_HEIGHT);
+	gwmRedrawTextField(field);
+};
+
 GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags)
 {
-	if (width < TEXTFIELD_MIN_WIDTH)
-	{
-		width = TEXTFIELD_MIN_WIDTH;
-	};
-	
 	GWMWindow *field = gwmCreateWindow(parent, "GWMTextField", x, y, width, TEXTFIELD_HEIGHT, 0);
 	if (field == NULL) return NULL;
 	
 	GWMTextFieldData *data = (GWMTextFieldData*) malloc(sizeof(GWMTextFieldData));
-	field->data = data;
 	
 	data->text = strdup(text);
-	data->textSize = strlen(text);
 	data->cursorPos = 0;
 	data->focused = 0;
 	data->flags = flags;
@@ -433,7 +583,8 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->clickPos = -1;
 	data->pen = NULL;
 	
-	data->acceptCallback = NULL;
+	field->getMinSize = field->getPrefSize = txtGetSize;
+	field->position = txtPosition;
 	
 	data->menu = gwmCreateMenu();
 	gwmMenuAddEntry(data->menu, "Cut", txtCut, field);
@@ -442,16 +593,21 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	gwmMenuAddSeparator(data->menu);
 	gwmMenuAddEntry(data->menu, "Select All", txtSelectAll, field);
 	
-	gwmPushEventHandler(field, gwmTextFieldHandler, NULL);
+	gwmPushEventHandler(field, gwmTextFieldHandler, data);
 	gwmRedrawTextField(field);
 	gwmSetWindowCursor(field, GWM_CURSOR_TEXT);
 	
 	return field;
 };
 
+GWMWindow* gwmNewTextField(GWMWindow *parent)
+{
+	return gwmCreateTextField(parent, "", 0, 0, 0, 0);
+};
+
 void gwmDestroyTextField(GWMWindow *field)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	free(data->text);
 	free(data);
 	gwmDestroyMenu(data->menu);
@@ -460,28 +616,14 @@ void gwmDestroyTextField(GWMWindow *field)
 
 size_t gwmGetTextFieldSize(GWMWindow *field)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
-	return data->textSize;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	return strlen(data->text);
 };
 
-size_t gwmReadTextField(GWMWindow *field, char *buffer, off_t startPos, off_t endPos)
+const char* gwmReadTextField(GWMWindow *field)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
-	off_t pos;
-	size_t count = 0;
-	for (pos=startPos; pos<endPos; pos++)
-	{
-		if ((pos < 0) || (pos >= (off_t)data->textSize))
-		{
-			break;
-		};
-		
-		*buffer++ = data->text[pos];
-		count++;
-	};
-	
-	*buffer = 0;
-	return count;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	return data->text;
 };
 
 void gwmResizeTextField(GWMWindow *field, int width)
@@ -496,10 +638,9 @@ void gwmResizeTextField(GWMWindow *field, int width)
 
 void gwmWriteTextField(GWMWindow *field, const char *newText)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	free(data->text);
 	data->text = strdup(newText);
-	data->textSize = strlen(newText);
 	data->selectStart = data->selectEnd = 0;
 	data->cursorPos = 0;
 	gwmRedrawTextField(field);
@@ -507,16 +648,21 @@ void gwmWriteTextField(GWMWindow *field, const char *newText)
 
 void gwmSetTextFieldAcceptCallback(GWMWindow *field, GWMTextFieldCallback callback, void *param)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
-	data->acceptCallback = callback;
-	data->acceptParam = param;
+
 };
 
 void gwmTextFieldSelectAll(GWMWindow *field)
 {
-	GWMTextFieldData *data = (GWMTextFieldData*) field->data;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->selectStart = 0;
-	data->selectEnd = data->textSize;
-	data->cursorPos = data->textSize;
+	data->selectEnd = ddiCountUTF8(data->text);
+	data->cursorPos = data->selectEnd;
+	gwmRedrawTextField(field);
+};
+
+void gwmSetTextFieldFlags(GWMWindow *field, int flags)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	data->flags = flags;
 	gwmRedrawTextField(field);
 };

@@ -38,10 +38,14 @@ enum
 	SYM_BUTTON3,
 	
 	SYM_CHECKBOX,
+	SYM_CB_MASK,
 	
 	SYM_BUTTON_FRAME1,
 	SYM_BUTTON_FRAME2,
 };
+
+GWMWindow *txtfield;
+GWMWindow *cbMask;
 
 int myCommandHandler(GWMCommandEvent *ev)
 {
@@ -57,7 +61,26 @@ int myCommandHandler(GWMCommandEvent *ev)
 		};
 		return GWM_EVSTATUS_OK;
 	case SYM_BUTTON_FRAME2:
-		gwmMessageBox(NULL, "Example", "You clicked button 2 inside the frame!", GWM_MBUT_OK | GWM_MBICON_WARN);
+		gwmMessageBox(NULL, "Example", gwmReadTextField(txtfield), GWM_MBUT_OK | GWM_MBICON_WARN);
+		return GWM_EVSTATUS_CONT;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
+};
+
+int myToggledHandler(GWMCommandEvent *ev)
+{
+	switch (ev->symbol)
+	{
+	case SYM_CB_MASK:
+		if (gwmGetCheckboxState(cbMask))
+		{
+			gwmSetTextFieldFlags(txtfield, GWM_TXT_MASKED);
+		}
+		else
+		{
+			gwmSetTextFieldFlags(txtfield, 0);
+		};
 		return GWM_EVSTATUS_CONT;
 	default:
 		return GWM_EVSTATUS_CONT;
@@ -70,6 +93,8 @@ int myHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	{
 	case GWM_EVENT_COMMAND:
 		return myCommandHandler((GWMCommandEvent*) ev);
+	case GWM_EVENT_TOGGLED:
+		return myToggledHandler((GWMCommandEvent*) ev);
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -114,11 +139,20 @@ int main()
 	GWMWindow *button2, *button3;
 	gwmBoxLayoutAddWindow(boxLayout, button2 = gwmCreateButtonWithLabel(topWindow, SYM_BUTTON2, "Button 2"), 0, 0, 0);
 	gwmBoxLayoutAddWindow(boxLayout, button3 = gwmCreateButtonWithLabel(topWindow, SYM_BUTTON3, "Button 3"), 0, 0, 0);
-
+	
+	txtfield = gwmNewTextField(topWindow);
+	gwmWriteTextField(txtfield, "кипeть злoбой");
+	gwmBoxLayoutAddWindow(boxLayout, txtfield, 0, 0, GWM_BOX_FILL);
+	
 	GWMWindow *checkbox = gwmNewCheckbox(topWindow);
 	gwmSetCheckboxLabel(checkbox, "Play with me");
 	gwmSetCheckboxSymbol(checkbox, SYM_CHECKBOX);
 	gwmBoxLayoutAddWindow(boxLayout, checkbox, 0, 0, 0);
+	
+	cbMask = gwmNewCheckbox(topWindow);
+	gwmSetCheckboxLabel(cbMask, "Mask the text");
+	gwmSetCheckboxSymbol(cbMask, SYM_CB_MASK);
+	gwmBoxLayoutAddWindow(boxLayout, cbMask, 0, 0, 0);
 	
 	GWMWindow *frame = gwmNewFrame(topWindow);
 	gwmSetFrameCaption(frame, "Example frame");
@@ -132,7 +166,7 @@ int main()
 	gwmBoxLayoutAddWindow(panelLayout, gwmCreateButtonWithLabel(panel, SYM_BUTTON_FRAME2, "Frame button 2"), 0, 0, 0);
 	
 	gwmFit(topWindow);
-	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED);
+	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 
 	gwmMainLoop();
 	gwmDestroyButton(button1);

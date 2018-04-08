@@ -128,7 +128,15 @@ int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox, void *context)
 					cmdev.symbol = data->symbol;
 					
 					if (gwmPostEvent((GWMEvent*) &cmdev, checkbox) == GWM_EVSTATUS_DEFAULT)
+					{
 						data->state = !data->state;
+						
+						memset(&cmdev, 0, sizeof(GWMCommandEvent));
+						cmdev.header.type = GWM_EVENT_TOGGLED;
+						cmdev.symbol = data->symbol;
+						
+						gwmPostEvent((GWMEvent*) &cmdev, checkbox);
+					};
 				};
 				data->mstate = CB_MSTATE_HOVERING;
 			}

@@ -419,6 +419,18 @@ void ddiExpandBitmap(DDISurface *surface, unsigned int x, unsigned int y, int ty
 long ddiReadUTF8(const char **strptr);
 
 /**
+ * Write a unicode codepoint to a UTF-8 string buffer. The passed-in buffer must have a size of 9 bytes - enough to store
+ * any character plus the terminator. The buffer is filled with a NUL-terminated string containing a single UTF-8 character
+ * (which may be multiple bytes).
+ */
+void ddiWriteUTF8(char *buffer, long codepoint);
+
+/**
+ * Count the number of CHARACTERS (rather than bytes) in a UTF-8 string.
+ */
+size_t ddiCountUTF8(const char *str);
+
+/**
  * Load the specified font.
  */
 DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error);

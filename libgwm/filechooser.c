@@ -170,9 +170,7 @@ static int onAccept(void *context)
 	GWMWindow *fc = (GWMWindow*) context;
 	FileChooserData *data = (FileChooserData*) fc->data;
 	
-	size_t nameSize = gwmGetTextFieldSize(data->txtName);
-	char filename[nameSize+1];
-	gwmReadTextField(data->txtName, filename, 0, nameSize);
+	const char *filename = gwmReadTextField(data->txtName);
 	
 	if (strchr(filename, '/') != NULL)
 	{

@@ -855,7 +855,7 @@ void gwmRelToAbs(GWMWindow *win, int relX, int relY, int *absX, int *absY)
 	if (absY != NULL) *absY = resp.relToAbsResp.absY;
 };
 
-int gwmClassifyChar(char c)
+int gwmClassifyChar(long c)
 {
 	if ((c == ' ') || (c == '\t') || (c == '\n'))
 	{
