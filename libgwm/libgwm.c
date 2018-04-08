@@ -118,13 +118,6 @@ static void* listenThreadFunc(void *ignore)
 	(void)ignore;
 	char msgbuf[65536];
 	
-	// block all signals. we don't want signal handlers to be invoked in the GWM
-	// listening thread, because if the application is buggy it might create undebuggable
-	// chaos.
-	sigset_t sigset;
-	sigfillset(&sigset);
-	pthread_sigmask(SIG_BLOCK, &sigset, NULL);
-	
 	initFinished = 1;
 	while (1)
 	{
@@ -362,6 +355,9 @@ GWMWindow* gwmCreateWindow(
 	int width, int height,
 	int flags)
 {
+	if (width < 0) width = 0;
+	if (height < 0) height = 0;
+	
 	uint64_t id = __sync_fetch_and_add(&nextWindowID, 1);
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
 	

@@ -1768,6 +1768,16 @@ uint64_t gwmReadOptionMenu(GWMWindow *optmenu);
 GWMWindow* gwmCreateFrame(GWMWindow *parent, const char *caption, int x, int y, int width, int height);
 
 /**
+ * Create a frame widget.
+ */
+GWMWindow* gwmNewFrame(GWMWindow *parent);
+
+/**
+ * Set the caption of a frame.
+ */
+void gwmSetFrameCaption(GWMWindow *frame, const char *parent);
+
+/**
  * Destroy a frame widget.
  */
 void gwmDestroyFrame(GWMWindow *frame);

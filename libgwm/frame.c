@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 typedef struct
 {
@@ -38,23 +39,29 @@ typedef struct
 	GWMWindow*			panel;
 } FrameData;
 
+static int frameHandler(GWMEvent *ev, GWMWindow *frame, void *context)
+{
+	return GWM_EVSTATUS_CONT;
+};
+
 static void redrawFrame(GWMWindow *frame)
 {
-	FrameData *data = (FrameData*) frame->data;
+	FrameData *data = (FrameData*) gwmGetData(frame, frameHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(frame);
 	
 	static DDIColor frameColor = {0x55, 0x55, 0xFF, 0xFF};
 	static DDIColor backColor = {0xDD, 0xDD, 0xDD, 0xFF};
 	
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &backColor);
-	ddiFillRect(canvas, 0, 10, canvas->width, 1, &frameColor);
-	ddiFillRect(canvas, 0, 10, 1, canvas->height-10, &frameColor);
-	ddiFillRect(canvas, canvas->width-1, 10, 1, canvas->height-10, &frameColor);
-	ddiFillRect(canvas, 0, canvas->height-1, canvas->width, 1, &frameColor);
+	ddiFillRect(canvas, 2, 10, canvas->width-4, 1, &frameColor);
+	ddiFillRect(canvas, 2, 10, 1, canvas->height-13, &frameColor);
+	ddiFillRect(canvas, canvas->width-3, 10, 1, canvas->height-13, &frameColor);
+	ddiFillRect(canvas, 2, canvas->height-3, canvas->width-4, 1, &frameColor);
 	
 	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 15, 2, canvas->width-19, 20, 0, 0, NULL);
 	if (pen != NULL)
 	{
+		ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);
 		ddiSetPenBackground(pen, &backColor);
 		ddiSetPenColor(pen, &frameColor);
 		ddiSetPenWrap(pen, 0);
@@ -66,19 +73,83 @@ static void redrawFrame(GWMWindow *frame)
 	gwmPostDirty(frame);
 };
 
+static void frameMinSize(GWMWindow *frame, int *width, int *height)
+{
+	FrameData *data = (FrameData*) gwmGetData(frame, frameHandler);
+	
+	if (data->panel->layout == NULL)
+	{
+		*width = 8;
+		*height = 24;
+	}
+	else
+	{
+		data->panel->layout->getMinSize(data->panel->layout, width, height);
+		*width += 8;
+		*height += 24;
+	};
+};
+
+static void framePrefSize(GWMWindow *frame, int *width, int *height)
+{
+	FrameData *data = (FrameData*) gwmGetData(frame, frameHandler);
+	
+	if (data->panel->layout == NULL)
+	{
+		*width = 8;
+		*height = 24;
+	}
+	else
+	{
+		data->panel->layout->getPrefSize(data->panel->layout, width, height);
+		*width += 8;
+		*height += 24;
+	};
+};
+
+static void framePosition(GWMWindow *frame, int x, int y, int width, int height)
+{
+	gwmMoveWindow(frame, x, y);
+	gwmResizeWindow(frame, width, height);
+	redrawFrame(frame);
+	
+	FrameData *data = (FrameData*) gwmGetData(frame, frameHandler);
+	gwmMoveWindow(data->panel, 4, 20);
+	gwmLayout(data->panel, width-8, height-24);
+};
+
 GWMWindow *gwmCreateFrame(GWMWindow *parent, const char *caption, int x, int y, int width, int height)
 {
 	GWMWindow *frame = gwmCreateWindow(parent, caption, x, y, width, height, 0);
 	if (frame == NULL) return NULL;
 	
 	FrameData *data = (FrameData*) malloc(sizeof(FrameData));
-	frame->data = data;
-	
+	gwmPushEventHandler(frame, frameHandler, data);
+
 	data->caption = strdup(caption);
-	data->panel = gwmCreateWindow(frame, "FramePanel", x+2, y+20, width-4, height-22, 0);
+	data->panel = gwmCreateWindow(frame, "FramePanel", 4, 20, width-8, height-24, 0);
+	assert(data->panel != NULL);
+	
+	frame->getMinSize = frameMinSize;
+	frame->getPrefSize = framePrefSize;
+	frame->position = framePosition;
 	
 	redrawFrame(frame);
 	return frame;
+};
+
+GWMWindow* gwmNewFrame(GWMWindow *parent)
+{
+	return gwmCreateFrame(parent, "", 0, 0, 0, 0);
+};
+
+void gwmSetFrameCaption(GWMWindow *frame, const char *caption)
+{
+	FrameData *data = (FrameData*) gwmGetData(frame, frameHandler);
+	free(data->caption);
+	data->caption = strdup(caption);
+	
+	redrawFrame(frame);
 };
 
 void gwmDestroyFrame(GWMWindow *frame)
@@ -92,6 +163,6 @@ void gwmDestroyFrame(GWMWindow *frame)
 
 GWMWindow* gwmGetFramePanel(GWMWindow *frame)
 {
-	FrameData *data = (FrameData*) frame->data;
+	FrameData *data = (FrameData*) gwmGetData(frame, frameHandler);
 	return data->panel;
 };

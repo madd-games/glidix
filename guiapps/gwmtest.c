@@ -38,6 +38,9 @@ enum
 	SYM_BUTTON3,
 	
 	SYM_CHECKBOX,
+	
+	SYM_BUTTON_FRAME1,
+	SYM_BUTTON_FRAME2,
 };
 
 int myCommandHandler(GWMCommandEvent *ev)
@@ -53,6 +56,9 @@ int myCommandHandler(GWMCommandEvent *ev)
 			return GWM_EVSTATUS_CONT;
 		};
 		return GWM_EVSTATUS_OK;
+	case SYM_BUTTON_FRAME2:
+		gwmMessageBox(NULL, "Example", "You clicked button 2 inside the frame!", GWM_MBUT_OK | GWM_MBICON_WARN);
+		return GWM_EVSTATUS_CONT;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -113,6 +119,17 @@ int main()
 	gwmSetCheckboxLabel(checkbox, "Play with me");
 	gwmSetCheckboxSymbol(checkbox, SYM_CHECKBOX);
 	gwmBoxLayoutAddWindow(boxLayout, checkbox, 0, 0, 0);
+	
+	GWMWindow *frame = gwmNewFrame(topWindow);
+	gwmSetFrameCaption(frame, "Example frame");
+	gwmBoxLayoutAddWindow(boxLayout, frame, 0, 0, 0);
+	
+	GWMWindow *panel = gwmGetFramePanel(frame);
+	GWMLayout *panelLayout = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
+	gwmSetWindowLayout(panel, panelLayout);
+	
+	gwmBoxLayoutAddWindow(panelLayout, gwmCreateButtonWithLabel(panel, SYM_BUTTON_FRAME1, "Frame button 1"), 0, 0, 0);
+	gwmBoxLayoutAddWindow(panelLayout, gwmCreateButtonWithLabel(panel, SYM_BUTTON_FRAME2, "Frame button 2"), 0, 0, 0);
 	
 	gwmFit(topWindow);
 	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED);
