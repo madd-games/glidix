@@ -1536,7 +1536,12 @@ void gwmDestroyMenu(GWMMenu *menu);
 /**
  * Creates a menu bar.
  */
-GWMWindow *gwmCreateMenubar(GWMWindow *parent);
+GWMWindow* gwmCreateMenubar(GWMWindow *parent);
+
+/**
+ * Alias for gwmCreateMenubar().
+ */
+GWMWindow* gwmNewMenubar(GWMWindow *parent);
 
 /**
  * Adjust a menu bar to its parent's new width. Call this whenever the parent is resized.

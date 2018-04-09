@@ -88,8 +88,11 @@ int main(int argc, char *argv[])
 	// make sure the clipboard and shared surface directories actually exist
 	mkdir("/run/clipboard", 0777);
 	mkdir("/run/shsurf", 0777);
+	mkdir("/run/gwmserver-wd", 0777);
 	mkdir("/var", 0755);
 	mkdir("/var/log", 0755);
+	
+	chdir("/run/gwmserver-wd");
 	
 	FILE *fp = fopen("/etc/gwm.conf", "r");
 	if (fp == NULL)

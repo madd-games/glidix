@@ -45,11 +45,13 @@ typedef struct
 	DDISurface*			textSurface;
 } GWMMenubarData;
 
+static int menubarHandler(GWMEvent *ev, GWMWindow *menubar, void *context);
+
 void gwmRedrawMenubar(GWMWindow *menubar, int i)
 {
 	static DDIColor black = {0x00, 0x00, 0x00, 0xFF};
 	
-	GWMMenubarData *data = (GWMMenubarData*) menubar->data;
+	GWMMenubarData *data = (GWMMenubarData*) gwmGetData(menubar, menubarHandler);
 	gwmClearWindow(menubar);
 	DDISurface *canvas = gwmGetWindowCanvas(menubar);
 	
@@ -74,7 +76,7 @@ void gwmRenderMenubar(GWMWindow *menubar)
 {
 	static DDIColor transparent = {0, 0, 0, 0};
 	
-	GWMMenubarData *data = (GWMMenubarData*) menubar->data;
+	GWMMenubarData *data = (GWMMenubarData*) gwmGetData(menubar, menubarHandler);
 	if (data->textSurface != NULL)
 	{
 		ddiDeleteSurface(data->textSurface);
@@ -116,7 +118,7 @@ void gwmRenderMenubar(GWMWindow *menubar)
 
 static int menubarHandler(GWMEvent *ev, GWMWindow *menubar, void *context)
 {
-	GWMMenubarData *data = (GWMMenubarData*) menubar->data;
+	GWMMenubarData *data = (GWMMenubarData*) gwmGetData(menubar, menubarHandler);
 	size_t i;
 	
 	switch (ev->type)
@@ -140,6 +142,20 @@ static int menubarHandler(GWMEvent *ev, GWMWindow *menubar, void *context)
 	};
 };
 
+static void menubarSize(GWMWindow *menubar, int *width, int *height)
+{
+	*width = 100;
+	*height = MENUBAR_HEIGHT;
+};
+
+static void menubarPosition(GWMWindow *menubar, int x, int y, int width, int height)
+{
+	y += (height - MENUBAR_HEIGHT) / 2;
+	gwmMoveWindow(menubar, x, y);
+	gwmResizeWindow(menubar, width, height);
+	gwmRenderMenubar(menubar);
+};
+
 GWMWindow *gwmCreateMenubar(GWMWindow *parent)
 {
 	DDISurface *canvas = gwmGetWindowCanvas(parent);
@@ -154,14 +170,22 @@ GWMWindow *gwmCreateMenubar(GWMWindow *parent)
 	data->parent = parent;
 	data->textSurface = NULL;
 
-	menubar->data = data;
-	gwmPushEventHandler(menubar, menubarHandler, NULL);
+	gwmPushEventHandler(menubar, menubarHandler, data);
+	
+	menubar->getMinSize = menubar->getPrefSize = menubarSize;
+	menubar->position = menubarPosition;
+	
 	return menubar;
+};
+
+GWMWindow* gwmNewMenubar(GWMWindow *parent)
+{
+	return gwmCreateMenubar(parent);
 };
 
 void gwmMenubarAdjust(GWMWindow *menubar)
 {
-	GWMMenubarData *data = (GWMMenubarData*) menubar->data;
+	GWMMenubarData *data = (GWMMenubarData*) gwmGetData(menubar, menubarHandler);
 	DDISurface *parentCanvas = gwmGetWindowCanvas(data->parent);
 	gwmResizeWindow(menubar, parentCanvas->width, MENUBAR_HEIGHT);
 	gwmRenderMenubar(menubar);
@@ -169,7 +193,7 @@ void gwmMenubarAdjust(GWMWindow *menubar)
 
 void gwmMenubarAdd(GWMWindow *menubar, const char *label, GWMMenu *menu)
 {
-	GWMMenubarData *data = (GWMMenubarData*) menubar->data;
+	GWMMenubarData *data = (GWMMenubarData*) gwmGetData(menubar, menubarHandler);
 
 	size_t index = data->numMenus++;
 	data->menus = realloc(data->menus, sizeof(GWMMenu*) * data->numMenus);

@@ -122,6 +122,12 @@ int main()
 	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	gwmSetWindowLayout(topWindow, boxLayout);
 
+	GWMWindow *menubar = gwmNewMenubar(topWindow);
+	gwmBoxLayoutAddWindow(boxLayout, menubar, 0, 0, GWM_BOX_FILL);
+	
+	GWMMenu *menuFile = gwmCreateMenu();
+	gwmMenubarAdd(menubar, "File", menuFile);
+	
 	GWMWindow *button1 = gwmCreateButtonWithLabel(
 		topWindow,			// the parent window
 		SYM_BUTTON1,			// the symbol

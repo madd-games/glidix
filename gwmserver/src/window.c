@@ -1528,7 +1528,7 @@ int wndGetWindowParams(GWMGlobWinRef *ref, GWMWindowParams *params)
 	Window *win;
 	for (win=desktopWindow->children; win!=NULL; win=win->next)
 	{
-		if (win->isDecoration)
+		if (win->isDecoration && win->children != NULL)
 		{
 			if (win->children->fd == ref->fd && win->children->id == ref->id)
 			{
