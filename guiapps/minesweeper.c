@@ -327,36 +327,28 @@ int getTextFieldInt(GWMWindow* input)
 	size_t size = gwmGetTextFieldSize(input);
 	if (size == 0) return -1;
 	
-	char *buffer = (char*) malloc(size+1);
-	buffer[size] = 0;
-	gwmReadTextField(input, buffer, 0, (off_t)size);
+	const char *buffer = gwmReadTextField(input);
 	
 	int result, count;
 	int elements = sscanf(buffer, "%d%n", &result, &count);
 	if ((elements < 1) || (count != strlen(buffer)))
 	{
-		free(buffer);
-		printf("result=%d, count=%d, elements=%d, buffer=[%s]\n", result, count, elements, buffer);
 		gwmMessageBox(NULL, "Settings error", "Failed to input value", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		return -1;
 	}
 	else if (result < 10) 
 	{
-		free(buffer);
 		return 10;
 	}
 	else if (result > 99)
 	{
-		free(buffer);
 		return 99;
 	}
 	else
 	{
-		free(buffer);
 		return result;
 	};
 };
-
 
 void resetBoard()
 {
