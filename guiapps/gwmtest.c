@@ -120,10 +120,14 @@ int main()
 	gwmPushEventHandler(topWindow, myHandler, NULL);
 	
 	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(topWindow, boxLayout);
-
-	GWMWindow *menubar = gwmNewMenubar(topWindow);
-	gwmBoxLayoutAddWindow(boxLayout, menubar, 0, 0, GWM_BOX_FILL);
+	
+	GWMWindowTemplate wt;
+	wt.wtComps = GWM_WTC_MENUBAR;
+	wt.wtWindow = topWindow;
+	wt.wtBody = boxLayout;
+	gwmCreateTemplate(&wt);
+	
+	GWMWindow *menubar = wt.wtMenubar;
 	
 	GWMMenu *menuFile = gwmCreateMenu();
 	gwmMenubarAdd(menubar, "File", menuFile);

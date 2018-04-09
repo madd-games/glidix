@@ -178,6 +178,19 @@ GWMWindow *gwmCreateMenubar(GWMWindow *parent)
 	return menubar;
 };
 
+void gwmDestroyMenubar(GWMWindow *menubar)
+{
+	GWMMenubarData *data = (GWMMenubarData*) gwmGetData(menubar, menubarHandler);
+	free(data->menus);
+	free(data->offsets);
+	free(data->widths);
+	free(data->labels);
+	ddiDeleteSurface(data->textSurface);
+	
+	free(data);
+	gwmDestroyWindow(menubar);
+};
+
 GWMWindow* gwmNewMenubar(GWMWindow *parent)
 {
 	return gwmCreateMenubar(parent);

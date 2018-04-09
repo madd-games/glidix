@@ -32,45 +32,31 @@
 #include <stdio.h>
 #include <string.h>
 
-GWMLayout* gwmCreateAbstractLayout()
+int gwmCreateTemplate(GWMWindowTemplate *wt)
 {
-	GWMLayout *layout = (GWMLayout*) malloc(sizeof(GWMLayout));
-	memset(layout, 0, sizeof(GWMLayout));
-	return layout;
+	GWMLayout *layout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(wt->wtWindow, layout);
+	
+	if (wt->wtComps & GWM_WTC_MENUBAR)
+	{
+		GWMWindow *menubar = gwmNewMenubar(wt->wtWindow);
+		gwmBoxLayoutAddWindow(layout, menubar, 0, 0, GWM_BOX_FILL);
+		wt->wtMenubar = menubar;
+	};
+	
+	gwmBoxLayoutAddLayout(layout, wt->wtBody, 1, 0, GWM_BOX_FILL);
+	return 0;
 };
 
-void gwmDestroyAbstractLayout(GWMLayout *layout)
+int gwmDestroyTemplate(GWMWindowTemplate *wt)
 {
-	free(layout);
-};
-
-void gwmFit(GWMWindow *win)
-{
-	if (win->layout == NULL) return;
+	if (wt->wtComps & GWM_WTC_MENUBAR)
+	{
+		gwmDestroyMenubar(wt->wtMenubar);
+	};
 	
-	int width, height;
-	win->layout->getPrefSize(win->layout, &width, &height);
-	//win->layout->getMinSize(win->layout, &width, &height);
+	gwmDestroyBoxLayout(wt->wtWindow->layout);
+	gwmSetWindowLayout(wt->wtWindow, NULL);
 	
-	gwmResizeWindow(win, width, height);
-	win->layout->run(win->layout, 0, 0, width, height);
-};
-
-void gwmLayout(GWMWindow *win, int width, int height)
-{
-	if (win->layout == NULL) return;
-	
-	int minWidth, minHeight;
-	win->layout->getMinSize(win->layout, &minWidth, &minHeight);
-	
-	if (width < minWidth) width = minWidth;
-	if (height < minHeight) height = minHeight;
-	
-	gwmResizeWindow(win, width, height);
-	win->layout->run(win->layout, 0, 0, width, height);
-};
-
-void gwmSetWindowLayout(GWMWindow *win, GWMLayout *layout)
-{
-	win->layout = layout;
+	return 0;
 };

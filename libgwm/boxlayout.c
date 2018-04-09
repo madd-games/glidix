@@ -166,10 +166,10 @@ static void gwmBoxPrefSize(GWMLayout *box, int *outWidth, int *outHeight)
 	int mainAxis = data->flags & GWM_BOX_VERTICAL;
 	int otherAxis = mainAxis ^ 1;
 	dims[0] = dims[1] = 0;
-
+	
 	int otherLeftoverMax = 0;
 	int units = 0;
-
+	
 	BoxChild *child;
 	for (child=data->firstChild; child!=NULL; child=child->next)
 	{
@@ -231,11 +231,12 @@ static void gwmBoxPrefSize(GWMLayout *box, int *outWidth, int *outHeight)
 			if (otherLeftoverMax < subdims[mainAxis]) otherLeftoverMax = subdims[mainAxis];
 			continue;
 		};
-		
+
 		dims[mainAxis] += subdims[mainAxis];
 		if (dims[otherAxis] < subdims[otherAxis]) dims[otherAxis] = subdims[otherAxis];
 	};
 	
+	dims[mainAxis] += otherLeftoverMax * units;
 	*outWidth = dims[0];
 	*outHeight = dims[1];
 };

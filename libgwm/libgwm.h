@@ -62,6 +62,12 @@
 #define	GWM_EVSTATUS_DEFAULT			-3
 
 /**
+ * True and false. Kinda makes stuff prettier.
+ */
+#define	GWM_TRUE				(1 == 1)
+#define	GWM_FALSE				(1 == 0)
+
+/**
  * Colors.
  */
 #define	GWM_COLOR_SELECTION			&gwmColorSelection
@@ -303,6 +309,12 @@ extern DDIColor gwmBackColor;
 #define	GWM_TYPE_SURFACE			1
 #define	GWM_TYPE_COLOR				2
 #define	GWM_TYPE_INT				3
+
+/**
+ * Some nice typedefs.
+ */
+typedef	int					GWMbool;
+typedef	int					GWMenum;
 
 /**
  * Window manager information structure, located in the shared file /run/gwminfo.
@@ -1115,7 +1127,44 @@ extern GWMTag gwmTagSelection;
 #define	GWM_TAG_SELECTION			(&gwmTagSelection)
 
 /**
- * Initialises the GWM library. This must be called before using any other functions.
+ * Flags for wtComps, indicating which template components to create.
+ */
+#define	GWM_WTC_MENUBAR				(1 << 0)
+
+/**
+ * Template descriptor for gwmCreateTemplate() and gwmDestroyTemplate().
+ */
+typedef struct
+{
+	/**
+	 * Flags (GWM_WTC_*) indicating which components are to be created by gwmCreateTemplate() and later
+	 * which must be destroyed by gwmDestroyTemplate(). You should initialize this before calling
+	 * gwmCreateTemplate() and not touch it after that. This indicates which fields of this structure
+	 * are actually present, for binary compatibility between versions!
+	 */
+	int					wtComps;
+	
+	/**
+	 * The window to put the template in. This must be created by the application before calling gwmCreateTemplate();
+	 * gwmDestoryTemplate() does NOT destroy it.
+	 */
+	GWMWindow*				wtWindow;
+	
+	/**
+	 * Layout manager to use for the body of the window. This must be initialized before gwmCreateTemplate(),
+	 * and gwmDestroyTemplate() does NOT destroy it. It must NOT be set as the layout of wtWindow;
+	 * gwmCreateTemplate() will instead add it as a sub-layout of the template layout.
+	 */
+	GWMLayout*				wtBody;
+	
+	/**
+	 * This field is set to the menubar if it is requested in wtComps.
+	 */
+	GWMWindow*				wtMenubar;
+} GWMWindowTemplate;
+
+/**
+ * Initializes the GWM library. This must be called before using any other functions.
  * Returns 0 on success, or -1 on error.
  */
 int gwmInit();
@@ -1542,6 +1591,11 @@ GWMWindow* gwmCreateMenubar(GWMWindow *parent);
  * Alias for gwmCreateMenubar().
  */
 GWMWindow* gwmNewMenubar(GWMWindow *parent);
+
+/**
+ * Destroy a menubar.
+ */
+void gwmDestroyMenubar(GWMWindow *menubar);
 
 /**
  * Adjust a menu bar to its parent's new width. Call this whenever the parent is resized.
@@ -2062,5 +2116,15 @@ void gwmSetImageViewport(GWMWindow *image, int x, int y, int width, int height);
  * Convenience wrapper to create an image of the specified surface and viewport.
  */
 GWMWindow* gwmCreateImage(GWMWindow *parent, DDISurface *surf, int x, int y, int width, int height);
+
+/**
+ * Create components based on the specified template. Return 0 on success, -1 on error.
+ */
+int gwmCreateTemplate(GWMWindowTemplate *wt);
+
+/**
+ * Destroy objects created by gwmCreateTemplate() for the specified template. Return 0 on success, -1 on error.
+ */
+int gwmDestroyTemplate(GWMWindowTemplate *wt);
 
 #endif
