@@ -50,7 +50,6 @@ void gwmFit(GWMWindow *win)
 	
 	int width, height;
 	win->layout->getPrefSize(win->layout, &width, &height);
-	//win->layout->getMinSize(win->layout, &width, &height);
 	
 	gwmResizeWindow(win, width, height);
 	win->layout->run(win->layout, 0, 0, width, height);
