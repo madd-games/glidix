@@ -46,5 +46,6 @@ namespace gwm {
 		image mbicons /usr/share/images/mbicons.png
 		image button /usr/share/images/button.png
 		image checkbox /usr/share/images/checkbox.png
+		image radio /usr/share/images/radiobutton.png
 	}
 }

@@ -59,9 +59,14 @@ typedef struct GWMRadioData_
 	int					value;
 	int					flags;
 	int					state;
+	int					minWidth;
+	int					symbol;
 	struct GWMRadioData_*			prev;
 	struct GWMRadioData_*			next;
+	char*					text;
 } GWMRadioData;
+
+static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio, void *context);
 
 GWMRadioGroup* gwmCreateRadioGroup(int value)
 {
@@ -80,7 +85,7 @@ void gwmDestroyRadioGroup(GWMRadioGroup *group)
 
 static void gwmRedrawRadio(GWMWindow *radio)
 {
-	GWMRadioData *data = (GWMRadioData*) radio->data;
+	GWMRadioData *data = (GWMRadioData*) gwmGetData(radio, gwmRadioHandler);
 	
 	int iy = data->state;
 	if (data->flags & GWM_RADIO_DISABLED)
@@ -97,16 +102,28 @@ static void gwmRedrawRadio(GWMWindow *radio)
 
 	if (imgRadio == NULL)
 	{
-		const char *error;
-		imgRadio = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/radiobutton.png", &error);
+		imgRadio = (DDISurface*) gwmGetThemeProp("gwm.toolkit.radio", GWM_TYPE_SURFACE, NULL);
 		if (imgRadio == NULL)
 		{
-			fprintf(stderr, "Failed to load radio button image (/usr/share/images/radiobutton.png): %s\n", error);
+			fprintf(stderr, "Failed to load radio button image\n");
 			abort();
 		};
 	};
 	
 	ddiBlit(imgRadio, RADIO_WIDTH*ix, RADIO_HEIGHT*iy, canvas, 0, 0, RADIO_WIDTH, RADIO_HEIGHT);
+
+	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height, 0, 0, NULL);
+	ddiSetPenWrap(pen, 0);
+	ddiWritePen(pen, data->text);
+	
+	int txtWidth, txtHeight;
+	ddiGetPenSize(pen, &txtWidth, &txtHeight);
+	ddiSetPenPosition(pen, 22, 10-(txtHeight/2));
+	ddiExecutePen(pen, canvas);
+	ddiDeletePen(pen);
+	
+	data->minWidth = txtWidth + 22;
+
 	gwmPostDirty(radio);
 };
 
@@ -132,7 +149,7 @@ void gwmSetRadioGroupValue(GWMRadioGroup *group, int value)
 
 static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio, void *context)
 {
-	GWMRadioData *data = (GWMRadioData*) radio->data;
+	GWMRadioData *data = (GWMRadioData*) gwmGetData(radio, gwmRadioHandler);
 	
 	switch (ev->type)
 	{
@@ -160,8 +177,22 @@ static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio, void *context)
 				
 				if ((data->flags & GWM_RADIO_DISABLED) == 0)
 				{
-					data->group->value = data->value;
-					gwmRedrawRadioGroup(data->group);
+					GWMCommandEvent cmdev;
+					memset(&cmdev, 0, sizeof(GWMCommandEvent));
+					cmdev.header.type = GWM_EVENT_COMMAND;
+					cmdev.symbol = data->symbol;
+					
+					if (gwmPostEvent((GWMEvent*) &cmdev, radio) == GWM_EVSTATUS_DEFAULT)
+					{
+						data->group->value = data->value;
+						gwmRedrawRadioGroup(data->group);
+						
+						memset(&cmdev, 0, sizeof(GWMCommandEvent));
+						cmdev.header.type = GWM_EVENT_TOGGLED;
+						cmdev.symbol = data->symbol;
+						
+						gwmPostEvent((GWMEvent*) &cmdev, radio);
+					};
 				};
 			};
 		};
@@ -171,14 +202,27 @@ static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio, void *context)
 	};
 };
 
+static void radioSize(GWMWindow *radio, int *width, int *height)
+{
+	GWMRadioData *data = (GWMRadioData*) gwmGetData(radio, gwmRadioHandler);
+	*width = data->minWidth;
+	*height = 20;
+};
+
+static void radioPosition(GWMWindow *radio, int x, int y, int width, int height)
+{
+	y += (height - 20) / 2;
+	gwmMoveWindow(radio, x, y);
+	gwmResizeWindow(radio, width, 20);
+	gwmRedrawRadio(radio);
+};
+
 GWMWindow* gwmCreateRadioButton(GWMWindow *parent, int x, int y, GWMRadioGroup *group, int value, int flags)
 {
 	GWMWindow *radio = gwmCreateWindow(parent, "GWMRadioButton", x, y, RADIO_WIDTH, RADIO_HEIGHT, 0);
 	if (radio == NULL) return NULL;
 	
 	GWMRadioData *data = (GWMRadioData*) malloc(sizeof(GWMRadioData));
-	radio->data = data;
-	
 	data->win = radio;
 	data->group = group;
 	data->value = value;
@@ -186,6 +230,12 @@ GWMWindow* gwmCreateRadioButton(GWMWindow *parent, int x, int y, GWMRadioGroup *
 	data->state = RADIO_NORMAL;
 	data->prev = group->last;
 	data->next = NULL;
+	data->text = strdup("");
+	data->minWidth = 20;
+	data->symbol = 0;
+	
+	radio->getMinSize = radio->getPrefSize = radioSize;
+	radio->position = radioPosition;
 	
 	if (group->last == NULL)
 	{
@@ -197,14 +247,40 @@ GWMWindow* gwmCreateRadioButton(GWMWindow *parent, int x, int y, GWMRadioGroup *
 		group->last = data;
 	};
 	
+	gwmPushEventHandler(radio, gwmRadioHandler, data);
 	gwmRedrawRadio(radio);
-	gwmPushEventHandler(radio, gwmRadioHandler, NULL);
 	return radio;
+};
+
+GWMWindow* gwmNewRadioButton(GWMWindow *parent, GWMRadioGroup *group)
+{
+	return gwmCreateRadioButton(parent, 0, 0, group, 0, 0);
+};
+
+void gwmSetRadioButtonValue(GWMWindow *radio, int value)
+{
+	GWMRadioData *data = (GWMRadioData*) gwmGetData(radio, gwmRadioHandler);
+	data->value = value;
+	gwmRedrawRadio(radio);
+};
+
+void gwmSetRadioButtonLabel(GWMWindow *radio, const char *text)
+{
+	GWMRadioData *data = (GWMRadioData*) gwmGetData(radio, gwmRadioHandler);
+	free(data->text);
+	data->text = strdup(text);
+	gwmRedrawRadio(radio);
+};
+
+void gwmSetRadioButtonSymbol(GWMWindow *radio, int symbol)
+{
+	GWMRadioData *data = (GWMRadioData*) gwmGetData(radio, gwmRadioHandler);
+	data->symbol = symbol;
 };
 
 void gwmDestroyRadioButton(GWMWindow *radio)
 {
-	GWMRadioData *data = (GWMRadioData*) radio->data;
+	GWMRadioData *data = (GWMRadioData*) gwmGetData(radio, gwmRadioHandler);
 	
 	if (data->group->first == data)
 	{

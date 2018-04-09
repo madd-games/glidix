@@ -373,6 +373,12 @@ typedef struct
 	 * disabled. The columns are: unchcked, checked, mixed/tristate.
 	 */
 	uint32_t				imgCheckbox;
+	
+	/**
+	 * Radio button graphics. It's a grid of 20x20 cells. The rows are: normal, hovered, clicked,
+	 * disabled. The columns are: unselected, selected.
+	 */
+	uint32_t				imgRadioButton;
 } GWMInfo;
 
 /**
@@ -1736,8 +1742,31 @@ void gwmSetRadioGroupValue(GWMRadioGroup *group, int value);
 /**
  * Create a radio button, which will join the specified group, and when selected by the user, sets the value
  * of the radio group to 'value'.
+ *
+ * DEPRECATED
  */
 GWMWindow* gwmCreateRadioButton(GWMWindow *parent, int x, int y, GWMRadioGroup *group, int value, int flags);
+
+/**
+ * Create a radio button within the specified group, with the specified parent.
+ */
+GWMWindow* gwmNewRadioButton(GWMWindow *parent, GWMRadioGroup *group);
+
+/**
+ * Change the value associated with a radio button; this is the value that the group will be set to when the
+ * radio button is selected.
+ */
+void gwmSetRadioButtonValue(GWMWindow *radio, int value);
+
+/**
+ * Change the label of a radio button.
+ */
+void gwmSetRadioButtonLabel(GWMWindow *radio, const char *text);
+
+/**
+ * Set the symbol of a radio button.
+ */
+void gwmSetRadioButtonSymbol(GWMWindow *radio, int symbol);
 
 /**
  * Destroy a radio button.

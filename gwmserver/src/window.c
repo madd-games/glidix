@@ -885,7 +885,7 @@ void wndMouseMove(int x, int y)
 	if (wndHovering != NULL)
 	{
 		newCursor = wndHovering->cursor;
-		if (wndHovering->isDecoration)
+		if (wndHovering->isDecoration && wndHovering->children != NULL)
 		{
 			// resize cursors if necessary
 			if (wndHovering->children->params.flags & GWM_WINDOW_RESIZEABLE)
@@ -917,7 +917,7 @@ void wndMouseMove(int x, int y)
 	pthread_mutex_unlock(&invalidateLock);
 	
 	// if necessary, re-draw the buttons on the decoration to remove the hover effect
-	if (toRedecorate != NULL)
+	if (toRedecorate != NULL && toRedecorate->children != NULL)
 	{
 		if ((toRedecorate->children->params.flags & GWM_WINDOW_NOSYSMENU) == 0)
 		{
@@ -941,7 +941,7 @@ void wndMouseMove(int x, int y)
 
 	if (wndHovering != NULL)
 	{
-		if (wndHovering->isDecoration)
+		if (wndHovering->isDecoration && wndHovering->children != NULL)
 		{
 			int offX = cursorX - wndHovering->params.x;
 			int offY = cursorY - wndHovering->params.y;

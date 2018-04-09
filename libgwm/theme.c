@@ -62,6 +62,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.mbicons",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgMessageIcons)},
 	{"gwm.toolkit.button",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgButton)},
 	{"gwm.toolkit.checkbox",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCheckbox)},
+	{"gwm.toolkit.radio",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgRadioButton)},
 	
 	// LIST TERMINATOR
 	{NULL, 0, 0}
@@ -229,6 +230,17 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawButton(surf, 40, 20, 20, 20, &cbTristate, 0);
 	drawButton(surf, 40, 40, 20, 20, &cbTristate, 1);
 	drawButton(surf, 40, 60, 20, 20, &buttonDisabled, 1);
+
+	// radiobutton
+	surf = surfaceSetup(format, &info->imgRadioButton, 40, 80);
+	drawButton(surf, 0, 0, 20, 20, &cbUnchecked, 0);
+	drawButton(surf, 0, 20, 20, 20, &cbUnchecked, 0);
+	drawButton(surf, 0, 40, 20, 20, &cbUnchecked, 1);
+	drawButton(surf, 0, 60, 20, 20, &buttonDisabled, 1);
+	drawButton(surf, 20, 0, 20, 20, &cbChecked, 0);
+	drawButton(surf, 20, 20, 20, 20, &cbChecked, 0);
+	drawButton(surf, 20, 40, 20, 20, &cbChecked, 1);
+	drawButton(surf, 20, 60, 20, 20, &buttonDisabled, 1);
 
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

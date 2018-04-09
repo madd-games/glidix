@@ -110,7 +110,7 @@ int main()
 	
 	GWMWindow *topWindow = gwmCreateWindow(
 		NULL,						// window parent (none)
-		"Tutorial Part 3",				// window caption
+		"GWM Demo",					// window caption
 		GWM_POS_UNSPEC, GWM_POS_UNSPEC,			// window coordinates unspecified
 		0, 0,						// window size (will be set later by gwmFit() )
 		GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR	// hidden, no taskbar icon
