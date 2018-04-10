@@ -40,9 +40,6 @@
 
 static PTe *getPage(uint64_t addr, int make)
 {
-	// page-align
-	addr &= ~0xFFF;
-	
 	PDPTe *pdpte = (PDPTe*) (((addr >> 27) | 0xffffffffffe00000UL) & ~0x7);
 	if (!pdpte->present)
 	{

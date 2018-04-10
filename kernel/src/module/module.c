@@ -58,7 +58,7 @@ void initModuleInterface()
 	lastModule = NULL;
 	memset(&pdptModuleSpace, 0, 0x1000);
 
-	uint64_t pdptPhysAddr = (uint64_t) &pdptModuleSpace - 0xFFFF800000000000;
+	uint64_t pdptPhysAddr = VIRT_TO_FRAME(&pdptModuleSpace) << 12;
 	if (pdptPhysAddr % 0x1000)
 	{
 		FAILED();

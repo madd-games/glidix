@@ -378,11 +378,11 @@ ACPI_STATUS AcpiOsInitialize()
 	memset(&pdptAcpi, 0, sizeof(PDPT));
 	pdptAcpi.entries[511].present = 1;
 	pdptAcpi.entries[511].rw = 1;
-	pdptAcpi.entries[511].pdPhysAddr = ((uint64_t)&pdptAcpi - 0xFFFF800000000000) >> 12;
+	pdptAcpi.entries[511].pdPhysAddr = VIRT_TO_FRAME(&pdptAcpi);
 	PML4 *pml4 = getPML4();
 	pml4->entries[262].present = 1;
 	pml4->entries[262].rw = 1;
-	pml4->entries[262].pdptPhysAddr = ((uint64_t)&pdptAcpi - 0xFFFF800000000000) >> 12;
+	pml4->entries[262].pdptPhysAddr = VIRT_TO_FRAME(&pdptAcpi);
 	refreshAddrSpace();
 	mutexInit(&acpiMemoryLock);
 	return AE_OK;

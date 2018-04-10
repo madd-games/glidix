@@ -66,7 +66,15 @@
 /**
  * Virtual address (pointer) to physical frame number.
  */
-#define	VIRT_TO_FRAME(ptr)	(((PTe*)((((uint64_t)ptr) >> 9) | 0xFFFFFC0000000000))->framePhysAddr)
+#define	VIRT_TO_FRAME(ptr)	(((PTe*)((((uint64_t)ptr) >> 9) | 0xFFFFFF8000000000))->framePhysAddr)
+
+/**
+ * Virtual address (pointer) to its describing PDPT, PD, PT and PTE.
+ */
+#define	VIRT_TO_PTE(ptr)	((PTe*)(((((uint64_t)ptr) >> 9) & (~(0x7UL | 0xFFFF000000000000UL))) | 0xFFFFFF8000000000))
+#define	VIRT_TO_PDE(ptr)	((PDe*)(((((uint64_t)ptr) >> 18) & (~(0x7UL | 0xFFFF000000000000UL))) | 0xFFFFFFFFC0000000))
+#define	VIRT_TO_PDPTE(ptr)	((PDPTe*)(((((uint64_t)ptr) >> 27) & (~(0x7UL | 0xFFFF000000000000UL))) | 0xFFFFFFFFFFE00000))
+#define	VIRT_TO_PML4E(ptr)	((PML4e*)(((((uint64_t)ptr) >> 36) & (~(0x7UL | 0xFFFF000000000000UL))) | 0xFFFFFFFFFFFFF000))
 
 /**
  * Special traps. If a userspace process jumps to one of these, it will trigger

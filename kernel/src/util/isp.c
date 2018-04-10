@@ -53,14 +53,14 @@ void ispInit()
 	pdpt->entries[0].present = 1;
 	pdpt->entries[0].rw = 1;
 	pdpt->entries[0].user = 1;		// because of the user support page
-	pdpt->entries[0].pdPhysAddr = (((uint64_t)pd-0xFFFF800000000000) >> 12);
+	pdpt->entries[0].pdPhysAddr = VIRT_TO_FRAME(pd);
 
 	PT *pt = &ispPT;
 	memset(pt, 0, sizeof(PT));
 	pd->entries[0].present = 1;
 	pd->entries[0].rw = 1;
 	pd->entries[0].user = 1;		// because of the user support page
-	pd->entries[0].ptPhysAddr = (((uint64_t)pt-0xFFFF800000000000) >> 12);
+	pd->entries[0].ptPhysAddr = VIRT_TO_FRAME(pt);
 
 	// get the page for ISP.
 	ispPTE = &pt->entries[0];
@@ -78,7 +78,7 @@ void ispInit()
 	
 	// user support page; executable userspace code
 	pt->entries[3].present = 1;
-	pt->entries[3].framePhysAddr = (((uint64_t)(&usup_start)-0xFFFF800000000000) >> 12);
+	pt->entries[3].framePhysAddr = VIRT_TO_FRAME(&usup_start);
 	pt->entries[3].user = 1;
 
 	/**
@@ -87,7 +87,7 @@ void ispInit()
 	
 	// set it in the PML4 (so it maps from 0xFFFF808000000000 up).
 	pml4->entries[257].present = 1;
-	pml4->entries[257].pdptPhysAddr = (((uint64_t)pdpt-0xFFFF800000000000) >> 12);
+	pml4->entries[257].pdptPhysAddr = VIRT_TO_FRAME(pdpt);
 	pml4->entries[257].rw = 1;
 	pml4->entries[257].user = 1;		// beucase of the user support page
 	

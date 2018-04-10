@@ -69,14 +69,14 @@ void initMemoryPhase2()
 	memset(pd, 0, sizeof(PD));
 	pdpt->entries[0].present = 1;
 	pdpt->entries[0].rw = 1;
-	pdpt->entries[0].pdPhysAddr = (((uint64_t)pd-0xFFFF800000000000) >> 12);
+	pdpt->entries[0].pdPhysAddr = VIRT_TO_FRAME(pd);
 
 	// page table for the first 2MB.
 	PT *pt = kxmalloc(sizeof(PT), MEM_PAGEALIGN);
 	memset(pt, 0, sizeof(PT));
 	pd->entries[0].present = 1;
 	pd->entries[0].rw = 1;
-	pd->entries[0].ptPhysAddr = (((uint64_t)pt-0xFFFF800000000000) >> 12);
+	pd->entries[0].ptPhysAddr = VIRT_TO_FRAME(pt);
 	pdHeap = pd;
 
 	// map the first 2MB to physical addresses.
@@ -91,7 +91,7 @@ void initMemoryPhase2()
 	// set it in the PML4 (so it maps from HEAP_BASE_ADDR up).
 	pml4->entries[258].present = 1;
 	pml4->entries[258].rw = 1;
-	pml4->entries[258].pdptPhysAddr = (((uint64_t)pdpt-0xFFFF800000000000) >> 12);
+	pml4->entries[258].pdptPhysAddr = VIRT_TO_FRAME(pdpt);
 
 	refreshAddrSpace();
 

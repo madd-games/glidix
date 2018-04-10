@@ -257,7 +257,7 @@ static ScreenSize okSizes[] = {
 	{0, 0}
 };
 
-static int safeMode = 0;
+static int safeMode;
 
 static int isOkSize(word_t width, word_t height)
 {
@@ -277,6 +277,7 @@ static int isOkSize(word_t width, word_t height)
 
 void bmain()
 {
+	safeMode = 0;
 	consoleX = 0;
 	consoleY = 0;
 	memset(vidmem, 0, 80*25*2);
@@ -507,6 +508,7 @@ void bmain()
 	{
 		if (pheads[i].p_type == PT_LOAD)
 		{
+#if 0
 			if (pheads[i].p_paddr & 0xFFF)
 			{
 				termput("ERROR: kernel.so contains a program header with non-page-aligned physical address\n");
@@ -517,6 +519,13 @@ void bmain()
 			memcpy((void*) (dword_t) pheads[i].p_paddr, elfPtr + pheads[i].p_offset, pheads[i].p_filesz);
 			
 			mmap(pheads[i].p_vaddr, pheads[i].p_paddr, pheads[i].p_memsz);
+#endif
+
+			void *buffer = balloc(0x1000, pheads[i].p_memsz);
+			memset(buffer, 0, pheads[i].p_memsz);
+			memcpy(buffer, elfPtr + pheads[i].p_offset, pheads[i].p_filesz);
+			
+			mmap(pheads[i].p_vaddr, (dword_t) buffer, pheads[i].p_memsz);
 		}
 		else if ((pheads[i].p_type == PT_GLIDIX_MMAP) || (pheads[i].p_type == PT_GLIDIX_INITRD))
 		{

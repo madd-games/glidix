@@ -251,7 +251,6 @@ void acpiInit()
 	pmem_read(&rsdtHeader, rsdp->rsdtAddr, sizeof(ACPI_SDTHeader));
 
 	acpiNumTables = (rsdtHeader.len - sizeof(rsdtHeader)) / 4;
-	//kprintf("Number of ACPI tables: %d\n", acpiNumTables);
 	acpiTables = (uint32_t*) kmalloc(acpiNumTables*4);
 	pmem_read(acpiTables, rsdp->rsdtAddr+sizeof(ACPI_SDTHeader), acpiNumTables*4);
 
