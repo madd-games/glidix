@@ -1,5 +1,4 @@
 KERNEL_VMA = 0xFFFF800000100000;		/* virtual address of kernel */
-KERNEL_PHYS = 0x100000;				/* physical address of kernel */
 
 PHDRS
 {
@@ -19,7 +18,7 @@ SECTIONS
 	
 	. = KERNEL_VMA;
 	
-	.text : AT(code + KERNEL_PHYS - KERNEL_VMA)
+	.text :
 	{
 		code = .;
 		*(.text)
@@ -30,13 +29,13 @@ SECTIONS
 	
 	. = ALIGN(4096);
 	
-	.data : AT(data + KERNEL_PHYS - KERNEL_VMA)
+	.data :
 	{
 		data = .;
 		*(.data)
 	} :data
 	
-	.bss : AT(bss + KERNEL_PHYS - KERNEL_VMA)
+	.bss :
 	{
 		bss = .;
 		*(.bss)
@@ -63,7 +62,7 @@ SECTIONS
 	per_cpu_phys_start = .;
 	. = 0xFFFF828000000000;
 	_per_cpu_start = .;
-	.per_cpu_bss (NOLOAD) : AT(per_cpu_phys_start + KERNEL_PHYS - KERNEL_VMA)
+	.per_cpu_bss (NOLOAD) :
 	{
 		*(.data_per_cpu)
 	} :percpu

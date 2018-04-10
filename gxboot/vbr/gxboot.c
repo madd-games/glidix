@@ -282,6 +282,8 @@ void bmain()
 	consoleY = 0;
 	memset(vidmem, 0, 80*25*2);
 	
+	int i;
+	
 	if (vbeInfoBlock.sig != (*((const dword_t*)"VESA")))
 	{
 		termput("ERROR: Invalid VBE information block");
@@ -352,7 +354,7 @@ void bmain()
 	};
 	
 	fsInit();
-	
+
 	dtermput("Finding /boot/vmglidix.tar... ");
 	FileHandle initrd;
 	if (openFile(&initrd, "/boot/vmglidix.tar") != 0)
@@ -449,29 +451,14 @@ void bmain()
 	};
 	
 	dtermput("OK\n");
-	
+
+	// initialize placement allocator
+	placement = (dword_t) 0x100000;
+
 	dtermput("Loading initrd to memory... ");
-	Elf64_Phdr phead;
-	void *initrdStart = NULL;
 	
-	int i;
-	for (i=0; i<header.e_phnum; i++)
-	{
-		readFile(&initrd, &phead, sizeof(Elf64_Phdr), pos + header.e_phoff + i * sizeof(Elf64_Phdr));
-		
-		if (phead.p_type == PT_GLIDIX_INITRD)
-		{
-			initrdStart = (void*) (dword_t) phead.p_paddr;
-			break;
-		};
-	};
-	
-	if (initrdStart == NULL)
-	{
-		dtermput("FAILED\n");
-		termput("ERROR: no initrd segment in kernel.so");
-		return;
-	};
+	void *initrdStart = balloc(0x1000, initrd.size);
+	memset(initrdStart, 0, initrd.size);
 	
 	readFile(&initrd, initrdStart, initrd.size, 0);
 	dtermput("OK\n");
@@ -479,22 +466,6 @@ void bmain()
 	char *elfPtr = (char*) initrdStart + pos;
 	Elf64_Ehdr *elfHeader = (Elf64_Ehdr*) elfPtr;
 	Elf64_Phdr *pheads = (Elf64_Phdr*) &elfPtr[elfHeader->e_phoff];
-	
-	// first find the top address
-	qword_t topAddr = 0;
-	for (i=0; i<elfHeader->e_phnum; i++)
-	{
-		if ((pheads[i].p_type == PT_LOAD) || (pheads[i].p_type == PT_GLIDIX_INITRD))
-		{
-			if ((pheads[i].p_paddr + pheads[i].p_memsz) > topAddr)
-			{
-				topAddr = pheads[i].p_paddr + pheads[i].p_memsz;
-			};
-		};
-	};
-	
-	// initialize placement allocator
-	placement = (dword_t) topAddr;
 	
 	// allocate space for the PML4
 	pml4 = (qword_t*) balloc(0x1000, 0x1000);
@@ -508,26 +479,13 @@ void bmain()
 	{
 		if (pheads[i].p_type == PT_LOAD)
 		{
-#if 0
-			if (pheads[i].p_paddr & 0xFFF)
-			{
-				termput("ERROR: kernel.so contains a program header with non-page-aligned physical address\n");
-				return;
-			};
-			
-			memset((void*) (dword_t) pheads[i].p_paddr, 0, pheads[i].p_memsz);
-			memcpy((void*) (dword_t) pheads[i].p_paddr, elfPtr + pheads[i].p_offset, pheads[i].p_filesz);
-			
-			mmap(pheads[i].p_vaddr, pheads[i].p_paddr, pheads[i].p_memsz);
-#endif
-
 			void *buffer = balloc(0x1000, pheads[i].p_memsz);
 			memset(buffer, 0, pheads[i].p_memsz);
 			memcpy(buffer, elfPtr + pheads[i].p_offset, pheads[i].p_filesz);
 			
 			mmap(pheads[i].p_vaddr, (dword_t) buffer, pheads[i].p_memsz);
 		}
-		else if ((pheads[i].p_type == PT_GLIDIX_MMAP) || (pheads[i].p_type == PT_GLIDIX_INITRD))
+		else if (pheads[i].p_type == PT_GLIDIX_MMAP)
 		{
 			if (pheads[i].p_paddr & 0xFFF)
 			{
@@ -536,6 +494,16 @@ void bmain()
 			};
 			
 			mmap(pheads[i].p_vaddr, pheads[i].p_paddr, pheads[i].p_memsz);
+		}
+		else if (pheads[i].p_type == PT_GLIDIX_INITRD)
+		{
+			if (pheads[i].p_vaddr & 0xFFF)
+			{
+				termput("ERROR: kernel.so contains a program header with non-page-aligned virtual address!");
+				return;
+			};
+		
+			mmap(pheads[i].p_vaddr, (dword_t) initrdStart, pheads[i].p_memsz);
 		};
 	};
 	
