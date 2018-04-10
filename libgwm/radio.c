@@ -197,6 +197,9 @@ static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio, void *context)
 			};
 		};
 		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_RETHEME:
+		gwmRedrawRadio(radio);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};

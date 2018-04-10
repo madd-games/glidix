@@ -147,6 +147,9 @@ int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox, void *context)
 			gwmRedrawCheckbox(checkbox);
 		};
 		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_RETHEME:
+		gwmRedrawCheckbox(checkbox);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};

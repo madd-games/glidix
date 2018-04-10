@@ -99,6 +99,9 @@ int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
 			gwmRedrawButton(button);
 		};
 		return retval;
+	case GWM_EVENT_RETHEME:
+		gwmRedrawButton(button);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};

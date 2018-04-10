@@ -127,6 +127,33 @@ Window* wltRemove(WndLookup **wlt, uint64_t id)
 	return NULL;
 };
 
+static void dispatchRethemeEvent(Window *win)
+{
+	while (win != NULL)
+	{
+		GWMEvent ev;
+		memset(&ev, 0, sizeof(GWMEvent));
+		ev.type = GWM_EVENT_RETHEME;
+		ev.win = win->id;
+		wndSendEvent(win, &ev);
+		
+		pthread_mutex_lock(&win->lock);
+		Window *children = win->children;
+		if (children != NULL) wndUp(children);
+		pthread_mutex_unlock(&win->lock);
+		
+		dispatchRethemeEvent(children);
+		
+		pthread_mutex_lock(&win->parent->lock);
+		Window *next = win->next;
+		if (next != NULL) wndUp(next);
+		pthread_mutex_unlock(&win->parent->lock);
+		
+		wndDown(win);
+		win = next;
+	};
+};
+
 void* clientThreadFunc(void *context)
 {
 	int sockfd = (int) (uintptr_t) context;
@@ -290,7 +317,10 @@ void* clientThreadFunc(void *context)
 			{
 				if (win->isDecoration)
 				{
-					wndDecorate(win, win->children);
+					if (win->children != NULL)
+					{
+						wndDecorate(win, win->children);
+					};
 				};
 				
 				pthread_mutex_lock(&desktopWindow->lock);
@@ -300,6 +330,13 @@ void* clientThreadFunc(void *context)
 				win = next;
 				pthread_mutex_unlock(&desktopWindow->lock);
 			};
+			
+			pthread_mutex_lock(&desktopWindow->lock);
+			win = desktopWindow->children;
+			if (win != NULL) wndUp(win);
+			pthread_mutex_unlock(&desktopWindow->lock);
+			
+			if (win != NULL) dispatchRethemeEvent(win);
 		}
 		else if (cmd.cmd == GWM_CMD_SCREEN_SIZE)
 		{

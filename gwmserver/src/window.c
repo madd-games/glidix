@@ -1072,9 +1072,7 @@ void wndSendEvent(Window *win, GWMEvent *ev)
 	msg.event.seq = 0;
 	memcpy(&msg.event.payload, ev, sizeof(GWMEvent));
 	
-	pthread_mutex_lock(&win->lock);
 	if (win->fd != 0) write(win->fd, &msg, sizeof(GWMMessage));
-	pthread_mutex_unlock(&win->lock);
 };
 
 void wndSetFocused(Window *wnd)

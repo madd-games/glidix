@@ -474,6 +474,7 @@ typedef struct
 #define	GWM_EVENT_DESKTOP_UPDATE		9
 #define	GWM_EVENT_RESIZE_REQUEST		10
 #define	GWM_EVENT_DOUBLECLICK			11
+#define	GWM_EVENT_RETHEME			12
 
 /**
  * Cascading events.
