@@ -751,7 +751,7 @@ void wndMouseMove(int x, int y)
 		ev.y = relY;
 		wndSendEvent(wndActive, &ev);
 		
-		if (wndActive->isDecoration)
+		if (wndActive->isDecoration && wndActive->children != NULL)
 		{
 			if ((decDragX <= wndActive->params.width-70 || (wndActive->params.flags & GWM_WINDOW_NOSYSMENU))
 				&& decDragY < WINDOW_CAPTION_HEIGHT)
@@ -1210,7 +1210,7 @@ void wndOnLeftDown()
 		if (wndActive != NULL) wndDown(wndActive);
 		wndActive = wndHovering;
 		
-		if (wndHovering->isDecoration)
+		if (wndHovering->isDecoration && wndHovering->children != NULL)
 		{
 			wndAbsToRelWithin(wndHovering, cursorX, cursorY, &decDragX, &decDragY);
 			pthread_mutex_lock(&wndHovering->lock);
@@ -1246,7 +1246,7 @@ void wndOnLeftDown()
 	};
 	pthread_mutex_unlock(&wincacheLock);
 
-	if (toRedecorate != NULL)
+	if (toRedecorate != NULL && toRedecorate->children != NULL)
 	{
 		int offX = cursorX - toRedecorate->params.x;
 		int offY = cursorY - toRedecorate->params.y;
@@ -1287,7 +1287,7 @@ void wndOnLeftUp()
 	pthread_mutex_lock(&wincacheLock);
 	if (wndActive != NULL)
 	{
-		if (wndActive->isDecoration)
+		if (wndActive->isDecoration && wndActive->children != NULL)
 		{
 			int x = cursorX - wndActive->params.x;
 			int y = cursorY - wndActive->params.y;
@@ -1591,7 +1591,7 @@ int wndToggle(GWMGlobWinRef *ref)
 	Window *win;
 	for (win=desktopWindow->children; win!=NULL; win=win->next)
 	{
-		if (win->isDecoration)
+		if (win->isDecoration && win->children != NULL)
 		{
 			if (win->children->fd == ref->fd && win->children->id == ref->id)
 			{
@@ -1731,7 +1731,7 @@ int wndGetGlobIcon(GWMGlobWinRef *ref, uint32_t *outSurf)
 	Window *win;
 	for (win=desktopWindow->children; win!=NULL; win=win->next)
 	{
-		if (win->isDecoration)
+		if (win->isDecoration && win->children != NULL)
 		{
 			if (win->children->fd == ref->fd && win->children->id == ref->id)
 			{
