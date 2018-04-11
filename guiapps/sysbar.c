@@ -565,21 +565,21 @@ int main()
 	loadApps();
 	
 	const char *error;
-	imgSysBar = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/sysbar.png", &error);
+	imgSysBar = (DDISurface*) gwmGetThemeProp("gwm.sysbar.sysbar", GWM_TYPE_SURFACE, NULL);
 	if (imgSysBar == NULL)
 	{
 		fprintf(stderr, "Failed to load sysbar pattern: %s\n", error);
 		return 1;
 	};
 	
-	menuButton = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/sysmenubutton.png", &error);
+	menuButton = (DDISurface*) gwmGetThemeProp("gwm.sysbar.menu", GWM_TYPE_SURFACE, NULL);
 	if (menuButton == NULL)
 	{
 		fprintf(stderr, "Failed to load menu button image: %s\n", error);
 		return 1;
 	};
 	
-	imgTaskBtn = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/taskbtn.png", &error);
+	imgTaskBtn = (DDISurface*) gwmGetThemeProp("gwm.sysbar.taskbtn", GWM_TYPE_SURFACE, NULL);
 	if (imgTaskBtn == NULL)
 	{
 		fprintf(stderr, "Failed to load task bar image: %s\n", error);

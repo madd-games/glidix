@@ -63,6 +63,9 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.button",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgButton)},
 	{"gwm.toolkit.checkbox",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCheckbox)},
 	{"gwm.toolkit.radio",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgRadioButton)},
+	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
+	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
+	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
 	
 	// LIST TERMINATOR
 	{NULL, 0, 0}
@@ -233,6 +236,7 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 
 	// radiobutton
 	surf = surfaceSetup(format, &info->imgRadioButton, 40, 80);
+	if (surf == NULL) return -1;
 	drawButton(surf, 0, 0, 20, 20, &cbUnchecked, 0);
 	drawButton(surf, 0, 20, 20, 20, &cbUnchecked, 0);
 	drawButton(surf, 0, 40, 20, 20, &cbUnchecked, 1);
@@ -242,6 +246,34 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawButton(surf, 20, 40, 20, 20, &cbChecked, 1);
 	drawButton(surf, 20, 60, 20, 20, &buttonDisabled, 1);
 
+	// system bar
+	surf = surfaceSetup(format, &info->imgSysbar, 1, 40);
+	if (surf == NULL) return -1;
+	DDIColor sysbarColor = {0x7F, 0x7F, 0x7F, 0xFF};
+	int y;
+	for (y=0; y<40; y++)
+	{
+		ddiFillRect(surf, 0, y, 1, 1, &sysbarColor);
+		sysbarColor.red += 3;
+		sysbarColor.green += 3;
+		sysbarColor.blue += 3;
+	};
+	
+	// system menu button
+	surf = surfaceSetup(format, &info->imgSysbarMenu, 32, 32);
+	if (surf == NULL) return -1;
+	drawButton(surf, 0, 0, 32, 32, &blue, 0);
+	
+	// task bar window buttons
+	surf = surfaceSetup(format, &info->imgTaskButton, 160, 32);
+	if (surf == NULL) return -1;
+	static DDIColor orange = {0x7F, 0x7F, 0x00, 0xFF};
+	drawButton(surf, 0, 0, 32, 32, &buttonNormal, 1);
+	drawButton(surf, 32, 0, 32, 32, &orange, 0);
+	drawButton(surf, 64, 0, 32, 32, &buttonHover, 0);
+	drawButton(surf, 96, 0, 32, 32, &buttonNormal, 1);
+	drawButton(surf, 128, 0, 32, 32, &buttonNormal, 0);
+	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;
 };

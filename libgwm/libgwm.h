@@ -379,6 +379,23 @@ typedef struct
 	 * disabled. The columns are: unselected, selected.
 	 */
 	uint32_t				imgRadioButton;
+	
+	/**
+	 * System bar gradient image. This image must have a width of 1 pixel and height of 40 pixels.
+	 * It is spread horizontally across the system bar.
+	 */
+	uint32_t				imgSysbar;
+	
+	/**
+	 * System bar menu button image. This must be a 32x32 image.
+	 */
+	uint32_t				imgSysbarMenu;
+	
+	/**
+	 * Task button images on the system bar. It's 5 sprites, horizontally, each 32x32.
+	 * From left to right: focused window, alerted, hovered, clicked, normal.
+	 */
+	uint32_t				imgTaskButton;
 } GWMInfo;
 
 /**

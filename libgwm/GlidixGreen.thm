@@ -48,4 +48,10 @@ namespace gwm {
 		image checkbox /usr/share/images/checkbox.png
 		image radio /usr/share/images/radiobutton.png
 	}
+	
+	namespace sysbar {
+		image sysbar /usr/share/images/sysbar.png
+		image menu /usr/share/images/sysmenubutton.png
+		image taskbtn /usr/share/images/taskbtn.png
+	}
 }
