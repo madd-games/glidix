@@ -7,6 +7,7 @@ PHDRS
 	data PT_LOAD;
 	initrd 0x60000001;			/* tells bootloader to load the initrd here */
 	percpu PT_LOAD;
+	klog PT_LOAD;
 }
 
 SECTIONS
@@ -56,10 +57,6 @@ SECTIONS
 		*(.initrd)
 	} :initrd
 
-	. = ALIGN(4096);
-
-	. = ALIGN(4096);
-	per_cpu_phys_start = .;
 	. = 0xFFFF828000000000;
 	_per_cpu_start = .;
 	.per_cpu_bss (NOLOAD) :
@@ -67,4 +64,10 @@ SECTIONS
 		*(.data_per_cpu)
 	} :percpu
 	_per_cpu_end = .;
+	
+	. = 0xFFFF848000000000;
+	.klog (NOLOAD) :
+	{
+		*(.klog)
+	} :klog
 }

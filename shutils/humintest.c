@@ -33,7 +33,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <glidix/humin.h>
+#include <glidix/humin/humin.h>
 
 typedef struct
 {

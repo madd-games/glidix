@@ -162,7 +162,7 @@ done
 
 # targets
 # NOTE: Those need to be in order; a target must come AFTER all the targets that it depends on.
-TARGETS="kernel build-tools libc dynld shutils init modules sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libz libpng freetype libddi fstools libgwm gwmserver guiapps netman sysinfo minipad gxdbg ddi-drivers gpm"
+TARGETS="kernel build-tools libc dynld libz shutils init modules sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libpng freetype libddi fstools libgwm gwmserver guiapps netman sysinfo minipad gxdbg ddi-drivers gpm"
 
 # determine build parameters
 export GLIDIX_SYSROOT="$sysroot"
@@ -213,7 +213,7 @@ done
 echo "generating Makefile..."
 echo >Makefile ".PHONY: all install clean mip tests $TARGETS"
 
-ISO_PACKAGES="shutils libc modules sh gxsetup gxboot dynld gxdbg"
+ISO_PACKAGES="libz shutils libc modules sh gxsetup gxboot dynld gxdbg"
 if [ "$iso_target" = "yes" ]
 then
 	mkdir -p isodir

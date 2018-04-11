@@ -1,7 +1,7 @@
 SRC := $(shell find $(SRCDIR) -name '*.c')
 OUT := $(patsubst $(SRCDIR)/%.c, out/%, $(SRC))
 CFLAGS := -Wall -Werror -ggdb -I$(SRCDIR)/../kernel/include
-LDFLAGS := -L../libc -lcrypt -ldl -ggdb
+LDFLAGS := -L../libc -L../libz/build -lcrypt -ldl -lz -ggdb
 
 .PHONY: all install
 all: $(OUT)

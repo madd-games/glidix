@@ -24,6 +24,7 @@ Glidix uses 4KB pages. Using the PML4, the 48-bit virtual address space is divid
 <li><code>pml4[262]</code> is used for ACPICA (<i>AcpiOsMapMemory()</i> and <i>AcpiOsUnmapMemory()</i>). Starts at <code>0xFFFF830000000000</code>.</li>
 <li><code>pml4[263]</code> is used to map DMA buffers. Starts at <code>0xFFFF838000000000</code>.</li>
 <li><code>pml4[264]</code> is used to map the framebuffer. This is actually done by the bootloader (<code>gxboot</code>). Starts at <code>0xFFFF840000000000</code>.</li>
+<li><code>pml4[265]</code> is used for buffering the kernel log. Starts at <code>0xFFFF848000000000</code>.</li>
 <li><code>pml4[511]</code> is mapped to the PML4 itself, for recursive mapping.</code></li>
 </ul>
 

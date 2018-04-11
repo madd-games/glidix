@@ -471,6 +471,8 @@ void kmain2()
 
 	initDevfs();
 
+	initKlogFile();
+	
 	kprintf("Initializing the pointer device interface... ");
 	ptrInit();
 	DONE();

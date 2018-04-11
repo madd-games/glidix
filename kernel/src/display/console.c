@@ -32,6 +32,11 @@
 #include <glidix/util/string.h>
 #include <stdint.h>
 #include <glidix/thread/mutex.h>
+#include <glidix/thread/semaphore.h>
+#include <glidix/hw/physmem.h>
+#include <glidix/hw/pagetab.h>
+#include <glidix/fs/vfs.h>
+#include <glidix/fs/devfs.h>
 
 /**
  * Represents parsed flags from a conversion specification.
@@ -61,6 +66,18 @@ enum
 ConsoleState consoleState;
 
 static Mutex consoleLock;
+
+/**
+ * Initial 4KB buffer for the kernel log.
+ */
+SECTION(".klog") char initklog[0x1000];
+
+/**
+ * Pointer to the next byte to store in the kernel log, and a semaphore counting the bytes stored.
+ */
+static char *klogput;
+static Semaphore semLog;
+static Semaphore semLogLock;
 
 /**
  * Console colors (RGB).
@@ -175,6 +192,11 @@ void initConsole()
 	consoleState.pixelWidth = bootInfo->fbWidth;
 	consoleState.pixelHeight = bootInfo->fbHeight;
 	clearScreen();
+	
+	// set up kernel log
+	klogput = initklog;
+	semInit2(&semLog, 0);
+	semInit(&semLogLock);
 };
 
 static void updateVGACursor()
@@ -309,6 +331,43 @@ static void kputch(char c)
 	{
 		while ((inb(0x3F8 + 5) & 0x20) == 0);
 		outb(0x3F8, c);
+	};
+	
+	*klogput++ = c;
+	semSignal2(&semLog, 1);		// DO NOT use semSignal(); see semaphore.c as to why
+	if ((((uint64_t)klogput) & 0xFFF) == 0)
+	{
+		// crossed a page boundary, ensure page allocated
+		PDPTe *pdpte = VIRT_TO_PDPTE(klogput);
+		PDe *pde = VIRT_TO_PDE(klogput);
+		PTe *pte = VIRT_TO_PTE(klogput);
+		
+		if (!pdpte->present)
+		{
+			pdpte->present = 1;
+			pdpte->pdPhysAddr = phmAllocZeroFrame();
+			pdpte->xd = 1;
+			pdpte->rw = 1;
+			refreshAddrSpace();
+		};
+		
+		if (!pde->present)
+		{
+			pde->present = 1;
+			pde->ptPhysAddr = phmAllocZeroFrame();
+			pde->xd = 1;
+			pde->rw = 1;
+			refreshAddrSpace();
+		};
+		
+		if (!pte->present)
+		{
+			pte->present = 1;
+			pte->framePhysAddr = phmAllocFrame();
+			pte->xd = 1;
+			pte->rw = 1;
+			refreshAddrSpace();
+		};
 	};
 	
 	if (!consoleState.putcon) return;
@@ -968,4 +1027,39 @@ void enableConsole()
 
 void setGfxTerm(int value)
 {
+};
+
+void klog_pollinfo(Inode *inode, File *fp, Semaphore **sems)
+{
+	sems[PEI_READ] = &semLog;
+};
+
+ssize_t klog_pread(Inode *inode, File *fp, void *buffer, size_t size, off_t offset)
+{
+	static const char *klogfetch = initklog;
+	
+	int count = semWaitGen(&semLog, (int) size, SEM_W_FILE(fp->oflags), 0);
+	if (count < 0)
+	{
+		ERRNO = -count;
+		return -1;
+	};
+	
+	semWait(&semLogLock);
+	memcpy(buffer, klogfetch, count);
+	klogfetch += count;
+	semSignal(&semLogLock);
+	
+	return (ssize_t) count;
+};
+
+void initKlogFile()
+{
+	kprintf("Creating /dev/klog... ");
+	
+	Inode *inode = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0400);
+	inode->pollinfo = klog_pollinfo;
+	inode->pread = klog_pread;
+	
+	devfsAdd("klog", inode);
 };

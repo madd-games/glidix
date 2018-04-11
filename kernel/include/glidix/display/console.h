@@ -67,6 +67,7 @@ void enableDebugTerm();
 void disableConsole();
 void enableConsole();
 void getConsoleSize(unsigned short *width, unsigned short *height);
+void initKlogFile();
 
 #define	DONE()						kprintf("Done\n")
 #define	FAILED()					kprintf("Failed\n")

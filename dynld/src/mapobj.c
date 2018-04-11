@@ -358,7 +358,7 @@ uint64_t dynld_mapobj(Dl_Library *lib, int fd, uint64_t base, const char *name, 
 {
 	if (debugMode)
 	{
-		dynld_printf("dynld: mapping object `%s' into memory at %p\n", name, base);
+		dynld_printf("dynld: mapping object `%s' into memory at %p (%s)\n", name, base, path);
 	};
 	
 	Elf64_Ehdr elfHeader;
@@ -385,7 +385,7 @@ uint64_t dynld_mapobj(Dl_Library *lib, int fd, uint64_t base, const char *name, 
 		strcpy(dynld_errmsg, "not litte-endian");
 		return 0;
 	};
-
+	
 	if (elfHeader.e_ident[EI_VERSION] != 1)
 	{
 		strcpy(dynld_errmsg, "ELF64 version not set to 1");
@@ -616,7 +616,14 @@ uint64_t dynld_mapobj(Dl_Library *lib, int fd, uint64_t base, const char *name, 
 		};
 	};
 	
-	lib->numSymbols = lib->hashtab[1];
+	if (lib->hashtab == NULL)
+	{
+		lib->numSymbols = 0;
+	}
+	else
+	{
+		lib->numSymbols = lib->hashtab[1];
+	};
 	
 	// additional library paths
 	const char *rpath = "";
@@ -636,11 +643,38 @@ uint64_t dynld_mapobj(Dl_Library *lib, int fd, uint64_t base, const char *name, 
 	};
 	
 	// load dependencies
+	if (debugMode)
+	{
+		dynld_printf("dynld: loading dependencies of object `%s'\n", name);
+	};
+	
 	for (dyn=lib->dyn; dyn->d_tag!=DT_NULL; dyn++)
 	{
 		if (dyn->d_tag == DT_NEEDED)
 		{
+			if (lib->strtab == NULL)
+			{
+				dynld_printf("dynld: no string table found in `%s' (%s)\n", name, path);
+				strcpy(dynld_errmsg, "string table not found");
+				
+				for (i=0; i<lib->numDeps; i++)
+				{
+					dynld_libclose(lib->deps[i]);
+				};
+				
+				for (i=0; i<lib->numSegs; i++)
+				{
+					munmap(lib->segs[i].base, lib->segs[i].size);
+				};
+				
+				return 0;
+			};
+			
 			const char *depname = &lib->strtab[dyn->d_un.d_val];
+			if (debugMode)
+			{
+				dynld_printf("dynld: loading dependency `%s'\n", depname);
+			};
 			
 			Dl_Library *dep = dynld_getlib(depname);
 			if (dep == NULL)
@@ -686,16 +720,21 @@ uint64_t dynld_mapobj(Dl_Library *lib, int fd, uint64_t base, const char *name, 
 					
 					return 0;
 				};
-
+				
+				dep->refcount = 1;
 				dep->next = lib->next;
+				if (dep->next != NULL) dep->next->prev = dep;
 				dep->prev = lib;
 				lib->next = dep;
 				addrPlacement += 0x1000;
 				
 				if (dynld_mapobj(dep, depfd, addrPlacement, depname, RTLD_LAZY | RTLD_GLOBAL, deppath) == 0)
 				{
-					// leave dynld_errmsg as is; we forward the error from the recursive
-					// invocation
+					char temp[2048];
+					strcpy(temp, dynld_errmsg);
+					strcpy(dynld_errmsg, depname);
+					strcpy(&dynld_errmsg[strlen(dynld_errmsg)], ": ");
+					strcpy(&dynld_errmsg[strlen(dynld_errmsg)], temp);
 					close(depfd);
 					
 					for (i=0; i<lib->numDeps; i++)
@@ -852,6 +891,16 @@ int dynld_libclose(Dl_Library *lib)
 {
 	if ((--lib->refcount) == 0)
 	{
+		if (lib->prev != NULL)
+		{
+			lib->prev->next = lib->next;
+		};
+		
+		if (lib->next != NULL)
+		{
+			lib->next->prev = lib->prev;
+		};
+
 		// call destructors
 		if (lib->finiFunc != NULL) lib->finiFunc();
 		size_t i;
@@ -868,16 +917,6 @@ int dynld_libclose(Dl_Library *lib)
 		for (i=0; i<lib->numSegs; i++)
 		{
 			munmap(lib->segs[i].base, lib->segs[i].size);
-		};
-		
-		if (lib->prev != NULL)
-		{
-			lib->prev->next = lib->next;
-		};
-		
-		if (lib->next != NULL)
-		{
-			lib->next->prev = lib->prev;
 		};
 		
 		munmap(lib, 0x1000);

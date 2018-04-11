@@ -251,6 +251,7 @@ void semSignal2(Semaphore *sem, int count)
 	
 	if (count == 0) return;
 	
+	uint64_t flags = getFlagsRegister();
 	cli();
 	spinlockAcquire(&sem->lock);
 	
@@ -279,7 +280,7 @@ void semSignal2(Semaphore *sem, int count)
 	
 	spinlockRelease(&sem->lock);
 	if (doResched) kyield();
-	sti();
+	setFlagsRegister(flags);
 };
 
 void semTerminate(Semaphore *sem)
