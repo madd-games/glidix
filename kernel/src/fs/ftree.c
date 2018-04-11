@@ -48,6 +48,7 @@ void ftInit()
 FileTree* ftCreate(int flags)
 {
 	FileTree *ft = NEW(FileTree);
+	memset(ft, 0, sizeof(FileTree));
 	ft->refcount = 1;
 	ft->flags = flags;
 	memset(&ft->top, 0, sizeof(FileNode));

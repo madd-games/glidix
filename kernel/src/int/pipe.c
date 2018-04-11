@@ -130,6 +130,7 @@ static ssize_t pipe_read(Inode *inode, File *fp, void *buffer, size_t size, off_
 	ssize_t out = 0;
 	
 	semWait(&pipe->lock);
+	semSignal2(&pipe->semBufferFree, count);
 	while (count--)
 	{
 		*put++ = pipe->buffer[pipe->offRead];
