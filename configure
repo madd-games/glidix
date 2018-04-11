@@ -229,6 +229,9 @@ then
 		echo >>Makefile "	cd $pkg && DESTDIR=\$(ISODIR) make install"
 	done
 	
+	echo >>Makefile "	rm isodir/usr/lib/libz.so isodir/usr/lib/libz.so.1"
+	echo >>Makefile "	cp isodir/usr/lib/libz.so.* isodir/usr/lib/libz.so.1"
+	echo >>Makefile "	cp isodir/usr/lib/libz.so.1 isodir/usr/lib/libz.so"
 	echo >>Makefile "	@mkdir -p isodir/usr/share/pkg"
 	echo >>Makefile "	PKGDIR=isodir/usr/share/pkg make mip"
 	echo >>Makefile "	mkdir -p isodir/var/run"
