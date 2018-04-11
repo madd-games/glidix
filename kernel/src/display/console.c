@@ -1062,4 +1062,5 @@ void initKlogFile()
 	inode->pread = klog_pread;
 	
 	devfsAdd("klog", inode);
+	DONE();
 };
