@@ -1,0 +1,5 @@
+#! /bin/sh
+# Stop the kernel log daemon
+[ -e /run/klogd.pid ] || exit 1
+kill `cat /run/klogd.pid` || exit 1
+rm /run/klogd.pid || exit 1

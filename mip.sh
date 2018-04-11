@@ -130,6 +130,13 @@ make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/netman.mip
 
+# klogd
+rm -rf mipdir || exit 1
+cd klogd
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/klogd.mip
+
 # sysinfo
 rm -rf mipdir || exit 1
 cd sysinfo
