@@ -48,6 +48,13 @@ namespace gwm {
 		image checkbox /usr/share/images/checkbox.png
 		image radio /usr/share/images/radiobutton.png
 		image optmenu /usr/share/images/optmenu.png
+		image slider /usr/share/images/slider.png
+		
+		namespace slider {
+			color active #00AA00:255
+			color inactive #555555:255
+			color disabled #333333:255
+		}
 	}
 	
 	namespace sysbar {

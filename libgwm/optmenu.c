@@ -137,6 +137,9 @@ static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu, void *context)
 			};
 		};
 		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_RETHEME:
+		redrawOptmenu(optmenu);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};

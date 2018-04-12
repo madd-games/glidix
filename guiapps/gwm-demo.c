@@ -165,8 +165,17 @@ int main()
 	gwmAddOptionMenu(optmenu, 1, "Here's one option");
 	gwmAddOptionMenu(optmenu, 2, "...and another!");
 	gwmAddOptionMenu(optmenu, 3, "And a final one!!!");
-	
 	gwmBoxLayoutAddWindow(boxLayout, optmenu, 0, 0, GWM_BOX_FILL);
+	
+	GWMWindow *sliderHoriz = gwmNewSlider(topWindow);
+	gwmSetSliderFlags(sliderHoriz, GWM_SLIDER_HORIZ);
+	gwmSetSliderValue(sliderHoriz, 0.3);
+	gwmBoxLayoutAddWindow(boxLayout, sliderHoriz, 0, 0, GWM_BOX_FILL);
+
+	GWMWindow *sliderDisHoriz = gwmNewSlider(topWindow);
+	gwmSetSliderFlags(sliderDisHoriz, GWM_SLIDER_HORIZ | GWM_SLIDER_DISABLED);
+	gwmSetSliderValue(sliderDisHoriz, 0.2);
+	gwmBoxLayoutAddWindow(boxLayout, sliderDisHoriz, 0, 0, GWM_BOX_FILL);
 	
 	txtfield = gwmNewTextField(topWindow);
 	gwmWriteTextField(txtfield, "кипeть злoбой");
@@ -192,6 +201,15 @@ int main()
 	
 	gwmBoxLayoutAddWindow(panelLayout, gwmCreateButtonWithLabel(panel, SYM_BUTTON_FRAME1, "Frame button 1"), 0, 0, 0);
 	gwmBoxLayoutAddWindow(panelLayout, gwmCreateButtonWithLabel(panel, SYM_BUTTON_FRAME2, "Frame button 2"), 0, 0, 0);
+	
+	GWMWindow *sliderVert = gwmNewSlider(panel);
+	gwmSetSliderValue(sliderVert, 0.5);
+	gwmBoxLayoutAddWindow(panelLayout, sliderVert, 0, 0, GWM_BOX_FILL);
+	
+	GWMWindow *sliderDisVert = gwmNewSlider(panel);
+	gwmSetSliderFlags(sliderDisVert, GWM_SLIDER_DISABLED);
+	gwmSetSliderValue(sliderDisVert, 0.3);
+	gwmBoxLayoutAddWindow(panelLayout, sliderDisVert, 0, 0, GWM_BOX_FILL);
 	
 	GWMWindow *frameA = gwmNewFrame(panel);
 	gwmSetFrameCaption(frameA, "Radio group A");

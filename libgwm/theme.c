@@ -64,6 +64,10 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.checkbox",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCheckbox)},
 	{"gwm.toolkit.radio",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgRadioButton)},
 	{"gwm.toolkit.optmenu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgOptionMenu)},
+	{"gwm.toolkit.slider",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSlider)},
+	{"gwm.toolkit.slider.active",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colSliderActive)},
+	{"gwm.toolkit.slider.inactive",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colSliderInactive)},
+	{"gwm.toolkit.slider.disabled",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colSliderDisabled)},
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
@@ -281,6 +285,16 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawButton(surf, 0, 20, 20, 20, &buttonHover, 0);
 	drawButton(surf, 0, 40, 20, 20, &buttonNormal, 1);
 	drawButton(surf, 0, 60, 20, 20, &buttonDisabled, 0);
+	
+	// slider
+	surf = surfaceSetup(format, &info->imgSlider, 20, 20);
+	static DDIColor green = {0x00, 0x7F, 0x00, 0xFF};
+	drawButton(surf, 0, 0, 20, 20, &green, 0);
+	
+	// slider colors
+	memcpy(&info->colSliderActive, &colActiveCap, sizeof(DDIColor));
+	memcpy(&info->colSliderInactive, &colInactiveCap, sizeof(DDIColor));
+	memcpy(&info->colSliderDisabled, &buttonDisabled, sizeof(DDIColor));
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

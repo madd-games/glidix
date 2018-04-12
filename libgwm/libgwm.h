@@ -401,6 +401,26 @@ typedef struct
 	 * Option menu image.
 	 */
 	uint32_t				imgOptionMenu;
+	
+	/**
+	 * Slider image (20x20).
+	 */
+	uint32_t				imgSlider;
+	
+	/**
+	 * Color of the active portion of a slider.
+	 */
+	DDIColor				colSliderActive;
+	
+	/**
+	 * Color of the inactive portion of a slider.
+	 */
+	DDIColor				colSliderInactive;
+	
+	/**
+	 * Color of the disabled portion of a slider.
+	 */
+	DDIColor				colSliderDisabled;
 } GWMInfo;
 
 /**
@@ -1808,7 +1828,7 @@ void gwmDestroyRadioButton(GWMWindow *radio);
 /**
  * Create a slider.
  */
-GWMWindow* gwmCreateSlider(GWMWindow *parent, int x, int y, int len, int value, int max, int flags);
+GWMWindow* gwmNewSlider(GWMWindow *parent);
 
 /**
  * Destroy a slider.
@@ -1816,14 +1836,19 @@ GWMWindow* gwmCreateSlider(GWMWindow *parent, int x, int y, int len, int value, 
 void gwmDestroySlider(GWMWindow *slider);
 
 /**
- * Set slider parameters. The orientation is ignored in 'flags'.
+ * Set slider flags.
  */
-void gwmSetSliderParams(GWMWindow *slider, int value, int max, int flags);
+void gwmSetSliderFlags(GWMWindow *slider, int flags);
 
 /**
- * Get the current value of the slider.
+ * Set the value of a slider. This function clamps it to the [0.0, 1.0] range.
  */
-int gwmGetSliderValue(GWMWindow *slider);
+void gwmSetSliderValue(GWMWindow *slider, float value);
+
+/**
+ * Get the value of a slider, in the [0.0, 1.0] range.
+ */
+float gwmGetSliderValue(GWMWindow *slider);
 
 /**
  * Turn a window handle into a global window reference.

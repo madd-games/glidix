@@ -31,176 +31,204 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-#define	SLIDER_MIN_LEN				30
-#define	SLIDER_BREADTH				20
+#include <assert.h>
 
 typedef struct
 {
-	int					len;
-	int					flags;
-	int					value;
-	int					max;
-	int					pressed;
-} GWMSliderData;
+	float				value;
+	int				flags;
+	int				clicked;
+} SliderData;
 
-static DDISurface *imgSlider = NULL;
+static DDISurface* imgSlider;
+static DDIColor *colSliderActive;
+static DDIColor *colSliderInactive;
+static DDIColor *colSliderDisabled;
 
-static void gwmRedrawSlider(GWMWindow *slider)
+static int sliderHandler(GWMEvent *ev, GWMWindow *slider, void *context);
+
+static void redrawSlider(GWMWindow *slider)
 {
-	static DDIColor backColor = {0x77, 0x77, 0x77, 0xFF};
-	static DDIColor foreColor = {0, 0xAA, 0, 0xFF};
-	static DDIColor disabledColor = {0x44, 0x44, 0x44, 0xFF};
-	
-	GWMSliderData *data = (GWMSliderData*) slider->data;
-	
-	DDISurface *canvas = gwmGetWindowCanvas(slider);
-	static DDIColor transparent = {0, 0, 0, 0};
-	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
+	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
 
 	if (imgSlider == NULL)
 	{
-		const char *error;
-		imgSlider = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/slider.png", &error);
+		imgSlider = (DDISurface*) gwmGetThemeProp("gwm.toolkit.slider", GWM_TYPE_SURFACE, NULL);
 		if (imgSlider == NULL)
 		{
-			fprintf(stderr, "Failed to load slider image (/usr/share/images/slider.png): %s\n", error);
+			fprintf(stderr, "libgwm: failed to load slider image\n");
 			abort();
 		};
+		
+		colSliderActive = (DDIColor*) gwmGetThemeProp("gwm.toolkit.slider.active", GWM_TYPE_COLOR, NULL);
+		colSliderInactive = (DDIColor*) gwmGetThemeProp("gwm.toolkit.slider.inactive", GWM_TYPE_COLOR, NULL);
+		colSliderDisabled = (DDIColor*) gwmGetThemeProp("gwm.toolkit.slider.disabled", GWM_TYPE_COLOR, NULL);
+		
+		assert(colSliderActive != NULL);
+		assert(colSliderInactive != NULL);
+		assert(colSliderDisabled != NULL);
 	};
-
-	int sliderX = data->value * (data->len-SLIDER_BREADTH) / data->max;
-	if (data->flags & GWM_SLIDER_HORIZ)
+	
+	static DDIColor transparent = {0, 0, 0, 0};
+	DDISurface *canvas = gwmGetWindowCanvas(slider);
+	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
+	
+	if (data->flags & GWM_SLIDER_DISABLED)
 	{
-		if (data->flags & GWM_SLIDER_DISABLED)
+		if (data->flags & GWM_SLIDER_HORIZ)
 		{
-			ddiFillRect(canvas, SLIDER_BREADTH/2, SLIDER_BREADTH/3, data->len-SLIDER_BREADTH, SLIDER_BREADTH/3+1,
-				&disabledColor);
+			ddiFillRect(canvas, 10, 5, canvas->width-20, 10, colSliderDisabled);
 		}
 		else
 		{
-			ddiFillRect(canvas, SLIDER_BREADTH/2, SLIDER_BREADTH/3, data->len-SLIDER_BREADTH, SLIDER_BREADTH/3+1,
-				&backColor);
-			ddiFillRect(canvas, SLIDER_BREADTH/2, SLIDER_BREADTH/3, sliderX, SLIDER_BREADTH/3+1, &foreColor);
-			
-			ddiBlit(imgSlider, 0, 0, canvas, sliderX, 0, SLIDER_BREADTH, SLIDER_BREADTH);
+			ddiFillRect(canvas, 5, 10, 10, canvas->height-20, colSliderDisabled);
 		};
 	}
 	else
 	{
-		if (data->flags & GWM_SLIDER_DISABLED)
+		if (data->flags & GWM_SLIDER_HORIZ)
 		{
-			ddiFillRect(canvas, SLIDER_BREADTH/3, SLIDER_BREADTH/2, SLIDER_BREADTH/3+1, data->len-SLIDER_BREADTH,
-				&disabledColor);
+			int len = (canvas->width-20) * data->value;
+			ddiFillRect(canvas, 10, 5, canvas->width-20, 10, colSliderInactive);
+			ddiFillRect(canvas, 10, 5, len, 10, colSliderActive);
+			ddiBlit(imgSlider, 0, 0, canvas, len, 0, 20, 20);
 		}
 		else
 		{
-			ddiFillRect(canvas, SLIDER_BREADTH/3, SLIDER_BREADTH/2, SLIDER_BREADTH/3+1, data->len-SLIDER_BREADTH,
-				&backColor);
-			ddiFillRect(canvas, SLIDER_BREADTH/3, SLIDER_BREADTH/2, SLIDER_BREADTH/3+1, sliderX, &foreColor);
-			
-			ddiBlit(imgSlider, 0, 0, canvas, 0, sliderX, SLIDER_BREADTH, SLIDER_BREADTH);
+			int len = (canvas->height-20) * data->value;
+			ddiFillRect(canvas, 5, 10, 10, canvas->height-20, colSliderInactive);
+			ddiFillRect(canvas, 5, 10, 10, len, colSliderActive);
+			ddiBlit(imgSlider, 0, 0, canvas, 0, len, 20, 20);
 		};
 	};
 	
 	gwmPostDirty(slider);
 };
 
-static int gwmSliderHandler(GWMEvent *ev, GWMWindow *slider, void *context)
+static int sliderHandler(GWMEvent *ev, GWMWindow *slider, void *context)
 {
-	GWMSliderData *data = (GWMSliderData*) slider->data;
-	
-	int pressPos = ev->y;
-	if (data->flags & GWM_SLIDER_HORIZ) pressPos = ev->x;
-	
-	if (data->flags & GWM_SLIDER_DISABLED)
-	{
-		return GWM_EVSTATUS_CONT;
-	};
+	SliderData *data = (SliderData*) context;
+	DDISurface *canvas = gwmGetWindowCanvas(slider);
 	
 	switch (ev->type)
 	{
-	case GWM_EVENT_DOWN:
-		if (ev->keycode == GWM_KC_MOUSE_LEFT)
-		{
-			data->pressed = 1;
-			data->value = (pressPos-SLIDER_BREADTH/2) * data->max / (data->len-SLIDER_BREADTH);
-			if (data->value < 0) data->value = 0;
-			if (data->value > data->max) data->value = data->max;
-			gwmRedrawSlider(slider);
-		};
+	case GWM_EVENT_RETHEME:
+		redrawSlider(slider);
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
-			data->pressed = 0;
+			data->clicked = 0;
 		};
-		return GWM_EVSTATUS_OK;
-	case GWM_EVENT_MOTION:
-		if (data->pressed)
+		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_DOWN:
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
-			data->value = (pressPos-SLIDER_BREADTH/2) * data->max / (data->len-SLIDER_BREADTH);
-			if (data->value < 0) data->value = 0;
-			if (data->value > data->max) data->value = data->max;
-			gwmRedrawSlider(slider);
+			data->clicked = 1;
 		};
-		return GWM_EVSTATUS_OK;
+		// no break
+	case GWM_EVENT_MOTION:
+		if (data->flags & GWM_SLIDER_DISABLED)
+		{
+			return GWM_EVSTATUS_OK;
+		};
+		
+		if (data->clicked)
+		{
+			if (data->flags & GWM_SLIDER_HORIZ)
+			{
+				float newValue = (float) (ev->x - 5) / (float) (canvas->width - 10);
+				gwmSetSliderValue(slider, newValue);
+			}
+			else
+			{
+				float newValue = (float) (ev->y - 5) / (float) (canvas->height - 10);
+				gwmSetSliderValue(slider, newValue);
+			};
+		};
+		return GWM_EVSTATUS_CONT;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
 };
 
-GWMWindow* gwmCreateSlider(GWMWindow *parent, int x, int y, int len, int value, int max, int flags)
+static void sizeSlider(GWMWindow *slider, int *width, int *height)
 {
-	int width, height;
-	if (len < SLIDER_MIN_LEN) len = SLIDER_MIN_LEN;
-	
-	if (flags & GWM_SLIDER_HORIZ)
+	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
+	if (data->flags & GWM_SLIDER_HORIZ)
 	{
-		width = len;
-		height = SLIDER_BREADTH;
+		*width = 100;
+		*height = 20;
 	}
 	else
 	{
-		width = SLIDER_BREADTH;
-		height = len;
+		*width = 20;
+		*height = 100;
+	};
+};
+
+static void positionSlider(GWMWindow *slider, int x, int y, int width, int height)
+{
+	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
+	if (data->flags & GWM_SLIDER_HORIZ)
+	{
+		y += (20 - height) / 2;
+		height = 20;
+	}
+	else
+	{
+		x += (20 - width) / 2;
+		width = 20;
 	};
 	
-	GWMWindow *slider = gwmCreateWindow(parent, "GWMSlider", x, y, width, height, 0);
+	gwmMoveWindow(slider, x, y);
+	gwmResizeWindow(slider, width, height);
+	redrawSlider(slider);
+};
+
+GWMWindow* gwmNewSlider(GWMWindow *parent)
+{
+	GWMWindow *slider = gwmCreateWindow(parent, "GWMSlider", 0, 0, 0, 0, 0);
 	if (slider == NULL) return NULL;
 	
-	GWMSliderData *data = (GWMSliderData*) malloc(sizeof(GWMSliderData));
-	data->len = len;
-	data->flags = flags;
-	data->value = value;
-	data->max = max;
-	data->pressed = 0;
+	SliderData *data = (SliderData*) malloc(sizeof(SliderData));
+	data->value = 0.0f;
+	data->flags = 0;
+	data->clicked = 0;
 	
-	slider->data = data;
+	slider->getMinSize = slider->getPrefSize = sizeSlider;
+	slider->position = positionSlider;
 	
-	gwmRedrawSlider(slider);
-	gwmPushEventHandler(slider, gwmSliderHandler, NULL);
+	gwmPushEventHandler(slider, sliderHandler, data);
+	redrawSlider(slider);
 	return slider;
 };
 
 void gwmDestroySlider(GWMWindow *slider)
 {
-	free(slider->data);
+	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
+	free(data);
 	gwmDestroyWindow(slider);
 };
 
-void gwmSetSliderParams(GWMWindow *slider, int value, int max, int flags)
+void gwmSetSliderFlags(GWMWindow *slider, int flags)
 {
-	GWMSliderData *data = (GWMSliderData*) slider->data;
-	data->value = value;
-	data->max = max;
-	data->flags = (data->flags & GWM_SLIDER_HORIZ) | (flags & ~GWM_SLIDER_HORIZ);
-	data->pressed = 0;
-	gwmRedrawSlider(slider);
+	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
+	data->flags = flags;
+	redrawSlider(slider);
 };
 
-int gwmGetSliderValue(GWMWindow *slider)
+void gwmSetSliderValue(GWMWindow *slider, float value)
 {
-	GWMSliderData *data = (GWMSliderData*) slider->data;
+	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
+	if (value < 0.0) value = 0.0;
+	if (value > 1.0) value = 1.0;
+	data->value = value;
+	redrawSlider(slider);
+};
+
+float gwmGetSliderValue(GWMWindow *slider)
+{
+	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
 	return data->value;
 };
