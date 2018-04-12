@@ -63,10 +63,11 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.button",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgButton)},
 	{"gwm.toolkit.checkbox",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCheckbox)},
 	{"gwm.toolkit.radio",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgRadioButton)},
+	{"gwm.toolkit.optmenu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgOptionMenu)},
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
-	
+
 	// LIST TERMINATOR
 	{NULL, 0, 0}
 };
@@ -273,6 +274,13 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawButton(surf, 64, 0, 32, 32, &buttonHover, 0);
 	drawButton(surf, 96, 0, 32, 32, &buttonNormal, 1);
 	drawButton(surf, 128, 0, 32, 32, &buttonNormal, 0);
+	
+	// option menu
+	surf = surfaceSetup(format, &info->imgOptionMenu, 20, 80);
+	drawButton(surf, 0, 0, 20, 20, &buttonNormal, 0);
+	drawButton(surf, 0, 20, 20, 20, &buttonHover, 0);
+	drawButton(surf, 0, 40, 20, 20, &buttonNormal, 1);
+	drawButton(surf, 0, 60, 20, 20, &buttonDisabled, 0);
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

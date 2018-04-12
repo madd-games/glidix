@@ -61,7 +61,7 @@ void gwmMenuAddEntry(GWMMenu *menu, const char *label, GWMMenuCallback callback,
 	menu->entries[index].param = param;
 };
 
-void gwmMenuAddCommand(GWMMenu *menu, int symbol, const char *label)
+void gwmMenuAddCommand(GWMMenu *menu, int symbol, const char *label, void *data)
 {
 	if (label == NULL)
 	{
@@ -74,6 +74,7 @@ void gwmMenuAddCommand(GWMMenu *menu, int symbol, const char *label)
 	memset(&menu->entries[index], 0, sizeof(GWMMenuEntry));
 	menu->entries[index].label = strdup(label);
 	menu->entries[index].symbol = symbol;
+	menu->entries[index].param = data;
 };
 
 static void closeSubMenu(void *context)
@@ -203,6 +204,7 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 					memset(&cmdev, 0, sizeof(GWMCommandEvent));
 					cmdev.header.type = GWM_EVENT_COMMAND;
 					cmdev.symbol = menu->entries[i].symbol;
+					cmdev.data = menu->entries[i].param;
 					
 					return gwmPostEvent((GWMEvent*) &cmdev, win->parent);
 				};

@@ -139,8 +139,8 @@ int main()
 	GWMMenu *menuFile = gwmCreateMenu();
 	gwmMenubarAdd(menubar, "File", menuFile);
 	
-	gwmMenuAddCommand(menuFile, SYM_FILE_DEMO, "Demo");
-	gwmMenuAddCommand(menuFile, GWM_SYM_EXIT, NULL);
+	gwmMenuAddCommand(menuFile, SYM_FILE_DEMO, "Demo", NULL);
+	gwmMenuAddCommand(menuFile, GWM_SYM_EXIT, NULL, NULL);
 	
 	GWMWindow *button1 = gwmCreateButtonWithLabel(
 		topWindow,			// the parent window
@@ -159,6 +159,14 @@ int main()
 	GWMWindow *button2, *button3;
 	gwmBoxLayoutAddWindow(boxLayout, button2 = gwmCreateButtonWithLabel(topWindow, SYM_BUTTON2, "Button 2"), 0, 0, 0);
 	gwmBoxLayoutAddWindow(boxLayout, button3 = gwmCreateButtonWithLabel(topWindow, SYM_BUTTON3, "Button 3"), 0, 0, 0);
+	
+	GWMWindow *optmenu = gwmNewOptionMenu(topWindow);
+	gwmSetOptionMenu(optmenu, 0, "Select something...");
+	gwmAddOptionMenu(optmenu, 1, "Here's one option");
+	gwmAddOptionMenu(optmenu, 2, "...and another!");
+	gwmAddOptionMenu(optmenu, 3, "And a final one!!!");
+	
+	gwmBoxLayoutAddWindow(boxLayout, optmenu, 0, 0, GWM_BOX_FILL);
 	
 	txtfield = gwmNewTextField(topWindow);
 	gwmWriteTextField(txtfield, "кипeть злoбой");

@@ -159,7 +159,7 @@ extern DDIColor gwmBackColor;
 #define	GWM_KC_8				0x038
 #define	GWM_KC_9				0x039
 #define	GWM_KC_0				0x030
-#define	GWM_KC_HYPHEN				0x02D		/* hyphen/underspace key */
+#define	GWM_KC_HYPHEN				0x02D		/* hyphen/underscore key */
 #define	GWM_KC_EQUALS				0x03D		/* equals/plus key */
 #define	GWM_KC_BACKSPACE			0x008		/* backspace (\b) */
 #define	GWM_KC_TAB				0x009		/* tab (\t) */
@@ -396,6 +396,11 @@ typedef struct
 	 * From left to right: focused window, alerted, hovered, clicked, normal.
 	 */
 	uint32_t				imgTaskButton;
+	
+	/**
+	 * Option menu image.
+	 */
+	uint32_t				imgOptionMenu;
 } GWMInfo;
 
 /**
@@ -527,6 +532,7 @@ typedef struct
 {
 	GWMEvent				header;
 	int					symbol;		// command symbol
+	void*					data;		// associated data if applicable
 } GWMCommandEvent;
 
 /**
@@ -1577,7 +1583,7 @@ void gwmMenuAddEntry(GWMMenu *menu, const char *label, GWMMenuCallback callback,
  * Add a command to a menu, with the specified symbol. If 'label' is NULL, the symbol is used to choose a
  * stock label.
  */
-void gwmMenuAddCommand(GWMMenu *menu, int symbol, const char *label);
+void gwmMenuAddCommand(GWMMenu *menu, int symbol, const char *label, void *data);
 
 /**
  * Adds a separator to a menu.
@@ -1862,6 +1868,11 @@ void gwmAddComboOption(GWMWindow *combo, const char *opt);
  * Create an option menu widget.
  */
 GWMWindow* gwmCreateOptionMenu(GWMWindow *parent, uint64_t id, const char *text, int x, int y, int width, int flags);
+
+/**
+ * Create a new option menu widget.
+ */
+GWMWindow* gwmNewOptionMenu(GWMWindow *parent);
 
 /**
  * Destroy an option menu.

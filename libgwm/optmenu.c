@@ -31,7 +31,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define	OPTMENU_MIN_WIDTH		50
+#define	OPTMENU_MIN_WIDTH		100
 #define	OPTMENU_HEIGHT			20
 #define	OPTMENU_BUTTON_WIDTH		16
 
@@ -53,7 +53,6 @@ typedef struct OptmenuOption_
 typedef struct
 {
 	GWMMenu*		options;
-	int			width;
 	int			state;
 	int			flags;
 	char*			currentText;
@@ -63,24 +62,25 @@ typedef struct
 
 static DDISurface *imgOptmenu;
 
+static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu, void *context);
+
 static void redrawOptmenu(GWMWindow *optmenu)
 {
-	OptmenuData *data = (OptmenuData*) optmenu->data;
+	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(optmenu);
 	
 	if (imgOptmenu == NULL)
 	{
-		const char *error;
-		imgOptmenu = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/optmenu.png", &error);
+		imgOptmenu = (DDISurface*) gwmGetThemeProp("gwm.toolkit.optmenu", GWM_TYPE_SURFACE, NULL);
 		if (imgOptmenu == NULL)
 		{
-			fprintf(stderr, "Failed to load option menu image (/usr/share/images/optmenu.png): %s\n", error);
+			fprintf(stderr, "Failed to load option menu image\n");
 			abort();
 		};
 	};
 	
 	DDIColor transparent = {0, 0, 0, 0};
-	ddiFillRect(canvas, 0, 0, data->width, OPTMENU_HEIGHT, &transparent);
+	ddiFillRect(canvas, 0, 0, canvas->width, OPTMENU_HEIGHT, &transparent);
 	
 	int state = data->state;
 	if (data->flags & GWM_OPTMENU_DISABLED)
@@ -90,12 +90,12 @@ static void redrawOptmenu(GWMWindow *optmenu)
 	
 	ddiBlit(imgOptmenu, 0, OPTMENU_HEIGHT * state, canvas, 0, 0, 3, OPTMENU_HEIGHT);
 	int i;
-	for (i=0; i<data->width-3-OPTMENU_BUTTON_WIDTH; i++)
+	for (i=0; i<canvas->width-3-OPTMENU_BUTTON_WIDTH; i++)
 	{
 		ddiBlit(imgOptmenu, 3, OPTMENU_HEIGHT * state, canvas, 3+i, 0, 1, OPTMENU_HEIGHT);
 	};
 	ddiBlit(imgOptmenu, imgOptmenu->width - OPTMENU_BUTTON_WIDTH, OPTMENU_HEIGHT * state,
-			canvas, data->width - OPTMENU_BUTTON_WIDTH, 0,
+			canvas, canvas->width - OPTMENU_BUTTON_WIDTH, 0,
 			OPTMENU_BUTTON_WIDTH, OPTMENU_HEIGHT);
 	
 	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 3, canvas->height-6, canvas->width-3, canvas->height-3, 0, 0, NULL);
@@ -110,7 +110,7 @@ static void redrawOptmenu(GWMWindow *optmenu)
 
 static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu, void *context)
 {
-	OptmenuData *data = (OptmenuData*) optmenu->data;
+	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	
 	switch (ev->type)
 	{
@@ -145,15 +145,27 @@ static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu, void *context)
 static void onOptmenuClose(void *context)
 {
 	GWMWindow *optmenu = (GWMWindow*) context;
-	OptmenuData *data = (OptmenuData*) optmenu->data;
+	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	data->state = OPTMENU_NORMAL;
+	redrawOptmenu(optmenu);
+};
+
+static void sizeOptmenu(GWMWindow *optmenu, int *width, int *height)
+{
+	*width = OPTMENU_MIN_WIDTH;
+	*height = OPTMENU_HEIGHT;
+};
+
+static void positionOptmenu(GWMWindow *optmenu, int x, int y, int width, int height)
+{
+	y += (height - OPTMENU_HEIGHT) / 2;
+	gwmMoveWindow(optmenu, x, y);
+	gwmResizeWindow(optmenu, width, OPTMENU_HEIGHT);
 	redrawOptmenu(optmenu);
 };
 
 GWMWindow* gwmCreateOptionMenu(GWMWindow *parent, uint64_t id, const char *text, int x, int y, int width, int flags)
 {
-	if (width < OPTMENU_MIN_WIDTH) width = OPTMENU_MIN_WIDTH;
-	
 	GWMWindow *optmenu = gwmCreateWindow(parent, "GWMOptionMenu", x, y, width, OPTMENU_HEIGHT, 0);
 	if (optmenu == NULL) return NULL;
 	
@@ -166,22 +178,28 @@ GWMWindow* gwmCreateOptionMenu(GWMWindow *parent, uint64_t id, const char *text,
 	
 	data->options = gwmCreateMenu();
 	gwmMenuSetCloseCallback(data->options, onOptmenuClose, optmenu);
-	data->width = width;
 	data->state = OPTMENU_NORMAL;
 	data->flags = flags;
 	data->currentText = strdup(text);
 	data->currentID = id;
 	data->optStack = NULL;
+
+	optmenu->getMinSize = optmenu->getPrefSize = sizeOptmenu;
+	optmenu->position = positionOptmenu;
 	
-	optmenu->data = data;
+	gwmPushEventHandler(optmenu, optmenuHandler, data);
 	redrawOptmenu(optmenu);
-	gwmPushEventHandler(optmenu, optmenuHandler, NULL);
 	return optmenu;
+};
+
+GWMWindow* gwmNewOptionMenu(GWMWindow *parent)
+{
+	return gwmCreateOptionMenu(parent, 0, "", 0, 0, 0, 0);
 };
 
 static void deleteOptions(GWMWindow *optmenu)
 {
-	OptmenuData *data = (OptmenuData*) optmenu->data;
+	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	gwmDestroyMenu(data->options);
 	
 	while (data->optStack != NULL)
@@ -195,7 +213,7 @@ static void deleteOptions(GWMWindow *optmenu)
 
 void gwmDestroyOptionMenu(GWMWindow *optmenu)
 {
-	OptmenuData *data = (OptmenuData*) optmenu->data;
+	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	deleteOptions(optmenu);
 	free(data->currentText);
 	free(data);
@@ -204,7 +222,7 @@ void gwmDestroyOptionMenu(GWMWindow *optmenu)
 
 void gwmClearOptionMenu(GWMWindow *optmenu)
 {
-	OptmenuData *data = (OptmenuData*) optmenu->data;
+	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	deleteOptions(optmenu);
 	data->options = gwmCreateMenu();
 	gwmMenuSetCloseCallback(data->options, onOptmenuClose, optmenu);
@@ -212,7 +230,7 @@ void gwmClearOptionMenu(GWMWindow *optmenu)
 
 void gwmSetOptionMenu(GWMWindow *optmenu, uint64_t id, const char *text)
 {
-	OptmenuData *data = (OptmenuData*) optmenu->data;
+	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	free(data->currentText);
 	data->currentText = strdup(text);
 	data->currentID = id;
@@ -230,7 +248,7 @@ static int onOptmenuOption(void *param)
 
 void gwmAddOptionMenu(GWMWindow *optmenu, uint64_t id, const char *text)
 {
-	OptmenuData *data = (OptmenuData*) optmenu->data;
+	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	
 	OptmenuOption *opt = (OptmenuOption*) malloc(sizeof(OptmenuOption));
 	opt->prev = data->optStack;
@@ -244,6 +262,6 @@ void gwmAddOptionMenu(GWMWindow *optmenu, uint64_t id, const char *text)
 
 uint64_t gwmReadOptionMenu(GWMWindow *optmenu)
 {
-	OptmenuData *data = (OptmenuData*) optmenu->data;
+	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	return data->currentID;
 };

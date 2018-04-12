@@ -47,6 +47,7 @@ namespace gwm {
 		image button /usr/share/images/button.png
 		image checkbox /usr/share/images/checkbox.png
 		image radio /usr/share/images/radiobutton.png
+		image optmenu /usr/share/images/optmenu.png
 	}
 	
 	namespace sysbar {
