@@ -467,6 +467,7 @@ typedef struct
 #define	GWM_SYM_CANCEL				2
 #define	GWM_SYM_YES				3
 #define	GWM_SYM_NO				4
+#define	GWM_SYM_EXIT				5
 
 /**
  * Starting numbers for event classes.
@@ -1000,6 +1001,7 @@ typedef struct
 	void*					param;		// callback parameter
 	struct GWMMenu_*			submenu;
 	DDISurface*				icon;		// or NULL for no icon
+	int					symbol;
 } GWMMenuEntry;
 
 /**
@@ -1570,6 +1572,12 @@ GWMMenu *gwmCreateMenu();
  * Adds a new entry to a menu.
  */
 void gwmMenuAddEntry(GWMMenu *menu, const char *label, GWMMenuCallback callback, void *param);
+
+/**
+ * Add a command to a menu, with the specified symbol. If 'label' is NULL, the symbol is used to choose a
+ * stock label.
+ */
+void gwmMenuAddCommand(GWMMenu *menu, int symbol, const char *label);
 
 /**
  * Adds a separator to a menu.

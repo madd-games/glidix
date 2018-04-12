@@ -39,6 +39,7 @@ static StockLabel labels[] = {
 	{GWM_SYM_CANCEL,		"Cancel"},
 	{GWM_SYM_YES,			"Yes"},
 	{GWM_SYM_NO,			"No"},
+	{GWM_SYM_EXIT,			"Exit"},
 	
 	// LIST TERMINATOR
 	{GWM_SYM_NONE, ""},

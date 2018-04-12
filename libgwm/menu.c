@@ -61,6 +61,21 @@ void gwmMenuAddEntry(GWMMenu *menu, const char *label, GWMMenuCallback callback,
 	menu->entries[index].param = param;
 };
 
+void gwmMenuAddCommand(GWMMenu *menu, int symbol, const char *label)
+{
+	if (label == NULL)
+	{
+		label = gwmGetStockLabel(symbol);
+	};
+	
+	menu->entries = (GWMMenuEntry*) realloc(menu->entries, sizeof(GWMMenuEntry)*(menu->numEntries+1));
+	int index = menu->numEntries++;
+	
+	memset(&menu->entries[index], 0, sizeof(GWMMenuEntry));
+	menu->entries[index].label = strdup(label);
+	menu->entries[index].symbol = symbol;
+};
+
 static void closeSubMenu(void *context)
 {
 	GWMMenu *menu = (GWMMenu*) context;
@@ -181,6 +196,15 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 				if (menu->entries[i].callback != NULL)
 				{
 					return menu->entries[i].callback(menu->entries[i].param);
+				}
+				else if (menu->entries[i].symbol != 0)
+				{
+					GWMCommandEvent cmdev;
+					memset(&cmdev, 0, sizeof(GWMCommandEvent));
+					cmdev.header.type = GWM_EVENT_COMMAND;
+					cmdev.symbol = menu->entries[i].symbol;
+					
+					return gwmPostEvent((GWMEvent*) &cmdev, win->parent);
 				};
 			};
 		};
@@ -238,6 +262,9 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 	{
 		return;
 	};
+	
+	// make it send events to the main window
+	menu->win->parent = win;
 
 	DDISurface *canvas = gwmGetWindowCanvas(menu->win);
 	menu->background = ddiCreateSurface(&canvas->format, MENU_WIDTH, menuHeight, NULL, 0);

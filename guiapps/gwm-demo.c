@@ -42,6 +42,8 @@ enum
 	
 	SYM_BUTTON_FRAME1,
 	SYM_BUTTON_FRAME2,
+	
+	SYM_FILE_DEMO,
 };
 
 GWMWindow *txtfield;
@@ -63,6 +65,11 @@ int myCommandHandler(GWMCommandEvent *ev)
 	case SYM_BUTTON_FRAME2:
 		gwmMessageBox(NULL, "Example", gwmReadTextField(txtfield), GWM_MBUT_OK | GWM_MBICON_WARN);
 		return GWM_EVSTATUS_CONT;
+	case SYM_FILE_DEMO:
+		gwmMessageBox(NULL, "Example", "You clicked the demo entry in the menu", GWM_MBUT_OK | GWM_MBICON_INFO);
+		return GWM_EVSTATUS_CONT;
+	case GWM_SYM_EXIT:
+		return GWM_EVSTATUS_BREAK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -131,6 +138,9 @@ int main()
 	
 	GWMMenu *menuFile = gwmCreateMenu();
 	gwmMenubarAdd(menubar, "File", menuFile);
+	
+	gwmMenuAddCommand(menuFile, SYM_FILE_DEMO, "Demo");
+	gwmMenuAddCommand(menuFile, GWM_SYM_EXIT, NULL);
 	
 	GWMWindow *button1 = gwmCreateButtonWithLabel(
 		topWindow,			// the parent window
