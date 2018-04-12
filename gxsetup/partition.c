@@ -1322,7 +1322,7 @@ void partFlush()
 	fclose(fp);
 	
 	// configure GWM
-	const char *logmgr = "gui";
+	const char *logmgr = "gui /usr/bin/gui-login";
 	pid = fork();
 	if (pid == -1)
 	{

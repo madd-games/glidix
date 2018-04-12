@@ -52,6 +52,12 @@
 
 int main(int argc, char *argv[])
 {
+	if (argc < 2)
+	{
+		fprintf(stderr, "[gwmserver] no launcher specified\n");
+		return 1;
+	};
+	
 	char dispdev[1024];
 	uint64_t requestRes;
 	char linebuf[1024];
@@ -253,8 +259,8 @@ int main(int argc, char *argv[])
 	
 	if (fork() == 0)
 	{
-		execl("/usr/bin/gui-login", "gui-login", NULL);
-		perror("exec gui-login");
+		execv(argv[1], &argv[1]);
+		perror("exec launcher");
 		_exit(1);
 	};
 	
