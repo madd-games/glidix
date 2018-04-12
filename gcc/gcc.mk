@@ -9,7 +9,7 @@ gcc-build/Makefile: gcc-$(GCC_VERSION)/configure
 	
 gcc-$(GCC_VERSION)/configure:
 	rm -f gcc-$(GCC_VERSION).tar.gz
-	wget http://nl.mirror.babylon.network/gcc/releases/gcc-$(GCC_VERSION)/gcc-$(GCC_VERSION).tar.gz
+	wget ftp://ftp.mirrorservice.org/sites/sourceware.org/pub/gcc/releases/gcc-$(GCC_VERSION)/gcc-$(GCC_VERSION).tar.gz
 	rm -rf gcc-$(GCC_VERSION)
 	tar -xf gcc-$(GCC_VERSION).tar.gz
 	cd gcc-$(GCC_VERSION) && ./contrib/download_prerequisites
