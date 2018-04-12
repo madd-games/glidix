@@ -141,7 +141,7 @@ void loadAppFile(const char *filename)
 	char *appName = NULL;
 	int appCat = CAT_SYS;
 	char **appArgs = (char**) malloc(sizeof(char*));
-	appArgs[0] = "/usr/bin/env";
+	appArgs[0] = "/usr/bin/grexec";
 	int argc = 1;
 	DDISurface *appIcon = NULL;
 	
@@ -189,13 +189,6 @@ void loadAppFile(const char *filename)
 				int index = argc++;
 				appArgs = realloc(appArgs, sizeof(char*)*argc);
 				appArgs[index] = strdup(token);
-			};
-		}
-		else if (strcmp(option, "Terminal") == 0)
-		{
-			if (strcmp(value, "1") == 0)
-			{
-				appArgs[0] = "/usr/bin/terminal";
 			};
 		}
 		else if (strcmp(option, "Icon") == 0)
