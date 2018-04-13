@@ -55,6 +55,12 @@ namespace gwm {
 			color inactive #555555:255
 			color disabled #333333:255
 		}
+		
+		namespace scrollbar {
+			color bg #555555:255
+			color fg #00AA00:255
+			color disabled #333333:255
+		}
 	}
 	
 	namespace sysbar {

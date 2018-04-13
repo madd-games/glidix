@@ -421,6 +421,21 @@ typedef struct
 	 * Color of the disabled portion of a slider.
 	 */
 	DDIColor				colSliderDisabled;
+	
+	/**
+	 * Background color of a scrollbar.
+	 */
+	DDIColor				colScrollbarBg;
+	
+	/**
+	 * Foreground color of a scrollbar.
+	 */
+	DDIColor				colScrollbarFg;
+	
+	/**
+	 * Disabled color of a scrollbar.
+	 */
+	DDIColor				colScrollbarDisabled;
 } GWMInfo;
 
 /**
@@ -481,8 +496,11 @@ typedef struct
  * Symbols. Used to mark widgets with a common function. The symbol 0 is reserved (GWM_SYM_NONE).
  * When bit 24 is set, it indicates a user-defined symbol. So all user-defined symbols must use
  * symbols larger than or equal to GWM_SYM_USER.
+ *
+ * When bit 25 is set, it indicates temporary symbols, generated using gwmGenerateSymbol().
  */
 #define	GWM_SYM_USER				(1 << 24)
+#define	GWM_SYM_GEN				(1 << 25)
 
 /**
  * Built-in symbols.
@@ -1542,9 +1560,9 @@ void gwmSetCheckboxState(GWMWindow *checkbox, int state);
 void gwmSetCheckboxSymbol(GWMWindow *checkbox, int symbol);
 
 /**
- * Create a scrollbar.
+ * Create a new scroll bar.
  */
-GWMWindow *gwmCreateScrollbar(GWMWindow *parent, int x, int y, int len, int viewOffset, int viewSize, int viewTotal, int flags);
+GWMWindow* gwmNewScrollbar(GWMWindow *parent);
 
 /**
  * Destroy a scrollbar.
@@ -1552,26 +1570,24 @@ GWMWindow *gwmCreateScrollbar(GWMWindow *parent, int x, int y, int len, int view
 void gwmDestroyScrollbar(GWMWindow *sbar);
 
 /**
- * Set the update handler for a scrollbar. The handler's return value is interpreted the same way as an event
- * handler's return value.
+ * Change the flags of a scrollbar.
  */
-typedef int (*GWMScrollbarCallback)(void *param);
-void gwmSetScrollbarCallback(GWMWindow *sbar, GWMScrollbarCallback callback, void *param);
+void gwmSetScrollbarFlags(GWMWindow *sbar, int flags);
 
 /**
- * Get the scrollbar's current view offset.
+ * Change the position of a scrollbar, clamped to the [0.0, 1.0] range.
  */
-int gwmGetScrollbarOffset(GWMWindow *sbar);
+void gwmSetScrollbarPosition(GWMWindow *sbar, float pos);
 
 /**
- * Set scrollbar parameters and redraw. Note: the orientation will NOT be changed by this function.
+ * Set the length of a scrollbar, clamped to the [0.0, 1.0] range.
  */
-void gwmSetScrollbarParams(GWMWindow *sbar, int viewOffset, int viewSize, int viewTotal, int flags);
+void gwmSetScrollbarLength(GWMWindow *sbar, float len);
 
 /**
- * Change the length of a scrollbar.
+ * Get the current position of a scrollbar, in the [0.0, 1.0] range.
  */
-void gwmSetScrollbarLen(GWMWindow *sbar, int len);
+float gwmGetScrollbarPosition(GWMWindow *sbar);
 
 /**
  * Change the size of a window. This frees, and hence invalidates, a previous return value from gwmGetWindowCanvas()!
@@ -2217,5 +2233,10 @@ int gwmCreateTemplate(GWMWindowTemplate *wt);
  * Destroy objects created by gwmCreateTemplate() for the specified template. Return 0 on success, -1 on error.
  */
 int gwmDestroyTemplate(GWMWindowTemplate *wt);
+
+/**
+ * Generate a unique temporary symbol.
+ */
+int gwmGenerateSymbol();
 
 #endif

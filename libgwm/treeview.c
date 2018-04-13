@@ -132,6 +132,7 @@ static GWMTreeEntry *readTree(GWMWindow *treeview, const void *path)
 
 static void adjustScrollbar(GWMWindow *treeview)
 {
+#if 0
 	GWMTreeViewData *data = (GWMTreeViewData*) treeview->data;
 	if (data->sbar != NULL)
 	{
@@ -145,6 +146,7 @@ static void adjustScrollbar(GWMWindow *treeview)
 		
 		gwmSetScrollbarParams(data->sbar, data->scroll, viewSize, data->viewTotal, 0);
 	};
+#endif
 };
 
 static void releaseTree(GWMTreeViewData *data, GWMTreeEntry *head)
@@ -384,6 +386,7 @@ static int treeviewHandler(GWMEvent *ev, GWMWindow *treeview, void *context)
 	};
 };
 
+#if 0
 static int onScroll(void *context)
 {
 	GWMWindow *treeview = (GWMWindow*) context;
@@ -392,6 +395,7 @@ static int onScroll(void *context)
 	gwmRedrawTreeView(treeview);
 	return 0;
 };
+#endif
 
 GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int height, GWMTreeEnum *tree, const void *root, int flags)
 {
@@ -446,21 +450,21 @@ GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int hei
 	data->actCallback = NULL;
 	data->selCallback = NULL;
 	
-	int scrollbarY = 1;
-	int scrollbarLen = height-2;
+	//int scrollbarY = 1;
+	//int scrollbarLen = height-2;
 	
 	if ((flags & GWM_TV_NOHEADS) == 0)
 	{
-		scrollbarY = ROW_HEIGHT;
-		scrollbarLen = height - scrollbarY - 1;
+		//scrollbarY = ROW_HEIGHT;
+		//scrollbarLen = height - scrollbarY - 1;
 	};
 
 	gwmPushEventHandler(treeview, treeviewHandler, NULL);
 	gwmRedrawTreeView(treeview);
 	
-	GWMWindow *sbar = gwmCreateScrollbar(treeview, width-8, scrollbarY, scrollbarLen, 0, 0, 10, GWM_SCROLLBAR_VERT);
-	data->sbar = sbar;
-	gwmSetScrollbarCallback(sbar, onScroll, treeview);
+	//GWMWindow *sbar = gwmCreateScrollbar(treeview, width-8, scrollbarY, scrollbarLen, 0, 0, 10, GWM_SCROLLBAR_VERT);
+	//data->sbar = sbar;
+	//gwmSetScrollbarCallback(sbar, onScroll, treeview);
 	adjustScrollbar(treeview);
 
 	return treeview;

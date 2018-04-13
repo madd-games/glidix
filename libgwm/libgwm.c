@@ -1056,3 +1056,9 @@ uint32_t gwmGetGlobIcon(GWMGlobWinRef *ref)
 		return resp.getGlobIconResp.surfID;
 	};
 };
+
+int gwmGenerateSymbol()
+{
+	static int nextSymbol = GWM_SYM_GEN;
+	return __sync_fetch_and_add(&nextSymbol, 1);
+};

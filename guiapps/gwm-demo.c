@@ -177,6 +177,12 @@ int main()
 	gwmSetSliderValue(sliderDisHoriz, 0.2);
 	gwmBoxLayoutAddWindow(boxLayout, sliderDisHoriz, 0, 0, GWM_BOX_FILL);
 	
+	GWMWindow *sbarHoriz = gwmNewScrollbar(topWindow);
+	gwmSetScrollbarFlags(sbarHoriz, GWM_SLIDER_HORIZ);
+	gwmSetScrollbarPosition(sbarHoriz, 0.2);
+	gwmSetScrollbarLength(sbarHoriz, 0.5);
+	gwmBoxLayoutAddWindow(boxLayout, sbarHoriz, 0, 0, GWM_BOX_FILL);
+	
 	txtfield = gwmNewTextField(topWindow);
 	gwmWriteTextField(txtfield, "кипeть злoбой");
 	gwmBoxLayoutAddWindow(boxLayout, txtfield, 0, 0, GWM_BOX_FILL);
@@ -210,6 +216,11 @@ int main()
 	gwmSetSliderFlags(sliderDisVert, GWM_SLIDER_DISABLED);
 	gwmSetSliderValue(sliderDisVert, 0.3);
 	gwmBoxLayoutAddWindow(panelLayout, sliderDisVert, 0, 0, GWM_BOX_FILL);
+	
+	GWMWindow *sbarVert = gwmNewScrollbar(panel);
+	gwmSetScrollbarPosition(sbarVert, 0.5);
+	gwmSetScrollbarLength(sbarVert, 0.3);
+	gwmBoxLayoutAddWindow(panelLayout, sbarVert, 0, 0, GWM_BOX_FILL);
 	
 	GWMWindow *frameA = gwmNewFrame(panel);
 	gwmSetFrameCaption(frameA, "Radio group A");

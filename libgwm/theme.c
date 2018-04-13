@@ -68,6 +68,9 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.slider.active",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colSliderActive)},
 	{"gwm.toolkit.slider.inactive",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colSliderInactive)},
 	{"gwm.toolkit.slider.disabled",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colSliderDisabled)},
+	{"gwm.toolkit.scrollbar.bg",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colScrollbarBg)},
+	{"gwm.toolkit.scrollbar.fg",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colScrollbarFg)},
+	{"gwm.toolkit.scrollbar.disabled",	GWM_TYPE_COLOR,		offsetof(GWMInfo, colScrollbarDisabled)},
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
@@ -295,6 +298,11 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	memcpy(&info->colSliderActive, &colActiveCap, sizeof(DDIColor));
 	memcpy(&info->colSliderInactive, &colInactiveCap, sizeof(DDIColor));
 	memcpy(&info->colSliderDisabled, &buttonDisabled, sizeof(DDIColor));
+	
+	// scrollbar
+	memcpy(&info->colScrollbarBg, &colWinInactive, sizeof(DDIColor));
+	memcpy(&info->colScrollbarFg, &colWinActive, sizeof(DDIColor));
+	memcpy(&info->colScrollbarDisabled, &buttonDisabled, sizeof(DDIColor));
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

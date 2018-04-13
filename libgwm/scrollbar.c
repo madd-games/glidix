@@ -31,273 +31,193 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-#define	SCROLLBAR_WIDTH					8
-#define	SCROLLBAR_MIN_LEN				8
-#define	SCROLLBAR_UPDATEABLE_FLAGS			(GWM_SCROLLBAR_DISABLED)
+#include <assert.h>
 
 typedef struct
 {
-	int						viewOffset;
-	int						viewSize;
-	int						viewTotal;
-	int						len;
-	int						flags;
-	int						mouseX, mouseY;
-	int						pressed;
-	int						anchorX, anchorY;
-	GWMScrollbarCallback				callback;
-	void*						callbackParam;
-} GWMScrollbarData;
+	float				pos;
+	float				len;
+	int				flags;
+	int				clickPos;
+	float				refPos;
+} ScrollbarData;
 
-static void gwmRedrawScrollbar(GWMWindow *sbar)
+static int sbarHandler(GWMEvent *ev, GWMWindow *sbar, void *context);
+static DDIColor *colScrollbarBg;
+static DDIColor *colScrollbarFg;
+static DDIColor *colScrollbarDisabled;
+
+static void redrawScrollbar(GWMWindow *sbar)
 {
-	GWMScrollbarData *data = (GWMScrollbarData*) sbar->data;
-	DDISurface *canvas = gwmGetWindowCanvas(sbar);
+	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
 	
+	if (colScrollbarBg == NULL)
+	{
+		colScrollbarBg = (DDIColor*) gwmGetThemeProp("gwm.toolkit.scrollbar.bg", GWM_TYPE_COLOR, NULL);
+		colScrollbarFg = (DDIColor*) gwmGetThemeProp("gwm.toolkit.scrollbar.fg", GWM_TYPE_COLOR, NULL);
+		colScrollbarDisabled = (DDIColor*) gwmGetThemeProp("gwm.toolkit.scrollbar.disabled", GWM_TYPE_COLOR, NULL);
+		
+		assert(colScrollbarBg != NULL);
+		assert(colScrollbarFg != NULL);
+		assert(colScrollbarDisabled != NULL);
+	};
+	
+	DDISurface *canvas = gwmGetWindowCanvas(sbar);
 	if (data->flags & GWM_SCROLLBAR_DISABLED)
 	{
-		static DDIColor disabledColor = {0x20, 0x20, 0x20, 0xFF};
-		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &disabledColor);
+		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, colScrollbarDisabled);
 	}
 	else
 	{
-		static DDIColor backgroundColor = {0xFF, 0xFF, 0xFF, 0xFF};
-		static DDIColor sliderColorNormal = {0x7F, 0x7F, 0x7F, 0xFF};
-		static DDIColor sliderColorHover = {0xBF, 0xBF, 0xBF, 0xFF};
-		static DDIColor sliderColorPressed = {0x40, 0x40, 0x40, 0xFF};
-		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &backgroundColor);
+		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, colScrollbarBg);
 
-		int sliderLen, sliderOffset;
-		
-		if (data->viewTotal == 0)
-		{
-			sliderLen = data->len;
-			sliderOffset = 0;
-		}
-		else
-		{
-			sliderLen = data->viewSize * data->len / data->viewTotal + 1;
-			sliderOffset = data->viewOffset * data->len / data->viewTotal;
-		};
-	
-		DDIColor *sliderColor = &sliderColorNormal;
 		if (data->flags & GWM_SCROLLBAR_HORIZ)
 		{
-			if (data->pressed)
-			{
-				sliderColor = &sliderColorPressed;
-			}
-			else if ((data->mouseX >= sliderOffset) && (data->mouseX < sliderOffset+sliderLen))
-			{
-				sliderColor = &sliderColorHover;
-			};
-		
-			ddiFillRect(canvas, sliderOffset, 0, sliderLen, SCROLLBAR_WIDTH, sliderColor);
+			int len = canvas->width * data->len;
+			int pos = (canvas->width - len) * data->pos;
+			ddiFillRect(canvas, pos, 0, len, canvas->height, colScrollbarFg);
 		}
 		else
 		{
-			if (data->pressed)
-			{
-				sliderColor = &sliderColorPressed;
-			}
-			else if ((data->mouseY >= sliderOffset) && (data->mouseY < sliderOffset+sliderLen))
-			{
-				sliderColor = &sliderColorHover;
-			};
-
-			ddiFillRect(canvas, 0, sliderOffset, SCROLLBAR_WIDTH, sliderLen, sliderColor);
+			int len = canvas->height * data->len;
+			int pos = (canvas->height - len) * data->pos;
+			ddiFillRect(canvas, 0, pos, canvas->width, len, colScrollbarFg);
 		};
 	};
 	
 	gwmPostDirty(sbar);
 };
 
-int gwmScrollbarHandler(GWMEvent *ev, GWMWindow *sbar, void *context)
+static int sbarHandler(GWMEvent *ev, GWMWindow *sbar, void *context)
 {
-	GWMScrollbarData *data = (GWMScrollbarData*) sbar->data;
-	int delta;
-	int sliderLen, sliderOffset;
-	if (data->viewTotal != 0)
-	{
-		sliderLen = data->viewSize * data->len / data->viewTotal + 1;
-		sliderOffset = data->viewOffset * data->len / data->viewTotal;
-	};
-	int newOffset;
-	int status = 0;
+	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
+	DDISurface *canvas = gwmGetWindowCanvas(sbar);
 	
 	switch (ev->type)
 	{
-	case GWM_EVENT_LEAVE:
-		if ((data->flags & GWM_SCROLLBAR_DISABLED) == 0)
-		{
-			data->mouseX = data->mouseY = -1;
-			gwmRedrawScrollbar(sbar);
-		};
-		return GWM_EVSTATUS_OK;
-	case GWM_EVENT_ENTER:
-	case GWM_EVENT_MOTION:
-		if ((data->flags & GWM_SCROLLBAR_DISABLED) == 0)
-		{
-			data->mouseX = ev->x;
-			data->mouseY = ev->y;
-			if ((data->pressed) && (data->viewTotal != 0))
-			{
-				if (data->flags & GWM_SCROLLBAR_HORIZ)
-				{
-					delta = ev->x - data->anchorX;
-				}
-				else
-				{
-					delta = ev->y - data->anchorY;
-				};
-			
-				data->anchorX = ev->x;
-				data->anchorY = ev->y;
-			
-				sliderOffset += delta;
-				newOffset = sliderOffset * data->viewTotal / data->len;
-				if (newOffset < 0)
-					data->viewOffset = 0;
-				else if (newOffset > (data->viewTotal-data->viewSize))
-					data->viewOffset = data->viewTotal-data->viewSize;
-				else
-					data->viewOffset = newOffset;
-
-				if (data->callback != NULL)
-				{
-					status = data->callback(data->callbackParam);
-				};
-			};
-			gwmRedrawScrollbar(sbar);
-			return status;
-		};
+	case GWM_EVENT_RETHEME:
+		redrawScrollbar(sbar);
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
-		if ((data->flags & GWM_SCROLLBAR_DISABLED) == 0)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
-			if (data->viewTotal != 0)
+			if (data->flags & GWM_SCROLLBAR_HORIZ)
 			{
-				if (ev->keycode == GWM_KC_MOUSE_LEFT)
-				{
-					if (data->flags & GWM_SCROLLBAR_HORIZ)
-					{
-						if ((data->mouseX >= sliderOffset) && (data->mouseX < sliderOffset+sliderLen))
-						{
-							data->anchorX = ev->x;
-							data->anchorY = ev->y;
-							data->pressed = 1;
-						};
-					}
-					else
-					{
-						if ((data->mouseY >= sliderOffset) && (data->mouseY < sliderOffset+sliderLen))
-						{
-							data->anchorX = ev->x;
-							data->anchorY = ev->y;
-							data->pressed = 1;
-						};
-					};
-			
-					gwmRedrawScrollbar(sbar);
-				};
+				data->clickPos = ev->x;
+			}
+			else
+			{
+				data->clickPos = ev->y;
 			};
+			data->refPos = data->pos;
 		};
-		return GWM_EVSTATUS_OK;
+		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_UP:
-		if ((data->flags & GWM_SCROLLBAR_DISABLED) == 0)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
-			if (ev->keycode == GWM_KC_MOUSE_LEFT)
+			data->clickPos = -1;
+		};
+		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_MOTION:
+		if (data->flags & GWM_SCROLLBAR_DISABLED)
+		{
+			return GWM_EVSTATUS_OK;
+		};
+		
+		if (data->clickPos != -1)
+		{
+			if (data->flags & GWM_SCROLLBAR_HORIZ)
 			{
-				data->pressed = 0;
-				gwmRedrawScrollbar(sbar);
+				gwmSetScrollbarPosition(sbar, data->refPos + (float) (ev->x - data->clickPos) /
+					(float) (canvas->width - canvas->width * data->len));
+			}
+			else
+			{
+				gwmSetScrollbarPosition(sbar, data->refPos + (float) (ev->y - data->clickPos) /
+					(float) (canvas->height - canvas->height * data->len));
 			};
 		};
-		return GWM_EVSTATUS_OK;
+		return GWM_EVSTATUS_CONT;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
 };
 
-GWMWindow *gwmCreateScrollbar(GWMWindow *parent, int x, int y, int len, int viewOffset, int viewSize, int viewTotal, int flags)
+static void sizeScrollbar(GWMWindow *sbar, int *width, int *height)
 {
-	if (len < SCROLLBAR_MIN_LEN)
+	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
+	if (data->flags & GWM_SCROLLBAR_HORIZ)
 	{
-		len = SCROLLBAR_MIN_LEN;
-	};
-	
-	GWMWindow *sbar;
-	if (flags & GWM_SCROLLBAR_HORIZ)
-	{
-		sbar = gwmCreateWindow(parent, "GWMScrollbar", x, y, len, SCROLLBAR_WIDTH, 0);
+		*width = 100;
+		*height = 10;
 	}
 	else
 	{
-		sbar = gwmCreateWindow(parent, "GWMScrollbar", x, y, SCROLLBAR_WIDTH, len, 0);
+		*width = 10;
+		*height = 100;
 	};
-	
+};
+
+static void positionScrollbar(GWMWindow *sbar, int x, int y, int width, int height)
+{
+	gwmMoveWindow(sbar, x, y);
+	gwmResizeWindow(sbar, width, height);
+	redrawScrollbar(sbar);
+};
+
+GWMWindow* gwmNewScrollbar(GWMWindow *parent)
+{
+	GWMWindow *sbar = gwmCreateWindow(parent, "GWMScrollbar", 0, 0, 0, 0, 0);
 	if (sbar == NULL) return NULL;
 	
-	GWMScrollbarData *data = (GWMScrollbarData*) malloc(sizeof(GWMScrollbarData));
-	sbar->data = data;
+	ScrollbarData *data = (ScrollbarData*) malloc(sizeof(ScrollbarData));
+	data->pos = 0.0;
+	data->len = 1.0;
+	data->flags = 0;
+	data->clickPos = -1;
 	
-	data->viewOffset = viewOffset;
-	data->viewSize = viewSize;
-	data->viewTotal = viewTotal;
-	data->len = len;
-	data->flags = flags;
-	data->mouseX = -1;
-	data->mouseY = -1;
-	data->pressed = 0;
-	data->callback = NULL;
-
-	gwmPushEventHandler(sbar, gwmScrollbarHandler, NULL);
-	gwmRedrawScrollbar(sbar);	
+	sbar->getMinSize = sbar->getPrefSize = sizeScrollbar;
+	sbar->position = positionScrollbar;
+	
+	gwmPushEventHandler(sbar, sbarHandler, data);
+	redrawScrollbar(sbar);
 	return sbar;
 };
 
 void gwmDestroyScrollbar(GWMWindow *sbar)
 {
-	free(sbar->data);
+	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
+	free(data);
 	gwmDestroyWindow(sbar);
 };
 
-void gwmSetScrollbarCallback(GWMWindow *sbar, GWMScrollbarCallback callback, void *param)
+void gwmSetScrollbarFlags(GWMWindow *sbar, int flags)
 {
-	GWMScrollbarData *data = (GWMScrollbarData*) sbar->data;
-	data->callback = callback;
-	data->callbackParam = param;
+	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
+	data->flags = flags;
+	redrawScrollbar(sbar);
 };
 
-int gwmGetScrollbarOffset(GWMWindow *sbar)
+void gwmSetScrollbarPosition(GWMWindow *sbar, float pos)
 {
-	GWMScrollbarData *data = (GWMScrollbarData*) sbar->data;
-	return data->viewOffset;
+	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
+	if (pos < 0.0) pos = 0.0;
+	if (pos > 1.0) pos = 1.0;
+	data->pos = pos;
+	redrawScrollbar(sbar);
 };
 
-void gwmSetScrollbarParams(GWMWindow *sbar, int viewOffset, int viewSize, int viewTotal, int flags)
+void gwmSetScrollbarLength(GWMWindow *sbar, float len)
 {
-	GWMScrollbarData *data = (GWMScrollbarData*) sbar->data;
-	data->viewOffset = viewOffset;
-	data->viewSize = viewSize;
-	data->viewTotal = viewTotal;
-	data->flags = (data->flags & ~SCROLLBAR_UPDATEABLE_FLAGS) | (flags & SCROLLBAR_UPDATEABLE_FLAGS);
-	gwmRedrawScrollbar(sbar);
-};
-
-void gwmSetScrollbarLen(GWMWindow *sbar, int len)
-{
-	GWMScrollbarData *data = (GWMScrollbarData*) sbar->data;
+	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
+	if (len < 0.0) len = 0.0;
+	if (len > 1.0) len = 1.0;
 	data->len = len;
+	redrawScrollbar(sbar);
+};
 
-	if (data->flags & GWM_SCROLLBAR_HORIZ)
-	{
-		gwmResizeWindow(sbar, len, SCROLLBAR_WIDTH);
-	}
-	else
-	{
-		gwmResizeWindow(sbar, SCROLLBAR_WIDTH, len);
-	};
-	
-	gwmRedrawScrollbar(sbar);
+float gwmGetScrollbarPosition(GWMWindow *sbar)
+{
+	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
+	return data->pos;
 };
