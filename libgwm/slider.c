@@ -35,7 +35,6 @@
 
 typedef struct
 {
-	float				value;
 	int				flags;
 	int				clicked;
 } SliderData;
@@ -86,16 +85,17 @@ static void redrawSlider(GWMWindow *slider)
 	}
 	else
 	{
+		float value = gwmGetScaleValue(slider);
 		if (data->flags & GWM_SLIDER_HORIZ)
 		{
-			int len = (canvas->width-20) * data->value;
+			int len = (canvas->width-20) * value;
 			ddiFillRect(canvas, 10, 5, canvas->width-20, 10, colSliderInactive);
 			ddiFillRect(canvas, 10, 5, len, 10, colSliderActive);
 			ddiBlit(imgSlider, 0, 0, canvas, len, 0, 20, 20);
 		}
 		else
 		{
-			int len = (canvas->height-20) * data->value;
+			int len = (canvas->height-20) * value;
 			ddiFillRect(canvas, 5, 10, 10, canvas->height-20, colSliderInactive);
 			ddiFillRect(canvas, 5, 10, 10, len, colSliderActive);
 			ddiBlit(imgSlider, 0, 0, canvas, 0, len, 20, 20);
@@ -112,9 +112,10 @@ static int sliderHandler(GWMEvent *ev, GWMWindow *slider, void *context)
 	
 	switch (ev->type)
 	{
+	case GWM_EVENT_VALUE_CHANGED:
 	case GWM_EVENT_RETHEME:
 		redrawSlider(slider);
-		return GWM_EVSTATUS_OK;
+		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -188,11 +189,10 @@ static void positionSlider(GWMWindow *slider, int x, int y, int width, int heigh
 
 GWMWindow* gwmNewSlider(GWMWindow *parent)
 {
-	GWMWindow *slider = gwmCreateWindow(parent, "GWMSlider", 0, 0, 0, 0, 0);
+	GWMWindow *slider = gwmNewScale(parent);
 	if (slider == NULL) return NULL;
 	
 	SliderData *data = (SliderData*) malloc(sizeof(SliderData));
-	data->value = 0.0f;
 	data->flags = 0;
 	data->clicked = 0;
 	
@@ -208,7 +208,7 @@ void gwmDestroySlider(GWMWindow *slider)
 {
 	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
 	free(data);
-	gwmDestroyWindow(slider);
+	gwmDestroyScale(slider);
 };
 
 void gwmSetSliderFlags(GWMWindow *slider, int flags)
@@ -220,15 +220,10 @@ void gwmSetSliderFlags(GWMWindow *slider, int flags)
 
 void gwmSetSliderValue(GWMWindow *slider, float value)
 {
-	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
-	if (value < 0.0) value = 0.0;
-	if (value > 1.0) value = 1.0;
-	data->value = value;
-	redrawSlider(slider);
+	gwmSetScaleValue(slider, value);
 };
 
 float gwmGetSliderValue(GWMWindow *slider)
 {
-	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
-	return data->value;
+	return gwmGetScaleValue(slider);
 };

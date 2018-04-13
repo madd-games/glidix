@@ -271,6 +271,7 @@ int main()
 	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 
 	gwmMainLoop();
+	gwmSetWindowFlags(topWindow, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	gwmDestroyButton(button1);
 	gwmDestroyButton(button2);
 	gwmDestroyButton(button3);

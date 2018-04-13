@@ -328,6 +328,8 @@ void gwmQuit()
 	fsQuit();
 };
 
+static int gwmPostEventByWindowID(GWMEvent *ev, uint64_t targetID, uint64_t modalID);
+
 static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
@@ -341,7 +343,7 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	default:
 		if (ev->type & GWM_EVENT_CASCADING)
 		{
-			if (win->parent != NULL) return gwmPostEvent(ev, win->parent);
+			if (win->parent != NULL) return /*gwmPostEvent(ev, win->parent)*/ gwmPostEventByWindowID(ev, win->parent->id, win->parent->modalID);
 			else return GWM_EVSTATUS_DEFAULT;
 		};
 		return GWM_EVSTATUS_CONT;
@@ -526,12 +528,12 @@ void gwmPushEventHandler(GWMWindow *win, GWMEventHandler handler, void *context)
 	firstHandler = info;
 };
 
-static int gwmPostEventByWindowID(GWMEvent *ev, uint64_t modalID)
+static int gwmPostEventByWindowID(GWMEvent *ev, uint64_t targetID, uint64_t modalID)
 {
 	GWMHandlerInfo *info;
 	for (info=firstHandler; info!=NULL; info=info->next)
 	{
-		if ((ev->win == info->win->id) && (info->win->modalID == modalID))
+		if ((targetID == info->win->id) && (info->win->modalID == modalID))
 		{
 			info->refcount++;
 			int status = info->callback(ev, info->win, info->context);
@@ -595,7 +597,7 @@ static int gwmPostEventByWindowID(GWMEvent *ev, uint64_t modalID)
 int gwmPostEvent(GWMEvent *ev, GWMWindow *win)
 {
 	ev->win = win->id;
-	return gwmPostEventByWindowID(ev, win->modalID);
+	return gwmPostEventByWindowID(ev, win->id, win->modalID);
 };
 
 static void gwmModalLoop(uint64_t modalID)
@@ -605,7 +607,7 @@ static void gwmModalLoop(uint64_t modalID)
 	while (1)
 	{
 		gwmWaitEvent(&ev);
-		if (gwmPostEventByWindowID(&ev, modalID) == GWM_EVSTATUS_BREAK) break;
+		if (gwmPostEventByWindowID(&ev, ev.win, modalID) == GWM_EVSTATUS_BREAK) break;
 	};
 };
 

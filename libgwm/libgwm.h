@@ -542,6 +542,7 @@ typedef struct
  */
 #define	GWM_EVENT_COMMAND			(GWM_EVENT_CASCADING + 1)
 #define	GWM_EVENT_TOGGLED			(GWM_EVENT_CASCADING + 2)
+#define	GWM_EVENT_VALUE_CHANGED			(GWM_EVENT_CASCADING + 3)
 
 /**
  * General event structure.
@@ -2238,5 +2239,31 @@ int gwmDestroyTemplate(GWMWindowTemplate *wt);
  * Generate a unique temporary symbol.
  */
 int gwmGenerateSymbol();
+
+/**
+ * Create a new scale widget. This is an abstract class with no drawing or layouts; use its subclasses such as
+ * GWMSlider or GWMScrollbar.
+ */
+GWMWindow* gwmNewScale(GWMWindow *parent);
+
+/**
+ * Destroy a scale.
+ */
+void gwmDestroyScale(GWMWindow *scale);
+
+/**
+ * Set the symbol of a scale.
+ */
+void gwmSetScaleSymbol(GWMWindow *scale, int symbol);
+
+/**
+ * Set the value of a scale. Clamped to the [0.0, 1.0] range.
+ */
+void gwmSetScaleValue(GWMWindow *scale, float value);
+
+/**
+ * Get the value of a scale, in the [0.0, 1.0] range.
+ */
+float gwmGetScaleValue(GWMWindow *scale);
 
 #endif

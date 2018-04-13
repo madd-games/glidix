@@ -35,7 +35,6 @@
 
 typedef struct
 {
-	float				pos;
 	float				len;
 	int				flags;
 	int				clickPos;
@@ -71,16 +70,17 @@ static void redrawScrollbar(GWMWindow *sbar)
 	{
 		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, colScrollbarBg);
 
+		float value = gwmGetScaleValue(sbar);
 		if (data->flags & GWM_SCROLLBAR_HORIZ)
 		{
 			int len = canvas->width * data->len;
-			int pos = (canvas->width - len) * data->pos;
+			int pos = (canvas->width - len) * value;
 			ddiFillRect(canvas, pos, 0, len, canvas->height, colScrollbarFg);
 		}
 		else
 		{
 			int len = canvas->height * data->len;
-			int pos = (canvas->height - len) * data->pos;
+			int pos = (canvas->height - len) * value;
 			ddiFillRect(canvas, 0, pos, canvas->width, len, colScrollbarFg);
 		};
 	};
@@ -95,9 +95,10 @@ static int sbarHandler(GWMEvent *ev, GWMWindow *sbar, void *context)
 	
 	switch (ev->type)
 	{
+	case GWM_EVENT_VALUE_CHANGED:
 	case GWM_EVENT_RETHEME:
 		redrawScrollbar(sbar);
-		return GWM_EVSTATUS_OK;
+		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -109,7 +110,7 @@ static int sbarHandler(GWMEvent *ev, GWMWindow *sbar, void *context)
 			{
 				data->clickPos = ev->y;
 			};
-			data->refPos = data->pos;
+			data->refPos = gwmGetScaleValue(sbar);
 		};
 		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_UP:
@@ -167,11 +168,10 @@ static void positionScrollbar(GWMWindow *sbar, int x, int y, int width, int heig
 
 GWMWindow* gwmNewScrollbar(GWMWindow *parent)
 {
-	GWMWindow *sbar = gwmCreateWindow(parent, "GWMScrollbar", 0, 0, 0, 0, 0);
+	GWMWindow *sbar = gwmNewScale(parent);
 	if (sbar == NULL) return NULL;
 	
 	ScrollbarData *data = (ScrollbarData*) malloc(sizeof(ScrollbarData));
-	data->pos = 0.0;
 	data->len = 1.0;
 	data->flags = 0;
 	data->clickPos = -1;
@@ -188,7 +188,7 @@ void gwmDestroyScrollbar(GWMWindow *sbar)
 {
 	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
 	free(data);
-	gwmDestroyWindow(sbar);
+	gwmDestroyScale(sbar);
 };
 
 void gwmSetScrollbarFlags(GWMWindow *sbar, int flags)
@@ -200,11 +200,7 @@ void gwmSetScrollbarFlags(GWMWindow *sbar, int flags)
 
 void gwmSetScrollbarPosition(GWMWindow *sbar, float pos)
 {
-	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
-	if (pos < 0.0) pos = 0.0;
-	if (pos > 1.0) pos = 1.0;
-	data->pos = pos;
-	redrawScrollbar(sbar);
+	gwmSetScaleValue(sbar, pos);
 };
 
 void gwmSetScrollbarLength(GWMWindow *sbar, float len)
@@ -218,6 +214,5 @@ void gwmSetScrollbarLength(GWMWindow *sbar, float len)
 
 float gwmGetScrollbarPosition(GWMWindow *sbar)
 {
-	ScrollbarData *data = (ScrollbarData*) gwmGetData(sbar, sbarHandler);
-	return data->pos;
+	return gwmGetScaleValue(sbar);
 };
