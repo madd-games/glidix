@@ -466,7 +466,7 @@ static int fatfsInodeFlush(Inode *inode)
 				{
 					// write the "leftover" entry
 					uint16_t bunch[13];
-					memset(bunch, 0, 26);
+					memset(bunch, 0xFF, 26);
 					memcpy(bunch, &longname[numFullEnts * 13], 2 * leftover);
 					
 					FATLongEntry lent;
