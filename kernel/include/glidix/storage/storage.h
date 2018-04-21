@@ -92,6 +92,40 @@ typedef struct
 	uint32_t				numSectors;
 } PACKED MBRPartition;
 
+/**
+ * GPT header.
+ */
+typedef struct
+{
+	uint64_t				sig;
+	uint32_t				rev;
+	uint32_t				headerSize;
+	uint32_t				headerCRC32;
+	uint32_t				zero;
+	uint64_t				myLBA;
+	uint64_t				altLBA;
+	uint64_t				firstUseableLBA;
+	uint64_t				lastUseableLBA;
+	uint8_t					diskGUID[16];
+	uint64_t				partListLBA;
+	uint32_t				numPartEnts;
+	uint32_t				partEntSize;
+	uint32_t				partArrayCRC32;
+} GPTHeader;
+
+/**
+ * GPT Partition.
+ */
+typedef struct
+{
+	uint8_t					type[16];
+	uint8_t					partid[16];
+	uint64_t				startLBA;
+	uint64_t				endLBA;
+	uint64_t				attr;
+	uint16_t				partName[36];		/* UTF-16LE */
+} GPTPartition;
+
 typedef struct _SDCommand
 {
 	enum SDCommandType			type;

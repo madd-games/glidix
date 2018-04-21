@@ -629,6 +629,111 @@ static Inode* sdCreateInode(SDDeviceFile *fdev)
 	return inode;
 };
 
+#define CRCPOLY2 0xEDB88320UL  /* left-right reversal */
+
+static uint32_t crc32(const void *data, size_t n)
+{
+	const uint8_t *c = (const uint8_t*) data;
+	int i, j;
+	uint32_t r;
+
+	r = 0xFFFFFFFFUL;
+	for (i = 0; i < n; i++)
+	{
+		r ^= c[i];
+		for (j = 0; j < 8; j++)
+			if (r & 1) r = (r >> 1) ^ CRCPOLY2;
+			else       r >>= 1;
+	}
+	return r ^ 0xFFFFFFFFUL;
+}
+
+static void reloadGPT(StorageDevice *sd)
+{
+	GPTHeader header;
+	sdRead(sd, 0x200, &header, sizeof(GPTHeader));
+	
+	if (header.sig != (*((const uint64_t*)"EFI PART")))
+	{
+		kprintf("gpt: invalid signature\n");
+		return;
+	};
+	
+	if (header.headerSize != 92)
+	{
+		kprintf("gpt: unsupported GPT header size\n");
+		return;
+	};
+	
+	uint32_t expectedCRC32 = header.headerCRC32;
+	header.headerCRC32 = 0;
+	uint32_t actualCRC32 = crc32(&header, header.headerSize);
+	
+	if (expectedCRC32 != actualCRC32)
+	{
+		kprintf("gpt: GPT header checksum error\n");
+		return;
+	};
+	
+	if (header.partEntSize != 128)
+	{
+		kprintf("gpt: unsupported partition entry size\n");
+		return;
+	};
+	
+	// TODO: create a /dev/guid link to the disk!
+	
+	size_t tableSize = header.partEntSize * header.numPartEnts;
+	GPTPartition *table = (GPTPartition*) kmalloc(tableSize);
+	sdRead(sd, 512 * header.partListLBA, table, tableSize);
+	
+	if (crc32(table, tableSize) != header.partArrayCRC32)
+	{
+		kprintf("gpt: partition table checksum error\n");
+		return;
+	};
+	
+	int nextPartIndex = 0;
+	unsigned int i;
+	
+	static uint8_t typeNone[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	for (i=0; i<header.numPartEnts; i++)
+	{
+		if (nextPartIndex == 32) break;
+		
+		if (memcmp(table[i].type, typeNone, 16) != 0)
+		{
+			SDDeviceFile *fdev = NEW(SDDeviceFile);
+			fdev->sd = sd;
+			fdev->offset = (uint64_t) table[i].startLBA * 512;
+			fdev->size = (uint64_t) (table[i].endLBA - table[i].startLBA + 1) * 512;
+			fdev->partIndex = nextPartIndex;
+			
+			sdUpref(sd);
+
+			char devName[16];
+			strformat(devName, 16, "sd%c%d", sd->letter, nextPartIndex);
+	
+			mutexLock(&sd->lock);
+			
+			Inode *inode = sdCreateInode(fdev);
+			
+			if (devfsAdd(devName, inode) != 0)
+			{
+				kfree(fdev);
+			}
+			else
+			{
+				nextPartIndex++;
+			};
+			
+			mutexUnlock(&sd->lock);
+		};
+	};
+	
+	sd->numSubs = (size_t) nextPartIndex;
+};
+
 static void reloadPartTable(StorageDevice *sd)
 {
 	// delete current device files
@@ -638,14 +743,11 @@ static void reloadPartTable(StorageDevice *sd)
 	int i;
 	for (i=0; i<sd->numSubs; i++)
 	{
-		//DeleteDevice(sd->devSubs[i]);
 		char subname[256];
 		strformat(subname, 256, "sd%c%d", sd->letter, (int) i);
 		devfsRemove(subname);
 	};
 	
-	//kfree(sd->devSubs);
-	//sd->devSubs = NULL;
 	sd->numSubs = 0;
 
 	while (numRefs--)
@@ -668,9 +770,24 @@ static void reloadPartTable(StorageDevice *sd)
 		return;
 	};
 	
-	// we preallocate an array of 4 partition descriptions, even if they won't all be used
+	// check for GPT
+	int haveGPT = 0;
+	for (i=0; i<4; i++)
+	{
+		if (mbrParts[i].systemID == 0xEE)
+		{
+			haveGPT = 1;
+			break;
+		};
+	};
+	
+	if (haveGPT)
+	{
+		reloadGPT(sd);
+		return;
+	};
+	
 	mutexLock(&sd->lock);
-	//sd->devSubs = (Device*) kmalloc(sizeof(Device)*4);
 	sd->numSubs = 0;
 	mutexUnlock(&sd->lock);
 	
@@ -692,19 +809,7 @@ static void reloadPartTable(StorageDevice *sd)
 	
 			mutexLock(&sd->lock);
 			
-			#if 0
-			sd->devSubs[nextSubIndex] = AddDevice(devName, fdev, sdfile_open, 0600);
-			if (sd->devMaster == NULL)
-			{
-				kfree(fdev);
-			}
-			else
-			{
-				nextSubIndex++;
-			};
-			#endif
-			
-			Inode *inode = /*vfsCreateInode(NULL, VFS_MODE_BLKDEV | 0600)*/ sdCreateInode(fdev);
+			Inode *inode = sdCreateInode(fdev);
 			
 			if (devfsAdd(devName, inode) != 0)
 			{
@@ -767,7 +872,6 @@ StorageDevice* sdCreate(SDParams *params)
 	sd->totalSize = params->totalSize;
 	sd->letter = letter;
 	sd->numSubs = 0;
-	//sd->devSubs = NULL;
 	sd->cmdq = NULL;
 	semInit2(&sd->semCommands, 0);
 	sd->openParts = 0;
