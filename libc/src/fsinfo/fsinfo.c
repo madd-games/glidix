@@ -74,7 +74,7 @@ size_t _glidix_fsinfo(struct fsinfo *list, size_t count)
 		
 		if (statvfs(record.__mntpoint, &st) != 0)
 		{
-			break;
+			continue;
 		};
 		
 		memset(&list[countOut], 0, sizeof(struct fsinfo));

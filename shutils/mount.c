@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
 	int fd = open("/run/fsinfo", O_WRONLY | O_APPEND);
 	if (fd == -1)
 	{
-		fprintf(stderr, "%s: warning: failed to add to /run/fsinfo: cannot open: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: failed to add to /run/fsinfo: cannot open: %s\n", argv[0], strerror(errno));
 		return 1;
 	};
 	
@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
 	
 	if (status != 0)
 	{
-		fprintf(stderr, "%s: warning: failed to add to /run/fsinfo: cannot acquire lock: %s\n",
+		fprintf(stderr, "%s: failed to add to /run/fsinfo: cannot acquire lock: %s\n",
 					argv[0], strerror(errno));
 		close(fd);
 		return 1;
