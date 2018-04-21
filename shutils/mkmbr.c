@@ -61,7 +61,7 @@ uint8_t parsePartType(const char *type)
 	{
 		return 0x0C;
 	}
-	else if (strcmp(type, "gxfs") == 0x7F)
+	else if (strcmp(type, "gxfs") == 0)
 	{
 		return 0x7F;
 	}
