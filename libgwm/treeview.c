@@ -473,7 +473,7 @@ GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int hei
 void gwmDestroyTreeView(GWMWindow *treeview)
 {
 	GWMTreeViewData *data = (GWMTreeViewData*) treeview->data;
-	gwmDestroyScrollbar(data->sbar);
+	//gwmDestroyScrollbar(data->sbar);
 	releaseTree(data, data->head);
 	
 	int i;
