@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 	MBR mbr;
 	memset(&mbr, 0, 512);
 	
-	// if no bootlaoder is specified, default to "boot failure" (INT 18H)
+	// if no bootloader is specified, default to "boot failure" (INT 18H)
 	mbr.bootstrap[0] = 0xCD;
 	mbr.bootstrap[1] = 0x18;
 	

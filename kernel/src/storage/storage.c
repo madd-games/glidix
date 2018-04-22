@@ -703,6 +703,8 @@ static void reloadGPT(StorageDevice *sd)
 		
 		if (memcmp(table[i].type, typeNone, 16) != 0)
 		{
+			// TODO: create a link to this partition under /dev/guid
+			
 			SDDeviceFile *fdev = NEW(SDDeviceFile);
 			fdev->sd = sd;
 			fdev->offset = (uint64_t) table[i].startLBA * 512;
