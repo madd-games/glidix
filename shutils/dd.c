@@ -81,6 +81,11 @@ int main(int argc, char *argv[])
 			sscanf(valueStr, "%lu", &ibs);
 			obs = ibs;
 		}
+		else if (strcmp(paramName, "bs") == 0)
+		{
+			sscanf(valueStr, "%lu", &ibs);
+			obs = ibs;
+		}
 		else if (strcmp(paramName, "count") == 0)
 		{
 			sscanf(valueStr, "%lu", &count);
