@@ -369,7 +369,6 @@ void initSched()
 };
 
 static Spinlock sysManReadySignal;
-static Spinlock sysManLock;
 static int numThreadsToClean;
 static void sysManFunc(void *ignore)
 {
@@ -382,13 +381,11 @@ static void sysManFunc(void *ignore)
 	// the stack that it runs on.
 	
 	numThreadsToClean = 0;
-	spinlockRelease(&sysManLock);
 	while (1)
 	{
-		spinlockAcquire(&sysManLock);
 		while (numThreadsToClean > 0)
 		{
-			numThreadsToClean--;
+			__sync_fetch_and_add(&numThreadsToClean, -1);
 			
 			Thread *threadFound = NULL;
 			cli();
@@ -443,7 +440,6 @@ static void sysManFunc(void *ignore)
 		cli();
 		lockSched();
 		waitThread(currentThread);
-		spinlockRelease(&sysManLock);
 		spinlockRelease(&sysManReadySignal);
 		unlockSched();
 		kyield();
@@ -717,13 +713,11 @@ static void kernelThreadExit()
 
 	if (currentThread->flags & THREAD_DETACHED)
 	{
-		spinlockAcquire(&sysManLock);
 		cli();
 		lockSched();
 		timedCancel(&currentThread->alarmTimer);
 		currentThread->flags |= THREAD_TERMINATED;
-		numThreadsToClean++;
-		spinlockRelease(&sysManLock);
+		__sync_fetch_and_add(&numThreadsToClean, 1);
 		signalThread(threadSysMan);
 		Regs regs;
 		switchTaskUnlocked(&regs);
@@ -1198,13 +1192,11 @@ void threadExitEx(uint64_t retval)
 		spinlockRelease(&notifLock);
 	};
 		
-	spinlockAcquire(&sysManLock);
 	cli();
 	lockSched();
 	timedCancel(&currentThread->alarmTimer);
 	currentThread->flags |= THREAD_TERMINATED;
-	numThreadsToClean++;
-	spinlockRelease(&sysManLock);
+	__sync_fetch_and_add(&numThreadsToClean, 1);
 	signalThread(threadSysMan);
 	Regs regs;
 	switchTaskUnlocked(&regs);
