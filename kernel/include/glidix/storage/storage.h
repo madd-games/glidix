@@ -259,6 +259,11 @@ typedef struct
 	 * Top level of the block tree.
 	 */
 	BlockTreeNode				cacheTop;
+	
+	/**
+	 * Path to the GUID link or NULL.
+	 */
+	char*					guidPath;
 } StorageDevice;
 
 typedef struct
@@ -274,6 +279,7 @@ typedef struct
 	size_t					offset;
 	size_t					size;
 	int					partIndex;		// -1 = master
+	char*					guidPath;		// path to link under /dev/guid or NULL
 } SDDeviceFile;
 
 typedef struct

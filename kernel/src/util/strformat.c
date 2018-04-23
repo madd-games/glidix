@@ -27,6 +27,7 @@
 */
 
 #include <glidix/util/string.h>
+#include <glidix/util/common.h>
 #include <stdarg.h>
 
 static char* strformat_d(char *buffer, size_t *bufsizeptr, int num)
@@ -63,6 +64,29 @@ static char* strformat_d(char *buffer, size_t *bufsizeptr, int num)
 	return buffer + strlen(put);
 };
 
+static char *strformat_hex(char *buffer, size_t *bufsizeptr, uint64_t num, size_t numNibbles)
+{
+	if ((2*numNibbles) >= (*bufsizeptr))
+	{
+		return NULL;
+	};
+	
+	char tmp[256];
+	char *put = &tmp[255];
+	*--put = 0;
+	
+	static char hexdigits[16] = "0123456789ABCDEF";
+	while (numNibbles--)
+	{
+		*--put = hexdigits[num & 0xF];
+		num >>= 4;
+	};
+	
+	(*bufsizeptr) -= strlen(put);
+	strcpy(buffer, put);
+	return buffer + strlen(put);
+};
+
 int strformat(char *buffer, size_t bufsize, const char *format, ...)
 {
 	va_list ap;
@@ -80,7 +104,8 @@ int strformat(char *buffer, size_t bufsize, const char *format, ...)
 		else
 		{
 			const char *str;
-			switch (*format++)
+			char c = *format++;
+			switch (c)
 			{
 			case 0:
 				return -1;
@@ -105,6 +130,18 @@ int strformat(char *buffer, size_t bufsize, const char *format, ...)
 				break;
 			case 'd':
 				buffer = strformat_d(buffer, &bufsize, va_arg(ap, int));
+				if (buffer == NULL) return -1;
+				break;
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7':
+			case '8':
+			case '9':
+				buffer = strformat_hex(buffer, &bufsize, va_arg(ap, uint64_t), (size_t) (c-'0'));
 				if (buffer == NULL) return -1;
 				break;
 			default:

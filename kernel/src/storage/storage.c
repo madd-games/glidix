@@ -615,6 +615,16 @@ static size_t sdfile_getsize(Inode *inode)
 	return size;
 };
 
+// TODO: this should be called whenever the device is removed from under /dev,
+// not necessarily all the way once its RELEASED.
+static void sdfile_free(Inode *inode)
+{
+	SDDeviceFile *fdev = (SDDeviceFile*) inode->fsdata;
+	if (fdev->guidPath != NULL) devfsRemove(fdev->guidPath);
+	kfree(fdev->guidPath);
+	kfree(fdev);
+};
+
 static Inode* sdCreateInode(SDDeviceFile *fdev)
 {
 	Inode *inode = vfsCreateInode(NULL, VFS_MODE_BLKDEV | 0600);
@@ -626,6 +636,7 @@ static Inode* sdCreateInode(SDDeviceFile *fdev)
 	inode->flush = sdfile_flush;
 	inode->ioctl = sdfile_ioctl;
 	inode->getsize = sdfile_getsize;
+	inode->free = sdfile_free;
 	return inode;
 };
 
@@ -647,6 +658,49 @@ static uint32_t crc32(const void *data, size_t n)
 	}
 	return r ^ 0xFFFFFFFFUL;
 }
+
+typedef struct
+{
+	uint32_t		a;
+	uint16_t		b;
+	uint16_t		c;
+	uint8_t			d[2];
+	uint8_t			e[6];
+} GuidDisect;
+
+static char* makeGuidLink(uint8_t *guid, const char *target)
+{
+	GuidDisect *disect = (GuidDisect*) guid;
+	
+	char linkpath[256];
+	strformat(linkpath, 256, "guid/%8-%4-%4-%2%2-%2%2%2%2%2%2",
+			(uint64_t) disect->a,
+			(uint64_t) disect->b,
+			(uint64_t) disect->c,
+			(uint64_t) disect->d[0],
+			(uint64_t) disect->d[1],
+			(uint64_t) disect->e[0],
+			(uint64_t) disect->e[1],
+			(uint64_t) disect->e[2],
+			(uint64_t) disect->e[3],
+			(uint64_t) disect->e[4],
+			(uint64_t) disect->e[5]
+	);
+	
+	Inode *inode = vfsCreateInode(NULL, 0777 | VFS_MODE_LINK);
+	inode->target = strdup(target);
+	
+	devfsRemove(linkpath);
+	
+	if (devfsAdd(linkpath, inode) != 0)
+	{
+		return NULL;
+	}
+	else
+	{
+		return strdup(linkpath);
+	};
+};
 
 static void reloadGPT(StorageDevice *sd)
 {
@@ -681,7 +735,10 @@ static void reloadGPT(StorageDevice *sd)
 		return;
 	};
 	
-	// TODO: create a /dev/guid link to the disk!
+	// create a link
+	char devpath[256];
+	strformat(devpath, 256, "/dev/sd%c", sd->letter);
+	sd->guidPath = makeGuidLink(header.diskGUID, devpath);
 	
 	size_t tableSize = header.partEntSize * header.numPartEnts;
 	GPTPartition *table = (GPTPartition*) kmalloc(tableSize);
@@ -703,9 +760,8 @@ static void reloadGPT(StorageDevice *sd)
 		
 		if (memcmp(table[i].type, typeNone, 16) != 0)
 		{
-			// TODO: create a link to this partition under /dev/guid
-			
 			SDDeviceFile *fdev = NEW(SDDeviceFile);
+			memset(fdev, 0, sizeof(SDDeviceFile));
 			fdev->sd = sd;
 			fdev->offset = (uint64_t) table[i].startLBA * 512;
 			fdev->size = (uint64_t) (table[i].endLBA - table[i].startLBA + 1) * 512;
@@ -714,8 +770,12 @@ static void reloadGPT(StorageDevice *sd)
 			sdUpref(sd);
 
 			char devName[16];
+			char devPath[256];
 			strformat(devName, 16, "sd%c%d", sd->letter, nextPartIndex);
-	
+			strformat(devPath, 256, "/dev/sd%c%d", sd->letter, nextPartIndex);
+			
+			fdev->guidPath = makeGuidLink(table[i].partid, devPath);
+			
 			mutexLock(&sd->lock);
 			
 			Inode *inode = sdCreateInode(fdev);
@@ -757,6 +817,9 @@ static void reloadPartTable(StorageDevice *sd)
 		sdDownref(sd);
 	};
 
+	if (sd->guidPath != NULL) devfsRemove(sd->guidPath);
+	kfree(sd->guidPath);
+	sd->guidPath = NULL;
 	mutexUnlock(&sd->lock);
 
 	// load the new partition table
@@ -799,6 +862,7 @@ static void reloadPartTable(StorageDevice *sd)
 		if (mbrParts[i].systemID != 0)
 		{
 			SDDeviceFile *fdev = NEW(SDDeviceFile);
+			memset(fdev, 0, sizeof(SDDeviceFile));
 			fdev->sd = sd;
 			fdev->offset = (uint64_t) mbrParts[i].lbaStart * 512;
 			fdev->size = (uint64_t) mbrParts[i].numSectors * 512;
@@ -898,6 +962,7 @@ StorageDevice* sdCreate(SDParams *params)
 		return NULL;
 	};
 	
+	memset(fdev, 0, sizeof(SDDeviceFile));
 	fdev->sd = sd;
 	fdev->offset = 0;
 	fdev->size = sd->totalSize;
@@ -909,16 +974,7 @@ StorageDevice* sdCreate(SDParams *params)
 	mutexLock(&sd->lock);
 	mutexLock(&sd->cacheLock);
 	
-	//sd->devMaster = AddDevice(masterName, fdev, sdfile_open, 0600);
-	//if (sd->devMaster == NULL)
-	//{
-	//	kfree(sd);
-	//	kfree(fdev);
-	//	sdFreeLetter(letter);
-	//	return NULL;
-	//};
-	
-	Inode *inode = /*vfsCreateInode(NULL, VFS_MODE_BLKDEV | 0600) */ sdCreateInode(fdev);
+	Inode *inode = sdCreateInode(fdev);
 	
 	if (devfsAdd(masterName, inode) != 0)
 	{
@@ -935,6 +991,8 @@ StorageDevice* sdCreate(SDParams *params)
 	mutexLock(&mtxList);
 	sdList[letter-'a'] = sd;
 	mutexUnlock(&mtxList);
+	
+	sd->guidPath = NULL;
 	
 	return sd;
 };

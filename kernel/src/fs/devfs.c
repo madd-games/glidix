@@ -109,6 +109,15 @@ void initDevfs()
 	};
 	
 	DONE();
+
+	kprintf("Creating /dev/guid... ");
+	if (vfsMakeDir(VFS_NULL_IREF, "/dev/guid", 0755) != 0)
+	{
+		FAILED();
+		panic("could not create /dev/guid");
+	};
+	
+	DONE();
 	
 	kprintf("Creating /dev/null... ");
 	Inode *inodeNull = vfsCreateInode(NULL, VFS_MODE_CHARDEV | 0666);
