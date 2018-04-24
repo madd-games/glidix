@@ -333,40 +333,43 @@ static void kputch(char c)
 		outb(0x3F8, c);
 	};
 	
-	*klogput++ = c;
-	semSignal2(&semLog, 1);		// DO NOT use semSignal(); see semaphore.c as to why
-	if ((((uint64_t)klogput) & 0xFFF) == 0)
+	if (!conOutCom)
 	{
-		// crossed a page boundary, ensure page allocated
-		PDPTe *pdpte = VIRT_TO_PDPTE(klogput);
-		PDe *pde = VIRT_TO_PDE(klogput);
-		PTe *pte = VIRT_TO_PTE(klogput);
-		
-		if (!pdpte->present)
+		*klogput++ = c;
+		semSignal2(&semLog, 1);		// DO NOT use semSignal(); see semaphore.c as to why
+		if ((((uint64_t)klogput) & 0xFFF) == 0)
 		{
-			pdpte->present = 1;
-			pdpte->pdPhysAddr = phmAllocZeroFrame();
-			pdpte->xd = 1;
-			pdpte->rw = 1;
-			refreshAddrSpace();
-		};
+			// crossed a page boundary, ensure page allocated
+			PDPTe *pdpte = VIRT_TO_PDPTE(klogput);
+			PDe *pde = VIRT_TO_PDE(klogput);
+			PTe *pte = VIRT_TO_PTE(klogput);
 		
-		if (!pde->present)
-		{
-			pde->present = 1;
-			pde->ptPhysAddr = phmAllocZeroFrame();
-			pde->xd = 1;
-			pde->rw = 1;
-			refreshAddrSpace();
-		};
+			if (!pdpte->present)
+			{
+				pdpte->present = 1;
+				pdpte->pdPhysAddr = phmAllocZeroFrame();
+				pdpte->xd = 1;
+				pdpte->rw = 1;
+				refreshAddrSpace();
+			};
 		
-		if (!pte->present)
-		{
-			pte->present = 1;
-			pte->framePhysAddr = phmAllocFrame();
-			pte->xd = 1;
-			pte->rw = 1;
-			refreshAddrSpace();
+			if (!pde->present)
+			{
+				pde->present = 1;
+				pde->ptPhysAddr = phmAllocZeroFrame();
+				pde->xd = 1;
+				pde->rw = 1;
+				refreshAddrSpace();
+			};
+		
+			if (!pte->present)
+			{
+				pte->present = 1;
+				pte->framePhysAddr = phmAllocFrame();
+				pte->xd = 1;
+				pte->rw = 1;
+				refreshAddrSpace();
+			};
 		};
 	};
 	

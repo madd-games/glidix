@@ -297,6 +297,7 @@ SDCommand*	sdPop(StorageDevice *dev);
 void		sdPostComplete(SDCommand *cmd);
 void		sdSignal(StorageDevice *dev);
 void		sdSync();
-int		sdFreeMemory();
+uint64_t	sdFreeMemory();
+void		sdDumpInfo();
 
 #endif

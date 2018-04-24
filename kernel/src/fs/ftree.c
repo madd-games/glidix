@@ -500,12 +500,16 @@ uint64_t ftGetFreePage()
 			{
 				// move this FileTree to the end of the list, so that we don't
 				// always free from the same one
-				if (ftFirst != ftLast)
+				if (ft != ftLast)
 				{
 					if (ftFirst == ft) ftFirst = ft->next;
+					if (ft->prev != NULL) ft->prev->next = ft->next;
+					if (ft->next != NULL) ft->next->prev = ft->prev;
+					
 					ftLast->next = ft;
 					ft->next = NULL;
 					ft->prev = ftLast;
+					
 					ftLast = ft;
 				};
 
@@ -538,4 +542,15 @@ void ftGetLock(FileTree *ft, int *type, int *pidOut, uint64_t *start, uint64_t *
 	uint64_t key = (uint64_t) getCurrentThread()->creds->pid;
 	rlGet(&ft->rlock, type, &key, start, size);
 	*pidOut = (int) key;
+};
+
+void ftDumpInfo()
+{
+	kprintf("--- FILE TREE DUMP ---\n");
+
+	FileTree *ft;
+	for (ft=ftFirst; ft!=NULL; ft=ft->next)
+	{
+		kprintf("FileTree@%p (size=%lu, getpage=%p)\n", ft, ft->size, ft->getpage);
+	};
 };

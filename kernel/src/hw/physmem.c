@@ -133,16 +133,53 @@ static int phmTryFrame(uint64_t frame)
 	return atomic_test_and_set8(&frameBitmap[byte], bit);
 };
 
-static int tryFreeMemory()
+static uint64_t frameFromCache()
 {
 	uint64_t frame = ftGetFreePage();
 	if (frame == 0)
 	{
-		return sdFreeMemory();
+		frame = sdFreeMemory();
+		if (frame == 0)
+		{
+			return 0;
+		}
+		else
+		{
+			phmFreeFrameEx(frame+1, 7);
+			return frame;
+		};
+	};
+	
+	return frame;
+};
+
+static int tryFreeMemory()
+{
+	uint64_t frame = frameFromCache();
+	if (frame == 0)
+	{
+		return -1;
 	};
 	
 	phmFreeFrame(frame);
 	return 0;
+};
+
+static void nomem()
+{
+	enableDebugTerm();
+	kprintf("physmem: there are %lu frames in the pool, %lu is the first allocatable one. dumping bitmap:",
+			numSystemFrames, lowestFreeFrame);
+	uint64_t i;
+	for (i=0; i<numSystemFrames>>3; i++)
+	{
+		if ((i % 32) == 0) kprintf("\n");
+		kprintf("%02hhX ", frameBitmap[i]);
+	};
+	kprintf("\n-- END OF BITMAP --\n");
+	sdDumpInfo();
+	ftDumpInfo();
+	panic("out of physical memory!");
 };
 
 static uint64_t phmAllocSingle()
@@ -166,13 +203,9 @@ static uint64_t phmAllocSingle()
 	
 		if (startAt == 0)
 		{
-			if (tryFreeMemory() == -1)
-			{
-				// that didn't work
-				panic("out of physical memory!");
-			};
-			
-			continue;
+			uint64_t result = frameFromCache();
+			if (result == 0) nomem();
+			return result;
 		};
 	
 		for (i=startAt; i<limit; i++)
@@ -183,11 +216,9 @@ static uint64_t phmAllocSingle()
 			};
 		};
 		
-		if (tryFreeMemory() == -1)
-		{
-			// that didn't work
-			panic("out of physical memory!");
-		};
+		uint64_t result = frameFromCache();
+		if (result == 0) nomem();
+		return result;
 	};
 };
 
@@ -197,9 +228,32 @@ static uint64_t phmAlloc8()
 	{
 		uint64_t i;
 		uint64_t numGroups = numSystemFrames;
+
+		// find the first group of 64 frames that isn't all used
+		uint64_t *bitmap64 = (uint64_t*) frameBitmap;
+		uint64_t startAt = 0;
+		for (i=(lowestFreeFrame>>6); i<(numGroups>>6); i++)
+		{
+			if (bitmap64[i] != 0xFFFFFFFFFFFFFFFF)
+			{
+				startAt = i << 6;
+				break;
+			};
+		};
 	
+		if (startAt == 0)
+		{
+			uint64_t result = sdFreeMemory();
+			if (result == 0)
+			{
+				nomem();
+			};
+			
+			return result;
+		};
+
 		uint8_t *bitmap8 = frameBitmap;
-		for (i=(lowestFreeFrame>>3); i<(numGroups>>3); i++)
+		for (i=(startAt>>3); i<(numGroups>>3); i++)
 		{
 			if (atomic_compare_and_swap8(&bitmap8[i], 0, 0xFF) == 0)
 			{
@@ -209,11 +263,13 @@ static uint64_t phmAlloc8()
 		};
 		
 		// try freeing some more memory
-		if (tryFreeMemory() == -1)
+		uint64_t result = sdFreeMemory();
+		if (result == 0)
 		{
-			// that didn't work
-			panic("out of physical memory!");
+			nomem();
 		};
+		
+		return result;
 	};
 };
 
@@ -238,7 +294,7 @@ static uint64_t phmAlloc16()
 		if (tryFreeMemory() == -1)
 		{
 			// that didn't work
-			panic("out of physical memory!");
+			nomem();
 		};
 	};
 };
@@ -264,7 +320,7 @@ static uint64_t phmAlloc32()
 		if (tryFreeMemory() == -1)
 		{
 			// that didn't work
-			panic("out of physical memory!");
+			nomem();
 		};
 	};
 };
@@ -290,7 +346,7 @@ static uint64_t phmAlloc64()
 		if (tryFreeMemory() == -1)
 		{
 			// that didn't work
-			panic("out of physical memory!");
+			nomem();
 		};
 	};
 };
@@ -349,7 +405,7 @@ static void loadNextMemory()
 
 	if ((uint64_t) memoryMap >= memoryMapEnd)
 	{
-		panic("out of physical memory!");
+		nomem();
 	};
 };
 

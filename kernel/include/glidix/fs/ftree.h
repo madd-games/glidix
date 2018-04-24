@@ -206,4 +206,9 @@ int ftSetLock(FileTree *ft, int type, uint64_t start, uint64_t size, int block);
  */
 void ftGetLock(FileTree *ft, int *type, int *pidOut, uint64_t *start, uint64_t *size);
 
+/**
+ * Dump all information about non-anonymous file trees.
+ */
+void ftDumpInfo();
+
 #endif

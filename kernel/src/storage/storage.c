@@ -1127,7 +1127,7 @@ static int sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t
 		// we cached nothing at this level, report failure
 		if (!foundAny)
 		{
-			return -1;
+			return 0;
 		};
 	
 		if (level == 6)
@@ -1158,19 +1158,19 @@ static int sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t
 			uint64_t phys = (*pte) & 0x0000fffffffff000L;
 		
 			node->entries[lowestIndex] = 0;
-			phmFreeFrameEx(phys >> 12, 8);
+			//phmFreeFrameEx(phys >> 12, 8);
 			unmapPhysMemory((void*)canaddr, 0x8000);
 			
-			return 0;
+			return phys >> 12;
 		}
 		else
 		{
 			uint64_t canaddr = (node->entries[lowestIndex] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
-			int status = sdTryFree(sd, (BlockTreeNode*) canaddr, level+1, (addr << 7) | lowestIndex);
+			uint64_t result = sdTryFree(sd, (BlockTreeNode*) canaddr, level+1, (addr << 7) | lowestIndex);
 			
-			if (status == 0)
+			if (result != 0)
 			{
-				return 0;
+				return result;
 			}
 			else
 			{
@@ -1182,10 +1182,50 @@ static int sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t
 	};
 };
 
-int sdFreeMemory()
+static void sdDump(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t addr)
+{
+	char indent[32];
+	memset(indent, 0, 32);
+	memset(indent, ' ', level+1);
+	
+	uint64_t i;
+	for (i=0; i<128; i++)
+	{
+		if (level == 6)
+		{
+			kprintf("%sTRACK_ADDR[0x%016lX] = 0x%016lX ", indent, ((addr << 7) | i) << 15, node->entries[i]);
+		}
+		else
+		{
+			kprintf("%sEntry[%lu] = 0x%016lX ", indent, i, node->entries[i]);
+		};
+
+		if (level == 6)
+		{
+			if (node->entries[i] & SD_BLOCK_DIRTY)
+			{
+				kprintf("[DIRTY] ");
+			};
+			
+			kprintf("\n");
+		}
+		else
+		{
+			kprintf("\n");
+			
+			if (node->entries[i] != 0)
+			{
+				uint64_t canaddr = (node->entries[i] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+				sdDump(sd, (BlockTreeNode*) canaddr, level+1, (addr << 7) | i);
+			};
+		};
+	};
+};
+
+uint64_t sdFreeMemory()
 {
 	mutexLock(&mtxList);
-	int status = -1;
+	uint64_t result = 0;
 	
 	int i;
 	for (i=0; i<26; i++)
@@ -1194,13 +1234,32 @@ int sdFreeMemory()
 		if (sd != NULL)
 		{
 			mutexLock(&sd->cacheLock);
-			status = sdTryFree(sd, &sd->cacheTop, 0, 0);
+			result = sdTryFree(sd, &sd->cacheTop, 0, 0);
 			mutexUnlock(&sd->cacheLock);
 		
-			if (status == 0) break;
+			if (result != 0) break;
 		};
 	};
 	
 	mutexUnlock(&mtxList);
-	return status;
+	return result;
+};
+
+void sdDumpInfo()
+{
+	kprintf("--- BLOCK DEVICE CACHE DUMP ---\n");
+	int i;
+	for (i=0; i<26; i++)
+	{
+		StorageDevice *sd = sdList[i];
+		if (sd == NULL)
+		{
+			kprintf("Device 'sd%c' not mapped\n", (char)i+'a');
+		}
+		else
+		{
+			kprintf("Device 'sd%c' = %p; dumping:\n", (char)i+'a', sdList[i]);
+			sdDump(sd, &sd->cacheTop, 0, 0);
+		};
+	};
 };
