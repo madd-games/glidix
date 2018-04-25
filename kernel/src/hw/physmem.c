@@ -155,10 +155,19 @@ static uint64_t frameFromCache()
 
 static int tryFreeMemory()
 {
-	uint64_t frame = frameFromCache();
+	uint64_t frame = ftGetFreePage();
 	if (frame == 0)
 	{
-		return -1;
+		frame = sdFreeMemory();
+		if (frame == 0)
+		{
+			return -1;
+		}
+		else
+		{
+			phmFreeFrameEx(frame, 8);
+			return 0;
+		};
 	};
 	
 	phmFreeFrame(frame);
@@ -246,7 +255,8 @@ static uint64_t phmAlloc8()
 			uint64_t result = sdFreeMemory();
 			if (result == 0)
 			{
-				nomem();
+				if (tryFreeMemory() == -1) nomem();
+				else continue;
 			};
 			
 			return result;
@@ -266,7 +276,8 @@ static uint64_t phmAlloc8()
 		uint64_t result = sdFreeMemory();
 		if (result == 0)
 		{
-			nomem();
+			if (tryFreeMemory() == -1) nomem();
+			else continue;
 		};
 		
 		return result;
