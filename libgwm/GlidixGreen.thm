@@ -43,12 +43,16 @@ namespace gwm {
 	}
 	
 	namespace toolkit {
+		color selection #00AA00:255
+		color winback #DDDDDD:255
+		
 		image mbicons /usr/share/images/mbicons.png
 		image button /usr/share/images/button.png
 		image checkbox /usr/share/images/checkbox.png
 		image radio /usr/share/images/radiobutton.png
 		image optmenu /usr/share/images/optmenu.png
 		image slider /usr/share/images/slider.png
+		image notebook /usr/share/images/notebook.png
 		
 		namespace slider {
 			color active #00AA00:255

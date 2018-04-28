@@ -84,8 +84,13 @@ static GWMHandlerInfo *firstHandler = NULL;
 static GWMInfo *gwminfo = NULL;
 static FileIconCache *fileIconCache = NULL;
 
+#if 0
 DDIColor gwmColorSelection = {0, 0xAA, 0, 0xFF};
 DDIColor gwmBackColor = {0xDD, 0xDD, 0xDD, 0xFF};		// window background color
+#endif
+
+DDIColor* gwmColorSelectionP;
+DDIColor* gwmBackColorP;
 
 static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 {
@@ -318,6 +323,10 @@ int gwmInit()
 	};
 	
 	gwmGetScreenFormat(&screenFormat);
+	
+	gwmColorSelectionP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.selection", GWM_TYPE_COLOR, NULL);
+	gwmBackColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.winback", GWM_TYPE_COLOR, NULL);
+	
 	return 0;
 };
 
@@ -369,7 +378,7 @@ GWMWindow* gwmCreateWindow(
 		return NULL;
 	};
 
-	ddiFillRect(canvas, 0, 0, width, height, &gwmBackColor);
+	ddiFillRect(canvas, 0, 0, width, height, gwmBackColorP);
 	
 	GWMCommand cmd;
 	cmd.createWindow.cmd = GWM_CMD_CREATE_WINDOW;
@@ -405,6 +414,7 @@ GWMWindow* gwmCreateWindow(
 		win->getMinSize = NULL;
 		win->getPrefSize = NULL;
 		win->flags = flags;
+		win->caption = strdup(caption);
 		
 		gwmPushEventHandler(win, gwmDefaultHandler, NULL);
 		return win;
@@ -455,6 +465,7 @@ void gwmDestroyWindow(GWMWindow *win)
 		info = next;
 	};
 	
+	free(win->caption);
 	free(win);
 };
 
@@ -485,7 +496,7 @@ void gwmWaitEvent(GWMEvent *ev)
 
 void gwmClearWindow(GWMWindow *win)
 {
-	ddiFillRect(win->canvas, 0, 0, win->canvas->width, win->canvas->height, &gwmBackColor);
+	ddiFillRect(win->canvas, 0, 0, win->canvas->width, win->canvas->height, gwmBackColorP);
 };
 
 void gwmPostUpdate(GWMWindow *win)
@@ -697,6 +708,11 @@ int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon)
 	return resp.setIconResp.status;
 };
 
+DDISurface* gwmGetWindowIcon(GWMWindow *win)
+{
+	return win->icon;
+};
+
 DDIFont *gwmGetDefaultFont()
 {
 	return defaultFont;
@@ -792,7 +808,7 @@ void gwmResizeWindow(GWMWindow *win, int width, int height)
 	
 	// resize the canvas
 	DDISurface *newCanvas = ddiCreateSurface(&format, width, height, NULL, DDI_SHARED);
-	ddiFillRect(newCanvas, 0, 0, width, height, &gwmBackColor);
+	ddiFillRect(newCanvas, 0, 0, width, height, gwmBackColorP);
 	ddiBlit(win->canvas, 0, 0, newCanvas, 0, 0, win->canvas->width, win->canvas->height);
 	ddiDeleteSurface(win->canvas);
 	win->canvas = newCanvas;
@@ -822,6 +838,12 @@ void gwmSetWindowCaption(GWMWindow *win, const char *caption)
 	strcpy(cmd.atomicConfig.caption, caption);
 	
 	write(queueFD, &cmd, sizeof(GWMCommand));
+	win->caption = strdup(caption);
+};
+
+const char* gwmGetWindowCaption(GWMWindow *win)
+{
+	return win->caption;
 };
 
 void gwmMoveWindow(GWMWindow *win, int x, int y)

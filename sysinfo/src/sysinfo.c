@@ -26,6 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#if 0
 #include <stdio.h>
 #include <libgwm.h>
 #include <time.h>
@@ -66,5 +67,11 @@ int main()
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED);
 	gwmMainLoop();
 	gwmQuit();
+	return 0;
+};
+#endif
+
+int main()
+{
 	return 0;
 };

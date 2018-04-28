@@ -120,116 +120,27 @@ int main()
 	gwmPushEventHandler(topWindow, myHandler, NULL);
 	
 	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(topWindow, boxLayout);
 	
-	GWMWindowTemplate wt;
-	wt.wtComps = GWM_WTC_MENUBAR;
-	wt.wtWindow = topWindow;
-	wt.wtBody = boxLayout;
-	gwmCreateTemplate(&wt);
-	
-	GWMWindow *menubar = wt.wtMenubar;
-	
-	GWMMenu *menuFile = gwmCreateMenu();
-	gwmMenubarAdd(menubar, "File", menuFile);
-	
-	GWMWindow *button1 = gwmCreateButtonWithLabel(
-		topWindow,			// the parent window
-		SYM_BUTTON1,			// the symbol
-		"Button 1"			// and finally the label
-	);
+	GWMWindow *notebook = gwmNewNotebook(topWindow);
+	gwmBoxLayoutAddWindow(boxLayout, notebook, 1, 0, GWM_BOX_FILL);
 
-	gwmBoxLayoutAddWindow(
-		boxLayout,			// the layout to add the button to
-		button1,			// the button
-		0,				// the proportion (use minimum size)
-		0,				// the border width
-		0				// flags
-	);
-
-	GWMWindow *button2, *button3;
-	gwmBoxLayoutAddWindow(boxLayout, button2 = gwmCreateButtonWithLabel(topWindow, SYM_BUTTON2, "Button 2"), 0, 0, 0);
-	gwmBoxLayoutAddWindow(boxLayout, button3 = gwmCreateButtonWithLabel(topWindow, SYM_BUTTON3, "Button 3"), 0, 0, 0);
+	GWMWindow *tab1 = gwmNewTab(notebook);
+	GWMWindow *tab2 = gwmNewTab(notebook);
+	gwmNewTab(notebook);
 	
-	txtfield = gwmNewTextField(topWindow);
-	gwmWriteTextField(txtfield, "кипeть злoбой");
-	gwmBoxLayoutAddWindow(boxLayout, txtfield, 0, 0, GWM_BOX_FILL);
+	gwmSetWindowCaption(tab2, "This is a really nice tab");
 	
-	GWMWindow *checkbox = gwmNewCheckbox(topWindow);
-	gwmSetCheckboxLabel(checkbox, "Play with me");
-	gwmSetCheckboxSymbol(checkbox, SYM_CHECKBOX);
-	gwmBoxLayoutAddWindow(boxLayout, checkbox, 0, 0, 0);
+	GWMLayout *tabLayout1 = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(tab1, tabLayout1);
 	
-	cbMask = gwmNewCheckbox(topWindow);
-	gwmSetCheckboxLabel(cbMask, "Mask the text");
-	gwmSetCheckboxSymbol(cbMask, SYM_CB_MASK);
-	gwmBoxLayoutAddWindow(boxLayout, cbMask, 0, 0, 0);
+	gwmBoxLayoutAddWindow(tabLayout1, gwmCreateButtonWithLabel(tab1, SYM_BUTTON1, "Button 1"), 0, 0, 0);
+	gwmBoxLayoutAddWindow(tabLayout1, gwmCreateButtonWithLabel(tab1, SYM_BUTTON2, "Button 2"), 0, 0, GWM_BOX_FILL);
 	
-	GWMWindow *frame = gwmNewFrame(topWindow);
-	gwmSetFrameCaption(frame, "Example frame");
-	gwmBoxLayoutAddWindow(boxLayout, frame, 0, 0, 0);
-	
-	GWMWindow *panel = gwmGetFramePanel(frame);
-	GWMLayout *panelLayout = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
-	gwmSetWindowLayout(panel, panelLayout);
-	
-	gwmBoxLayoutAddWindow(panelLayout, gwmCreateButtonWithLabel(panel, SYM_BUTTON_FRAME1, "Frame button 1"), 0, 0, 0);
-	gwmBoxLayoutAddWindow(panelLayout, gwmCreateButtonWithLabel(panel, SYM_BUTTON_FRAME2, "Frame button 2"), 0, 0, 0);
-	
-	GWMWindow *frameA = gwmNewFrame(panel);
-	gwmSetFrameCaption(frameA, "Radio group A");
-	gwmBoxLayoutAddWindow(panelLayout, frameA, 0, 0, 0);
-	
-	GWMWindow *panelA = gwmGetFramePanel(frameA);
-	GWMLayout *panelLayoutA = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(panelA, panelLayoutA);
-	
-	GWMRadioGroup *groupA = gwmCreateRadioGroup(0);
-	
-	GWMWindow *radioA1 = gwmNewRadioButton(panelA, groupA);
-	gwmSetRadioButtonValue(radioA1, 0);
-	gwmSetRadioButtonLabel(radioA1, "Radio button A1");
-	gwmBoxLayoutAddWindow(panelLayoutA, radioA1, 0, 0, 0);
-
-	GWMWindow *radioA2 = gwmNewRadioButton(panelA, groupA);
-	gwmSetRadioButtonValue(radioA2, 1);
-	gwmSetRadioButtonLabel(radioA2, "Radio button A2");
-	gwmBoxLayoutAddWindow(panelLayoutA, radioA2, 0, 0, 0);
-
-	GWMWindow *radioA3 = gwmNewRadioButton(panelA, groupA);
-	gwmSetRadioButtonValue(radioA3, 2);
-	gwmSetRadioButtonLabel(radioA3, "Radio button A3");
-	gwmBoxLayoutAddWindow(panelLayoutA, radioA3, 0, 0, 0);
-
-	GWMWindow *frameB = gwmNewFrame(panel);
-	gwmSetFrameCaption(frameB, "Radio group B");
-	gwmBoxLayoutAddWindow(panelLayout, frameB, 0, 0, 0);
-	
-	GWMWindow *panelB = gwmGetFramePanel(frameB);
-	GWMLayout *panelLayoutB = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(panelB, panelLayoutB);
-	
-	GWMRadioGroup *groupB = gwmCreateRadioGroup(1);
-	
-	GWMWindow *radioB1 = gwmNewRadioButton(panelB, groupB);
-	gwmSetRadioButtonValue(radioB1, 0);
-	gwmSetRadioButtonLabel(radioB1, "Radio button B1");
-	gwmBoxLayoutAddWindow(panelLayoutB, radioB1, 0, 0, 0);
-
-	GWMWindow *radioB2 = gwmNewRadioButton(panelB, groupB);
-	gwmSetRadioButtonValue(radioB2, 1);
-	gwmSetRadioButtonLabel(radioB2, "Radio button B2");
-	gwmBoxLayoutAddWindow(panelLayoutB, radioB2, 0, 0, 0);
-
 	gwmFit(topWindow);
 	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 
 	gwmMainLoop();
-	gwmDestroyButton(button1);
-	gwmDestroyButton(button2);
-	gwmDestroyButton(button3);
-	gwmDestroyCheckbox(checkbox);
-	gwmDestroyBoxLayout(boxLayout);
-	gwmDestroyWindow(topWindow);
 	gwmQuit();
 	return 0;
 };

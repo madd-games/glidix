@@ -59,6 +59,8 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.server.wincolor.inactive",	GWM_TYPE_COLOR,		offsetof(GWMInfo, colWinInactive)},
 	{"gwm.server.wincolor.active",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colWinActive)},
 	{"gwm.tools.shutdown",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgShutdown)},
+	{"gwm.toolkit.selection",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colSelection)},
+	{"gwm.toolkit.winback",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colWinBack)},
 	{"gwm.toolkit.mbicons",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgMessageIcons)},
 	{"gwm.toolkit.button",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgButton)},
 	{"gwm.toolkit.checkbox",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCheckbox)},
@@ -71,6 +73,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.scrollbar.bg",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colScrollbarBg)},
 	{"gwm.toolkit.scrollbar.fg",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colScrollbarFg)},
 	{"gwm.toolkit.scrollbar.disabled",	GWM_TYPE_COLOR,		offsetof(GWMInfo, colScrollbarDisabled)},
+	{"gwm.toolkit.notebook",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgNotebook)},
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
@@ -125,6 +128,20 @@ static void drawButton(DDISurface *surf, int x, int y, int width, int height, DD
 		ddiFillRect(surf, x, y, 1, height, &white);
 		ddiFillRect(surf, x, y+height-1, width, 1, &black);
 		ddiFillRect(surf, x+width-1, y, 1, height, &black);
+	};
+};
+
+static void drawTab(DDISurface *surf, int x, int y, int width, int height, DDIColor *bg, int active)
+{
+	static DDIColor black = {0, 0, 0, 0xFF};
+	ddiFillRect(surf, x, y, width, height, bg);
+	ddiFillRect(surf, x, y, width, 1, &black);
+	ddiFillRect(surf, x, y, 1, height, &black);
+	ddiFillRect(surf, x+width-1, y, 1, height, &black);
+	
+	if (!active)
+	{
+		ddiFillRect(surf, x, y+height-1, width, 1, &black);
 	};
 };
 
@@ -303,6 +320,19 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	memcpy(&info->colScrollbarBg, &colWinInactive, sizeof(DDIColor));
 	memcpy(&info->colScrollbarFg, &colWinActive, sizeof(DDIColor));
 	memcpy(&info->colScrollbarDisabled, &buttonDisabled, sizeof(DDIColor));
+
+	// selection color
+	memcpy(&info->colSelection, &colWinActive, sizeof(DDIColor));
+	
+	// window background
+	DDIColor winBack = {0xDD, 0xDD, 0xDD, 0xFF};
+	memcpy(&info->colWinBack, &winBack, sizeof(DDIColor));
+
+	// notebook
+	surf = surfaceSetup(format, &info->imgNotebook, 17, 60);
+	drawTab(surf, 0, 0, 17, 20, &buttonNormal, 0);
+	drawTab(surf, 0, 20, 17, 20, &buttonHover, 0);
+	drawTab(surf, 0, 40, 17, 20, &winBack, 1);
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

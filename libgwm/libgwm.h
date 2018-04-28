@@ -70,10 +70,10 @@
 /**
  * Colors.
  */
-#define	GWM_COLOR_SELECTION			&gwmColorSelection
-extern DDIColor gwmColorSelection;
-#define	GWM_COLOR_BACKGROUND			&gwmBackColor
-extern DDIColor gwmBackColor;
+#define	GWM_COLOR_SELECTION			gwmColorSelectionP
+extern DDIColor* gwmColorSelectionP;
+#define	GWM_COLOR_BACKGROUND			gwmBackColorP
+extern DDIColor* gwmBackColorP;
 
 /**
  * Unspecified window position.
@@ -436,6 +436,23 @@ typedef struct
 	 * Disabled color of a scrollbar.
 	 */
 	DDIColor				colScrollbarDisabled;
+	
+	/**
+	 * Notebook tab image. Extends horizontally according to the "button" method (see imgButton).
+	 * It is made of 3 vertically stacked 17x20 sprites, meaning (from top to bottom):
+	 * Inactive, inactive-hovered, active.
+	 */
+	uint32_t				imgNotebook;
+	
+	/**
+	 * Selection color.
+	 */
+	DDIColor				colSelection;
+	
+	/**
+	 * Window default background color.
+	 */
+	DDIColor				colWinBack;
 } GWMInfo;
 
 /**
@@ -543,6 +560,10 @@ typedef struct
 #define	GWM_EVENT_COMMAND			(GWM_EVENT_CASCADING + 1)
 #define	GWM_EVENT_TOGGLED			(GWM_EVENT_CASCADING + 2)
 #define	GWM_EVENT_VALUE_CHANGED			(GWM_EVENT_CASCADING + 3)
+#define	GWM_EVENT_TAB_LIST_UPDATED		(GWM_EVENT_CASCADING + 4)
+#define	GWM_EVENT_TAB_FADING			(GWM_EVENT_CASCADING + 5)
+#define	GWM_EVENT_TAB_FADED			(GWM_EVENT_CASCADING + 6)
+#define	GWM_EVENT_TAB_ACTIVATED			(GWM_EVENT_CASCADING + 7)
 
 /**
  * General event structure.
@@ -573,6 +594,15 @@ typedef struct
 	int					symbol;		// command symbol
 	void*					data;		// associated data if applicable
 } GWMCommandEvent;
+
+/**
+ * Tab event structure. Aliased from GWMEvent when 'type' is GWM_EVENT_TAB_*.
+ */
+typedef struct
+{
+	GWMEvent				header;
+	struct GWMWindow_*			tab;		// the tab in question if applicable, or NULL
+} GWMTabEvent;
 
 /**
  * Global window reference - uniquely identifies a window on the screen, which may belong
@@ -1022,6 +1052,11 @@ typedef struct GWMWindow_
 	 * Current window flags set by libgwm.
 	 */
 	int					flags;
+	
+	/**
+	 * Window caption.
+	 */
+	char*					caption;
 } GWMWindow;
 
 /**
@@ -1278,6 +1313,11 @@ void gwmDestroyWindow(GWMWindow *win);
 void gwmSetWindowCaption(GWMWindow *win, const char *caption);
 
 /**
+ * Return the window caption.
+ */
+const char* gwmGetWindowCaption(GWMWindow *win);
+
+/**
  * Tell the window manager that a window needs re-drawing.
  */
 void gwmPostDirty(GWMWindow *win);
@@ -1486,6 +1526,11 @@ int gwmSetWindowCursor(GWMWindow *win, int cursor);
 int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon);
 
 /**
+ * Get the current icon surface of the specified window.
+ */
+DDISurface* gwmGetWindowIcon(GWMWindow *win);
+
+/**
  * Returns the default font for use with DDI.
  */
 DDIFont *gwmGetDefaultFont();
@@ -1688,6 +1733,7 @@ void gwmMenubarAdd(GWMWindow *menubar, const char *label, GWMMenu *menu);
  */
 int gwmClassifyChar(long c);
 
+#if 0
 /**
  * Create a new notebook widget.
  */
@@ -1710,6 +1756,60 @@ void gwmNotebookSetTab(GWMWindow *notebook, int index);
 
 /**
  * Destroy a notebook widget.
+ */
+void gwmDestroyNotebook(GWMWindow *notebook);
+#endif
+
+/**
+ * Create a new tab list. This is an abstract class; use its derivaties such as GWMNotebook.
+ */
+GWMWindow* gwmNewTabList(GWMWindow *parent);
+
+/**
+ * Destroy a tab list.
+ */
+void gwmDestroyTabList(GWMWindow *tablist);
+
+/**
+ * Create a new tab on a tab list.
+ */
+GWMWindow* gwmNewTab(GWMWindow *tablist);
+
+/**
+ * Destroy a tab from a tab list.
+ */
+void gwmDestroyTab(GWMWindow *tab);
+
+/**
+ * Activate the specified tab (switch to it). This goes as follows:
+ * 1. A GWM_EVENT_TAB_FADING is emitted for the current tab, and if inhibited, no switch occurs.
+ * 2. If the event reaches the GWMTabList handler, then a GWM_EVENT_TAB_FADED is emitted for the orignal tab;
+ * 3. then, a GWM_EVENT_TAB_LIST_UPDATED is emitted, so that the subclass could update the visible tab and
+ *    decoration as necessary.
+ * 4. A GWM_EVENT_TAB_ACTIVATED is emitted for the new tab.
+ *
+ * NOTE: All events are emitted on the TAB LIST, not the tab itself! The 'tab' field of the GWMTabEvent
+ *       is set to the tab in question though.
+ */
+void gwmActivateTab(GWMWindow *tab);
+
+/**
+ * Return the active tab of the tablist.
+ */
+GWMWindow* gwmGetActiveTab(GWMWindow *tablist);
+
+/**
+ * Get a tab given an index. Used to enumerate tabs. Returns NULL if out of bounds.
+ */
+GWMWindow* gwmGetTab(GWMWindow *tablist, int index);
+
+/**
+ * Create a new notebook widget with the specified parent.
+ */
+GWMWindow* gwmNewNotebook(GWMWindow *parent);
+
+/**
+ * Destroy a notebook.
  */
 void gwmDestroyNotebook(GWMWindow *notebook);
 

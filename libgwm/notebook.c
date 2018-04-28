@@ -34,232 +34,230 @@
 
 typedef struct
 {
-	DDISurface*			label;
-	GWMWindow*			win;
-} Tab;
-
-typedef struct
-{
-	int				numTabs;
-	Tab*				tabs;
-	int				currentTab;
-	int				selectedTab;
-	int				width, height;
-} GWMNotebookData;
+	int			flags;
+	int*			widths;
+	int			hoveredTab;
+} NotebookData;
 
 static DDISurface *imgNotebook = NULL;
 
-static void gwmRedrawNotebook(GWMWindow *notebook)
+static int notebookHandler(GWMEvent *ev, GWMWindow *tablist, void *context);
+
+static void redrawNotebook(GWMWindow *notebook)
 {
-	static DDIColor colorTransparent = {0, 0, 0, 0};
-	static DDIColor colorBlack = {0, 0, 0, 0xFF};
-	
-	GWMNotebookData *data = (GWMNotebookData*) notebook->data;
-	
+	NotebookData *data = (NotebookData*) gwmGetData(notebook, notebookHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(notebook);
-	ddiFillRect(canvas, 0, 0, data->width, imgNotebook->height/3, &colorTransparent);
-	ddiFillRect(canvas, 0, imgNotebook->height/3-1, data->width, data->height-imgNotebook->height/3+1, &colorBlack);
-	
-	int borderWidth = imgNotebook->width/2;
-	int tabHeight = imgNotebook->height/3;
-	
-	int i;
-	int xoff = 0;
-	for (i=0; i<data->numTabs; i++)
-	{
-		int yi = 0;
-		
-		if (data->selectedTab == i)
-		{
-			yi = 1;
-		};
-		
-		if (data->currentTab == i)
-		{
-			yi = 2;
-		};
-		
-		ddiBlit(imgNotebook, 0, yi*tabHeight, canvas, xoff, 0, borderWidth, tabHeight);
-		xoff += borderWidth;
-		
-		int drawAt = xoff;
-		
-		int j;
-		for (j=0; j<data->tabs[i].label->width; j++)
-		{
-			ddiBlit(imgNotebook, borderWidth, yi*tabHeight, canvas, xoff, 0, 1, tabHeight);
-			xoff++;
-		};
-		
-		ddiBlit(imgNotebook, borderWidth+1, yi*tabHeight, canvas, xoff, 0, borderWidth, tabHeight);
-		xoff += borderWidth;
-		
-		ddiBlit(data->tabs[i].label, 0, 0, canvas, drawAt, 2, data->tabs[i].label->width, data->tabs[i].label->height);
-		
-		// we put the ends of tabs on top of each other
-		xoff--;
-	};
-	
-	gwmPostDirty(notebook);
-};
+	if (canvas->width == 0) return;
 
-int notebookHandler(GWMEvent *ev, GWMWindow *notebook, void *context)
-{
-	GWMNotebookData *data = (GWMNotebookData*) notebook->data;
-	int newSelectedTab;
-	int switchTab = 0;
-	
-	switch (ev->type)
-	{
-	case GWM_EVENT_LEAVE:
-		newSelectedTab = -1;
-		break;
-	case GWM_EVENT_DOWN:
-		if (ev->keycode != GWM_KC_MOUSE_LEFT)
-		{
-			return GWM_EVSTATUS_OK;
-		};
-		switchTab = 1;
-		// no break
-	case GWM_EVENT_ENTER:
-	case GWM_EVENT_MOTION:
-		for (newSelectedTab=0; newSelectedTab<data->numTabs; newSelectedTab++)
-		{
-			if ((ev->x >= 0) && (ev->x < (data->tabs[newSelectedTab].label->width+imgNotebook->width-2)))
-			{
-				break;
-			};
-			
-			ev->x -= (data->tabs[newSelectedTab].label->width+imgNotebook->width-2);
-		};
-		
-		if (newSelectedTab == data->numTabs)
-		{
-			newSelectedTab = -1;
-		};
-		
-		break;
-	default:
-		return GWM_EVSTATUS_CONT;
-	};
-	
-	if (newSelectedTab != data->selectedTab)
-	{
-		data->selectedTab = newSelectedTab;
-		gwmRedrawNotebook(notebook);
-	};
-	
-	if (switchTab)
-	{
-		if (newSelectedTab != -1)
-		{
-			gwmNotebookSetTab(notebook, newSelectedTab);
-		};
-	};
-
-	return GWM_EVSTATUS_OK;
-};
-
-GWMWindow *gwmCreateNotebook(GWMWindow *parent, int x, int y, int width, int height, int flags)
-{
-	GWMWindow *notebook = gwmCreateWindow(parent, "GWMNotebook", x, y, width, height, 0);
-	GWMNotebookData *data = (GWMNotebookData*) malloc(sizeof(GWMNotebookData));
-	
-	DDISurface *canvas = gwmGetWindowCanvas(notebook);
 	if (imgNotebook == NULL)
 	{
-		imgNotebook = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/notebook.png", NULL);
+		imgNotebook = (DDISurface*) gwmGetThemeProp("gwm.toolkit.notebook", GWM_TYPE_SURFACE, NULL);
 		if (imgNotebook == NULL)
 		{
-			fprintf(stderr, "Failed to load /usr/share/images/notebook.png");
+			fprintf(stderr, "Failed to load notebook image\n");
 			abort();
 		};
 	};
 	
-	data->numTabs = 0;
-	data->tabs = NULL;
-	data->currentTab = -1;
-	data->selectedTab = -1;
-	data->width = width;
-	data->height = height;
+	static DDIColor black = {0, 0, 0, 0xFF};
+	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, GWM_COLOR_BACKGROUND);
+	ddiFillRect(canvas, 0, 20, 1, canvas->height-20, &black);
+	ddiFillRect(canvas, 0, canvas->height-1, canvas->width, 1, &black);
+	ddiFillRect(canvas, canvas->width-1, 20, 1, canvas->height-20, &black);
+	ddiFillRect(canvas, 0, 19, canvas->width, 1, &black);
 	
-	notebook->data = data;
-	gwmRedrawNotebook(notebook);
-	gwmPushEventHandler(notebook, notebookHandler, NULL);
+	// draw tabs
+	GWMWindow* activeTab = gwmGetActiveTab(notebook);
+	int i;
+	int drawX = 0;
+	free(data->widths);
+	data->widths = NULL;
+	for (i=0;;i++)
+	{
+		GWMWindow *tab = gwmGetTab(notebook, i);
+		if (tab == NULL) break;
+		
+		int state = 0;
+		if (tab == activeTab)
+		{
+			gwmSetWindowFlags(tab, 0);
+			state = 2;
+		}
+		else
+		{
+			gwmSetWindowFlags(tab, GWM_WINDOW_HIDDEN);
+			
+			if (data->hoveredTab == i)
+			{
+				state = 1;
+			};
+		};
+		
+		DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), drawX+20, 2, canvas->width, canvas->height, 0, 0, NULL);
+		ddiSetPenWrap(pen, 0);
+		ddiWritePen(pen, gwmGetWindowCaption(tab));
+	
+		int txtWidth, txtHeight;
+		ddiGetPenSize(pen, &txtWidth, &txtHeight);
+		
+		int tabWidth = txtWidth + 22;
+		int middleWidth = tabWidth - 16;
+		int iconX = drawX + 2;
+		
+		ddiBlit(imgNotebook, 0, state*20, canvas, drawX, 0, 8, 20);
+		drawX += 8;
+		while (middleWidth--)
+		{
+			ddiBlit(imgNotebook, 8, state*20, canvas, drawX++, 0, 1, 20);
+		};
+		ddiBlit(imgNotebook, 9, state*20, canvas, drawX, 0, 8, 20);
+		drawX += 8;
+		
+		ddiExecutePen(pen, canvas);
+		ddiDeletePen(pen);
+		
+		DDISurface *icon = gwmGetWindowIcon(tab);
+		if (icon != NULL)
+		{
+			ddiBlit(icon, 0, 0, imgNotebook, iconX, 2, 16, 16);
+		};
+		
+		data->widths = realloc(data->widths, sizeof(int) * (i+1));
+		data->widths[i] = tabWidth;
+	};
+	
+	data->widths = realloc(data->widths, sizeof(int) * (i+1));
+	data->widths[i] = -1;
+	
+	gwmPostDirty(notebook);
+};
+
+static int notebookHandler(GWMEvent *ev, GWMWindow *notebook, void *context)
+{
+	NotebookData *data = (NotebookData*) context;
+	int newTab;
+	
+	switch (ev->type)
+	{
+	case GWM_EVENT_ENTER:
+	case GWM_EVENT_MOTION:
+		if (ev->y < 0 || ev->y > 20 || ev->x < 0 || data->widths == NULL)
+		{
+			newTab = -1;
+		}
+		else
+		{
+			int i;
+			for (i=0;;i++)
+			{
+				if (data->widths[i] == -1)
+				{
+					newTab = -1;
+					break;
+				};
+				
+				if (data->widths[i] > ev->x)
+				{
+					newTab = i;
+					break;
+				};
+				
+				ev->x -= data->widths[i];
+			};
+		};
+		if (data->hoveredTab != newTab)
+		{
+			data->hoveredTab = newTab;
+			redrawNotebook(notebook);
+		};
+		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_LEAVE:
+		data->hoveredTab = -1;
+		redrawNotebook(notebook);
+		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_DOWN:
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
+		{
+			GWMWindow *tab = gwmGetTab(notebook, data->hoveredTab);
+			if (tab != NULL) gwmActivateTab(tab);
+		};
+		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_TAB_LIST_UPDATED:
+		redrawNotebook(notebook);
+		return GWM_EVSTATUS_CONT;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
+};
+
+static void sizeNotebook(GWMWindow *notebook, int *width, int *height)
+{
+	int maxWidth=0, maxHeight=0;
+	
+	int i;
+	for (i=0;;i++)
+	{
+		GWMWindow *tab = gwmGetTab(notebook, i);
+		if (tab == NULL) break;
+		
+		int w, h;
+		if (tab->layout != NULL)
+		{
+			tab->layout->getMinSize(tab->layout, &w, &h);
+		}
+		else
+		{
+			w = 150;
+			h = 150;
+		};
+			
+		if (w > maxWidth) maxWidth = w;
+		if (h > maxHeight) maxHeight = h;
+	};
+	
+	*width = maxWidth + 2;
+	*height = maxHeight + 21;
+};
+
+static void positionNotebook(GWMWindow *notebook, int x, int y, int width, int height)
+{
+	gwmMoveWindow(notebook, x, y);
+	gwmResizeWindow(notebook, width, height);
+	
+	if (width < 2) width = 2;
+	if (height < 21) height = 21;
+	
+	int i;
+	for (i=0;;i++)
+	{
+		GWMWindow *tab = gwmGetTab(notebook, i);
+		if (tab == NULL) break;
+		
+		gwmMoveWindow(tab, 1, 20);
+		gwmLayout(tab, width-2, height-21);
+	};
+	
+	redrawNotebook(notebook);
+};
+
+GWMWindow* gwmNewNotebook(GWMWindow *parent)
+{
+	GWMWindow *notebook = gwmNewTabList(parent);
+	if (notebook == NULL) return NULL;
+	
+	NotebookData *data = (NotebookData*) malloc(sizeof(NotebookData));
+	data->flags = 0;
+	data->widths = NULL;
+	data->hoveredTab = -1;
+	
+	notebook->getMinSize = notebook->getPrefSize = sizeNotebook;
+	notebook->position = positionNotebook;
+
+	gwmPushEventHandler(notebook, notebookHandler, data);
 	return notebook;
-};
-
-void gwmNotebookGetDisplaySize(GWMWindow *notebook, int *width, int *height)
-{
-	GWMNotebookData *data = (GWMNotebookData*) notebook->data;
-	
-	if (width != NULL) *width = data->width - 2;
-	if (height != NULL) *height = data->height - 1 - imgNotebook->height/3;
-};
-
-GWMWindow *gwmNotebookAdd(GWMWindow *notebook, const char *label)
-{
-	static DDIColor colorTransparent = {0, 0, 0, 0};
-	GWMNotebookData *data = (GWMNotebookData*) notebook->data;
-	
-	int width, height;
-	gwmNotebookGetDisplaySize(notebook, &width, &height);
-	
-	int index = data->numTabs++;
-	data->tabs = realloc(data->tabs, sizeof(Tab)*data->numTabs);
-	Tab *tab = &data->tabs[index];
-	
-	tab->win = gwmCreateWindow(notebook, "GWMNotebookTab", 1, imgNotebook->height/3, width, height, GWM_WINDOW_HIDDEN);
-	
-	DDISurface *canvas = gwmGetWindowCanvas(tab->win);
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, 100, imgNotebook->height/3, 0, 0, NULL);
-	ddiSetPenWrap(pen, 0);
-	ddiWritePen(pen, label);
-	ddiGetPenSize(pen, &width, &height);
-	
-	tab->label = ddiCreateSurface(&canvas->format, width, height, NULL, 0);
-	ddiFillRect(tab->label, 0, 0, width, height, &colorTransparent);
-	ddiExecutePen(pen, tab->label);
-	ddiDeletePen(pen);
-	
-	gwmRedrawNotebook(notebook);
-	return tab->win;
-};
-
-void gwmNotebookSetTab(GWMWindow *notebook, int index)
-{
-	GWMNotebookData *data = (GWMNotebookData*) notebook->data;
-	
-	if (data->currentTab != -1)
-	{
-		gwmSetWindowFlags(data->tabs[data->currentTab].win, GWM_WINDOW_HIDDEN);
-	};
-	
-	if ((index < 0) || (index >= data->numTabs))
-	{
-		data->currentTab = -1;
-	}
-	else
-	{
-		data->currentTab = index;
-		gwmSetWindowFlags(data->tabs[index].win, 0);
-	};
-	
-	gwmRedrawNotebook(notebook);
 };
 
 void gwmDestroyNotebook(GWMWindow *notebook)
 {
-	GWMNotebookData *data = (GWMNotebookData*) notebook->data;
-	
-	int i;
-	for (i=0; i<data->numTabs; i++)
-	{
-		ddiDeleteSurface(data->tabs[i].label);
-		gwmDestroyWindow(data->tabs[i].win);
-	};
-	
-	free(data->tabs);
-	free(data);
-	gwmDestroyWindow(notebook);
+	gwmDestroyTabList(notebook);
 };

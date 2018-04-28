@@ -26,6 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#if 0
 #include <stdio.h>
 #include <libgwm.h>
 #include <time.h>
@@ -278,3 +279,5 @@ void initPCITab(GWMWindow *notebook)
 	GWMWindow *treeview = gwmCreateTreeView(tab, 0, 0, width, height, &enumPci, &root, 0);
 	gwmTreeViewSetActivateCallback(treeview, pciActivate, treeview);
 };
+
+#endif
