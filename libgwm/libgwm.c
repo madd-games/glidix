@@ -686,13 +686,13 @@ int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon)
 		ddiDeleteSurface(win->icon);
 	};
 	
-	win->icon = ddiCreateSurface(&win->canvas->format, 16, 16, NULL, DDI_SHARED);
+	win->icon = ddiCreateSurface(&win->canvas->format, icon->width, icon->height, NULL, DDI_SHARED);
 	if (win->icon == NULL)
 	{
 		return GWM_ERR_NOSURF;
 	};
 	
-	ddiOverlay(icon, 0, 0, win->icon, 0, 0, 16, 16);
+	ddiOverlay(icon, 0, 0, win->icon, 0, 0, icon->width, icon->height);
 	
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
 	

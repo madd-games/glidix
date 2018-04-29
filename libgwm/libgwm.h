@@ -1520,8 +1520,7 @@ void gwmSetTextFieldFlags(GWMWindow *field, int flags);
 int gwmSetWindowCursor(GWMWindow *win, int cursor);
 
 /**
- * Sets the icon of a window. The specified surface must be 16x16, in screen format; otherwise,
- * undefined behaviour occurs.
+ * Sets the icon of a window. The specified surface must use the "GWM icon layout".
  */
 int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon);
 
