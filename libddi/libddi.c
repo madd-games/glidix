@@ -1621,3 +1621,12 @@ DDISurface* ddiScale(DDISurface *surface, unsigned int newWidth, unsigned int ne
 		return NULL;
 	};
 };
+
+void ddiSampleLinearGradient(DDIColor *out, float fb, DDIColor *a, DDIColor *b)
+{
+	float fa = 1.0 - fb;
+	out->red = a->red * fa + b->red * fb;
+	out->green = a->green * fa + b->green * fb;
+	out->blue = a->blue * fa + b->blue * fb;
+	out->alpha = a->alpha * fa + b->alpha * fb;
+};

@@ -142,6 +142,10 @@ int main()
 	gwmBoxLayoutAddWindow(tabLayout1, gwmCreateButtonWithLabel(tab1, SYM_BUTTON1, "Button 1"), 0, 0, 0);
 	gwmBoxLayoutAddWindow(tabLayout1, gwmCreateButtonWithLabel(tab1, SYM_BUTTON2, "Button 2"), 0, 0, GWM_BOX_FILL);
 	
+	GWMWindow *progbar = gwmNewProgressBar(tab1);
+	gwmBoxLayoutAddWindow(tabLayout1, progbar, 0, 0, GWM_BOX_FILL);
+	gwmSetScaleValue(progbar, 0.8);
+	
 	gwmFit(topWindow);
 	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 

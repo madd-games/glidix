@@ -84,11 +84,6 @@ static GWMHandlerInfo *firstHandler = NULL;
 static GWMInfo *gwminfo = NULL;
 static FileIconCache *fileIconCache = NULL;
 
-#if 0
-DDIColor gwmColorSelection = {0, 0xAA, 0, 0xFF};
-DDIColor gwmBackColor = {0xDD, 0xDD, 0xDD, 0xFF};		// window background color
-#endif
-
 DDIColor* gwmColorSelectionP;
 DDIColor* gwmBackColorP;
 

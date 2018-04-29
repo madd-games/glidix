@@ -453,6 +453,17 @@ typedef struct
 	 * Window default background color.
 	 */
 	DDIColor				colWinBack;
+	
+	/**
+	 * Progress bar gradient.
+	 */
+	DDIColor				colProgressLeft;
+	DDIColor				colProgressRight;
+	
+	/**
+	 * Progress bar background.
+	 */
+	DDIColor				colProgressBackground;
 } GWMInfo;
 
 /**
@@ -2364,5 +2375,15 @@ void gwmSetScaleValue(GWMWindow *scale, float value);
  * Get the value of a scale, in the [0.0, 1.0] range.
  */
 float gwmGetScaleValue(GWMWindow *scale);
+
+/**
+ * Create a new progress bar.
+ */
+GWMWindow* gwmNewProgressBar(GWMWindow *parent);
+
+/**
+ * Destroy a progress bar.
+ */
+void gwmDestroyProgressBar(GWMWindow *progbar);
 
 #endif

@@ -558,4 +558,13 @@ int ddiGetIndexForMask(uint32_t mask);
  */
 void ddiColorToPixel(uint32_t *pixeldata, DDIPixelFormat *format, DDIColor *color);
 
+/**
+ * Sample a linear gradient.
+ * If 'factor' is 0.0, 'out' is set to 'a'.
+ * If 'factor' is 1.0, 'out' is set to 'b'.
+ * Everything inbetween, the colors aare blended and result stored in 'out'.
+ * NOTE: The alpha channel is blended too!
+ */
+void ddiSampleLinearGradient(DDIColor *out, float factor, DDIColor *a, DDIColor *b);
+
 #endif

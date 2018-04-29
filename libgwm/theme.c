@@ -74,6 +74,9 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.scrollbar.fg",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colScrollbarFg)},
 	{"gwm.toolkit.scrollbar.disabled",	GWM_TYPE_COLOR,		offsetof(GWMInfo, colScrollbarDisabled)},
 	{"gwm.toolkit.notebook",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgNotebook)},
+	{"gwm.toolkit.progress.left",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colProgressLeft)},
+	{"gwm.toolkit.progress.right",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colProgressRight)},
+	{"gwm.toolkit.progress.bg",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colProgressBackground)},
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
@@ -333,6 +336,12 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawTab(surf, 0, 0, 17, 20, &buttonNormal, 0);
 	drawTab(surf, 0, 20, 17, 20, &buttonHover, 0);
 	drawTab(surf, 0, 40, 17, 20, &winBack, 1);
+	
+	// progress bar gradient
+	memcpy(&info->colProgressLeft, &colWinInactive, sizeof(DDIColor));
+	memcpy(&info->colProgressRight, &colWinActive, sizeof(DDIColor));
+	static DDIColor progressBackground = {0xAA, 0xAA, 0xAA, 0xFF};
+	memcpy(&info->colProgressBackground, &progressBackground, sizeof(DDIColor));
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;
