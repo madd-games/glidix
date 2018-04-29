@@ -296,7 +296,14 @@ void sysbarRedraw()
 		ddiBlit(imgTaskBtn, 32*spriteIndex, 0, canvas, 40+34*index, 3, 32, 32);
 		if (info->icon != NULL)
 		{
-			ddiBlit(info->icon, 0, 0, canvas, 40+34*index+8, 11, 16, 16);
+			if (info->icon->width < (16+24))
+			{
+				ddiBlit(info->icon, 0, 0, canvas, 40+34*index+8, 11, 16, 16);
+			}
+			else
+			{
+				ddiBlit(info->icon, 16, 0, canvas, 40+34*index+4, 7, 24, 24);
+			};
 		}
 		else
 		{

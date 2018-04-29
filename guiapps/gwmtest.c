@@ -129,7 +129,12 @@ int main()
 	GWMWindow *tab2 = gwmNewTab(notebook);
 	gwmNewTab(notebook);
 	
+	DDISurface *canvas = gwmGetWindowCanvas(topWindow);
+	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/calc.png", NULL);
+	assert(icon != NULL);
+	
 	gwmSetWindowCaption(tab2, "This is a really nice tab");
+	gwmSetWindowIcon(tab2, icon);
 	
 	GWMLayout *tabLayout1 = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	gwmSetWindowLayout(tab1, tabLayout1);

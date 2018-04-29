@@ -352,7 +352,7 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	default:
 		if (ev->type & GWM_EVENT_CASCADING)
 		{
-			if (win->parent != NULL) return /*gwmPostEvent(ev, win->parent)*/ gwmPostEventByWindowID(ev, win->parent->id, win->parent->modalID);
+			if (win->parent != NULL) return gwmPostEventByWindowID(ev, win->parent->id, win->parent->modalID);
 			else return GWM_EVSTATUS_DEFAULT;
 		};
 		return GWM_EVSTATUS_CONT;

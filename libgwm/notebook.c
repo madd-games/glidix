@@ -119,7 +119,7 @@ static void redrawNotebook(GWMWindow *notebook)
 		DDISurface *icon = gwmGetWindowIcon(tab);
 		if (icon != NULL)
 		{
-			ddiBlit(icon, 0, 0, imgNotebook, iconX, 2, 16, 16);
+			ddiBlit(icon, 0, 0, canvas, iconX, 2, 16, 16);
 		};
 		
 		data->widths = realloc(data->widths, sizeof(int) * (i+1));
