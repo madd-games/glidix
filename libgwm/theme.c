@@ -77,6 +77,37 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.progress.left",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colProgressLeft)},
 	{"gwm.toolkit.progress.right",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colProgressRight)},
 	{"gwm.toolkit.progress.bg",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colProgressBackground)},
+	{"gwm.toolkit.toolbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgToolButton)},
+	{"gwm.toolkit.stock.back",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockBack)},
+	{"gwm.toolkit.stock.forward",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockForward)},
+	{"gwm.toolkit.stock.up",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockUp)},
+	{"gwm.toolkit.stock.down",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockDown)},
+	{"gwm.toolkit.stock.newfile",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockNewFile)},
+	{"gwm.toolkit.stock.openfile",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockOpenFile)},
+	{"gwm.toolkit.stock.save",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockSave)},
+	{"gwm.toolkit.stock.saveas",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockSaveAs)},
+	{"gwm.toolkit.stock.savecopy",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockSaveCopy)},
+	{"gwm.toolkit.stock.refresh",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockRefresh)},
+	{"gwm.toolkit.stock.cancel",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockCancel)},
+	{"gwm.toolkit.stock.confirm",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockConfirm)},
+	{"gwm.toolkit.stock.cut",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockCut)},
+	{"gwm.toolkit.stock.copy",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockCopy)},
+	{"gwm.toolkit.stock.paste",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockPaste)},
+	{"gwm.toolkit.stock.add",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockAdd)},
+	{"gwm.toolkit.stock.remove",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockRemove)},
+	{"gwm.toolkit.stock.home",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockHome)},
+	{"gwm.toolkit.stock.undo",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockUndo)},
+	{"gwm.toolkit.stock.redo",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockRedo)},
+	{"gwm.toolkit.stock.adjleft",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockAdjLeft)},
+	{"gwm.toolkit.stock.adjcenter",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockAdjCenter)},
+	{"gwm.toolkit.stock.adjright",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockAdjRight)},
+	{"gwm.toolkit.stock.justify",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockJustify)},
+	{"gwm.toolkit.stock.selectall",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockSelectAll)},
+	{"gwm.toolkit.stock.edit",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockEdit)},
+	{"gwm.toolkit.stock.bold",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockBold)},
+	{"gwm.toolkit.stock.italic",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockItalic)},
+	{"gwm.toolkit.stock.underline",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockUnderline)},
+	{"gwm.toolkit.stock.strike",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockStrike)},
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
@@ -146,6 +177,13 @@ static void drawTab(DDISurface *surf, int x, int y, int width, int height, DDICo
 	{
 		ddiFillRect(surf, x, y+height-1, width, 1, &black);
 	};
+};
+
+static void stockFiller(DDIPixelFormat *format, uint32_t *id)
+{
+	DDISurface *surf = surfaceSetup(format, id, 24, 24);
+	static DDIColor green = {0x22, 0xFF, 0x22, 0xFF};
+	ddiFillRect(surf, 0, 0, 24, 24, &green);
 };
 
 int gwmGlobalThemeInit(DDIPixelFormat *format)
@@ -342,6 +380,45 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	memcpy(&info->colProgressRight, &colWinActive, sizeof(DDIColor));
 	static DDIColor progressBackground = {0xAA, 0xAA, 0xAA, 0xFF};
 	memcpy(&info->colProgressBackground, &progressBackground, sizeof(DDIColor));
+	
+	// tool button
+	surf = surfaceSetup(format, &info->imgToolButton, 30, 90);
+	static DDIColor transparent = {0, 0, 0, 0};
+	ddiFillRect(surf, 0, 0, 30, 30, &transparent);
+	drawButton(surf, 0, 30, 30, 30, &transparent, 0);
+	drawButton(surf, 0, 60, 30, 30, &transparent, 1);
+	
+	// stock icons; just use a fillter
+	stockFiller(format, &info->imgStockBack);
+	stockFiller(format, &info->imgStockForward);
+	stockFiller(format, &info->imgStockUp);
+	stockFiller(format, &info->imgStockDown);
+	stockFiller(format, &info->imgStockNewFile);
+	stockFiller(format, &info->imgStockOpenFile);
+	stockFiller(format, &info->imgStockSave);
+	stockFiller(format, &info->imgStockSaveAs);
+	stockFiller(format, &info->imgStockSaveCopy);
+	stockFiller(format, &info->imgStockRefresh);
+	stockFiller(format, &info->imgStockCancel);
+	stockFiller(format, &info->imgStockConfirm);
+	stockFiller(format, &info->imgStockCut);
+	stockFiller(format, &info->imgStockCopy);
+	stockFiller(format, &info->imgStockPaste);
+	stockFiller(format, &info->imgStockAdd);
+	stockFiller(format, &info->imgStockRemove);
+	stockFiller(format, &info->imgStockHome);
+	stockFiller(format, &info->imgStockUndo);
+	stockFiller(format, &info->imgStockRedo);
+	stockFiller(format, &info->imgStockAdjLeft);
+	stockFiller(format, &info->imgStockAdjCenter);
+	stockFiller(format, &info->imgStockAdjRight);
+	stockFiller(format, &info->imgStockJustify);
+	stockFiller(format, &info->imgStockSelectAll);
+	stockFiller(format, &info->imgStockEdit);
+	stockFiller(format, &info->imgStockBold);
+	stockFiller(format, &info->imgStockItalic);
+	stockFiller(format, &info->imgStockUnderline);
+	stockFiller(format, &info->imgStockStrike);
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

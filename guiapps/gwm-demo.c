@@ -129,7 +129,7 @@ int main()
 	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	
 	GWMWindowTemplate wt;
-	wt.wtComps = GWM_WTC_MENUBAR;
+	wt.wtComps = GWM_WTC_MENUBAR | GWM_WTC_TOOLBAR;
 	wt.wtWindow = topWindow;
 	wt.wtBody = boxLayout;
 	gwmCreateTemplate(&wt);
@@ -141,6 +141,15 @@ int main()
 	
 	gwmMenuAddCommand(menuFile, SYM_FILE_DEMO, "Demo", NULL);
 	gwmMenuAddCommand(menuFile, GWM_SYM_EXIT, NULL, NULL);
+	
+	GWMLayout *toolbar = wt.wtToolbar;
+	GWMWindow *toolNew = gwmNewToolButton(topWindow);
+	gwmSetToolButtonSymbol(toolNew, GWM_SYM_NEW_FILE);
+	gwmBoxLayoutAddWindow(toolbar, toolNew, 0, 0, 0);
+	
+	GWMWindow *toolOpen = gwmNewToolButton(topWindow);
+	gwmSetToolButtonSymbol(toolOpen, GWM_SYM_OPEN_FILE);
+	gwmBoxLayoutAddWindow(toolbar, toolOpen, 0, 0, 0);
 	
 	GWMWindow *button1 = gwmCreateButtonWithLabel(
 		topWindow,			// the parent window

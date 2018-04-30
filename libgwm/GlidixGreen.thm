@@ -53,6 +53,7 @@ namespace gwm {
 		image optmenu /usr/share/images/optmenu.png
 		image slider /usr/share/images/slider.png
 		image notebook /usr/share/images/notebook.png
+		image toolbtn /usr/share/images/toolbtn.png
 		
 		namespace slider {
 			color active #00AA00:255
@@ -70,6 +71,21 @@ namespace gwm {
 			color bg #555555:255
 			color left #00AA00:255
 			color right #77FF77:255
+		}
+		
+		namespace stock {
+			image back /usr/share/images/back.png
+			image forward /usr/share/images/forward.png
+			image up /usr/share/images/up.png
+			image down /usr/share/images/down.png
+			image newfile /usr/share/images/newfile.png
+			image openfile /usr/share/images/openfile.png
+			image save /usr/share/images/save.png
+			image saveas /usr/share/images/saveas.png
+			image savecopy /usr/share/images/savecopy.png
+			image refresh /usr/share/images/refresh.png
+			image cancel /usr/share/images/cancel.png
+			image confirm /usr/share/images/confirm.png
 		}
 	}
 	

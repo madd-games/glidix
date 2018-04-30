@@ -44,6 +44,13 @@ int gwmCreateTemplate(GWMWindowTemplate *wt)
 		wt->wtMenubar = menubar;
 	};
 	
+	if (wt->wtComps & GWM_WTC_TOOLBAR)
+	{
+		GWMLayout *toolbar = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
+		gwmBoxLayoutAddLayout(layout, toolbar, 0, 0, GWM_BOX_FILL);
+		wt->wtToolbar = toolbar;
+	};
+	
 	gwmBoxLayoutAddLayout(layout, wt->wtBody, 1, 0, GWM_BOX_FILL);
 	return 0;
 };
@@ -53,6 +60,11 @@ int gwmDestroyTemplate(GWMWindowTemplate *wt)
 	if (wt->wtComps & GWM_WTC_MENUBAR)
 	{
 		gwmDestroyMenubar(wt->wtMenubar);
+	};
+	
+	if (wt->wtComps & GWM_WTC_TOOLBAR)
+	{
+		gwmDestroyBoxLayout(wt->wtToolbar);
 	};
 	
 	gwmDestroyBoxLayout(wt->wtWindow->layout);

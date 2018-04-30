@@ -464,6 +464,47 @@ typedef struct
 	 * Progress bar background.
 	 */
 	DDIColor				colProgressBackground;
+	
+	/**
+	 * Tool button image. It is 3 vertically-stacked sprites, each 30x30. From top to
+	 * bottom: normal, hovered, clicked.
+	 */
+	uint32_t				imgToolButton;
+	
+	/**
+	 * Stock images.
+	 */
+	uint32_t				imgStockBack;
+	uint32_t				imgStockForward;
+	uint32_t				imgStockUp;
+	uint32_t				imgStockDown;
+	uint32_t				imgStockNewFile;
+	uint32_t				imgStockOpenFile;
+	uint32_t				imgStockSave;
+	uint32_t				imgStockSaveAs;
+	uint32_t				imgStockSaveCopy;
+	uint32_t				imgStockRefresh;
+	uint32_t				imgStockCancel;
+	uint32_t				imgStockConfirm;
+	uint32_t				imgStockCut;
+	uint32_t				imgStockCopy;
+	uint32_t				imgStockPaste;
+	uint32_t				imgStockAdd;
+	uint32_t				imgStockRemove;
+	uint32_t				imgStockHome;
+	uint32_t				imgStockUndo;
+	uint32_t				imgStockRedo;
+	uint32_t				imgStockAdjLeft;
+	uint32_t				imgStockAdjCenter;
+	uint32_t				imgStockAdjRight;
+	uint32_t				imgStockJustify;
+	uint32_t				imgStockSelectAll;
+	uint32_t				imgStockEdit;
+	uint32_t				imgStockBold;
+	uint32_t				imgStockItalic;
+	uint32_t				imgStockUnderline;
+	uint32_t				imgStockStrike;
+	uint32_t				imgStockResv[16];
 } GWMInfo;
 
 /**
@@ -539,6 +580,35 @@ typedef struct
 #define	GWM_SYM_YES				3
 #define	GWM_SYM_NO				4
 #define	GWM_SYM_EXIT				5
+#define	GWM_SYM_BACK				6
+#define	GWM_SYM_FORWARD				7
+#define	GWM_SYM_UP				8
+#define	GWM_SYM_DOWN				9
+#define	GWM_SYM_NEW_FILE			10
+#define	GWM_SYM_OPEN_FILE			11
+#define	GWM_SYM_SAVE				12
+#define	GWM_SYM_SAVE_AS				13
+#define	GWM_SYM_SAVE_COPY			14
+#define	GWM_SYM_REFRESH				15
+#define	GWM_SYM_CONFIRM				16
+#define	GWM_SYM_CUT				17
+#define	GWM_SYM_COPY				18
+#define	GWM_SYM_PASTE				19
+#define	GWM_SYM_ADD				20
+#define	GWM_SYM_REMOVE				21
+#define	GWM_SYM_HOME				22
+#define	GWM_SYM_UNDO				23
+#define	GWM_SYM_REDO				24
+#define	GWM_SYM_ADJ_LEFT			25
+#define	GWM_SYM_ADJ_CENTER			26
+#define	GWM_SYM_ADJ_RIGHT			27
+#define	GWM_SYM_JUSTIFY				28
+#define	GWM_SYM_SELECT_ALL			29
+#define	GWM_SYM_EDIT				30
+#define	GWM_SYM_BOLD				31
+#define	GWM_SYM_ITALIC				32
+#define	GWM_SYM_UNDERLINE			33
+#define	GWM_SYM_STRIKE				34
 
 /**
  * Starting numbers for event classes.
@@ -1247,6 +1317,7 @@ extern GWMTag gwmTagSelection;
  * Flags for wtComps, indicating which template components to create.
  */
 #define	GWM_WTC_MENUBAR				(1 << 0)
+#define	GWM_WTC_TOOLBAR				(1 << 1)
 
 /**
  * Template descriptor for gwmCreateTemplate() and gwmDestroyTemplate().
@@ -1278,6 +1349,11 @@ typedef struct
 	 * This field is set to the menubar if it is requested in wtComps.
 	 */
 	GWMWindow*				wtMenubar;
+	
+	/**
+	 * This field is set to the toolbar layout manager if it is requested in wtComps.
+	 */
+	GWMLayout*				wtToolbar;
 } GWMWindowTemplate;
 
 /**
@@ -2272,6 +2348,11 @@ void gwmBoxLayoutAddLayout(GWMLayout *box, GWMLayout *child, int proportion, int
 const char *gwmGetStockLabel(int symbol);
 
 /**
+ * Get a (24x24) stock icon for the given symbol. Returns NULL if no icon is available.
+ */
+DDISurface* gwmGetStockIcon(int symbol);
+
+/**
  * Get data associated with an event handler (may be NULL). Returns NULL if the event handler is not found.
  * This is used to store arbitrary class-specific data; the event handler is used as a class identifier.
  */
@@ -2385,5 +2466,25 @@ GWMWindow* gwmNewProgressBar(GWMWindow *parent);
  * Destroy a progress bar.
  */
 void gwmDestroyProgressBar(GWMWindow *progbar);
+
+/**
+ * Create a new tool button.
+ */
+GWMWindow* gwmNewToolButton(GWMWindow *parent);
+
+/**
+ * Destroy a tool button.
+ */
+void gwmDestroyToolButton(GWMWindow *toolbtn);
+
+/**
+ * Change the symbol of a tool button.
+ */
+void gwmSetToolButtonSymbol(GWMWindow *toolbtn, int symbol);
+
+/**
+ * Change the icon of a tool button. It must be 24x24. Set to NULL to use the default icon based on the symbol.
+ */
+void gwmSetToolButtonIcon(GWMWindow *toolbtn, DDISurface *icon);
 
 #endif
