@@ -122,6 +122,16 @@ extern DDIColor* gwmBackColorP;
 #define	GWM_SCROLLBAR_DISABLED			(1 << 1)
 
 /**
+ * Splitter flags. Again, GWM_SPLIITER_HORIZ and GWM_SPLITTER_VERT are mutually exclusive,
+ * with GWM_SPLITTER_VERT being the default. The orientation refers to the axis on which the
+ * splitter MOVES, not the axis on which it forms a line graphically (that is, a horizontal
+ * splitter affects the width of its panels).
+ */
+#define	GWM_SPLITTER_VERT			0
+#define	GWM_SPLITTER_HORIZ			(1 << 0)
+#define	GWM_SPLITTER_DISABLED			(1 << 1)
+
+/**
  * Message box icon types. Bottom 4 bits of the 'flags' parameter.
  */
 #define	GWM_MBICON_NONE				0x0
@@ -265,7 +275,9 @@ extern DDIColor* gwmBackColorP;
 #define	GWM_CURSOR_TEXT				1
 #define	GWM_CURSOR_HAND				2
 #define	GWM_CURSOR_SE_RESIZE			3
-#define	GWM_CURSOR_COUNT			4		/* number of cursors */
+#define	GWM_CURSOR_SPLIT_HORIZ			4
+#define	GWM_CURSOR_SPLIT_VERT			5
+#define	GWM_CURSOR_COUNT			6		/* number of cursors */
 
 /**
  * Slider flags.
@@ -1138,7 +1150,14 @@ typedef struct GWMWindow_
 	 * Window caption.
 	 */
 	char*					caption;
-} GWMWindow;
+} GWMObject;
+
+/**
+ * Typedef GWMObject to all classes.
+ */
+typedef GWMObject GWMWindow;
+// TODO: typedef the rest, it's for clarity
+typedef	GWMWindow GWMSplitter;
 
 /**
  * Menu entry callback; return -1 to terminate application, 0 to continue.
@@ -2486,5 +2505,36 @@ void gwmSetToolButtonSymbol(GWMWindow *toolbtn, int symbol);
  * Change the icon of a tool button. It must be 24x24. Set to NULL to use the default icon based on the symbol.
  */
 void gwmSetToolButtonIcon(GWMWindow *toolbtn, DDISurface *icon);
+
+/**
+ * Create a new splitter widget.
+ */
+GWMSplitter* gwmNewSplitter(GWMWindow *parent);
+
+/**
+ * Destroy a splitter widget.
+ */
+void gwmDestroySplitter(GWMSplitter *split);
+
+/**
+ * Set the flags of a splitter.
+ */
+void gwmSetSplitterFlags(GWMSplitter *split, int flags);
+
+/**
+ * Get a panel from a splitter. The index must be 0 or 1. For horizontal splitters, 0 is the left panel, and 1
+ * is the right panel; for a vertical splitter, 0 is top and 1 is bottom.
+ */
+GWMWindow* gwmGetSplitterPanel(GWMSplitter *split, int index);
+
+/**
+ * Set the proportion of a splitter. Clamped to the [0.0,1.0] range.
+ */
+void gwmSetSplitterProportion(GWMSplitter *split, float prop);
+
+/**
+ * Get the current proportion of a splitter.
+ */
+float gwmGetSplitterProportion(GWMSplitter *split);
 
 #endif

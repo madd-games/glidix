@@ -77,7 +77,13 @@ static int progbarHandler(GWMEvent *ev, GWMWindow *progbar, void *context)
 	};
 };
 
-static void sizeProgressBar(GWMWindow *progbar, int *width, int *height)
+static void minsizeProgressBar(GWMWindow *progbar, int *width, int *height)
+{
+	*width = 0;
+	*height = 20;
+};
+
+static void prefsizeProgressBar(GWMWindow *progbar, int *width, int *height)
 {
 	*width = 100;
 	*height = 20;
@@ -94,7 +100,8 @@ GWMWindow* gwmNewProgressBar(GWMWindow *parent)
 {
 	GWMWindow *progbar = gwmNewScale(parent);
 	
-	progbar->getMinSize = progbar->getPrefSize = sizeProgressBar;
+	progbar->getMinSize = minsizeProgressBar;
+	progbar->getPrefSize = prefsizeProgressBar;
 	progbar->position = positionProgressBar;
 	
 	gwmPushEventHandler(progbar, progbarHandler, NULL);

@@ -115,7 +115,9 @@ static Cursor cursors[GWM_CURSOR_COUNT] = {
 	{NULL, NULL, 0, 0, "/usr/share/images/cursor.png"},
 	{NULL, NULL, 7, 7, "/usr/share/images/txtcursor.png"},
 	{NULL, NULL, 13, 3, "/usr/share/images/hand.png"},
-	{NULL, NULL, 12, 12, "/usr/share/images/se-resize.png"}
+	{NULL, NULL, 12, 12, "/usr/share/images/se-resize.png"},
+	{NULL, NULL, 7, 7, "/usr/share/images/split-horiz.png"},
+	{NULL, NULL, 7, 7, "/usr/share/images/split-vert.png"},
 };
 
 int currentCursor = 0;

@@ -146,6 +146,26 @@ int main()
 	gwmBoxLayoutAddWindow(tabLayout1, progbar, 0, 0, GWM_BOX_FILL);
 	gwmSetScaleValue(progbar, 0.8);
 	
+	GWMSplitter *split = gwmNewSplitter(topWindow);
+	gwmSetSplitterFlags(split, GWM_SPLITTER_HORIZ);
+	gwmBoxLayoutAddWindow(boxLayout, split, 1, 0, GWM_BOX_FILL);
+	
+	GWMWindow *panel1 = gwmGetSplitterPanel(split, 0);
+	GWMLayout *panelLayout1 = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(panel1, panelLayout1);
+	
+	GWMWindow *prog1 = gwmNewProgressBar(panel1);
+	gwmSetScaleValue(prog1, 0.7);
+	gwmBoxLayoutAddWindow(panelLayout1, prog1, 1, 0, GWM_BOX_FILL);
+	
+	GWMWindow *panel2 = gwmGetSplitterPanel(split, 1);
+	GWMLayout *panelLayout2 = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(panel2, panelLayout2);
+	
+	GWMWindow *prog2 = gwmNewProgressBar(panel2);
+	gwmSetScaleValue(prog2, 0.3);
+	gwmBoxLayoutAddWindow(panelLayout2, prog2, 1, 0, GWM_BOX_FILL);
+	
 	gwmFit(topWindow);
 	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 
