@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #define	TEXTFIELD_MIN_WIDTH	100
 #define	TEXTFIELD_HEIGHT	20
@@ -67,7 +68,14 @@ typedef struct
 	 * Icon or NULL.
 	 */
 	DDISurface*		icon;
+	
+	/**
+	 * Placeholder text if empty (or NULL for no placeholder).
+	 */
+	char*			placeholder;
 } GWMTextFieldData;
+
+static DDIFont *fntPlaceHolder;
 
 int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context);
 
@@ -104,7 +112,7 @@ void gwmRedrawTextField(GWMWindow *field)
 		penX = 20;
 	};
 	
-	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), penX, 2, canvas->width-3, canvas->height-3, 0, 0, NULL);
+	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), penX, 2, canvas->width-penX, canvas->height-3, 0, 0, NULL);
 	if (data->pen != NULL)
 	{
 		ddiSetPenWrap(data->pen, 0);
@@ -153,6 +161,28 @@ void gwmRedrawTextField(GWMWindow *field)
 		};
 		
 		ddiExecutePen(data->pen, canvas);
+	};
+	
+	if (data->text[0] == 0 && data->placeholder != NULL)
+	{
+		if (fntPlaceHolder == NULL)
+		{
+			const char *error;
+			fntPlaceHolder = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_ITALIC, &error);
+			if (fntPlaceHolder == NULL)
+			{
+				fprintf(stderr, "Failed to load DejaVu Sans 12 italic: %s\n", error);
+				abort();
+			};
+		};
+		
+		static DDIColor colPlaceHolder = {0x77, 0x77, 0x77, 0xFF};
+		DDIPen *pen = ddiCreatePen(&canvas->format, fntPlaceHolder, penX, 2, canvas->width-penX, canvas->height-3, 0, 0, NULL);
+		ddiSetPenColor(pen, &colPlaceHolder);
+		ddiSetPenWrap(pen, 0);
+		ddiWritePen(pen, data->placeholder);
+		ddiExecutePen(pen, canvas);
+		ddiDeletePen(pen);
 	};
 	
 	gwmPostDirty(field);
@@ -595,6 +625,7 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->clickPos = -1;
 	data->pen = NULL;
 	data->icon = NULL;
+	data->placeholder = NULL;
 	
 	field->getMinSize = field->getPrefSize = txtGetSize;
 	field->position = txtPosition;
@@ -622,6 +653,7 @@ void gwmDestroyTextField(GWMWindow *field)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	free(data->text);
+	free(data->placeholder);
 	free(data);
 	gwmDestroyMenu(data->menu);
 	gwmDestroyWindow(field);
@@ -679,5 +711,13 @@ void gwmSetTextFieldIcon(GWMTextField *field, DDISurface *icon)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->icon = icon;
+	gwmRedrawTextField(field);
+};
+
+void gwmSetTextFieldPlaceholder(GWMTextField *field, const char *placeholder)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	free(data->placeholder);
+	data->placeholder = strdup(placeholder);
 	gwmRedrawTextField(field);
 };

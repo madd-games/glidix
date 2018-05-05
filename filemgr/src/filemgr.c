@@ -46,6 +46,7 @@
 
 GWMWindow *topWindow;
 GWMTextField *txtPath;
+GWMTextField *txtSearch;
 DirView *dirView;
 
 static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
@@ -140,8 +141,12 @@ int main(int argc, char *argv[])
 	gwmBoxLayoutAddWindow(toolbar, toolRefresh, 0, 0, 0);
 	
 	txtPath = gwmNewTextField(topWindow);
-	gwmBoxLayoutAddWindow(toolbar, txtPath, 1, 2, GWM_BOX_ALL);
+	gwmBoxLayoutAddWindow(toolbar, txtPath, 3, 2, GWM_BOX_ALL);
 	gwmSetTextFieldIcon(txtPath, icon);
+	
+	txtSearch = gwmNewTextField(topWindow);
+	gwmBoxLayoutAddWindow(toolbar, txtSearch, 1, 2, GWM_BOX_ALL);
+	gwmSetTextFieldPlaceholder(txtSearch, "Search...");
 	
 	GWMSplitter *split = gwmNewSplitter(topWindow);
 	gwmSetSplitterFlags(split, GWM_SPLITTER_HORIZ);

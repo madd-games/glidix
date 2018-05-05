@@ -858,6 +858,7 @@ DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error
 	fterr = FT_New_Face(font->lib, fontfile, 0, &font->face);
 	if (fterr != 0)
 	{
+		fprintf(stderr, "libddi: warning: loading font `%s' failed\n", fontfile);
 		DDI_ERROR("Failed to load the font");
 		free(font);
 		return NULL;
@@ -1020,12 +1021,7 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 	int lastWordOffX = 0;
 	int lastWordOffY = 0;
 	int includeWord = 0;
-	
-	const char *lastCharEnd = NULL;
-	int lastCharWidth = 0;
-	int lastCharHeight = 0;
-	int lastCharOffX = 0;
-	int lastCharOffY = 0;
+	int writtenCharsYet = 0;
 	
 	while (1)
 	{
@@ -1092,15 +1088,6 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 		}
 		else
 		{
-			lastCharEnd = chptr;
-			lastCharWidth = maxX - minX;
-			lastCharHeight = maxY - minY;
-			lastCharOffX = 0;
-			lastCharOffY = 0;
-			
-			if (minX < 0) lastCharOffX = -minX;
-			if (minY < 0) lastCharOffY = -minY;
-			
 			DDIGlyphCache *glyph = ddiGetGlyph(pen->font, point);
 			
 			int left = penX + glyph->bitmap_left;
@@ -1119,19 +1106,20 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 		
 		if ((pen->currentLine->currentWidth + (maxX-minX)) > pen->width)
 		{
-			// only wrap if we actually managed to write characters previously; otherwise
-			// we must allow at least one character to be written
-			if (pen->wrap && lastCharEnd != NULL)
+			if (pen->wrap && writtenCharsYet)
 			{
 				// we must wrap around at the last word that fit in
 				if (lastWordEnd == NULL)
 				{
-					// no words fit, wrap at last character
-					*nextEl = lastCharEnd;
-					*width = lastCharWidth;
-					*height = lastCharHeight;
-					*offsetX = lastCharOffX;
-					*offsetY = lastCharOffY;
+					// no words fit, wrap at this character
+					*nextEl = chptr;
+					*width = maxX - minX;
+					*height = maxY - minY;
+					*offsetX = 0;
+					*offsetY = 0;
+					if (minX < 0) *offsetX = -minX;
+					if (minY < 0) *offsetY = -minY;
+					
 					*include = 1;
 					return 0;
 				};
@@ -1145,6 +1133,8 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 				return 0;
 			};
 		};
+		
+		writtenCharsYet = 1;
 	};
 	
 	if (minX < 0)

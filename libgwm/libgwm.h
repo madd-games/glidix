@@ -1617,6 +1617,11 @@ void gwmSetTextFieldFlags(GWMTextField *field, int flags);
 void gwmSetTextFieldIcon(GWMTextField *field, DDISurface *icon);
 
 /**
+ * Set the placeholder text for the text field.
+ */
+void gwmSetTextFieldPlaceholder(GWMTextField *field, const char *placeholder);
+
+/**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
  * Returns 0 on success, -1 on error.
  */
