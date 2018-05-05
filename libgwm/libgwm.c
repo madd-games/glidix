@@ -86,6 +86,7 @@ static FileIconCache *fileIconCache = NULL;
 
 DDIColor* gwmColorSelectionP;
 DDIColor* gwmBackColorP;
+DDIColor* gwmEditorColorP;
 
 static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 {
@@ -321,6 +322,7 @@ int gwmInit()
 	
 	gwmColorSelectionP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.selection", GWM_TYPE_COLOR, NULL);
 	gwmBackColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.winback", GWM_TYPE_COLOR, NULL);
+	gwmEditorColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.editor", GWM_TYPE_COLOR, NULL);
 	
 	return 0;
 };
@@ -338,6 +340,26 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
+	case GWM_EVENT_UP:
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
+		{
+			clock_t now = clock();
+			if ((now-win->lastClickTime) <= GWM_DOUBLECLICK_TIMEOUT)
+			{
+				if (win->lastClickX == ev->x && win->lastClickY == ev->y)
+				{
+					win->lastClickTime = 0;
+					
+					ev->type = GWM_EVENT_DOUBLECLICK;
+					return gwmPostEvent(ev, win);
+				};
+			};
+			
+			win->lastClickTime = now;
+			win->lastClickX = ev->x;
+			win->lastClickY = ev->y;
+		};
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_CLOSE:
 		return GWM_EVSTATUS_BREAK;
 	case GWM_EVENT_RESIZE_REQUEST:
@@ -348,7 +370,22 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 		if (ev->type & GWM_EVENT_CASCADING)
 		{
 			if (win->parent != NULL) return gwmPostEventByWindowID(ev, win->parent->id, win->parent->modalID);
-			else return GWM_EVSTATUS_DEFAULT;
+			else
+			{
+				if (ev->type == GWM_EVENT_COMMAND)
+				{
+					GWMCommandEvent *cmdev = (GWMCommandEvent*) ev;
+					if (cmdev->symbol == GWM_SYM_EXIT)
+					{
+						GWMEvent closeev;
+						memset(&closeev, 0, sizeof(GWMEvent));
+						closeev.type = GWM_EVENT_CLOSE;
+						
+						return gwmPostEvent(&closeev, win);
+					};
+				};
+				return GWM_EVSTATUS_DEFAULT;
+			};
 		};
 		return GWM_EVSTATUS_CONT;
 	};
@@ -481,12 +518,28 @@ void gwmPostDirty(GWMWindow *win)
 void gwmWaitEvent(GWMEvent *ev)
 {
 	while (sem_wait(&semEventCounter) != 0);
-
+	
 	pthread_mutex_lock(&eventLock);
-	memcpy(ev, &firstEvent->payload, sizeof(GWMEvent));
-	firstEvent = firstEvent->next;
-	if (firstEvent != NULL) firstEvent->prev = NULL;
-	pthread_mutex_unlock(&eventLock);
+	while (1)
+	{
+		memcpy(ev, &firstEvent->payload, sizeof(GWMEvent));
+		firstEvent = firstEvent->next;
+		if (firstEvent != NULL) firstEvent->prev = NULL;
+		
+		if (ev->type == GWM_EVENT_MOTION && firstEvent != NULL)
+		{
+			// aggregate motion events; if there are more motion events waiting,
+			// ignore this one
+			if (firstEvent->payload.type == GWM_EVENT_MOTION)
+			{
+				while (sem_wait(&semEventCounter) != 0);		// decrement count
+				continue;
+			};
+		};
+
+		pthread_mutex_unlock(&eventLock);
+		break;
+	};
 };
 
 void gwmClearWindow(GWMWindow *win)
@@ -547,46 +600,6 @@ static int gwmPostEventByWindowID(GWMEvent *ev, uint64_t targetID, uint64_t moda
 			{
 				gwmHandlerDecref(info);
 				return GWM_EVSTATUS_BREAK;
-			}
-			else if (info->win != NULL) // info->win may be set to NULL by callback() if the window was destroyed.
-			{
-				if ((ev->type == GWM_EVENT_UP) && (ev->keycode == GWM_KC_MOUSE_LEFT))
-				{
-					clock_t now = clock();
-					if (info->win->lastClickTime != 0)
-					{
-						if ((now-info->win->lastClickTime) <= GWM_DOUBLECLICK_TIMEOUT)
-						{
-							if ((info->win->lastClickX == ev->x)
-								&& (info->win->lastClickY == ev->y))
-							{
-								// add a double-click event to queue
-								EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
-								memcpy(&buf->payload, ev, sizeof(GWMEvent));
-								buf->payload.type = GWM_EVENT_DOUBLECLICK;
-								pthread_mutex_lock(&eventLock);
-								if (firstEvent == NULL)
-								{
-									buf->prev = buf->next = NULL;
-									firstEvent = lastEvent = buf;
-								}
-								else
-								{
-									buf->prev = lastEvent;
-									buf->next = NULL;
-									lastEvent->next = buf;
-									lastEvent = buf;
-								};
-								pthread_mutex_unlock(&eventLock);
-								sem_post(&semEventCounter);
-							};
-						};
-					};
-			
-					info->win->lastClickX = ev->x;
-					info->win->lastClickY = ev->y;
-					info->win->lastClickTime = now;
-				};
 			};
 			
 			GWMWindow *winWas = info->win;

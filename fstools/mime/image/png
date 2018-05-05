@@ -1,0 +1,5 @@
+# image/png
+# PNG image file
+label Portable Network Graphics
+icon image-png
+magic 89 'P' 'N' 'G' 0D 0A 1A 0A

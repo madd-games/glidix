@@ -27,6 +27,7 @@
 */
 
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #include <fstools.h>
 #include <stdio.h>
@@ -70,8 +71,8 @@ static FSMimeType *specialType(const char *name, const char *label, const char *
 	strcpy(type->mimename, name);
 	type->filenames = NULL;
 	type->numFilenames = 0;
-	type->magics = NULL;
-	type->numMagics = 0;
+	type->magicSize = 0;
+	type->magic = NULL;
 	type->label = strdup(label);
 	type->iconName = strdup(icon);
 	
@@ -90,8 +91,8 @@ static void loadMimeInfo(const char *cat, const char *type)
 	info->filenames = NULL;
 	info->numFilenames = 0;
 	
-	info->magics = NULL;
-	info->numMagics = 0;
+	info->magicSize = 0;
+	info->magic = NULL;
 	
 	info->label = info->mimename;
 	info->iconName = strdup("unknown");
@@ -147,6 +148,26 @@ static void loadMimeInfo(const char *cat, const char *type)
 					size_t index = info->numFilenames++;
 					info->filenames = realloc(info->filenames, sizeof(char*)*info->numFilenames);
 					info->filenames[index] = strdup(pat);
+				};
+			}
+			else if (strcmp(cmd, "magic") == 0)
+			{
+				char *spec;
+				for (spec=strtok_r(NULL, " \t", &saveptr); spec!=NULL; spec=strtok_r(NULL, " \t", &saveptr))
+				{
+					uint8_t byte = 0;
+					if (spec[0] == '\'')
+					{
+						byte = (uint8_t) spec[1];
+					}
+					else
+					{
+						sscanf(spec, "%hhx", &byte);
+					};
+					
+					size_t index = info->magicSize++;
+					info->magic = realloc(info->magic, info->magicSize);
+					info->magic[index] = byte;
 				};
 			}
 			else if (strcmp(cmd, "label") == 0)
@@ -250,7 +271,7 @@ void fsQuit()
 		};
 		
 		free(type->filenames);
-		free(type->magics);
+		free(type->magic);
 		
 		if (type->label != type->mimename) free(type->label);
 		
@@ -373,7 +394,31 @@ FSMimeType* fsGetType(const char *filename)
 			};
 		};
 		
-		// TODO: magic values searches
+		// check for magic value
+		for (type=firstType; type!=NULL; type=type->next)
+		{
+			if (type->magicSize != 0)
+			{
+				int fd = open(filename, O_RDONLY);
+				if (fd != -1)
+				{
+					void *buffer = malloc(type->magicSize);
+					ssize_t sz = read(fd, buffer, type->magicSize);
+					if (sz == (ssize_t) type->magicSize)
+					{
+						if (memcmp(buffer, type->magic, type->magicSize) == 0)
+						{
+							free(buffer);
+							close(fd);
+							return type;
+						};
+					};
+				
+					free(buffer);
+					close(fd);
+				};
+			};
+		};
 		
 		// matches nothing, check if it's plain text or binary
 		if (isTextFile(filename, &st))

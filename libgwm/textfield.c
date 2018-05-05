@@ -62,6 +62,11 @@ typedef struct
 	 * The right-click menu.
 	 */
 	GWMMenu*		menu;
+	
+	/**
+	 * Icon or NULL.
+	 */
+	DDISurface*		icon;
 } GWMTextFieldData;
 
 int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context);
@@ -80,9 +85,8 @@ void gwmRedrawTextField(GWMWindow *field)
 		color = &focusBorderColor;
 	};
 
-	static DDIColor normalBackground = {0xFF, 0xFF, 0xFF, 0xFF};
 	static DDIColor disabledBackground = {0x77, 0x77, 0x77, 0xFF};
-	DDIColor *background = &normalBackground;
+	DDIColor *background = GWM_COLOR_EDITOR;
 	if (data->flags & GWM_TXT_DISABLED)
 	{
 		background = &disabledBackground;
@@ -92,7 +96,15 @@ void gwmRedrawTextField(GWMWindow *field)
 	ddiFillRect(canvas, 1, 1, canvas->width-2, canvas->height-2, background);
 
 	if (data->pen != NULL) ddiDeletePen(data->pen);
-	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 3, 2, canvas->width-3, canvas->height-3, 0, 0, NULL);
+	
+	int penX = 3;
+	if (data->icon != NULL)
+	{
+		ddiBlit(data->icon, 0, 0, canvas, 2, 2, 16, 16);
+		penX = 20;
+	};
+	
+	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), penX, 2, canvas->width-3, canvas->height-3, 0, 0, NULL);
 	if (data->pen != NULL)
 	{
 		ddiSetPenWrap(data->pen, 0);
@@ -582,6 +594,7 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->selectStart = data->selectEnd = 0;
 	data->clickPos = -1;
 	data->pen = NULL;
+	data->icon = NULL;
 	
 	field->getMinSize = field->getPrefSize = txtGetSize;
 	field->position = txtPosition;
@@ -646,11 +659,6 @@ void gwmWriteTextField(GWMWindow *field, const char *newText)
 	gwmRedrawTextField(field);
 };
 
-void gwmSetTextFieldAcceptCallback(GWMWindow *field, GWMTextFieldCallback callback, void *param)
-{
-
-};
-
 void gwmTextFieldSelectAll(GWMWindow *field)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
@@ -664,5 +672,12 @@ void gwmSetTextFieldFlags(GWMWindow *field, int flags)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->flags = flags;
+	gwmRedrawTextField(field);
+};
+
+void gwmSetTextFieldIcon(GWMTextField *field, DDISurface *icon)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	data->icon = icon;
 	gwmRedrawTextField(field);
 };

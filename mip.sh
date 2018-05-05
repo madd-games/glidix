@@ -144,6 +144,13 @@ make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/sysinfo.mip
 
+# filemgr
+rm -rf mipdir || exit 1
+cd filemgr
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/filemgr.mip
+
 # minipad
 rm -rf mipdir || exit 1
 cd minipad

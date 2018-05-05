@@ -194,7 +194,7 @@ int gwmRunMessageDialog(GWMWindow *msg)
 	
 	gwmBoxLayoutAddWindow(topBox, image = gwmCreateImage(msg, data->surf, data->x, data->y, data->width, data->height),
 		0, 5, GWM_BOX_ALL);
-	gwmBoxLayoutAddWindow(topBox, label = gwmCreateLabel(msg, data->text, 200), 0, 5, GWM_BOX_ALL);
+	gwmBoxLayoutAddWindow(topBox, label = gwmCreateLabel(msg, data->text, 400), 0, 5, GWM_BOX_ALL);
 	
 	// add all the buttons to the bottom box
 	int i;
@@ -208,6 +208,7 @@ int gwmRunMessageDialog(GWMWindow *msg)
 	
 	gwmFit(msg);
 	gwmRunModal(msg, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_MKFOCUSED);
+	gwmSetWindowFlags(msg, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
 	int answer = data->answer;
 	

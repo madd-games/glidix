@@ -74,6 +74,8 @@
 extern DDIColor* gwmColorSelectionP;
 #define	GWM_COLOR_BACKGROUND			gwmBackColorP
 extern DDIColor* gwmBackColorP;
+#define	GWM_COLOR_EDITOR			gwmEditorColorP
+extern DDIColor* gwmEditorColorP;
 
 /**
  * Unspecified window position.
@@ -83,7 +85,7 @@ extern DDIColor* gwmBackColorP;
 /**
  * Maximum timespan between 2 clicks that allows it to be considered a "double-click".
  */
-#define	GWM_DOUBLECLICK_TIMEOUT			(1*CLOCKS_PER_SEC)
+#define	GWM_DOUBLECLICK_TIMEOUT			(CLOCKS_PER_SEC/2)
 
 /**
  * Button flags.
@@ -517,6 +519,11 @@ typedef struct
 	uint32_t				imgStockUnderline;
 	uint32_t				imgStockStrike;
 	uint32_t				imgStockResv[16];
+	
+	/**
+	 * Editing area color.
+	 */
+	DDIColor				colEditor;
 } GWMInfo;
 
 /**
@@ -1158,6 +1165,9 @@ typedef struct GWMWindow_
 typedef GWMObject GWMWindow;
 // TODO: typedef the rest, it's for clarity
 typedef	GWMWindow GWMSplitter;
+typedef GWMWindow GWMTextField;
+typedef GWMWindow GWMToolButton;
+typedef	GWMWindow GWMScrollbar;
 
 /**
  * Menu entry callback; return -1 to terminate application, 0 to continue.
@@ -1566,58 +1576,45 @@ int gwmSetWindowFlags(GWMWindow *win, int flags);
 /**
  * Creates a new text field in the specified window.
  */
-GWMWindow* gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
+GWMTextField* gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
 
 /**
  * Creates a new text field in the specified window.
  */
-GWMWindow* gwmNewTextField(GWMWindow *parent);
+GWMTextField* gwmNewTextField(GWMWindow *parent);
 
 /**
  * Destroys a text field.
  */
-void gwmDestroyTextField(GWMWindow *txt);
-
-/**
- * Gets the current number of bytes in a text field. You may use it to get the full text by
- * calling gwmReadTextField().
- *
- * DEPRECATED; how can this work with unicode?
- */
-size_t gwmGetTextFieldSize(GWMWindow *field);
+void gwmDestroyTextField(GWMTextField *txt);
 
 /**
  * Returns a READ-ONLY NUL-terminated UTF-8 string containing the text field text. This string must
  * not be used after further calls to text field functions are made, or if the main loop is used!
  * The text field continues to won this function.
  */
-const char* gwmReadTextField(GWMWindow *field);
-
-/**
- * Set the width of a text field.
- */
-void gwmResizeTextField(GWMWindow *field, int width);
+const char* gwmReadTextField(GWMTextField *field);
 
 /**
  * Change the text in a text field. The expected encoding is UTF-8.
  */
-void gwmWriteTextField(GWMWindow *field, const char *newText);
+void gwmWriteTextField(GWMTextField *field, const char *newText);
 
 /**
  * Select the entire contents of the text field.
  */
-void gwmTextFieldSelectAll(GWMWindow *field);
-
-/**
- * Sets the callback for when the user pressed ENTER while typing in a text field.
- */
-typedef int (*GWMTextFieldCallback)(void *param);
-void gwmSetTextFieldAcceptCallback(GWMWindow *field, GWMTextFieldCallback callback, void *param);
+void gwmTextFieldSelectAll(GWMTextField *field);
 
 /**
  * Set the flags of a text field.
  */
-void gwmSetTextFieldFlags(GWMWindow *field, int flags);
+void gwmSetTextFieldFlags(GWMTextField *field, int flags);
+
+/**
+ * Set the icon of a text field, to be displayed before the text. NULL means no icon. The icon
+ * is taken as 16x16.
+ */
+void gwmSetTextFieldIcon(GWMTextField *field, DDISurface *icon);
 
 /**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
@@ -1713,32 +1710,32 @@ void gwmSetCheckboxSymbol(GWMWindow *checkbox, int symbol);
 /**
  * Create a new scroll bar.
  */
-GWMWindow* gwmNewScrollbar(GWMWindow *parent);
+GWMScrollbar* gwmNewScrollbar(GWMWindow *parent);
 
 /**
  * Destroy a scrollbar.
  */
-void gwmDestroyScrollbar(GWMWindow *sbar);
+void gwmDestroyScrollbar(GWMScrollbar *sbar);
 
 /**
  * Change the flags of a scrollbar.
  */
-void gwmSetScrollbarFlags(GWMWindow *sbar, int flags);
+void gwmSetScrollbarFlags(GWMScrollbar *sbar, int flags);
 
 /**
  * Change the position of a scrollbar, clamped to the [0.0, 1.0] range.
  */
-void gwmSetScrollbarPosition(GWMWindow *sbar, float pos);
+void gwmSetScrollbarPosition(GWMScrollbar *sbar, float pos);
 
 /**
  * Set the length of a scrollbar, clamped to the [0.0, 1.0] range.
  */
-void gwmSetScrollbarLength(GWMWindow *sbar, float len);
+void gwmSetScrollbarLength(GWMScrollbar *sbar, float len);
 
 /**
  * Get the current position of a scrollbar, in the [0.0, 1.0] range.
  */
-float gwmGetScrollbarPosition(GWMWindow *sbar);
+float gwmGetScrollbarPosition(GWMScrollbar *sbar);
 
 /**
  * Change the size of a window. This frees, and hence invalidates, a previous return value from gwmGetWindowCanvas()!
@@ -2269,7 +2266,7 @@ GWMWindow* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int mode
 char* gwmRunFileChooser(GWMWindow *fc);
 
 /**
- * Get an file icon with the given name, in the given size (GWM_FICON_SMALL being 16x16 and GWM_FICON_LARGE being 64x64).
+ * Get a file icon with the given name, in the given size (GWM_FICON_SMALL being 16x16 and GWM_FICON_LARGE being 64x64).
  * Always returns something; it may be a dummy icon.
  */
 DDISurface* gwmGetFileIcon(const char *iconName, int size);

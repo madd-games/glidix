@@ -61,6 +61,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.tools.shutdown",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgShutdown)},
 	{"gwm.toolkit.selection",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colSelection)},
 	{"gwm.toolkit.winback",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colWinBack)},
+	{"gwm.toolkit.editor",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colEditor)},
 	{"gwm.toolkit.mbicons",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgMessageIcons)},
 	{"gwm.toolkit.button",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgButton)},
 	{"gwm.toolkit.checkbox",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCheckbox)},
@@ -388,7 +389,7 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawButton(surf, 0, 30, 30, 30, &transparent, 0);
 	drawButton(surf, 0, 60, 30, 30, &transparent, 1);
 	
-	// stock icons; just use a fillter
+	// stock icons; just use a filler
 	stockFiller(format, &info->imgStockBack);
 	stockFiller(format, &info->imgStockForward);
 	stockFiller(format, &info->imgStockUp);
@@ -419,6 +420,10 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	stockFiller(format, &info->imgStockItalic);
 	stockFiller(format, &info->imgStockUnderline);
 	stockFiller(format, &info->imgStockStrike);
+	
+	// editor color (white)
+	static DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};
+	memcpy(&info->colEditor, &white, sizeof(DDIColor));
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

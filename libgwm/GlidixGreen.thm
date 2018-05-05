@@ -45,6 +45,7 @@ namespace gwm {
 	namespace toolkit {
 		color selection #00AA00:255
 		color winback #DDDDDD:255
+		color editor #FFFFFF:255
 		
 		image mbicons /usr/share/images/mbicons.png
 		image button /usr/share/images/button.png
@@ -86,6 +87,24 @@ namespace gwm {
 			image refresh /usr/share/images/refresh.png
 			image cancel /usr/share/images/cancel.png
 			image confirm /usr/share/images/confirm.png
+			image cut /usr/share/images/cut.png
+			image copy /usr/share/images/copy.png
+			image paste /usr/share/images/paste.png
+			image add /usr/share/images/add.png
+			image remove /usr/share/images/remove.png
+			image home /usr/share/images/home.png
+			image undo /usr/share/images/undo.png
+			image redo /usr/share/images/redo.png
+			image adjleft /usr/share/images/adjleft.png
+			image adjcenter /usr/share/images/adjcenter.png
+			image adjright /usr/share/images/adjright.png
+			image justify /usr/share/images/justify.png
+			image selectall /usr/share/images/selectall.png
+			image edit /usr/share/images/edit.png
+			image bold /usr/share/images/bold.png
+			image italic /usr/share/images/italic.png
+			image underline /usr/share/images/underline.png
+			image strike /usr/share/images/strike.png
 		}
 	}
 	

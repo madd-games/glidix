@@ -95,6 +95,15 @@ int myHandler(GWMEvent *ev, GWMWindow *win, void *context)
 		return myCommandHandler((GWMCommandEvent*) ev);
 	case GWM_EVENT_TOGGLED:
 		return myToggledHandler((GWMCommandEvent*) ev);
+	case GWM_EVENT_UP:
+		if (ev->keycode == GWM_KC_MOUSE_LEFT)
+		{
+			printf("left click\n");
+		};
+		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_DOUBLECLICK:
+		printf("double-click\n");
+		return GWM_EVSTATUS_CONT;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -123,7 +132,7 @@ int main()
 	gwmSetWindowLayout(topWindow, boxLayout);
 	
 	GWMWindow *notebook = gwmNewNotebook(topWindow);
-	gwmBoxLayoutAddWindow(boxLayout, notebook, 1, 0, GWM_BOX_FILL);
+	gwmBoxLayoutAddWindow(boxLayout, notebook, 1, 50, GWM_BOX_ALL | GWM_BOX_FILL);
 
 	GWMWindow *tab1 = gwmNewTab(notebook);
 	GWMWindow *tab2 = gwmNewTab(notebook);

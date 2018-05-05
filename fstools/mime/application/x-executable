@@ -1,0 +1,5 @@
+# application/x-executable
+# Executable
+label Executable
+icon exe
+magic 7F 'E' 'L' 'F' 02 01 01 00 00 00 00 00 00 00 00 00 02 00 3E 00

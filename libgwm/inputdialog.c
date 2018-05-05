@@ -38,14 +38,10 @@ int inputOK(void *context)
 	GWMWindow *dialog = (GWMWindow*) context;
 	GWMWindow *txtInput = (GWMWindow*) dialog->data;
 	
-	size_t size = gwmGetTextFieldSize(txtInput);
-	if (size == 0) return 0;
+	const char *text = gwmReadTextField(txtInput);
+	if (text[0] == 0) return 0;
 	
-	//char *buffer = (char*) malloc(size+1);
-	//buffer[size] = 0;
-	//gwmReadTextField(txtInput, buffer, 0, (off_t)size);
-	
-	dialog->data = strdup(gwmReadTextField(txtInput));
+	dialog->data = strdup(text);
 	return -1;
 };
 

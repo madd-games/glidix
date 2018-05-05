@@ -88,10 +88,10 @@ typedef struct FSMimeType_
 	size_t					numFilenames;
 	
 	/**
-	 * Array of magic values to search for, and their amount.
+	 * Magic value (at start of file) and the size of it.
 	 */
-	FSMagic*				magics;
-	size_t					numMagics;
+	size_t					magicSize;
+	uint8_t*				magic;
 	
 	/**
 	 * Label attached to the file type (a human-readable string). By default, it's just

@@ -74,13 +74,13 @@ static void redrawScrollbar(GWMWindow *sbar)
 		if (data->flags & GWM_SCROLLBAR_HORIZ)
 		{
 			int len = canvas->width * data->len;
-			int pos = (canvas->width - len) * value;
+			int pos = canvas->width * value;
 			ddiFillRect(canvas, pos, 0, len, canvas->height, colScrollbarFg);
 		}
 		else
 		{
 			int len = canvas->height * data->len;
-			int pos = (canvas->height - len) * value;
+			int pos = canvas->height * value;
 			ddiFillRect(canvas, 0, pos, canvas->width, len, colScrollbarFg);
 		};
 	};
@@ -127,15 +127,20 @@ static int sbarHandler(GWMEvent *ev, GWMWindow *sbar, void *context)
 		
 		if (data->clickPos != -1)
 		{
+			float maxval = 1.0 - data->len;
 			if (data->flags & GWM_SCROLLBAR_HORIZ)
 			{
-				gwmSetScrollbarPosition(sbar, data->refPos + (float) (ev->x - data->clickPos) /
-					(float) (canvas->width - canvas->width * data->len));
+				float val = data->refPos + (float) (ev->x - data->clickPos) /
+					(float) (canvas->width);
+				if (val > maxval) val = maxval;
+				gwmSetScrollbarPosition(sbar, val);
 			}
 			else
 			{
-				gwmSetScrollbarPosition(sbar, data->refPos + (float) (ev->y - data->clickPos) /
-					(float) (canvas->height - canvas->height * data->len));
+				float val = data->refPos + (float) (ev->y - data->clickPos) /
+					(float) (canvas->height);
+				if (val > maxval) val = maxval;
+				gwmSetScrollbarPosition(sbar, val);
 			};
 		};
 		return GWM_EVSTATUS_CONT;

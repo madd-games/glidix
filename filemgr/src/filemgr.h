@@ -26,58 +26,24 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifndef FILEMGR_H_
+#define FILEMGR_H_
+
 #include <libgwm.h>
-#include <libddi.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 
-GWMLayout* gwmCreateAbstractLayout()
+extern GWMWindow *topWindow;
+
+/**
+ * File manager events.
+ */
+enum
 {
-	GWMLayout *layout = (GWMLayout*) malloc(sizeof(GWMLayout));
-	memset(layout, 0, sizeof(GWMLayout));
-	return layout;
+	FILEMGR_EVENT_ = (GWM_EVENT_CASCADING | GWM_EVENT_USER),
+	
+	/**
+	 * DirView events.
+	 */
+	DV_EVENT_CHDIR,
 };
 
-void gwmDestroyAbstractLayout(GWMLayout *layout)
-{
-	free(layout);
-};
-
-void gwmFit(GWMWindow *win)
-{
-	if (win->layout == NULL) return;
-	
-	int width, height;
-	win->layout->getPrefSize(win->layout, &width, &height);
-	
-	int screenWidth, screenHeight;
-	gwmScreenSize(&screenWidth, &screenHeight);
-	gwmMoveWindow(win, (screenWidth-width)/2, (screenHeight-height)/2);
-	
-	gwmResizeWindow(win, width, height);
-	win->layout->run(win->layout, 0, 0, width, height);
-};
-
-void gwmLayout(GWMWindow *win, int width, int height)
-{
-	if (win->layout == NULL)
-	{
-		gwmResizeWindow(win, width, height);
-		return;
-	};
-	
-	int minWidth, minHeight;
-	win->layout->getMinSize(win->layout, &minWidth, &minHeight);
-	
-	if (width < minWidth) width = minWidth;
-	if (height < minHeight) height = minHeight;
-	
-	gwmResizeWindow(win, width, height);
-	win->layout->run(win->layout, 0, 0, width, height);
-};
-
-void gwmSetWindowLayout(GWMWindow *win, GWMLayout *layout)
-{
-	win->layout = layout;
-};
+#endif

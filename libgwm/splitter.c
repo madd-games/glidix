@@ -41,6 +41,7 @@ typedef struct
 	int				clicked;
 	float				minProp;
 	float				maxProp;
+	int				propSet;
 } SplitterData;
 
 static int splitHandler(GWMEvent *ev, GWMSplitter *split, void *context)
@@ -137,7 +138,7 @@ static void splitterMinSize(GWMSplitter *split, int *width, int *height)
 
 	if (data->panels[1]->layout != NULL)
 	{
-		data->panels[1]->layout->getMinSize(data->panels[0]->layout, &w1, &h1);
+		data->panels[1]->layout->getMinSize(data->panels[1]->layout, &w1, &h1);
 	}
 	else
 	{
@@ -167,7 +168,7 @@ static void splitterPrefSize(GWMSplitter *split, int *width, int *height)
 	
 	if (data->panels[0]->layout != NULL)
 	{
-		data->panels[0]->layout->getMinSize(data->panels[0]->layout, &w0, &h0);
+		data->panels[0]->layout->getPrefSize(data->panels[0]->layout, &w0, &h0);
 	}
 	else
 	{
@@ -176,24 +177,22 @@ static void splitterPrefSize(GWMSplitter *split, int *width, int *height)
 
 	if (data->panels[1]->layout != NULL)
 	{
-		data->panels[1]->layout->getMinSize(data->panels[0]->layout, &w1, &h1);
+		data->panels[1]->layout->getPrefSize(data->panels[1]->layout, &w1, &h1);
 	}
 	else
 	{
 		w1 = h1 = 100;
 	};
 	
-	// the preffered size is double the maximum of the preffered sizes on the main axis, and
-	// the maximum on the other.
 	if (data->flags & GWM_SPLITTER_HORIZ)
 	{
-		*width = 2*((w0 > w1) ? w0:w1) + 8;
+		*width = w0 + w1 + 8;
 		*height = (h0 > h1) ? h0:h1;
 	}
 	else
 	{
 		*width = (w0 > w1) ? w0:w1;
-		*height = 2*((h0 > h1) ? h0:h1) + 8;
+		*height = h0 + h1 + 8;
 	};
 };
 
@@ -219,7 +218,7 @@ static void splitterPosition(GWMSplitter *split, int x, int y, int width, int he
 
 	if (data->panels[1]->layout != NULL)
 	{
-		data->panels[1]->layout->getMinSize(data->panels[0]->layout, &w1, &h1);
+		data->panels[1]->layout->getMinSize(data->panels[1]->layout, &w1, &h1);
 	}
 	else
 	{
@@ -235,6 +234,39 @@ static void splitterPosition(GWMSplitter *split, int x, int y, int width, int he
 	{
 		data->minProp = (float) h0 / (float) (height-8);
 		data->maxProp = 1.0 - (float) h1 / (float) (height-8);
+	};
+	
+	// if proportion is not set yet, set it now depending on preferred sizes
+	if (!data->propSet)
+	{
+		data->propSet = 1;
+		
+		if (data->panels[0]->layout != NULL)
+		{
+			data->panels[0]->layout->getPrefSize(data->panels[0]->layout, &w0, &h0);
+		}
+		else
+		{
+			w0 = h0 = 100;
+		};
+
+		if (data->panels[1]->layout != NULL)
+		{
+			data->panels[1]->layout->getPrefSize(data->panels[1]->layout, &w1, &h1);
+		}
+		else
+		{
+			w1 = h1 = 100;
+		};
+		
+		if (data->flags & GWM_SPLITTER_HORIZ)
+		{
+			data->proportion = (float) w0 / (float) (w0+w1);
+		}
+		else
+		{
+			data->proportion = (float) h0 / (float) (h0+h1);
+		};
 	};
 	
 	updateSplitter(split);
@@ -253,6 +285,7 @@ GWMSplitter* gwmNewSplitter(GWMWindow *parent)
 	data->clicked = 0;
 	data->minProp = 0.0;
 	data->maxProp = 1.0;
+	data->propSet = 0;
 	
 	split->getMinSize = splitterMinSize;
 	split->getPrefSize = splitterPrefSize;
@@ -301,6 +334,7 @@ void gwmSetSplitterProportion(GWMSplitter *split, float prop)
 	if (prop < 0.0) prop = 0.0;
 	if (prop > 1.0) prop = 1.0;
 	data->proportion = prop;
+	data->propSet = 1;
 	updateSplitter(split);
 };
 
