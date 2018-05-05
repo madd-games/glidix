@@ -991,13 +991,25 @@ DDIGlyphCache* ddiGetGlyph(DDIFont *font, long codepoint)
 	return cache;
 };
 
+static int isExclusiveBreak(long codepoint)
+{
+	return codepoint == ' ' || codepoint == '\t';
+};
+
+static int isInclusiveBreak(long codepoint)
+{
+	// TODO: just an example for now; basically all punctuation should be an inclusive breakpoint
+	return codepoint == '-' || codepoint == '_' || codepoint == '/' || codepoint == '.' || codepoint == ',';
+};
+
 /**
  * Calculate the size of the surface that will fit the text segment. If the text needs to be wrapped, 'nextEl' will point
  * to the location at which the rendering is to be stopped, and the rest of the text is to be rendered on another line.
  * If a newline character is in the text, the same happens. Otherwise, 'nextEl' is set to NULL.
- * If 'nextEl' is set, the character it points to must be IGNORED.
+ * If 'nextEl' is set, the character it points to must be IGNORED, UNLESS *include gets set to 1.
  */ 
-static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *height, int *offsetX, int *offsetY, const char **nextEl)
+static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *height, int *offsetX, int *offsetY,
+		const char **nextEl, int *include)
 {
 	int penX=0, penY=0;
 	int minX=0, maxX=0, minY=0, maxY=0;
@@ -1007,6 +1019,13 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 	int lastWordHeight = 0;
 	int lastWordOffX = 0;
 	int lastWordOffY = 0;
+	int includeWord = 0;
+	
+	const char *lastCharEnd = NULL;
+	int lastCharWidth = 0;
+	int lastCharHeight = 0;
+	int lastCharOffX = 0;
+	int lastCharOffY = 0;
 	
 	while (1)
 	{
@@ -1026,7 +1045,7 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 			point = pen->mask;
 		};
 
-		if (point == ' ')
+		if (isExclusiveBreak(point))
 		{
 			lastWordEnd = chptr;
 			lastWordWidth = maxX - minX;
@@ -1036,6 +1055,20 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 			
 			if (minX < 0) lastWordOffX = -minX;
 			if (minY < 0) lastWordOffY = -minY;
+		};
+
+		if (isInclusiveBreak(point))
+		{
+			lastWordEnd = chptr;
+			lastWordWidth = maxX - minX;
+			lastWordHeight = maxY - minY;
+			lastWordOffX = 0;
+			lastWordOffY = 0;
+			
+			if (minX < 0) lastWordOffX = -minX;
+			if (minY < 0) lastWordOffY = -minY;
+			
+			includeWord = 1;
 		};
 		
 		if (point == '\n')
@@ -1059,6 +1092,15 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 		}
 		else
 		{
+			lastCharEnd = chptr;
+			lastCharWidth = maxX - minX;
+			lastCharHeight = maxY - minY;
+			lastCharOffX = 0;
+			lastCharOffY = 0;
+			
+			if (minX < 0) lastCharOffX = -minX;
+			if (minY < 0) lastCharOffY = -minY;
+			
 			DDIGlyphCache *glyph = ddiGetGlyph(pen->font, point);
 			
 			int left = penX + glyph->bitmap_left;
@@ -1077,15 +1119,29 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 		
 		if ((pen->currentLine->currentWidth + (maxX-minX)) > pen->width)
 		{
-			if (pen->wrap)
+			// only wrap if we actually managed to write characters previously; otherwise
+			// we must allow at least one character to be written
+			if (pen->wrap && lastCharEnd != NULL)
 			{
 				// we must wrap around at the last word that fit in
-				// TODO: mfw nothing was written yet
+				if (lastWordEnd == NULL)
+				{
+					// no words fit, wrap at last character
+					*nextEl = lastCharEnd;
+					*width = lastCharWidth;
+					*height = lastCharHeight;
+					*offsetX = lastCharOffX;
+					*offsetY = lastCharOffY;
+					*include = 1;
+					return 0;
+				};
+				
 				*nextEl = lastWordEnd;
 				*width = lastWordWidth;
 				*height = lastWordHeight;
 				*offsetX = lastWordOffX;
 				*offsetY = lastWordOffY;
+				*include = includeWord;
 				return 0;
 			};
 		};
@@ -1124,7 +1180,8 @@ void ddiWritePen(DDIPen *pen, const char *text)
 	
 	while (1)
 	{
-		if (calculateSegmentSize(pen, text, &width, &height, &offsetX, &offsetY, &nextEl) != 0)
+		int include = 0;
+		if (calculateSegmentSize(pen, text, &width, &height, &offsetX, &offsetY, &nextEl, &include) != 0)
 		{
 			break;
 		};
@@ -1269,6 +1326,7 @@ void ddiWritePen(DDIPen *pen, const char *text)
 			seg->numChars = numChars;
 			
 			text = nextEl+1;
+			if (include) text = nextEl;
 			PenLine *line = (PenLine*) malloc(sizeof(PenLine));
 			line->firstSegment = NULL;
 			line->maxHeight = pen->font->face->size->metrics.height/64;
