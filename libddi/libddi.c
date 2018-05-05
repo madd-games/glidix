@@ -1053,7 +1053,7 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 			if (minY < 0) lastWordOffY = -minY;
 		};
 
-		if (isInclusiveBreak(point))
+		if (writtenCharsYet && isInclusiveBreak(point))
 		{
 			lastWordEnd = chptr;
 			lastWordWidth = maxX - minX;

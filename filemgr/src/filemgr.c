@@ -40,6 +40,7 @@
 #include <pthread.h>
 #include <poll.h>
 #include <errno.h>
+#include <pwd.h>
 
 #include "dirview.h"
 #include "filemgr.h"
@@ -53,6 +54,7 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 {
 	char *newpath;
 	const char *location = dvGetLocation(dirView);
+	struct passwd *pwd;
 	
 	switch (ev->symbol)
 	{
@@ -63,10 +65,15 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 		free(newpath);
 		return GWM_EVSTATUS_OK;
 	case GWM_SYM_OK:
-		dvGoTo(dirView, gwmReadTextField(txtPath));
+		if (ev->header.win == txtPath->id) dvGoTo(dirView, gwmReadTextField(txtPath));
 		return GWM_EVSTATUS_OK;
 	case GWM_SYM_REFRESH:
 		dvGoTo(dirView, dvGetLocation(dirView));
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_HOME:
+		pwd = getpwuid(geteuid());
+		assert(pwd != NULL);
+		dvGoTo(dirView, pwd->pw_dir);
 		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
@@ -147,6 +154,10 @@ int main(int argc, char *argv[])
 	txtSearch = gwmNewTextField(topWindow);
 	gwmBoxLayoutAddWindow(toolbar, txtSearch, 1, 2, GWM_BOX_ALL);
 	gwmSetTextFieldPlaceholder(txtSearch, "Search...");
+	
+	GWMToolButton *toolHome = gwmNewToolButton(topWindow);
+	gwmSetToolButtonSymbol(toolHome, GWM_SYM_HOME);
+	gwmBoxLayoutAddWindow(toolbar, toolHome, 0, 0, 0);
 	
 	GWMSplitter *split = gwmNewSplitter(topWindow);
 	gwmSetSplitterFlags(split, GWM_SPLITTER_HORIZ);

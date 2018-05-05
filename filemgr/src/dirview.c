@@ -392,6 +392,19 @@ int dvGoTo(DirView *dv, const char *path)
 	
 	data->ents = newlist;
 	
+	char *slashPos = strrchr(rpath, '/');
+	if (slashPos == NULL)
+	{
+		gwmSetWindowCaption(topWindow, "/ - File manager");
+	}
+	else
+	{
+		char *caption = (char*) malloc(strlen(slashPos+1) + strlen(" - File manager") + 1);
+		sprintf(caption, "%s - File manager", slashPos+1);
+		gwmSetWindowCaption(topWindow, caption);
+		free(caption);
+	};
+	
 	GWMEvent ev;
 	memset(&ev, 0, sizeof(GWMEvent));
 	ev.type = DV_EVENT_CHDIR;
