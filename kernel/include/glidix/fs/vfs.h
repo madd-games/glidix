@@ -35,6 +35,7 @@
 
 #include <glidix/util/common.h>
 #include <glidix/thread/procmem.h>
+#include <glidix/thread/mutex.h>
 #include <glidix/fs/ftree.h>
 #include <stddef.h>
 
@@ -268,9 +269,10 @@ struct Inode_
 	
 	/**
 	 * The lock. Protects all mutable fields of this structure. It is also held when
-	 * flushing.
+	 * flushing. It needs to be recursive to avoid problems if, for example, rename()
+	 * gets called on dentries from the same directory.
 	 */
-	Semaphore lock;
+	Mutex lock;
 	
 	/**
 	 * Specifies which filesystem this inode belongs to. This may be NULL if the

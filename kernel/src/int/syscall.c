@@ -3176,10 +3176,10 @@ int sys_aclput(const char *upath, int type, int id, int perms)
 		return -1;
 	};
 	
-	semWait(&iref.inode->lock);
+	mutexLock(&iref.inode->lock);
 	if (iref.inode->uid != getCurrentThread()->creds->euid && !havePerm(XP_FSADMIN))
 	{
-		semSignal(&iref.inode->lock);
+		mutexUnlock(&iref.inode->lock);
 		vfsUnrefInode(iref);
 		ERRNO = EACCES;
 		return -1;
@@ -3219,14 +3219,14 @@ int sys_aclput(const char *upath, int type, int id, int perms)
 	if (!found)
 	{
 		// if still not found, then the ACL is overflowed
-		semSignal(&iref.inode->lock);
+		mutexUnlock(&iref.inode->lock);
 		vfsUnrefInode(iref);
 		ERRNO = EOVERFLOW;
 		return -1;
 	};
 	
 	vfsDirtyInode(iref.inode);
-	semSignal(&iref.inode->lock);
+	mutexUnlock(&iref.inode->lock);
 	vfsUnrefInode(iref);
 	return 0;
 };
@@ -3268,10 +3268,10 @@ int sys_aclclear(const char *upath, int type, int id)
 		return -1;
 	};
 	
-	semWait(&iref.inode->lock);
+	mutexLock(&iref.inode->lock);
 	if (iref.inode->uid != getCurrentThread()->creds->euid && !havePerm(XP_FSADMIN))
 	{
-		semSignal(&iref.inode->lock);
+		mutexUnlock(&iref.inode->lock);
 		vfsUnrefInode(iref);
 		ERRNO = EACCES;
 		return -1;
@@ -3289,7 +3289,7 @@ int sys_aclclear(const char *upath, int type, int id)
 	};
 	
 	vfsDirtyInode(iref.inode);
-	semSignal(&iref.inode->lock);
+	mutexUnlock(&iref.inode->lock);
 	vfsUnrefInode(iref);
 	return 0;
 };

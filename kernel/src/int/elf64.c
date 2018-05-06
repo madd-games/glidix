@@ -228,7 +228,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 		return -1;
 	};
 	
-	semWait(&fp->iref.inode->lock);
+	mutexLock(&fp->iref.inode->lock);
 	int execAllowed = vfsIsAllowed(fp->iref.inode, VFS_ACE_EXEC);
 	mode_t execmode = fp->iref.inode->mode;
 	if (fp->iref.inode->fs->flags & VFS_ST_NOSUID) execmode &= 0777;	// no suid/sgid
@@ -237,7 +237,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	uint64_t exec_ixperm = fp->iref.inode->ixperm;
 	uint64_t exec_oxperm = fp->iref.inode->oxperm;
 	uint64_t exec_dxperm = fp->iref.inode->dxperm;
-	semSignal(&fp->iref.inode->lock);
+	mutexUnlock(&fp->iref.inode->lock);
 	
 	if (!execAllowed)
 	{
@@ -534,10 +534,10 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 			InodeRef iref = vfsGetInode(dref, 0, NULL);
 			if (iref.inode != NULL)
 			{
-				semWait(&iref.inode->lock);
+				mutexLock(&iref.inode->lock);
 				kfree(iref.inode->target);
 				iref.inode->target = rpath;
-				semSignal(&iref.inode->lock);
+				mutexUnlock(&iref.inode->lock);
 			}
 			else
 			{

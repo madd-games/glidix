@@ -63,6 +63,8 @@ static void gxfsFlushSuperblock(GXFS *gxfs)
 
 static void gxfsUnmount(FileSystem *fs)
 {
+	kprintf("gxfs: unmounting\n");
+	
 	GXFS *gxfs = (GXFS*) fs->fsdata;
 	if ((gxfs->flags & MNT_RDONLY) == 0)
 	{
@@ -1053,6 +1055,7 @@ static Inode* gxfsOpenRoot(const char *image, int flags, const void *options, si
 	
 	if (gxfsLoadInode(fs, root) != 0)
 	{
+		kprintf("gxfs: failed to load root directory!\n");
 		vfsDownrefInode(root);
 		kfree(fs);
 		kfree(gxfs);

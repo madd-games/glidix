@@ -321,6 +321,7 @@ int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *boo
 	// try mounting it first
 	if (mount(fstype, image, "/rootfs", 0, NULL, 0) != 0)
 	{
+		printf("init: mount of %s as %s failed\n", image, fstype);
 		return -1;
 	};
 	
@@ -336,7 +337,12 @@ int try_mount_root_candidate(const char *fstype, const char *image, uint8_t *boo
 	};
 	
 	// not the right boot ID, unmount
-	unmount("/rootfs", 0);
+	printf("init: %s had a different boot signature, unmounting\n", image);
+	if (unmount("/rootfs", 0) != 0)
+	{
+		perror("init: unmount failed");
+		_exit(1);
+	};
 	return -1;
 };
 

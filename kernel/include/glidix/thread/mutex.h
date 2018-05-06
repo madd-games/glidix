@@ -34,7 +34,6 @@
  */
 
 #include <glidix/util/common.h>
-#include <glidix/thread/sched.h>
 
 /**
  * Number of threads that are allowed to go into a mutex queue at once. Must be power of
@@ -65,16 +64,17 @@ typedef struct
 	/**
 	 * Current owner.
 	 */
-	Thread*						owner;
+	struct _Thread*					owner;
 	
 	/**
 	 * Queue of threads.
 	 */
-	Thread*						queue[MUTEX_MAX_QUEUE];
+	struct _Thread*					queue[MUTEX_MAX_QUEUE];
 } Mutex;
 
 void mutexInit(Mutex *mutex);
 void mutexLock(Mutex *mutex);
+int mutexTryLock(Mutex *mutex);		// 0 = locked, -1 = failed
 void mutexUnlock(Mutex *mutex);
 
 #endif

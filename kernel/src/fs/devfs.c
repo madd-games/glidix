@@ -30,6 +30,7 @@
 #include <glidix/util/common.h>
 #include <glidix/util/memory.h>
 #include <glidix/thread/mutex.h>
+#include <glidix/thread/sched.h>
 #include <glidix/util/string.h>
 #include <glidix/fs/vfs.h>
 #include <glidix/util/random.h>

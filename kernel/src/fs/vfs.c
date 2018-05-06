@@ -117,7 +117,7 @@ Inode* vfsCreateInode(FileSystem *fs, mode_t mode)
 	memset(inode, 0, sizeof(Inode));
 	inode->refcount = 1;
 	if (fs == NULL) inode->dups = 1;
-	semInit(&inode->lock);
+	mutexInit(&inode->lock);
 	inode->fs = fs;
 	inode->mode = mode & ~umask;
 	inode->nextKey = 2;		/* 0 and 1 are for "." and ".." */
@@ -175,18 +175,18 @@ int vfsFlush(Inode *inode)
 		return -1;
 	};
 	
-	semWait(&inode->lock);
+	mutexLock(&inode->lock);
 	if (inode->ft != NULL) ftFlush(inode->ft);
 	if (inode->flush != NULL)
 	{
 		if (inode->flush(inode) != 0)
 		{
 			int error = ERRNO;
-			semSignal(&inode->lock);
+			mutexUnlock(&inode->lock);
 			return error;
 		};
 	};
-	semSignal(&inode->lock);
+	mutexUnlock(&inode->lock);
 	
 	return 0;
 };
@@ -249,7 +249,7 @@ DentryRef vfsGetParentDentry(InodeRef iref)
 		kfree(iref.top);
 		
 		// done
-		semWait(&dref.dent->dir->lock);
+		mutexLock(&dref.dent->dir->lock);
 		return dref;
 	}
 	else
@@ -260,7 +260,7 @@ DentryRef vfsGetParentDentry(InodeRef iref)
 		
 		vfsUprefInode(dref.dent->dir);		// we're taking a reference to it
 		vfsDownrefInode(iref.inode);
-		semWait(&dref.dent->dir->lock);
+		mutexLock(&dref.dent->dir->lock);
 		return dref;
 	};
 };
@@ -270,7 +270,7 @@ InodeRef vfsGetDentryContainer(DentryRef dref)
 	InodeRef iref;
 	iref.inode = dref.dent->dir;
 	iref.top = dref.top;
-	semSignal(&iref.inode->lock);
+	mutexUnlock(&iref.inode->lock);
 	return iref;
 };
 
@@ -310,7 +310,7 @@ void vfsCallInInode(Dentry *dent)
 			memset(inode, 0, sizeof(Inode));
 			inode->refcount = 1;
 			inode->dups = 1;
-			semInit(&inode->lock);
+			mutexInit(&inode->lock);
 			inode->fs = fs;
 			inode->parent = dent;
 			inode->nextKey = 2;
@@ -349,7 +349,7 @@ InodeRef vfsGetDentryTarget(DentryRef dref)
 	if (dref.dent->target == NULL)
 	{
 		Inode *dir = dref.dent->dir;
-		semSignal(&dir->lock);
+		mutexUnlock(&dir->lock);
 		vfsDownrefInode(dir);
 		
 		InodeRef nulref;
@@ -378,7 +378,7 @@ InodeRef vfsGetDentryTarget(DentryRef dref)
 	};
 	
 	Inode *dir = dref.dent->dir;
-	semSignal(&dir->lock);
+	mutexUnlock(&dir->lock);
 	vfsDownrefInode(dir);
 
 	return iref;
@@ -489,10 +489,10 @@ InodeRef vfsGetCurrentDir()
 DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
 {
 	// update the access time of the inode
-	semWait(&diref.inode->lock);
+	mutexLock(&diref.inode->lock);
 	diref.inode->atime = time();
 	vfsDirtyInode(diref.inode);		// should it be made dirty here?
-	semSignal(&diref.inode->lock);
+	mutexUnlock(&diref.inode->lock);
 	
 	// first the special ones
 	if (strcmp(entname, ".") == 0 || entname[0] == 0)
@@ -518,7 +518,7 @@ DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
 	{
 		// for all other names, we must go through the list of dentries and
 		// return the named one while locked
-		semWait(&diref.inode->lock);
+		mutexLock(&diref.inode->lock);
 		
 		// first check if it already exists
 		Dentry *dent;
@@ -539,7 +539,7 @@ DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
 		{
 			if (!vfsIsAllowed(diref.inode, VFS_ACE_WRITE))
 			{
-				semSignal(&diref.inode->lock);
+				mutexUnlock(&diref.inode->lock);
 				vfsUnrefInode(diref);
 				
 				DentryRef nulref;
@@ -582,7 +582,7 @@ DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
 		}
 		else
 		{
-			semSignal(&diref.inode->lock);
+			mutexUnlock(&diref.inode->lock);
 			vfsUnrefInode(diref);
 			
 			DentryRef nulref;
@@ -595,7 +595,7 @@ DentryRef vfsGetChildDentry(InodeRef diref, const char *entname, int create)
 
 void vfsAppendDentry(Inode *dir, const char *name, ino_t ino)
 {
-	semWait(&dir->lock);
+	mutexLock(&dir->lock);
 	
 	Dentry *dent = NEW(Dentry);
 	memset(dent, 0, sizeof(Dentry));
@@ -617,7 +617,7 @@ void vfsAppendDentry(Inode *dir, const char *name, ino_t ino)
 		dent->prev = last;
 	};
 	
-	semSignal(&dir->lock);
+	mutexUnlock(&dir->lock);
 };
 
 int vfsIsAllowed(Inode *inode, int perms)
@@ -700,13 +700,13 @@ int vfsIsAllowed(Inode *inode, int perms)
 
 char* vfsReadLink(Inode *link)
 {
-	semWait(&link->lock);
+	mutexLock(&link->lock);
 	char *target = NULL;
 	if (link->target != NULL)
 	{
 		target = strdup(link->target);
 	};
-	semSignal(&link->lock);
+	mutexUnlock(&link->lock);
 	vfsDownrefInode(link);
 	return target;
 };
@@ -788,16 +788,16 @@ static DentryRef vfsGetDentryRecur(InodeRef startdir, const char *path, int crea
 		// check if we have the required permissions
 		int neededPerms = VFS_ACE_EXEC;
 		if (create && isFinal) neededPerms |= VFS_ACE_WRITE;
-		semWait(&dir.inode->lock);
+		mutexLock(&dir.inode->lock);
 		if (!vfsIsAllowed(dir.inode, neededPerms))
 		{
-			semSignal(&dir.inode->lock);
+			mutexUnlock(&dir.inode->lock);
 			vfsUnrefInode(dir);
 			kfree(pathbuf);
 			if (error != NULL) *error = EACCES;
 			return nulref;
 		};
-		semSignal(&dir.inode->lock);
+		mutexUnlock(&dir.inode->lock);
 		
 		// all good
 		currentDent = vfsGetChildDentry(dir, token, (create) && (isFinal));
@@ -824,7 +824,7 @@ void vfsUnrefDentry(DentryRef dref)
 	if (dref.dent != NULL)
 	{
 		Inode *dir = dref.dent->dir;
-		semSignal(&dir->lock);
+		mutexUnlock(&dir->lock);
 		vfsDownrefInode(dir);
 	};
 	
@@ -869,11 +869,11 @@ void vfsLinkInode(DentryRef dref, Inode *target)
 	vfsDirtyInode(dref.dent->dir);
 	vfsUnrefDentry(dref);
 	
-	semWait(&target->lock);
+	mutexLock(&target->lock);
 	target->links++;
 	__sync_fetch_and_add(&target->dups, 1);
 	vfsDirtyInode(target);
-	semSignal(&target->lock);
+	mutexUnlock(&target->lock);
 };
 
 InodeRef vfsLinkAndGetInode(DentryRef dref, Inode *target)
@@ -890,11 +890,11 @@ InodeRef vfsLinkAndGetInode(DentryRef dref, Inode *target)
 	
 	vfsDirtyInode(dref.dent->dir);
 	
-	semWait(&target->lock);
+	mutexLock(&target->lock);
 	target->links++;
 	__sync_fetch_and_add(&target->dups, 1);
 	vfsDirtyInode(target);
-	semSignal(&target->lock);
+	mutexUnlock(&target->lock);
 	
 	return vfsGetDentryTarget(dref);
 };
@@ -915,15 +915,15 @@ void vfsBindInode(DentryRef dref, Inode *target)
 	vfsDirtyInode(dref.dent->dir);
 	vfsUnrefDentry(dref);
 	
-	semWait(&target->lock);
+	mutexLock(&target->lock);
 	target->links++;
 	vfsDirtyInode(target);
-	semSignal(&target->lock);
+	mutexUnlock(&target->lock);
 };
 
 static void vfsLinkDown(Inode *inode)
 {
-	semWait(&inode->lock);
+	mutexLock(&inode->lock);
 	if ((--inode->links) == 0)
 	{	
 		if (inode->drop != NULL)
@@ -943,7 +943,7 @@ static void vfsLinkDown(Inode *inode)
 	};
 	
 	__sync_fetch_and_add(&inode->dups, -1);
-	semSignal(&inode->lock);
+	mutexUnlock(&inode->lock);
 	vfsDownrefInode(inode);
 };
 
@@ -1050,7 +1050,7 @@ void vfsRemoveDentry(DentryRef dref)
 	
 	Inode *dir = dref.dent->dir;
 	vfsDirtyInode(dir);
-	semSignal(&dir->lock);
+	mutexUnlock(&dir->lock);
 	vfsDownrefInode(dir);
 	vfsDownrefInode(dir);
 
@@ -1227,15 +1227,15 @@ File* vfsOpen(InodeRef startdir, const char *path, int oflag, mode_t mode, int *
 		if (oflag & O_RDONLY) permsNeeded |= VFS_ACE_READ;
 		if (oflag & O_WRONLY) permsNeeded |= VFS_ACE_WRITE;
 	
-		semWait(&iref.inode->lock);
+		mutexLock(&iref.inode->lock);
 		if (!vfsIsAllowed(iref.inode, permsNeeded))
 		{
-			semSignal(&iref.inode->lock);
+			mutexUnlock(&iref.inode->lock);
 			vfsUnrefInode(iref);
 			if (error != NULL) *error = EACCES;
 			return NULL;
 		};
-		semSignal(&iref.inode->lock);
+		mutexUnlock(&iref.inode->lock);
 	};
 	
 	// create the description
@@ -1455,9 +1455,9 @@ off_t vfsSeek(File *fp, off_t off, int whence)
 	}
 	else if (fp->iref.inode->getsize != NULL)
 	{
-		semWait(&fp->iref.inode->lock);
+		mutexLock(&fp->iref.inode->lock);
 		size = fp->iref.inode->getsize(fp->iref.inode);
-		semSignal(&fp->iref.inode->lock);
+		mutexUnlock(&fp->iref.inode->lock);
 	}
 	else
 	{
@@ -1499,7 +1499,7 @@ off_t vfsSeek(File *fp, off_t off, int whence)
 
 void vfsInodeStat(Inode *inode, struct kstat *st)
 {
-	semWait(&inode->lock);
+	mutexLock(&inode->lock);
 	if (inode->fs == NULL)
 	{
 		st->st_dev = 0;
@@ -1541,7 +1541,7 @@ void vfsInodeStat(Inode *inode, struct kstat *st)
 	st->st_dxperm = inode->dxperm;
 	st->st_btime = inode->btime;
 	memcpy(st->st_acl, inode->acl, sizeof(AccessControlEntry) * VFS_ACL_SIZE);
-	semSignal(&inode->lock);
+	mutexUnlock(&inode->lock);
 };
 
 void vfsInodeStatVFS(Inode *inode, struct kstatvfs *st)
@@ -1622,23 +1622,23 @@ int vfsInodeChangeMode(Inode *inode, mode_t mode)
 		myUID = getCurrentThread()->creds->euid;
 	};
 
-	semWait(&inode->lock);	
+	mutexLock(&inode->lock);	
 	if (inode->fs->flags & VFS_ST_RDONLY)
 	{
-		semSignal(&inode->lock);
+		mutexUnlock(&inode->lock);
 		ERRNO = EROFS;
 		return -1;
 	};
 	if ((inode->uid != myUID) && !havePerm(XP_FSADMIN))
 	{
-		semSignal(&inode->lock);
+		mutexUnlock(&inode->lock);
 		ERRNO = EACCES;
 		return -1;
 	};
 	
 	inode->mode = (inode->mode & 0xF000) | (mode & 0x0FFF);
 	vfsDirtyInode(inode);
-	semSignal(&inode->lock);
+	mutexUnlock(&inode->lock);
 	return 0;
 };
 
@@ -1687,10 +1687,10 @@ int vfsInodeChangeOwner(Inode *inode, uid_t uid, gid_t gid)
 		};
 	};
 	
-	semWait(&inode->lock);
+	mutexLock(&inode->lock);
 	if (inode->fs->flags & VFS_ST_RDONLY)
 	{
-		semSignal(&inode->lock);
+		mutexUnlock(&inode->lock);
 		ERRNO = EROFS;
 		return -1;
 	};
@@ -1712,14 +1712,14 @@ int vfsInodeChangeOwner(Inode *inode, uid_t uid, gid_t gid)
 		{
 			if (uid != -1 && uid != inode->uid)
 			{
-				semSignal(&inode->lock);
+				mutexUnlock(&inode->lock);
 				ERRNO = EACCES;
 				return -1;
 			};
 			
 			if (gid != -1 && gid != inode->gid && myUID != inode->uid)
 			{
-				semSignal(&inode->lock);
+				mutexUnlock(&inode->lock);
 				ERRNO = EACCES;
 				return -1;
 			};
@@ -1730,7 +1730,7 @@ int vfsInodeChangeOwner(Inode *inode, uid_t uid, gid_t gid)
 	if (uid != -1) inode->uid = uid;
 	if (gid != -1) inode->gid = gid;
 	vfsDirtyInode(inode);
-	semSignal(&inode->lock);
+	mutexUnlock(&inode->lock);
 	return 0;
 };
 
@@ -1763,7 +1763,6 @@ int vfsTruncate(Inode *inode, off_t size)
 {
 	if (inode->fs->flags & VFS_ST_RDONLY)
 	{
-		semSignal(&inode->lock);
 		ERRNO = EROFS;
 		return -1;
 	};
@@ -1846,14 +1845,14 @@ int vfsChangeDir(InodeRef startdir, const char *path)
 		return ENOTDIR;
 	};
 	
-	semWait(&iref.inode->lock);
+	mutexLock(&iref.inode->lock);
 	if (!vfsIsAllowed(iref.inode, VFS_ACE_EXEC))
 	{
-		semSignal(&iref.inode->lock);
+		mutexUnlock(&iref.inode->lock);
 		vfsUnrefInode(iref);
 		return EACCES;
 	};
-	semSignal(&iref.inode->lock);
+	mutexUnlock(&iref.inode->lock);
 	
 	semWait(&creds->semDir);
 	InodeRef old = creds->cwd;
@@ -1894,14 +1893,14 @@ int vfsChangeRoot(InodeRef startdir, const char *path)
 		return ENOTDIR;
 	};
 	
-	semWait(&iref.inode->lock);
+	mutexLock(&iref.inode->lock);
 	if (!vfsIsAllowed(iref.inode, VFS_ACE_EXEC))
 	{
-		semSignal(&iref.inode->lock);
+		mutexUnlock(&iref.inode->lock);
 		vfsUnrefInode(iref);
 		return EACCES;
 	};
-	semSignal(&iref.inode->lock);
+	mutexUnlock(&iref.inode->lock);
 	
 	semWait(&creds->semDir);
 	InodeRef old = creds->rootdir;
@@ -1948,7 +1947,7 @@ static char* vfsRealPathRecur(InodeRef rootdir, CompChain *next, DentryRef dref)
 		
 		*put = 0;
 		kfree(frame.comp);
-		vfsUnrefDentry(dref);
+		vfsUnrefInode(parent);
 		return result;	
 	};
 	
@@ -2132,7 +2131,7 @@ char* vfsReadLinkPath(InodeRef startdir, const char *path)
 
 int vfsInodeChangeTimes(Inode *inode, time_t atime, uint32_t anano, time_t mtime, uint32_t mnano)
 {
-	semWait(&inode->lock);
+	mutexLock(&inode->lock);
 
 	uid_t myUID;
 	if (getCurrentThread()->creds == NULL)
@@ -2173,14 +2172,14 @@ int vfsInodeChangeTimes(Inode *inode, time_t atime, uint32_t anano, time_t mtime
 	}
 	else
 	{
-		semSignal(&inode->lock);
+		mutexUnlock(&inode->lock);
 		if (atime == 0 && mtime == 0) ERRNO = EACCES;
 		else ERRNO = EPERM;
 		return -1;
 	};
 	
 	vfsDirtyInode(inode);
-	semSignal(&inode->lock);
+	mutexUnlock(&inode->lock);
 	return 0;
 };
 
@@ -2258,7 +2257,7 @@ int vfsUnmount(const char *path, int flags)
 			// dentries, then nobody has it open.
 			int expectedCount = scan->dups;
 			
-			if (semWaitGen(&scan->lock, 1, SEM_W_NONBLOCK, 0) != 1)
+			if (mutexTryLock(&scan->lock) != 0)
 			{
 				// if we couldn't immediately lock the inode, it means someone's using it
 				// (and we can't block waiting for them since most threads will lock the inode
@@ -2277,11 +2276,11 @@ int vfsUnmount(const char *path, int flags)
 			{
 				foundBusy = 1;
 				kprintf("vfs: inode %lu is busy (refcount=%d, expected %d)\n", scan->ino, scan->refcount, expectedCount);
-				semSignal(&scan->lock);
+				mutexUnlock(&scan->lock);
 				break;
 			};
 			
-			semSignal(&scan->lock);
+			mutexUnlock(&scan->lock);
 		};
 		
 		if (foundBusy)
@@ -2386,12 +2385,12 @@ int vfsInodeChangeXPerm(Inode *inode, uint64_t ixperm, uint64_t oxperm, uint64_t
 		};
 	};
 	
-	semWait(&inode->lock);
+	mutexLock(&inode->lock);
 	inode->ixperm = ixperm;
 	inode->oxperm = oxperm;
 	inode->dxperm = dxperm;
 	vfsDirtyInode(inode);
-	semSignal(&inode->lock);
+	mutexUnlock(&inode->lock);
 	
 	return 0;
 };
@@ -2428,7 +2427,7 @@ ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out)
 		return -ENOTDIR;
 	};
 	
-	semWait(&inode->lock);
+	mutexLock(&inode->lock);
 	
 	if (key >= 0 && key < 2)
 	{
@@ -2449,7 +2448,7 @@ ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out)
 		};
 		
 		*out = dirent;
-		semSignal(&inode->lock);
+		mutexUnlock(&inode->lock);
 		return sizeof(struct kdirent) + 3;
 	};
 	
@@ -2464,7 +2463,7 @@ ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out)
 			dirent->d_ino = dent->ino;
 			strcpy(dirent->d_name, dent->name);
 			*out = dirent;
-			semSignal(&inode->lock);
+			mutexUnlock(&inode->lock);
 			return sizeof(struct kdirent) + strlen(dirent->d_name) + 1;
 		};
 		
@@ -2474,7 +2473,7 @@ ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out)
 		};
 	};
 	
-	semSignal(&inode->lock);
+	mutexUnlock(&inode->lock);
 	
 	if (haveHigher) return -ENOENT;
 	else return -EOVERFLOW;

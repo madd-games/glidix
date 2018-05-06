@@ -29,6 +29,7 @@
 #include <glidix/display/console.h>
 #include <glidix/hw/port.h>
 #include <glidix/thread/ticket.h>
+#include <glidix/thread/sched.h>
 #include <glidix/util/string.h>
 #include <stdint.h>
 #include <glidix/thread/mutex.h>

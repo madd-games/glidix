@@ -363,10 +363,10 @@ static int ptm_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 	switch (cmd)
 	{
 	case IOCTL_TTY_GRANTPT:
-		semWait(&ptty->devSlave->lock);
+		mutexLock(&ptty->devSlave->lock);
 		ptty->devSlave->uid = getCurrentThread()->creds->ruid;
 		ptty->devSlave->gid = getCurrentThread()->creds->rgid;
-		semSignal(&ptty->devSlave->lock);
+		mutexUnlock(&ptty->devSlave->lock);
 		return 0;
 	case IOCTL_TTY_UNLOCKPT:
 		// i see no point

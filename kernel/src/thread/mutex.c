@@ -29,6 +29,7 @@
 #include <glidix/thread/mutex.h>
 #include <glidix/display/console.h>
 #include <glidix/util/string.h>
+#include <glidix/thread/sched.h>
 
 void mutexInit(Mutex *mutex)
 {
@@ -81,6 +82,32 @@ void mutexLock(Mutex *mutex)
 	mutex->queue[ticket] = NULL;
 	mutex->numLocks = 1;
 	__sync_fetch_and_add(&mutex->numQueue, -1);
+};
+
+int mutexTryLock(Mutex *mutex)
+{
+	if (mutex->owner == getCurrentThread())
+	{
+		mutex->numLocks++;
+		return 0;
+	};
+	
+	uint16_t entry = mutex->cntEntry;
+	uint16_t ticket = entry & (MUTEX_MAX_QUEUE-1);
+	
+	if ((mutex->cntExit & (MUTEX_MAX_QUEUE-1)) == ticket)
+	{
+		if (atomic_compare_and_swap16(&mutex->cntEntry, entry, entry+1) == entry)
+		{
+			// we got a ticket
+			mutex->owner = getCurrentThread();
+			mutex->queue[ticket] = NULL;
+			mutex->numLocks = 1;
+			return 0;
+		};
+	};
+	
+	return -1;
 };
 
 void mutexUnlock(Mutex *mutex)
