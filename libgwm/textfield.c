@@ -33,7 +33,6 @@
 #include <assert.h>
 
 #define	TEXTFIELD_MIN_WIDTH	100
-#define	TEXTFIELD_HEIGHT	20
 
 typedef struct
 {
@@ -73,6 +72,11 @@ typedef struct
 	 * Placeholder text if empty (or NULL for no placeholder).
 	 */
 	char*			placeholder;
+	
+	/**
+	 * Whether the text should wrap (false by default).
+	 */
+	int			wrap;
 } GWMTextFieldData;
 
 static DDIFont *fntPlaceHolder;
@@ -115,7 +119,7 @@ void gwmRedrawTextField(GWMWindow *field)
 	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), penX, 2, canvas->width-penX, canvas->height-3, 0, 0, NULL);
 	if (data->pen != NULL)
 	{
-		ddiSetPenWrap(data->pen, 0);
+		ddiSetPenWrap(data->pen, data->wrap);
 		if (data->flags & GWM_TXT_MASKED) ddiPenSetMask(data->pen, 1);
 		if (data->focused) ddiSetPenCursor(data->pen, data->cursorPos);
 		
@@ -179,7 +183,7 @@ void gwmRedrawTextField(GWMWindow *field)
 		static DDIColor colPlaceHolder = {0x77, 0x77, 0x77, 0xFF};
 		DDIPen *pen = ddiCreatePen(&canvas->format, fntPlaceHolder, penX, 2, canvas->width-penX, canvas->height-3, 0, 0, NULL);
 		ddiSetPenColor(pen, &colPlaceHolder);
-		ddiSetPenWrap(pen, 0);
+		ddiSetPenWrap(pen, data->wrap);
 		ddiWritePen(pen, data->placeholder);
 		ddiExecutePen(pen, canvas);
 		ddiDeletePen(pen);
@@ -482,6 +486,8 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 	int disabled = data->flags & GWM_TXT_DISABLED;
 	char buf[9];
 	
+	GWMCommandEvent cmdev;
+	
 	switch (ev->type)
 	{
 	case GWM_EVENT_FOCUS_IN:
@@ -491,7 +497,9 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 	case GWM_EVENT_FOCUS_OUT:
 		data->focused = 0;
 		gwmRedrawTextField(field);
-		return GWM_EVSTATUS_OK;
+		memset(&cmdev, 0, sizeof(GWMCommandEvent));
+		cmdev.header.type = GWM_EVENT_EDIT_END;
+		return gwmPostEvent((GWMEvent*) &cmdev, field);
 	case GWM_EVENT_DOUBLECLICK:
 		gwmTextFieldSelectWord(field);
 		gwmRedrawTextField(field);
@@ -598,20 +606,19 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 static void txtGetSize(GWMWindow *field, int *width, int *height)
 {
 	*width = TEXTFIELD_MIN_WIDTH;
-	*height = TEXTFIELD_HEIGHT;
+	*height = 20;
 };
 
 static void txtPosition(GWMWindow *field, int x, int y, int width, int height)
 {
-	y += (height - TEXTFIELD_HEIGHT) / 2;
 	gwmMoveWindow(field, x, y);
-	gwmResizeWindow(field, width, TEXTFIELD_HEIGHT);
+	gwmResizeWindow(field, width, height);
 	gwmRedrawTextField(field);
 };
 
 GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags)
 {
-	GWMWindow *field = gwmCreateWindow(parent, "GWMTextField", x, y, width, TEXTFIELD_HEIGHT, 0);
+	GWMWindow *field = gwmCreateWindow(parent, "GWMTextField", x, y, width, 20, 0);
 	if (field == NULL) return NULL;
 	
 	GWMTextFieldData *data = (GWMTextFieldData*) malloc(sizeof(GWMTextFieldData));
@@ -626,6 +633,7 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->pen = NULL;
 	data->icon = NULL;
 	data->placeholder = NULL;
+	data->wrap = 0;
 	
 	field->getMinSize = field->getPrefSize = txtGetSize;
 	field->position = txtPosition;
@@ -671,16 +679,6 @@ const char* gwmReadTextField(GWMWindow *field)
 	return data->text;
 };
 
-void gwmResizeTextField(GWMWindow *field, int width)
-{
-	if (width < TEXTFIELD_MIN_WIDTH)
-	{
-		width = TEXTFIELD_MIN_WIDTH;
-	};
-	gwmResizeWindow(field, width, TEXTFIELD_HEIGHT);
-	gwmRedrawTextField(field);
-};
-
 void gwmWriteTextField(GWMWindow *field, const char *newText)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
@@ -719,5 +717,12 @@ void gwmSetTextFieldPlaceholder(GWMTextField *field, const char *placeholder)
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	free(data->placeholder);
 	data->placeholder = strdup(placeholder);
+	gwmRedrawTextField(field);
+};
+
+void gwmSetTextFieldWrap(GWMTextField *field, GWMbool wrap)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	data->wrap = wrap;
 	gwmRedrawTextField(field);
 };

@@ -253,54 +253,54 @@ static void gwmBoxRun(GWMLayout *layout, int x, int y, int width, int height)
 	BoxChild *child;
 	for (child=data->firstChild; child!=NULL; child=child->next)
 	{
+		int width, height;
+		if (child->layout != NULL)
+		{
+			child->layout->getMinSize(child->layout, &width, &height);
+		}
+		else if (child->win != NULL)
+		{
+			if (child->win->getMinSize != NULL)
+			{
+				child->win->getMinSize(child->win, &width, &height);
+			}
+			else if (child->win->layout != NULL)
+			{
+				child->win->layout->getMinSize(child->win->layout, &width, &height);
+			}
+			else
+			{
+				width = child->win->canvas->width;
+				height = child->win->canvas->height;
+			};
+		}
+		else
+		{
+			width = 0;
+			height = 0;
+		};
+		
+		if (data->flags & GWM_BOX_VERTICAL)
+		{
+			child->len = height;
+			if (child->flags & GWM_BOX_UP) child->len += child->border;
+			if (child->flags & GWM_BOX_DOWN) child->len += child->border;
+			child->otherLen = width;
+			if (child->flags & GWM_BOX_LEFT) child->otherLen += child->border;
+			if (child->flags & GWM_BOX_RIGHT) child->otherLen += child->border;
+		}
+		else
+		{
+			child->len = width;
+			if (child->flags & GWM_BOX_LEFT) child->len += child->border;
+			if (child->flags & GWM_BOX_RIGHT) child->len += child->border;
+			child->otherLen = height;
+			if (child->flags & GWM_BOX_UP) child->otherLen += child->border;
+			if (child->flags & GWM_BOX_DOWN) child->otherLen += child->border;
+		};
+		
 		if (child->proportion == 0)
 		{
-			int width, height;
-			if (child->layout != NULL)
-			{
-				child->layout->getMinSize(child->layout, &width, &height);
-			}
-			else if (child->win != NULL)
-			{
-				if (child->win->getMinSize != NULL)
-				{
-					child->win->getMinSize(child->win, &width, &height);
-				}
-				else if (child->win->layout != NULL)
-				{
-					child->win->layout->getMinSize(child->win->layout, &width, &height);
-				}
-				else
-				{
-					width = child->win->canvas->width;
-					height = child->win->canvas->height;
-				};
-			}
-			else
-			{
-				width = 0;
-				height = 0;
-			};
-			
-			if (data->flags & GWM_BOX_VERTICAL)
-			{
-				child->len = height;
-				if (child->flags & GWM_BOX_UP) child->len += child->border;
-				if (child->flags & GWM_BOX_DOWN) child->len += child->border;
-				child->otherLen = width;
-				if (child->flags & GWM_BOX_LEFT) child->otherLen += child->border;
-				if (child->flags & GWM_BOX_RIGHT) child->otherLen += child->border;
-			}
-			else
-			{
-				child->len = width;
-				if (child->flags & GWM_BOX_LEFT) child->len += child->border;
-				if (child->flags & GWM_BOX_RIGHT) child->len += child->border;
-				child->otherLen = height;
-				if (child->flags & GWM_BOX_UP) child->otherLen += child->border;
-				if (child->flags & GWM_BOX_DOWN) child->otherLen += child->border;
-			};
-			
 			totalFixed += child->len;
 		}
 		else

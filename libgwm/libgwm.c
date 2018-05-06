@@ -41,6 +41,7 @@
 #include <fcntl.h>
 #include <semaphore.h>
 #include <fstools.h>
+#include <assert.h>
 
 static int queueFD;
 static volatile int initFinished = 0;
@@ -323,6 +324,10 @@ int gwmInit()
 	gwmColorSelectionP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.selection", GWM_TYPE_COLOR, NULL);
 	gwmBackColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.winback", GWM_TYPE_COLOR, NULL);
 	gwmEditorColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.editor", GWM_TYPE_COLOR, NULL);
+	
+	assert(gwmColorSelectionP != NULL);
+	assert(gwmBackColorP != NULL);
+	assert(gwmEditorColorP != NULL);
 	
 	return 0;
 };

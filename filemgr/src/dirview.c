@@ -55,6 +55,9 @@ static void dvRedraw(DirView *dv)
 		int y = (entIndex / entsPerLine) * 100 - data->scroll;
 		int x = (entIndex % entsPerLine) * 100;
 		
+		ent->baseX = x;
+		ent->baseY = y;
+		
 		if (ent->selected)
 		{
 			ddiFillRect(canvas, x, y, 100, 100, GWM_COLOR_SELECTION);
@@ -210,6 +213,51 @@ static void dvOpen(DirView *dv)
 	};
 };
 
+static void doRename(DirView *dv, DirViewData *data)
+{
+	char *dir = strdup(data->editing->path);
+	strrchr(dir, '/')[1] = 0;
+	
+	if (chdir(dir) != 0)
+	{
+		gwmMessageBox(topWindow, "Rename", "Failed to switch directory", GWM_MBUT_OK | GWM_MBICON_ERROR);
+	}
+	else
+	{
+		const char *newname = gwmReadTextField(data->txtEdit);
+		if (strchr(newname, '/') != NULL)
+		{
+			gwmMessageBox(topWindow, "Rename", "A file name is not allwoed to contain slashes (/)",
+					GWM_MBUT_OK | GWM_MBICON_ERROR);
+		}
+		else
+		{
+			if (rename(data->editing->name, newname) != 0)
+			{
+				char errbuf[2048];
+				sprintf(errbuf, "Failed to rename file: %s", strerror(errno));
+				gwmMessageBox(topWindow, "Rename", errbuf, GWM_MBUT_OK | GWM_MBICON_ERROR);
+			}
+			else
+			{
+				free(data->editing->name);
+				data->editing->name = strdup(newname);
+				free(data->editing->path);
+				
+				data->editing->path = (char*) malloc(strlen(dir) + strlen(newname) + 1);
+				sprintf(data->editing->path, "%s%s", dir, newname);
+			};
+		};
+	};
+	
+	free(dir);
+	data->editing = NULL;
+	gwmSetWindowFlags(dv, GWM_WINDOW_MKFOCUSED);
+	gwmDestroyTextField(data->txtEdit);
+	data->txtEdit = NULL;
+	dvRedraw(dv);
+};
+
 static int dvHandler(GWMEvent *ev, DirView *dv, void *context)
 {
 	DirViewData *data = (DirViewData*) context;
@@ -266,6 +314,10 @@ static int dvHandler(GWMEvent *ev, DirView *dv, void *context)
 	case GWM_EVENT_RETHEME:
 		dvRedraw(dv);
 		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_EDIT_END:
+	case GWM_EVENT_COMMAND:			/* GWM_SYM_OK when user presses ENTER in name editor */
+		doRename(dv, data);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -298,7 +350,9 @@ DirView* dvNew(GWMWindow *parent)
 	data->ents = NULL;
 	data->location = NULL;
 	data->sbar = NULL;
-		
+	data->editing = NULL;
+	data->txtEdit = NULL;
+	
 	dv->getMinSize = dvMinSize;
 	dv->getPrefSize = dvPrefSize;
 	dv->position = dvPosition;
@@ -428,4 +482,31 @@ void dvAttachScrollbar(DirView *dv, GWMScrollbar *sbar)
 	data->sbar = sbar;
 	gwmPushEventHandler(sbar, dvScrollHandler, dv);
 	dvRedraw(dv);
+};
+
+void dvRename(DirView *dv)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	
+	// find a selected DirEntry
+	DirEntry *ent;
+	for (ent=data->ents; ent!=NULL; ent=ent->next)
+	{
+		if (ent->selected) break;
+	};
+	
+	if (ent != NULL)
+	{
+		// OK, we found an entry to edit
+		data->editing = ent;
+		
+		GWMTextField *edit = gwmNewTextField(dv);
+		edit->position(edit, ent->baseX, ent->baseY+66, 100, 100-66);
+		gwmSetTextFieldWrap(edit, 1);
+		gwmSetWindowFlags(edit, GWM_WINDOW_MKFOCUSED);
+		gwmWriteTextField(edit, ent->name);
+		gwmTextFieldSelectAll(edit);
+		
+		data->txtEdit = edit;
+	};
 };

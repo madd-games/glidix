@@ -75,6 +75,7 @@ static StockLabel labels[] = {
 	{GWM_SYM_ITALIC,		"Italic"},
 	{GWM_SYM_UNDERLINE,		"Underline"},
 	{GWM_SYM_STRIKE,		"Strike"},
+	{GWM_SYM_RENAME,		"Rename"},
 	
 	// LIST TERMINATOR
 	{GWM_SYM_NONE, ""},

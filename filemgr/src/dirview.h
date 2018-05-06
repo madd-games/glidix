@@ -79,6 +79,11 @@ typedef struct DirEntry_
 	 * Is the entry selected?
 	 */
 	int						selected;
+	
+	/**
+	 * Base X/Y of the tile.
+	 */
+	int						baseX, baseY;
 } DirEntry;
 
 /**
@@ -110,6 +115,12 @@ typedef struct
 	 * Scroll position.
 	 */
 	int						scroll;
+	
+	/**
+	 * Current directory entry being edited (renamed) and the text field editing it.
+	 */
+	DirEntry*					editing;
+	GWMTextField*					txtEdit;
 } DirViewData;
 
 /**
@@ -137,5 +148,10 @@ const char* dvGetLocation(DirView *dv);
  * Set the scrollbar attached to the directory view.
  */
 void dvAttachScrollbar(DirView *dv, GWMScrollbar *sbar);
+
+/**
+ * Rename the currently-selected entry in the directory if any.
+ */
+void dvRename(DirView *dv);
 
 #endif

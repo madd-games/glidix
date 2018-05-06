@@ -628,6 +628,7 @@ typedef struct
 #define	GWM_SYM_ITALIC				32
 #define	GWM_SYM_UNDERLINE			33
 #define	GWM_SYM_STRIKE				34
+#define	GWM_SYM_RENAME				35
 
 /**
  * Starting numbers for event classes.
@@ -664,6 +665,7 @@ typedef struct
 #define	GWM_EVENT_TAB_FADING			(GWM_EVENT_CASCADING + 5)
 #define	GWM_EVENT_TAB_FADED			(GWM_EVENT_CASCADING + 6)
 #define	GWM_EVENT_TAB_ACTIVATED			(GWM_EVENT_CASCADING + 7)
+#define	GWM_EVENT_EDIT_END			(GWM_EVENT_CASCADING + 8)
 
 /**
  * General event structure.
@@ -1620,6 +1622,11 @@ void gwmSetTextFieldIcon(GWMTextField *field, DDISurface *icon);
  * Set the placeholder text for the text field.
  */
 void gwmSetTextFieldPlaceholder(GWMTextField *field, const char *placeholder);
+
+/**
+ * Set whether the given text field should wrap text. False by default.
+ */
+void gwmSetTextFieldWrap(GWMTextField *field, GWMbool wrap);
 
 /**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
