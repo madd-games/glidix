@@ -154,4 +154,9 @@ void dvAttachScrollbar(DirView *dv, GWMScrollbar *sbar);
  */
 void dvRename(DirView *dv);
 
+/**
+ * Create a new directory.
+ */
+void dvMakeDir(DirView *dv);
+
 #endif

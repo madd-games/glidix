@@ -77,6 +77,11 @@ typedef struct
 	 * Whether the text should wrap (false by default).
 	 */
 	int			wrap;
+	
+	/**
+	 * Text alignment (left by default).
+	 */
+	int			align;
 } GWMTextFieldData;
 
 static DDIFont *fntPlaceHolder;
@@ -120,6 +125,7 @@ void gwmRedrawTextField(GWMWindow *field)
 	if (data->pen != NULL)
 	{
 		ddiSetPenWrap(data->pen, data->wrap);
+		ddiSetPenAlignment(data->pen, data->wrap);
 		if (data->flags & GWM_TXT_MASKED) ddiPenSetMask(data->pen, 1);
 		if (data->focused) ddiSetPenCursor(data->pen, data->cursorPos);
 		
@@ -182,6 +188,7 @@ void gwmRedrawTextField(GWMWindow *field)
 		
 		static DDIColor colPlaceHolder = {0x77, 0x77, 0x77, 0xFF};
 		DDIPen *pen = ddiCreatePen(&canvas->format, fntPlaceHolder, penX, 2, canvas->width-penX, canvas->height-3, 0, 0, NULL);
+		ddiSetPenAlignment(pen, data->align);
 		ddiSetPenColor(pen, &colPlaceHolder);
 		ddiSetPenWrap(pen, data->wrap);
 		ddiWritePen(pen, data->placeholder);
@@ -634,6 +641,7 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->icon = NULL;
 	data->placeholder = NULL;
 	data->wrap = 0;
+	data->align = DDI_ALIGN_LEFT;
 	
 	field->getMinSize = field->getPrefSize = txtGetSize;
 	field->position = txtPosition;
@@ -724,5 +732,12 @@ void gwmSetTextFieldWrap(GWMTextField *field, GWMbool wrap)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->wrap = wrap;
+	gwmRedrawTextField(field);
+};
+
+void gwmSetTextFieldAlignment(GWMTextField *field, int align)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	data->align = align;
 	gwmRedrawTextField(field);
 };

@@ -46,4 +46,17 @@ enum
 	DV_EVENT_CHDIR,
 };
 
+/**
+ * File manager symbols.
+ */
+enum
+{
+	FILEMGR_SYM_ = GWM_SYM_USER,
+	
+	/**
+	 * DirView-related commands.
+	 */
+	DV_SYM_MKDIR,
+};
+
 #endif

@@ -28,6 +28,7 @@
 
 #include <fstools.h>
 #include <assert.h>
+#include <sys/stat.h>
 
 #include "dirview.h"
 #include "filemgr.h"
@@ -385,6 +386,7 @@ static int listDir(const char *path, DirEntry **out)
 		sprintf(fullpath, "%s/%s", path, ent->d_name);
 		
 		DirEntry *ment = (DirEntry*) malloc(sizeof(DirEntry));
+		memset(ment, 0, sizeof(DirEntry));
 		ment->next = NULL;
 		
 		if (last == NULL)
@@ -503,10 +505,78 @@ void dvRename(DirView *dv)
 		GWMTextField *edit = gwmNewTextField(dv);
 		edit->position(edit, ent->baseX, ent->baseY+66, 100, 100-66);
 		gwmSetTextFieldWrap(edit, 1);
+		gwmSetTextFieldAlignment(edit, DDI_ALIGN_CENTER);
 		gwmSetWindowFlags(edit, GWM_WINDOW_MKFOCUSED);
 		gwmWriteTextField(edit, ent->name);
 		gwmTextFieldSelectAll(edit);
 		
 		data->txtEdit = edit;
 	};
+};
+
+void dvMakeDir(DirView *dv)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	
+	// unselect all entries
+	DirEntry *ent;
+	for (ent=data->ents; ent!=NULL; ent=ent->next)
+	{
+		ent->selected = 0;
+	};
+	
+	// change to the containing directory
+	if (chdir(data->location) != 0)
+	{
+		gwmMessageBox(topWindow, "New directory", "Failed to change directory", GWM_MBUT_OK | GWM_MBICON_ERROR);
+		return;
+	};
+	
+	// choose a suitable name
+	int i;
+	char namebuf[128];
+	for (i=0;;i++)
+	{
+		if (i == 0) strcpy(namebuf, "New directory");
+		else sprintf(namebuf, "New directory (%d)", i);
+		
+		if (mkdir(namebuf, 0755) == 0)
+		{
+			break;
+		};
+		
+		if (errno != EEXIST)
+		{
+			char errbuf[2048];
+			sprintf(errbuf, "Cannot create directory: %s", strerror(errno));
+			gwmMessageBox(topWindow, "New directory", errbuf, GWM_MBUT_OK | GWM_MBICON_ERROR);
+			return;
+		};
+	};
+	
+	// create an entry and select it
+	ent = (DirEntry*) malloc(sizeof(DirEntry));
+	memset(ent, 0, sizeof(DirEntry));
+	
+	ent->mime = fsGetType(namebuf);
+	ent->icon = gwmGetFileIcon(ent->mime->iconName, GWM_FICON_LARGE);
+	ent->name = strdup(namebuf);
+	ent->path = realpath(namebuf, NULL);
+	ent->selected = 1;
+	
+	// append the entry
+	if (data->ents == NULL) data->ents = ent;
+	else
+	{
+		DirEntry *last = data->ents;
+		while (last->next != NULL) last = last->next;
+		last->next = ent;
+		ent->prev = last;
+	};
+	
+	// redraw the directory view so that the tile coordinates are found
+	dvRedraw(dv);
+	
+	// now rename it
+	dvRename(dv);
 };

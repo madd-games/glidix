@@ -78,6 +78,9 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 	case GWM_SYM_RENAME:
 		dvRename(dirView);
 		return GWM_EVSTATUS_OK;
+	case DV_SYM_MKDIR:
+		dvMakeDir(dirView);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -136,6 +139,8 @@ int main(int argc, char *argv[])
 	GWMMenu *menuEdit = gwmCreateMenu();
 	gwmMenubarAdd(menubar, "Edit", menuEdit);
 	
+	gwmMenuAddCommand(menuEdit, DV_SYM_MKDIR, "New directory", NULL);
+	gwmMenuAddSeparator(menuEdit);
 	gwmMenuAddCommand(menuEdit, GWM_SYM_RENAME, NULL, NULL);
 	
 	GWMLayout *toolbar = wt.wtToolbar;

@@ -1629,6 +1629,11 @@ void gwmSetTextFieldPlaceholder(GWMTextField *field, const char *placeholder);
 void gwmSetTextFieldWrap(GWMTextField *field, GWMbool wrap);
 
 /**
+ * Set text alignment in a text field (DDI_ALIGN_*). Left by default.
+ */
+void gwmSetTextFieldAlignment(GWMTextField *field, int align);
+
+/**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
  * Returns 0 on success, -1 on error.
  */
