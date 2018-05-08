@@ -597,7 +597,7 @@ int elfExec(const char *path, const char *pars, size_t parsz)
 	
 	// allocate a 2MB stack
 	vmMap(0x200000, 0x200000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, NULL, 0);
-
+	
 	// make sure we jump to the entry upon return
 	regs.rip = elfHeader.e_entry;
 

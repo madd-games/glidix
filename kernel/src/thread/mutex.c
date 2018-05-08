@@ -50,38 +50,52 @@ void mutexLock(Mutex *mutex)
 		return;
 	};
 	
-	// wait until we are allowed to attempt lazy locking
-	while (1)
+	// take the lock
+	uint64_t flags = getFlagsRegister();
+	cli();
+	spinlockAcquire(&mutex->lock);
+	
+	if (mutex->owner == NULL)
 	{
-		uint16_t waiters = mutex->numQueue;
-		if (waiters == MUTEX_MAX_QUEUE)
-		{
-			continue;
-		};
-		
-		if (atomic_compare_and_swap16(&mutex->numQueue, waiters, waiters+1) == waiters)
-		{
-			break;
-		};
+		mutex->owner = getCurrentThread();
+		mutex->numLocks = 1;
+		spinlockRelease(&mutex->lock);
+		setFlagsRegister(flags);
+		return;
 	};
 	
-	// get a ticket and enter the queue
-	uint16_t ticket = __sync_fetch_and_add(&mutex->cntEntry, 1) & (MUTEX_MAX_QUEUE-1);
-	mutex->queue[ticket] = getCurrentThread();
+	// couldn't immediately acquire, add us to the queue
+	MutexWaiter waiter;
+	waiter.thread = getCurrentThread();
+	waiter.next = NULL;
+	waiter.awaken = 0;
 	
-	while ((mutex->cntExit & (MUTEX_MAX_QUEUE-1)) != ticket)
+	if (mutex->first == NULL)
 	{
-		cli();
-		lockSched();
+		mutex->first = mutex->last = &waiter;
+	}
+	else
+	{
+		mutex->last->next = &waiter;
+		mutex->last = &waiter;
+	};
+	
+	while (!waiter.awaken)
+	{
 		waitThread(getCurrentThread());
-		unlockSched();
+		spinlockRelease(&mutex->lock);
 		kyield();
+		
+		cli();
+		spinlockAcquire(&mutex->lock);
 	};
 	
-	mutex->owner = getCurrentThread();
-	mutex->queue[ticket] = NULL;
+	// mutex->owner was set by the previous owner to us when they set awaken to 1
+	// and also they removed out waiter from the queue
+	spinlockRelease(&mutex->lock);
+	setFlagsRegister(flags);
+	
 	mutex->numLocks = 1;
-	__sync_fetch_and_add(&mutex->numQueue, -1);
 };
 
 int mutexTryLock(Mutex *mutex)
@@ -92,21 +106,20 @@ int mutexTryLock(Mutex *mutex)
 		return 0;
 	};
 	
-	uint16_t entry = mutex->cntEntry;
-	uint16_t ticket = entry & (MUTEX_MAX_QUEUE-1);
+	cli();
+	spinlockAcquire(&mutex->lock);
 	
-	if ((mutex->cntExit & (MUTEX_MAX_QUEUE-1)) == ticket)
+	if (mutex->owner == NULL)
 	{
-		if (atomic_compare_and_swap16(&mutex->cntEntry, entry, entry+1) == entry)
-		{
-			// we got a ticket
-			mutex->owner = getCurrentThread();
-			mutex->queue[ticket] = NULL;
-			mutex->numLocks = 1;
-			return 0;
-		};
+		mutex->owner = getCurrentThread();
+		mutex->numLocks = 1;
+		spinlockRelease(&mutex->lock);
+		sti();
+		return 0;
 	};
 	
+	spinlockRelease(&mutex->lock);
+	sti();
 	return -1;
 };
 
@@ -127,23 +140,22 @@ void mutexUnlock(Mutex *mutex)
 		return;
 	};
 	
-	mutex->owner = NULL;
+	uint64_t flags = getFlagsRegister();
+	cli();
+	spinlockAcquire(&mutex->lock);
 	
-	uint16_t nextToGo = __sync_add_and_fetch(&mutex->cntExit, 1) & (MUTEX_MAX_QUEUE-1);
-	Thread *thread = mutex->queue[nextToGo];
-	
-	if (thread != NULL)
+	if (mutex->first != NULL)
 	{
-		int doResched = 0;
-		cli();
-		lockSched();
-		thread = mutex->queue[nextToGo];
-		if (thread != NULL)
-		{
-			doResched = signalThread(thread);
-		};
-		unlockSched();
-		if (doResched) kyield();
-		sti();
+		mutex->first->awaken = 1;
+		signalThread(mutex->first->thread);
+		mutex->owner = mutex->first->thread;
+		mutex->first = mutex->first->next;
+	}
+	else
+	{
+		mutex->owner = NULL;
 	};
+	
+	spinlockRelease(&mutex->lock);
+	setFlagsRegister(flags);
 };

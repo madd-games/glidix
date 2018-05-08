@@ -34,42 +34,38 @@
  */
 
 #include <glidix/util/common.h>
+#include <glidix/thread/spinlock.h>
 
-/**
- * Number of threads that are allowed to go into a mutex queue at once. Must be power of
- * 2. When the queue is exhausted, busy-waiting will be employed so beware.
- */
-#define	MUTEX_MAX_QUEUE					512
+typedef struct MutexWaiter_
+{
+	struct _Thread*			thread;
+	struct MutexWaiter_*		next;
+	int				awaken;
+} MutexWaiter;
 
 typedef struct
 {
 	/**
-	 * Number of threads queing up.
+	 * Spinlock.
 	 */
-	uint16_t					numQueue;
+	Spinlock			lock;
 	
 	/**
-	 * Number of times the current owner has locked the mutex.
-	 * BELONGS TO THE OWNER.
+	 * Current owner of the mutex; NULL means nobody.
 	 */
-	uint16_t					numLocks;
+	struct _Thread*			owner;
 	
 	/**
-	 * Entry and exit counters. 'cntExit' is written to ONLY by the unlocking
-	 * thread.
+	 * Number of times the current owner has recursively locked the mutex. This field
+	 * is owned by the mutex owner!
 	 */
-	uint16_t					cntEntry;
-	uint16_t					cntExit;
+	int				numLocks;
 	
 	/**
-	 * Current owner.
+	 * Waiting queue.
 	 */
-	struct _Thread*					owner;
-	
-	/**
-	 * Queue of threads.
-	 */
-	struct _Thread*					queue[MUTEX_MAX_QUEUE];
+	MutexWaiter*			first;
+	MutexWaiter*			last;
 } Mutex;
 
 void mutexInit(Mutex *mutex);
