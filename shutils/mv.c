@@ -1,5 +1,5 @@
 /*
-	Glidix Runtime
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,67 +26,27 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _FCNTL_H
-#define _FCNTL_H
+#include <sys/call.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <string.h>
 
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#define	O_WRONLY			(1 << 0)
-#define	O_RDONLY			(1 << 1)
-#define	O_RDWR				(O_WRONLY | O_RDONLY)
-#define	O_APPEND			(1 << 2)
-#define	O_CREAT				(1 << 3)
-#define	O_EXCL				(1 << 4)
-#define	O_NOCTTY			(1 << 5)
-#define	O_TRUNC				(1 << 6)
-#define	O_DSYNC				(1 << 7)
-#define	O_NONBLOCK			(1 << 8)
-#define	O_RSYNC				(1 << 9)
-#define	O_SYNC				(1 << 10)
-#define	O_CLOEXEC			(1 << 11)
-#define	O_ACCMODE			(O_RDWR)
-
-#define	FD_CLOEXEC			O_CLOEXEC
-
-#define	F_DUPFD				0
-#define	F_GETFD				1
-#define	F_SETFD				2
-#define	F_GETFL				3
-#define	F_SETFL				4
-#define	F_GETLK				5
-#define	F_SETLK				6
-#define	F_SETLKW			7
-
-/* lock types */
-#define	F_UNLCK				0
-#define	F_RDLCK				1
-#define	F_WRLCK				2
-
-/* file descriptor for current directory */
-#define	AT_FDCWD			0xFFFF
-
-struct flock
+int main(int argc, char *argv[])
 {
-	short int				l_type;
-	short int				l_whence;
-	int					l_pid;
-	off_t					l_start;
-	off_t					l_len;
-	unsigned long				__l_resv[8];
+	if (argc != 3)
+	{
+		fprintf(stderr, "USAGE:\t%s <source> <destionation>\n", argv[0]);
+		fprintf(stderr, "\tMove or rename <source> to <destination>\n");
+		return 1;
+	};
+	
+	if (__syscall(__SYS_mv, AT_FDCWD, argv[1], AT_FDCWD, argv[2], 0) != 0)
+	{
+		fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
+		return 1;
+	};
+	
+	return 0;
 };
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* implemented by the runtime */
-int open(const char *path, int oflag, ...);
-int fcntl(int fd, int cmd, ...);
-int creat(const char *path, mode_t mode);
-
-#ifdef __cplusplus
-}	/* extern "C" */
-#endif
-
-#endif

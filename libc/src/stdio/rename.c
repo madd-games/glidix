@@ -27,48 +27,13 @@
 */
 
 #include <sys/stat.h>
+#include <sys/call.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 
 int rename(const char *oldpath, const char *newpath)
 {
-	struct stat st_old, st_new;
-	if (lstat(oldpath, &st_old) != 0)
-	{
-		return -1;
-	};
-
-	if (lstat(newpath, &st_new) == 0)
-	{
-		if ((st_new.st_dev == st_old.st_dev) && (st_new.st_ino == st_old.st_ino))
-		{
-			// same file, do nothing.
-			return 0;
-		};
-
-		if (st_new.st_dev != st_old.st_dev)
-		{
-			// don't even try to do a cross-device rename
-			errno = EXDEV;
-			return -1;
-		};
-
-		if (unlink(newpath) != 0)
-		{
-			return -1;
-		};
-	};
-
-	if (link(oldpath, newpath) != 0)
-	{
-		return -1;
-	};
-
-	if (unlink(oldpath) != 0)
-	{
-		return -1;
-	};
-
-	return 0;
+	return (int) __syscall(__SYS_mv, AT_FDCWD, oldpath, AT_FDCWD, newpath, 0);
 };

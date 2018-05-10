@@ -161,6 +161,16 @@
 #define	VFS_AT_NOVALID			(1 << 16)		/* do not validate (ignore ROFS) */
 
 /**
+ * File descriptor referring to the current working directory.
+ */
+#define	VFS_AT_FDCWD			0xFFFF
+
+/**
+ * vfsMove() flags.
+ */
+#define	VFS_MV_EXCL			(1 << 0)		/* do not replace 'newpath' if already exists */
+
+/**
  * Access control list stuff.
  */
 #define	VFS_ACL_SIZE			128
@@ -1098,5 +1108,11 @@ int vfsChangeXPerm(InodeRef startdir, const char *path, uint64_t ixperm, uint64_
  * them). Returns -EOVERFLOW if there is no dentry for the given key, or any higher one.
  */
 ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out);
+
+/**
+ * Move an inode from one dentry to another. This is used to implement rename(). Returns 0 on success, error number
+ * on error.
+ */
+int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const char *newpath, int flags);
 
 #endif

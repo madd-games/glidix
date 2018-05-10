@@ -2478,3 +2478,97 @@ ssize_t vfsReadDir(Inode *inode, int key, struct kdirent **out)
 	if (haveHigher) return -ENOENT;
 	else return -EOVERFLOW;
 };
+
+int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const char *newpath, int flags)
+{
+	int allFlags = VFS_MV_EXCL;
+	if ((flags & allFlags) != flags)
+	{
+		// unknown bits set in 'flags'
+		return EINVAL;
+	};
+	
+	int error;
+	DentryRef drefOld = vfsGetDentry(startold, oldpath, 0, &error);
+	if (drefOld.dent == NULL)
+	{
+		vfsUnrefDentry(drefOld);
+		return error;
+	};
+	
+	DentryRef drefNew = vfsGetDentry(startnew, newpath, 1, &error);
+	if (drefNew.dent == NULL)
+	{
+		vfsUnrefDentry(drefOld);
+		vfsUnrefDentry(drefNew);
+		return error;
+	};
+	
+	if (drefNew.dent == drefOld.dent)
+	{
+		// same file; do nothing and report success
+		vfsUnrefDentry(drefOld);
+		vfsUnrefDentry(drefNew);
+		return 0;
+	};
+	
+	if (drefNew.dent->dir->fs != drefOld.dent->dir->fs)
+	{
+		// different filesystem; cannot move
+		vfsUnrefDentry(drefOld);
+		if (drefNew.dent->ino != 0) vfsUnrefDentry(drefNew);
+		else vfsRemoveDentry(drefNew);
+		return EXDEV;
+	};
+	
+	if (drefNew.dent->ino != 0)
+	{
+		if (flags & VFS_MV_EXCL)
+		{
+			vfsUnrefDentry(drefOld);
+			vfsUnrefDentry(drefNew);
+			return EEXIST;
+		};
+		
+		vfsCallInInode(drefNew.dent);
+		if (drefNew.dent->target == NULL)
+		{
+			vfsUnrefDentry(drefOld);
+			vfsUnrefDentry(drefNew);
+			return EIO;
+		};
+		
+		if ((drefNew.dent->target->mode & VFS_MODE_TYPEMASK) == VFS_MODE_DIRECTORY)
+		{
+			if (drefNew.dent->target->dents != NULL)
+			{
+				vfsUnrefDentry(drefOld);
+				vfsUnrefDentry(drefNew);
+				return ENOTEMPTY;
+			};
+		
+			if (drefNew.dent->target->refcount != 1)
+			{
+				vfsUnrefDentry(drefOld);
+				vfsUnrefDentry(drefNew);
+				return EBUSY;
+			};
+		};
+		
+		Inode *removing = drefNew.dent->target;
+		drefNew.dent->target = NULL;
+		vfsLinkDown(removing);
+	};
+	
+	// move it
+	drefNew.dent->ino = drefOld.dent->ino;
+	drefNew.dent->target = drefOld.dent->target;
+	
+	drefOld.dent->ino = 0;
+	drefOld.dent->target = NULL;
+	vfsRemoveDentry(drefOld);
+	
+	// done
+	vfsUnrefDentry(drefNew);
+	return 0;
+};

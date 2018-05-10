@@ -3437,11 +3437,69 @@ int sys_modstat(int block, ModuleState *ustate)
 	};
 };
 
+static InodeRef fd2iref(int dirfd, int *error)
+{
+	if (dirfd == VFS_AT_FDCWD)
+	{
+		return vfsGetCurrentDir();
+	}
+	else
+	{
+		File *fp = ftabGet(getCurrentThread()->ftab, dirfd);
+		if (fp == NULL)
+		{
+			*error = EBADF;
+			return VFS_NULL_IREF;
+		};
+		
+		if ((fp->iref.inode->mode & VFS_MODE_TYPEMASK) != VFS_MODE_DIRECTORY)
+		{
+			vfsClose(fp);
+			*error = ENOTDIR;
+			return VFS_NULL_IREF;
+		};
+		
+		InodeRef result = vfsCopyInodeRef(fp->iref);
+		vfsClose(fp);
+		return result;
+	};
+};
+
+int sys_mv(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags)
+{
+	int error;
+	InodeRef oldstart = fd2iref(olddirfd, &error);
+	if (oldstart.inode == NULL)
+	{
+		vfsUnrefInode(oldstart);
+		ERRNO = error;
+		return -1;
+	};
+	
+	InodeRef newstart = fd2iref(newdirfd, &error);
+	if (newstart.inode == NULL)
+	{
+		vfsUnrefInode(oldstart);
+		vfsUnrefInode(newstart);
+		ERRNO = error;
+		return -1;
+	};
+	
+	int status = vfsMove(oldstart, oldpath, newstart, newpath, flags);
+	if (status != 0)
+	{
+		ERRNO = status;
+		return -1;
+	};
+	
+	return 0;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 150
+#define SYSCALL_NUMBER 151
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3593,6 +3651,7 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_chroot,				// 147
 	&sys_modstat,				// 148
 	&sys_rmdir,				// 149
+	&sys_mv,				// 150
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 
