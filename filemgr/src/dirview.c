@@ -599,3 +599,79 @@ void dvMakeDir(DirView *dv)
 	// now rename it
 	dvRename(dv);
 };
+
+void dvMakeFile(DirView *dv, const void *content, size_t size)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	
+	// unselect all entries
+	DirEntry *ent;
+	for (ent=data->ents; ent!=NULL; ent=ent->next)
+	{
+		ent->selected = 0;
+	};
+	
+	// change to the containing directory
+	if (chdir(data->location) != 0)
+	{
+		gwmMessageBox(topWindow, "New file", "Failed to change directory", GWM_MBUT_OK | GWM_MBICON_ERROR);
+		return;
+	};
+	
+	// choose a suitable name
+	int i;
+	char namebuf[128];
+	for (i=0;;i++)
+	{
+		if (i == 0) strcpy(namebuf, "New file");
+		else sprintf(namebuf, "New file (%d)", i);
+		
+		int fd = open(namebuf, O_WRONLY | O_CREAT | O_EXCL, 0644);
+		if (fd == -1)
+		{
+			if (errno != EEXIST)
+			{
+				char errbuf[2048];
+				sprintf(errbuf, "Cannot create file: %s", strerror(errno));
+				gwmMessageBox(topWindow, "New file", errbuf, GWM_MBUT_OK | GWM_MBICON_ERROR);
+				return;
+			};
+		}
+		else
+		{
+			if (size != 0)
+			{
+				write(fd, content, size);
+				close(fd);
+			};
+			
+			break;
+		};
+	};
+	
+	// create an entry and select it
+	ent = (DirEntry*) malloc(sizeof(DirEntry));
+	memset(ent, 0, sizeof(DirEntry));
+	
+	ent->mime = fsGetType(namebuf);
+	ent->icon = gwmGetFileIcon(ent->mime->iconName, GWM_FICON_LARGE);
+	ent->name = strdup(namebuf);
+	ent->path = realpath(namebuf, NULL);
+	ent->selected = 1;
+	
+	// append the entry
+	if (data->ents == NULL) data->ents = ent;
+	else
+	{
+		DirEntry *last = data->ents;
+		while (last->next != NULL) last = last->next;
+		last->next = ent;
+		ent->prev = last;
+	};
+	
+	// redraw the directory view so that the tile coordinates are found
+	dvRedraw(dv);
+	
+	// now rename it
+	dvRename(dv);
+};

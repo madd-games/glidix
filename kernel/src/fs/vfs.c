@@ -2571,6 +2571,7 @@ int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const cha
 	drefNew.dent->target = drefOld.dent->target;
 	if (drefNew.dent->target != NULL) drefNew.dent->target->parent = drefNew.dent;
 	drefNew.dent->flags &= ~VFS_DENTRY_TEMP;
+	vfsDirtyInode(drefNew.dent->dir);
 	
 	drefOld.dent->ino = 0;
 	drefOld.dent->target = NULL;

@@ -266,7 +266,14 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 	};
 	
 	// make it send events to the main window
-	menu->win->parent = win;
+	if (gwmGetData(win, menuEventHandler) != NULL)
+	{
+		menu->win->parent = win->parent;
+	}
+	else
+	{
+		menu->win->parent = win;
+	};
 
 	DDISurface *canvas = gwmGetWindowCanvas(menu->win);
 	menu->background = ddiCreateSurface(&canvas->format, MENU_WIDTH, menuHeight, NULL, 0);
@@ -316,7 +323,7 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 	menu->focused = 1;
 	gwmPostDirty(menu->win);
 	gwmSetWindowFlags(menu->win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NODECORATE);
-	gwmPushEventHandler(menu->win, menuEventHandler, NULL);
+	gwmPushEventHandler(menu->win, menuEventHandler, (void*)1);
 };
 
 void gwmCloseMenu(GWMMenu *menu)

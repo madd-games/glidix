@@ -159,4 +159,9 @@ void dvRename(DirView *dv);
  */
 void dvMakeDir(DirView *dv);
 
+/**
+ * Create a new file with the specified content.
+ */
+void dvMakeFile(DirView *dv, const void *content, size_t size);
+
 #endif

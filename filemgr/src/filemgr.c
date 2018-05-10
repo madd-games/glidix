@@ -82,6 +82,9 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 	case DV_SYM_MKDIR:
 		dvMakeDir(dirView);
 		return GWM_EVSTATUS_OK;
+	case GWM_SYM_NEW_FILE:
+		dvMakeFile(dirView, NULL, 0);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -140,7 +143,10 @@ int main(int argc, char *argv[])
 	menuEdit = gwmCreateMenu();
 	gwmMenubarAdd(menubar, "Edit", menuEdit);
 	
-	gwmMenuAddCommand(menuEdit, DV_SYM_MKDIR, "New directory", NULL);
+	GWMMenu *menuNew = gwmMenuAddSub(menuEdit, "New...");
+	gwmMenuAddCommand(menuNew, DV_SYM_MKDIR, "Directory", NULL);
+	gwmMenuAddCommand(menuNew, GWM_SYM_NEW_FILE, "Empty file", NULL);
+
 	gwmMenuAddSeparator(menuEdit);
 	gwmMenuAddCommand(menuEdit, GWM_SYM_RENAME, NULL, NULL);
 	

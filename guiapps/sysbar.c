@@ -164,6 +164,11 @@ void loadAppFile(const char *filename)
 			continue;
 		};
 		
+		if (line[0] == 0)
+		{
+			continue;
+		};
+		
 		char *equals = strchr(line, '=');
 		if (equals == NULL)
 		{
