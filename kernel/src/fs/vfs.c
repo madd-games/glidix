@@ -2496,6 +2496,12 @@ int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const cha
 		return error;
 	};
 	
+	if (drefOld.dent->flags & VFS_DENTRY_TEMP)
+	{
+		vfsUnrefDentry(drefOld);
+		return EPERM;
+	};
+	
 	DentryRef drefNew = vfsGetDentry(startnew, newpath, 1, &error);
 	if (drefNew.dent == NULL)
 	{
@@ -2564,6 +2570,7 @@ int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const cha
 	drefNew.dent->ino = drefOld.dent->ino;
 	drefNew.dent->target = drefOld.dent->target;
 	if (drefNew.dent->target != NULL) drefNew.dent->target->parent = drefNew.dent;
+	drefNew.dent->flags &= ~VFS_DENTRY_TEMP;
 	
 	drefOld.dent->ino = 0;
 	drefOld.dent->target = NULL;

@@ -49,6 +49,7 @@ GWMWindow *topWindow;
 GWMTextField *txtPath;
 GWMTextField *txtSearch;
 DirView *dirView;
+GWMMenu *menuEdit;
 
 static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 {
@@ -136,7 +137,7 @@ int main(int argc, char *argv[])
 	
 	gwmMenuAddCommand(menuFile, GWM_SYM_EXIT, NULL, NULL);
 	
-	GWMMenu *menuEdit = gwmCreateMenu();
+	menuEdit = gwmCreateMenu();
 	gwmMenubarAdd(menubar, "Edit", menuEdit);
 	
 	gwmMenuAddCommand(menuEdit, DV_SYM_MKDIR, "New directory", NULL);

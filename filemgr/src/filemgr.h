@@ -32,6 +32,7 @@
 #include <libgwm.h>
 
 extern GWMWindow *topWindow;
+extern GWMMenu *menuEdit;
 
 /**
  * File manager events.

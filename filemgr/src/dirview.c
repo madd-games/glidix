@@ -261,6 +261,18 @@ static void doRename(DirView *dv, DirViewData *data)
 	dvRedraw(dv);
 };
 
+static int dvCommandHandler(GWMCommandEvent *ev, DirView *dv, DirViewData *data)
+{
+	switch (ev->symbol)
+	{
+	case GWM_SYM_OK:
+		doRename(dv, data);
+		return GWM_EVSTATUS_OK;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
+};
+
 static int dvHandler(GWMEvent *ev, DirView *dv, void *context)
 {
 	DirViewData *data = (DirViewData*) context;
@@ -306,6 +318,10 @@ static int dvHandler(GWMEvent *ev, DirView *dv, void *context)
 			
 			dvRedraw(dv);
 		}
+		else if (ev->keycode == GWM_KC_MOUSE_RIGHT)
+		{
+			gwmOpenMenu(menuEdit, dv, ev->x, ev->y);
+		}
 		else if (ev->keycode == GWM_KC_RETURN)
 		{
 			dvOpen(dv);
@@ -318,9 +334,10 @@ static int dvHandler(GWMEvent *ev, DirView *dv, void *context)
 		dvRedraw(dv);
 		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_EDIT_END:
-	case GWM_EVENT_COMMAND:			/* GWM_SYM_OK when user presses ENTER in name editor */
 		doRename(dv, data);
 		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_COMMAND:
+		return dvCommandHandler((GWMCommandEvent*) ev, dv, data);
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
