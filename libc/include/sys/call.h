@@ -181,6 +181,9 @@
 #define	__SYS_rmdir				149
 #define	__SYS_mv				150
 
+/* flags for __SYS_mv */
+#define	__MV_EXCL				(1 << 0)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

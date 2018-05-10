@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	if (__syscall(__SYS_mv, AT_FDCWD, argv[1], AT_FDCWD, argv[2], 0) != 0)
+	if (__syscall(__SYS_mv, AT_FDCWD, argv[1], AT_FDCWD, argv[2], __MV_EXCL) != 0)
 	{
 		fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
 		return 1;

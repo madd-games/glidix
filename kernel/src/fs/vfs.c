@@ -2563,6 +2563,7 @@ int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const cha
 	// move it
 	drefNew.dent->ino = drefOld.dent->ino;
 	drefNew.dent->target = drefOld.dent->target;
+	if (drefNew.dent->target != NULL) drefNew.dent->target->parent = drefNew.dent;
 	
 	drefOld.dent->ino = 0;
 	drefOld.dent->target = NULL;

@@ -29,6 +29,8 @@
 #include <fstools.h>
 #include <assert.h>
 #include <sys/stat.h>
+#include <sys/call.h>
+#include <fcntl.h>
 
 #include "dirview.h"
 #include "filemgr.h"
@@ -233,7 +235,7 @@ static void doRename(DirView *dv, DirViewData *data)
 		}
 		else
 		{
-			if (rename(data->editing->name, newname) != 0)
+			if (__syscall(__SYS_mv, AT_FDCWD, data->editing->name, AT_FDCWD, newname, __MV_EXCL) != 0)
 			{
 				char errbuf[2048];
 				sprintf(errbuf, "Failed to rename file: %s", strerror(errno));
