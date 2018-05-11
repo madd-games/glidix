@@ -323,11 +323,9 @@ int dialogHandler(GWMEvent *ev, GWMWindow *win, void *context)
 };
 
 int getTextFieldInt(GWMWindow* input)
-{
-	size_t size = gwmGetTextFieldSize(input);
-	if (size == 0) return -1;
-	
+{	
 	const char *buffer = gwmReadTextField(input);
+	if (buffer[0] == 0) return -1;
 	
 	int result, count;
 	int elements = sscanf(buffer, "%d%n", &result, &count);
