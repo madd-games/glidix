@@ -228,10 +228,27 @@ int logInCallback(void *ignore)
 				perror("setuid");
 				exit(1);
 			};
-
+			
+			// make sure the basic directories exist
+			mkdir("Desktop", 0755);
+			mkdir("Documents", 0755);
+			mkdir("Pictures", 0755);
+			mkdir("Music", 0755);
+			mkdir("Videos", 0755);
+			mkdir("Downloads", 0755);
+			
+			if (fork() == 0)
+			{
+				// the "-filemgr" is there to let the file manager distinguish that it must
+				// open a dekstop window by argv[0]
+				execl("/usr/bin/filemgr", "-filemgr", NULL);
+				perror("exec filemgr");
+				_exit(1);
+			};
+			
 			execl("/usr/bin/sysbar", "sysbar", NULL);
 			perror("exec");
-			exit(1);
+			_exit(1);
 		};
 		
 		return -1;

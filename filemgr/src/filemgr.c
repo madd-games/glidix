@@ -53,6 +53,7 @@ DirView *dirView;
 GWMMenu *menuEdit;
 DDIFont *fntCategory;
 Places *places;
+int desktopMode;
 
 static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 {
@@ -100,12 +101,27 @@ static int filemgrHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	case GWM_EVENT_COMMAND:
 		return filemgrCommand((GWMCommandEvent*) ev, win);
 	case DV_EVENT_CHDIR:
-		gwmWriteTextField(txtPath, dvGetLocation(dirView));
-		plRedraw(places);
+		if (!desktopMode)
+		{
+			gwmWriteTextField(txtPath, dvGetLocation(dirView));
+			plRedraw(places);
+		};
 		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
+};
+
+void makeEditMenu()
+{
+	menuEdit = gwmCreateMenu();
+	
+	GWMMenu *menuNew = gwmMenuAddSub(menuEdit, "New...");
+	gwmMenuAddCommand(menuNew, DV_SYM_MKDIR, "Directory", NULL);
+	gwmMenuAddCommand(menuNew, GWM_SYM_NEW_FILE, "Empty file", NULL);
+
+	gwmMenuAddSeparator(menuEdit);
+	gwmMenuAddCommand(menuEdit, GWM_SYM_RENAME, NULL, NULL);
 };
 
 int main(int argc, char *argv[])
@@ -119,6 +135,35 @@ int main(int argc, char *argv[])
 	
 	fntCategory = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_BOLD, NULL);
 	assert(fntCategory != NULL);
+	
+	if (argv[0][0] == '-')
+	{
+		desktopMode = 1;
+		makeEditMenu();
+		
+		// requesting to open the desktop window
+		int width, height;
+		gwmScreenSize(&width, &height);
+		
+		topWindow = gwmCreateWindow(NULL, "File manager", 0, 0, width, height-40,
+						GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NODECORATE);
+		GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+		gwmSetWindowLayout(topWindow, boxLayout);
+		
+		dirView = dvNew(topWindow);
+		gwmBoxLayoutAddWindow(boxLayout, dirView, 1, 0, GWM_BOX_FILL);
+		
+		dvGoTo(dirView, "Desktop");
+		gwmLayout(topWindow, width, height-40);
+		DDISurface *canvas = gwmGetWindowCanvas(topWindow);
+		static DDIColor transparent = {0, 0, 0, 0};
+		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
+		gwmPostDirty(topWindow);
+		gwmPushEventHandler(topWindow, filemgrHandler, NULL);
+		gwmSetWindowFlags(topWindow, GWM_WINDOW_NORESTACK | GWM_WINDOW_NOTASKBAR);
+		gwmMainLoop();
+		return 0;
+	};
 	
 	topWindow = gwmCreateWindow(NULL, "File manager",
 						GWM_POS_UNSPEC, GWM_POS_UNSPEC,
@@ -147,15 +192,8 @@ int main(int argc, char *argv[])
 	
 	gwmMenuAddCommand(menuFile, GWM_SYM_EXIT, NULL, NULL);
 	
-	menuEdit = gwmCreateMenu();
+	makeEditMenu();
 	gwmMenubarAdd(menubar, "Edit", menuEdit);
-	
-	GWMMenu *menuNew = gwmMenuAddSub(menuEdit, "New...");
-	gwmMenuAddCommand(menuNew, DV_SYM_MKDIR, "Directory", NULL);
-	gwmMenuAddCommand(menuNew, GWM_SYM_NEW_FILE, "Empty file", NULL);
-
-	gwmMenuAddSeparator(menuEdit);
-	gwmMenuAddCommand(menuEdit, GWM_SYM_RENAME, NULL, NULL);
 	
 	GWMLayout *toolbar = wt.wtToolbar;
 	GWMWindow *toolBack = gwmNewToolButton(topWindow);

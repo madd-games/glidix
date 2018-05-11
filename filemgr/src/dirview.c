@@ -47,7 +47,9 @@ static void dvRedraw(DirView *dv)
 	int entsPerLine = canvas->width/100;
 	if (entsPerLine == 0) return;
 
-	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, GWM_COLOR_EDITOR);
+	static DDIColor transparent = {0, 0, 0, 0};
+	if (desktopMode) ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
+	else ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, GWM_COLOR_EDITOR);
 	
 	int entIndex = 0;
 	int totalHeight = 0;
@@ -75,6 +77,8 @@ static void dvRedraw(DirView *dv)
 			DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), x+2, y+68, 98, 100-68-2, 0, 0, NULL);
 			assert(pen != NULL);
 			ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);
+			static DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};
+			if (desktopMode) ddiSetPenColor(pen, &white);
 			ddiWritePen(pen, ent->name);
 			ddiExecutePen(pen, canvas);
 			ddiDeletePen(pen);
@@ -160,7 +164,19 @@ static int doOpen(DirView *dv, DirEntry *ent)
 {
 	if (strcmp(ent->mime->mimename, "inode/directory") == 0)
 	{
-		dvGoTo(dv, ent->path);
+		if (desktopMode)
+		{
+			if (fork() == 0)
+			{
+				chdir(ent->path);
+				execl("/usr/bin/filemgr", "filemgr", NULL);
+				_exit(1);
+			};
+		}
+		else
+		{
+			dvGoTo(dv, ent->path);
+		};
 		return -1;
 	}
 	else

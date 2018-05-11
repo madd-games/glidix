@@ -34,6 +34,7 @@
 extern GWMWindow *topWindow;
 extern GWMMenu *menuEdit;
 extern DDIFont *fntCategory;
+extern int desktopMode;
 
 /**
  * File manager events.
