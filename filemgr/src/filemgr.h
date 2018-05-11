@@ -33,6 +33,7 @@
 
 extern GWMWindow *topWindow;
 extern GWMMenu *menuEdit;
+extern DDIFont *fntCategory;
 
 /**
  * File manager events.

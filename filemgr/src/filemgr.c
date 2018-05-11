@@ -44,12 +44,15 @@
 
 #include "dirview.h"
 #include "filemgr.h"
+#include "places.h"
 
 GWMWindow *topWindow;
 GWMTextField *txtPath;
 GWMTextField *txtSearch;
 DirView *dirView;
 GWMMenu *menuEdit;
+DDIFont *fntCategory;
+Places *places;
 
 static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 {
@@ -98,6 +101,7 @@ static int filemgrHandler(GWMEvent *ev, GWMWindow *win, void *context)
 		return filemgrCommand((GWMCommandEvent*) ev, win);
 	case DV_EVENT_CHDIR:
 		gwmWriteTextField(txtPath, dvGetLocation(dirView));
+		plRedraw(places);
 		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
@@ -112,6 +116,9 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "%s: gwmInit() failed\n", argv[0]);
 		return 1;
 	};
+	
+	fntCategory = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_BOLD, NULL);
+	assert(fntCategory != NULL);
 	
 	topWindow = gwmCreateWindow(NULL, "File manager",
 						GWM_POS_UNSPEC, GWM_POS_UNSPEC,
@@ -182,6 +189,21 @@ int main(int argc, char *argv[])
 	GWMSplitter *split = gwmNewSplitter(topWindow);
 	gwmSetSplitterFlags(split, GWM_SPLITTER_HORIZ);
 	gwmBoxLayoutAddWindow(boxLayout, split, 1, 0, GWM_BOX_FILL);
+	
+	GWMWindow *panelLeft = gwmGetSplitterPanel(split, 0);
+	GWMLayout *layoutLeft = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
+	gwmSetWindowLayout(panelLeft, layoutLeft);
+	
+	Places *pl = plNew(panelLeft);
+	places = pl;
+	gwmBoxLayoutAddWindow(layoutLeft, pl, 1, 0, GWM_BOX_FILL);
+	
+	struct passwd *pwd = getpwuid(geteuid());
+	assert(pwd != NULL);
+	
+	Category *catPlaces = plNewCat(pl, "Places");
+	plAddBookmark(catPlaces, icon, "Filesystem", "/");
+	plAddBookmark(catPlaces, ddiScale(gwmGetStockIcon(GWM_SYM_HOME), 16, 16, DDI_SCALE_BEST), "Home", pwd->pw_dir);
 	
 	GWMWindow *panelRight = gwmGetSplitterPanel(split, 1);
 	GWMLayout *layoutRight = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);

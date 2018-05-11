@@ -61,20 +61,24 @@ static void dvRedraw(DirView *dv)
 		ent->baseX = x;
 		ent->baseY = y;
 		
-		if (ent->selected)
-		{
-			ddiFillRect(canvas, x, y, 100, 100, GWM_COLOR_SELECTION);
-		};
-		
-		ddiBlit(ent->icon, 0, 0, canvas, x+18, y+2, 64, 64);
 		totalHeight = y + 100 + data->scroll;
-		 
-		DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), x+2, y+68, 98, 100-68-2, 0, 0, NULL);
-		assert(pen != NULL);
-		ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);
-		ddiWritePen(pen, ent->name);
-		ddiExecutePen(pen, canvas);
-		ddiDeletePen(pen);
+		
+		if (y > -100 && y < canvas->height)
+		{
+			if (ent->selected)
+			{
+				ddiFillRect(canvas, x, y, 100, 100, GWM_COLOR_SELECTION);
+			};
+		
+			ddiBlit(ent->icon, 0, 0, canvas, x+18, y+2, 64, 64);
+			
+			DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), x+2, y+68, 98, 100-68-2, 0, 0, NULL);
+			assert(pen != NULL);
+			ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);
+			ddiWritePen(pen, ent->name);
+			ddiExecutePen(pen, canvas);
+			ddiDeletePen(pen);
+		};
 		
 		entIndex++;
 	};
@@ -642,9 +646,9 @@ void dvMakeFile(DirView *dv, const void *content, size_t size)
 			if (size != 0)
 			{
 				write(fd, content, size);
-				close(fd);
 			};
-			
+
+			close(fd);
 			break;
 		};
 	};

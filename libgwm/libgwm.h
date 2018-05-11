@@ -43,6 +43,7 @@
 #define	GWM_WINDOW_NOSYSMENU			(1 << 4)
 #define	GWM_WINDOW_RESIZEABLE			(1 << 5)
 #define	GWM_WINDOW_NOICON			(1 << 6)
+#define	GWM_WINDOW_NORESTACK			(1 << 7)
 
 /**
  * Error codes.

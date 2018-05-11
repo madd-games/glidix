@@ -1137,25 +1137,28 @@ void wndSetFocused(Window *wnd)
 			};
 			
 			pthread_mutex_lock(&wnd->parent->lock);
-			if (wnd->next != NULL)
+			if ((wnd->params.flags & GWM_WINDOW_NORESTACK) == 0)
 			{
-				wnd->next->prev = wnd->prev;
+				if (wnd->next != NULL)
+				{
+					wnd->next->prev = wnd->prev;
 			
-				if (wnd->prev == NULL)
-				{
-					wnd->parent->children = wnd->next;
-				}
-				else
-				{
-					wnd->prev->next = wnd->next;
+					if (wnd->prev == NULL)
+					{
+						wnd->parent->children = wnd->next;
+					}
+					else
+					{
+						wnd->prev->next = wnd->next;
+					};
+			
+					Window *last = wnd->next;
+					while (last->next != NULL) last = last->next;
+			
+					last->next = wnd;
+					wnd->prev = last;
+					wnd->next = NULL;
 				};
-			
-				Window *last = wnd->next;
-				while (last->next != NULL) last = last->next;
-			
-				last->next = wnd;
-				wnd->prev = last;
-				wnd->next = NULL;
 			};
 			pthread_mutex_unlock(&wnd->parent->lock);
 			

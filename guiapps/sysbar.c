@@ -544,7 +544,7 @@ int main()
 	gwmScreenSize(&width, &height);
 	
 	win = gwmCreateWindow(NULL, "sysbar", 0, height-40, width, 40,
-				GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NODECORATE | GWM_WINDOW_NOTASKBAR);
+				GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NODECORATE | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NORESTACK);
 	
 	if (win == NULL)
 	{
