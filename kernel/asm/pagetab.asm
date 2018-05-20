@@ -122,8 +122,73 @@ frameRead:
 	pop	rbp
 	ret
 
+[global __zeroFrame]
+__zeroFrame:
+	push	rbp
+	mov	rbp, rsp
+	
+	; turn the frame address that was passed in into a valid PTE
+	shl	rdi, 12
+	or	rdi, 3	; present, write
+	
+	; allocate a page-aligned page-sized region on the stack to temporarily remap
+	sub	rsp, 0x1000
+	and	rsp, ~0xFFF
+	
+	; find the virtual address of the PTE (thanks to recursive mapping); put that in RDX
+	mov	rdx, rsp
+	mov	rax, 0xffffff8000000000
+	shr	rdx, 9
+	or	rdx, rax
+	
+	; preserve old PTE in R8, write the new PTE in
+	mov	r8, [rdx]
+	mov	[rdx], rdi
+	
+	; invalidate that page
+	invlpg	[rsp]
+	
+	; do the zeroing
+	mov rdi, rsp
+	call __zeroPage
+	
+	; restore the old PTE and invalidate the page again
+	mov	[rdx], r8
+	invlpg	[rsp]
+	
+	; thanks
+	mov	rsp, rbp
+	pop	rbp
+	ret
+	
 [global invlpg]
 invlpg:
 	invlpg	[rdi]
 	ret
 
+[global __zeroPage]
+__zeroPage:
+	push rbp
+	mov rbp, rsp
+	
+	; kernel ABI requires that the XMM registers be preserved on interrupts, and this function may
+	; be called on interrupts; so better preserve those registers
+	sub rsp, 16
+	pushf
+	cli
+	movaps [rsp+8], xmm0
+	
+	; zero out the page
+	xorps xmm0, xmm0
+	mov rcx, 256
+.loop:
+	movaps [rdi], xmm0
+	add rdi, 16
+	loop .loop
+
+	; restore everything
+	movaps xmm0, [rsp+8]
+	popf
+	mov rsp, rbp
+	pop rbp
+	ret

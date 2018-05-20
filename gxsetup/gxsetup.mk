@@ -1,11 +1,11 @@
 C_SRC := $(shell find $(SRCDIR) -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, %.o, $(C_SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -ggdb
+CFLAGS := -Wall -Werror -ggdb -I$(SRCDIR)/../libgpm/src
 
 gxsetup: $(OBJ)
 	@mkdir -p out
-	$(HOST_GCC) -o $@ $^ -lcrypt -ggdb
+	$(HOST_GCC) -o $@ $^ -lcrypt -ggdb -L../libgpm -lgpm
 
 -include $(DEP)
 

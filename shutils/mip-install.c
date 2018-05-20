@@ -34,217 +34,101 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
-#include "mip.h"
-
-#define	COPY_BUFFER_SIZE			0x8000
-
-char destDir[256];
-int installPackage(const char *path)
-{
-	FILE *fp = fopen(path, "rb");
-	if (fp == NULL)
-	{
-		perror(path);
-		return 1;
-	};
-
-	MIPHeader head;
-	fread(&head, 1, sizeof(MIPHeader), fp);
-
-	if (memcmp(head.magic, "MIP", 3) != 0)
-	{
-		fprintf(stderr, "this is not a valid MIP file\n");
-		fclose(fp);
-		return 1;
-	};
-
-	char setupFile[256] = "";
-	if (head.version == 1)
-	{
-		fseek(fp, 4, SEEK_SET);
-	}
-	else if (head.version == 2)
-	{
-		strcpy(setupFile, head.setupFile);
-	}
-	else
-	{
-		fprintf(stderr, "unsupported MIP version (%d)\n", head.version);
-		fclose(fp);
-		return 1;
-	};
-
-	while (!feof(fp))
-	{
-		MIPFile fileinfo;
-		if (fread(&fileinfo, 1, sizeof(MIPFile), fp) == 0) break;
-
-		char destname[256];
-		sprintf(destname, "%s%s", destDir, fileinfo.filename);
-		
-		if ((fileinfo.mode & MIP_MODE_TYPEMASK) == MIP_MODE_DIRECTORY)
-		{
-			printf("mkdir %s (%o)\n", destname, fileinfo.mode & 0xFFF);
-			struct stat st;
-			if (stat(destname, &st) == 0)
-			{
-				continue;
-			};
-
-			if (mkdir(destname, fileinfo.mode & 0xFFF) != 0)
-			{
-				perror("mkdir");
-				fclose(fp);
-				return 1;
-			};
-		}
-		else if ((fileinfo.mode & MIP_MODE_TYPEMASK) == MIP_MODE_SYMLINK)
-		{
-			char target[fileinfo.size];
-			fread(target, 1, fileinfo.size, fp);
-			
-			printf("symlink %s -> %s\n", destname, target);
-			unlink(destname);		// if it already exists
-			if (symlink(target, destname) != 0)
-			{
-				perror("symlink");
-				fclose(fp);
-				return 1;
-			};
-		}
-		else if ((fileinfo.mode & MIP_MODE_TYPEMASK) == MIP_MODE_REGULAR)
-		{
-			printf("unpack %s (%o)\n", destname, fileinfo.mode);
-			int fd = open(destname, O_CREAT | O_WRONLY | O_TRUNC, fileinfo.mode);
-			if (fd == -1)
-			{
-				perror("open");
-				fclose(fp);
-				return 1;
-			};
-			
-			char buffer[COPY_BUFFER_SIZE];
-			uint64_t togo = fileinfo.size;
-			
-			while (togo > 0)
-			{
-				uint64_t doNow = togo;
-				if (doNow > COPY_BUFFER_SIZE) doNow = COPY_BUFFER_SIZE;
-				
-				fread(buffer, 1, doNow, fp);
-				write(fd, buffer, doNow);
-				togo -= doNow;
-			};
-
-			close(fd);
-		}
-		else
-		{
-			fprintf(stderr, "file %s has invalid type value (mode=0x%04hX)\n", fileinfo.filename, fileinfo.mode);
-			fclose(fp);
-			return 1;
-		}
-	};
-
-	if (setupFile[0] != 0)
-	{
-		printf("running setup script %s\n", setupFile);
-		
-		char fullpath[256];
-		sprintf(fullpath, "%s%s", destDir, setupFile);
-		
-		char dirname[256];
-		strcpy(dirname, fullpath);
-		
-		char *endslash = strrchr(dirname, '/');
-		*endslash = 0;
-		
-		pid_t pid = fork();
-		if (pid == -1)
-		{
-			fprintf(stderr, "fork failed: %s\n", strerror(errno));
-			return 1;
-		}
-		else if (pid == 0)
-		{
-			if (chdir(dirname) != 0)
-			{
-				fprintf(stderr, "failed to switch directory to %s\n", dirname);
-				_exit(1);
-			};
-			
-			execl("/bin/sh", "sh", fullpath, NULL);
-			perror("exec");
-			_exit(1);
-		}
-		else
-		{
-			waitpid(pid, NULL, 0);
-		};
-	};
-	
-	printf("installation of %s complete\n", path);
-	fclose(fp);
-	return 0;
-};
-
-static int startsWith(const char *str, const char *with)
-{
-	if (strlen(str) >= strlen(with))
-	{
-		if (memcmp(str, with, strlen(with)) == 0)
-		{
-			return 1;
-		};
-	};
-	
-	return 0;
-};
+#include <libgpm.h>
 
 int main(int argc, char *argv[])
 {
-	destDir[0] = 0;
+	char *dest = NULL;
 	
-	if (argc < 2)
-	{
-		fprintf(stderr, "USAGE:\t%s mip-files... [--option=value...]\n", argv[0]);
-		fprintf(stderr, "\tInstall MIP files.\n");
-		return 1;
-	};
-
-	if (geteuid() != 0)
-	{
-		fprintf(stderr, "you must be root\n");
-		return 1;
-	};
-
 	int i;
+	int havepkg = 0;
 	for (i=1; i<argc; i++)
 	{
-		if (startsWith(argv[i], "--dest="))
+		if (memcmp(argv[i], "--dest=", 7) == 0)
 		{
-			strcpy(destDir, &argv[i][7]);
+			if (dest != NULL)
+			{
+				fprintf(stderr, "%s: destination specified multiple times\n", argv[0]);
+				return 1;
+			};
+			
+			dest = &argv[i][7];
 		}
-		else if (startsWith(argv[i], "--"))
+		else if (argv[i][0] == '-')
 		{
-			printf("invalid command-line option: %s\n", argv[i]);
+			fprintf(stderr, "%s: unrecognised command-line option: `%s'\n", argv[0], argv[i]);
 			return 1;
+		}
+		else
+		{
+			havepkg = 1;
 		};
 	};
 	
+	if (!havepkg)
+	{
+		fprintf(stderr, "USAGE:\t%s mip-list... [--option=value...]\n", argv[0]);
+		fprintf(stderr, "\tInstall the specified MIP files.\n");
+		fprintf(stderr, "\n\t--dest=DESTINATION\n");
+		fprintf(stderr, "\t\tSpecifies the system root to install under.\n");
+		return 1;
+	};
+	
+	int error;
+	GPMContext *ctx = gpmCreateContext(dest, &error);
+	if (ctx == NULL)
+	{
+		fprintf(stderr, "%s: failed to open package database: error %d\n", argv[0], error);
+		return 1;
+	};
+	
+	GPMInstallRequest *req = gpmCreateInstallRequest(ctx, &error);
+	if (req == NULL)
+	{
+		fprintf(stderr, "%s: failed to create installation request: error %d\n", argv[0], error);
+		return 1;
+	};
+	
 	for (i=1; i<argc; i++)
 	{
-		if (!startsWith(argv[i], "--"))
+		if (argv[i][0] != '-')
 		{
-			int status = installPackage(argv[i]);
-			if (status != 0)
+			if (gpmInstallRequestMIP(req, argv[i], &error) != 0)
 			{
-				fprintf(stderr, "installation aborted\n");
-				return status;
+				fprintf(stderr, "%s: failed to add `%s' to installation request: error %d\n", argv[0], argv[i], error);
+				return 1;
 			};
 		};
 	};
-
-	printf("installation complete\n");
-	return 0;
+	
+	GPMTaskProgress *task = gpmRunInstall(req);
+	if (task == NULL)
+	{
+		fprintf(stderr, "%s: failed to execute the installation task\n", argv[0]);
+		return 1;
+	};
+	
+	while (!gpmIsComplete(task))
+	{
+		float prog = gpmGetProgress(task);
+		printf("\r%d%%      ", (int)(prog*100));
+		fflush(stdout);
+		sleep(1);
+	};
+	
+	printf("\r100%%           ");
+	fflush(stdout);
+	
+	const char *status = gpmWait(task);
+	if (status == NULL)
+	{
+		printf("\n");
+		return 0;
+	}
+	else
+	{
+		printf("\r             ");
+		printf("\r%s: installation failed: %s\n", argv[0], status);
+		return 1;
+	};
 };

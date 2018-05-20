@@ -1,12 +1,12 @@
 SRC := $(shell find $(SRCDIR)/src -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -ggdb -D_GLIDIX_SOURCE
+CFLAGS := -fPIC -Wall -Werror -ggdb -D_GLIDIX_SOURCE
 
 .PHONY: install
 
-gpm: $(OBJ)
-	$(HOST_GCC) $^ -o $@ -ggdb
+libgpm.so: $(OBJ)
+	$(HOST_GCC) $^ -o $@ -shared -ggdb
 
 -include $(DEP)
 
@@ -19,5 +19,5 @@ obj/%.o: $(SRCDIR)/%.c
 	$(HOST_GCC) -c $< -o $@ $(CFLAGS)
 
 install:
-	@mkdir -p $(DESTDIR)/usr/bin
-	cp gpm $(DESTDIR)/usr/bin/gpm
+	@mkdir -p $(DESTDIR)/usr/lib
+	cp libgpm.so $(DESTDIR)/usr/lib/libgpm.so

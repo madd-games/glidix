@@ -162,7 +162,7 @@ done
 
 # targets
 # NOTE: Those need to be in order; a target must come AFTER all the targets that it depends on.
-TARGETS="kernel build-tools libc dynld libz shutils init modules sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libpng freetype libddi fstools libgwm gwmserver guiapps netman klogd sysinfo filemgr minipad gxdbg ddi-drivers gpm"
+TARGETS="kernel build-tools libc dynld libz shutils init modules sh libgpm $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libpng freetype libddi fstools libgwm gwmserver guiapps netman klogd sysinfo filemgr minipad gxdbg ddi-drivers"
 
 # determine build parameters
 export GLIDIX_SYSROOT="$sysroot"
@@ -213,7 +213,7 @@ done
 echo "generating Makefile..."
 echo >Makefile ".PHONY: all install clean mip tests $TARGETS"
 
-ISO_PACKAGES="libz shutils libc modules sh gxsetup gxboot dynld gxdbg"
+ISO_PACKAGES="libz libgpm shutils libc modules sh gxsetup gxboot dynld gxdbg"
 if [ "$iso_target" = "yes" ]
 then
 	mkdir -p isodir
@@ -291,7 +291,7 @@ else
 fi
 
 echo >>Makefile "mip:"
-echo >>Makefile "	export MIP_BINUTILS=\$(MIP_BINUTILS) export MIP_GCC=\$(MIP_GCC) && sh $srcdir/mip.sh \$(PKGDIR)"
+echo >>Makefile "	export MIP_BINUTILS=\$(MIP_BINUTILS) export MIP_GCC=\$(MIP_GCC) export GLIDIX_VERSION=$GLIDIX_VERSION && sh $srcdir/mip.sh \$(PKGDIR)"
 echo >>Makefile "tests:"
 echo >>Makefile "	sh $srcdir/tests.sh"
 

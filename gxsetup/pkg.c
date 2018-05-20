@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <libgpm.h>
 
 #include "progress.h"
 #include "pkg.h"
@@ -158,6 +159,7 @@ void pkgSelection()
 
 void pkgInstall()
 {
+#if 0
 	int numPkg = 0;
 	size_t i;
 	for (i=0; i<numPackages; i++)
@@ -196,7 +198,7 @@ void pkgInstall()
 				dup(0);
 				dup(1);
 				execl("/usr/bin/mip-install", "mip-install", path, "--dest=/mnt", NULL);
-				exit(1);
+				_exit(1);
 			};
 		
 			int status;
@@ -215,4 +217,64 @@ void pkgInstall()
 			};
 		};
 	};
+#endif
+
+	// create the package database
+	mkdir("/mnt/etc/gpm", 0755);
+	
+	GPMContext *ctx = gpmCreateContext("/mnt", NULL);
+	if (ctx == NULL)
+	{
+		msgbox("ERROR", "Failed to open GPM database!");
+		exit(1);
+	};
+	
+	GPMInstallRequest *req = gpmCreateInstallRequest(ctx, NULL);
+	if (req == NULL)
+	{
+		msgbox("ERROR", "Failed to create installation request!");
+		exit(1);
+	};
+	
+	int i;
+	for (i=0; i<numPackages; i++)
+	{
+		if (packages[i].install)
+		{
+			char *pkgpath;
+			asprintf(&pkgpath, "/usr/share/pkg/%s", packages[i].name);
+			
+			if (gpmInstallRequestMIP(req, pkgpath, NULL) != 0)
+			{
+				char *errmsg;
+				asprintf(&errmsg, "Failed to add package %s", pkgpath);
+				msgbox("ERROR", errmsg);
+				exit(1);
+			};
+			
+			free(pkgpath);
+		};
+	};
+	
+	GPMTaskProgress *task = gpmRunInstall(req);
+	if (task == NULL)
+	{
+		msgbox("ERROR", "Failed to execute installation task!");
+		exit(1);
+	};
+	
+	while (!gpmIsComplete(task))
+	{
+		drawProgress("SETUP", "Installing packages...", gpmGetProgress(task) * 100, 100);
+		sleep(1);
+	};
+	
+	char *result = gpmWait(task);
+	if (result != NULL)
+	{
+		msgbox("ERROR", result);
+		exit(1);
+	};
+	
+	gpmDestroyContext(ctx);
 };

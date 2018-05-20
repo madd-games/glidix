@@ -456,16 +456,13 @@ void phmFreeFrameEx(uint64_t start, uint64_t count)
 	};
 };
 
+/* pagetab.asm */
+void __zeroFrame(uint64_t frame);
+
 uint64_t phmAllocZeroFrame()
 {
-	uint8_t zeroes[0x1000];
-	memset(zeroes, 0, 0x1000);
 	uint64_t frame = phmAllocFrame();
-	frameWrite(frame, zeroes);
-	//ispLock();
-	//ispSetFrame(frame);
-	//ispZero();
-	//ispUnlock();
+	__zeroFrame(frame);
 	return frame;
 };
 

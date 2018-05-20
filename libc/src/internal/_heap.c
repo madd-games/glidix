@@ -37,6 +37,8 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#define	HEAP_DEBUG_GUARD_PAGES			10
+
 pthread_mutex_t __heap_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /**
@@ -45,9 +47,10 @@ pthread_mutex_t __heap_lock = PTHREAD_MUTEX_INITIALIZER;
  */
 
 static __heap_header *firstHead;
+static int heapDebugMode = 0;
 
 void _heap_init()
-{	
+{
 	void *addr = mmap(NULL, _HEAP_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
 	if (addr == MAP_FAILED) abort();
 	
@@ -110,7 +113,30 @@ void _heap_split_block(__heap_header *head, size_t newSize)
 void* _heap_malloc(size_t len)
 {
 	if (len == 0) return NULL;
+	size_t requestedLen = len;
 	len = (len + 0xF) & ~0xF;
+	
+	if (heapDebugMode)
+	{
+		len = (len + 0xFFF) & ~0xFFF;
+		size_t totalSize = len + 0x1000 * 2 * HEAP_DEBUG_GUARD_PAGES;
+		void *ptr = mmap(NULL, totalSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+		if (ptr == MAP_FAILED)
+		{
+			return NULL;
+		};
+		
+		char *buf = (char*) ptr;
+		*((uint64_t*)buf) = requestedLen;
+		*((uint64_t*)(buf+8)) = len;
+		char *guard = &buf[0x1000];
+		munmap(guard, 0x1000 * HEAP_DEBUG_GUARD_PAGES - 0x1000);
+		char *blockStart = &buf[0x1000 * HEAP_DEBUG_GUARD_PAGES];
+		char *blockEnd = &blockStart[len];
+		
+		munmap(blockEnd, 0x1000 * HEAP_DEBUG_GUARD_PAGES);
+		return blockStart;
+	};
 	
 	__heap_header *head = firstHead;
 	while ((head->size < len) || (head->flags & _HEAP_BLOCK_USED))
@@ -118,6 +144,7 @@ void* _heap_malloc(size_t len)
 		if (head->magic != _HEAP_HEADER_MAGIC)
 		{
 			fprintf(stderr, "heap corruption detected: header at %p has invalid magic\n", head);
+			_heap_dump();
 			abort();
 		};
 
@@ -125,6 +152,7 @@ void* _heap_malloc(size_t len)
 		if (foot->magic != _HEAP_FOOTER_MAGIC)
 		{
 			fprintf(stderr, "heap corruption detected: footer for header at %p has invalid magic\n", head);
+			_heap_dump();
 			abort();
 		};
 
@@ -153,12 +181,24 @@ void _heap_free(void *block);
 void *_heap_realloc(void *block, size_t newsize)
 {
 	if (block == NULL) return _heap_malloc(newsize);
-	uint64_t addr = (uint64_t) block - sizeof(__heap_header);
-	__heap_header *header = (__heap_header*) addr;
-	void *newblock = _heap_malloc(newsize);
-	if (newsize > header->size)
+	size_t oldsize;
+	
+	if (heapDebugMode)
 	{
-		memcpy(newblock, block, header->size);
+		uint64_t addr = (uint64_t) block - 0x1000 * HEAP_DEBUG_GUARD_PAGES;
+		oldsize = *((uint64_t*)addr);
+	}
+	else
+	{
+		uint64_t addr = (uint64_t) block - sizeof(__heap_header);
+		__heap_header *header = (__heap_header*) addr;
+		oldsize = header->size;
+	};
+	
+	void *newblock = _heap_malloc(newsize);
+	if (newsize > oldsize)
+	{
+		memcpy(newblock, block, oldsize);
 	}
 	else
 	{
@@ -172,6 +212,22 @@ void *_heap_realloc(void *block, size_t newsize)
 void _heap_free(void *block)
 {
 	if (block == NULL) return;
+	
+	if (heapDebugMode)
+	{
+#if 0
+		printf("__heap_free__\n");
+		uint64_t addr = (uint64_t) block - 0x1000 * HEAP_DEBUG_GUARD_PAGES;
+		printf("__free_A\n");
+		uint64_t mainLen = *((uint64_t*)(addr+8));
+		printf("__free_B (addr=%p, mainLen=%lu)\n", (void*)addr, mainLen);
+		mprotect((void*)addr, 0x1000, PROT_NONE);
+		printf("__free_C (block=%p, mainLen=%lu)\n", block, mainLen);
+		mprotect(block, mainLen, PROT_NONE);
+		printf("__free_end__\n");
+#endif
+		return;
+	};
 	
 	uint64_t addr = (uint64_t) block - sizeof(__heap_header);
 	__heap_header *header = (__heap_header*) addr;

@@ -1,7 +1,7 @@
 SRC := $(shell find $(SRCDIR) -name '*.c')
 OUT := $(patsubst $(SRCDIR)/%.c, out/%, $(SRC))
-CFLAGS := -Wall -Werror -ggdb -I$(SRCDIR)/../kernel/include
-LDFLAGS := -L../libc -L../libz/build -lcrypt -ldl -lz -ggdb
+CFLAGS := -Wall -Werror -ggdb -I$(SRCDIR)/../kernel/include -I$(SRCDIR)/libz -I$(SRCDIR)/../libgpm/src
+LDFLAGS := -L../libc -L../libz/build -L../libgpm -lcrypt -ldl -lz -lgpm -ggdb
 
 .PHONY: all install
 all: $(OUT)
