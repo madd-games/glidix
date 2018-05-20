@@ -159,66 +159,6 @@ void pkgSelection()
 
 void pkgInstall()
 {
-#if 0
-	int numPkg = 0;
-	size_t i;
-	for (i=0; i<numPackages; i++)
-	{
-		if (packages[i].install) numPkg++;
-	};
-	
-	if (numPkg == 0) return;
-	
-	int count = 0;
-	for (i=0; i<numPackages; i++)
-	{
-		if (packages[i].install)
-		{
-			char msg[256];
-			sprintf(msg, "Unpacking %s...", packages[i].name);
-		
-			char path[256];
-			sprintf(path, "/usr/share/pkg/%s", packages[i].name);
-		
-			drawProgress("SETUP", msg, count++, numPkg);
-		
-			pid_t pid = fork();
-			if (pid == -1)
-			{
-				msgbox("ERROR", "fork() failed for mip-install!");
-				continue;
-			};
-		
-			if (pid == 0)
-			{
-				close(0);
-				close(1);
-				close(2);
-				open("/run/mip-log", O_RDWR | O_CREAT | O_TRUNC);
-				dup(0);
-				dup(1);
-				execl("/usr/bin/mip-install", "mip-install", path, "--dest=/mnt", NULL);
-				_exit(1);
-			};
-		
-			int status;
-			waitpid(pid, &status, 0);
-		
-			if (!WIFEXITED(status))
-			{
-				msgbox("ERROR", "mip-install terminated with an error!");
-				displayError("/run/mip-log");
-			};
-		
-			if (WEXITSTATUS(status) != 0)
-			{
-				msgbox("ERROR", "mip-install terminated with an error!");
-				displayError("/run/mip-log");
-			};
-		};
-	};
-#endif
-
 	// create the package database
 	mkdir("/mnt/etc/gpm", 0755);
 	
