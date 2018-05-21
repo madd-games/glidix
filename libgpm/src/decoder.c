@@ -140,13 +140,20 @@ void addToHeap(MinHeap **heapPtr, HuffNode *node)
 	new->prev->next = new;
 };
 
-size_t hlzDecode(const uint8_t *buffer, size_t compsize, uint8_t *outbuf)
+static void deleteTree(HuffNode *node)
+{
+	if (node->children[0] != NULL) deleteTree(node->children[0]);
+	if (node->children[1] != NULL) deleteTree(node->children[1]);
+	free(node);
+};
+
+static size_t hlzDecode(const uint8_t *buffer, size_t compsize, uint8_t *outbuf)
 {
 	size_t outsize = 0;
 	
 	MinHeap* heap;
 	HuffNode* huffTree;
-
+	
 	if (verbose) printf("  Huffman Coding over LZ77\n");
 	
 	uint8_t bitspec = buffer[0];
@@ -290,7 +297,8 @@ size_t hlzDecode(const uint8_t *buffer, size_t compsize, uint8_t *outbuf)
 			current = huffTree;
 		};
 	};
-	
+
+	deleteTree(huffTree);
 	return outsize;
 };
 
