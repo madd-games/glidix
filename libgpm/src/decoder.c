@@ -286,7 +286,7 @@ static size_t hlzDecode(const uint8_t *buffer, size_t compsize, uint8_t *outbuf)
 				
 				if (verbose) printf("\nREPEAT <-%hu,%hu>\n", lookback, looksize);
 				
-				memcpy(outbuf, &outbuf[outsize-lookback-looksize], looksize);
+				memcpy(&outbuf[outsize], &outbuf[outsize-lookback-looksize], looksize);
 				outsize += looksize;
 			}
 			else

@@ -50,6 +50,7 @@ int main(int argc, char *argv[])
 	
 	uint8_t buffer[16*1024];
 	uint64_t sum = 0xDEADBEEFC0FFEE98;
+	size_t numOut = 0;
 	
 	clock_t start = clock();
 	while (1)
@@ -60,12 +61,19 @@ int main(int argc, char *argv[])
 		for (i=0; i<sz; i++)
 		{
 			sum = (sum << 2) ^ buffer[i];
+			
+			if (numOut < 32*32)
+			{
+				printf("%02hhX ", buffer[i]);
+				numOut++;
+				if ((numOut % 32) == 0) printf("\n");
+			};
 		};
 		
 		if (sz < 16*1024) break;
 	};
 	clock_t end = clock();
 	
-	printf("This took %lu ms and the checksum is 0x%016lX\n", (end-start)*1000/CLOCKS_PER_SEC, sum);
+	printf("\nThis took %lu ms and the checksum is 0x%016lX\n", (end-start)*1000/CLOCKS_PER_SEC, sum);
 	return 0;
 };
