@@ -2,7 +2,7 @@ C_SRC := $(shell find $(SRCDIR)/src -name '*.c')
 ASM_SRC := $(shell find $(SRCDIR)/asm -name '*.asm')
 OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(C_SRC)) $(patsubst $(SRCDIR)/asm/%.asm, asm/%.o, $(ASM_SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -fno-omit-frame-pointer -I $(SRCDIR)/include -I $(SRCDIR)/include/acpi -I. -D__KERNEL__ -DCONFIG_ACPI -Wall -Werror -ggdb
+CFLAGS := -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-common -fno-builtin -fno-omit-frame-pointer -I $(SRCDIR)/include -I $(SRCDIR)/include/acpi -I.. -I. -D__KERNEL__ -DCONFIG_ACPI -Wall -Werror -ggdb
 
 .PHONY: all
 all: out/kernel.so module_start.o module_end.o

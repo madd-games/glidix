@@ -75,6 +75,8 @@ maybe_gcc=""
 binutils_version="2.27"
 gcc_version="6.2.0"
 
+heap_mode="slab"
+
 iso_target="no"
 expanded_options=""
 
@@ -152,6 +154,10 @@ case $i in
 	--gcc-version=*)
 		gcc_version=`echo $i | sed 's/[-a-zA-Z0-9]*=//'`
 		;;
+	
+	--heap=*)
+		heap_mode=`echo $i | sed 's/[-a-zA-Z0-9]*=//'`
+		;;
 		
 	*)
 		echo >&2 "$0: unrecognised command-line option '$i'"
@@ -209,6 +215,18 @@ do
 	../$srcdir/$target/subconf.sh || exit 1
 	cd ..
 done
+
+echo "generating glidix-config.h..."
+echo '#ifndef __glidix_config' > glidix-config.h
+echo '#define __glidix_config' >> glidix-config.h
+if [ "$heap_mode" = "block" ]
+then
+	echo '#define __CONFIG_HEAP_BLOCK' >> glidix-config.h
+elif [ "$heap_mode" = "slab" ]
+then
+	echo '#define __CONFIG_HEAP_SLAB' >> glidix-config.h
+fi
+echo '#endif' >> glidix-config.h
 
 echo "generating Makefile..."
 echo >Makefile ".PHONY: all install clean mip tests $TARGETS"

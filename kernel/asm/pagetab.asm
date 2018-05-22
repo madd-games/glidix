@@ -171,24 +171,9 @@ __zeroPage:
 	push rbp
 	mov rbp, rsp
 	
-	; kernel ABI requires that the XMM registers be preserved on interrupts, and this function may
-	; be called on interrupts; so better preserve those registers
-	sub rsp, 16
-	pushf
-	cli
-	movaps [rsp+8], xmm0
+	xor rax, rax
+	mov rcx, 512
+	rep stosq
 	
-	; zero out the page
-	xorps xmm0, xmm0
-	mov rcx, 256
-.loop:
-	movaps [rdi], xmm0
-	add rdi, 16
-	loop .loop
-
-	; restore everything
-	movaps xmm0, [rsp+8]
-	popf
-	mov rsp, rbp
 	pop rbp
 	ret

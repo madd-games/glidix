@@ -345,7 +345,7 @@ void kmain(KernelBootInfo *info)
 	kprintf("Initializing the frame bitmap... ");
 	initPhysMem2();
 	DONE();
-
+	
 	kprintf("Initializing DMA... ");
 	dmaInit();
 	DONE();

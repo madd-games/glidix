@@ -38,8 +38,11 @@
 
 #define	MEM_PAGEALIGN			1
 
+extern int readyForDynamic;
+
 void initMemoryPhase1(uint64_t placement, uint64_t size);
 void initMemoryPhase2();
+void *kxmallocDynamic(size_t size, int flags, const char *aid, int lineno);
 void *_kxmalloc(size_t size, int flags, const char *aid, int lineno);
 void *_kmalloc(size_t size, const char *aid, int lineno);
 void *krealloc(void *block, size_t size);
