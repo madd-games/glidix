@@ -540,7 +540,7 @@ int shRun()
 };
 
 int main(int argc, char *argv[], char *initEnv[])
-{
+{	
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(struct sigaction));
 	sa.sa_sigaction = on_signal;

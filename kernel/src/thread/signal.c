@@ -235,6 +235,11 @@ void dispatchSignal()
 		return;
 	};
 	
+	if (siginfo->si_signo == SIGSEGV)
+	{
+		panic("SIGSEGV, name=%s, rip=0x%016lX, addr=0x%016lX\n", thread->name, thread->regs.rip, siginfo->si_addr);
+	};
+	
 	if (siginfo->si_signo == SIGTHSUSP)
 	{
 		// cannot override SIGTHSUSP

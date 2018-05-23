@@ -40,40 +40,13 @@ extern "C" {
  * Some stuff about the libc heap.
  */
 
-#define	_HEAP_SIZE					0x4000000000	/* 256GB */
-#define	_HEAP_HEADER_MAGIC				0xDEADBEEF
-#define	_HEAP_FOOTER_MAGIC				0xBEEF2BAD
-
-/* header flags */
-#define	_HEAP_BLOCK_USED				(1 << 0)
-#define	_HEAP_BLOCK_HAS_LEFT				(1 << 1)
-
-/* footer flags */
-#define	_HEAP_BLOCK_HAS_RIGHT				(1 << 0)
-
-typedef struct
-{
-	size_t size;
-	uint8_t flags;
-	uint32_t magic;
-} __heap_header;
-
-typedef struct
-{
-	size_t size;
-	uint8_t flags;
-	uint32_t magic;
-} __heap_footer;
+#define	_HEAP_NUM_BUCKETS				33
 
 void _heap_init();
-__heap_footer* _heap_get_footer(__heap_header *head);
-__heap_header* _heap_get_header(__heap_footer *foot);
-void _heap_split_block(__heap_header *head, size_t newSize);
 void *_heap_malloc(size_t len);
 void *_heap_realloc(void *block, size_t newsize);
 void _heap_free(void *block);
 void _heap_dump();
-void _heap_expand();
 
 #ifdef __cplusplus
 }	/* extern "C" */

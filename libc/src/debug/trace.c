@@ -26,47 +26,14 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _SYS_DEBUG_H
-#define _SYS_DEBUG_H
+#include <sys/debug.h>
+#include <stdio.h>
 
-#include <inttypes.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/**
- * Represents a stack frame.
- */
-struct stack_frame
+void __print_trace(struct stack_frame *frame)
 {
-	struct stack_frame*		sf_next;
-	void*				sf_ip;
+	printf("Stack trace:\n");
+	for (; frame!=NULL; frame=frame->sf_next)
+	{
+		printf("  <%p>\n", frame->sf_ip);
+	};
 };
-
-/**
- * Get the line, source file and function name corresponding to the specified raw (unrelocated)
- * address in the given object file. Returns a string on the heap, which must later be freed using
- * free(), in the form "<function>@<source-file>:<source-line>". Always returns something; even
- * if all fields are "??".
- *
- * This function is only successful if "objdump" from "binutils" is installed.
- */
-char* __dbg_addr2line(const char *path, uint64_t offset);
-
-/**
- * Get the symbol containing the specified raw (unrelocated) address in the given object file.
- * Returns a string on the heap (which may just be "??") and free() must be called on it later.
- */
-char* __dbg_getsym(const char *path, uint64_t offset);
-
-/**
- * Print a stack trace.
- */
-void __stack_trace();
-
-#ifdef __cplusplus
-};	/* extern "C" */
-#endif
-
-#endif

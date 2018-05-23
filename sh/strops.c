@@ -28,6 +28,8 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <sys/debug.h>
 
 #include "strops.h"
 

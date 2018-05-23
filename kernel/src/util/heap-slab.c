@@ -272,6 +272,7 @@ void *krealloc(void *block, size_t size)
 	if (slab->bucket != 0 && size < (currentSize>>1))
 	{
 		slab->bucket--;
+		slab->realSize = size-16;
 		
 		size_t newBucketSize = (1UL << (slab->bucket+5));
 		FreeSlab *second = (FreeSlab*) ((uint64_t) slab + newBucketSize);
@@ -288,6 +289,7 @@ void *krealloc(void *block, size_t size)
 	// in all other cases, first check if we already have enough memory
 	if (size <= currentSize)
 	{
+		slab->realSize = size-16;
 		mapPages(slab, size);
 		return block;
 	};

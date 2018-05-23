@@ -1,7 +1,7 @@
 C_SRC := $(shell find $(SRCDIR) -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, %.o, $(C_SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -L../libc -ggdb
+CFLAGS := -Wall -Werror -L../libc -ggdb -I$(SRCDIR)/../libc/include
 
 sh: $(OBJ)
 	@mkdir -p out
