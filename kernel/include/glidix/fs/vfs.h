@@ -149,8 +149,8 @@
  */
 #define	MNT_RDONLY			(1 << 0)
 #define	MNT_NOSUID			(1 << 1)
-
-#define	MNT_ALL				((1 << 2)-1)
+#define	MNT_TEMP			(1 << 2)
+#define	MNT_ALL				((1 << 3)-1)
 
 /**
  * The AT_* flags.

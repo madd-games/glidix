@@ -1,0 +1,32 @@
+>NAME
+
+unmount - unmount a filesystem
+
+>SYNOPSIS
+
+	#include <sys/mount.h>
+	
+	int unmount(const char *'mntpoint', int 'flags');
+
+>DESCRIPTION
+
+This function unmounts the filesystem from mountpoint 'mntpoint'. The 'flags' argument must currently be zero. The *XP_MOUNT* executable permission is required to unmount filesystems; see [xperm.6]
+
+>RETURN VALUE
+
+On success, returns '0'; otherwise, returns '-1' and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following:
+
+\* *EACCES* - the calling thread does not have the *XP_MOUNT* executable permission, or 'mntpoint' cannot be accessed.
+\* *ENOENT* - 'mntpoint' does not exist.
+\* *EINVAL* - 'flags' is not zero.
+\* *EPERM* - attempting to unmount a location which would create an inconsistent VFS tree, such as the kernel root directory.
+\* *EBUSY* - the indicated filesystem is in use and cannot be unmounted.
+\* *EFAULT* - 'mntpoint' is not a valid pointer.
+
+>SEE ALSO
+
+[mount.2], [fsdrv.2], [xperm.6], [filesystem.6]

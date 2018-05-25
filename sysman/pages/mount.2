@@ -1,0 +1,44 @@
+>NAME
+
+mount - establish a mountpoint
+
+>SYNOPSIS
+
+	#define _GLIDIX_SOURCE
+	#include <sys/mount.h>
+	
+	int mount(const char *'fstype', const char *'image', const char *'mntpoint', int 'flags', const void *'options', size_t 'optlen');
+
+>DESCRIPTION
+
+You must define the *_GLIDIX_SOURCE* macro, before including any header files, for this function to be visible.
+
+This function makes the filesystem resident on the block device or file 'image' visible under the path 'mntpoint'. By default, the mountpoint must already exist (but see *MNT_TEMP*). The 'fstype' argument specifies the filesystem driver which understands the filesystem under 'image'; for example 'gxfs'. Use [fsdrv.2] to obtain a list of all supported filesystem drivers. The 'options' and 'optlen' arguments are a pointer to an options structure, and its size, respectively. The options structure is filesystem-driver-specific and defines options specific to that filesystem. See filesystem-specific pages such as [isofs.6] for more information about their options.
+
+The 'flags' argument is a bitwise-OR of zero or more of the following flags:
+
+\* *MNT_RDONLY* - mount the filesystem as read-only; no changes cna be made to the files contained in it. By default, a filesystem is mounted read-write.
+\* *MNT_NOSUID* - do not respect the set-UID and set-GID attributes in this filesystem. By default, when executing files with the SUID/SGID bets, the EUID or EGID (see [creds.6]) is set the the owner/group of the file; with this flag, it is not.
+\* *MNT_TEMP* - mark the mountpoint as temporary. If 'mntpoint' does not exist, it is created, and after unmounting is once again removed. There is no directory 'mntpoint' physically created and so it is never committed to disk. If 'mntpoint' already exists, this flag has no effect.
+
+After a successful call to this function, the path 'mntpoint' represents the root of the newly-mounted filesystem.
+
+The calling threads needs the *XP_MOUNT* executable permission to mount filesystems. See [xperm.6].
+
+>RETURN VALUE
+
+On success, this function returns '0'. On error, it returns '-1' and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns '-1' and sets [errno.6] to one of the following:
+
+\* *EINVAL* - invalid 'fstype' or 'flags'; or 'image' does not contain a filesystem of type 'fstype'.
+\* *EACCES* - the calling thread does not have the *XP_MOUNT* executable permission, or 'image' cannot be accessed.
+\* *ENOENT* - 'image' does not exist.
+
+Other errors may also be returned for specific filesystems.
+
+>SEE ALSO
+
+[unmount.2], [fsdrv.2], [xperm.6], [filesystem.6]

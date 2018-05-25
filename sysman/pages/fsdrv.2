@@ -1,0 +1,27 @@
+>NAME
+
+fsdrv - get a list of filesystem drivers
+
+>SYNOPSIS
+
+	#include <sys/call.h>
+	
+	int 'count' = (int) __syscall(__SYS_fsdrv, char *'buffer', int 'maxcount');
+
+>DESCRIPTION
+
+This function loads a list of filesystem drivers currently known to the kernel into 'buffer'. Each name is 16 bytes long and is NUL-terminated. This means that after a successful call, every 16th character will be a valid C string naming a driver. 'maxcount' is the maximum number of names to store in the 'buffer'.
+
+>RETURN VALUE
+
+On success, this function returns a positive number - the amount of driver names stored in the 'buffer'. On error it returns '-1' and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error this function returns '-1' and sets [errno.6] to one of the following:
+
+\* *EFAULT* - 'buffer' is not a valid pointer.
+
+>SEE ALSO
+
+[mount.2], [unmount.2]

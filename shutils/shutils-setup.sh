@@ -9,6 +9,7 @@ chxperm ../bin/ping own.rawsock=1
 chxperm ../bin/ping6 own.rawsock=1
 chxperm ../bin/env inherit.all=1 delegate.all=1
 chxperm ../bin/mip-install inherit.all=1 delegate.all=1
+chxperm ../bin/mediamnt own.mount=1 own.fsadmin=1
 
 chmod 6755 ../bin/sudo
 chmod 6755 ../bin/passwd

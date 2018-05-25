@@ -1107,6 +1107,12 @@ int vfsMakeDirEx(InodeRef startdir, const char *path, mode_t mode, int flags)
 
 int vfsMount(DentryRef dref, Inode *mntroot, int flags)
 {
+	if (!havePerm(XP_MOUNT))
+	{
+		vfsUnrefDentry(dref);
+		return EACCES;
+	};
+
 	if (mntroot->fs != NULL)
 	{
 		if (mntroot->fs->numMounts == 0)
@@ -1115,12 +1121,6 @@ int vfsMount(DentryRef dref, Inode *mntroot, int flags)
 			if (flags & MNT_RDONLY) mntroot->fs->flags |= VFS_ST_RDONLY;
 			if (flags & MNT_NOSUID) mntroot->fs->flags |= VFS_ST_NOSUID;
 		};
-	};
-	
-	if (!havePerm(XP_MOUNT))
-	{
-		vfsUnrefDentry(dref);
-		return EACCES;
 	};
 	
 	if (dref.dent->flags & VFS_DENTRY_MNTPOINT)
@@ -1144,6 +1144,7 @@ int vfsMount(DentryRef dref, Inode *mntroot, int flags)
 	Inode *oldTarget = dref.dent->target;
 	dref.dent->target = mntroot;
 	dref.dent->flags |= VFS_DENTRY_MNTPOINT;
+	if (dref.dent->ino == 0) dref.dent->ino = mntroot->ino;
 	vfsUprefInode(mntroot);
 	__sync_fetch_and_add(&mntroot->fs->numMounts, 1);
 	
@@ -2339,7 +2340,8 @@ int vfsUnmount(const char *path, int flags)
 	
 	dref.dent->target = NULL;
 	dref.dent->flags &= ~VFS_DENTRY_MNTPOINT;
-	vfsUnrefDentry(dref);
+	if (dref.dent->flags & VFS_DENTRY_TEMP) vfsRemoveDentry(dref);
+	else vfsUnrefDentry(dref);
 	return 0;
 };
 

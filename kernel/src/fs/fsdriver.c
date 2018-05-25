@@ -174,7 +174,7 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 		return -1;
 	};
 	
-	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, mountpoint, 0, &error);
+	DentryRef dref = vfsGetDentry(VFS_NULL_IREF, mountpoint, !!(flags & MNT_TEMP), &error);
 	if (dref.dent == NULL)
 	{
 		vfsDownrefInode(inode);
@@ -186,6 +186,9 @@ int sys_mount(const char *ufsname, const char *uimage, const char *umountpoint, 
 	vfsDownrefInode(inode);
 	if (status != 0)
 	{
+		if (dref.dent->ino == 0) vfsRemoveDentry(dref);
+		else vfsUnrefDentry(dref);
+		
 		ERRNO = status;
 		return -1;
 	};
