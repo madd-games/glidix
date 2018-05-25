@@ -402,6 +402,12 @@ static void* pts_open(Inode *inode, int oflags)
 	return (void*) 1;		/* can't return NULL cause that's an error */
 };
 
+static void pts_close(Inode *inode, void *filedata)
+{
+	PseudoTerm *ptty = (PseudoTerm*) inode->fsdata;
+	semTerminate(&ptty->masterCounter);
+};
+
 static void* ptmx_open(Inode *inode, int oflags)
 {
 	PseudoTerm *ptty = NEW(PseudoTerm);
@@ -442,6 +448,7 @@ static void* ptmx_open(Inode *inode, int oflags)
 	slave->pwrite = pts_write;
 	slave->ioctl = pts_ioctl;
 	slave->free = pts_free;
+	slave->close = pts_close;
 	
 	vfsUprefInode(slave);
 	ptty->devSlave = slave;

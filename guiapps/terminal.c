@@ -553,6 +553,8 @@ void *ctrlThreadFunc(void *context)
 	{
 		char buffer[4096];
 		ssize_t sz = read(fdMaster, buffer, 4096);
+		if (sz == 0) running = 0;
+		
 		if (sz > 0L)
 		{
 			pthread_mutex_lock(&consoleLock);
