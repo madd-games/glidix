@@ -618,7 +618,6 @@ Socket* unixsock_accept(Socket *sock, struct sockaddr *addr, size_t *addrlenptr)
 			unaddr->sun_path[0] = 0;
 		};
 		
-		enableDebugTerm();
 		int status = semWaitGen(&unixsock->seq.semConnWaiting, 1, SEM_W_FILE(sock->fp->oflags),
 						sock->options[GSO_RCVTIMEO]);
 		if (status < 0)

@@ -693,8 +693,8 @@ int vfsIsAllowed(Inode *inode, int perms)
 			if (!found) totalPerms = (inode->mode) & 7;
 		};
 	};
-	
-	// release the lock then just make sure we have the permissions
+
+	// make sure we have the permissions
 	return (totalPerms & perms) == perms;
 };
 
@@ -786,10 +786,8 @@ static DentryRef vfsGetDentryRecur(InodeRef startdir, const char *path, int crea
 		};
 		
 		// check if we have the required permissions
-		int neededPerms = VFS_ACE_EXEC;
-		if (create && isFinal) neededPerms |= VFS_ACE_WRITE;
 		mutexLock(&dir.inode->lock);
-		if (!vfsIsAllowed(dir.inode, neededPerms))
+		if (!vfsIsAllowed(dir.inode, VFS_ACE_EXEC))
 		{
 			mutexUnlock(&dir.inode->lock);
 			vfsUnrefInode(dir);
