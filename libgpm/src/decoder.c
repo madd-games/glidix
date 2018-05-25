@@ -84,13 +84,6 @@ struct MinHeap_
 	HuffNode*		node;
 };
 
-typedef struct CodeMapping_
-{
-	int			bits;
-	int			symbol;
-	struct CodeMapping_*	sub;
-} CodeMapping;
-
 int nextbit(BitStreamReader *bsr)
 {
 	if (bsr->mask == 0)
@@ -154,26 +147,12 @@ static void deleteTree(HuffNode *node)
 	free(node);
 };
 
-static void deleteCodeTable(CodeMapping *map)
-{
-	int i;
-	for (i=0; i<256; i++)
-	{
-		if (map[i].sub != NULL)
-		{
-			deleteCodeTable(map[i].sub);
-			free(map[i].sub);
-		};
-	};
-};
-
 static size_t hlzDecode(const uint8_t *buffer, size_t compsize, uint8_t *outbuf)
 {
 	size_t outsize = 0;
 	
 	MinHeap* heap;
 	HuffNode* huffTree;
-	HuffNode* symbolNodes[258];
 	
 	if (verbose) printf("  Huffman Coding over LZ77\n");
 	
@@ -221,7 +200,6 @@ static size_t hlzDecode(const uint8_t *buffer, size_t compsize, uint8_t *outbuf)
 	heap->node->parent = NULL;
 	heap->node->freq = 1;
 	heap->node->value = 257;
-	symbolNodes[257] = heap->node;
 	
 	for (i=0; i<257; i++)
 	{
@@ -232,7 +210,6 @@ static size_t hlzDecode(const uint8_t *buffer, size_t compsize, uint8_t *outbuf)
 		node->value = i;
 	
 		addToHeap(&heap, node);
-		symbolNodes[i] = node;
 	};
 	
 	// print them out
@@ -273,156 +250,55 @@ static size_t hlzDecode(const uint8_t *buffer, size_t compsize, uint8_t *outbuf)
 	huffTree = heap->node;
 	free(heap);
 	
-	// generate the code mapping table
-	CodeMapping codemap[256];
-	memset(codemap, 0, sizeof(codemap));
-	
-	for (i=0; i<258; i++)
-	{
-		HuffNode *node = symbolNodes[i];
-		if (node->freq == 0) continue;
-		
-		uint32_t code = 0;
-		uint32_t mask = 1;
-		int bits = 0;
-		
-		while (node->parent != NULL)
-		{
-			if (node->parent->children[1] == node)
-			{
-				code |= mask;
-			};
-			
-			mask <<= 1;
-			bits++;
-			
-			node = node->parent;
-		};
-		
-		// find the correct mapping table
-		CodeMapping *table = codemap;
-		while (bits > 8)
-		{
-			uint32_t index = (code >> (bits-8)) & 0xFF;
-			if (table[index].sub == NULL)
-			{
-				table[index].sub = (CodeMapping*) malloc(sizeof(CodeMapping) * 256);
-				memset(table[index].sub, 0, sizeof(CodeMapping) * 256);
-			};
-			
-			table = table[index].sub;
-			bits -= 8;
-		};
-		
-		int pushbits = 8 - bits;
-		int j;
-		for (j=0; j<(1<<pushbits); j++)
-		{
-			uint8_t index = (code << pushbits) | j;
-			table[index].bits = bits;
-			table[index].symbol = i;
-			table[index].sub = NULL;
-		};
-	};
-
 	// decode
-	if (bsr.mask == 0)
-	{
-		bsr.scan++;
-		bsr.size--;
-		bsr.mask = 0x80;
-	};
-
-	uint64_t bitbuf = 0;
-	size_t bytesLeft = bsr.size;
-	const uint8_t *scan = bsr.scan;
-	bitbuf = __builtin_bswap64(*((const uint64_t*)scan));
-	scan += 8;
-	bytesLeft -= 8;
-	int bitsInBuffer = 64;
-
-	while (bsr.mask != 0x80)
-	{
-		bitsInBuffer--;
-		bitbuf <<= 1;
-		bsr.mask <<= 1;
-	};
+	HuffNode *current = huffTree;
 	
-	CodeMapping *table = codemap;
 	while (1)
 	{
-		while (bitsInBuffer < (64-8))
+		int bit = nextbit(&bsr);
+		if (verbose)
 		{
-			int shiftNeeded = (64-8) - bitsInBuffer;
-			uint8_t byte = 0;
-			if (bytesLeft)
-			{
-				byte = *scan++;
-				bytesLeft--;
-			};
-			
-			bitbuf |= (((uint64_t) byte) << shiftNeeded);
-			bitsInBuffer += 8;
+			printf("%d", bit);
+			fflush(stdout);
 		};
+		current = current->children[bit];
 		
-		uint8_t index = bitbuf >> (64-8);
-		if (table[index].sub != NULL)
+		if (current->children[0] == NULL)
 		{
-			table = table[index].sub;
-			bitbuf <<= 8;
-			bitsInBuffer -= 8;
-		}
-		else
-		{
-			int symbol = table[index].symbol;
-			int prefixBits = table[index].bits;
-			table = codemap;
-			
-			bitbuf <<= prefixBits;
-			bitsInBuffer -= prefixBits;
-			
-			if (symbol == 257)
+			if (verbose) printf("\nSYMBOL %d\n", current->value);
+			if (current->value == 257) break;
+			else if (current->value == 256)
 			{
-				// end symbol
-				break;
-			}
-			else if (symbol == 256)
-			{
-				// we must fill the bit buffer since the lookback/looksize pair could be up to 32 bits
-				while (bitsInBuffer < (64-8))
+				uint16_t lookback = 0;
+				uint16_t looksize = 0;
+				
+				size_t count = lookbackBits;
+				while (count--)
 				{
-					int shiftNeeded = (64-8) - bitsInBuffer;
-					uint8_t byte = 0;
-					if (bytesLeft)
-					{
-						byte = *scan++;
-						bytesLeft--;
-					};
-			
-					bitbuf |= (((uint64_t) byte) << shiftNeeded);
-					bitsInBuffer += 8;
+					lookback = (lookback << 1) | nextbit(&bsr);
 				};
 				
-				size_t lookback = bitbuf >> (64-lookbackBits);
-				bitbuf <<= lookbackBits;
-				bitsInBuffer -= lookbackBits;
+				count = sizeBits;
+				while (count--)
+				{
+					looksize = (looksize << 1) | nextbit(&bsr);
+				};
 				
-				size_t looksize = bitbuf >> (64-sizeBits);
-				bitbuf <<= sizeBits;
-				bitsInBuffer -= sizeBits;
+				if (verbose) printf("\nREPEAT <-%hu,%hu>\n", lookback, looksize);
 				
 				memcpy(&outbuf[outsize], &outbuf[outsize-lookback-looksize], looksize);
 				outsize += looksize;
 			}
 			else
 			{
-				outbuf[outsize++] = (uint8_t) symbol;
+				outbuf[outsize++] = (uint8_t) current->value;
 			};
+			
+			current = huffTree;
 		};
 	};
-	
+
 	deleteTree(huffTree);
-	deleteCodeTable(codemap);
 	return outsize;
 };
 
