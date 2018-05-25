@@ -1,0 +1,5 @@
+# multipart/x-mip
+# Madd Installation Package (MIP)
+label Madd Installation Package
+icon x-mip
+magic 'M' 'I' 'P'
