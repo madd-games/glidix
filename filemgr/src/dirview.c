@@ -695,3 +695,27 @@ void dvMakeFile(DirView *dv, const void *content, size_t size)
 	// now rename it
 	dvRename(dv);
 };
+
+void dvTerminal(DirView *dv)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	
+	// change to the visible directory
+	if (chdir(data->location) != 0)
+	{
+		gwmMessageBox(topWindow, "New file", "Failed to change directory", GWM_MBUT_OK | GWM_MBICON_ERROR);
+		return;
+	};
+	
+	pid_t pid = fork();
+	if (pid == -1)
+	{
+		gwmMessageBox(topWindow, "Terminal", "Cannot start new process", GWM_MBUT_OK | GWM_MBICON_ERROR);
+		return;
+	}
+	else if (pid == 0)
+	{
+		execl("/usr/bin/terminal", "terminal", NULL);
+		_exit(1);
+	};
+};

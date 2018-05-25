@@ -164,4 +164,9 @@ void dvMakeDir(DirView *dv);
  */
 void dvMakeFile(DirView *dv, const void *content, size_t size);
 
+/**
+ * Open a terminal in the current directory.
+ */
+void dvTerminal(DirView *dv);
+
 #endif

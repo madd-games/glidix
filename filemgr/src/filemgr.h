@@ -60,6 +60,7 @@ enum
 	 * DirView-related commands.
 	 */
 	DV_SYM_MKDIR,
+	DV_SYM_TERMINAL,
 };
 
 #endif

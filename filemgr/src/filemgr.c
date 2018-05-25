@@ -89,6 +89,9 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 	case GWM_SYM_NEW_FILE:
 		dvMakeFile(dirView, NULL, 0);
 		return GWM_EVSTATUS_OK;
+	case DV_SYM_TERMINAL:
+		dvTerminal(dirView);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -114,12 +117,21 @@ static int filemgrHandler(GWMEvent *ev, GWMWindow *win, void *context)
 
 void makeEditMenu()
 {
+	DDIPixelFormat screenFormat;
+	gwmGetScreenFormat(&screenFormat);
+	
+	DDISurface *iconTerm = ddiLoadAndConvertPNG(&screenFormat, "/usr/share/images/terminal.png", NULL);
+	
 	menuEdit = gwmCreateMenu();
 	
 	GWMMenu *menuNew = gwmMenuAddSub(menuEdit, "New...");
 	gwmMenuAddCommand(menuNew, DV_SYM_MKDIR, "Directory", NULL);
 	gwmMenuAddCommand(menuNew, GWM_SYM_NEW_FILE, "Empty file", NULL);
 
+	gwmMenuAddSeparator(menuEdit);
+	gwmMenuAddCommand(menuEdit, DV_SYM_TERMINAL, "Open terminal", NULL);
+	gwmMenuSetIcon(menuEdit, iconTerm);
+	
 	gwmMenuAddSeparator(menuEdit);
 	gwmMenuAddCommand(menuEdit, GWM_SYM_RENAME, NULL, NULL);
 };
