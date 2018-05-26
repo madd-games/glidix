@@ -13,7 +13,7 @@ mount - establish a mountpoint
 
 You must define the *_GLIDIX_SOURCE* macro, before including any header files, for this function to be visible.
 
-This function makes the filesystem resident on the block device or file 'image' visible under the path 'mntpoint'. By default, the mountpoint must already exist (but see *MNT_TEMP*). The 'fstype' argument specifies the filesystem driver which understands the filesystem under 'image'; for example 'gxfs'. Use [fsdrv.2] to obtain a list of all supported filesystem drivers. The 'options' and 'optlen' arguments are a pointer to an options structure, and its size, respectively. The options structure is filesystem-driver-specific and defines options specific to that filesystem. See filesystem-specific pages such as [isofs.6] for more information about their options.
+This function makes the filesystem resident on the block device or file 'image' visible under the path 'mntpoint'. By default, the mountpoint must already exist (but see *MNT_TEMP*). The 'fstype' argument specifies the filesystem driver which understands the filesystem under 'image'; for example 'gxfs'. Use [fsdrv.2] to obtain a list of all supported filesystem drivers. The 'options' and 'optlen' arguments are a pointer to an options structure, and its size, respectively. The options structure is filesystem-driver-specific and defines options specific to that filesystem. See filesystem-specific pages such as [isofs.6] for more information about their options. 'options' may be *NULL* if 'optlen' is zero.
 
 The 'flags' argument is a bitwise-OR of zero or more of the following flags:
 
@@ -36,6 +36,7 @@ On error, this function returns '-1' and sets [errno.6] to one of the following:
 \* *EINVAL* - invalid 'fstype' or 'flags'; or 'image' does not contain a filesystem of type 'fstype'.
 \* *EACCES* - the calling thread does not have the *XP_MOUNT* executable permission, or 'image' cannot be accessed.
 \* *ENOENT* - 'image' does not exist.
+\* *EFAULT* - one of the passed pointers is not valid.
 
 Other errors may also be returned for specific filesystems.
 
