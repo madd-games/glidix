@@ -162,3 +162,6 @@ GLIDIX_SYSCALL	146,	fstatvfs
 GLIDIX_SYSCALL	147,	chroot
 GLIDIX_SYSCALL	148,	_glidix_modstat
 GLIDIX_SYSCALL	149,	rmdir
+
+GLIDIX_SYSCALL	151,	_glidix_pathctlat
+GLIDIX_SYSCALL	152,	_glidix_pathctl

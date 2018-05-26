@@ -452,7 +452,7 @@ static void ideInit(IDEController *ctrl)
 				ctrl->devs[index].channel = channel;
 				ctrl->devs[index].slot = slot;
 				ctrl->devs[index].ctrl = ctrl;
-				ctrl->devs[index].sd = sdCreate(&sdpars);
+				ctrl->devs[index].sd = sdCreate(&sdpars, "IDE UNKNOWN");
 				
 				KernelThreadParams thpars;
 				memset(&thpars, 0, sizeof(KernelThreadParams));
@@ -473,7 +473,7 @@ static void ideInit(IDEController *ctrl)
 				ctrl->devs[index].channel = channel;
 				ctrl->devs[index].slot = slot;
 				ctrl->devs[index].ctrl = ctrl;
-				ctrl->devs[index].sd = sdCreate(&sdpars);
+				ctrl->devs[index].sd = sdCreate(&sdpars, "IDE UNKNOWN");
 				
 				KernelThreadParams thpars;
 				memset(&thpars, 0, sizeof(KernelThreadParams));

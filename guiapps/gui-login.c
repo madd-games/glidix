@@ -246,6 +246,19 @@ int logInCallback(void *ignore)
 				_exit(1);
 			};
 			
+			if (fork() == 0)
+			{
+				struct stat st;
+				if (stat(".wallpaper", &st) != 0)
+				{
+					unlink(".wallpaper");	// in case it's a broken link
+					symlink("/usr/share/images/wallpaper.png", ".wallpaper");
+				};
+				
+				execl("/usr/bin/wallpaper", "wallpaper", "--scale", "--image=.wallpaper", NULL);
+				_exit(1);
+			};
+			
 			execl("/usr/bin/sysbar", "sysbar", NULL);
 			perror("exec");
 			_exit(1);
@@ -273,7 +286,7 @@ int main(int argc, char *argv[])
 	}
 	else if (pid == 0)
 	{
-		execl("/usr/bin/wallpaper", "wallpaper", "--scale", "--image=/usr/share/images/wallpaper.png", NULL);
+		execl("/usr/bin/wallpaper", "wallpaper", "--image=/usr/share/images/splash.png", "--color=#000000", NULL);
 		perror("exec wallpaper");
 		_exit(1);
 	}
@@ -348,24 +361,6 @@ int main(int argc, char *argv[])
 	
 	GWMWindow *btnLogIn = gwmCreateButton(win, "Log in", 2, 46, 50, 0);
 	gwmSetButtonCallback(btnLogIn, logInCallback, NULL);
-	
-	DDISurface *wallpaper = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/wallpaper.png", NULL);
-	if (wallpaper != NULL)
-	{
-		DDISurface *background = ddiOpenSurface(gwmGetInfo()->backgroundID);
-		if (background != NULL)
-		{
-			DDISurface *scaledWallpaper = ddiScale(wallpaper, background->width, background->height, DDI_SCALE_BEST);
-			if (scaledWallpaper != NULL)
-			{
-				ddiBlit(scaledWallpaper, 0, 0, background, 0, 0, background->width, background->height);
-			};
-			
-			ddiDeleteSurface(scaledWallpaper);
-		};
-		
-		ddiDeleteSurface(wallpaper);
-	};
 	
 	gwmPostDirty(win);
 	gwmMainLoop();

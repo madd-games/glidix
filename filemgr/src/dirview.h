@@ -84,6 +84,12 @@ typedef struct DirEntry_
 	 * Base X/Y of the tile.
 	 */
 	int						baseX, baseY;
+	
+	/**
+	 * Callback to open this entry; default action is taken if NULL.
+	 * Return 0 if we should continue opening other selected files, -1 otherwise.
+	 */
+	int (*open)(GWMWindow *dv, struct DirEntry_*);
 } DirEntry;
 
 /**

@@ -26,24 +26,32 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _SYS_IOCTL_H
-#define _SYS_IOCTL_H
+#ifndef _SYS_STORAGE_H
+#define _SYS_STORAGE_H
 
-#define	__IOCTL_NOARG(intf, cmd)				((intf << 16) | cmd)
-#define	__IOCTL_ARG(type, intf, cmd)				((sizeof(type) << 32) | __IOCTL_NOARG(intf, cmd))
+#include <sys/glidix.h>
+#include <sys/ioctl.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#define	IOCTL_SDI_IDENTITY			_GLIDIX_IOCTL_ARG(SDIdentity, _GLIDIX_IOCTL_INT_SDI, 0)
 
-/* implemented by the runtime */
-int ioctl(int fd, unsigned long cmd, ...);
+#define	SD_READONLY				(1 << 0)	/* device is read-only */
+#define	SD_HANGUP				(1 << 1)	/* device hanged up */
+#define	SD_EJECTABLE				(1 << 2)	/* device is ejectable (memory can be replaced, such as CD-ROM) */
+#define	SD_REMOVEABLE				(1 << 3)	/* the whole drive can be removed at runtime */
 
-#define	pathctl	_glidix_pathctl
-#define	pathctlat _glidix_pathctlat
-
-#ifdef __cplusplus
-};	/* extern "C" */
-#endif
+typedef union
+{
+	struct
+	{
+		int				flags;
+		int				partIndex;
+		size_t				offset;
+		size_t				size;
+		char				name[128];
+	};
+	
+	/* force the size to 256 bytes */
+	char _size[256];
+} SDIdentity;
 
 #endif

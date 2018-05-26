@@ -30,12 +30,19 @@
 #include <assert.h>
 #include <sys/stat.h>
 #include <sys/call.h>
+#include <sys/storage.h>
+#include <sys/fsinfo.h>
 #include <fcntl.h>
 
 #include "dirview.h"
 #include "filemgr.h"
 
 extern GWMWindow *topWindow;
+
+DDISurface *iconUnmountHDD;
+DDISurface *iconMountHDD;
+DDISurface *iconUnmountCD;
+DDISurface *iconMountCD;
 
 static int dvHandler(GWMEvent *ev, DirView *dv, void *context);
 
@@ -162,7 +169,11 @@ char** getOpenArgs(const char *mimename)
 // returns 0 if we should continue opening other selected files, else -1
 static int doOpen(DirView *dv, DirEntry *ent)
 {
-	if (strcmp(ent->mime->mimename, "inode/directory") == 0)
+	if (ent->open != NULL)
+	{
+		return ent->open(dv, ent);
+	}
+	else if (strcmp(ent->mime->mimename, "inode/directory") == 0)
 	{
 		if (desktopMode)
 		{
@@ -384,6 +395,19 @@ static void dvPosition(DirView *dv, int x, int y, int width, int height)
 
 DirView* dvNew(GWMWindow *parent)
 {
+	DDIPixelFormat format;
+	gwmGetScreenFormat(&format);
+	
+	iconUnmountHDD = ddiLoadAndConvertPNG(&format, "/usr/share/images/hdd-umnt.png", NULL);
+	iconMountHDD = ddiLoadAndConvertPNG(&format, "/usr/share/images/hdd-mnt.png", NULL);
+	iconUnmountCD = ddiLoadAndConvertPNG(&format, "/usr/share/images/cd-umnt.png", NULL);
+	iconMountCD = ddiLoadAndConvertPNG(&format, "/usr/share/images/cd-mnt.png", NULL);
+	
+	assert(iconUnmountHDD != NULL);
+	assert(iconMountHDD != NULL);
+	assert(iconUnmountCD != NULL);
+	assert(iconMountCD != NULL);
+	
 	DirView *dv = gwmCreateWindow(parent, "DirView", 0, 0, 0, 0, 0);
 	
 	DirViewData *data = (DirViewData*) malloc(sizeof(DirViewData));
@@ -392,6 +416,7 @@ DirView* dvNew(GWMWindow *parent)
 	data->sbar = NULL;
 	data->editing = NULL;
 	data->txtEdit = NULL;
+	data->scroll = 0;
 	
 	dv->getMinSize = dvMinSize;
 	dv->getPrefSize = dvPrefSize;
@@ -402,8 +427,236 @@ DirView* dvNew(GWMWindow *parent)
 	return dv;
 };
 
+static int isMounted(const char *diskpath)
+{
+	struct fsinfo info[256];
+	size_t count = _glidix_fsinfo(info, 256);
+	
+	size_t i;
+	for (i=0; i<count; i++)
+	{
+		if (strcmp(info[i].fs_image, diskpath) == 0) return 1;
+	};
+	
+	return 0;
+};
+
+static int openDisk(DirView *dv, DirEntry *ent)
+{
+	char *dirpath = NULL;
+	
+	struct fsinfo info[256];
+	size_t count = _glidix_fsinfo(info, 256);
+	
+	size_t i;
+	for (i=0; i<count; i++)
+	{
+		if (strcmp(info[i].fs_image, ent->path) == 0)
+		{
+			dirpath = info[i].fs_mntpoint;
+			break;
+		};
+	};
+	
+	if (dirpath == NULL)
+	{
+		char path[256];
+		char error[1024];
+		
+		int outpipe[2];
+		int errpipe[2];
+		
+		if (pipe(outpipe) != 0)
+		{
+			gwmMessageBox(topWindow, "File manager", "FATAL: failed to create output pipe", GWM_MBICON_ERROR | GWM_MBUT_OK);
+			return -1;
+		};
+		
+		if (pipe(errpipe) != 0)
+		{
+			gwmMessageBox(topWindow, "File manager", "FATAL: failed to create error pipe", GWM_MBICON_ERROR | GWM_MBUT_OK);
+			return -1;
+		};
+
+		pid_t pid = fork();
+		if (pid == -1)
+		{
+			gwmMessageBox(topWindow, "File manager", "fork() failed!", GWM_MBICON_ERROR | GWM_MBUT_OK);
+			return -1;
+		}
+		else if (pid == 0)
+		{
+			close(outpipe[0]);
+			close(errpipe[0]);
+			
+			close(1);
+			close(2);
+			
+			dup(outpipe[1]);
+			dup(errpipe[1]);
+			
+			close(outpipe[1]);
+			close(errpipe[1]);
+			
+			execl("/usr/bin/mediamnt", "mediamnt", ent->path, NULL);
+			perror("exec mediamnt");
+			_exit(1);
+		}
+		else
+		{
+			close(outpipe[1]);
+			close(errpipe[1]);
+			
+			char *put = path;
+			while (1)
+			{
+				ssize_t sz = read(outpipe[0], put, 256);
+				if (sz > 0)
+				{
+					put += sz;
+				}
+				else
+				{
+					*put = 0;
+					break;
+				};
+			};
+			
+			memset(error, 0, 256);
+			read(errpipe[0], error, 256);
+			
+			close(outpipe[0]);
+			close(errpipe[0]);
+			
+			int status;
+			waitpid(pid, &status, 0);
+			
+			if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+			{
+				gwmMessageBox(topWindow, "File manager", error, GWM_MBICON_ERROR | GWM_MBUT_OK);
+				return -1;
+			};
+			
+			char *endline = strrchr(path, '\n');
+			if (endline != NULL) *endline = 0;
+			dirpath = path;
+		};
+	};
+	
+	dvGoTo(dv, dirpath);
+	return -1;
+};
+
+static DirEntry* makeDiskEntry(const char *diskpath)
+{
+	DirEntry *ment = (DirEntry*) malloc(sizeof(DirEntry));
+	memset(ment, 0, sizeof(DirEntry));
+	ment->next = NULL;
+	
+	SDIdentity id;
+	if (pathctl(diskpath, IOCTL_SDI_IDENTITY, &id) != 0)
+	{
+		id.flags = 0;
+		strcpy(id.name, diskpath);
+	};
+	
+	if (id.flags & SD_EJECTABLE)
+	{
+		if (isMounted(diskpath)) ment->icon = iconMountCD;
+		else ment->icon = iconUnmountCD;
+	}
+	else
+	{
+		if (isMounted(diskpath)) ment->icon = iconMountHDD;
+		else ment->icon = iconUnmountHDD;
+	};
+	
+	FSMimeType *mime = fsGetType(diskpath);
+	ment->mime = mime;
+	ment->name = strdup(id.name);
+	ment->path = strdup(diskpath);
+	ment->selected = 0;
+	ment->open = openDisk;
+	
+	return ment;
+};
+
+static int listComputer(DirEntry **out)
+{
+	DirEntry *first = NULL;
+	DirEntry *last = NULL;
+	
+	DIR *dirp = opendir("/dev");
+	if (dirp == NULL)
+	{
+		char errbuf[2048];
+		sprintf(errbuf, "Cannot scan /dev: %s", strerror(errno));
+		gwmMessageBox(NULL, "File manager", errbuf, GWM_MBICON_ERROR | GWM_MBUT_OK);
+		return -1;
+	};
+	
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
+	{
+		if (strlen(ent->d_name) == 3 && memcmp(ent->d_name, "sd", 2) == 0)
+		{
+			char firstPart[16];
+			sprintf(firstPart, "/dev/%s0", ent->d_name);
+			
+			struct stat st;
+			if (lstat(firstPart, &st) != 0)
+			{
+				char diskpath[16];
+				sprintf(diskpath, "/dev/%s", ent->d_name);
+				
+				DirEntry *dent = makeDiskEntry(diskpath);
+				if (last != NULL)
+				{
+					last->next = dent;
+					last = dent;
+				}
+				else
+				{
+					first = last = dent;
+				};
+			}
+			else
+			{
+				int i;
+				for (i=0;;i++)
+				{
+					char diskpath[16];
+					sprintf(diskpath, "/dev/%s%d", ent->d_name, i);
+					
+					if (lstat(diskpath, &st) != 0) break;
+					
+					DirEntry *dent = makeDiskEntry(diskpath);
+					if (last != NULL)
+					{
+						last->next = dent;
+						last = dent;
+					}
+					else
+					{
+						first = last = dent;
+					};
+				};
+			};
+		};
+	};
+	
+	closedir(dirp);
+	*out = first;
+	return 0;
+};
+
 static int listDir(const char *path, DirEntry **out)
 {
+	if (strcmp(path, "://computer") == 0)
+	{
+		return listComputer(out);
+	};
+	
 	DIR *dirp = opendir(path);
 	if (dirp == NULL)
 	{
@@ -457,11 +710,21 @@ int dvGoTo(DirView *dv, const char *path)
 {
 	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
 	
-	char *rpath = realpath(path, NULL);
+	char *rpath;
+	if (memcmp(path, "://", 3) == 0)
+	{
+		rpath = strdup(path);
+	}
+	else
+	{
+		rpath = realpath(path, NULL);
+	};
+	
 	if (rpath == NULL)
 	{
 		char errbuf[2048];
 		sprintf(errbuf, "Cannot resolve %s: %s", path, strerror(errno));
+		gwmMessageBox(topWindow, "File manager", errbuf, GWM_MBICON_ERROR | GWM_MBUT_OK);
 		return -1;
 	};
 	

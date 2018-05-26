@@ -444,6 +444,14 @@ struct Inode_
 	 * Duplicate counter. This is the number of times the inode has been called in.
 	 */
 	int dups;
+
+	/**
+	 * For files which support this, pathctl() implementation. 'inode' is the inode being operated on.
+	 * pathctl() commands share space with ioctl() commands, so see <glidix/ioctl.h>.
+	 *
+	 * This function may set ERRNO.
+	 */
+	int (*pathctl)(Inode *inode, uint64_t cmd, void *argp);
 };
 
 /**

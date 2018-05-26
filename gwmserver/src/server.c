@@ -697,6 +697,7 @@ void* clientThreadFunc(void *context)
 		else if (cmd.cmd == GWM_CMD_REDRAW_SCREEN)
 		{
 			wndInvalidate(0, 0, screen->width, screen->height);
+			wndDrawScreen();
 		}
 		else if (cmd.cmd == GWM_CMD_SCREENSHOT_WINDOW)
 		{

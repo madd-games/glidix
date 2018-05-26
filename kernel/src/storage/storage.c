@@ -119,10 +119,14 @@ static int sdfile_ioctl(Inode *inode, File *fp, uint64_t cmd, void *params)
 	{
 		SDHandle *data = (SDHandle*) fp->filedata;
 		mutexLock(&data->sd->lock);
-		SDParams *sdpars = (SDParams*) params;
-		sdpars->flags = data->sd->flags;
-		sdpars->blockSize = data->sd->blockSize;
-		sdpars->totalSize = data->size;
+		
+		SDIdentity *id = (SDIdentity*) params;
+		id->flags = data->sd->flags;
+		id->partIndex = data->partIndex;
+		id->offset = data->offset;
+		id->size = data->size;
+		strcpy(id->name, data->name);
+		
 		mutexUnlock(&data->sd->lock);
 		return 0;
 	}
@@ -148,6 +152,28 @@ static int sdfile_ioctl(Inode *inode, File *fp, uint64_t cmd, void *params)
 		semWait(&lock);				// wait for the eject operation to finish
 	
 		// (cmd was freed by the driver)
+		return 0;
+	};
+
+	ERRNO = ENODEV;
+	return -1;
+};
+
+static int sdfile_pathctl(Inode *inode, uint64_t cmd, void *params)
+{
+	if (cmd == IOCTL_SDI_IDENTITY)
+	{
+		SDDeviceFile *data = (SDDeviceFile*) inode->fsdata;
+		mutexLock(&data->sd->lock);
+		
+		SDIdentity *id = (SDIdentity*) params;
+		id->flags = data->sd->flags;
+		id->partIndex = data->partIndex;
+		id->offset = data->offset;
+		id->size = data->size;
+		strcpy(id->name, data->name);
+		
+		mutexUnlock(&data->sd->lock);
 		return 0;
 	};
 
@@ -574,6 +600,7 @@ static void* sdfile_open(Inode *inode, int oflags)
 	handle->offset = fdev->offset;
 	handle->size = fdev->size;
 	handle->partIndex = fdev->partIndex;
+	strcpy(handle->name, fdev->name);
 	
 	return handle;
 };
@@ -635,6 +662,7 @@ static Inode* sdCreateInode(SDDeviceFile *fdev)
 	inode->pwrite = sdfile_pwrite;
 	inode->flush = sdfile_flush;
 	inode->ioctl = sdfile_ioctl;
+	inode->pathctl = sdfile_pathctl;
 	inode->getsize = sdfile_getsize;
 	inode->free = sdfile_free;
 	return inode;
@@ -776,6 +804,18 @@ static void reloadGPT(StorageDevice *sd)
 			
 			fdev->guidPath = makeGuidLink(table[i].partid, devPath);
 			
+			char *put = fdev->name;
+			uint16_t *scan = table[i].partName;
+			size_t count = 36;
+			while (count--)
+			{
+				if (*scan == 0) break;
+				
+				*put++ = (char) (*scan++);
+			};
+			
+			*put = 0;
+			
 			mutexLock(&sd->lock);
 			
 			Inode *inode = sdCreateInode(fdev);
@@ -872,7 +912,8 @@ static void reloadPartTable(StorageDevice *sd)
 
 			char devName[16];
 			strformat(devName, 16, "sd%c%d", sd->letter, nextSubIndex);
-	
+			strformat(fdev->name, 16, "sd%c%d", sd->letter, nextSubIndex);
+			
 			mutexLock(&sd->lock);
 			
 			Inode *inode = sdCreateInode(fdev);
@@ -916,7 +957,7 @@ static void sdFlushThread(void *context)
 	};
 };
 
-StorageDevice* sdCreate(SDParams *params)
+StorageDevice* sdCreate(SDParams *params, const char *name)
 {
 	char letter = sdAllocLetter();
 	if (letter == 0)
@@ -943,6 +984,16 @@ StorageDevice* sdCreate(SDParams *params)
 	sd->openParts = 0;
 	semInit2(&sd->semFlush, 0);
 	
+	if (strlen(name) > 127)
+	{
+		memcpy(sd->name, name, 127);
+		sd->name[127] = 0;
+	}
+	else
+	{
+		strcpy(sd->name, name);
+	};
+	
 	sdUpref(sd);				// for the flush thread
 	KernelThreadParams pars;
 	memset(&pars, 0, sizeof(KernelThreadParams));
@@ -967,6 +1018,7 @@ StorageDevice* sdCreate(SDParams *params)
 	fdev->offset = 0;
 	fdev->size = sd->totalSize;
 	fdev->partIndex = -1;
+	strcpy(fdev->name, sd->name);
 	
 	char masterName[16];
 	strformat(masterName, 16, "sd%c", letter);

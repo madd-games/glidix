@@ -30,6 +30,8 @@
 #include <sys/mount.h>
 #include <sys/call.h>
 #include <sys/fsinfo.h>
+#include <sys/stat.h>
+#include <sys/storage.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,15 +50,23 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
+	SDIdentity id;
 	char *mediaName;
-	char *slashPos = strrchr(argv[1], '/');
-	if (slashPos == NULL)
+	if (pathctl(argv[1], IOCTL_SDI_IDENTITY, &id) == 0)
 	{
-		mediaName = argv[1];
+		mediaName = id.name;
 	}
 	else
 	{
-		mediaName = slashPos+1;
+		char *slashPos = strrchr(argv[1], '/');
+		if (slashPos == NULL)
+		{
+			mediaName = argv[1];
+		}
+		else
+		{
+			mediaName = slashPos+1;
+		};
 	};
 	
 	char *drive = argv[1];
@@ -66,6 +76,19 @@ int main(int argc, char *argv[])
 	{
 		fprintf(stderr, "%s: fatal error: %s\n", argv[0], strerror(errno));
 		return 1;
+	};
+	
+	struct stat st;
+	int rep = 1;
+	while (lstat(mountPoint, &st) == 0)
+	{
+		free(mountPoint);
+
+		if (asprintf(&mountPoint, "/media/%s (%d)", mediaName, rep++) == -1)
+		{
+			fprintf(stderr, "%s: fatal error: %s\n", argv[0], strerror(errno));
+			return 1;
+		};
 	};
 	
 	char fsnames[256*16];

@@ -36,14 +36,16 @@
 #include <glidix/thread/mutex.h>
 #include <glidix/thread/sched.h>
 
-#define	IOCTL_SDI_IDENTITY			IOCTL_ARG(SDParams, IOCTL_INT_SDI, 0)
+#define	IOCTL_SDI_IDENTITY			IOCTL_ARG(SDIdentity, IOCTL_INT_SDI, 0)
 #define	IOCTL_SDI_EJECT				IOCTL_NOARG(IOCTL_INT_SDI, 1)
 
 /**
  * Storage device flags.
  */
-#define	SD_READONLY				(1 << 0)
-#define	SD_HANGUP				(1 << 1)
+#define	SD_READONLY				(1 << 0)	/* device is read-only */
+#define	SD_HANGUP				(1 << 1)	/* device hanged up */
+#define	SD_EJECTABLE				(1 << 2)	/* device is ejectable (memory can be replaced, such as CD-ROM) */
+#define	SD_REMOVEABLE				(1 << 3)	/* the whole drive can be removed at runtime */
 
 /**
  * The value for 'openParts' which indicates the master file is open.
@@ -264,6 +266,11 @@ typedef struct
 	 * Path to the GUID link or NULL.
 	 */
 	char*					guidPath;
+	
+	/**
+	 * Name of the storage device.
+	 */
+	char					name[128];
 } StorageDevice;
 
 typedef struct
@@ -273,6 +280,21 @@ typedef struct
 	size_t					totalSize;
 } SDParams;
 
+typedef union
+{
+	struct
+	{
+		int				flags;
+		int				partIndex;
+		size_t				offset;
+		size_t				size;
+		char				name[128];
+	};
+	
+	/* force the size to 256 bytes */
+	char _size[256];
+} SDIdentity;
+
 typedef struct
 {
 	StorageDevice*				sd;
@@ -280,6 +302,7 @@ typedef struct
 	size_t					size;
 	int					partIndex;		// -1 = master
 	char*					guidPath;		// path to link under /dev/guid or NULL
+	char					name[128];
 } SDDeviceFile;
 
 typedef struct
@@ -288,10 +311,11 @@ typedef struct
 	size_t					offset;
 	size_t					size;
 	int					partIndex;
+	char					name[128];
 } SDHandle;
 
 void		sdInit();
-StorageDevice*	sdCreate(SDParams *params);
+StorageDevice*	sdCreate(SDParams *params, const char *name);
 void		sdHangup(StorageDevice *sd);
 SDCommand*	sdPop(StorageDevice *dev);
 void		sdPostComplete(SDCommand *cmd);

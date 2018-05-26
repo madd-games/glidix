@@ -3495,11 +3495,75 @@ int sys_mv(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
 	return 0;
 };
 
+int sys_pathctlat(int dirfd, const char *upath, uint64_t cmd, void *argp)
+{
+	char path[USER_STRING_MAX];
+	if (strcpy_u2k(path, upath) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	int error;
+	InodeRef start = fd2iref(dirfd, &error);
+	if (start.inode == NULL)
+	{
+		vfsUnrefInode(start);
+		ERRNO = error;
+		return -1;
+	};
+	
+	DentryRef dref = vfsGetDentry(start, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
+	{
+		vfsUnrefInode(iref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	if (iref.inode->pathctl == NULL)
+	{
+		vfsUnrefInode(iref);
+		ERRNO = error;
+		return -1;
+	};
+	
+	size_t argsize = (cmd >> 32) & 0xFFFF;
+	void *argbuf = kmalloc(argsize);
+	if (memcpy_u2k(argbuf, argp, argsize) != 0)
+	{
+		kfree(argbuf);
+		vfsUnrefInode(iref);
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	int ret = iref.inode->pathctl(iref.inode, cmd, argbuf);
+	memcpy_k2u(argp, argbuf, argsize);		// ignore error
+	kfree(argbuf);
+	
+	vfsUnrefInode(iref);
+	return ret;
+};
+
+int sys_pathctl(const char *path, uint64_t cmd, void *argp)
+{
+	return sys_pathctlat(VFS_AT_FDCWD, path, cmd, argp);
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 151
+#define SYSCALL_NUMBER 153
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3652,6 +3716,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_modstat,				// 148
 	&sys_rmdir,				// 149
 	&sys_mv,				// 150
+	&sys_pathctlat,				// 151
+	&sys_pathctl,				// 152
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

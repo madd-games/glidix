@@ -519,24 +519,33 @@ int wndDestroy(Window *wnd)
 	
 	if (parent == NULL) return GWM_ERR_NOWND;
 	
-	// remove us from the list
-	pthread_mutex_lock(&parent->lock);
-	if (wnd->prev == NULL)
+	if (wnd->decorated)
 	{
-		parent->children = wnd->next;
-	}
-	else
-	{
-		wnd->prev->next = wnd->next;
+		wndDestroy(parent);
+		parent = NULL;
 	};
 	
-	if (wnd->next != NULL)
+	if (parent != NULL)
 	{
-		wnd->next->prev = wnd->prev;
+		// remove us from the list
+		pthread_mutex_lock(&parent->lock);
+		if (wnd->prev == NULL)
+		{
+			parent->children = wnd->next;
+		}
+		else
+		{
+			wnd->prev->next = wnd->next;
+		};
+	
+		if (wnd->next != NULL)
+		{
+			wnd->next->prev = wnd->prev;
+		};
+		pthread_mutex_unlock(&parent->lock);
+		wndDirty(parent);
+		wndDown(parent);
 	};
-	pthread_mutex_unlock(&parent->lock);
-	wndDirty(parent);
-	wndDown(parent);
 	
 	pthread_mutex_lock(&wincacheLock);
 	if (wndHovering == wnd)
@@ -563,7 +572,7 @@ int wndDestroy(Window *wnd)
 	
 	if (wnd->decorated)
 	{
-		wndDestroy(parent);
+		//wndDestroy(parent);
 	}
 	else
 	{
@@ -1506,8 +1515,13 @@ void wndGetWindowList(GWMGlobWinRef *focused, GWMGlobWinRef *list, int *outCount
 		
 		if (win->isDecoration)
 		{
-			list->id = win->children->id;
-			list->fd = win->children->fd;
+			pthread_mutex_lock(&win->lock);
+			if (win->children != NULL)
+			{
+				list->id = win->children->id;
+				list->fd = win->children->fd;
+			};
+			pthread_mutex_unlock(&win->lock);
 		}
 		else
 		{

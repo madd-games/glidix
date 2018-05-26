@@ -180,6 +180,8 @@
 #define	__SYS_modstat				148
 #define	__SYS_rmdir				149
 #define	__SYS_mv				150
+#define	__SYS_pathctlat				151
+#define	__SYS_pathctl				152
 
 /* flags for __SYS_mv */
 #define	__MV_EXCL				(1 << 0)

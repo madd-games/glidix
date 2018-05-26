@@ -1,12 +1,12 @@
 SRC := $(shell find $(SRCDIR)/src -name '*.c')
 OBJ := $(patsubst $(SRCDIR)/%.c, obj/%.o, $(SRC))
 DEP := $(OBJ:.o=.d)
-CFLAGS := -Wall -Werror -I$(SRCDIR)/../libgwm -I$(SRCDIR)/../libddi -I$(SRCDIR)/../fstools/lib -ggdb
+CFLAGS := -Wall -Werror -I$(SRCDIR)/../libc/include -I$(SRCDIR)/../libgwm -I$(SRCDIR)/../libddi -I$(SRCDIR)/../fstools/lib -ggdb
 
 .PHONY: install
 
 filemgr: $(OBJ)
-	$(HOST_GCC) $^ -o $@ -L../libgwm -L../libddi -L../fstools -mgui -lfstools -ggdb
+	$(HOST_GCC) $^ -o $@ -L../libgwm -L../libddi -L../fstools -L../libc -mgui -lfstools -ggdb
 
 -include $(DEP)
 

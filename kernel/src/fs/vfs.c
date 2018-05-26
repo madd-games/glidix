@@ -1144,6 +1144,7 @@ int vfsMount(DentryRef dref, Inode *mntroot, int flags)
 	Inode *oldTarget = dref.dent->target;
 	dref.dent->target = mntroot;
 	dref.dent->flags |= VFS_DENTRY_MNTPOINT;
+	if (dref.dent->ino == 0) dref.dent->ino = mntroot->ino;
 	vfsUprefInode(mntroot);
 	__sync_fetch_and_add(&mntroot->fs->numMounts, 1);
 	
@@ -2339,7 +2340,11 @@ int vfsUnmount(const char *path, int flags)
 	
 	dref.dent->target = NULL;
 	dref.dent->flags &= ~VFS_DENTRY_MNTPOINT;
-	if (dref.dent->flags & VFS_DENTRY_TEMP) vfsRemoveDentry(dref);
+	if (dref.dent->flags & VFS_DENTRY_TEMP)
+	{
+		dref.dent->ino = 0;
+		vfsRemoveDentry(dref);
+	}
 	else vfsUnrefDentry(dref);
 	return 0;
 };

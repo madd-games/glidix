@@ -216,6 +216,8 @@ size_t		_glidix_getparsz();
 void		_glidix_getpars(char *buffer, size_t size);
 int		_glidix_insmod(const char *modname, const char *path, const char *opt, int flags);
 int		_glidix_ioctl(int fd, unsigned long cmd, void *argp);
+int		_glidix_pathctl(const char *path, unsigned long cmd, void *argp);
+int		_glidix_pathctlat(int dirfd, const char *path, unsigned long cmd, void *argp);
 void		_glidix_diag();
 int		_glidix_mount(const char *fsname, const char *image, const char *mountpoint, int flags, const void *options, size_t optlen);
 void		_glidix_yield();

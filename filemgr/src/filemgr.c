@@ -252,9 +252,10 @@ int main(int argc, char *argv[])
 	assert(pwd != NULL);
 	
 	Category *catPlaces = plNewCat(pl, "Places");
+	plAddBookmark(catPlaces, icon, "Computer", "://computer");
 	plAddBookmark(catPlaces, icon, "Filesystem", "/");
 	plAddBookmark(catPlaces, ddiScale(gwmGetStockIcon(GWM_SYM_HOME), 16, 16, DDI_SCALE_BEST), "Home", pwd->pw_dir);
-	
+
 	GWMWindow *panelRight = gwmGetSplitterPanel(split, 1);
 	GWMLayout *layoutRight = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
 	gwmSetWindowLayout(panelRight, layoutRight);

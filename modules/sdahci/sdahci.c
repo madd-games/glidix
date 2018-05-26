@@ -570,12 +570,27 @@ static void initCtrl(AHCIController *ctrl)
 						
 						kprintf("Size in MB: %d\n", (int) (size / 1024 / 2));
 						
+						char model[41];
+						int k;
+						for (k=0; k<40; k+=2)
+						{
+							model[k] = defer[ATA_IDENT_MODEL + k + 1];
+							model[k+1] = defer[ATA_IDENT_MODEL + k];
+						};
+						model[40] = 0;
+						char *check = &model[39];
+						while (*check == ' ')
+						{
+							if (check == model) break;
+							*check-- = 0;
+						};
+						
 						SDParams pars;
 						pars.flags = 0;
 						pars.blockSize = 512;
 						pars.totalSize = size * 512;
 						
-						dev->sd = sdCreate(&pars);
+						dev->sd = sdCreate(&pars, model);
 						if (dev->sd == NULL)
 						{
 							kprintf("sdahci: storage device creation failed!\n");
@@ -630,11 +645,11 @@ static void initCtrl(AHCIController *ctrl)
 						port->is = port->is;
 						
 						SDParams pars;
-						pars.flags = SD_READONLY;
+						pars.flags = SD_READONLY | SD_EJECTABLE;
 						pars.blockSize = 2048;
 						pars.totalSize = 0;
 						
-						dev->sd = sdCreate(&pars);
+						dev->sd = sdCreate(&pars, "CD-ROM");
 						if (dev->sd == NULL)
 						{
 							kprintf("sdahci: storage device creation failed!\n");
