@@ -93,6 +93,15 @@ typedef struct DirEntry_
 } DirEntry;
 
 /**
+ * A node on the history stack.
+ */
+typedef struct HistoryNode_
+{
+	struct HistoryNode_*				down;
+	char*						location;
+} HistoryNode;
+
+/**
  * Directory view data.
  */
 typedef struct
@@ -127,6 +136,12 @@ typedef struct
 	 */
 	DirEntry*					editing;
 	GWMTextField*					txtEdit;
+	
+	/**
+	 * "back" and "forward" stacks.
+	 */
+	HistoryNode*					back;
+	HistoryNode*					forward;
 } DirViewData;
 
 /**
@@ -174,5 +189,15 @@ void dvMakeFile(DirView *dv, const void *content, size_t size);
  * Open a terminal in the current directory.
  */
 void dvTerminal(DirView *dv);
+
+/**
+ * Go back.
+ */
+void dvBack(DirView *dv);
+
+/**
+ * Go forward.
+ */
+void dvForward(DirView *dv);
 
 #endif

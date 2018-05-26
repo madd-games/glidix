@@ -45,6 +45,7 @@ DDISurface *iconUnmountCD;
 DDISurface *iconMountCD;
 
 static int dvHandler(GWMEvent *ev, DirView *dv, void *context);
+int dvGoToEx(DirView *dv, const char *path, int stack);
 
 static void dvRedraw(DirView *dv)
 {
@@ -417,6 +418,8 @@ DirView* dvNew(GWMWindow *parent)
 	data->editing = NULL;
 	data->txtEdit = NULL;
 	data->scroll = 0;
+	data->back = NULL;
+	data->forward = NULL;
 	
 	dv->getMinSize = dvMinSize;
 	dv->getPrefSize = dvPrefSize;
@@ -708,6 +711,11 @@ static int listDir(const char *path, DirEntry **out)
 
 int dvGoTo(DirView *dv, const char *path)
 {
+	return dvGoToEx(dv, path, 1);
+};
+
+int dvGoToEx(DirView *dv, const char *path, int stack)
+{
 	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
 	
 	char *rpath;
@@ -735,7 +743,26 @@ int dvGoTo(DirView *dv, const char *path)
 		return -1;
 	};
 	
-	free(data->location);
+	if (stack && data->location != NULL)
+	{
+		while (data->forward != NULL)
+		{
+			HistoryNode *node = data->forward;
+			data->forward = node->down;
+			
+			free(node->location);
+			free(node);
+		};
+		
+		HistoryNode *node = (HistoryNode*) malloc(sizeof(HistoryNode));
+		node->location = data->location;
+		node->down = data->back;
+		data->back = node;
+	}
+	else
+	{
+		free(data->location);
+	};
 	data->location = rpath;
 	
 	while (data->ents != NULL)
@@ -981,4 +1008,44 @@ void dvTerminal(DirView *dv)
 		execl("/usr/bin/terminal", "terminal", NULL);
 		_exit(1);
 	};
+};
+
+void dvBack(DirView *dv)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	if (data->back == NULL) return;
+	
+	// take the node off
+	HistoryNode *node = data->back;
+	data->back = node->down;
+	
+	// move onto "forward" stack
+	char *location = node->location;
+	node->down = data->forward;
+	node->location = strdup(data->location);
+	data->forward = node;
+	
+	// move there
+	dvGoToEx(dv, location, 0);
+	free(location);
+};
+
+void dvForward(DirView *dv)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	if (data->forward == NULL) return;
+	
+	// take the node off
+	HistoryNode *node = data->forward;
+	data->forward = node->down;
+	
+	// move onto "back" stack
+	char *location = node->location;
+	node->down = data->back;
+	node->location = strdup(data->location);
+	data->back = node;
+	
+	// move there
+	dvGoToEx(dv, location, 0);
+	free(location);
 };

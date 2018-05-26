@@ -63,6 +63,12 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 	
 	switch (ev->symbol)
 	{
+	case GWM_SYM_BACK:
+		dvBack(dirView);
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_FORWARD:
+		dvForward(dirView);
+		return GWM_EVSTATUS_OK;
 	case GWM_SYM_UP:
 		newpath = (char*) malloc(strlen(location)+4);
 		sprintf(newpath, "%s/..", location);
