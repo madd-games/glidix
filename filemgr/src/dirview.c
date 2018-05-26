@@ -43,6 +43,7 @@ DDISurface *iconUnmountHDD;
 DDISurface *iconMountHDD;
 DDISurface *iconUnmountCD;
 DDISurface *iconMountCD;
+DDISurface *iconSymlink;
 
 static int dvHandler(GWMEvent *ev, DirView *dv, void *context);
 int dvGoToEx(DirView *dv, const char *path, int stack);
@@ -81,6 +82,10 @@ static void dvRedraw(DirView *dv)
 			};
 		
 			ddiBlit(ent->icon, 0, 0, canvas, x+18, y+2, 64, 64);
+			if (ent->symlink)
+			{
+				ddiBlit(iconSymlink, 0, 0, canvas, x+18, y+50, 16, 16);
+			};
 			
 			DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), x+2, y+68, 98, 100-68-2, 0, 0, NULL);
 			assert(pen != NULL);
@@ -403,11 +408,13 @@ DirView* dvNew(GWMWindow *parent)
 	iconMountHDD = ddiLoadAndConvertPNG(&format, "/usr/share/images/hdd-mnt.png", NULL);
 	iconUnmountCD = ddiLoadAndConvertPNG(&format, "/usr/share/images/cd-umnt.png", NULL);
 	iconMountCD = ddiLoadAndConvertPNG(&format, "/usr/share/images/cd-mnt.png", NULL);
+	iconSymlink = ddiLoadAndConvertPNG(&format, "/usr/share/images/symlink.png", NULL);
 	
 	assert(iconUnmountHDD != NULL);
 	assert(iconMountHDD != NULL);
 	assert(iconUnmountCD != NULL);
 	assert(iconMountCD != NULL);
+	assert(iconSymlink != NULL);
 	
 	DirView *dv = gwmCreateWindow(parent, "DirView", 0, 0, 0, 0, 0);
 	
@@ -680,6 +687,9 @@ static int listDir(const char *path, DirEntry **out)
 		char *fullpath = (char*) malloc(strlen(path) + strlen(ent->d_name) + 2);
 		sprintf(fullpath, "%s/%s", path, ent->d_name);
 		
+		struct stat st;
+		lstat(fullpath, &st);
+		
 		DirEntry *ment = (DirEntry*) malloc(sizeof(DirEntry));
 		memset(ment, 0, sizeof(DirEntry));
 		ment->next = NULL;
@@ -702,6 +712,7 @@ static int listDir(const char *path, DirEntry **out)
 		ment->name = strdup(ent->d_name);
 		ment->path = fullpath;
 		ment->selected = 0;
+		ment->symlink = S_ISLNK(st.st_mode);
 	};
 	
 	closedir(dirp);

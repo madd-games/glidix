@@ -81,6 +81,11 @@ typedef struct DirEntry_
 	int						selected;
 	
 	/**
+	 * Is the entry a symbolic link?
+	 */
+	int						symlink;
+	
+	/**
 	 * Base X/Y of the tile.
 	 */
 	int						baseX, baseY;
