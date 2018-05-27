@@ -32,6 +32,7 @@
 #include <stdint.h>
 #include <libddi.h>
 #include <unistd.h>
+#include <pthread.h>
 
 /**
  * Window flags.
@@ -1171,6 +1172,32 @@ typedef	GWMWindow GWMSplitter;
 typedef GWMWindow GWMTextField;
 typedef GWMWindow GWMToolButton;
 typedef	GWMWindow GWMScrollbar;
+
+/**
+ * GWM timer.
+ */
+typedef struct
+{
+	/**
+	 * The thread handling the timing.
+	 */
+	pthread_t				thread;
+	
+	/**
+	 * Timer period in milliseconds.
+	 */
+	int					period;
+	
+	/**
+	 * Whether or not the timer should continue.
+	 */
+	int					running;
+	
+	/**
+	 * The window to send update events to.
+	 */
+	GWMWindow*				win;
+} GWMTimer;
 
 /**
  * Menu entry callback; return -1 to terminate application, 0 to continue.
@@ -2551,5 +2578,17 @@ void gwmSetSplitterProportion(GWMSplitter *split, float prop);
  * Get the current proportion of a splitter.
  */
 float gwmGetSplitterProportion(GWMSplitter *split);
+
+/**
+ * Create a timer. This will periodically send the GWM_EVENT_UPDATE event to the specified window, until
+ * destroyed with gwmDestroyTimer().
+ */
+GWMTimer* gwmCreateTimer(GWMWindow *win, int period);
+
+/**
+ * Destroy a timer. NOTE: spurious GWM_EVENT_UPDATE events may be sent to the window because the timer is
+ * destroyed.
+ */
+void gwmDestroyTimer(GWMTimer *timer);
 
 #endif
