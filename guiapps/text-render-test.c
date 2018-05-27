@@ -67,11 +67,12 @@ int main()
 	DDIFont *font = ddiLoadFont("DejaVu Sans", 20, DDI_STYLE_REGULAR, NULL);
 	assert(font != NULL);
 	
+	static DDIColor black = {0x00, 0x00, 0x00, 0xFF};
 	int count = RENDER_COUNT;
 	clock_t start = clock();
 	while (count--)
 	{
-		ddiRenderText(&format, font, sampleText, NULL);
+		ddiRenderText(&format, font, &black, sampleText, NULL);
 	};
 	
 	clock_t end = clock();

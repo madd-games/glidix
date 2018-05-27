@@ -1532,12 +1532,13 @@ void ddiPenSetMask(DDIPen *pen, long mask)
 	pen->mask = mask;
 };
 
-DDISurface* ddiRenderText(DDIPixelFormat *format, DDIFont *font, const char *text, const char **error)
+DDISurface* ddiRenderText(DDIPixelFormat *format, DDIFont *font, DDIColor *color, const char *text, const char **error)
 {
 	DDIPen *pen = ddiCreatePen(format, font, 0, 0, 100, 100, 0, 0, error);
 	if (pen == NULL) return NULL;
 	
 	ddiSetPenWrap(pen, 0);
+	ddiSetPenColor(pen, color);
 	ddiWritePen(pen, text);
 	
 	int width, height;

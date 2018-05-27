@@ -113,7 +113,8 @@ static GWMTreeEntry *readTree(GWMWindow *treeview, const void *path)
 		int i;
 		for (i=0; i<data->tree->teNumCols; i++)
 		{
-			entry->labels[i] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), (char*)values[i], NULL);
+			static DDIColor black = {0x00, 0x00, 0x00, 0xFF};
+			entry->labels[i] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, (char*)values[i], NULL);
 			free(values[i]);
 		};
 		
@@ -436,7 +437,8 @@ GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int hei
 	for (i=0; i<tree->teNumCols; i++)
 	{
 		char *caption = tree->teGetColCaption(i);
-		data->colLabels[i] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), caption, NULL);
+		static DDIColor black = {0x00, 0x00, 0x00, 0xFF};
+		data->colLabels[i] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, caption, NULL);
 		free(caption);
 	};
 	

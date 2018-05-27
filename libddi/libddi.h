@@ -524,7 +524,7 @@ void ddiPenSetMask(DDIPen *pen, long mask);
 /**
  * Renders text to a new surface, as small as possible, and returns that new surface.
  */
-DDISurface* ddiRenderText(DDIPixelFormat *format, DDIFont *font, const char *text, const char **error);
+DDISurface* ddiRenderText(DDIPixelFormat *format, DDIFont *font, DDIColor *color, const char *text, const char **error);
 
 /**
  * Parse a color string. This is either a HTML color specification (#RGB or #RRGGBB), or a HTML color name.

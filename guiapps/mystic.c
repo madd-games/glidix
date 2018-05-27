@@ -263,7 +263,8 @@ int main()
 		char text[16];
 		sprintf(text, "%d", i+1);
 		
-		numberSurfaces[i] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), text, NULL);
+		static DDIColor black = {0x00, 0x00, 0x00, 0xFF};
+		numberSurfaces[i] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, text, NULL);
 	};
 	
 	GWMWindow *menubar = gwmCreateMenubar(win);

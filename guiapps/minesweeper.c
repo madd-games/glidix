@@ -548,6 +548,7 @@ int main()
 	totalMines = 50;
 	
 	const char *error;
+	static DDIColor black = {0x00, 0x00, 0x00, 0xFF};
 	
 	DDISurface *canvas = gwmGetWindowCanvas(win);
 	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/minesweeper.png", NULL);
@@ -563,49 +564,49 @@ int main()
 		fprintf(stderr, "Failed to load sprite file: %s\n", error);
 		return 0;
 	};
-	if ((minesText[0] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), "1", &error)) == NULL)
+	if ((minesText[0] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, "1", &error)) == NULL)
 	{
 		gwmMessageBox(NULL, "Text render error", "Failed to render text!", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		fprintf(stderr, "Failed to render text: %s\n", error);
 		return 0;
 	};
-	if ((minesText[1] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), "2", &error)) == NULL)
+	if ((minesText[1] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, "2", &error)) == NULL)
 	{
 		gwmMessageBox(NULL, "Text render error", "Failed to render text!", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		fprintf(stderr, "Failed to render text: %s\n", error);
 		return 0;
 	};
-	if ((minesText[2] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), "3", &error)) == NULL)
+	if ((minesText[2] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, "3", &error)) == NULL)
 	{
 		gwmMessageBox(NULL, "Text render error", "Failed to render text!", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		fprintf(stderr, "Failed to render text: %s\n", error);
 		return 0;
 	};
-	if ((minesText[3] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), "4", &error)) == NULL)
+	if ((minesText[3] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, "4", &error)) == NULL)
 	{
 		gwmMessageBox(NULL, "Text render error", "Failed to render text!", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		fprintf(stderr, "Failed to render text: %s\n", error);
 		return 0;
 	};
-	if ((minesText[4] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), "5", &error)) == NULL)
+	if ((minesText[4] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, "5", &error)) == NULL)
 	{
 		gwmMessageBox(NULL, "Text render error", "Failed to render text!", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		fprintf(stderr, "Failed to render text: %s\n", error);
 		return 0;
 	};
-	if ((minesText[5] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), "6", &error)) == NULL)
+	if ((minesText[5] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, "6", &error)) == NULL)
 	{
 		gwmMessageBox(NULL, "Text render error", "Failed to render text!", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		fprintf(stderr, "Failed to render text: %s\n", error);
 		return 0;
 	};
-	if ((minesText[6] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), "7", &error)) == NULL)
+	if ((minesText[6] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, "7", &error)) == NULL)
 	{
 		gwmMessageBox(NULL, "Text render error", "Failed to render text!", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		fprintf(stderr, "Failed to render text: %s\n", error);
 		return 0;
 	};
-	if ((minesText[7] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), "8", &error)) == NULL)
+	if ((minesText[7] = ddiRenderText(&canvas->format, gwmGetDefaultFont(), &black, "8", &error)) == NULL)
 	{
 		gwmMessageBox(NULL, "Text render error", "Failed to render text!", GWM_MBICON_ERROR | GWM_MBUT_OK);
 		fprintf(stderr, "Failed to render text: %s\n", error);
