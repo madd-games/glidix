@@ -1,0 +1,5 @@
+# application/x-kernel-module
+# Glidix kernel module
+label Kernel module
+icon gkm
+filename *.gkm
