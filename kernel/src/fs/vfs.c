@@ -2500,6 +2500,12 @@ int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const cha
 		return error;
 	};
 	
+	if (!vfsIsAllowed(drefOld.dent->dir, VFS_ACE_WRITE))
+	{
+		vfsUnrefDentry(drefOld);
+		return EACCES;
+	};
+	
 	if (drefOld.dent->flags & VFS_DENTRY_TEMP)
 	{
 		vfsUnrefDentry(drefOld);
@@ -2521,7 +2527,14 @@ int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const cha
 		vfsUnrefDentry(drefNew);
 		return 0;
 	};
-	
+
+	if (!vfsIsAllowed(drefNew.dent->dir, VFS_ACE_WRITE))
+	{
+		vfsUnrefDentry(drefOld);
+		vfsUnrefDentry(drefNew);
+		return EACCES;
+	};
+
 	if (drefNew.dent->dir->fs != drefOld.dent->dir->fs)
 	{
 		// different filesystem; cannot move
