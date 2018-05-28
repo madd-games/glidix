@@ -526,6 +526,11 @@ typedef struct
 	 * Editing area color.
 	 */
 	DDIColor				colEditor;
+	
+	/**
+	 * Combo box image.
+	 */
+	uint32_t				imgCombo;
 } GWMInfo;
 
 /**
@@ -559,7 +564,6 @@ typedef struct
  */
 #define	GWM_BOX_HORIZONTAL			0		/* horizontal by default */
 #define	GWM_BOX_VERTICAL			(1 << 0)	/* vertical with this flag */
-#define	GWM_BOX_INCLUDE_HIDDEN			(1 << 1)	/* include hidden children in calculation */
 
 /**
  * Flags for a box layout child.
@@ -656,6 +660,7 @@ typedef struct
 #define	GWM_EVENT_RESIZE_REQUEST		10
 #define	GWM_EVENT_DOUBLECLICK			11
 #define	GWM_EVENT_RETHEME			12
+#define	GWM_EVENT_RESIZED			13
 
 /**
  * Cascading events.
@@ -668,6 +673,7 @@ typedef struct
 #define	GWM_EVENT_TAB_FADED			(GWM_EVENT_CASCADING + 6)
 #define	GWM_EVENT_TAB_ACTIVATED			(GWM_EVENT_CASCADING + 7)
 #define	GWM_EVENT_EDIT_END			(GWM_EVENT_CASCADING + 8)
+#define	GWM_EVENT_MENU_CLOSE			(GWM_EVENT_CASCADING + 9)
 
 /**
  * General event structure.
@@ -1172,6 +1178,7 @@ typedef	GWMWindow GWMSplitter;
 typedef GWMWindow GWMTextField;
 typedef GWMWindow GWMToolButton;
 typedef	GWMWindow GWMScrollbar;
+typedef GWMWindow GWMCombo;
 
 /**
  * GWM timer.
@@ -2126,32 +2133,34 @@ void gwmGetGlobRef(GWMWindow *win, GWMGlobWinRef *ref);
 DDISurface* gwmScreenshotWindow(GWMGlobWinRef *ref);
 
 /**
- * Create a combo box. A combo box contains a text field which the user may edit, and a dropdown menu which
- * allows the selection of some suggested options.
+ * Create a combo box.
  */
-GWMWindow* gwmCreateCombo(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
+GWMCombo* gwmNewCombo(GWMWindow *parent);
 
 /**
  * Destroy a combo box.
  */
-void gwmDestroyCombo(GWMWindow *combo);
+void gwmDestroyCombo(GWMCombo *combo);
 
 /**
- * Return the text field inside the combo box. This can be used to retrieve the text etc. Do NOT destroy the field
- * manually! It is owned by the combo box and is destroyed when gwmDestroyCombo() is called.
+ * Add an option to a combo box.
  */
-GWMWindow* gwmGetComboTextField(GWMWindow *combo);
+void gwmAddComboOption(GWMCombo *combo, const char *option);
 
 /**
- * Clear the list of options in a combo box.
+ * Clear the options of a combo box.
  */
-void gwmClearComboOptions(GWMWindow *combo);
+void gwmClearComboOptions(GWMCombo *combo);
 
 /**
- * Add a new option to the list of combo box options. The string passed in is copied, so you may free the buffer after
- * use.
+ * Change the text of a combo box. The text is UTF-8 encoded.
  */
-void gwmAddComboOption(GWMWindow *combo, const char *opt);
+void gwmWriteCombo(GWMCombo *combo, const char *text);
+
+/**
+ * Get the text of a combo box.
+ */
+const char* gwmReadCombo(GWMCombo *combo);
 
 /**
  * Create an option menu widget.
@@ -2586,7 +2595,7 @@ float gwmGetSplitterProportion(GWMSplitter *split);
 GWMTimer* gwmCreateTimer(GWMWindow *win, int period);
 
 /**
- * Destroy a timer. NOTE: spurious GWM_EVENT_UPDATE events may be sent to the window because the timer is
+ * Destroy a timer. NOTE: spurious GWM_EVENT_UPDATE events may be sent to the window before the timer is
  * destroyed.
  */
 void gwmDestroyTimer(GWMTimer *timer);

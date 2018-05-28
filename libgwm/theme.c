@@ -79,6 +79,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.progress.right",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colProgressRight)},
 	{"gwm.toolkit.progress.bg",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colProgressBackground)},
 	{"gwm.toolkit.toolbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgToolButton)},
+	{"gwm.toolkit.combo",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCombo)},
 	{"gwm.toolkit.stock.back",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockBack)},
 	{"gwm.toolkit.stock.forward",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockForward)},
 	{"gwm.toolkit.stock.up",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockUp)},
@@ -424,7 +425,14 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	// editor color (white)
 	static DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};
 	memcpy(&info->colEditor, &white, sizeof(DDIColor));
-	
+
+	// combo box
+	surf = surfaceSetup(format, &info->imgCombo, 20, 80);
+	drawButton(surf, 0, 0, 20, 20, &buttonNormal, 0);
+	drawButton(surf, 0, 20, 20, 20, &buttonHover, 0);
+	drawButton(surf, 0, 40, 20, 20, &buttonNormal, 1);
+	drawButton(surf, 0, 60, 20, 20, &buttonDisabled, 0);
+
 	munmap(addr, sizeof(GWMInfo));
 	return 0;
 };

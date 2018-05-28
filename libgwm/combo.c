@@ -31,209 +31,188 @@
 #include <stdio.h>
 #include <string.h>
 
-#define	COMBO_MIN_WIDTH		50
-#define	COMBO_HEIGHT		20
-#define	COMBO_BUTTON_WIDTH	20
-
 enum
 {
 	COMBO_NORMAL,
 	COMBO_HOVER,
-	COMBO_DOWN
+	COMBO_PRESSED
 };
 
 typedef struct ComboOption_
 {
-	struct ComboOption_*	prev;
-	char*			label;
-	GWMWindow*		combo;
+	struct ComboOption_*			next;
+	char					text[];
 } ComboOption;
 
 typedef struct
 {
-	GWMWindow*		field;
-	GWMMenu*		options;
-	int			width;
-	int			state;
-	int			flags;
-	ComboOption*		optStack;
+	/**
+	 * The text field inside the combo box.
+	 */
+	GWMTextField*				field;
+	
+	/**
+	 * The layout for the combo box.
+	 */
+	GWMLayout*				layout;
+	
+	/**
+	 * The menu.
+	 */
+	GWMMenu*				menu;
+	
+	/**
+	 * Linked list of combo box options. This is needed so that the strings can be
+	 * freed.
+	 */
+	ComboOption*				opts;
+	
+	/**
+	 * Symbol for the menu commands.
+	 */
+	int					menusym;
+	
+	/**
+	 * State.
+	 */
+	int					state;
 } ComboData;
 
-static DDISurface *imgCombo = NULL;
+static DDISurface *imgCombo;
 
-static void redrawCombo(GWMWindow *combo)
+static int comboHandler(GWMEvent *ev, GWMCombo *combo, void *context);
+
+static void redrawCombo(GWMCombo *combo)
 {
-	ComboData *data = (ComboData*) combo->data;
+	ComboData *data = (ComboData*) gwmGetData(combo, comboHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(combo);
 	
 	if (imgCombo == NULL)
 	{
-		const char *error;
-		imgCombo = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/combo.png", &error);
+		imgCombo = (DDISurface*) gwmGetThemeProp("gwm.toolkit.combo", GWM_TYPE_SURFACE, NULL);
 		if (imgCombo == NULL)
 		{
-			fprintf(stderr, "Failed to load combobox image (/usr/share/images/combo.png): %s\n", error);
+			fprintf(stderr, "Failed to load combo image\n");
 			abort();
 		};
 	};
 	
-	DDIColor transparent = {0, 0, 0, 0};
-	ddiFillRect(canvas, 0, 0, data->width, COMBO_HEIGHT, &transparent);
+	static DDIColor transparent = {0x00, 0x00, 0x00, 0x00};
+	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
 	
-	int state = data->state;
-	if (data->flags & GWM_COMBO_DISABLED)
-	{
-		state = 3;
-	};
-	
-	ddiBlit(imgCombo, 0, COMBO_HEIGHT * state, canvas, data->width - COMBO_BUTTON_WIDTH, 0, COMBO_BUTTON_WIDTH, COMBO_HEIGHT);
+	ddiBlit(imgCombo, 0, 20*data->state, canvas, canvas->width-20, 0, 20, 20);
 	gwmPostDirty(combo);
 };
 
-static int comboHandler(GWMEvent *ev, GWMWindow *combo, void *context)
+static int comboHandler(GWMEvent *ev, GWMCombo *combo, void *context)
 {
-	ComboData *data = (ComboData*) combo->data;
+	ComboData *data = (ComboData*) context;
+	GWMCommandEvent *cmdev = (GWMCommandEvent*) ev;
 	
 	switch (ev->type)
 	{
+	case GWM_EVENT_RESIZED:
+		redrawCombo(combo);
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_ENTER:
-	case GWM_EVENT_MOTION:
-		if (ev->x >= (data->width-COMBO_BUTTON_WIDTH))
-		{
-			if (data->state != COMBO_DOWN)
-			{
-				data->state = COMBO_HOVER;
-			};
-		}
-		else
-		{
-			if (data->state != COMBO_DOWN)
-			{
-				data->state = COMBO_NORMAL;
-			};
-		};
+		if (data->state != COMBO_PRESSED) data->state = COMBO_HOVER;
 		redrawCombo(combo);
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
-		if (data->state != COMBO_DOWN) data->state = COMBO_NORMAL;
+		if (data->state != COMBO_PRESSED) data->state = COMBO_NORMAL;
 		redrawCombo(combo);
 		return GWM_EVSTATUS_OK;
-	case GWM_EVENT_UP:
+	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
-			if ((data->flags & GWM_COMBO_DISABLED) == 0)
-			{
-				data->state = COMBO_DOWN;
-				redrawCombo(combo);
-				gwmOpenMenu(data->options, combo, 0, COMBO_HEIGHT-1);
-			};
+			data->state = COMBO_PRESSED;
+			redrawCombo(combo);
+			gwmOpenMenu(data->menu, combo, 0, 20);
 		};
+		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_MENU_CLOSE:
+		data->state = COMBO_NORMAL;
+		redrawCombo(combo);
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_COMMAND:
+		gwmWriteTextField(data->field, (char*) cmdev->data);
+		gwmSetWindowFlags(data->field, GWM_WINDOW_MKFOCUSED);
 		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
 };
 
-static void onComboClose(void *context)
+GWMCombo* gwmNewCombo(GWMWindow *parent)
 {
-	GWMWindow *combo = (GWMWindow*) context;
-	ComboData *data = (ComboData*) combo->data;
-	data->state = COMBO_NORMAL;
-	redrawCombo(combo);
-};
-
-GWMWindow* gwmCreateCombo(GWMWindow *parent, const char *text, int x, int y, int width, int flags)
-{
-	if (width < COMBO_MIN_WIDTH) width = COMBO_MIN_WIDTH;
-	
-	GWMWindow *combo = gwmCreateWindow(parent, "GWMCombo", x, y, width, COMBO_HEIGHT, 0);
+	GWMCombo *combo = gwmCreateWindow(parent, "GWMCombo", 0, 0, 0, 0, 0);
 	if (combo == NULL) return NULL;
 	
 	ComboData *data = (ComboData*) malloc(sizeof(ComboData));
-	if (data == NULL)
-	{
-		gwmDestroyWindow(combo);
-		return NULL;
-	};
+	data->layout = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
+	gwmSetWindowLayout(combo, data->layout);
 	
-	data->field = gwmCreateTextField(combo, text, 0, 0, width-COMBO_BUTTON_WIDTH, flags);
-	if (data->field == NULL)
-	{
-		gwmDestroyWindow(combo);
-		free(data);
-		return NULL;
-	};
+	data->field = gwmNewTextField(combo);
+	gwmBoxLayoutAddWindow(data->layout, data->field, 1, 20, GWM_BOX_RIGHT | GWM_BOX_FILL);
 	
-	data->options = gwmCreateMenu();
-	gwmMenuSetCloseCallback(data->options, onComboClose, combo);
-	data->width = width;
+	data->menu = gwmCreateMenu();
+	data->opts = NULL;
+	data->menusym = gwmGenerateSymbol();
 	data->state = COMBO_NORMAL;
-	data->flags = flags;
-	data->optStack = NULL;
 	
-	combo->data = data;
-	redrawCombo(combo);
-	gwmPushEventHandler(combo, comboHandler, NULL);
+	gwmPushEventHandler(combo, comboHandler, data);
 	return combo;
 };
 
-static void deleteOptions(GWMWindow *combo)
+static void deleteOptions(GWMCombo *combo, ComboData *data)
 {
-	ComboData *data = (ComboData*) combo->data;
-	gwmDestroyMenu(data->options);
+	gwmDestroyMenu(data->menu);
 	
-	while (data->optStack != NULL)
+	while (data->opts != NULL)
 	{
-		ComboOption *opt = data->optStack;
-		data->optStack = opt->prev;
-		free(opt->label);
+		ComboOption *opt = data->opts;
+		data->opts = opt->next;
 		free(opt);
 	};
 };
 
-void gwmDestroyCombo(GWMWindow *combo)
+void gwmDestroyCombo(GWMCombo *combo)
 {
-	ComboData *data = (ComboData*) combo->data;
+	ComboData *data = (ComboData*) gwmGetData(combo, comboHandler);
+	gwmSetWindowLayout(combo, NULL);
+	gwmDestroyBoxLayout(data->layout);
 	gwmDestroyTextField(data->field);
-	deleteOptions(combo);
-	free(data);
 	gwmDestroyWindow(combo);
+	deleteOptions(combo, data);
+	free(data);
 };
 
-GWMWindow* gwmGetComboTextField(GWMWindow *combo)
+void gwmAddComboOption(GWMCombo *combo, const char *option)
 {
-	ComboData *data = (ComboData*) combo->data;
-	return data->field;
-};
-
-void gwmClearComboOptions(GWMWindow *combo)
-{
-	ComboData *data = (ComboData*) combo->data;
-	deleteOptions(combo);
-	data->options = gwmCreateMenu();
-	gwmMenuSetCloseCallback(data->options, onComboClose, combo);
-};
-
-static int onComboOption(void *param)
-{
-	ComboOption *opt = (ComboOption*) param;
-	ComboData *data = (ComboData*) opt->combo->data;
+	ComboData *data = (ComboData*) gwmGetData(combo, comboHandler);
+	ComboOption *opt = (ComboOption*) malloc(sizeof(ComboOption) + strlen(option) + 1);
+	opt->next = data->opts;
+	data->opts = opt;
+	strcpy(opt->text, option);
 	
-	gwmWriteTextField(data->field, opt->label);
-	gwmTextFieldSelectAll(data->field);
-	gwmSetWindowFlags(data->field, GWM_WINDOW_MKFOCUSED);
-	return 0;
+	gwmMenuAddCommand(data->menu, data->menusym, option, opt->text);
 };
 
-void gwmAddComboOption(GWMWindow *combo, const char *label)
+void gwmClearComboOptions(GWMCombo *combo)
 {
-	ComboData *data = (ComboData*) combo->data;
-	
-	ComboOption *opt = (ComboOption*) malloc(sizeof(ComboOption));
-	opt->prev = data->optStack;
-	opt->label = strdup(label);
-	opt->combo = combo;
-	data->optStack = opt;
-	
-	gwmMenuAddEntry(data->options, label, onComboOption, opt);
+	ComboData *data = (ComboData*) gwmGetData(combo, comboHandler);
+	deleteOptions(combo, data);
+	data->menu = gwmCreateMenu();
+};
+
+void gwmWriteCombo(GWMCombo *combo, const char *text)
+{
+	ComboData *data = (ComboData*) gwmGetData(combo, comboHandler);
+	gwmWriteTextField(data->field, text);
+};
+
+const char* gwmReadCombo(GWMCombo *combo)
+{
+	ComboData *data = (ComboData*) gwmGetData(combo, comboHandler);
+	return gwmReadTextField(data->field);
 };

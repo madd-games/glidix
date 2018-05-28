@@ -838,6 +838,11 @@ void gwmResizeWindow(GWMWindow *win, int width, int height)
 	cmd.atomicConfig.canvasID = newCanvas->id;
 	
 	write(queueFD, &cmd, sizeof(GWMCommand));
+	
+	GWMEvent ev;
+	memset(&ev, 0, sizeof(GWMEvent));
+	ev.type = GWM_EVENT_RESIZED;
+	gwmPostEvent(&ev, win);
 };
 
 void gwmSetWindowCaption(GWMWindow *win, const char *caption)

@@ -330,10 +330,19 @@ void gwmCloseMenu(GWMMenu *menu)
 {
 	if (menu->win != NULL)
 	{
+		GWMWindow *parent = menu->win->parent;
 		gwmDestroyWindow(menu->win);
 		ddiDeleteSurface(menu->background);
 		ddiDeleteSurface(menu->overlay);
 		menu->win = NULL;
+		
+		GWMCommandEvent cmdev;
+		memset(&cmdev, 0, sizeof(GWMCommandEvent));
+		cmdev.header.type = GWM_EVENT_MENU_CLOSE;
+		cmdev.symbol = 0;
+		cmdev.data = menu;
+		
+		gwmPostEvent((GWMEvent*) &cmdev, parent);
 		
 		if (menu->closeCallback != NULL)
 		{

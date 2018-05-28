@@ -443,6 +443,11 @@ static void gwmBoxRun(GWMLayout *layout, int x, int y, int width, int height)
 			{
 				child->win->position(child->win, resultCoords[0], resultCoords[1], resultSize[0], resultSize[1]);
 			}
+			else if (child->win->layout != NULL)
+			{
+				gwmMoveWindow(child->win, resultCoords[0], resultCoords[1]);
+				gwmLayout(child->win, resultSize[0], resultSize[1]);
+			}
 			else
 			{
 				// roughly center the window, since it cannot autoposition
@@ -454,8 +459,6 @@ static void gwmBoxRun(GWMLayout *layout, int x, int y, int width, int height)
 		
 		// move on
 		resultSize[mainAxis] = len;
-		//coords[0] += resultSize[0];
-		//coords[1] += resultSize[1];
 		coords[mainAxis] += resultSize[mainAxis];
 	};
 };

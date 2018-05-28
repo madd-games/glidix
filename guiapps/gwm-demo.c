@@ -177,6 +177,12 @@ int main()
 	gwmAddOptionMenu(optmenu, 3, "And a final one!!!");
 	gwmBoxLayoutAddWindow(boxLayout, optmenu, 0, 0, GWM_BOX_FILL);
 	
+	GWMCombo *combo = gwmNewCombo(topWindow);
+	gwmBoxLayoutAddWindow(boxLayout, combo, 0, 0, GWM_BOX_FILL);
+	gwmAddComboOption(combo, "First option");
+	gwmAddComboOption(combo, "Some other option");
+	gwmAddComboOption(combo, "кипeть злoбой");
+	
 	GWMWindow *sliderHoriz = gwmNewSlider(topWindow);
 	gwmSetSliderFlags(sliderHoriz, GWM_SLIDER_HORIZ);
 	gwmSetSliderValue(sliderHoriz, 0.3);
