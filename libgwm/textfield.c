@@ -125,7 +125,7 @@ void gwmRedrawTextField(GWMWindow *field)
 	if (data->pen != NULL)
 	{
 		ddiSetPenWrap(data->pen, data->wrap);
-		ddiSetPenAlignment(data->pen, data->wrap);
+		ddiSetPenAlignment(data->pen, data->align);
 		if (data->flags & GWM_TXT_MASKED) ddiPenSetMask(data->pen, 1);
 		if (data->focused) ddiSetPenCursor(data->pen, data->cursorPos);
 		
