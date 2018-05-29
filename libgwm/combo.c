@@ -136,6 +136,7 @@ static int comboHandler(GWMEvent *ev, GWMCombo *combo, void *context)
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_COMMAND:
 		gwmWriteTextField(data->field, (char*) cmdev->data);
+		gwmTextFieldSelectAll(data->field);
 		gwmSetWindowFlags(data->field, GWM_WINDOW_MKFOCUSED);
 		return GWM_EVSTATUS_OK;
 	default:
