@@ -267,6 +267,12 @@ LZSegment* lzEncode(const uint8_t *scan, size_t size)
 	LZSegment *first = NULL;
 	LZSegment *last = NULL;
 	
+	size_t maxLookback = 0x1000;
+	if (compLevel >= 3)
+	{
+		maxLookback = 0x10000;	/* full 64KB */
+	};
+	
 	while (1)
 	{
 		if (i == size)
@@ -297,10 +303,10 @@ LZSegment* lzEncode(const uint8_t *scan, size_t size)
 			const uint8_t *haystack = scan;
 			size_t max = i;
 			
-			if (i >= 0x1000)
+			if (i >= maxLookback)
 			{
-				haystack = &scan[i-0x1000];
-				max = 0x1000;
+				haystack = &scan[i-maxLookback];
+				max = maxLookback;
 			};
 			
 			size_t matchSize;
