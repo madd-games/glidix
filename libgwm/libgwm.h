@@ -531,6 +531,11 @@ typedef struct
 	 * Combo box image.
 	 */
 	uint32_t				imgCombo;
+	
+	/**
+	 * Spinner controls image.
+	 */
+	uint32_t				imgSpin;
 } GWMInfo;
 
 /**
@@ -661,6 +666,9 @@ typedef struct
 #define	GWM_EVENT_DOUBLECLICK			11
 #define	GWM_EVENT_RETHEME			12
 #define	GWM_EVENT_RESIZED			13
+#define	GWM_EVENT_SPIN_DECR			14
+#define	GWM_EVENT_SPIN_INCR			15
+#define	GWM_EVENT_SPIN_SET			16
 
 /**
  * Cascading events.
@@ -713,6 +721,15 @@ typedef struct
 	GWMEvent				header;
 	struct GWMWindow_*			tab;		// the tab in question if applicable, or NULL
 } GWMTabEvent;
+
+/**
+ * Spin event structure. Emitted to implement actions for spinners.
+ */
+typedef struct
+{
+	GWMEvent				header;
+	const char*				text;		// value string for GWM_EVENT_SPIN_SET
+} GWMSpinEvent;
 
 /**
  * Global window reference - uniquely identifies a window on the screen, which may belong
@@ -1179,6 +1196,12 @@ typedef GWMWindow GWMTextField;
 typedef GWMWindow GWMToolButton;
 typedef	GWMWindow GWMScrollbar;
 typedef GWMWindow GWMCombo;
+typedef GWMWindow GWMSpinner;
+
+/**
+ * Typedef the spinner classes.
+ */
+typedef GWMSpinner GWMIntSpinner;
 
 /**
  * GWM timer.
@@ -2599,5 +2622,45 @@ GWMTimer* gwmCreateTimer(GWMWindow *win, int period);
  * destroyed.
  */
 void gwmDestroyTimer(GWMTimer *timer);
+
+/**
+ * Create a new abstract spinner. Do not use directly: instead use a derived class such as GWMIntSpinner.
+ */
+GWMSpinner* gwmNewSpinner(GWMWindow *parent);
+
+/**
+ * Destroy an abstract spinner.
+ */
+void gwmDestroySpinner(GWMSpinner *spin);
+
+/**
+ * Update the label on the spinner.
+ */
+void gwmSetSpinnerLabel(GWMSpinner *spin, const char *label);
+
+/**
+ * Create an integer spinner.
+ */
+GWMIntSpinner* gwmNewIntSpinner(GWMWindow *parent);
+
+/**
+ * Destroy an integer spinner.
+ */
+void gwmDestroyIntSpinner(GWMIntSpinner *ispin);
+
+/**
+ * Set the value of an integer spinner.
+ */
+void gwmSetIntSpinnerValue(GWMIntSpinner *ispin, int value);
+
+/**
+ * Change the format of an integer spinner.
+ */
+void gwmSetIntSpinnerFormat(GWMIntSpinner *ispin, const char *format);
+
+/**
+ * Get the valuie of an integer spinner.
+ */
+int gwmGetIntSpinnerValue(GWMIntSpinner *ispin);
 
 #endif

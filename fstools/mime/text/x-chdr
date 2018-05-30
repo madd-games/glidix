@@ -1,0 +1,5 @@
+# text/x-chdr
+# C/C++ header
+filename *.h
+label C/C++ header file
+icon x-chdr

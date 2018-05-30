@@ -80,6 +80,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.progress.bg",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colProgressBackground)},
 	{"gwm.toolkit.toolbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgToolButton)},
 	{"gwm.toolkit.combo",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCombo)},
+	{"gwm.toolkit.spin",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSpin)},
 	{"gwm.toolkit.stock.back",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockBack)},
 	{"gwm.toolkit.stock.forward",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockForward)},
 	{"gwm.toolkit.stock.up",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockUp)},
@@ -432,6 +433,18 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawButton(surf, 0, 20, 20, 20, &buttonHover, 0);
 	drawButton(surf, 0, 40, 20, 20, &buttonNormal, 1);
 	drawButton(surf, 0, 60, 20, 20, &buttonDisabled, 0);
+
+	// spinner controls
+	surf = surfaceSetup(format, &info->imgSpin, 40, 80);
+	drawButton(surf, 0, 0, 20, 20, &red, 0);
+	drawButton(surf, 0, 20, 20, 20, &red, 0);
+	drawButton(surf, 0, 40, 20, 20, &red, 1);
+	drawButton(surf, 0, 60, 20, 20, &red, 0);
+
+	drawButton(surf, 20, 0, 20, 20, &green, 0);
+	drawButton(surf, 20, 20, 20, 20, &green, 0);
+	drawButton(surf, 20, 40, 20, 20, &green, 1);
+	drawButton(surf, 20, 60, 20, 20, &green, 0);
 
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

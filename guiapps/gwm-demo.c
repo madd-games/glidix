@@ -183,6 +183,10 @@ int main()
 	gwmAddComboOption(combo, "Some other option");
 	gwmAddComboOption(combo, "кипeть злoбой");
 	
+	GWMIntSpinner *ispin = gwmNewIntSpinner(topWindow);
+	gwmBoxLayoutAddWindow(boxLayout, ispin, 0, 0, GWM_BOX_FILL);
+	gwmSetIntSpinnerFormat(ispin, "%d apples");
+	
 	GWMWindow *sliderHoriz = gwmNewSlider(topWindow);
 	gwmSetSliderFlags(sliderHoriz, GWM_SLIDER_HORIZ);
 	gwmSetSliderValue(sliderHoriz, 0.3);
