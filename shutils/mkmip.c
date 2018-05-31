@@ -268,10 +268,6 @@ LZSegment* lzEncode(const uint8_t *scan, size_t size)
 	LZSegment *last = NULL;
 	
 	size_t maxLookback = 0x1000;
-	if (compLevel >= 3)
-	{
-		maxLookback = 0x10000;	/* full 64KB */
-	};
 	
 	while (1)
 	{
