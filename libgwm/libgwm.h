@@ -2413,8 +2413,6 @@ void gwmSetWindowLayout(GWMWindow *win, GWMLayout *layout);
  * Create a box layout. The flags must be one of the following:
  *	GWM_BOX_HORIZONTAL - lay out children horizontally
  *	GWM_BOX_VERTICAL - lay out children vertically
- * You may also bitwise-OR zero or more of the following into it:
- *	GWM_BOX_INCLUDE_HIDDEN - allocate space for hidden children (not done by default).
  */
 GWMLayout* gwmCreateBoxLayout(int flags);
 
@@ -2433,6 +2431,43 @@ void gwmBoxLayoutAddWindow(GWMLayout *box, GWMWindow *win, int proportion, int b
  * Add a sub-layout to a box layout.
  */
 void gwmBoxLayoutAddLayout(GWMLayout *box, GWMLayout *child, int proportion, int border, int flags);
+
+/**
+ * Add a spacer to a box layout.
+ */
+void gwmBoxLayoutAddSpacer(GWMLayout *box, int proportion, int border, int flags);
+
+/**
+ * Create a leaf layout. If 'win' is NULL, then this layout represents a spacer. Otherwise, it represents the
+ * specified window. This is simply used to represents the leafs in a layout tree, i.e. the windows and the
+ * spacers.
+ */
+GWMLayout* gwmCreateLeafLayout(GWMWindow *win);
+
+/**
+ * Destroy a leaf layout.
+ */
+void gwmDestroyLeafLayout(GWMLayout *leaf);
+
+/**
+ * Create a static layout.
+ */
+GWMLayout* gwmCreateStaticLayout(int minWidth, int minHeight, int prefWidth, int prefHeight);
+
+/**
+ * Destroy a static layout.
+ */
+void gwmDestroyStaticLayout(GWMLayout *layout);
+
+/**
+ * Add a nested layout to a static layout.
+ */
+void gwmStaticLayoutAddLayout(GWMLayout *st, GWMLayout *child, int left, int top, int right, int bottom);
+
+/**
+ * Add a window to a static layout.
+ */
+void gwmStaticLayoutAddWindow(GWMLayout *st, GWMWindow *child, int left, int top, int right, int bottom);
 
 /**
  * Given a stock symbol, return its label (in the correct language).
@@ -2659,7 +2694,7 @@ void gwmSetIntSpinnerValue(GWMIntSpinner *ispin, int value);
 void gwmSetIntSpinnerFormat(GWMIntSpinner *ispin, const char *format);
 
 /**
- * Get the valuie of an integer spinner.
+ * Get the value of an integer spinner.
  */
 int gwmGetIntSpinnerValue(GWMIntSpinner *ispin);
 
