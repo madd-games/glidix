@@ -89,6 +89,9 @@ int myToggledHandler(GWMCommandEvent *ev)
 
 int myHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
+	DDISurface *canvas = gwmGetWindowCanvas(win);
+	static DDIColor blue = {0x00, 0x00, 0xFF, 0xFF};
+	
 	switch (ev->type)
 	{
 	case GWM_EVENT_COMMAND:
@@ -104,6 +107,9 @@ int myHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	case GWM_EVENT_DOUBLECLICK:
 		printf("double-click\n");
 		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_RESIZED:
+		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &blue);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -130,52 +136,11 @@ int main()
 	
 	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	gwmSetWindowLayout(topWindow, boxLayout);
-	
-	GWMWindow *notebook = gwmNewNotebook(topWindow);
-	gwmBoxLayoutAddWindow(boxLayout, notebook, 1, 50, GWM_BOX_ALL | GWM_BOX_FILL);
 
-	GWMWindow *tab1 = gwmNewTab(notebook);
-	GWMWindow *tab2 = gwmNewTab(notebook);
-	gwmNewTab(notebook);
+	GWMButton *btn = gwmCreateButtonWithLabel(topWindow, GWM_SYM_OK, "Le test button");
+	gwmBoxLayoutAddWindow(boxLayout, btn, 1, 0, GWM_BOX_FILL);
 	
-	DDISurface *canvas = gwmGetWindowCanvas(topWindow);
-	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/calc.png", NULL);
-	assert(icon != NULL);
-	
-	gwmSetWindowCaption(tab2, "This is a really nice tab");
-	gwmSetWindowIcon(tab2, icon);
-	
-	GWMLayout *tabLayout1 = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(tab1, tabLayout1);
-	
-	gwmBoxLayoutAddWindow(tabLayout1, gwmCreateButtonWithLabel(tab1, SYM_BUTTON1, "Button 1"), 0, 0, 0);
-	gwmBoxLayoutAddWindow(tabLayout1, gwmCreateButtonWithLabel(tab1, SYM_BUTTON2, "Button 2"), 0, 0, GWM_BOX_FILL);
-	
-	GWMWindow *progbar = gwmNewProgressBar(tab1);
-	gwmBoxLayoutAddWindow(tabLayout1, progbar, 0, 0, GWM_BOX_FILL);
-	gwmSetScaleValue(progbar, 0.8);
-	
-	GWMSplitter *split = gwmNewSplitter(topWindow);
-	gwmSetSplitterFlags(split, GWM_SPLITTER_HORIZ);
-	gwmBoxLayoutAddWindow(boxLayout, split, 1, 0, GWM_BOX_FILL);
-	
-	GWMWindow *panel1 = gwmGetSplitterPanel(split, 0);
-	GWMLayout *panelLayout1 = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(panel1, panelLayout1);
-	
-	GWMWindow *prog1 = gwmNewProgressBar(panel1);
-	gwmSetScaleValue(prog1, 0.7);
-	gwmBoxLayoutAddWindow(panelLayout1, prog1, 1, 0, GWM_BOX_FILL);
-	
-	GWMWindow *panel2 = gwmGetSplitterPanel(split, 1);
-	GWMLayout *panelLayout2 = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(panel2, panelLayout2);
-	
-	GWMWindow *prog2 = gwmNewProgressBar(panel2);
-	gwmSetScaleValue(prog2, 0.3);
-	gwmBoxLayoutAddWindow(panelLayout2, prog2, 1, 0, GWM_BOX_FILL);
-	
-	gwmFit(topWindow);
+	gwmLayout(topWindow, 300, 300);
 	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 
 	gwmMainLoop();

@@ -1191,6 +1191,7 @@ typedef struct GWMWindow_
  */
 typedef GWMObject GWMWindow;
 // TODO: typedef the rest, it's for clarity
+typedef GWMWindow GWMButton;
 typedef	GWMWindow GWMSplitter;
 typedef GWMWindow GWMTextField;
 typedef GWMWindow GWMToolButton;

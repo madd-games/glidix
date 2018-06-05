@@ -102,6 +102,7 @@
 #define	DDI_SCALE_BEST				0
 #define	DDI_SCALE_FASTEST			1
 #define	DDI_SCALE_LINEAR			2
+#define	DDI_SCALE_BORDERED_GRADIENT		3
 
 /**
  * Describes the pixel format of a surface.
@@ -541,9 +542,10 @@ void ddiColorToString(const DDIColor *col, char *buffer);
 
 /**
  * Scale a surface to the specifies size, using the specified algorithm.
- * DDI_SCALE_BEST	Highest-quality algorithm available.
- * DDI_SCALE_FASTEST	Fastest algorithm available.
- * DDI_SCALE_LINEAR	Linear scaling algorithm.
+ * DDI_SCALE_BEST			Highest-quality algorithm available.
+ * DDI_SCALE_FASTEST			Fastest algorithm available.
+ * DDI_SCALE_LINEAR			Linear scaling algorithm.
+ * DDI_SCALE_BORDERED_GRADIENT		Bordered gradient scaling.
  * Returns a new surface on success, NULL on error.
  */
 DDISurface* ddiScale(DDISurface *surface, unsigned int newWidth, unsigned int newHeight, int algorithm);
@@ -562,9 +564,14 @@ void ddiColorToPixel(uint32_t *pixeldata, DDIPixelFormat *format, DDIColor *colo
  * Sample a linear gradient.
  * If 'factor' is 0.0, 'out' is set to 'a'.
  * If 'factor' is 1.0, 'out' is set to 'b'.
- * Everything inbetween, the colors aare blended and result stored in 'out'.
+ * Everything inbetween, the colors are blended and result stored in 'out'.
  * NOTE: The alpha channel is blended too!
  */
 void ddiSampleLinearGradient(DDIColor *out, float factor, DDIColor *a, DDIColor *b);
+
+/**
+ * Get the color at the specified pixel of a surface.
+ */
+void ddiGetPixelColor(DDISurface *surface, int x, int y, DDIColor *color);
 
 #endif

@@ -1634,6 +1634,145 @@ void ddiColorToString(const DDIColor *col, char *buffer)
 	sprintf(buffer, "#%02hhx%02hhx%02hhx", col->red, col->green, col->blue);
 };
 
+static DDISurface* ddiScaleBorderedGradient(DDISurface *surface, unsigned int newWidth, unsigned int newHeight)
+{
+	DDISurface *out = ddiCreateSurface(&surface->format, newWidth, newHeight, NULL, 0);
+	if (out == NULL) return NULL;
+	
+	ddiOverlay(surface, 0, 0, out, 0, 0, surface->width/2, surface->height/2);
+	ddiOverlay(surface, surface->width-surface->width/2, 0, out, newWidth-(surface->width/2), 0, surface->width/2, surface->height/2);
+	ddiOverlay(surface, 0, surface->height-surface->height/2, out, 0, newHeight-(surface->height/2), surface->width/2, surface->height/2);
+	ddiOverlay(surface, surface->width-surface->width/2, surface->height-surface->height/2, out, newWidth-(surface->width/2), newHeight-(surface->height/2), surface->width/2, surface->height/2);
+
+	if (newWidth < surface->width || newHeight < surface->height) return out;
+	
+	// top part: mix colors from the left/right borders
+	int y;
+	for (y=0; y<surface->height/2; y++)
+	{
+		DDIColor left, right;
+		ddiGetPixelColor(surface, surface->width/2, y, &left);
+		ddiGetPixelColor(surface, surface->width-surface->width/2, y, &right);
+		
+		int baseX = surface->width/2-1;
+		int endX = newWidth - (surface->width/2);
+		int lineWidth = endX - baseX;
+		
+		int x;
+		for (x=1; x<lineWidth; x++)
+		{
+			float factor = (float) x / (float) lineWidth;
+			DDIColor color;
+			ddiSampleLinearGradient(&color, factor, &left, &right);
+			ddiFillRect(out, baseX+x, y, 1, 1, &color);
+		};
+	};
+	
+	// bottom part: same idea
+	int baseY = newHeight-(surface->height/2);
+	for (y=baseY; y<newHeight; y++)
+	{
+		int srcY = surface->height - (newHeight - y);
+		DDIColor left, right;
+		ddiGetPixelColor(surface, surface->width/2, srcY, &left);
+		ddiGetPixelColor(surface, surface->width-surface->width/2, srcY, &right);
+		
+		int baseX = surface->width/2-1;
+		int endX = newWidth - (surface->width/2);
+		int lineWidth = endX - baseX;
+		
+		int x;
+		for (x=1; x<lineWidth; x++)
+		{
+			float factor = (float) x / (float) lineWidth;
+			DDIColor color;
+			ddiSampleLinearGradient(&color, factor, &left, &right);
+			ddiFillRect(out, baseX+x, y, 1, 1, &color);
+		};
+	};
+	
+	// left part
+	int x;
+	for (x=0; x<surface->width/2; x++)
+	{
+		DDIColor top, bottom;
+		ddiGetPixelColor(surface, x, surface->height/2, &top);
+		ddiGetPixelColor(surface, x, surface->height-surface->height/2, &bottom);
+		
+		int baseY = surface->height/2-1;
+		int endY = newHeight - (surface->height/2);
+		int lineHeight = endY - baseY;
+		
+		int y;
+		for (y=1; y<lineHeight; y++)
+		{
+			float factor = (float) y / (float) lineHeight;
+			DDIColor color;
+			ddiSampleLinearGradient(&color, factor, &top, &bottom);
+			ddiFillRect(out, x, baseY+y, 1, 1, &color);
+		};
+	};
+
+	// right part
+	int baseX = newWidth-(surface->width-surface->width/2);
+	for (x=baseX; x<newWidth; x++)
+	{
+		int srcX = surface->width - (newWidth - x);
+		DDIColor top, bottom;
+		ddiGetPixelColor(surface, srcX, surface->height/2, &top);
+		ddiGetPixelColor(surface, srcX, surface->height-surface->height/2, &bottom);
+		
+		int baseY = surface->height/2-1;
+		int endY = newHeight - (surface->height/2);
+		int lineHeight = endY - baseY;
+		
+		int y;
+		for (y=1; y<lineHeight; y++)
+		{
+			float factor = (float) y / (float) lineHeight;
+			DDIColor color;
+			ddiSampleLinearGradient(&color, factor, &top, &bottom);
+			ddiFillRect(out, x, baseY+y, 1, 1, &color);
+		};
+	};
+
+	// finally the middle part (quadratic interpolation)
+	int subwidth = newWidth - surface->width;
+	int subheight = newHeight - surface->height;
+	
+	baseX = surface->width / 2;
+	baseY = surface->height / 2;
+	
+	unsigned int totalArea = subwidth * subheight;
+	
+	DDIColor topleft, topright, bottomleft, bottomright;
+	ddiGetPixelColor(surface, surface->width/2, baseY, &topleft);
+	ddiGetPixelColor(surface, surface->width-surface->width/2, baseY, &topright);
+	ddiGetPixelColor(surface, surface->width/2, baseY+1, &bottomleft);
+	ddiGetPixelColor(surface, surface->width-surface->width/2, baseY+1, &bottomright);
+	
+	for (y=0; y<subheight; y++)
+	{
+		for (x=0; x<subwidth; x++)
+		{
+			unsigned int areaTL = x * y;
+			unsigned int areaTR = (subwidth-x) * y;
+			unsigned int areaBL = x * (subheight-y);
+			unsigned int areaBR = (subwidth-x) * (subheight-y);
+			
+			DDIColor result;
+			result.red = ((unsigned int) topleft.red * areaTL + (unsigned int) topright.red * areaTR + (unsigned int) bottomleft.red * areaBL + (unsigned int) bottomright.red * areaBR) / totalArea;
+			result.green = ((unsigned int) topleft.green * areaTL + (unsigned int) topright.green * areaTR + (unsigned int) bottomleft.green * areaBL + (unsigned int) bottomright.green * areaBR) / totalArea;
+			result.blue = ((unsigned int) topleft.blue * areaTL + (unsigned int) topright.blue * areaTR + (unsigned int) bottomleft.blue * areaBL + (unsigned int) bottomright.blue * areaBR) / totalArea;
+			result.alpha = ((unsigned int) topleft.alpha * areaTL + (unsigned int) topright.alpha * areaTR + (unsigned int) bottomleft.alpha * areaBL + (unsigned int) bottomright.alpha * areaBR) / totalArea;
+			
+			ddiFillRect(out, baseX+x, baseY+y, 1, 1, &result);
+		};
+	};
+	
+	return out;
+};
+
 static DDISurface* ddiScaleLinear(DDISurface *surface, unsigned int newWidth, unsigned int newHeight)
 {
 	DDISurface *out = ddiCreateSurface(&surface->format, newWidth, newHeight, NULL, 0);
@@ -1666,6 +1805,8 @@ DDISurface* ddiScale(DDISurface *surface, unsigned int newWidth, unsigned int ne
 	case DDI_SCALE_FASTEST:
 	case DDI_SCALE_LINEAR:
 		return ddiScaleLinear(surface, newWidth, newHeight);
+	case DDI_SCALE_BORDERED_GRADIENT:
+		return ddiScaleBorderedGradient(surface, newWidth, newHeight);
 	default:
 		return NULL;
 	};
@@ -1678,4 +1819,57 @@ void ddiSampleLinearGradient(DDIColor *out, float fb, DDIColor *a, DDIColor *b)
 	out->green = a->green * fa + b->green * fb;
 	out->blue = a->blue * fa + b->blue * fb;
 	out->alpha = a->alpha * fa + b->alpha * fb;
+};
+
+static int maskToIndex(uint32_t mask)
+{
+	int index = 0;
+	while (mask != 0xFF)
+	{
+		mask >>= 8;
+		index++;
+	};
+	
+	return index;
+};
+
+void ddiGetPixelColor(DDISurface *surface, int x, int y, DDIColor *color)
+{
+	uint8_t *pixel = &surface->data[((surface->format.bpp + surface->format.pixelSpacing) * surface->width + surface->format.scanlineSpacing) * y + (surface->format.bpp + surface->format.pixelSpacing) * x];
+	
+	if (surface->format.redMask == 0)
+	{
+		color->red = 0;
+	}
+	else
+	{
+		color->red = pixel[maskToIndex(surface->format.redMask)];
+	};
+	
+	if (surface->format.greenMask == 0)
+	{
+		color->green = 0;
+	}
+	else
+	{
+		color->green = pixel[maskToIndex(surface->format.greenMask)];
+	};
+
+	if (surface->format.blueMask == 0)
+	{
+		color->blue = 0;
+	}
+	else
+	{
+		color->blue = pixel[maskToIndex(surface->format.blueMask)];
+	};
+
+	if (surface->format.alphaMask == 0)
+	{
+		color->alpha = 0xFF;
+	}
+	else
+	{
+		color->alpha = pixel[maskToIndex(surface->format.alphaMask)];
+	};
 };

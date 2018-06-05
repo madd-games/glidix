@@ -26,6 +26,7 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <assert.h>
 #include <libgwm.h>
 #include <libddi.h>
 #include <stdlib.h>
@@ -131,16 +132,15 @@ static void gwmRedrawButton(GWMWindow *button)
 			abort();
 		};
 	};
-	
-	ddiBlit(imgButton, 0, BUTTON_HEIGHT*whichImg, canvas, 0, 0, 8, BUTTON_HEIGHT);
-	
-	int x;
-	for (x=8; x<canvas->width-8; x++)
-	{
-		ddiBlit(imgButton, 8, BUTTON_HEIGHT*whichImg, canvas, x, 0, 1, BUTTON_HEIGHT);
-	};
-	
-	ddiBlit(imgButton, 9, BUTTON_HEIGHT*whichImg, canvas, canvas->width-8, 0, 8, BUTTON_HEIGHT);
+
+	DDISurface *temp = ddiCreateSurface(&canvas->format, imgButton->width, BUTTON_HEIGHT, NULL, 0);
+	assert(temp != NULL);
+	ddiOverlay(imgButton, 0, BUTTON_HEIGHT*whichImg, temp, 0, 0, imgButton->width, BUTTON_HEIGHT);
+	DDISurface *scaled = ddiScale(temp, canvas->width, canvas->height, DDI_SCALE_BORDERED_GRADIENT);
+	assert(scaled != NULL);
+	ddiBlit(scaled, 0, 0, canvas, 0, 0, canvas->width, canvas->height);
+	ddiDeleteSurface(scaled);
+	ddiDeleteSurface(temp);
 	
 	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height-11, 0, 0, NULL);
 	ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);
@@ -149,7 +149,7 @@ static void gwmRedrawButton(GWMWindow *button)
 	
 	int txtWidth, txtHeight;
 	ddiGetPenSize(pen, &txtWidth, &txtHeight);
-	ddiSetPenPosition(pen, 0, 15-(txtHeight/2));
+	ddiSetPenPosition(pen, 0, (canvas->height-txtHeight)/2);
 	ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
@@ -180,9 +180,8 @@ static void gwmSizeButton(GWMWindow *button, int *width, int *height)
 
 static void gwmPositionButton(GWMWindow *button, int x, int y, int width, int height)
 {
-	y += (height - BUTTON_HEIGHT) / 2;
 	gwmMoveWindow(button, x, y);
-	gwmResizeWindow(button, width, BUTTON_HEIGHT);
+	gwmResizeWindow(button, width, height);
 	gwmRedrawButton(button);
 };
 
