@@ -2471,6 +2471,21 @@ void gwmStaticLayoutAddLayout(GWMLayout *st, GWMLayout *child, int left, int top
 void gwmStaticLayoutAddWindow(GWMLayout *st, GWMWindow *child, int left, int top, int right, int bottom);
 
 /**
+ * Create a grid layout with the specified number of columns.
+ */
+GWMLayout* gwmCreateGridLayout(int cols);
+
+/**
+ * Add a sub-layout to a grid layout.
+ */
+void gwmGridLayoutAddLayout(GWMLayout *grid, GWMLayout *child, int colspan, int rowspan);
+
+/**
+ * Add a window to a grid layout.
+ */
+void gwmGridLayoutAddWindow(GWMLayout *grid, GWMWindow *child, int colspan, int rowspan);
+
+/**
  * Given a stock symbol, return its label (in the correct language).
  * Returns "??" for invalid labels.
  */
