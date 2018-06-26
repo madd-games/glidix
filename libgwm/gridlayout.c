@@ -106,8 +106,8 @@ static void gridMinSize(GWMLayout *grid, int *width, int *height)
 		};
 	};
 	
-	*width = mw;
-	*height = mh;
+	*width = mw * data->cols;
+	*height = mh * data->rows;
 };
 
 static void gridPrefSize(GWMLayout *grid, int *width, int *height)
@@ -135,8 +135,8 @@ static void gridPrefSize(GWMLayout *grid, int *width, int *height)
 		};
 	};
 	
-	*width = mw;
-	*height = mh;
+	*width = mw * data->cols;
+	*height = mh * data->rows;
 };
 
 static void gridRun(GWMLayout *grid, int x, int y, int width, int height)
