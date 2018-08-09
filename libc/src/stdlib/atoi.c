@@ -43,6 +43,7 @@ long long atoll(const char *str)
 	return strtoll(str, NULL, 10);
 };
 
+// TODO: handle exponent and stuff
 double atof(const char* s)
 {
 	double rez = 0, fact = 1;

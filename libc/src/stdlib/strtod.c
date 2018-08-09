@@ -20,7 +20,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <errno.h>
-extern  int     errno;
 
 #ifndef TRUE
 #define TRUE 1

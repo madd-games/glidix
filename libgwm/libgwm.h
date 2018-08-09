@@ -1635,6 +1635,11 @@ void gwmScreenSize(int *width, int *height);
 int gwmSetWindowFlags(GWMWindow *win, int flags);
 
 /**
+ * Give focus to the specified window.
+ */
+void gwmFocus(GWMWindow *win);
+
+/**
  * Creates a new text field in the specified window.
  */
 GWMTextField* gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags);

@@ -691,9 +691,15 @@ void gwmWriteTextField(GWMWindow *field, const char *newText)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	free(data->text);
+	
 	data->text = strdup(newText);
-	data->selectStart = data->selectEnd = 0;
-	data->cursorPos = 0;
+	size_t count = 0;
+	while (ddiReadUTF8(&newText) != 0)
+	{
+		count++;
+	};
+	
+	data->selectStart = data->selectEnd = data->cursorPos = count;
 	gwmRedrawTextField(field);
 };
 

@@ -450,7 +450,7 @@ GWMWindow* gwmCreateWindow(
 		win->position = NULL;
 		win->getMinSize = NULL;
 		win->getPrefSize = NULL;
-		win->flags = flags;
+		win->flags = flags & (~GWM_WINDOW_MKFOCUSED);
 		win->caption = strdup(caption);
 		
 		gwmPushEventHandler(win, gwmDefaultHandler, NULL);
@@ -670,10 +670,15 @@ int gwmSetWindowFlags(GWMWindow *win, int flags)
 	
 	if (resp.setFlagsResp.status == 0)
 	{
-		win->flags = flags;
+		win->flags = flags & (~GWM_WINDOW_MKFOCUSED);
 	};
 	
 	return resp.setFlagsResp.status;
+};
+
+void gwmFocus(GWMWindow *win)
+{
+	gwmSetWindowFlags(win, win->flags | GWM_WINDOW_MKFOCUSED);
 };
 
 int gwmSetWindowCursor(GWMWindow *win, int cursor)
