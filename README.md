@@ -25,7 +25,7 @@ The operating system is currently in _alpha_ state. It is currently therefore _n
  * Capable of booting from an MBR using a custom bootloader; UEFI boot planned.
  * A simple graphical interface, currently under heavy development.
  * Network stack supporting IPv4 and IPv6, ICMP to some degree, UDP, DNS and TCP. Supports autoconfiguration with DHCP, ALIC (*Automatic Local IP Configuration*, for IPv4 link-local addresses when DHCP is unavailable), and SLAAC for IPv6.
- * Supports the ISO 9660 filesystem, plus a custom filesystem called Glidix File System (GXFS), which can store Glidix-specific metadata such as application permissions. Support for variants of FAT is planned.
+ * Supports the ISO 9660 filesystem, FAT32, and a custom filesystem called Glidix File System (GXFS), which can store Glidix-specific metadata such as application permissions.
  * Implements the POSIX API using a custom C library.
  * The GNU toolchain (binutils and GCC) can run natively on Glidix (the source code must be patched to support the `x86_64-glidix` target).
 
