@@ -562,7 +562,7 @@ static void tcpThread(void *context)
 					ob->segment->flags = TCP_FIN | TCP_ACK;
 					tcpsock->nextSeqNo++;
 				};
-				ob->segment->winsz = 0xFFFF;
+				ob->segment->winsz = htons(TCP_BUFFER_SIZE);
 				uint8_t *put = (uint8_t*) &ob->segment[1];
 				uint32_t size = (uint32_t)count;
 				while (count--)
@@ -591,7 +591,7 @@ static void tcpThread(void *context)
 				ack->ackno = htonl(tcpsock->nextAckNo);
 				ack->dataOffsetNS = 0x50;
 				ack->flags = TCP_ACK;
-				ack->winsz = 0xFFFF;
+				ack->winsz = htons(TCP_BUFFER_SIZE);
 				ChecksumOutbound(ob);
 				
 				sendPacketEx(&tcpsock->sockname, &tcpsock->peername,
@@ -640,7 +640,7 @@ static void tcpThread(void *context)
 				ack->ackno = htonl(tcpsock->nextAckNo);
 				ack->dataOffsetNS = 0x50;
 				ack->flags = TCP_FIN | TCP_ACK;
-				ack->winsz = 0xFFFF;
+				ack->winsz = htons(TCP_BUFFER_SIZE);
 				ChecksumOutbound(ob);
 		
 				sendPacketEx(&tcpsock->sockname, &tcpsock->peername,
@@ -740,7 +740,7 @@ static int tcpsock_connect(Socket *sock, const struct sockaddr *addr, size_t siz
 	syn->seqno = htonl(tcpsock->nextSeqNo-1);
 	syn->dataOffsetNS = 0x50;
 	syn->flags = TCP_SYN;
-	syn->winsz = 0xFFFF;
+	syn->winsz = htons(TCP_BUFFER_SIZE);
 	ChecksumOutbound(tcpsock->currentOut);
 	
 	KernelThreadParams pars;
@@ -1396,7 +1396,7 @@ static Socket* tcpsock_accept(Socket *sock, struct sockaddr *addr, size_t *addrl
 	syn->ackno = htonl(pend->ackno);
 	syn->dataOffsetNS = 0x50;
 	syn->flags = TCP_SYN | TCP_ACK;
-	syn->winsz = 0xFFFF;
+	syn->winsz = htons(TCP_BUFFER_SIZE);
 	ChecksumOutbound(tcpclient->currentOut);
 	
 	KernelThreadParams pars;
