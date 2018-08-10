@@ -40,9 +40,8 @@ The source comes with GCC and binutils patches, and allows a cross-compiler to b
 
 ## Planned features
 
- * FAT filesystem support.
  * USB support.
- * Booting from UEFI, and supporting GPT.
+ * Booting from UEFI.
  * Hardware-accelerated graphics.
  * More drivers and porting more applications.
  * Audio support.
