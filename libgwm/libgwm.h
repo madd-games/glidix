@@ -113,6 +113,29 @@ extern DDIColor* gwmEditorColorP;
 #define	GWM_CB_TRI				2
 
 /**
+ * Data types for GWMDataCtrl.
+ */
+#define	GWM_DATA_STRING				1
+
+/**
+ * Values for 'whence' in gwmAddDataNode().
+ */
+#define	GWM_DATA_ADD_BEFORE			1
+#define	GWM_DATA_ADD_AFTER			2
+#define	GWM_DATA_ADD_TOP_CHILD			3
+#define	GWM_DATA_ADD_BOTTOM_CHILD		4
+
+/**
+ * GWMDataCtrl flags.
+ */
+#define	GWM_DATA_SHOW_HEADERS			(1 << 0)
+
+/**
+ * GWMDataNode flags.
+ */
+#define	GWM_DATA_NODE_FORCE_PTR			(1 << 0)
+
+/**
  * Radio button flags.
  */
 #define	GWM_RADIO_DISABLED			(1 << 0)
@@ -536,6 +559,11 @@ typedef struct
 	 * Spinner controls image.
 	 */
 	uint32_t				imgSpin;
+	
+	/**
+	 * Data control "tree pointer" image.
+	 */
+	uint32_t				imgTreePtr;
 } GWMInfo;
 
 /**
@@ -563,6 +591,16 @@ typedef struct
 	int					x;
 	int					y;
 } GWMWindowParams;
+
+/**
+ * Data node object for GWMDataCtrl. Opaque - use pointers only. Defined in datactrl.c.
+ */
+typedef struct GWMDataNode_ GWMDataNode;
+
+/**
+ * Data column object for GWMDataCtrl. Opaque - use pointers only. Defined in datactrl.c.
+ */
+typedef struct GWMDataColumn_ GWMDataColumn;
 
 /**
  * Flags for the box layout.
@@ -682,6 +720,10 @@ typedef struct
 #define	GWM_EVENT_TAB_ACTIVATED			(GWM_EVENT_CASCADING + 7)
 #define	GWM_EVENT_EDIT_END			(GWM_EVENT_CASCADING + 8)
 #define	GWM_EVENT_MENU_CLOSE			(GWM_EVENT_CASCADING + 9)
+#define	GWM_EVENT_DATA_EXPANDING		(GWM_EVENT_CASCADING + 10)
+#define	GWM_EVENT_DATA_COLLAPSING		(GWM_EVENT_CASCADING + 11)
+#define	GWM_EVENT_DATA_ACTIVATED		(GWM_EVENT_CASCADING + 12)
+#define	GWM_EVENT_DATA_DELETING			(GWM_EVENT_CASCADING + 13)
 
 /**
  * General event structure.
@@ -730,6 +772,16 @@ typedef struct
 	GWMEvent				header;
 	const char*				text;		// value string for GWM_EVENT_SPIN_SET
 } GWMSpinEvent;
+
+/**
+ * Data control event.
+ */
+typedef struct
+{
+	GWMEvent				header;
+	GWMDataNode*				node;		// node in question
+	int					symbol;
+} GWMDataEvent;
 
 /**
  * Global window reference - uniquely identifies a window on the screen, which may belong
@@ -1198,6 +1250,7 @@ typedef GWMWindow GWMToolButton;
 typedef	GWMWindow GWMScrollbar;
 typedef GWMWindow GWMCombo;
 typedef GWMWindow GWMSpinner;
+typedef GWMWindow GWMDataCtrl;
 
 /**
  * Typedef the spinner classes.
@@ -1463,6 +1516,11 @@ void gwmQuit();
  *	GWM_EVSTATUS_BREAK if some handler returned it
  */
 int gwmPostEvent(GWMEvent *ev, GWMWindow *win);
+
+/**
+ * Throw an exception.
+ */
+void gwmThrow(int errcode);
 
 /**
  * Creates a new window. On success, returns a window handle; on error, returns NULL.
@@ -2718,5 +2776,74 @@ void gwmSetIntSpinnerFormat(GWMIntSpinner *ispin, const char *format);
  * Get the value of an integer spinner.
  */
 int gwmGetIntSpinnerValue(GWMIntSpinner *ispin);
+
+/**
+ * Set the value corresponding to a string key in a data node. This function makes an internal copy of the
+ * string.
+ */
+void gwmSetDataString(GWMDataCtrl *ctrl, GWMDataNode *node, int key, const char *str);
+
+/**
+ * Return the value corresponding to a string key in a data node. Valid until updated. Returns an empty string
+ * if the key has not been set.
+ */
+const char* gwmGetDataString(GWMDataCtrl *ctrl, GWMDataNode *node, int key);
+
+/**
+ * Create a new data control widget with the specified parent.
+ */
+GWMDataCtrl* gwmNewDataCtrl(GWMWindow *parent);
+
+/**
+ * Set the flags in a data control.
+ */
+void gwmSetDataFlags(GWMDataCtrl *ctrl, int flags);
+
+/**
+ * Set the symbol of a data control.
+ */
+void gwmSetDataSymbol(GWMDataCtrl *ctrl, int symbol);
+
+/**
+ * Create a new column on the data control. It will have the specified label and data type, and will pull its values
+ * from the specified key on a data node.
+ */
+GWMDataColumn* gwmAddDataColumn(GWMDataCtrl *ctrl, const char *label, int type, int key);
+
+/**
+ * Create a new data node on a data control. 'ctrl' is the data control in question. 'ref' is a reference node, or
+ * NULL for the root node; then 'whence' specifies where the node shall be in relation to 'ref':
+ *	GWM_DATA_ADD_BEFORE		The new node will have the same parent as 'ref' and come directly before it.
+ *	GWM_DATA_ADD_AFTER		The new node will have the same parent as 'ref' and come directly after it.
+ *	GWM_DATA_ADD_TOP_CHILD		The new node will be the first child of 'ref', with all remaining children coming after it.
+ *	GWM_DATA_ADD_BOTTOM_CHILD	The new node will be the last child of 'ref', with all remaining children coming before it.
+ * NOTE: If 'ref' is NULL, then 'whence' must be one of the *_CHILD macros, since there can be no siblings of the root node.
+ */
+GWMDataNode* gwmAddDataNode(GWMDataCtrl *ctrl, int whence, GWMDataNode *ref);
+
+/**
+ * Set flags on a data node.
+ */
+void gwmSetDataNodeFlags(GWMDataCtrl *ctrl, GWMDataNode *node, int flags);
+
+/**
+ * Set the description of a data node. The meaning is user-defined.
+ */
+void gwmSetDataNodeDesc(GWMDataCtrl *ctrl, GWMDataNode *node, void *desc);
+
+/**
+ * Get the description of a data node. The meaning is user-defined; it must have been previously set by gwmSetDataNodeDesc().
+ */
+void* gwmGetDataNodeDesc(GWMDataCtrl *ctrl, GWMDataNode *node);
+
+/**
+ * Delete a data node.
+ */
+void gwmDeleteDataNode(GWMDataCtrl *ctrl, GWMDataNode *node);
+
+/**
+ * Destroy a data control.
+ */
+void gwmDestroyDataCtrl(GWMDataCtrl *ctrl);
 
 #endif

@@ -57,6 +57,7 @@ namespace gwm {
 		image toolbtn /usr/share/images/toolbtn.png
 		image combo /usr/share/images/combo.png
 		image spin /usr/share/images/spin.png
+		image treeptr /usr/share/images/treeptr.png
 		
 		namespace slider {
 			color active #00AA00:255

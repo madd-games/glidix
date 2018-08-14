@@ -81,6 +81,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.toolbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgToolButton)},
 	{"gwm.toolkit.combo",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgCombo)},
 	{"gwm.toolkit.spin",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSpin)},
+	{"gwm.toolkit.treeptr",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTreePtr)},
 	{"gwm.toolkit.stock.back",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockBack)},
 	{"gwm.toolkit.stock.forward",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockForward)},
 	{"gwm.toolkit.stock.up",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockUp)},
@@ -446,6 +447,10 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawButton(surf, 20, 40, 20, 20, &green, 1);
 	drawButton(surf, 20, 60, 20, 20, &green, 0);
 
+	// tree pointer
+	surf = surfaceSetup(format, &info->imgTreePtr, 16, 16);
+	drawButton(surf, 0, 0, 16, 16, &green, 0);
+	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;
 };
