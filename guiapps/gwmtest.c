@@ -186,7 +186,7 @@ int main()
 	int i, j, k;
 	for (i=0; i<30; i++)
 	{
-		GWMDataNode *inode = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
+		GWMDataNode *inode = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, nodeSecond);
 		
 		char ibuf[16];
 		sprintf(ibuf, "%d", i);
@@ -215,7 +215,6 @@ int main()
 	};
 	
 	gwmMainLoop();
-	gwmDestroyDataCtrl(ctrl);
 	gwmQuit();
 	return 0;
 };

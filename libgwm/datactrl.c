@@ -204,6 +204,11 @@ typedef struct
 	 * Total height.
 	 */
 	int					totalHeight;
+	
+	/**
+	 * If set to 1, the control is "completly dirty" and all cells reuqire a re-draw.
+	 */
+	int					dirty;
 } DataCtrlData;
 
 static DataCell* getCellByKey(GWMDataNode *node, int key)
@@ -286,6 +291,7 @@ static int drawNode(DDISurface *canvas, DataCtrlData *data, GWMDataNode *parent,
 				int update = 0;
 				if (data->mouseY > drawY && data->mouseY < (drawY+DATA_ROW_HEIGHT)) update = 1;
 				if (data->prevMouseY > drawY && data->prevMouseY < (drawY+DATA_ROW_HEIGHT)) update = 1;
+				if (data->dirty) update = 1;
 				
 				if (cell->surf == NULL || cell->surf->width != col->width || update)
 				{
@@ -419,12 +425,14 @@ static void ctrlRedraw(GWMDataCtrl *ctrl)
 		data->totalHeight = maxY;
 	};
 	
-	if (len > 1.0) gwmSetScrollbarFlags(data->sbar, GWM_SCROLLBAR_DISABLED);
+	if (len > 1.0) gwmHide(data->sbar);
 	else
 	{
-		gwmSetScrollbarFlags(data->sbar, 0);
+		gwmShow(data->sbar);
 		gwmSetScrollbarLength(data->sbar, len);
 	};
+	
+	data->dirty = 0;
 	gwmPostDirty(ctrl);
 };
 
@@ -511,6 +519,47 @@ static void ctrlDoubleClick(GWMDataCtrl *ctrl, DataCtrlData *data, int y, GWMDat
 	};
 };
 
+static void ctrlSelectOnlyRecur(DataCtrlData *data, GWMDataNode *parent, GWMDataNode *sel)
+{
+	GWMDataNode *node;
+	for (node=parent->children; node!=NULL; node=node->next)
+	{
+		node->selected = (node == sel);
+		ctrlSelectOnlyRecur(data, node, sel);
+	};
+};
+
+static void ctrlSelectOnly(GWMDataCtrl *ctrl, DataCtrlData *data, GWMDataNode *sel)
+{
+	ctrlSelectOnlyRecur(data, data->root, sel);
+	
+	int cap = 1;
+	if (data->flags & GWM_DATA_SHOW_HEADERS)
+	{
+		cap = DATA_ROW_HEIGHT;
+	};
+	
+	DDISurface *canvas = gwmGetWindowCanvas(ctrl);
+	int update = 0;
+	int newPos;
+	if (sel->lastDrawY > (canvas->height-DATA_ROW_HEIGHT))
+	{
+		newPos = data->scrollY + (sel->lastDrawY - (canvas->height-DATA_ROW_HEIGHT));
+		update = 1;
+	}
+	else if (sel->lastDrawY < cap)
+	{
+		newPos = data->scrollY + (sel->lastDrawY-cap);
+		update = 1;
+	};
+	
+	if (update)
+	{
+		float pos = (float) newPos / (float) data->totalHeight;
+		gwmSetScrollbarPosition(data->sbar, pos);
+	};
+};
+
 static int ctrlHandler(GWMEvent *ev, GWMDataCtrl *ctrl, void *context)
 {
 	DataCtrlData *data = (DataCtrlData*) context;
@@ -533,6 +582,104 @@ static int ctrlHandler(GWMEvent *ev, GWMDataCtrl *ctrl, void *context)
 			
 			ctrlDoSelect(ctrl, data, ev->x, ev->y, data->root, multiSelect, 0);
 			gwmPostUpdate(ctrl);
+		}
+		else if (ev->keycode == GWM_KC_UP)
+		{
+			GWMDataNode *sel = gwmGetDataSelection(ctrl, 0);
+			if (sel != NULL)
+			{
+				if (sel->prev != NULL)
+				{
+					GWMDataNode *cand = sel->prev;
+					while (cand->expanded && cand->children != NULL)
+					{
+						GWMDataNode *last = cand->children;
+						while (last->next != NULL) last = last->next;
+						cand = last;
+					};
+					ctrlSelectOnly(ctrl, data, cand);
+					gwmPostUpdate(ctrl);
+				}
+				else if (sel->parent != NULL && sel->parent != data->root)
+				{
+					ctrlSelectOnly(ctrl, data, sel->parent);
+					gwmPostUpdate(ctrl);
+				};
+			};
+			return GWM_EVSTATUS_OK;
+		}
+		else if (ev->keycode == GWM_KC_DOWN)
+		{
+			GWMDataNode *sel = gwmGetDataSelection(ctrl, 0);
+			if (sel != NULL)
+			{
+				if (sel->expanded)
+				{
+					if (sel->children != NULL)
+					{
+						ctrlSelectOnly(ctrl, data, sel->children);
+						gwmPostUpdate(ctrl);
+						return GWM_EVSTATUS_OK;
+					};
+				};
+				
+				while (sel->next == NULL)
+				{
+					if (sel->parent == NULL || sel->parent == data->root)
+					{
+						return GWM_EVSTATUS_OK;
+					};
+					
+					sel = sel->parent;
+				};
+				
+				ctrlSelectOnly(ctrl, data, sel->next);
+				gwmPostUpdate(ctrl);
+			};
+			return GWM_EVSTATUS_OK;
+		}
+		else if (ev->keycode == GWM_KC_RETURN)
+		{
+			GWMDataNode *sel = gwmGetDataSelection(ctrl, 0);
+			if (sel != NULL)
+			{
+				GWMDataEvent ev;
+				memset(&ev, 0, sizeof(GWMDataEvent));
+				ev.header.type = GWM_EVENT_DATA_ACTIVATED;
+				ev.node = sel;
+				ev.symbol = data->symbol;
+				gwmPostEvent((GWMEvent*) &ev, ctrl);
+			};
+			return GWM_EVSTATUS_CONT;
+		}
+		else if (ev->keycode == GWM_KC_SPACE)
+		{
+			GWMDataNode *sel = gwmGetDataSelection(ctrl, 0);
+			if (sel != NULL)
+			{
+				if (sel->children != NULL || (sel->flags & GWM_DATA_NODE_FORCE_PTR))
+				{
+					GWMDataEvent ev;
+					memset(&ev, 0, sizeof(GWMDataEvent));
+					if (sel->expanded)
+					{
+						ev.header.type = GWM_EVENT_DATA_COLLAPSING;
+					}
+					else
+					{
+						ev.header.type = GWM_EVENT_DATA_EXPANDING;
+					};
+					ev.node = sel;
+					ev.symbol = data->symbol;
+					if (gwmPostEvent((GWMEvent*) &ev, ctrl) == GWM_EVSTATUS_DEFAULT)
+					{
+						sel->expanded = !sel->expanded;
+						data->dirty = 1;
+						gwmPostUpdate(ctrl);
+					};
+				};
+			};
+			return GWM_EVSTATUS_CONT;
 		};
 		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_ENTER:
@@ -605,6 +752,8 @@ GWMDataCtrl* gwmNewDataCtrl(GWMWindow *parent)
 	
 	data->symbol = 0;
 	data->totalHeight = 0;
+	
+	data->dirty = 0;
 	
 	ctrl->getMinSize = ctrlMinSize;
 	ctrl->getPrefSize = ctrlPrefSize;
@@ -846,4 +995,36 @@ void gwmDestroyDataCtrl(GWMDataCtrl *ctrl)
 	
 	free(data);
 	gwmDestroyWindow(ctrl);
+};
+
+static GWMDataNode* getSelectionRecur(GWMDataNode *parent, int *counter)
+{
+	GWMDataNode *node;
+	for (node=parent->children; node!=NULL; node=node->next)
+	{
+		if (node->selected)
+		{
+			if ((*counter) == 0)
+			{
+				return node;
+			}
+			else
+			{
+				(*counter)--;
+			};
+		};
+		
+		GWMDataNode *candidate = getSelectionRecur(node, counter);
+		if (candidate != NULL) return candidate;
+	};
+	
+	return NULL;
+};
+
+GWMDataNode* gwmGetDataSelection(GWMDataCtrl *ctrl, int index)
+{
+	DataCtrlData *data = (DataCtrlData*) gwmGetData(ctrl, ctrlHandler);
+	if (data == NULL) return NULL;
+	
+	return getSelectionRecur(data->root, &index);
 };

@@ -706,6 +706,16 @@ void gwmFocus(GWMWindow *win)
 	gwmSetWindowFlags(win, win->flags | GWM_WINDOW_MKFOCUSED);
 };
 
+void gwmShow(GWMWindow *win)
+{
+	gwmSetWindowFlags(win, win->flags & ~GWM_WINDOW_HIDDEN);
+};
+
+void gwmHide(GWMWindow *win)
+{
+	gwmSetWindowFlags(win, win->flags | GWM_WINDOW_HIDDEN);
+};
+
 int gwmSetWindowCursor(GWMWindow *win, int cursor)
 {
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);

@@ -1698,6 +1698,16 @@ int gwmSetWindowFlags(GWMWindow *win, int flags);
 void gwmFocus(GWMWindow *win);
 
 /**
+ * Show a window.
+ */
+void gwmShow(GWMWindow *win);
+
+/**
+ * Hide a window.
+ */
+void gwmHide(GWMWindow *win);
+
+/**
  * Creates a new text field in the specified window.
  */
 GWMTextField* gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
@@ -2845,5 +2855,12 @@ void gwmDeleteDataNode(GWMDataCtrl *ctrl, GWMDataNode *node);
  * Destroy a data control.
  */
 void gwmDestroyDataCtrl(GWMDataCtrl *ctrl);
+
+/**
+ * Get selection on a data control. 'index' is how many selections to skip. Thus, if multiple nodes are selected, you can
+ * enumerate all of them by iterating through 'index' from 0 up to the first one that returns no result. Returns a selected
+ * node if found, or NULL if not found (at that index).
+ */
+GWMDataNode* gwmGetDataSelection(GWMDataCtrl *ctrl, int index);
 
 #endif

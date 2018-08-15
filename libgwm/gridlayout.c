@@ -260,13 +260,13 @@ void gwmGridLayoutAddLayout(GWMLayout *grid, GWMLayout *sublayout, int colspan, 
 	GridLayoutData *data = (GridLayoutData*) grid->data;
 	if (colspan > data->cols)
 	{
-		// TODO: we need to make that error API that exists in my head
+		gwmThrow(GWM_ERR_INVAL);
 		return;
 	};
 	
 	if (colspan < 1 || rowspan < 1)
 	{
-		// TODO
+		gwmThrow(GWM_ERR_INVAL);
 		return;
 	};
 	
