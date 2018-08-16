@@ -42,10 +42,10 @@
 #define	CELL_WIDTH			20
 #define	CELL_HEIGHT			20
 
-#define	GRID_COLS			20
+#define	GRID_COLS			10
 #define	GRID_ROWS			25
 
-#define	NUM_PIECES			5
+#define	NUM_PIECES			7
 
 typedef struct
 {
@@ -128,6 +128,28 @@ Piece pieces[NUM_PIECES] = {
 			{0, -2},
 			{1, 0},
 		},
+	},
+	
+	/* inverted "L" shape */
+	{
+		{0xFF, 0x00, 0xFF, 0xFF},
+		{
+			{0, 0},
+			{0, -1},
+			{0, -2},
+			{-1, 0},
+		},
+	},
+
+	/* inverted "S" shape */
+	{
+		{0x11, 0xAA, 0xFF, 0xFF},
+		{
+			{1, 0},
+			{0, 0},
+			{0, -1},
+			{-1, -1},
+		}
 	},
 };
 
