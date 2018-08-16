@@ -43,7 +43,7 @@
 #define	CELL_HEIGHT			20
 
 #define	GRID_COLS			10
-#define	GRID_ROWS			25
+#define	GRID_ROWS			20
 
 #define	NUM_PIECES			7
 
@@ -452,7 +452,7 @@ int main()
 	);
 	assert(topWindow != NULL);
 
-	fntGameOver = ddiLoadFont("DejaVu Sans", 50, DDI_STYLE_BOLD, NULL);
+	fntGameOver = ddiLoadFont("DejaVu Sans", 25, DDI_STYLE_BOLD, NULL);
 	assert(fntGameOver != NULL);
 	
 	DDISurface *canvas = gwmGetWindowCanvas(topWindow);
