@@ -1251,6 +1251,7 @@ typedef	GWMWindow GWMScrollbar;
 typedef GWMWindow GWMCombo;
 typedef GWMWindow GWMSpinner;
 typedef GWMWindow GWMDataCtrl;
+typedef GWMWindow GWMFileChooser;
 
 /**
  * Typedef the spinner classes.
@@ -2406,7 +2407,7 @@ void gwmSetTextAreaUpdateCallback(GWMWindow *area, GWMTextAreaUpdateCallback cb,
  * Create a file chooser dialog. 'mode' is either GWM_FILE_OPEN or GWM_FILE_SAVE. You can set other settings then call
  * gwmRunFileChooser() to run it.
  */
-GWMWindow* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int mode);
+GWMFileChooser* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int mode);
 
 /**
  * Run a file chooser dialog. If the user clicks Cancel, NULL is returned; otherwise, the absolute path of the selected
@@ -2414,7 +2415,7 @@ GWMWindow* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int mode
  *
  * NOTE: The file chooser is destroyed after running!
  */
-char* gwmRunFileChooser(GWMWindow *fc);
+char* gwmRunFileChooser(GWMFileChooser *fc);
 
 /**
  * Get a file icon with the given name, in the given size (GWM_FICON_SMALL being 16x16 and GWM_FICON_LARGE being 64x64).
@@ -2798,6 +2799,11 @@ void gwmSetDataString(GWMDataCtrl *ctrl, GWMDataNode *node, int key, const char 
  * if the key has not been set.
  */
 const char* gwmGetDataString(GWMDataCtrl *ctrl, GWMDataNode *node, int key);
+
+/**
+ * Set the icon of a data node. The icon must be a 16x16 surface (or GWM icon format).
+ */
+void gwmSetDataNodeIcon(GWMDataCtrl *ctrl, GWMDataNode *node, DDISurface *icon);
 
 /**
  * Create a new data control widget with the specified parent.

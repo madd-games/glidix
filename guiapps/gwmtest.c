@@ -183,15 +183,19 @@ int main()
 	gwmLayout(topWindow, 300, 300);
 	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 
+	DDISurface *canvas = gwmGetWindowCanvas(topWindow);
+	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/calc.png", NULL);
+	
 	int i, j, k;
 	for (i=0; i<30; i++)
 	{
-		GWMDataNode *inode = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, nodeSecond);
+		GWMDataNode *inode = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
 		
 		char ibuf[16];
 		sprintf(ibuf, "%d", i);
 		
 		gwmSetDataString(ctrl, inode, COL_A, ibuf);
+		gwmSetDataNodeIcon(ctrl, inode, icon);
 		
 		for (j=0; j<5; j++)
 		{
@@ -201,6 +205,7 @@ int main()
 			sprintf(jbuf, "%d", j);
 			
 			gwmSetDataString(ctrl, jnode, COL_A, jbuf);
+			gwmSetDataNodeIcon(ctrl, jnode, icon);
 			
 			for (k=0; k<10; k++)
 			{
@@ -210,6 +215,7 @@ int main()
 				sprintf(kbuf, "%d", k);
 				
 				gwmSetDataString(ctrl, knode, COL_A, kbuf);
+				gwmSetDataNodeIcon(ctrl, knode, icon);
 			};
 		};
 	};

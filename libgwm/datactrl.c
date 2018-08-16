@@ -153,6 +153,11 @@ struct GWMDataNode_
 	 * Is the node selected?
 	 */
 	int					selected;
+	
+	/**
+	 * Node icon or NULL.
+	 */
+	DDISurface*				icon;
 };
 
 typedef struct
@@ -260,6 +265,12 @@ const char* gwmGetDataString(GWMDataCtrl *ctrl, GWMDataNode *node, int key)
 	};
 };
 
+void gwmSetDataNodeIcon(GWMDataCtrl *ctrl, GWMDataNode *node, DDISurface *icon)
+{
+	node->icon = icon;
+	gwmPostUpdate(ctrl);
+};
+
 static int drawNode(DDISurface *canvas, DataCtrlData *data, GWMDataNode *parent, int firstIndent, int plotY)
 {
 	static DDIColor transparent = {0, 0, 0, 0};
@@ -321,6 +332,12 @@ static int drawNode(DDISurface *canvas, DataCtrlData *data, GWMDataNode *parent,
 							};
 							
 							ddiOverlay(imgTreePtr, 8*whichX, 8*whichImg, cell->surf, firstIndent+2, 6, 8, 8);
+						};
+						
+						if (node->icon)
+						{
+							ddiBlit(node->icon, 0, 0, cell->surf, indent, (DATA_ROW_HEIGHT-16)/2, 16, 16);
+							indent += 18;
 						};
 					};
 					
@@ -968,6 +985,8 @@ static void deleteNodeRecur(GWMDataCtrl *ctrl, GWMDataNode *node)
 		
 		deleteNodeRecur(ctrl, child);
 	};
+	
+	gwmDestroyScrollbar(data->sbar);
 	
 	// finally free it
 	free(node);

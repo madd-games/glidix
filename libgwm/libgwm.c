@@ -301,6 +301,7 @@ int gwmInit()
 	};
 	
 	struct sockaddr_un srvaddr;
+	memset(&srvaddr, 0, sizeof(struct sockaddr_un));
 	srvaddr.sun_family = AF_UNIX;
 	strcpy(srvaddr.sun_path, "/run/gwmserver");
 	
