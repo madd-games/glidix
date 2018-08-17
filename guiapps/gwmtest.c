@@ -142,6 +142,8 @@ int main()
 	};
 	
 	GWMFileChooser *fc = gwmCreateFileChooser(NULL, "Chooser test", GWM_FILE_SAVE);
+	//gwmAddFileChooserFilter(fc, "Some random files", "*.mip;*.c", ".mip");
+	gwmAddFileChooserFilter(fc, "All the files!!!", "*", "");
 	char *result = gwmRunFileChooser(fc);
 	
 	if (result == NULL)

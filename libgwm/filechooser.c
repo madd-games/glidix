@@ -39,6 +39,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <fstools.h>
+#include <assert.h>
 
 #define	FC_WIDTH			500
 #define	FC_HEIGHT			300
@@ -51,7 +52,7 @@
 typedef struct FCFilter_
 {
 	struct FCFilter_*		next;
-	uint64_t			num;
+	uint64_t			id;
 	char*				label;
 	char*				filtspec;
 	char*				ext;
@@ -81,6 +82,7 @@ typedef struct
 	GWMLabel*			lblFileType;
 	GWMOptionMenu*			optFileType;
 	GWMButton*			btnCancel;
+	GWMCheckbox*			cbExt;
 	
 	/**
 	 * Current location.
@@ -96,7 +98,69 @@ typedef struct
 	 * Head of filter list.
 	 */
 	FCFilter*			filts;
+	uint64_t			nextFiltID;
 } FCData;
+
+static int filtMatch(FCData *data, uint64_t filtID, const char *filename, FSMimeType *mime)
+{
+	if (mime != NULL)
+	{
+		if (strcmp(mime->mimename, "inode/directory") == 0)
+		{
+			// always show directories
+			return 1;
+		};
+	};
+	
+	FCFilter *filt;
+	for (filt=data->filts; filt!=NULL; filt=filt->next)
+	{
+		if (filt->id == filtID) break;
+	};
+	
+	assert(filt != NULL);
+	
+	const char *scan = filt->filtspec;
+	while (*scan != 0)
+	{
+		char spec[128];
+		char *put = spec;
+		
+		while (*scan != ';' && *scan != 0)
+		{
+			*put++ = *scan++;
+		};
+		
+		*put = 0;
+		if (*scan == ';') scan++;
+		
+		char *starPos = strchr(spec, '*');
+		if (starPos == NULL)
+		{
+			if (strcmp(spec, filename) == 0)
+			{
+				return 1;
+			};
+		}
+		else
+		{
+			int a = memcmp(filename, spec, starPos-spec);
+			
+			char *endSpec = starPos+1;
+			if (strlen(endSpec) <= strlen(filename))
+			{
+				int b = strcmp(endSpec, &filename[strlen(filename)-strlen(endSpec)]);
+				
+				if (a == 0 && b == 0)
+				{
+					return 1;
+				};
+			};
+		};
+	};
+	
+	return 0;
+};
 
 static void fcListDir(GWMFileChooser *fc, FCData *data, const char *path)
 {
@@ -124,22 +188,23 @@ static void fcListDir(GWMFileChooser *fc, FCData *data, const char *path)
 		char *fullpath;
 		asprintf(&fullpath, "%s/%s", path, ent->d_name);
 		
-		// TODO: filtering
+		uint64_t filtID = gwmReadOptionMenu(data->optFileType);
 		
 		FSMimeType *mime = fsGetType(fullpath);
 		DDISurface *icon = gwmGetFileIcon(mime->iconName, GWM_FICON_SMALL);
 		
-		GWMDataNode *node = gwmAddDataNode(data->dcFiles, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
-		gwmSetDataString(data->dcFiles, node, FC_COL_NAME, ent->d_name);
-		gwmSetDataNodeIcon(data->dcFiles, node, icon);
-		gwmSetDataNodeDesc(data->dcFiles, node, realpath(fullpath, NULL));
+		if (filtMatch(data, filtID, ent->d_name, mime))
+		{
+			GWMDataNode *node = gwmAddDataNode(data->dcFiles, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
+			gwmSetDataString(data->dcFiles, node, FC_COL_NAME, ent->d_name);
+			gwmSetDataNodeIcon(data->dcFiles, node, icon);
+			gwmSetDataNodeDesc(data->dcFiles, node, realpath(fullpath, NULL));
+		};
 		
 		free(fullpath);
 	};
 	
 	closedir(dirp);
-	
-	free(data->location);
 	
 	char *rpath = realpath(path, NULL);
 	if (rpath != NULL)
@@ -147,6 +212,7 @@ static void fcListDir(GWMFileChooser *fc, FCData *data, const char *path)
 		gwmWriteCombo(data->comPath, rpath);
 	};
 	
+	free(data->location);
 	data->location = rpath;
 };
 
@@ -162,14 +228,26 @@ static int doFileChoice(GWMFileChooser *fc, FCData *data, const char *path)
 			return GWM_EVSTATUS_CONT;
 		};
 		
+		if (S_ISDIR(st.st_mode))
+		{
+			gwmMessageBox(fc, "Error", "The specified name refers to a directory.", GWM_MBICON_ERROR | GWM_MBUT_OK);
+			return GWM_EVSTATUS_CONT;
+		};
+		
 		data->result = strdup(path);
 		return GWM_EVSTATUS_BREAK;
 	}
 	else
-	{
+	{	
 		struct stat st;
 		if (stat(path, &st) == 0)
 		{
+			if (S_ISDIR(st.st_mode))
+			{
+				gwmMessageBox(fc, "Error", "The specified name refers to a directory.", GWM_MBICON_ERROR | GWM_MBUT_OK);
+				return GWM_EVSTATUS_CONT;
+			};
+			
 			if (gwmMessageBox(fc, "File exists", "The specified file already exists. Do you want to overwrite it?",
 						GWM_MBICON_WARN | GWM_MBUT_YESNO) != GWM_SYM_YES)
 			{
@@ -190,16 +268,19 @@ static int fcHandler(GWMEvent *ev, GWMFileChooser *fc, void *context)
 	GWMDataNode *node;
 	struct stat st;
 	const char *path;
+	const char *name;
 	
 	switch (ev->type)
 	{
-	case GWM_EVENT_COMBO_OPTION_SET:
-		fcListDir(fc, data, gwmReadCombo(data->comPath));
+	case GWM_EVENT_OPTION_SET:
+		if (ev->win == data->comPath->id) fcListDir(fc, data, gwmReadCombo(data->comPath));
+		else fcListDir(fc, data, data->location);
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_COMMAND:
 		if (cmdev->symbol == GWM_SYM_OK && ev->win == data->comPath->id)
 		{
 			fcListDir(fc, data, gwmReadCombo(data->comPath));
+			return GWM_EVSTATUS_OK;
 		}
 		else if (cmdev->symbol == GWM_SYM_CANCEL)
 		{
@@ -208,13 +289,50 @@ static int fcHandler(GWMEvent *ev, GWMFileChooser *fc, void *context)
 		}
 		else if (cmdev->symbol == GWM_SYM_OK)
 		{
+			name = gwmReadTextField(data->txtFileName);
+			
+			if (name[0] == 0)
+			{
+				return GWM_EVSTATUS_OK;
+			};
+			
+			if (strchr(name, '/') != NULL)
+			{
+				gwmMessageBox(fc, "Error", "File names cannot include the slash (/) character.",
+						GWM_MBICON_ERROR | GWM_MBUT_OK);
+				return GWM_EVSTATUS_OK;
+			};
+			
 			char *finalPath;
-			asprintf(&finalPath, "%s/%s", data->location, gwmReadTextField(data->txtFileName));
+			const char *suffix = "";
+
+			if (data->cbExt != NULL)
+			{
+				if (gwmGetCheckboxState(data->cbExt))
+				{
+					uint64_t filtID = gwmReadOptionMenu(data->optFileType);
+				
+					if (!filtMatch(data, filtID, name, NULL))
+					{
+						FCFilter *filt;
+						for (filt=data->filts; filt!=NULL; filt=filt->next)
+						{
+							if (filt->id == filtID) break;
+						};
+	
+						assert(filt != NULL);	
+				
+						suffix = filt->ext;
+					};
+				};
+			};
+
+			asprintf(&finalPath, "%s/%s%s", data->location, name, suffix);
 			int result = doFileChoice(fc, data, finalPath);
 			free(finalPath);
 			return result;
 		};
-		return GWM_EVSTATUS_OK;
+		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_DATA_SELECT_CHANGED:
 		node = gwmGetDataSelection(data->dcFiles, 0);
 		if (node != NULL)
@@ -266,8 +384,10 @@ GWMFileChooser* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int
 	gwmAddComboOption(data->comPath, "/");
 
 	free(wd);
-	data->location = NULL;
+	data->location = strdup(".");
+	
 	data->filts = NULL;
+	data->nextFiltID = 0;
 	
 	data->dcFiles = gwmNewDataCtrl(fc);
 	gwmBoxLayoutAddWindow(data->mainBox, data->dcFiles, 1, 2, GWM_BOX_FILL | GWM_BOX_ALL);
@@ -306,9 +426,9 @@ GWMFileChooser* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int
 	data->btnCancel = gwmCreateButtonWithLabel(fc, GWM_SYM_CANCEL, NULL);
 	gwmGridLayoutAddWindow(data->grid, data->btnCancel, 1, 1);
 	
-	fcListDir(fc, data, ".");
 	gwmPushEventHandler(fc, fcHandler, data);
-	gwmLayout(fc, FC_WIDTH, FC_HEIGHT);
+	
+	data->cbExt = NULL;
 	return fc;
 };
 
@@ -320,11 +440,66 @@ void gwmSetFileChooserName(GWMFileChooser *fc, const char *filename)
 	gwmWriteTextField(data->txtFileName, filename);
 };
 
+void gwmAddFileChooserFilter(GWMFileChooser *fc, const char *label, const char *filtspec, const char *ext)
+{
+	FCData *data = (FCData*) gwmGetData(fc, fcHandler);
+	if (data == NULL) return;
+
+	FCFilter *filt = (FCFilter*) malloc(sizeof(FCFilter));
+	filt->next = NULL;
+	filt->id = data->nextFiltID++;
+	filt->label = strdup(label);
+	filt->filtspec = strdup(filtspec);
+	filt->ext = strdup(ext);
+	
+	gwmAddOptionMenu(data->optFileType, filt->id, label);
+	
+	if (data->filts == NULL)
+	{
+		data->filts = filt;
+		gwmSetOptionMenu(data->optFileType, filt->id, label);
+	}
+	else
+	{
+		FCFilter *last = data->filts;
+		while (last->next != NULL) last = last->next;
+		last->next = filt;
+	};
+};
+
 char* gwmRunFileChooser(GWMFileChooser *fc)
 {
 	FCData *data = (FCData*) gwmGetData(fc, fcHandler);
 	if (data == NULL) return NULL;
 	
+	if (data->filts == NULL)
+	{
+		gwmAddFileChooserFilter(fc, "All files", "*", "");
+	};
+	
+	if (data->mode == GWM_FILE_SAVE)
+	{
+		// check if any filter has a filename extension
+		int found = 0;
+		
+		FCFilter *filt;
+		for (filt=data->filts; filt!=NULL; filt=filt->next)
+		{
+			if (filt->ext[0] != 0) found = 1;
+		};
+		
+		if (found)
+		{
+			// then create the "append extension?" checkbox
+			data->cbExt = gwmNewCheckbox(fc);
+			gwmGridLayoutAddWindow(data->grid, data->cbExt, 6, 1);
+			
+			gwmSetCheckboxLabel(data->cbExt, "Automatically set filename extension");
+			gwmSetCheckboxState(data->cbExt, GWM_CB_ON);
+		};
+	};
+	
+	gwmLayout(fc, FC_WIDTH, FC_HEIGHT);
 	gwmRunModal(fc, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_MKFOCUSED);
 	gwmSetWindowFlags(fc, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
@@ -336,6 +511,8 @@ char* gwmRunFileChooser(GWMFileChooser *fc)
 	gwmDestroyLabel(data->lblFileName);
 	gwmDestroyDataCtrl(data->dcFiles);
 	gwmDestroyCombo(data->comPath);
+	
+	if (data->cbExt != NULL) gwmDestroyCheckbox(data->cbExt);
 	
 	gwmDestroyBoxLayout(data->mainBox);
 	gwmDestroyGridLayout(data->grid);

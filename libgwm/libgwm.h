@@ -726,7 +726,7 @@ typedef struct GWMDataColumn_ GWMDataColumn;
 #define	GWM_EVENT_DATA_ACTIVATED		(GWM_EVENT_CASCADING + 12)
 #define	GWM_EVENT_DATA_DELETING			(GWM_EVENT_CASCADING + 13)
 #define	GWM_EVENT_DATA_SELECT_CHANGED		(GWM_EVENT_CASCADING + 14)
-#define	GWM_EVENT_COMBO_OPTION_SET		(GWM_EVENT_CASCADING + 15)
+#define	GWM_EVENT_OPTION_SET			(GWM_EVENT_CASCADING + 15)
 
 /**
  * General event structure.
@@ -1257,6 +1257,7 @@ typedef GWMWindow GWMDataCtrl;
 typedef GWMWindow GWMFileChooser;
 typedef	GWMWindow GWMLabel;
 typedef GWMWindow GWMOptionMenu;
+typedef GWMWindow GWMCheckbox;
 
 /**
  * Typedef the spinner classes.
@@ -1734,42 +1735,42 @@ void gwmSetListenWindow(GWMWindow *win);
 /**
  * Creates a new checkbox in the specified window.
  */
-GWMWindow *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int flags);
+GWMCheckbox *gwmCreateCheckbox(GWMWindow *parent, int x, int y, int state, int flags);
 
 /**
  * Creates a checkbox in the specified window. This call should be followed by property-setting functions.
  */
-GWMWindow *gwmNewCheckbox(GWMWindow *parent);
+GWMCheckbox *gwmNewCheckbox(GWMWindow *parent);
 
 /**
  * Set the label on a checkbox.
  */
-void gwmSetCheckboxLabel(GWMWindow *checkbox, const char *text);
+void gwmSetCheckboxLabel(GWMCheckbox *checkbox, const char *text);
 
 /**
  * Destroys a checkbox.
  */
-void gwmDestroyCheckbox(GWMWindow *checkbox);
+void gwmDestroyCheckbox(GWMCheckbox *checkbox);
 
 /**
  * Set checkbox flags.
  */
-void gwmSetCheckboxFlags(GWMWindow *checkbox, int flags);
+void gwmSetCheckboxFlags(GWMCheckbox *checkbox, int flags);
 
 /**
  * Return the current state of a checkbox (GWM_CB_OFF, GWM_CB_ON, or GWM_CB_TRI).
  */
-int gwmGetCheckboxState(GWMWindow *checkbox);
+int gwmGetCheckboxState(GWMCheckbox *checkbox);
 
 /**
  * Set the state of a checkbox (GWM_CB_OFF, GWM_CB_ON or GWM_CB_TRI).
  */
-void gwmSetCheckboxState(GWMWindow *checkbox, int state);
+void gwmSetCheckboxState(GWMCheckbox *checkbox, int state);
 
 /**
  * Set the symbol of a checkbox.
  */
-void gwmSetCheckboxSymbol(GWMWindow *checkbox, int symbol);
+void gwmSetCheckboxSymbol(GWMCheckbox *checkbox, int symbol);
 
 /**
  * Create a new scroll bar.
@@ -2294,6 +2295,11 @@ GWMFileChooser* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int
  * Set the suggested file name on a file chooser.
  */
 void gwmSetFileChooserName(GWMFileChooser *fc, const char *filename);
+
+/**
+ * Add a file type filter to a file chooser.
+ */
+void gwmAddFileChooserFilter(GWMFileChooser *fc, const char *label, const char *filtspec, const char *ext);
 
 /**
  * Run a file chooser dialog. If the user clicks Cancel, NULL is returned; otherwise, the absolute path of the selected
