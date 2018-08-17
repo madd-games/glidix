@@ -256,6 +256,11 @@ void gwmSetButtonFlags(GWMWindow *button, int flags)
 
 GWMWindow* gwmCreateButtonWithLabel(GWMWindow *parent, int symbol, const char *label)
 {
+	if (label == NULL)
+	{
+		label = gwmGetStockLabel(symbol);
+	};
+	
 	GWMWindow *btn = gwmCreateButton(parent, label, 0, 0, 0, 0);
 	gwmSetButtonSymbol(btn, symbol);
 	return btn;

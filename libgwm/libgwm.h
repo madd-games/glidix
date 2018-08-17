@@ -678,6 +678,7 @@ typedef struct GWMDataColumn_ GWMDataColumn;
 #define	GWM_SYM_UNDERLINE			33
 #define	GWM_SYM_STRIKE				34
 #define	GWM_SYM_RENAME				35
+#define	GWM_SYM_OPEN				36
 
 /**
  * Starting numbers for event classes.
@@ -724,6 +725,8 @@ typedef struct GWMDataColumn_ GWMDataColumn;
 #define	GWM_EVENT_DATA_COLLAPSING		(GWM_EVENT_CASCADING + 11)
 #define	GWM_EVENT_DATA_ACTIVATED		(GWM_EVENT_CASCADING + 12)
 #define	GWM_EVENT_DATA_DELETING			(GWM_EVENT_CASCADING + 13)
+#define	GWM_EVENT_DATA_SELECT_CHANGED		(GWM_EVENT_CASCADING + 14)
+#define	GWM_EVENT_COMBO_OPTION_SET		(GWM_EVENT_CASCADING + 15)
 
 /**
  * General event structure.
@@ -1252,6 +1255,8 @@ typedef GWMWindow GWMCombo;
 typedef GWMWindow GWMSpinner;
 typedef GWMWindow GWMDataCtrl;
 typedef GWMWindow GWMFileChooser;
+typedef	GWMWindow GWMLabel;
+typedef GWMWindow GWMOptionMenu;
 
 /**
  * Typedef the spinner classes.
@@ -1325,97 +1330,6 @@ typedef struct GWMMenu_
 	int					selectedSub;
 	int					focused;
 } GWMMenu;
-
-/**
- * Tree node flags.
- */
-#define	GWM_NODE_HASCHLD			(1 << 0)			/* has children */
-
-/**
- * Tree node information.
- */
-typedef struct
-{
-	/**
-	 * Pointer to a buffer of size tePathSize, into which the entry's path shall be stored.
-	 * This pointer is initialized by the TreeView widget.
-	 */
-	void*					niPath;
-	
-	/**
-	 * Node flags; 0, or bitwise-OR of one or more of GWM_NODE_*
-	 */
-	int					niFlags;
-	
-	/**
-	 * Pointer to an array of 'teNumCols' pointers, each specifying the value for a corresponding
-	 * column. All entries are to be on the heap, and they are free()d by the TreeView widget.
-	 * This pointer itself is initialized by the TreeView widget.
-	 */
-	void**					niValues;
-	
-	/**
-	 * A 16x16 surface to use as an icon for the entry. This is initialized to NULL by the TreeView
-	 * widget, indicating that no icon will be used by default. The TreeView widget WILL NOT call
-	 * ddiDeleteSurface() on this.
-	 */
-	DDISurface*				niIcon;
-} GWMNodeInfo;
-
-/**
- * Describes a tree enumerator for use with a TreeView widget.
- */
-typedef struct
-{
-	/**
-	 * Size of this structure.
-	 */
-	size_t					teSize;
-	
-	/**
-	 * The size of a 'path' used by this enumerator.
-	 */
-	size_t					tePathSize;
-	
-	/**
-	 * Number of columns that this enumerator returns.
-	 */
-	size_t					teNumCols;
-	
-	/**
-	 * Returns the caption of the column with the given index; the returned string shall
-	 * be on the heap, and the TreeView widget will call free() on it.
-	 */
-	char* (*teGetColCaption)(int index);
-	
-	/**
-	 * Open a node on the tree. Return NULL if that failed; a pointer to an opaque iterator structure
-	 * otherwise.
-	 */
-	void* (*teOpenNode)(const void *path);
-	
-	/**
-	 * Get the next entry of a node; return 0 on success or -1 if there are no more entries. If an entry
-	 * does exist, the 'info' structure shall be filled in with information about the node. The 'node'
-	 * argument is one previously returned by teOpenNode().
-	 */
-	int (*teGetNext)(void *node, GWMNodeInfo *info, size_t infoSize);
-	
-	/**
-	 * Close the node previously opened by teOpenNode().
-	 */
-	void (*teCloseNode)(void *node);
-} GWMTreeEnum;
-
-extern GWMTreeEnum gwmTreeFilesystem;
-extern char gwmFSRoot[PATH_MAX];
-#define	GWM_TREE_FILESYSTEM (&gwmTreeFilesystem)
-#define	GWM_FS_ROOT gwmFSRoot
-
-/**
- * TreeView flags.
- */
-#define	GWM_TV_NOHEADS				(1 << 0)
 
 /**
  * File chooser modes.
@@ -2079,39 +1993,6 @@ void gwmClipboardPutText(const char *text, size_t textSize);
 char* gwmClipboardGetText(size_t *sizeOut);
 
 /**
- * Create a new TreeView widget, whose root displays the path 'root' in the specified 'tree'.
- */
-GWMWindow *gwmCreateTreeView(GWMWindow *parent, int x, int y, int width, int height, GWMTreeEnum *tree, const void *root, int flags);
-
-/**
- * Destroy a TreeView object.
- */
-void gwmDestroyTreeView(GWMWindow *treeview);
-
-/**
- * Set a TreeView double-click handler. The TreeView event handler will return whatever the callback returns.
- */
-typedef int (*GWMTreeViewActivateCallback)(void *param);
-void gwmTreeViewSetActivateCallback(GWMWindow *treeview, GWMTreeViewActivateCallback handler, void *param);
-
-/**
- * Set a TreeView selection handler.
- */
-typedef void (*GWMTreeViewSelectCallback)(void *param);
-void gwmTreeViewSetSelectCallback(GWMWindow *treeview, GWMTreeViewSelectCallback handler, void *param);
-
-/**
- * Store the currently-selected path on a TreeView in the given buffer. Returns 0 if something actually was
- * selected; otherwise returns -1 and the buffer is untouched.
- */
-int gwmTreeViewGetSelection(GWMWindow *treeview, void *buffer);
-
-/**
- * Change the tree in a TreeView and refresh.
- */
-void gwmTreeViewUpdate(GWMWindow *treeview, const void *root);
-
-/**
  * Create a modal dialog. You may place children in it, and then run it using gwmRunModal(). You can set an
  * event handler as for a normal window. A modal dialog closes when an event handler returns -1 (the application
  * does not close in this case). You may also use the "data" field in the window in whatever way you wish.
@@ -2263,37 +2144,37 @@ const char* gwmReadCombo(GWMCombo *combo);
 /**
  * Create an option menu widget.
  */
-GWMWindow* gwmCreateOptionMenu(GWMWindow *parent, uint64_t id, const char *text, int x, int y, int width, int flags);
+GWMOptionMenu* gwmCreateOptionMenu(GWMWindow *parent, uint64_t id, const char *text, int x, int y, int width, int flags);
 
 /**
  * Create a new option menu widget.
  */
-GWMWindow* gwmNewOptionMenu(GWMWindow *parent);
+GWMOptionMenu* gwmNewOptionMenu(GWMWindow *parent);
 
 /**
  * Destroy an option menu.
  */
-void gwmDestroyOptionMenu(GWMWindow *optmenu);
+void gwmDestroyOptionMenu(GWMOptionMenu *optmenu);
 
 /**
  * Clear an option menu.
  */
-void gwmClearOptionMenu(GWMWindow *optmenu);
+void gwmClearOptionMenu(GWMOptionMenu *optmenu);
 
 /**
  * Change the value in an option menu.
  */
-void gwmSetOptionMenu(GWMWindow *optmenu, uint64_t id, const char *text);
+void gwmSetOptionMenu(GWMOptionMenu *optmenu, uint64_t id, const char *text);
 
 /**
  * Add an option to an option menu.
  */
-void gwmAddOptionMenu(GWMWindow *optmenu, uint64_t id, const char *text);
+void gwmAddOptionMenu(GWMOptionMenu *optmenu, uint64_t id, const char *text);
 
 /**
  * Get the ID of the currently-selected option in the menu.
  */
-uint64_t gwmReadOptionMenu(GWMWindow *optmenu);
+uint64_t gwmReadOptionMenu(GWMOptionMenu *optmenu);
 
 /**
  * Create a frame widget with the specified caption.
@@ -2408,6 +2289,11 @@ void gwmSetTextAreaUpdateCallback(GWMWindow *area, GWMTextAreaUpdateCallback cb,
  * gwmRunFileChooser() to run it.
  */
 GWMFileChooser* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int mode);
+
+/**
+ * Set the suggested file name on a file chooser.
+ */
+void gwmSetFileChooserName(GWMFileChooser *fc, const char *filename);
 
 /**
  * Run a file chooser dialog. If the user clicks Cancel, NULL is returned; otherwise, the absolute path of the selected
@@ -2560,6 +2446,11 @@ void gwmGridLayoutAddLayout(GWMLayout *grid, GWMLayout *child, int colspan, int 
 void gwmGridLayoutAddWindow(GWMLayout *grid, GWMWindow *child, int colspan, int rowspan);
 
 /**
+ * Destroy a grid layout.
+ */
+void gwmDestroyGridLayout(GWMLayout *grid);
+
+/**
  * Given a stock symbol, return its label (in the correct language).
  * Returns "??" for invalid labels.
  */
@@ -2580,27 +2471,27 @@ void* gwmGetData(GWMWindow *win, GWMEventHandler handler);
  * Create a new label. This call should be followed by property-setting calls. Alternatively, you may use
  * the convenience wrapper, gwmCreateLabel().
  */
-GWMWindow* gwmNewLabel(GWMWindow *parent);
+GWMLabel* gwmNewLabel(GWMWindow *parent);
 
 /**
  * Destroy a label.
  */
-void gwmDestroyLabel(GWMWindow *label);
+void gwmDestroyLabel(GWMLabel *label);
 
 /**
  * Convenience wrapper to create a label with properties.
  */
-GWMWindow* gwmCreateLabel(GWMWindow *parent, const char *text, int width);
+GWMLabel* gwmCreateLabel(GWMWindow *parent, const char *text, int width);
 
 /**
  * Set the text of a label.
  */
-void gwmSetLabelText(GWMWindow *label, const char *text);
+void gwmSetLabelText(GWMLabel *label, const char *text);
 
 /**
  * Set the maximum width of a label. 0 means there is no limit, and so it should not wrap.
  */
-void gwmSetLabelWidth(GWMWindow *label, int width);
+void gwmSetLabelWidth(GWMLabel *label, int width);
 
 /**
  * Get the icon surface ID of a window.
@@ -2827,6 +2718,11 @@ void gwmSetDataSymbol(GWMDataCtrl *ctrl, int symbol);
 GWMDataColumn* gwmAddDataColumn(GWMDataCtrl *ctrl, const char *label, int type, int key);
 
 /**
+ * Set the width of a column.
+ */
+void gwmSetDataColumnWidth(GWMDataCtrl *ctrl, GWMDataColumn* col, int width);
+
+/**
  * Create a new data node on a data control. 'ctrl' is the data control in question. 'ref' is a reference node, or
  * NULL for the root node; then 'whence' specifies where the node shall be in relation to 'ref':
  *	GWM_DATA_ADD_BEFORE		The new node will have the same parent as 'ref' and come directly before it.
@@ -2836,6 +2732,12 @@ GWMDataColumn* gwmAddDataColumn(GWMDataCtrl *ctrl, const char *label, int type, 
  * NOTE: If 'ref' is NULL, then 'whence' must be one of the *_CHILD macros, since there can be no siblings of the root node.
  */
 GWMDataNode* gwmAddDataNode(GWMDataCtrl *ctrl, int whence, GWMDataNode *ref);
+
+/**
+ * Get a child of the specified node with the given index. A 'parent' of NULL means the root node. Returns a node if found,
+ * or NULL if no such node exists.
+ */
+GWMDataNode* gwmGetDataNode(GWMDataCtrl *ctrl, GWMDataNode *parent, int index);
 
 /**
  * Set flags on a data node.

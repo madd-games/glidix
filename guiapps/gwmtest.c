@@ -141,86 +141,18 @@ int main()
 		return 1;
 	};
 	
-	GWMWindow *topWindow = gwmCreateWindow(
-		NULL,						// window parent (none)
-		"Tutorial Part 3",				// window caption
-		GWM_POS_UNSPEC, GWM_POS_UNSPEC,			// window coordinates unspecified
-		0, 0,						// window size (will be set later by gwmFit() )
-		GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR	// hidden, no taskbar icon
-	);
-	assert(topWindow != NULL);
+	GWMFileChooser *fc = gwmCreateFileChooser(NULL, "Chooser test", GWM_FILE_SAVE);
+	char *result = gwmRunFileChooser(fc);
 	
-	gwmPushEventHandler(topWindow, myHandler, NULL);
-	
-	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(topWindow, boxLayout);
-	
-	GWMDataCtrl *ctrl = gwmNewDataCtrl(topWindow);
-	gwmBoxLayoutAddWindow(boxLayout, ctrl, 1, 0, GWM_BOX_FILL);
-	
-	gwmSetDataFlags(ctrl, GWM_DATA_SHOW_HEADERS);
-	
-	gwmAddDataColumn(ctrl, "Column A", GWM_DATA_STRING, COL_A);
-	gwmAddDataColumn(ctrl, "Column B", GWM_DATA_STRING, COL_B);
-	gwmAddDataColumn(ctrl, "Column C", GWM_DATA_STRING, COL_C);
-	
-	GWMDataNode *nodeTest = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
-	gwmSetDataString(ctrl, nodeTest, COL_A, "Hello");
-	gwmSetDataString(ctrl, nodeTest, COL_B, "world");
-	
-	GWMDataNode *nodeApple = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, nodeTest);
-	gwmSetDataString(ctrl, nodeApple, COL_A, "Apple");
-	
-	GWMDataNode *nodeOrange = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, nodeTest);
-	gwmSetDataString(ctrl, nodeOrange, COL_A, "Orange");
-	
-	GWMDataNode *nodeStrawberry = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, nodeTest);
-	gwmSetDataString(ctrl, nodeStrawberry, COL_A, "Strawberry");
-	
-	GWMDataNode *nodeSecond = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
-	gwmSetDataString(ctrl, nodeSecond, COL_B, "Second test");
-	
-	gwmLayout(topWindow, 300, 300);
-	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
-
-	DDISurface *canvas = gwmGetWindowCanvas(topWindow);
-	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/calc.png", NULL);
-	
-	int i, j, k;
-	for (i=0; i<30; i++)
+	if (result == NULL)
 	{
-		GWMDataNode *inode = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
-		
-		char ibuf[16];
-		sprintf(ibuf, "%d", i);
-		
-		gwmSetDataString(ctrl, inode, COL_A, ibuf);
-		gwmSetDataNodeIcon(ctrl, inode, icon);
-		
-		for (j=0; j<5; j++)
-		{
-			GWMDataNode *jnode = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, inode);
-			
-			char jbuf[16];
-			sprintf(jbuf, "%d", j);
-			
-			gwmSetDataString(ctrl, jnode, COL_A, jbuf);
-			gwmSetDataNodeIcon(ctrl, jnode, icon);
-			
-			for (k=0; k<10; k++)
-			{
-				GWMDataNode *knode = gwmAddDataNode(ctrl, GWM_DATA_ADD_BOTTOM_CHILD, jnode);
-				
-				char kbuf[16];
-				sprintf(kbuf, "%d", k);
-				
-				gwmSetDataString(ctrl, knode, COL_A, kbuf);
-				gwmSetDataNodeIcon(ctrl, knode, icon);
-			};
-		};
+		printf("User cancelled.\n");
+	}
+	else
+	{
+		printf("User selected: `%s'\n", result);
 	};
 	
-	gwmMainLoop();
 	gwmQuit();
 	return 0;
 };

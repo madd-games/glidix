@@ -392,8 +392,32 @@ int inspectCore(const char *filename)
 					funcname = __dbg_getsym(path, offset);
 					lineinfo = __dbg_addr2line(path, offset);
 				};
+
+				char libinfo[512];
+				strcpy(libinfo, "");
+				uint64_t highestAddr = 0;
 				
-				printf("#%-4d 0x%lx in %s() at %s\n", number++, frame.rip, funcname, lineinfo);
+				Dl_Library lib;
+				uint64_t addr;
+				for (addr=(uint64_t) dlopen(NULL, RTLD_LAZY); addr!=0; addr=(uint64_t) lib.next)
+				{
+					if (readCore(&lib, addr, sizeof(Dl_Library), seglist, header.ch_segnum, &header, fp) != 0)
+					{
+						printf("<bad pointer 0x%016lX>\n", addr);
+						break;
+					};
+				
+					if (lib.base <= frame.rip)
+					{
+						if (lib.base >= highestAddr)
+						{
+							sprintf(libinfo, "%s+0x%016lX", lib.soname, frame.rip - lib.base);
+							highestAddr = lib.base;
+						};
+					};
+				};
+				
+				printf("#%-4d 0x%lx in %s() at %s (%s)\n", number++, frame.rip, funcname, lineinfo, libinfo);
 				free(funcname);
 				free(lineinfo);
 				

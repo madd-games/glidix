@@ -43,213 +43,249 @@
 #define	FC_WIDTH			500
 #define	FC_HEIGHT			300
 
+#define	FC_COL_NAME			1
+
+/**
+ * Describes a file type filter.
+ */
+typedef struct FCFilter_
+{
+	struct FCFilter_*		next;
+	uint64_t			num;
+	char*				label;
+	char*				filtspec;
+	char*				ext;
+} FCFilter;
+
 typedef struct
 {
-	int					mode;
-	char*					dir;
-	GWMWindow*				txtDir;
-	GWMWindow*				txtName;
-	GWMWindow*				teListing;
-	GWMWindow*				optFilter;
-	GWMWindow*				btnAccept;
-	GWMWindow*				btnCancel;
-	char*					result;
-} FileChooserData;
-
-typedef struct
-{
-	char					path[PATH_MAX];
-	DIR*					dirp;
-} DirNode;
-
-static const char *dirCols[] = {
-	"Name",
-	"Type"
-};
-
-static char* dirGetColCaption(int index)
-{
-	return strdup(dirCols[index]);
-};
-
-static void* dirOpenNode(const void *path)
-{
-	DirNode *node = (DirNode*) malloc(sizeof(DirNode));
-	if (node == NULL) return NULL;
+	/**
+	 * File chooser mode (GWM_FILE_OPEN or GWM_FILE_SAVE).
+	 */
+	int				mode;
 	
-	strcpy(node->path, (const char*) path);
-	node->dirp = opendir((const char*) path);
-	if (node->dirp == NULL)
+	/**
+	 * Layout.
+	 */
+	GWMLayout*			mainBox;
+	GWMLayout*			grid;
+	
+	/**
+	 * All the controls.
+	 */
+	GWMCombo*			comPath;
+	GWMDataCtrl*			dcFiles;
+	GWMLabel*			lblFileName;
+	GWMTextField*			txtFileName;
+	GWMButton*			btnAccept;
+	GWMLabel*			lblFileType;
+	GWMOptionMenu*			optFileType;
+	GWMButton*			btnCancel;
+	
+	/**
+	 * Current location.
+	 */
+	char*				location;
+	
+	/**
+	 * Result.
+	 */
+	char*				result;
+	
+	/**
+	 * Head of filter list.
+	 */
+	FCFilter*			filts;
+} FCData;
+
+static void fcListDir(GWMFileChooser *fc, FCData *data, const char *path)
+{
+	DIR *dirp = opendir(path);
+	if (dirp == NULL)
 	{
-		free(node);
-		return NULL;
+		gwmMessageBox(fc, "Error", strerror(errno), GWM_MBICON_ERROR | GWM_MBUT_OK);
+		return;
 	};
 	
-	return node;
-};
-
-static int dirGetNext(void *context, GWMNodeInfo *info, size_t infoSize)
-{
-	DirNode *node = (DirNode*) context;
-	struct dirent *ent = readdir(node->dirp);
-	if (ent == NULL) return -1;
-	
-	strcpy((char*)info->niPath, ent->d_name);
-	
-	char pathname[PATH_MAX];
-	sprintf(pathname, "%s/%s", node->path, ent->d_name);
-	FSMimeType *mime = fsGetType(pathname);
-	
-	info->niFlags = 0;
-	info->niIcon = gwmGetFileIcon(mime->iconName, GWM_FICON_SMALL);
-	info->niValues[0] = strdup(ent->d_name);
-	info->niValues[1] = strdup(mime->label);
-	return 0;
-};
-
-static void dirCloseNode(void *context)
-{
-	DirNode *node = (DirNode*) context;
-	closedir(node->dirp);
-	free(node);
-};
-
-static GWMTreeEnum enumDir = {
-	.teSize = 				sizeof(GWMTreeEnum),
-	.tePathSize = 				PATH_MAX,
-	.teNumCols =				sizeof(dirCols) / sizeof(const char*),
-	.teGetColCaption =			dirGetColCaption,
-	.teOpenNode =				dirOpenNode,
-	.teGetNext =				dirGetNext,
-	.teCloseNode =				dirCloseNode
-};
-
-GWMWindow* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int mode)
-{
-	GWMWindow *dialog = gwmCreateModal(caption, GWM_POS_UNSPEC, GWM_POS_UNSPEC, FC_WIDTH, FC_HEIGHT);
-	FileChooserData *data = (FileChooserData*) malloc(sizeof(FileChooserData));
-	dialog->data = data;
-	
-	data->mode = mode;
-
-	char *home = getenv("HOME");
-	if (home == NULL)
+	GWMDataNode *node;
+	while ((node = gwmGetDataNode(data->dcFiles, NULL, 0)) != NULL)
 	{
-		data->dir = strdup("/");
-	}
-	else
-	{
-		data->dir = strdup(home);
+		gwmDeleteDataNode(data->dcFiles, node);
 	};
 	
-	return dialog;
-};
-
-static void onSelect(void *context)
-{
-	char buf[PATH_MAX];
-	GWMWindow *fc = (GWMWindow*) context;
-	FileChooserData *data = (FileChooserData*) fc->data;
-	
-	if (gwmTreeViewGetSelection(data->teListing, buf) == 0)
+	struct dirent *ent;
+	while ((ent = readdir(dirp)) != NULL)
 	{
-		gwmWriteTextField(data->txtName, buf);
-	};
-};
-
-static int onCancel(void *context)
-{
-	GWMWindow *fc = (GWMWindow*) context;
-	FileChooserData *data = (FileChooserData*) fc->data;
-	data->result = NULL;
-	return -1;
-};
-
-static int onAccept(void *context)
-{
-	GWMWindow *fc = (GWMWindow*) context;
-	FileChooserData *data = (FileChooserData*) fc->data;
-	
-	const char *filename = gwmReadTextField(data->txtName);
-	
-	if (strchr(filename, '/') != NULL)
-	{
-		gwmMessageBox(NULL, "Error", "A filename may not to contain the '/' character", GWM_MBICON_ERROR | GWM_MBUT_OK);
-		return 0;
-	};
-	
-	char pathname[PATH_MAX];
-	if (strlen(data->dir)+1+strlen(filename) >= PATH_MAX)
-	{
-		gwmMessageBox(NULL, "Error", "Path too long!", GWM_MBICON_ERROR | GWM_MBUT_OK);
-		return 0;
-	};
-	
-	sprintf(pathname, "%s/%s", data->dir, filename);
-	struct stat st;
-	int exists = (stat(pathname, &st) == 0);
-	
-	if (exists && S_ISDIR(st.st_mode))
-	{
-		char normalPath[PATH_MAX];
-		if (realpath(pathname, normalPath) == NULL)
+		if ((strcmp(ent->d_name, ".") == 0) || (strcmp(ent->d_name, "..") == 0))
 		{
-			strcpy(normalPath, pathname);
+			continue;
 		};
 		
-		gwmTreeViewUpdate(data->teListing, normalPath);
-		gwmWriteTextField(data->txtDir, normalPath);
-		free(data->dir);
-		data->dir = strdup(normalPath);
-		return 0;
+		char *fullpath;
+		asprintf(&fullpath, "%s/%s", path, ent->d_name);
+		
+		// TODO: filtering
+		
+		FSMimeType *mime = fsGetType(fullpath);
+		DDISurface *icon = gwmGetFileIcon(mime->iconName, GWM_FICON_SMALL);
+		
+		GWMDataNode *node = gwmAddDataNode(data->dcFiles, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
+		gwmSetDataString(data->dcFiles, node, FC_COL_NAME, ent->d_name);
+		gwmSetDataNodeIcon(data->dcFiles, node, icon);
+		gwmSetDataNodeDesc(data->dcFiles, node, realpath(fullpath, NULL));
+		
+		free(fullpath);
 	};
 	
+	closedir(dirp);
+	
+	free(data->location);
+	
+	char *rpath = realpath(path, NULL);
+	if (rpath != NULL)
+	{
+		gwmWriteCombo(data->comPath, rpath);
+	};
+	
+	data->location = rpath;
+};
+
+static int doFileChoice(GWMFileChooser *fc, FCData *data, const char *path)
+{
 	if (data->mode == GWM_FILE_OPEN)
 	{
-		if (!exists)
+		struct stat st;
+		if (stat(path, &st) != 0)
 		{
-			gwmMessageBox(NULL, "Error", "The specified file does not exist or access was denied.",
+			gwmMessageBox(fc, "Error", "The specified file does not exist or could not be opened.",
 					GWM_MBICON_ERROR | GWM_MBUT_OK);
-			return 0;
+			return GWM_EVSTATUS_CONT;
 		};
 		
-		data->result = strdup(pathname);
-		return -1;
+		data->result = strdup(path);
+		return GWM_EVSTATUS_BREAK;
 	}
 	else
 	{
-		int ok = 1;
-		if (exists)
+		struct stat st;
+		if (stat(path, &st) == 0)
 		{
-			int selection = gwmMessageBox(NULL, "Save File",
-						"The specified file already exists! Do you want to replace it?",
-						GWM_MBICON_WARN | GWM_MBUT_YESNO);
-			ok = (selection == GWM_SYM_YES);
+			if (gwmMessageBox(fc, "File exists", "The specified file already exists. Do you want to overwrite it?",
+						GWM_MBICON_WARN | GWM_MBUT_YESNO) != GWM_SYM_YES)
+			{
+				return GWM_EVSTATUS_CONT;
+			};
 		};
 		
-		if (ok)
-		{
-			data->result = strdup(pathname);
-			return -1;
-		};
+		data->result = strdup(path);
+		return GWM_EVSTATUS_BREAK;
 	};
-	
-	return 0;
 };
 
-char* gwmRunFileChooser(GWMWindow *fc)
+static int fcHandler(GWMEvent *ev, GWMFileChooser *fc, void *context)
 {
-	FileChooserData *data = (FileChooserData*) fc->data;
+	FCData *data = (FCData*) context;
+	GWMCommandEvent *cmdev = (GWMCommandEvent*) ev;
+	GWMDataEvent *dev = (GWMDataEvent*) ev;
+	GWMDataNode *node;
+	struct stat st;
+	const char *path;
 	
-	data->txtDir = gwmCreateTextField(fc, data->dir, 2, 5, FC_WIDTH-4, 0);
-	data->teListing = gwmCreateTreeView(fc, 2, 30, FC_WIDTH-4, FC_HEIGHT-96, &enumDir, data->dir, 0);
-	gwmTreeViewSetSelectCallback(data->teListing, onSelect, fc);
-	gwmTreeViewSetActivateCallback(data->teListing, onAccept, fc);
-	data->txtName = gwmCreateTextField(fc, "", 70, FC_HEIGHT-60, FC_WIDTH-154, 0);
-	data->optFilter = gwmCreateOptionMenu(fc, 0, "Filters", 70, FC_HEIGHT-28, FC_WIDTH-154, GWM_OPTMENU_DISABLED);
+	switch (ev->type)
+	{
+	case GWM_EVENT_COMBO_OPTION_SET:
+		fcListDir(fc, data, gwmReadCombo(data->comPath));
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_COMMAND:
+		if (cmdev->symbol == GWM_SYM_OK && ev->win == data->comPath->id)
+		{
+			fcListDir(fc, data, gwmReadCombo(data->comPath));
+		}
+		else if (cmdev->symbol == GWM_SYM_CANCEL)
+		{
+			data->result = NULL;
+			return GWM_EVSTATUS_BREAK;
+		}
+		else if (cmdev->symbol == GWM_SYM_OK)
+		{
+			char *finalPath;
+			asprintf(&finalPath, "%s/%s", data->location, gwmReadTextField(data->txtFileName));
+			int result = doFileChoice(fc, data, finalPath);
+			free(finalPath);
+			return result;
+		};
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_DATA_SELECT_CHANGED:
+		node = gwmGetDataSelection(data->dcFiles, 0);
+		if (node != NULL)
+		{
+			gwmWriteTextField(data->txtFileName, gwmGetDataString(data->dcFiles, node, FC_COL_NAME));
+		};
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_DATA_DELETING:
+		free(gwmGetDataNodeDesc(data->dcFiles, dev->node));
+		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_DATA_ACTIVATED:
+		path = (const char*) gwmGetDataNodeDesc(data->dcFiles, dev->node);
+		if (stat(path, &st) != 0)
+		{
+			gwmMessageBox(fc, "Error", strerror(errno), GWM_MBICON_ERROR | GWM_MBUT_OK);
+			return GWM_EVSTATUS_OK;
+		};
+		if (S_ISDIR(st.st_mode))
+		{
+			fcListDir(fc, data, path);
+		}
+		else
+		{
+			return doFileChoice(fc, data, path);
+		};
+		return GWM_EVSTATUS_CONT;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
+};
+
+GWMFileChooser* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int mode)
+{
+	GWMFileChooser *fc = gwmCreateModal(caption, GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0);
+	if (fc == NULL) return NULL;
+	
+	FCData *data = (FCData*) malloc(sizeof(FCData));
+	data->mode = mode;
+	
+	data->mainBox = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(fc, data->mainBox);
+	
+	data->comPath = gwmNewCombo(fc);
+	gwmBoxLayoutAddWindow(data->mainBox, data->comPath, 0, 2, GWM_BOX_FILL | GWM_BOX_ALL);
+	
+	char *wd = getcwd(NULL, 0);
+
+	gwmAddComboOption(data->comPath, wd);	
+	gwmAddComboOption(data->comPath, "/");
+
+	free(wd);
+	data->location = NULL;
+	data->filts = NULL;
+	
+	data->dcFiles = gwmNewDataCtrl(fc);
+	gwmBoxLayoutAddWindow(data->mainBox, data->dcFiles, 1, 2, GWM_BOX_FILL | GWM_BOX_ALL);
+	
+	GWMDataColumn *col = gwmAddDataColumn(data->dcFiles, "Name", GWM_DATA_STRING, FC_COL_NAME);
+	gwmSetDataColumnWidth(data->dcFiles, col, FC_WIDTH);
+	
+	data->grid = gwmCreateGridLayout(6);
+	gwmBoxLayoutAddLayout(data->mainBox, data->grid, 0, 2, GWM_BOX_FILL | GWM_BOX_ALL);
+	
+	data->lblFileName = gwmCreateLabel(fc, "File name:", 0);
+	gwmGridLayoutAddWindow(data->grid, data->lblFileName, 1, 1);
+	
+	data->txtFileName = gwmNewTextField(fc);
+	gwmGridLayoutAddWindow(data->grid, data->txtFileName, 4, 1);
 	
 	const char *acceptLabel;
-	if (data->mode == GWM_FILE_OPEN)
+	if (mode == GWM_FILE_OPEN)
 	{
 		acceptLabel = "Open";
 	}
@@ -258,40 +294,53 @@ char* gwmRunFileChooser(GWMWindow *fc)
 		acceptLabel = "Save";
 	};
 	
-	data->btnAccept = gwmCreateButton(fc, acceptLabel, FC_WIDTH-82, FC_HEIGHT-64, 80, 0);
-	gwmSetButtonCallback(data->btnAccept, onAccept, fc);
-	data->btnCancel = gwmCreateButton(fc, "Cancel", FC_WIDTH-82, FC_HEIGHT-32, 80, 0);
-	gwmSetButtonCallback(data->btnCancel, onCancel, fc);
+	data->btnAccept = gwmCreateButtonWithLabel(fc, GWM_SYM_OK, acceptLabel);
+	gwmGridLayoutAddWindow(data->grid, data->btnAccept, 1, 1);
 	
-	DDISurface *canvas = gwmGetWindowCanvas(fc);
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, FC_HEIGHT-58, FC_WIDTH, 32, 0, 0, NULL);
-	if (pen != NULL)
-	{
-		ddiWritePen(pen, "File name:");
-		ddiExecutePen(pen, canvas);
-		ddiDeletePen(pen);
-	};
+	data->lblFileType = gwmCreateLabel(fc, "File type:", 0);
+	gwmGridLayoutAddWindow(data->grid, data->lblFileType, 1, 1);
 	
-	pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, FC_HEIGHT-26, FC_WIDTH, 32, 0, 0, NULL);
-	if (pen != NULL)
-	{
-		ddiWritePen(pen, "File types:");
-		ddiExecutePen(pen, canvas);
-		ddiDeletePen(pen);
-	};
+	data->optFileType = gwmNewOptionMenu(fc);
+	gwmGridLayoutAddWindow(data->grid, data->optFileType, 4, 1);
 	
-	gwmPostDirty(fc);
-	gwmRunModal(fc, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOICON | GWM_WINDOW_NOSYSMENU);
-	char *result = data->result;
+	data->btnCancel = gwmCreateButtonWithLabel(fc, GWM_SYM_CANCEL, NULL);
+	gwmGridLayoutAddWindow(data->grid, data->btnCancel, 1, 1);
 	
-	gwmDestroyTreeView(data->teListing);
-	gwmDestroyTextField(data->txtDir);
-	gwmDestroyTextField(data->txtName);
-	gwmDestroyOptionMenu(data->optFilter);
-	gwmDestroyButton(data->btnAccept);
+	fcListDir(fc, data, ".");
+	gwmPushEventHandler(fc, fcHandler, data);
+	gwmLayout(fc, FC_WIDTH, FC_HEIGHT);
+	return fc;
+};
+
+void gwmSetFileChooserName(GWMFileChooser *fc, const char *filename)
+{
+	FCData *data = (FCData*) gwmGetData(fc, fcHandler);
+	if (data == NULL) return;
+	
+	gwmWriteTextField(data->txtFileName, filename);
+};
+
+char* gwmRunFileChooser(GWMFileChooser *fc)
+{
+	FCData *data = (FCData*) gwmGetData(fc, fcHandler);
+	if (data == NULL) return NULL;
+	
+	gwmRunModal(fc, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_MKFOCUSED);
+	gwmSetWindowFlags(fc, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
+	
 	gwmDestroyButton(data->btnCancel);
-	gwmDestroyWindow(fc);
-	free(data);
+	gwmDestroyOptionMenu(data->optFileType);
+	gwmDestroyLabel(data->lblFileType);
+	gwmDestroyButton(data->btnAccept);
+	gwmDestroyTextField(data->txtFileName);
+	gwmDestroyLabel(data->lblFileName);
+	gwmDestroyDataCtrl(data->dcFiles);
+	gwmDestroyCombo(data->comPath);
 	
+	gwmDestroyBoxLayout(data->mainBox);
+	gwmDestroyGridLayout(data->grid);
+	
+	char *result = data->result;
+	free(data);
 	return result;
 };

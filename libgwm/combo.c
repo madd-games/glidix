@@ -109,6 +109,9 @@ static int comboHandler(GWMEvent *ev, GWMCombo *combo, void *context)
 	ComboData *data = (ComboData*) context;
 	GWMCommandEvent *cmdev = (GWMCommandEvent*) ev;
 	
+	/* "steal" events from the text field */
+	ev->win = combo->id;
+	
 	switch (ev->type)
 	{
 	case GWM_EVENT_RESIZED:
@@ -135,10 +138,20 @@ static int comboHandler(GWMEvent *ev, GWMCombo *combo, void *context)
 		redrawCombo(combo);
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_COMMAND:
-		gwmWriteTextField(data->field, (char*) cmdev->data);
-		gwmTextFieldSelectAll(data->field);
-		gwmSetWindowFlags(data->field, GWM_WINDOW_MKFOCUSED);
-		return GWM_EVSTATUS_OK;
+		if (cmdev->symbol == data->menusym)
+		{
+			gwmWriteTextField(data->field, (char*) cmdev->data);
+			gwmTextFieldSelectAll(data->field);
+			gwmSetWindowFlags(data->field, GWM_WINDOW_MKFOCUSED);
+		
+			GWMEvent sev;
+			memset(&sev, 0, sizeof(GWMEvent));
+			sev.type = GWM_EVENT_COMBO_OPTION_SET;
+			gwmPostEvent(&sev, combo);
+		
+			return GWM_EVSTATUS_OK;
+		};
+		return GWM_EVSTATUS_CONT;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};

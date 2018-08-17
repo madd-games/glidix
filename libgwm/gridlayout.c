@@ -81,6 +81,28 @@ typedef struct
 	GridRow*				head;
 } GridLayoutData;
 
+void gwmDestroyGridLayout(GWMLayout *grid)
+{
+	GridLayoutData *data = (GridLayoutData*) grid->data;
+	while (data->head != NULL)
+	{
+		GridRow *row = data->head;
+		data->head = row->next;
+		
+		int i;
+		for (i=0; i<data->cols; i++)
+		{
+			free(row->ents[i]);
+		};
+		
+		free(row->bitmap);
+		free(row);
+	};
+	
+	free(data);
+	gwmDestroyAbstractLayout(grid);
+};
+
 static void gridMinSize(GWMLayout *grid, int *width, int *height)
 {
 	GridLayoutData *data = (GridLayoutData*) grid->data;

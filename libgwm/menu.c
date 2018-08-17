@@ -265,6 +265,9 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 		return;
 	};
 	
+	// make sure it's part of the same modal loop
+	menu->win->modalID = win->modalID;
+	
 	// make it send events to the main window
 	if (gwmGetData(win, menuEventHandler) != NULL)
 	{
