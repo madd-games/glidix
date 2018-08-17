@@ -142,22 +142,30 @@ int strcpy_u2k(char *dst, const char *src)
 	uint64_t addr = (uint64_t) src;
 	
 	size_t count = 0;
-	while (1)
+	int ex = catch();
+	if (ex == 0)
 	{
-		if (addr >= ADDR_MAX)
+		while (1)
 		{
-			return -1;
-		};
+			if (addr >= ADDR_MAX)
+			{
+				return -1;
+			};
 		
-		if (count == (USER_STRING_MAX-1))
-		{
-			return -1;
-		};
+			if (count == (USER_STRING_MAX-1))
+			{
+				return -1;
+			};
 		
-		char c = *((char*)addr);
-		addr++;
-		*dst++ = c;
-		if (c == 0) return 0;
+			char c = *((char*)addr);
+			addr++;
+			*dst++ = c;
+			if (c == 0) return 0;
+		};
+	}
+	else
+	{
+		return -1;
 	};
 };
 
