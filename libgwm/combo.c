@@ -146,7 +146,7 @@ static int comboHandler(GWMEvent *ev, GWMCombo *combo, void *context)
 		
 			GWMEvent sev;
 			memset(&sev, 0, sizeof(GWMEvent));
-			sev.type = GWM_EVENT_COMBO_OPTION_SET;
+			sev.type = GWM_EVENT_OPTION_SET;
 			gwmPostEvent(&sev, combo);
 		
 			return GWM_EVSTATUS_OK;

@@ -237,6 +237,12 @@ void gwmSetOptionMenu(GWMWindow *optmenu, uint64_t id, const char *text)
 	free(data->currentText);
 	data->currentText = strdup(text);
 	data->currentID = id;
+
+	GWMEvent sev;
+	memset(&sev, 0, sizeof(GWMEvent));
+	sev.type = GWM_EVENT_OPTION_SET;
+	gwmPostEvent(&sev, optmenu);
+
 	redrawOptmenu(optmenu);
 };
 
