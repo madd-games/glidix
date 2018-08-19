@@ -601,6 +601,8 @@ static int ctrlHandler(GWMEvent *ev, GWMDataCtrl *ctrl, void *context)
 	switch (ev->type)
 	{
 	case GWM_EVENT_RETHEME:
+		data->dirty = 1;
+		/* no break */
 	case GWM_EVENT_UPDATE:
 		ctrlRedraw(ctrl);
 		return GWM_EVSTATUS_OK;
