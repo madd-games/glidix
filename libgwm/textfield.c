@@ -618,9 +618,8 @@ static void txtGetSize(GWMWindow *field, int *width, int *height)
 
 static void txtPosition(GWMWindow *field, int x, int y, int width, int height)
 {
-	y += (height-20)/2;
 	gwmMoveWindow(field, x, y);
-	gwmResizeWindow(field, width, 20);
+	gwmResizeWindow(field, width, height);
 	gwmRedrawTextField(field);
 };
 

@@ -42,6 +42,8 @@ typedef struct
 	GWMLayout*				layout;
 	int					rowspan;
 	int					colspan;
+	int					xScaling;
+	int					yScaling;
 } GridChild;
 
 typedef struct GridRow_
@@ -179,7 +181,34 @@ static void gridRun(GWMLayout *grid, int x, int y, int width, int height)
 			if (row->ents[col] != NULL)
 			{
 				GridChild *child = row->ents[col];
-				child->layout->run(child->layout, x+cellWidth*col, y+cellHeight*rowno, cellWidth*child->colspan, cellHeight*child->rowspan);
+				
+				int childX = x+cellWidth*col;
+				int childY = y+cellHeight*rowno;
+				int childWidth = cellWidth*child->colspan;
+				int childHeight = cellHeight*child->rowspan;
+				
+				int prefWidth, prefHeight;
+				child->layout->getPrefSize(child->layout, &prefWidth, &prefHeight);
+				
+				if (child->xScaling == GWM_GRID_CENTER)
+				{
+					if (childWidth > prefWidth)
+					{
+						childX += (childWidth-prefWidth)/2;
+						childWidth = prefWidth;
+					};
+				};
+				
+				if (child->yScaling == GWM_GRID_CENTER)
+				{
+					if (childHeight > prefHeight)
+					{
+						childY += (childHeight-prefHeight)/2;
+						childHeight = prefHeight;
+					};
+				};
+				
+				child->layout->run(child->layout, childX, childY, childWidth, childHeight);
 			};
 		};
 		
@@ -277,7 +306,7 @@ static void markRectTaken(GridLayoutData *data, int col, int row, int colspan, i
 	};
 };
 
-void gwmGridLayoutAddLayout(GWMLayout *grid, GWMLayout *sublayout, int colspan, int rowspan)
+void gwmGridLayoutAddLayout(GWMLayout *grid, GWMLayout *sublayout, int colspan, int rowspan, int xScaling, int yScaling)
 {
 	GridLayoutData *data = (GridLayoutData*) grid->data;
 	if (colspan > data->cols)
@@ -309,6 +338,8 @@ void gwmGridLayoutAddLayout(GWMLayout *grid, GWMLayout *sublayout, int colspan, 
 				child->layout = sublayout;
 				child->colspan = colspan;
 				child->rowspan = rowspan;
+				child->xScaling = xScaling;
+				child->yScaling = yScaling;
 				
 				r->ents[x] = child;
 				return;
@@ -317,7 +348,7 @@ void gwmGridLayoutAddLayout(GWMLayout *grid, GWMLayout *sublayout, int colspan, 
 	};
 };
 
-void gwmGridLayoutAddWindow(GWMLayout *grid, GWMWindow *child, int colspan, int rowspan)
+void gwmGridLayoutAddWindow(GWMLayout *grid, GWMWindow *child, int colspan, int rowspan, int xScaling, int yScaling)
 {
-	gwmGridLayoutAddLayout(grid, gwmCreateLeafLayout(child), colspan, rowspan);
+	gwmGridLayoutAddLayout(grid, gwmCreateLeafLayout(child), colspan, rowspan, xScaling, yScaling);
 };

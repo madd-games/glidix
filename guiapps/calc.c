@@ -418,7 +418,7 @@ int main()
 		if (i == 14) symbol = GWM_SYM_OK;		/* '=' button */
 		
 		GWMButton *btn = gwmCreateButtonWithLabel(topWindow, symbol, pad[i]);
-		gwmGridLayoutAddWindow(grid, btn, 1, 1);
+		gwmGridLayoutAddWindow(grid, btn, 1, 1, GWM_GRID_FILL, GWM_GRID_FILL);
 	};
 	
 	gwmFit(topWindow);

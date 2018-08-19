@@ -84,11 +84,8 @@ static void gwmSizeLabel(GWMWindow *label, int *width, int *height)
 
 static void gwmPositionLabel(GWMWindow *label, int x, int y, int width, int height)
 {
-	LabelData *data = (LabelData*) gwmGetData(label, labelHandler);
-	
-	y += (height-data->prefHeight)/2;
 	gwmMoveWindow(label, x, y);
-	gwmResizeWindow(label, width, data->prefHeight);
+	gwmResizeWindow(label, width, height);
 	gwmRedrawLabel(label);
 };
 

@@ -620,6 +620,12 @@ typedef struct GWMDataColumn_ GWMDataColumn;
 #define	GWM_BOX_ALL				0xF		/* border in all directions */
 
 /**
+ * Grid layout scaling.
+ */
+#define	GWM_GRID_CENTER				1		/* center child along specified axis */
+#define	GWM_GRID_FILL				2		/* fill child on the specified axis */
+
+/**
  * Flags for @keymod.
  */
 #define	GWM_KM_CTRL				(1 << 0)
@@ -2444,12 +2450,12 @@ GWMLayout* gwmCreateGridLayout(int cols);
 /**
  * Add a sub-layout to a grid layout.
  */
-void gwmGridLayoutAddLayout(GWMLayout *grid, GWMLayout *child, int colspan, int rowspan);
+void gwmGridLayoutAddLayout(GWMLayout *grid, GWMLayout *child, int colspan, int rowspan, int xScaling, int yScaling);
 
 /**
  * Add a window to a grid layout.
  */
-void gwmGridLayoutAddWindow(GWMLayout *grid, GWMWindow *child, int colspan, int rowspan);
+void gwmGridLayoutAddWindow(GWMLayout *grid, GWMWindow *child, int colspan, int rowspan, int xScaling, int yScaling);
 
 /**
  * Destroy a grid layout.

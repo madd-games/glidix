@@ -399,10 +399,10 @@ GWMFileChooser* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int
 	gwmBoxLayoutAddLayout(data->mainBox, data->grid, 0, 2, GWM_BOX_FILL | GWM_BOX_ALL);
 	
 	data->lblFileName = gwmCreateLabel(fc, "File name:", 0);
-	gwmGridLayoutAddWindow(data->grid, data->lblFileName, 1, 1);
+	gwmGridLayoutAddWindow(data->grid, data->lblFileName, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	
 	data->txtFileName = gwmNewTextField(fc);
-	gwmGridLayoutAddWindow(data->grid, data->txtFileName, 4, 1);
+	gwmGridLayoutAddWindow(data->grid, data->txtFileName, 4, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	
 	const char *acceptLabel;
 	if (mode == GWM_FILE_OPEN)
@@ -415,16 +415,16 @@ GWMFileChooser* gwmCreateFileChooser(GWMWindow *parent, const char *caption, int
 	};
 	
 	data->btnAccept = gwmCreateButtonWithLabel(fc, GWM_SYM_OK, acceptLabel);
-	gwmGridLayoutAddWindow(data->grid, data->btnAccept, 1, 1);
+	gwmGridLayoutAddWindow(data->grid, data->btnAccept, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	
 	data->lblFileType = gwmCreateLabel(fc, "File type:", 0);
-	gwmGridLayoutAddWindow(data->grid, data->lblFileType, 1, 1);
+	gwmGridLayoutAddWindow(data->grid, data->lblFileType, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	
 	data->optFileType = gwmNewOptionMenu(fc);
-	gwmGridLayoutAddWindow(data->grid, data->optFileType, 4, 1);
+	gwmGridLayoutAddWindow(data->grid, data->optFileType, 4, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	
 	data->btnCancel = gwmCreateButtonWithLabel(fc, GWM_SYM_CANCEL, NULL);
-	gwmGridLayoutAddWindow(data->grid, data->btnCancel, 1, 1);
+	gwmGridLayoutAddWindow(data->grid, data->btnCancel, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	
 	gwmPushEventHandler(fc, fcHandler, data);
 	
@@ -492,7 +492,7 @@ char* gwmRunFileChooser(GWMFileChooser *fc)
 		{
 			// then create the "append extension?" checkbox
 			data->cbExt = gwmNewCheckbox(fc);
-			gwmGridLayoutAddWindow(data->grid, data->cbExt, 6, 1);
+			gwmGridLayoutAddWindow(data->grid, data->cbExt, 6, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 			
 			gwmSetCheckboxLabel(data->cbExt, "Automatically set filename extension");
 			gwmSetCheckboxState(data->cbExt, GWM_CB_ON);
