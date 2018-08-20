@@ -82,6 +82,11 @@ typedef struct
 	 * Text alignment (left by default).
 	 */
 	int			align;
+	
+	/**
+	 * Font.
+	 */
+	DDIFont*		font;
 } GWMTextFieldData;
 
 static DDIFont *fntPlaceHolder;
@@ -121,7 +126,7 @@ void gwmRedrawTextField(GWMWindow *field)
 		penX = 20;
 	};
 	
-	data->pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), penX, 2, canvas->width-penX, canvas->height-3, 0, 0, NULL);
+	data->pen = ddiCreatePen(&canvas->format, data->font, penX, 2, canvas->width-penX, canvas->height-3, 0, 0, NULL);
 	if (data->pen != NULL)
 	{
 		ddiSetPenWrap(data->pen, data->wrap);
@@ -245,7 +250,7 @@ void gwmTextFieldBackspace(GWMWindow *field)
 	if (data->selectStart != data->selectEnd)
 	{
 		gwmTextFieldDeleteSelection(field);
-		gwmRedrawTextField(field);
+		gwmPostUpdate(field);
 		return;
 	};
 	
@@ -281,7 +286,7 @@ void gwmTextFieldBackspace(GWMWindow *field)
 	data->text = newBuffer;
 	data->cursorPos--;
 	
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 };
 
 void gwmTextFieldInsert(GWMWindow *field, const char *str)
@@ -320,8 +325,13 @@ void gwmTextFieldInsert(GWMWindow *field, const char *str)
 	
 	free(data->text);
 	data->text = newBuffer;
-	
-	gwmRedrawTextField(field);
+
+	GWMCommandEvent cmdev;
+	memset(&cmdev, 0, sizeof(GWMCommandEvent));
+	cmdev.header.type = GWM_EVENT_VALUE_CHANGED;
+	gwmPostEvent((GWMEvent*) &cmdev, field);
+
+	gwmPostUpdate(field);
 };
 
 void gwmTextFieldSelectWord(GWMWindow *field)
@@ -379,7 +389,7 @@ void gwmTextFieldSelectWord(GWMWindow *field)
 		data->selectEnd = endPos;
 	};
 	
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 };
 
 int txtPaste(void *context)
@@ -431,7 +441,7 @@ int txtCut(void *context)
 	};
 	
 	gwmTextFieldDeleteSelection(field);
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
 
 	return 0;
@@ -481,7 +491,7 @@ int txtSelectAll(void *context)
 	data->selectStart = 0;
 	data->selectEnd = ddiCountUTF8(data->text);
 	data->cursorPos = data->selectEnd;
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
 	return 0;
 };
@@ -497,19 +507,22 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 	
 	switch (ev->type)
 	{
+	case GWM_EVENT_UPDATE:
+		gwmRedrawTextField(field);
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_FOCUS_IN:
 		data->focused = 1;
-		gwmRedrawTextField(field);
+		gwmPostUpdate(field);
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_FOCUS_OUT:
 		data->focused = 0;
-		gwmRedrawTextField(field);
+		gwmPostUpdate(field);
 		memset(&cmdev, 0, sizeof(GWMCommandEvent));
 		cmdev.header.type = GWM_EVENT_EDIT_END;
 		return gwmPostEvent((GWMEvent*) &cmdev, field);
 	case GWM_EVENT_DOUBLECLICK:
 		gwmTextFieldSelectWord(field);
-		gwmRedrawTextField(field);
+		gwmPostUpdate(field);
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
@@ -519,7 +532,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 			data->clickPos = data->cursorPos;
 			data->selectStart = 0;
 			data->selectEnd = 0;
-			gwmRedrawTextField(field);
+			gwmPostUpdate(field);
 		}
 		else if (ev->keycode == GWM_KC_LEFT)
 		{
@@ -527,7 +540,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 			if (data->cursorPos != 0)
 			{
 				data->cursorPos--;
-				gwmRedrawTextField(field);
+				gwmPostUpdate(field);
 			};
 		}
 		else if (ev->keycode == GWM_KC_RIGHT)
@@ -536,7 +549,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 			if (data->cursorPos != (off_t)ddiCountUTF8(data->text))
 			{
 				data->cursorPos++;
-				gwmRedrawTextField(field);
+				gwmPostUpdate(field);
 			};
 		}
 		else if (ev->keymod & GWM_KM_CTRL)
@@ -560,11 +573,19 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 		}
 		else if (ev->keycode == '\r')
 		{
-			GWMCommandEvent cmdev;
-			memset(&cmdev, 0, sizeof(GWMCommandEvent));
-			cmdev.header.type = GWM_EVENT_COMMAND;
-			cmdev.symbol = GWM_SYM_OK;
-			return gwmPostEvent((GWMEvent*) &cmdev, field);
+			if (data->flags & GWM_TXT_MULTILINE)
+			{
+				ddiWriteUTF8(buf, '\n');
+				gwmTextFieldInsert(field, buf);
+			}
+			else
+			{
+				GWMCommandEvent cmdev;
+				memset(&cmdev, 0, sizeof(GWMCommandEvent));
+				cmdev.header.type = GWM_EVENT_COMMAND;
+				cmdev.symbol = GWM_SYM_OK;
+				return gwmPostEvent((GWMEvent*) &cmdev, field);
+			};
 		}
 		else if ((ev->keycode == '\b') && (!disabled))
 		{
@@ -602,7 +623,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 				data->selectStart = data->clickPos;
 				data->selectEnd = newCursorPos;
 			};
-			gwmRedrawTextField(field);
+			gwmPostUpdate(field);
 		};
 		return GWM_EVSTATUS_OK;
 	default:
@@ -620,7 +641,7 @@ static void txtPosition(GWMWindow *field, int x, int y, int width, int height)
 {
 	gwmMoveWindow(field, x, y);
 	gwmResizeWindow(field, width, height);
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 };
 
 GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y, int width, int flags)
@@ -642,6 +663,7 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->placeholder = NULL;
 	data->wrap = 0;
 	data->align = DDI_ALIGN_LEFT;
+	data->font = gwmGetDefaultFont();
 	
 	field->getMinSize = field->getPrefSize = txtGetSize;
 	field->position = txtPosition;
@@ -654,7 +676,7 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	gwmMenuAddEntry(data->menu, "Select All", txtSelectAll, field);
 	
 	gwmPushEventHandler(field, gwmTextFieldHandler, data);
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 	gwmSetWindowCursor(field, GWM_CURSOR_TEXT);
 	
 	return field;
@@ -700,7 +722,13 @@ void gwmWriteTextField(GWMWindow *field, const char *newText)
 	};
 	
 	data->selectStart = data->selectEnd = data->cursorPos = count;
-	gwmRedrawTextField(field);
+
+	GWMCommandEvent cmdev;
+	memset(&cmdev, 0, sizeof(GWMCommandEvent));
+	cmdev.header.type = GWM_EVENT_VALUE_CHANGED;
+	gwmPostEvent((GWMEvent*) &cmdev, field);
+
+	gwmPostUpdate(field);
 };
 
 void gwmTextFieldSelectAll(GWMWindow *field)
@@ -709,21 +737,21 @@ void gwmTextFieldSelectAll(GWMWindow *field)
 	data->selectStart = 0;
 	data->selectEnd = ddiCountUTF8(data->text);
 	data->cursorPos = data->selectEnd;
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 };
 
 void gwmSetTextFieldFlags(GWMWindow *field, int flags)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->flags = flags;
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 };
 
 void gwmSetTextFieldIcon(GWMTextField *field, DDISurface *icon)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->icon = icon;
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 };
 
 void gwmSetTextFieldPlaceholder(GWMTextField *field, const char *placeholder)
@@ -731,19 +759,26 @@ void gwmSetTextFieldPlaceholder(GWMTextField *field, const char *placeholder)
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	free(data->placeholder);
 	data->placeholder = strdup(placeholder);
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 };
 
 void gwmSetTextFieldWrap(GWMTextField *field, GWMbool wrap)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->wrap = wrap;
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
 };
 
 void gwmSetTextFieldAlignment(GWMTextField *field, int align)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->align = align;
-	gwmRedrawTextField(field);
+	gwmPostUpdate(field);
+};
+
+void gwmSetTextFieldFont(GWMTextField *field, DDIFont *font)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	data->font = font;
+	gwmPostUpdate(field);
 };

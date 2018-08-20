@@ -99,6 +99,7 @@ extern DDIColor* gwmEditorColorP;
  */
 #define	GWM_TXT_DISABLED			(1 << 1)
 #define	GWM_TXT_MASKED				(1 << 2)
+#define	GWM_TXT_MULTILINE			(1 << 3)
 
 /**
  * Checkbox flags.
@@ -323,11 +324,6 @@ extern DDIColor* gwmEditorColorP;
  * Option menu flags.
  */
 #define	GWM_OPTMENU_DISABLED			(1 << 0)
-
-/**
- * Text area flags.
- */
-#define	GWM_TEXTAREA_DISABLED			(1 << 0)
 
 /**
  * Stacking options (above or below).
@@ -1688,6 +1684,11 @@ void gwmSetTextFieldWrap(GWMTextField *field, GWMbool wrap);
 void gwmSetTextFieldAlignment(GWMTextField *field, int align);
 
 /**
+ * Set the font on a text field.
+ */
+void gwmSetTextFieldFont(GWMTextField *field, DDIFont *font);
+
+/**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
  * Returns 0 on success, -1 on error.
  */
@@ -2228,68 +2229,6 @@ void gwmSetTagForeground(GWMTag *tag, DDIColor *fg);
  * Set the background color of a tag. Setting to NULL removed the background.
  */
 void gwmSetTagBackground(GWMTag *tag, DDIColor *bg);
-
-/**
- * Create a text area widget, initially containing no text.
- */
-GWMWindow* gwmCreateTextArea(GWMWindow *parent, int x, int y, int width, int height, int flags);
-
-/**
- * Destroy a text area widget.
- */
-void gwmDestroyTextArea(GWMWindow *area);
-
-/**
- * Append text to the end of a text area.
- */
-void gwmAppendTextArea(GWMWindow *area, const char *text);
-
-/**
- * Insert a tag at the given offset in the text area, with the specified length in bytes.
- */
-void gwmTagTextArea(GWMWindow *area, GWMTag *tag, size_t pos, size_t len, int stacking);
-
-/**
- * Insert text in a specified position in the text area.
- */
-void gwmTextAreaInsert(GWMWindow *area, off_t pos, const char *text);
-
-/**
- * Remove text from a text area.
- */
-void gwmTextAreaErase(GWMWindow *area, off_t pos, size_t len);
-
-/**
- * Return the first range of a tag occuring after, or on, the specified offset, in the specified pointers.
- * The "size" will be 0 if none was found.
- */
-void gwmGetTextAreaTagRange(GWMWindow *area, GWMTag *tag, off_t after, off_t *outPos, size_t *outLen);
-
-/**
- * Change the default style in a text area (and redraw).
- */
-void gwmSetTextAreaStyle(GWMWindow *area, DDIFont *font, DDIColor *background, DDIColor *txtbg, DDIColor *txtfg);
-
-/**
- * Change the text area flags.
- */
-void gwmSetTextAreaFlags(GWMWindow *area, int flags);
-
-/**
- * Get the size of text in a text area.
- */
-size_t gwmGetTextAreaLen(GWMWindow *area);
-
-/**
- * Read text from the text area and return it into the specified buffer. NOTE: A NUL character is added at the end!
- */
-void gwmReadTextArea(GWMWindow *area, off_t pos, size_t len, char *buffer);
-
-/**
- * Set the callback for when text in a textarea changes.
- */
-typedef void (*GWMTextAreaUpdateCallback)(void *param);
-void gwmSetTextAreaUpdateCallback(GWMWindow *area, GWMTextAreaUpdateCallback cb, void *param);
 
 /**
  * Create a file chooser dialog. 'mode' is either GWM_FILE_OPEN or GWM_FILE_SAVE. You can set other settings then call

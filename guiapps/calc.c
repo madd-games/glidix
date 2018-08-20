@@ -392,7 +392,7 @@ int main()
 	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	
 	GWMWindowTemplate wt;
-	wt.wtComps = GWM_WTC_MENUBAR | GWM_WTC_TOOLBAR;
+	wt.wtComps = GWM_WTC_MENUBAR;
 	wt.wtWindow = topWindow;
 	wt.wtBody = boxLayout;
 	gwmCreateTemplate(&wt);

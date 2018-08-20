@@ -561,6 +561,25 @@ void gwmWaitEvent(GWMEvent *ev)
 			
 			if (found) continue;
 		};
+
+		if (ev->type == GWM_EVENT_RESIZE_REQUEST)
+		{
+			// aggregate resize events; if there are more updates waiting, ignore this one
+			EventBuffer *buf;
+			int found = 0;
+			
+			for (buf=firstEvent; buf!=NULL; buf=buf->next)
+			{
+				if (firstEvent->payload.type == GWM_EVENT_RESIZE_REQUEST && firstEvent->payload.win == ev->win)
+				{
+					while (sem_wait(&semEventCounter) != 0);		// decrement count
+					found = 1;
+					break;
+				};
+			};
+			
+			if (found) continue;
+		};
 		
 		pthread_mutex_unlock(&eventLock);
 		break;

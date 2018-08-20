@@ -27,6 +27,7 @@
 */
 
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <libgwm.h>
 #include <time.h>
@@ -39,258 +40,256 @@
 #include <pthread.h>
 #include <poll.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #define	DEFAULT_WIDTH			500
 #define	DEFAULT_HEIGHT			500
 
 GWMWindow *topWindow;
-GWMWindow *textArea;
-GWMWindow *menubar;
-
-char *openedFile = NULL;
+GWMTextField *txtEditor;
+char *filePath = NULL;
 int fileDirty = 0;
 
-int doFileChoice()
+void setCaption()
 {
-	GWMWindow *fc = gwmCreateFileChooser(topWindow, "Save as...", GWM_FILE_SAVE);
-	char *path = gwmRunFileChooser(fc);
-	
-	if (path != NULL)
+	const char *base;
+	if (filePath == NULL)
 	{
-		free(openedFile);
-		openedFile = path;
-		// TODO: update window caption
-		return 0;
-	};
-	
-	return -1;
-};
-
-int doFileSave()
-{
-	FILE *fp = fopen(openedFile, "w");
-	if (fp == NULL)
-	{
-		char *msg;
-		asprintf(&msg, "Could not write to %s: %s", openedFile, strerror(errno));
-		gwmMessageBox(topWindow, "Error", msg, GWM_MBICON_ERROR | GWM_MBUT_OK);
-		free(msg);
-		return -1;
+		base = "Untitled";
 	}
 	else
 	{
-		size_t len = gwmGetTextAreaLen(textArea);
-		char *buffer = (char*) malloc(len+1);
-		gwmReadTextArea(textArea, 0, len, buffer);
-		
-		if (buffer[len-1] == '\n')
+		char *slashPos = strrchr(filePath, '/');
+		if (slashPos == NULL)
 		{
-			fprintf(fp, "%s", buffer);
+			base = filePath;
 		}
 		else
 		{
-			fprintf(fp, "%s\n", buffer);
-		};
-		
-		fclose(fp);
-		free(buffer);
-		fileDirty = 0;
-		return 0;
-	};
-};
-
-int onExit(void *ignore)
-{
-	if (fileDirty)
-	{
-		int resp = gwmMessageBox(topWindow, "Minipad",
-				"You have made changes to this file. Would you like to save before exiting?",
-				GWM_MBICON_WARN | GWM_MBUT_YESNOCANCEL);
-		switch (resp)
-		{
-		case GWM_SYM_YES:
-			if (openedFile == NULL)
-			{
-				if (doFileChoice() != 0) return GWM_EVSTATUS_OK;
-			};
-			if (doFileSave() == 0) return GWM_EVSTATUS_BREAK;
-			return GWM_EVSTATUS_OK;
-		case GWM_SYM_NO:
-			return GWM_EVSTATUS_BREAK;
-		case GWM_SYM_CANCEL:
-			return GWM_EVSTATUS_OK;
+			base = slashPos + 1;
 		};
 	};
 	
-	return GWM_EVSTATUS_BREAK;
+	const char *s = "";
+	if (fileDirty) s = "*";
+	
+	char *caption;
+	asprintf(&caption, "%s%s - Minipad%s", s, base, s);
+	gwmSetWindowCaption(topWindow, caption);
+	free(caption);
 };
 
-int eventHandler(GWMEvent *ev, GWMWindow *win, void *context)
+int trySave(int forceChoice)
 {
-	switch (ev->type)
+	if (filePath == NULL || forceChoice)
 	{
-	case GWM_EVENT_CLOSE:
-		return onExit(NULL);
+		GWMFileChooser *fc = gwmCreateFileChooser(topWindow, "Select location to save file", GWM_FILE_SAVE);
+		char *newPath = gwmRunFileChooser(fc);
+		
+		if (newPath == NULL) return -1;
+		
+		free(filePath);
+		filePath = newPath;
+	};
+	
+	int fd = open(filePath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (fd == -1)
+	{
+		char *msg;
+		asprintf(&msg, "Cannot write to %s: %s", filePath, strerror(errno));
+		gwmMessageBox(topWindow, "Minipad", msg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+		free(msg);
+		return -1;
+	};
+	
+	const char *text = gwmReadTextField(txtEditor);
+	size_t size = strlen(text);
+	
+	write(fd, text, size);
+	if (size == 0 || text[size-1] != '\n') write(fd, "\n", 1);
+	close(fd);
+	
+	fileDirty = 0;
+	setCaption();
+	return 0;
+};
+
+int minipadCommand(GWMCommandEvent *ev)
+{
+	switch (ev->symbol)
+	{
+	case GWM_SYM_NEW_FILE:
+		if (fork() == 0)
+		{
+			execl("/proc/self/exe", "minipad", NULL);
+			_exit(1);
+		};
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_OPEN_FILE:
+		{
+			GWMFileChooser *fc = gwmCreateFileChooser(topWindow, "Select text file", GWM_FILE_OPEN);
+			char *path = gwmRunFileChooser(fc);
+			
+			if (path != NULL)
+			{
+				if (fork() == 0)
+				{
+					execl("/proc/self/exe", "minipad", path, NULL);
+					_exit(1);
+				};
+			};
+			
+			free(path);
+		};
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_SAVE:
+		trySave(0);
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_SAVE_AS:
+		trySave(1);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
 };
 
-int onFileNew(void *ignore)
+int minipadHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
-	pid_t pid = fork();
-	if (pid == 0)
+	switch (ev->type)
 	{
-		execl("/usr/bin/grexec", "grexec", "minipad", NULL);
-		_exit(1);
-	}
-	else
-	{
-		waitpid(pid, NULL, 0);
-	};
-	
-	return 0;
-};
-
-int onFileOpen(void *ignore)
-{
-	GWMWindow *fc = gwmCreateFileChooser(topWindow, "Open...", GWM_FILE_OPEN);
-	char *path = gwmRunFileChooser(fc);
-	
-	if (path != NULL)
-	{
-		pid_t pid = fork();
-		if (pid == 0)
+	case GWM_EVENT_CLOSE:
+		if (fileDirty)
 		{
-			execl("/usr/bin/grexec", "grexec", "minipad", path, NULL);
-			_exit(1);
-		}
-		else
-		{
-			waitpid(pid, NULL, 0);
+			int answer = gwmMessageBox(topWindow, "Minipad",
+						"You have made changes to this file. Do you want to save before exiting?",
+						GWM_MBICON_WARN | GWM_MBUT_YESNOCANCEL);
+			if (answer == GWM_SYM_CANCEL)
+			{
+				return GWM_EVSTATUS_OK;
+			}
+			else if (answer == GWM_SYM_NO)
+			{
+				return GWM_EVSTATUS_BREAK;
+			}
+			else
+			{
+				if (trySave(0) == -1) return GWM_EVSTATUS_OK;
+				else return GWM_EVSTATUS_BREAK;
+			};
 		};
-		
-		free(path);
+		return GWM_EVSTATUS_BREAK;
+	case GWM_EVENT_COMMAND:
+		return minipadCommand((GWMCommandEvent*) ev);
+	case GWM_EVENT_VALUE_CHANGED:
+		if (!fileDirty)
+		{
+			fileDirty = 1;
+			setCaption();
+		};
+		return GWM_EVSTATUS_OK;
+	default:
+		return GWM_EVSTATUS_CONT;
 	};
-	
-	return 0;
-};
-
-int onFileSave(void *ignore)
-{
-	if (openedFile == NULL)
-	{
-		if (doFileChoice() != 0) return 0;
-	};
-	
-	doFileSave();
-	return 0;
-};
-
-int onFileSaveAs(void *ignore)
-{
-	if (doFileChoice() == 0) doFileSave();
-	return 0;
-};
-
-void onTextUpdate(void *ignore)
-{
-	fileDirty = 1;
 };
 
 int main(int argc, char *argv[])
 {
-	if (argc > 1)
-	{
-		openedFile = strdup(argv[1]);
-	};
-	
 	if (gwmInit() != 0)
 	{
 		fprintf(stderr, "Failed to initialize GWM!\n");
 		return 1;
 	};
 	
-	char *caption;
-	char *baseName;
-	if (openedFile == NULL)
+	topWindow = gwmCreateWindow(NULL, "Minipad", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0,
+					GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
+
+	DDISurface *surface = gwmGetWindowCanvas(topWindow);
+	
+	const char *error;
+	DDISurface *icon = ddiLoadAndConvertPNG(&surface->format, "/usr/share/images/minipad.png", &error);
+	if (icon == NULL)
 	{
-		baseName = "Untitled";
-	}
-	else if (strrchr(openedFile, '/') == NULL)
-	{
-		baseName = openedFile;
+		printf("Failed to load minipad icon: %s\n", error);
 	}
 	else
 	{
-		baseName = strrchr(openedFile, '/') + 1;
-	};
-	
-	asprintf(&caption, "%s - Minipad", baseName);
-	topWindow = gwmCreateWindow(NULL, caption, GWM_POS_UNSPEC, GWM_POS_UNSPEC,
-						DEFAULT_WIDTH, DEFAULT_HEIGHT, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
-	DDISurface *canvas = gwmGetWindowCanvas(topWindow);
-	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/minipad.png", NULL);
-	if (icon != NULL)
-	{
 		gwmSetWindowIcon(topWindow, icon);
-		ddiDeleteSurface(icon);
 	};
+
+	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	
+	GWMWindowTemplate wt;
+	wt.wtComps = GWM_WTC_MENUBAR;
+	wt.wtWindow = topWindow;
+	wt.wtBody = boxLayout;
+	gwmCreateTemplate(&wt);
+	
+	GWMWindow *menubar = wt.wtMenubar;
+	
+	GWMMenu *menuFile = gwmCreateMenu();
+	gwmMenubarAdd(menubar, "File", menuFile);
+	
+	gwmMenuAddCommand(menuFile, GWM_SYM_NEW_FILE, NULL, NULL);
+	gwmMenuAddCommand(menuFile, GWM_SYM_OPEN_FILE, NULL, NULL);
+	gwmMenuAddSeparator(menuFile);
+	gwmMenuAddCommand(menuFile, GWM_SYM_SAVE, NULL, NULL);
+	gwmMenuAddCommand(menuFile, GWM_SYM_SAVE_AS, NULL, NULL);
+	gwmMenuAddSeparator(menuFile);
+	gwmMenuAddCommand(menuFile, GWM_SYM_EXIT, NULL, NULL);
+	
+	txtEditor = gwmNewTextField(topWindow);
+	gwmBoxLayoutAddWindow(boxLayout, txtEditor, 1, 0, GWM_BOX_FILL);
+	gwmSetTextFieldFlags(txtEditor, GWM_TXT_MULTILINE);
 	
 	DDIFont *font = ddiLoadFont("DejaVu Sans Mono", 14, 0, NULL);
-	textArea = gwmCreateTextArea(topWindow, 0, 20, DEFAULT_WIDTH, DEFAULT_HEIGHT-20, 0);
 	if (font == NULL)
 	{
 		fprintf(stderr, "Failed to load font!\n");
 	}
 	else
 	{
-		gwmSetTextAreaStyle(textArea, font, NULL, NULL, NULL);
+		gwmSetTextFieldFont(txtEditor, font);
 	};
 	
-	gwmSetTextAreaUpdateCallback(textArea, onTextUpdate, NULL);
-	
-	if (openedFile != NULL)
+	if (argc >= 2)
 	{
-		char linebuf[1024];
-		FILE *fp = fopen(openedFile, "r");
-		if (fp == NULL)
+		filePath = realpath(argv[1], NULL);
+		if (filePath == NULL)
 		{
-			char *msg;
-			asprintf(&msg, "Could not read %s: %s", openedFile, strerror(errno));
-			
-			gwmMessageBox(NULL, "Minipad", msg, GWM_MBICON_ERROR | GWM_MBUT_OK);
-			free(msg);
-			gwmQuit();
+			gwmMessageBox(NULL, "Minipad", "Could not resolve the specified path", GWM_MBICON_ERROR | GWM_MBUT_OK);
 			return 1;
 		};
 		
-		while (fgets(linebuf, 1024, fp) != NULL)
+		int fd = open(filePath, O_RDONLY);
+		if (fd == -1)
 		{
-			gwmAppendTextArea(textArea, linebuf);
+			char *msg;
+			asprintf(&msg, "Could not open %s: %s", filePath, strerror(errno));
+			gwmMessageBox(NULL, "Minipad", msg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+			return 1;
 		};
 		
-		fclose(fp);
+		struct stat st;
+		if (fstat(fd, &st) != 0)
+		{
+			char *msg;
+			asprintf(&msg, "Could not stat file: %s", strerror(errno));
+			gwmMessageBox(NULL, "Minipad", msg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+			return 1;
+		};
+		
+		char *buffer = (char*) malloc(st.st_size+1);
+		read(fd, buffer, st.st_size);
+		buffer[st.st_size] = 0;
+		close(fd);
+		
+		gwmWriteTextField(txtEditor, buffer);
 	};
 	
-	menubar = gwmCreateMenubar(topWindow);
-	
-	GWMMenu *menuFile = gwmCreateMenu();
-	gwmMenuAddEntry(menuFile, "New", onFileNew, NULL);
-	gwmMenuAddSeparator(menuFile);
-	gwmMenuAddEntry(menuFile, "Open", onFileOpen, NULL);
-	gwmMenuAddSeparator(menuFile);
-	gwmMenuAddEntry(menuFile, "Save", onFileSave, NULL);
-	gwmMenuAddEntry(menuFile, "Save as...", onFileSaveAs, NULL);
-	gwmMenuAddSeparator(menuFile);
-	gwmMenuAddEntry(menuFile, "Exit", onExit, NULL);
-	
-	gwmMenubarAdd(menubar, "File", menuFile);
-	gwmMenubarAdjust(menubar);
-	
-	gwmSetWindowFlags(topWindow, 0);
-	gwmSetWindowFlags(textArea, GWM_WINDOW_MKFOCUSED);
-	gwmPushEventHandler(topWindow, eventHandler, NULL);
+	setCaption();
+	gwmLayout(topWindow, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+	gwmPushEventHandler(topWindow, minipadHandler, NULL);
+	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;
