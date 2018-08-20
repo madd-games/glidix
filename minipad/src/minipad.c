@@ -240,6 +240,7 @@ int main(int argc, char *argv[])
 	txtEditor = gwmNewTextField(topWindow);
 	gwmBoxLayoutAddWindow(boxLayout, txtEditor, 1, 0, GWM_BOX_FILL);
 	gwmSetTextFieldFlags(txtEditor, GWM_TXT_MULTILINE);
+	gwmSetTextFieldWrap(txtEditor, GWM_TRUE);
 	
 	DDIFont *font = ddiLoadFont("Hack", 14, 0, NULL);
 	if (font == NULL)

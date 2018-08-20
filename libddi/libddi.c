@@ -1310,8 +1310,8 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		}
 		else
 		{
-			widths[numChars++] = 0;
-			pen->writePos++;
+			if (!include) widths[numChars++] = 0;
+			if (!include) pen->writePos++;
 			seg->widths = widths;
 			seg->numChars = numChars;
 			

@@ -87,6 +87,12 @@ typedef struct
 	 * Font.
 	 */
 	DDIFont*		font;
+	
+	/**
+	 * Scrollbars.
+	 */
+	GWMScrollbar*		sbarX;
+	GWMScrollbar*		sbarY;
 } GWMTextFieldData;
 
 static DDIFont *fntPlaceHolder;
@@ -126,7 +132,7 @@ void gwmRedrawTextField(GWMWindow *field)
 		penX = 20;
 	};
 	
-	data->pen = ddiCreatePen(&canvas->format, data->font, penX, 2, canvas->width-penX, canvas->height-3, 0, 0, NULL);
+	data->pen = ddiCreatePen(&canvas->format, data->font, penX, 2, canvas->width-penX-10, canvas->height-13, 0, 0, NULL);
 	if (data->pen != NULL)
 	{
 		ddiSetPenWrap(data->pen, data->wrap);
@@ -173,6 +179,47 @@ void gwmRedrawTextField(GWMWindow *field)
 			ddiWritePen(data->pen, scan);
 			
 			free(buffer);
+		};
+		
+		if ((data->flags & GWM_TXT_MULTILINE) == 0)
+		{
+			gwmHide(data->sbarX);
+			gwmHide(data->sbarY);
+		}
+		else
+		{
+			int penWidth, penHeight;
+			ddiGetPenSize(data->pen, &penWidth, &penHeight);
+			
+			int scrollX=0, scrollY=0;
+			
+			if (penWidth <= canvas->width)
+			{
+				gwmHide(data->sbarX);
+			}
+			else
+			{
+				float len = (float) (canvas->width-13) / (float) penWidth;
+				gwmSetScrollbarLength(data->sbarX, len);
+				
+				scrollX = penWidth * gwmGetScrollbarPosition(data->sbarX);
+				gwmShow(data->sbarX);
+			};
+			
+			if (penHeight <= canvas->height)
+			{
+				gwmHide(data->sbarY);
+			}
+			else
+			{
+				float len = (float) (canvas->height-13) / (float) penHeight;
+				gwmSetScrollbarLength(data->sbarY, len);
+				
+				scrollY = penHeight * gwmGetScrollbarPosition(data->sbarY);
+				gwmShow(data->sbarY);
+			};
+			
+			ddiSetPenPosition(data->pen, 3-scrollX, 3-scrollY);
 		};
 		
 		ddiExecutePen(data->pen, canvas);
@@ -626,6 +673,13 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 			gwmPostUpdate(field);
 		};
 		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_VALUE_CHANGED:
+		if (ev->win == data->sbarX->id || ev->win == data->sbarY->id)
+		{
+			gwmPostUpdate(field);
+			return GWM_EVSTATUS_OK;		/* do not forward to parent */
+		};
+		return GWM_EVSTATUS_CONT;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -639,8 +693,14 @@ static void txtGetSize(GWMWindow *field, int *width, int *height)
 
 static void txtPosition(GWMWindow *field, int x, int y, int width, int height)
 {
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	
 	gwmMoveWindow(field, x, y);
 	gwmResizeWindow(field, width, height);
+	
+	data->sbarX->position(data->sbarX, 0, height-10, width-10, 10);
+	data->sbarY->position(data->sbarY, width-10, 0, 10, height-10);
+	
 	gwmPostUpdate(field);
 };
 
@@ -673,8 +733,12 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	gwmMenuAddEntry(data->menu, "Copy", txtCopy, field);
 	gwmMenuAddEntry(data->menu, "Paste", txtPaste, field);
 	gwmMenuAddSeparator(data->menu);
-	gwmMenuAddEntry(data->menu, "Select All", txtSelectAll, field);
+	gwmMenuAddEntry(data->menu, "Select all", txtSelectAll, field);
 	
+	data->sbarX = gwmNewScrollbar(field);
+	data->sbarY = gwmNewScrollbar(field);
+	gwmSetScrollbarFlags(data->sbarX, GWM_SCROLLBAR_HORIZ);
+
 	gwmPushEventHandler(field, gwmTextFieldHandler, data);
 	gwmPostUpdate(field);
 	gwmSetWindowCursor(field, GWM_CURSOR_TEXT);
@@ -693,6 +757,8 @@ void gwmDestroyTextField(GWMWindow *field)
 	free(data->text);
 	free(data->placeholder);
 	free(data);
+	gwmDestroyScrollbar(data->sbarX);
+	gwmDestroyScrollbar(data->sbarY);
 	gwmDestroyMenu(data->menu);
 	gwmDestroyWindow(field);
 };
