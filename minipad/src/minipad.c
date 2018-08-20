@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
 	gwmBoxLayoutAddWindow(boxLayout, txtEditor, 1, 0, GWM_BOX_FILL);
 	gwmSetTextFieldFlags(txtEditor, GWM_TXT_MULTILINE);
 	
-	DDIFont *font = ddiLoadFont("DejaVu Sans Mono", 14, 0, NULL);
+	DDIFont *font = ddiLoadFont("Hack", 14, 0, NULL);
 	if (font == NULL)
 	{
 		fprintf(stderr, "Failed to load font!\n");
