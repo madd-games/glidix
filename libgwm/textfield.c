@@ -624,6 +624,10 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 			
 			return GWM_EVSTATUS_OK;
 		}
+		else if (ev->keycode == GWM_KC_TAB && (data->flags & GWM_TXT_MULTILINE) == 0)
+		{
+			return GWM_EVSTATUS_CONT;
+		}
 		else if (ev->keycode == '\r')
 		{
 			if (data->flags & GWM_TXT_MULTILINE)
@@ -718,6 +722,8 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 {
 	GWMWindow *field = gwmCreateWindow(parent, "GWMTextField", x, y, width, 20, 0);
 	if (field == NULL) return NULL;
+	
+	gwmAcceptTabs(field);
 	
 	GWMTextFieldData *data = (GWMTextFieldData*) malloc(sizeof(GWMTextFieldData));
 	

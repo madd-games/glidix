@@ -364,6 +364,30 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 			win->lastClickTime = now;
 			win->lastClickX = ev->x;
 			win->lastClickY = ev->y;
+		}
+		else if (ev->keycode == GWM_KC_TAB)
+		{
+			GWMWindow *scan;
+			for (scan=win->tabNext; scan!=NULL; scan=scan->tabNext)
+			{
+				if (scan->tabAccept) break;
+			};
+			
+			if (scan == NULL)
+			{
+				scan = win;
+				while (scan->tabPrev != NULL) scan = scan->tabPrev;
+				
+				for (; scan!=NULL; scan=scan->tabNext)
+				{
+					if (scan->tabAccept) break;
+				};
+			};
+			
+			if (scan != NULL)
+			{
+				gwmFocus(scan);
+			};
 		};
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_CLOSE:
@@ -454,6 +478,28 @@ GWMWindow* gwmCreateWindow(
 		win->flags = flags & (~GWM_WINDOW_MKFOCUSED);
 		win->caption = strdup(caption);
 		
+		if (parent != NULL)
+		{
+			if (parent->tabLastChild == NULL)
+			{
+				win->tabPrev = win->tabNext = NULL;
+				parent->tabLastChild = win;
+			}
+			else
+			{
+				parent->tabLastChild->tabNext = win;
+				win->tabPrev = parent->tabLastChild;
+				win->tabNext = NULL;
+				parent->tabLastChild = win;
+			};
+		}
+		else
+		{
+			win->tabPrev = win->tabNext = NULL;
+		};
+		
+		win->tabLastChild = NULL;
+		win->tabAccept = 0;
 		gwmPushEventHandler(win, gwmDefaultHandler, NULL);
 		return win;
 	};
@@ -461,6 +507,11 @@ GWMWindow* gwmCreateWindow(
 	// failed to create it
 	ddiDeleteSurface(canvas);
 	return NULL;
+};
+
+void gwmAcceptTabs(GWMWindow *win)
+{
+	win->tabAccept = 1;
 };
 
 DDISurface* gwmGetWindowCanvas(GWMWindow *win)
@@ -487,6 +538,17 @@ void gwmDestroyWindow(GWMWindow *win)
 		return;
 	};
 
+	if (win->parent != NULL)
+	{
+		if (win->parent->tabLastChild == win)
+		{
+			win->parent->tabLastChild = win->tabPrev;
+		};
+	};
+	
+	if (win->tabPrev != NULL) win->tabPrev->tabNext = win->tabNext;
+	if (win->tabNext != NULL) win->tabNext->tabPrev = win->tabPrev;
+	
 	GWMHandlerInfo *info = firstHandler;
 	while (info != NULL)
 	{

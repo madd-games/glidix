@@ -1241,6 +1241,22 @@ typedef struct GWMWindow_
 	 * Window caption.
 	 */
 	char*					caption;
+	
+	/**
+	 * Previous and next windows in tab order.
+	 */
+	struct GWMWindow_*			tabPrev;
+	struct GWMWindow_*			tabNext;
+	
+	/**
+	 * The last child window in tab order.
+	 */
+	struct GWMWindow_*			tabLastChild;
+	
+	/**
+	 * Does this window accept tabs?
+	 */
+	int					tabAccept;
 } GWMObject;
 
 /**
@@ -1454,6 +1470,11 @@ GWMWindow* gwmCreateWindow(
  * Return the DDI surface representing the window.
  */
 DDISurface* gwmGetWindowCanvas(GWMWindow *win);
+
+/**
+ * Mark a window as accepting tabs.
+ */
+void gwmAcceptTabs(GWMWindow *win);
 
 /**
  * Destroy a window.
