@@ -450,7 +450,7 @@ int txtPaste(void *context)
 		free(text);
 	};
 
-	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
+	gwmFocus(field);
 	return 0;
 };
 
@@ -489,7 +489,7 @@ int txtCut(void *context)
 	
 	gwmTextFieldDeleteSelection(field);
 	gwmPostUpdate(field);
-	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
+	gwmFocus(field);
 
 	return 0;
 };
@@ -527,7 +527,7 @@ int txtCopy(void *context)
 		free(temp);
 	};
 	
-	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
+	gwmFocus(field);
 	return 0;
 };
 
@@ -539,7 +539,7 @@ int txtSelectAll(void *context)
 	data->selectEnd = ddiCountUTF8(data->text);
 	data->cursorPos = data->selectEnd;
 	gwmPostUpdate(field);
-	gwmSetWindowFlags(field, GWM_WINDOW_MKFOCUSED);
+	gwmFocus(field);
 	return 0;
 };
 
@@ -589,6 +589,8 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 				data->cursorPos--;
 				gwmPostUpdate(field);
 			};
+			
+			return GWM_EVSTATUS_OK;
 		}
 		else if (ev->keycode == GWM_KC_RIGHT)
 		{
@@ -598,6 +600,8 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 				data->cursorPos++;
 				gwmPostUpdate(field);
 			};
+			
+			return GWM_EVSTATUS_OK;
 		}
 		else if (ev->keymod & GWM_KM_CTRL)
 		{
@@ -617,6 +621,8 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 			{
 				txtSelectAll(field);
 			};
+			
+			return GWM_EVSTATUS_OK;
 		}
 		else if (ev->keycode == '\r')
 		{
@@ -633,18 +639,22 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 				cmdev.symbol = GWM_SYM_OK;
 				return gwmPostEvent((GWMEvent*) &cmdev, field);
 			};
+			
+			return GWM_EVSTATUS_OK;
 		}
 		else if ((ev->keycode == '\b') && (!disabled))
 		{
 			gwmTextFieldBackspace(field);
+			return GWM_EVSTATUS_OK;
 		}
 		else if ((ev->keychar != 0) && (!disabled))
 		{
 			//sprintf(buf, "%c", (char)ev->keychar);
 			ddiWriteUTF8(buf, ev->keychar);
 			gwmTextFieldInsert(field, buf);
+			return GWM_EVSTATUS_OK;
 		};
-		return GWM_EVSTATUS_OK;
+		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -654,7 +664,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 		{
 			gwmOpenMenu(data->menu, field, ev->x, ev->y);
 		};
-		return GWM_EVSTATUS_OK;
+		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_MOTION:
 		if (data->clickPos != -1)
 		{

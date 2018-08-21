@@ -26,7 +26,6 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#if 0
 #include <stdio.h>
 #include <libgwm.h>
 #include <time.h>
@@ -41,6 +40,7 @@
 #include <sys/glidix.h>
 #include <errno.h>
 
+#if 0
 typedef struct
 {
 	int			dev;
@@ -268,16 +268,12 @@ GWMTreeEnum enumPci = {
 	.teGetNext =				pciGetNext,
 	.teCloseNode =				pciCloseNode
 };
-
-void initPCITab(GWMWindow *notebook)
-{
-	int width, height;
-	gwmNotebookGetDisplaySize(notebook, &width, &height);
-	
-	GWMWindow *tab = gwmNotebookAdd(notebook, "PCI Devices");
-	int root = -1;
-	GWMWindow *treeview = gwmCreateTreeView(tab, 0, 0, width, height, &enumPci, &root, 0);
-	gwmTreeViewSetActivateCallback(treeview, pciActivate, treeview);
-};
-
 #endif
+
+GWMWindow* newPCITab(GWMWindow *notebook)
+{
+	GWMWindow *tab = gwmNewTab(notebook);
+	gwmSetWindowCaption(tab, "PCI Devices");
+	
+	return tab;
+};

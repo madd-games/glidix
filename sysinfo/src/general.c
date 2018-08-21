@@ -37,46 +37,32 @@
 #include <dirent.h>
 #include <pthread.h>
 #include <poll.h>
+#include <sys/utsname.h>
+#include <errno.h>
+#include <libddi.h>
 
-GWMWindow* topWindow;
-GWMWindow* newGeneralTab(GWMWindow *notebook);
-GWMWindow* newProcTab(GWMWindow *notebook);
-GWMWindow* newPCITab(GWMWindow *notebook);
-
-int main()
+GWMWindow* newGeneralTab(GWMWindow *notebook)
 {
-	if (gwmInit() != 0)
-	{
-		fprintf(stderr, "gwmInit() failed!\n");
-		return 1;
-	};
+	struct utsname info;
+	uname(&info);
 	
-	GWMWindow *win = gwmCreateWindow(NULL, "System Information", GWM_POS_UNSPEC, GWM_POS_UNSPEC,
-						0, 0, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
-	topWindow = win;
-	
-	DDISurface *canvas = gwmGetWindowCanvas(win);
-	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/sysinfo.png", NULL);
-	if (icon != NULL)
-	{
-		gwmSetWindowIcon(win, icon);
-		ddiDeleteSurface(icon);
-	};
+	GWMWindow *tab = gwmNewTab(notebook);
+	gwmSetWindowCaption(tab, "General");
 	
 	GWMLayout *box = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(win, box);
+	gwmSetWindowLayout(tab, box);
 	
-	GWMWindow *notebook = gwmNewNotebook(win);
-	gwmBoxLayoutAddWindow(box, notebook, 1, 0, GWM_BOX_FILL);
+	GWMLayout *grid = gwmCreateGridLayout(2);
+	gwmBoxLayoutAddLayout(box, grid, 0, 2, GWM_BOX_FILL);
 	
-	GWMWindow *defTab = newGeneralTab(notebook);
-	newProcTab(notebook);
-	newPCITab(notebook);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, "Glidix release:", 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, info.release, 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, "Glidix version:", 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, info.version, 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, "DDI driver in use:", 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, ddiDisplayInfo.renderer, 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, "DDI renderer string:", 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, ddiDriver->renderString, 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	
-	gwmActivateTab(defTab);
-	gwmFit(win);
-	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
-	gwmMainLoop();
-	gwmQuit();
-	return 0;
+	return tab;
 };

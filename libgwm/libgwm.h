@@ -1907,33 +1907,6 @@ void gwmMenubarAdd(GWMWindow *menubar, const char *label, GWMMenu *menu);
  */
 int gwmClassifyChar(long c);
 
-#if 0
-/**
- * Create a new notebook widget.
- */
-GWMWindow *gwmCreateNotebook(GWMWindow *parent, int x, int y, int width, int height, int flags);
-
-/**
- * Returns the dimensions of the client area of a notebook tab.
- */
-void gwmNotebookGetDisplaySize(GWMWindow *notebook, int *width, int *height);
-
-/**
- * Adds a new tab to a notebook, with the specified label, and return its display window.
- */
-GWMWindow *gwmNotebookAdd(GWMWindow *notebook, const char *label);
-
-/**
- * Sets which tab (given as a zero-based index) is to be visible in the notebook.
- */
-void gwmNotebookSetTab(GWMWindow *notebook, int index);
-
-/**
- * Destroy a notebook widget.
- */
-void gwmDestroyNotebook(GWMWindow *notebook);
-#endif
-
 /**
  * Create a new tab list. This is an abstract class; use its derivaties such as GWMNotebook.
  */
