@@ -50,6 +50,7 @@ static uint64_t nextSeq;
 static pthread_t listenThread;
 static DDIFont *defaultFont;
 static DDIPixelFormat screenFormat;
+static GWMWindow* currentModalMaster;
 
 typedef struct GWMWaiter_
 {
@@ -500,6 +501,7 @@ GWMWindow* gwmCreateWindow(
 		
 		win->tabLastChild = NULL;
 		win->tabAccept = 0;
+		
 		gwmPushEventHandler(win, gwmDefaultHandler, NULL);
 		return win;
 	};
@@ -698,6 +700,19 @@ static int gwmPostEventByWindowID(GWMEvent *ev, uint64_t targetID, uint64_t moda
 	GWMHandlerInfo *info;
 	for (info=firstHandler; info!=NULL; info=info->next)
 	{
+		if (targetID == info->win->id && ev->type == GWM_EVENT_FOCUS_IN && info->win->modalID != modalID)
+		{
+			// attempting to bring focus to a window from another modal session;
+			// focus the master instead
+			
+			if (currentModalMaster != NULL)
+			{
+				gwmFocus(currentModalMaster);
+			};
+			
+			return GWM_EVSTATUS_OK;
+		};
+		
 		if ((targetID == info->win->id) && (info->win->modalID == modalID))
 		{
 			info->refcount++;
@@ -731,20 +746,25 @@ void gwmThrow(int errcode)
 	abort();
 };
 
-static void gwmModalLoop(uint64_t modalID)
+static void gwmModalLoop(GWMWindow *master, uint64_t modalID)
 {
 	GWMEvent ev;
-	
+
+	GWMWindow *oldMaster = currentModalMaster;
+	currentModalMaster = master;
+		
 	while (1)
 	{
 		gwmWaitEvent(&ev);
 		if (gwmPostEventByWindowID(&ev, ev.win, modalID) == GWM_EVSTATUS_BREAK) break;
 	};
+	
+	currentModalMaster = oldMaster;
 };
 
 void gwmMainLoop()
 {
-	gwmModalLoop(0);
+	gwmModalLoop(NULL, 0);
 };
 
 void gwmScreenSize(int *width, int *height)
@@ -1040,7 +1060,7 @@ GWMWindow* gwmCreateModal(const char *caption, int x, int y, int width, int heig
 void gwmRunModal(GWMWindow *modal, int flags)
 {
 	gwmSetWindowFlags(modal, flags);
-	gwmModalLoop(modal->modalID);
+	gwmModalLoop(modal, modal->modalID);
 };
 
 GWMInfo *gwmGetInfo()
