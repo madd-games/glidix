@@ -53,6 +53,7 @@
 #include <glidix/thread/pageinfo.h>
 #include <glidix/hw/msr.h>
 #include <glidix/int/trace.h>
+#include <glidix/fs/procfs.h>
 
 /**
  * Options for _glidix_kopt().
@@ -939,6 +940,7 @@ int sys_setuid(uid_t uid)
 	};
 
 	me->creds->euid = uid;
+	procfsUpdateCreds();
 	return 0;
 };
 
@@ -991,7 +993,8 @@ int sys_setreuid(uid_t ruid, uid_t euid)
 
 		me->creds->euid = euid;
 	};
-
+	
+	procfsUpdateCreds();
 	return 0;
 };
 

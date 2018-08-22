@@ -40,6 +40,8 @@
 #include <errno.h>
 #include <libddi.h>
 #include <sys/stat.h>
+#include <pwd.h>
+#include <grp.h>
 
 enum
 {
@@ -47,6 +49,8 @@ enum
 	
 	COL_EXE,
 	COL_PID,
+	COL_USER,
+	COL_GROUP,
 };
 
 enum
@@ -62,11 +66,39 @@ typedef struct ProcData_
 	char*				exe;
 	pid_t				pid;
 	int				found;
+	char*				user;
+	char*				group;
 } ProcData;
 
 extern GWMWindow* topWindow;
 
 GWMDataCtrl* dcProc;
+
+char* getUserName(uid_t uid)
+{
+	struct passwd *pwd = getpwuid(uid);
+	if (pwd == NULL)
+	{
+		return strdup("?");
+	}
+	else
+	{
+		return strdup(pwd->pw_name);
+	};
+};
+
+char* getGroupName(gid_t gid)
+{
+	struct group *grp = getgrgid(gid);
+	if (grp == NULL)
+	{
+		return strdup("?");
+	}
+	else
+	{
+		return strdup(grp->gr_name);
+	};
+};
 
 ProcData* procGetList()
 {
@@ -106,6 +138,8 @@ ProcData* procGetList()
 				data->exe = strdup(exepath);
 				data->pid = pid;
 				data->found = 0;
+				data->user = getUserName(st.st_uid);
+				data->group = getGroupName(st.st_gid);
 				
 				if (last == NULL)
 				{
@@ -132,6 +166,8 @@ void procDeleteList(ProcData *data)
 		data = this->next;
 		
 		free(this->exe);
+		free(this->user);
+		free(this->group);
 		free(this);
 	};
 };
@@ -225,6 +261,8 @@ int procHandler(GWMEvent *ev, GWMWindow *win, void *context)
 					
 					gwmSetDataString(dcProc, node, COL_EXE, scan->exe);
 					gwmSetDataString(dcProc, node, COL_PID, pidstr);
+					gwmSetDataString(dcProc, node, COL_USER, scan->user);
+					gwmSetDataString(dcProc, node, COL_GROUP, scan->group);
 				};
 			};
 			
@@ -254,6 +292,8 @@ GWMWindow* newProcTab(GWMWindow *notebook)
 	gwmSetDataColumnWidth(dcProc, colApp, 300);
 	
 	gwmAddDataColumn(dcProc, "PID", GWM_DATA_STRING, COL_PID);
+	gwmAddDataColumn(dcProc, "User", GWM_DATA_STRING, COL_USER);
+	gwmAddDataColumn(dcProc, "Group", GWM_DATA_STRING, COL_GROUP);
 	
 	GWMLayout *btnBox = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
 	gwmBoxLayoutAddLayout(mainBox, btnBox, 0, 0, GWM_BOX_FILL);

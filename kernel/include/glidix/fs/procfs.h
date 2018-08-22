@@ -49,4 +49,9 @@ void procfsCreate(int old, int new);
  */
 void procfsDelete(int pid);
 
+/**
+ * Update current process credentials.
+ */
+void procfsUpdateCreds();
+
 #endif

@@ -75,6 +75,7 @@ int main()
 	
 	gwmActivateTab(defTab);
 	gwmFit(win);
+	gwmLayout(win, 640, 480);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	gwmMainLoop();
 	gwmQuit();

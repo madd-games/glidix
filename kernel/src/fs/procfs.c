@@ -85,6 +85,29 @@ void initProcfs()
 	procfs->flags |= VFS_ST_RDONLY;
 };
 
+static void procfsUpdateInfo(InodeRef startdir, const char *path, uid_t uid, gid_t gid)
+{
+	int error;
+	DentryRef dref = vfsGetDentry(startdir, path, 0, &error);
+	if (dref.dent == NULL)
+	{
+		vfsUnrefDentry(dref);
+		return;
+	};
+	
+	InodeRef iref = vfsGetInode(dref, 1, &error);
+	if (iref.inode == NULL)
+	{
+		return;
+	};
+	
+	iref.inode->uid = uid;
+	iref.inode->gid = gid;
+	
+	vfsUnrefInode(iref);
+	return;
+};
+
 void procfsSetPid(int pid)
 {
 	strformat(pidstrbuf, 16, "%d", pid);
@@ -98,11 +121,23 @@ void procfsCreate(int old, int new)
 	
 	Creds *creds = getCurrentThread()->creds;
 	getCurrentThread()->creds = NULL;
+	
+	uid_t uid = 0;
+	gid_t gid = 0;
+	
+	if (creds != NULL)
+	{
+		uid = creds->ruid;
+		gid = creds->rgid;
+	};
+	
 	int error = vfsMakeDirEx(VFS_NULL_IREF, fullpath, 0555, VFS_MKDIR_NOVALID);
 	if (error != 0)
 	{
 		panic("could not create %s: errno %d", fullpath, error);
 	};
+	
+	procfsUpdateInfo(VFS_NULL_IREF, fullpath, uid, gid);
 	
 	strformat(fullpath, 64, "/proc/%d/parent", new);
 	strformat(parentpath, 64, "../%d", old);
@@ -183,4 +218,23 @@ void procfsDelete(int pid)
 	{
 		panic("could not unlink %s: errno %d", fullpath, error);
 	};
+};
+
+void procfsUpdateCreds()
+{
+	Creds *creds = getCurrentThread()->creds;
+	getCurrentThread()->creds = NULL;
+	
+	uid_t uid = 0;
+	gid_t gid = 0;
+	
+	if (creds != NULL)
+	{
+		uid = creds->ruid;
+		gid = creds->rgid;
+	};
+	
+	procfsUpdateInfo(VFS_NULL_IREF, "/proc/self", uid, gid);
+	
+	getCurrentThread()->creds = creds;
 };
