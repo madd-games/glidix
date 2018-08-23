@@ -1974,6 +1974,38 @@ char* vfsRealPath(DentryRef dref)
 		return strdup("/");
 	};
 	
+	// follow symlinks
+	while (1)
+	{
+		vfsCallInInode(dref.dent);
+		if (dref.dent->target == NULL)
+		{
+			// if we can't call it in, just return the path to this dentry
+			break;
+		};
+		
+		if ((dref.dent->target->mode & VFS_MODE_TYPEMASK) != VFS_MODE_LINK)
+		{
+			// this is not a symlink; we're good
+			break;
+		};
+		
+		// XXX: this might need to be locked???
+		char *target = strdup(dref.dent->target->target);
+		
+		// retract up
+		int error;
+		InodeRef up = vfsGetDentryContainer(dref);
+		dref = vfsGetDentry(up, target, 0, &error);
+		kfree(target);
+		
+		if (dref.dent == NULL)
+		{
+			vfsUnrefDentry(dref);
+			return strdup("(unreachable)");
+		};
+	};
+	
 	char *result = vfsRealPathRecur(rootdir, NULL, dref);
 	vfsUnrefInode(rootdir);
 	return result;
