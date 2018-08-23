@@ -198,7 +198,14 @@ static void fcListDir(GWMFileChooser *fc, FCData *data, const char *path)
 			GWMDataNode *node = gwmAddDataNode(data->dcFiles, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
 			gwmSetDataString(data->dcFiles, node, FC_COL_NAME, ent->d_name);
 			gwmSetDataNodeIcon(data->dcFiles, node, icon);
-			gwmSetDataNodeDesc(data->dcFiles, node, realpath(fullpath, NULL));
+			
+			char *rpath = realpath(fullpath, NULL);
+			if (rpath == NULL)
+			{
+				gwmMessageBox(NULL, "realpath", strerror(errno), GWM_MBICON_ERROR | GWM_MBUT_OK);
+				abort();
+			};
+			gwmSetDataNodeDesc(data->dcFiles, node, rpath);
 		};
 		
 		free(fullpath);
@@ -210,6 +217,11 @@ static void fcListDir(GWMFileChooser *fc, FCData *data, const char *path)
 	if (rpath != NULL)
 	{
 		gwmWriteCombo(data->comPath, rpath);
+	}
+	else
+	{
+		gwmMessageBox(NULL, "realpath", strerror(errno), GWM_MBICON_ERROR | GWM_MBUT_OK);
+		abort();
 	};
 	
 	free(data->location);
@@ -352,7 +364,9 @@ static int fcHandler(GWMEvent *ev, GWMFileChooser *fc, void *context)
 		};
 		if (S_ISDIR(st.st_mode))
 		{
-			fcListDir(fc, data, path);
+			char *goPath = strdup(path);
+			fcListDir(fc, data, goPath);
+			free(goPath);
 		}
 		else
 		{
