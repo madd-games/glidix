@@ -45,6 +45,12 @@ GWMWindow* newGeneralTab(GWMWindow *notebook)
 {
 	struct utsname info;
 	uname(&info);
+
+	char *dispdev = realpath("/run/gwmdisp", NULL);
+	if (dispdev == NULL)
+	{
+		dispdev = strdup("<cannot detect>");
+	};
 	
 	GWMWindow *tab = gwmNewTab(notebook);
 	gwmSetWindowCaption(tab, "General");
@@ -63,6 +69,9 @@ GWMWindow* newGeneralTab(GWMWindow *notebook)
 	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, ddiDisplayInfo.renderer, 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, "DDI renderer string:", 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, ddiDriver->renderString, 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
-	
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, "GWM display device:", 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, dispdev, 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+
+	free(dispdev);
 	return tab;
 };

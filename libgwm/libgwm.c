@@ -213,72 +213,7 @@ int gwmInit()
 	pthread_mutex_init(&waiterLock, NULL);
 	pthread_mutex_init(&eventLock, NULL);
 	
-	char dispdev[1024];
-	char linebuf[1024];
-	dispdev[0] = 0;
-	
-	FILE *fp = fopen("/etc/gwm.conf", "r");
-	if (fp == NULL)
-	{
-		fprintf(stderr, "gwm: failed to open configuration file /etc/gwm.conf: %s\n", strerror(errno));
-		return -1;
-	};
-	
-	char *saveptr;
-	char *line;
-	int lineno = 0;
-	while ((line = fgets(linebuf, 1024, fp)) != NULL)
-	{
-		lineno++;
-		
-		char *endline = strchr(line, '\n');
-		if (endline != NULL)
-		{
-			*endline = 0;
-		};
-		
-		if (strlen(line) >= 1023)
-		{
-			fprintf(stderr, "/etc/gwm.conf:%d: buffer overflow\n", lineno);
-			fclose(fp);
-			return -1;
-		};
-		
-		if ((line[0] == 0) || (line[0] == '#'))
-		{
-			continue;
-		}
-		else
-		{
-			char *cmd = strtok_r(line, " \t", &saveptr);
-			if (cmd == NULL)
-			{
-				continue;
-			};
-			
-			if (strcmp(cmd, "display") == 0)
-			{
-				char *name = strtok_r(NULL, " \t", &saveptr);
-				if (name == NULL)
-				{
-					fprintf(stderr, "/etc/gwm.conf:%d: 'display' needs a parameter\n", lineno);
-					fclose(fp);
-					return -1;
-				};
-				
-				strcpy(dispdev, name);
-			};
-		};
-	};
-	fclose(fp);
-	
-	if (dispdev[0] == 0)
-	{
-		fprintf(stderr, "gwm: display device not found\n");
-		return -1;
-	};
-	
-	if (ddiInit(dispdev, O_RDONLY) != 0)
+	if (ddiInit("/run/gwmdisp", O_RDONLY) != 0)
 	{
 		fprintf(stderr, "gwm: failed to initialize DDI: %s\n", strerror(errno));
 		return -1;

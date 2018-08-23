@@ -229,6 +229,12 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "ddiInit: %s: %s\n", dispdev, strerror(errno));
 		return 1;
 	};
+	
+	if (symlink(dispdev, "/run/gwmdisp") != 0)
+	{
+		fprintf(stderr, "symlink /run/gwmdisp: %s\n", strerror(errno));
+		return 1;
+	};
 
 	frontBuffer = ddiSetVideoMode(requestRes);
 	screen = ddiCreateSurface(&frontBuffer->format, frontBuffer->width, frontBuffer->height, NULL, 0);
