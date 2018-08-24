@@ -560,6 +560,11 @@ typedef struct
 	 * Data control "tree pointer" image.
 	 */
 	uint32_t				imgTreePtr;
+	
+	/**
+	 * Frame color.
+	 */
+	DDIColor				colFrame;
 } GWMInfo;
 
 /**

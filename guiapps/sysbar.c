@@ -461,6 +461,16 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	
 	switch (ev->type)
 	{
+	case GWM_EVENT_RETHEME:
+		{
+			int i;
+			for (i=0; i<imgBackground->width; i++)
+			{
+				ddiOverlay(imgSysBar, 0, 0, imgBackground, i, 0, 1, 40);
+			};
+			sysbarRedraw();
+		};
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{

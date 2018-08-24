@@ -39,9 +39,20 @@ typedef struct
 	GWMWindow*			panel;
 } FrameData;
 
+static DDIColor *colFrame;
+
+static void redrawFrame(GWMWindow *frame);
+
 static int frameHandler(GWMEvent *ev, GWMWindow *frame, void *context)
 {
-	return GWM_EVSTATUS_CONT;
+	switch (ev->type)
+	{
+	case GWM_EVENT_RETHEME:
+		redrawFrame(frame);
+		return GWM_EVSTATUS_OK;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
 };
 
 static void redrawFrame(GWMWindow *frame)
@@ -49,21 +60,24 @@ static void redrawFrame(GWMWindow *frame)
 	FrameData *data = (FrameData*) gwmGetData(frame, frameHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(frame);
 	
-	static DDIColor frameColor = {0x55, 0x55, 0xFF, 0xFF};
-	static DDIColor backColor = {0xDD, 0xDD, 0xDD, 0xFF};
+	if (colFrame == NULL)
+	{
+		colFrame = (DDIColor*) gwmGetThemeProp("gwm.toolkit.frame", GWM_TYPE_COLOR, NULL);
+		assert(colFrame != NULL);
+	};
 	
-	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &backColor);
-	ddiFillRect(canvas, 2, 10, canvas->width-4, 1, &frameColor);
-	ddiFillRect(canvas, 2, 10, 1, canvas->height-13, &frameColor);
-	ddiFillRect(canvas, canvas->width-3, 10, 1, canvas->height-13, &frameColor);
-	ddiFillRect(canvas, 2, canvas->height-3, canvas->width-4, 1, &frameColor);
+	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, GWM_COLOR_BACKGROUND);
+	ddiFillRect(canvas, 2, 10, canvas->width-4, 1, colFrame);
+	ddiFillRect(canvas, 2, 10, 1, canvas->height-13, colFrame);
+	ddiFillRect(canvas, canvas->width-3, 10, 1, canvas->height-13, colFrame);
+	ddiFillRect(canvas, 2, canvas->height-3, canvas->width-4, 1, colFrame);
 	
 	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 15, 2, canvas->width-19, 20, 0, 0, NULL);
 	if (pen != NULL)
 	{
 		ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);
-		ddiSetPenBackground(pen, &backColor);
-		ddiSetPenColor(pen, &frameColor);
+		ddiSetPenBackground(pen, GWM_COLOR_BACKGROUND);
+		ddiSetPenColor(pen, colFrame);
 		ddiSetPenWrap(pen, 0);
 		ddiWritePen(pen, data->caption);
 		ddiExecutePen(pen, canvas);

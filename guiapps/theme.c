@@ -67,7 +67,6 @@ int themeSet(char *type, char *name, char *value)
 		};
 		
 		ddiOverlay(image, 0, 0, surface, 0, 0, image->width, image->height);
-		gwmRetheme();
 		return 0;
 	}
 	else if (strcmp(type, "color") == 0)
@@ -111,7 +110,6 @@ int themeSet(char *type, char *name, char *value)
 		};
 		
 		color->alpha = alpha;
-		gwmRetheme();
 		return 0;
 	}
 	else
@@ -279,7 +277,9 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 		
-		return themeSet(argv[2], argv[3], argv[4]);
+		int status = themeSet(argv[2], argv[3], argv[4]);
+		gwmRetheme();
+		return status;
 	}
 	else if (strcmp(argv[1], "load") == 0)
 	{

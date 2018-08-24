@@ -59,6 +59,8 @@ namespace gwm {
 		image spin /usr/share/images/spin.png
 		image treeptr /usr/share/images/treeptr.png
 		
+		color frame #5555FF:255
+		
 		namespace slider {
 			color active #00AA00:255
 			color inactive #555555:255
