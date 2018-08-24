@@ -60,6 +60,12 @@ typedef struct PenSegment_
 	// baseline position
 	int baselineY;
 	DDIColor background;
+	
+	// offset position
+	int offsetX, offsetY;
+	
+	// advance
+	int advanceX;
 } PenSegment;
 
 typedef struct PenLine_
@@ -1010,7 +1016,7 @@ static int isInclusiveBreak(long codepoint)
  * If 'nextEl' is set, the character it points to must be IGNORED, UNLESS *include gets set to 1.
  */ 
 static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *height, int *offsetX, int *offsetY,
-		const char **nextEl, int *include)
+		const char **nextEl, int *include, int *advanceX)
 {
 	int penX=0, penY=0;
 	int minX=0, maxX=0, minY=0, maxY=0;
@@ -1075,6 +1081,7 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 			*height = maxY - minY;
 			*offsetX = 0;
 			*offsetY = 0;
+			*advanceX = penX;
 			
 			if (minX < 0) *offsetX = -minX;
 			if (minY < 0) *offsetY = -minY;
@@ -1121,6 +1128,7 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 					if (minY < 0) *offsetY = -minY;
 					
 					*include = 1;
+					*advanceX = penX;
 					return 0;
 				};
 				
@@ -1130,6 +1138,7 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 				*offsetX = lastWordOffX;
 				*offsetY = lastWordOffY;
 				*include = includeWord;
+				*advanceX = penX;
 				return 0;
 			};
 		};
@@ -1158,6 +1167,7 @@ static int calculateSegmentSize(DDIPen *pen, const char *text, int *width, int *
 	*width = maxX - minX;
 	*height = maxY - minY;
 	*nextEl = NULL;
+	*advanceX = penX;
 	
 	return 0;
 };
@@ -1166,12 +1176,12 @@ void ddiWritePen(DDIPen *pen, const char *text)
 {
 	if (*text == 0) return;
 	const char *nextEl;
-	int offsetX, offsetY, width, height;
+	int offsetX, offsetY, width, height, advanceX;
 	
 	while (1)
 	{
 		int include = 0;
-		if (calculateSegmentSize(pen, text, &width, &height, &offsetX, &offsetY, &nextEl, &include) != 0)
+		if (calculateSegmentSize(pen, text, &width, &height, &offsetX, &offsetY, &nextEl, &include, &advanceX) != 0)
 		{
 			break;
 		};
@@ -1281,6 +1291,9 @@ void ddiWritePen(DDIPen *pen, const char *text)
 		seg->widths = widths;
 		seg->firstCharPos = firstCharPos;
 		seg->baselineY = offsetY;
+		seg->offsetX = offsetX;
+		seg->offsetY = offsetY;
+		seg->advanceX = advanceX;
 		memcpy(&seg->background, &pen->background, sizeof(DDIColor));
 		
 		if ((-pen->font->face->size->metrics.descender/64) > pen->currentLine->baselineY)
@@ -1343,6 +1356,8 @@ void ddiExecutePen2(DDIPen *pen, DDISurface *surface, int flags)
 	dseg->widths[0] = 0;
 	dseg->firstCharPos = pen->writePos;
 	dseg->baselineY = 0;
+	dseg->offsetX = 0;
+	dseg->offsetY = 0;
 	memcpy(&dseg->background, &pen->background, sizeof(DDIColor));
 
 	if (pen->currentLine->firstSegment == NULL)
@@ -1393,13 +1408,13 @@ void ddiExecutePen2(DDIPen *pen, DDISurface *surface, int flags)
 			{
 				if (seg->surface != NULL)
 				{
-					ddiFillRect(surface, drawX, drawY, seg->surface->width, line->maxHeight, &seg->background);
+					ddiFillRect(surface, drawX-seg->offsetX, drawY, seg->surface->width, line->maxHeight, &seg->background);
 				};
 			};
 			
 			if (seg->surface != NULL)
 			{
-				ddiBlit(seg->surface, 0, 0, surface, drawX, plotY, seg->surface->width, seg->surface->height);
+				ddiBlit(seg->surface, 0, 0, surface, drawX-seg->offsetX, plotY, seg->surface->width, seg->surface->height);
 			};
 			
 			if ((pen->cursorPos >= seg->firstCharPos) && (pen->cursorPos < (seg->firstCharPos + seg->numChars)))
@@ -1415,7 +1430,7 @@ void ddiExecutePen2(DDIPen *pen, DDISurface *surface, int flags)
 				
 				ddiFillRect(surface, drawX + cursorX, drawY, 1, line->maxHeight, &cursorColor);
 			};
-			if (seg->surface != NULL) drawX += seg->surface->width;
+			if (seg->surface != NULL) drawX += /*seg->surface->width*/ seg->advanceX;
 		};
 		
 		drawY += line->maxHeight * line->lineHeight / 100;
