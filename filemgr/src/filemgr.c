@@ -173,6 +173,7 @@ int main(int argc, char *argv[])
 		
 		dvGoTo(dirView, "Desktop");
 		gwmLayout(topWindow, width, height-40);
+		gwmMoveWindow(topWindow, 0, 0);
 		DDISurface *canvas = gwmGetWindowCanvas(topWindow);
 		static DDIColor transparent = {0, 0, 0, 0};
 		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);

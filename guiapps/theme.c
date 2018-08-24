@@ -289,7 +289,10 @@ int main(int argc, char *argv[])
 			return 1;
 		};
 		
-		return themeLoad(argv[2]);
+		themeLoad("/usr/share/themes/GlidixGreen.thm");
+		int status = themeLoad(argv[2]);
+		gwmRetheme();
+		return status;
 	}
 	else
 	{
