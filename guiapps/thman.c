@@ -48,13 +48,26 @@ enum
 };
 
 GWMDataCtrl *dcThemes;
+DDISurface *icon;
 
 static int thmanHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	GWMDataEvent *dev = (GWMDataEvent*) ev;
+	GWMCommandEvent *cmdev = (GWMCommandEvent*) ev;
 	
 	switch (ev->type)
 	{
+	case GWM_EVENT_COMMAND:
+		if (cmdev->symbol == GWM_SYM_ABOUT)
+		{
+			GWMAboutDialog *about = gwmNewAboutDialog(win);
+			gwmSetAboutIcon(about, icon, 16+24+32+48, 0, 64, 64);
+			gwmSetAboutCaption(about, "Glidix Theme Manager");
+			gwmSetAboutDesc(about, "A simple interface for switching between Glidix themes.");
+			gwmSetAboutLicense(about, GWM_LICENSE);
+			gwmRunAbout(about);
+		};
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DATA_ACTIVATED:
 		{
 			const char *thmPath = (const char*) gwmGetDataNodeDesc(dcThemes, dev->node);
@@ -80,10 +93,29 @@ int main()
 	
 	GWMWindow *topWindow = gwmCreateWindow(NULL, "Theme Manager", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0,
 					GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
-					
-	GWMLayout *box = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(topWindow, box);
+
+	DDISurface *canvas = gwmGetWindowCanvas(topWindow);
+	icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/thman.png", NULL);
+	if (icon != NULL)
+	{
+		gwmSetWindowIcon(topWindow, icon);
+	};
 	
+	GWMLayout *box = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+
+	GWMWindowTemplate wt;
+	wt.wtComps = GWM_WTC_MENUBAR;
+	wt.wtWindow = topWindow;
+	wt.wtBody = box;
+	gwmCreateTemplate(&wt);
+
+	GWMWindow *menubar = wt.wtMenubar;
+	
+	GWMMenu *menuHelp = gwmCreateMenu();
+	gwmMenubarAdd(menubar, "Help", menuHelp);
+	
+	gwmMenuAddCommand(menuHelp, GWM_SYM_ABOUT, NULL, NULL);
+
 	dcThemes = gwmNewDataCtrl(topWindow);
 	gwmBoxLayoutAddWindow(box, dcThemes, 1, 0, GWM_BOX_FILL);
 	
