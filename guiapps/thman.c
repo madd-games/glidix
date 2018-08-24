@@ -49,6 +49,27 @@ enum
 
 GWMDataCtrl *dcThemes;
 
+static int thmanHandler(GWMEvent *ev, GWMWindow *win, void *context)
+{
+	GWMDataEvent *dev = (GWMDataEvent*) ev;
+	
+	switch (ev->type)
+	{
+	case GWM_EVENT_DATA_ACTIVATED:
+		{
+			const char *thmPath = (const char*) gwmGetDataNodeDesc(dcThemes, dev->node);
+			if (fork() == 0)
+			{
+				execl("/usr/bin/theme", "theme", "load", thmPath, NULL);
+				_exit(1);
+			};
+		};
+		return GWM_EVSTATUS_CONT;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
+};
+
 int main()
 {
 	if (gwmInit() != 0)
@@ -95,6 +116,7 @@ int main()
 	closedir(dirp);
 	
 	gwmFit(topWindow);
+	gwmPushEventHandler(topWindow, thmanHandler, NULL);
 	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	gwmMainLoop();
 	gwmQuit();
