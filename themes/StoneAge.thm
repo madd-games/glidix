@@ -1,0 +1,81 @@
+'	Glidix GUI
+'
+'	Copyright (c) 2014-2017, Madd Games.
+'	All rights reserved.
+'	
+'	Redistribution and use in source and binary forms, with or without
+'	modification, are permitted provided that the following conditions are met:
+'	
+'	* Redistributions of source code must retain the above copyright notice, this
+'	  list of conditions and the following disclaimer.
+'	
+'	* Redistributions in binary form must reproduce the above copyright notice,
+'	  this list of conditions and the following disclaimer in the documentation
+'	  and/or other materials provided with the distribution.
+'	
+'	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+'	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+'	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+'	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+'	FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+'	DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+'	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+'	CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+'	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+'	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+' StoneAge.thm
+' A "stone age" theme for Glidix; very "classic" and simple
+
+namespace gwm {
+	namespace server {
+		image wincap /usr/share/themes/StoneAge/wincap.png
+		image winbuttons /usr/share/themes/StoneAge/winbuttons.png
+		
+		namespace wincolor {
+			color inactive #777777:255
+			color active #000077:255
+		}
+	}
+
+	namespace toolkit {
+		color selection #000077:255
+		color winback #777777:255
+		color editor #FFFFFF:255
+		
+		image button /usr/share/themes/StoneAge/button.png
+		image checkbox /usr/share/themes/StoneAge/checkbox.png
+		image radio /usr/share/themes/StoneAge/radiobutton.png
+		image optmenu /usr/share/themes/StoneAge/optmenu.png
+		image notebook /usr/share/themes/StoneAge/notebook.png
+		image toolbtn /usr/share/themes/StoneAge/toolbtn.png
+		image combo /usr/share/themes/StoneAge/combo.png
+		image spin /usr/share/themes/StoneAge/spin.png
+		image treeptr /usr/share/themes/StoneAge/treeptr.png
+
+		color frame #000077:255
+		
+		namespace slider {
+			color active #000077:255
+			color inactive #555555:255
+			color disabled #555555:255
+		}
+		
+		namespace scrollbar {
+			color bg #555555:255
+			color fg #000077:255
+			color disabled #555555:255
+		}
+		
+		namespace progress {
+			color bg #555555:255
+			color left #000077:255
+			color right #0000AA:255
+		}
+	}
+
+	namespace sysbar {
+		image sysbar /usr/share/themes/StoneAge/sysbar.png
+		image taskbtn /usr/share/themes/StoneAge/taskbtn.png
+	}
+}

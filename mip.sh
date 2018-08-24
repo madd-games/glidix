@@ -7,6 +7,8 @@ mkdir -p $1
 
 export DESTDIR="$mipdir"
 
+srcdir="`dirname $0`"
+
 # libc
 cd libc
 make install || exit 1
@@ -171,6 +173,12 @@ cd ddi-drivers
 make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/ddidrv.mip -i ddidrv $GLIDIX_VERSION -d libc $GLIDIX_VERSION -d libddi $GLIDIX_VERSION
+
+# gwm-themes
+rm -rf mipdir || exit 1
+mkdir -p mipdir/usr/share/themes || exit 1
+cp -RT $srcdir/themes mipdir/usr/share/themes || exit 1
+build-tools/mkmip mipdir $1/gwm-themes.mip -i gwm-themes $GLIDIX_VERSION -d libgwm $GLIDIX_VERSION || exit 1
 
 # libgpm
 rm -rf mipdir || exit 1
