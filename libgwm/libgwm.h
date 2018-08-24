@@ -1278,6 +1278,7 @@ typedef	GWMWindow GWMLabel;
 typedef GWMWindow GWMOptionMenu;
 typedef GWMWindow GWMCheckbox;
 typedef GWMWindow GWMModal;
+typedef GWMWindow GWMImage;
 
 /**
  * Typedef modals.
@@ -2466,28 +2467,28 @@ uint32_t gwmGetGlobIcon(GWMGlobWinRef *ref);
  * Create a new image widget. This call should be followed by property-setting functions. Alternatively,
  * you may use the convenience wrapper, gwmCreateImage().
  */
-GWMWindow* gwmNewImage(GWMWindow *parent);
+GWMImage* gwmNewImage(GWMWindow *parent);
 
 /**
  * Destroy an image.
  */
-void gwmDestroyImage(GWMWindow *image);
+void gwmDestroyImage(GWMImage *image);
 
 /**
  * Set the surface to be displayed on an image. NULL indicates no image.
  */
-void gwmSetImageSurface(GWMWindow *image, DDISurface *surf);
+void gwmSetImageSurface(GWMImage *image, DDISurface *surf);
 
 /**
  * Set the viewport of an image. This indicates the offset into the surface, and size of the cropped area,
  * to be drawn. A width or height of 0 indicates the maximum extent along the given axis.
  */
-void gwmSetImageViewport(GWMWindow *image, int x, int y, int width, int height);
+void gwmSetImageViewport(GWMImage *image, int x, int y, int width, int height);
 
 /**
  * Convenience wrapper to create an image of the specified surface and viewport.
  */
-GWMWindow* gwmCreateImage(GWMWindow *parent, DDISurface *surf, int x, int y, int width, int height);
+GWMImage* gwmCreateImage(GWMWindow *parent, DDISurface *surf, int x, int y, int width, int height);
 
 /**
  * Create components based on the specified template. Return 0 on success, -1 on error.
@@ -2765,6 +2766,11 @@ void gwmTextDialog(GWMWindow *parent, const char *caption, const char *text);
  * Create a new "about" dialog.
  */
 GWMAboutDialog* gwmNewAboutDialog(GWMWindow *parent);
+
+/**
+ * Set the icon of an about dialog.
+ */
+void gwmSetAboutIcon(GWMAboutDialog *about, DDISurface *icon, int x, int y, int width, int height);
 
 /**
  * Set the caption of an about dialog.

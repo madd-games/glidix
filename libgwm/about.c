@@ -47,6 +47,7 @@ typedef struct
 	/**
 	 * Widgets.
 	 */
+	GWMImage*			img;
 	GWMLabel*			lblCaption;
 	GWMLabel*			lblDesc;
 	GWMButton*			btnCredits;
@@ -109,6 +110,9 @@ GWMAboutDialog* gwmNewAboutDialog(GWMWindow *parent)
 		};
 	};
 	
+	data->img = gwmNewImage(about);
+	gwmBoxLayoutAddWindow(data->mainBox, data->img, 0, 5, GWM_BOX_UP);
+	
 	data->lblCaption = gwmNewLabel(about);
 	gwmBoxLayoutAddWindow(data->mainBox, data->lblCaption, 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
 	gwmSetLabelFont(data->lblCaption, fntCaption);
@@ -140,6 +144,13 @@ GWMAboutDialog* gwmNewAboutDialog(GWMWindow *parent)
 	
 	gwmPushEventHandler(about, aboutHandler, data);
 	return about;
+};
+
+void gwmSetAboutIcon(GWMAboutDialog *about, DDISurface *icon, int x, int y, int width, int height)
+{
+	AboutData *data = (AboutData*) gwmGetData(about, aboutHandler);
+	gwmSetImageSurface(data->img, icon);
+	gwmSetImageViewport(data->img, x, y, width, height);
 };
 
 void gwmSetAboutCaption(GWMAboutDialog *about, const char *caption)
@@ -186,6 +197,7 @@ void gwmRunAbout(GWMAboutDialog *about)
 	gwmRunModal(about, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_MKFOCUSED);
 	gwmSetWindowFlags(about, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
+	gwmDestroyImage(data->img);
 	gwmDestroyButton(data->btnCredits);
 	gwmDestroyButton(data->btnLicense);
 	gwmDestroyButton(data->btnClose);

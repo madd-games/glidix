@@ -49,6 +49,7 @@ GWMWindow *topWindow;
 GWMTextField *txtEditor;
 char *filePath = NULL;
 int fileDirty = 0;
+DDISurface* icon;
 
 void setCaption()
 {
@@ -117,6 +118,7 @@ int trySave(int forceChoice)
 void showAbout()
 {
 	GWMAboutDialog *about = gwmNewAboutDialog(topWindow);
+	gwmSetAboutIcon(about, icon, 16, 0, 24, 24);
 	gwmSetAboutCaption(about, "Minipad");
 	gwmSetAboutDesc(about, "The native text editor of Glidix.");
 	gwmSetAboutLicense(about, "Glidix GUI\n\
@@ -242,7 +244,7 @@ int main(int argc, char *argv[])
 	DDISurface *surface = gwmGetWindowCanvas(topWindow);
 	
 	const char *error;
-	DDISurface *icon = ddiLoadAndConvertPNG(&surface->format, "/usr/share/images/minipad.png", &error);
+	icon = ddiLoadAndConvertPNG(&surface->format, "/usr/share/images/minipad.png", &error);
 	if (icon == NULL)
 	{
 		printf("Failed to load minipad icon: %s\n", error);
