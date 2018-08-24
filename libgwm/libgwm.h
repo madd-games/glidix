@@ -681,6 +681,8 @@ typedef struct GWMDataColumn_ GWMDataColumn;
 #define	GWM_SYM_STRIKE				34
 #define	GWM_SYM_RENAME				35
 #define	GWM_SYM_OPEN				36
+#define	GWM_SYM_CLOSE				37
+#define	GWM_SYM_ABOUT				38
 
 /**
  * Starting numbers for event classes.
@@ -1272,10 +1274,17 @@ typedef	GWMWindow GWMScrollbar;
 typedef GWMWindow GWMCombo;
 typedef GWMWindow GWMSpinner;
 typedef GWMWindow GWMDataCtrl;
-typedef GWMWindow GWMFileChooser;
 typedef	GWMWindow GWMLabel;
 typedef GWMWindow GWMOptionMenu;
 typedef GWMWindow GWMCheckbox;
+typedef GWMWindow GWMModal;
+
+/**
+ * Typedef modals.
+ */
+typedef GWMModal GWMFileChooser;
+typedef GWMModal GWMAboutDialog;
+typedef GWMModal GWMTextDialog;
 
 /**
  * Typedef the spinner classes.
@@ -2439,6 +2448,16 @@ void gwmSetLabelText(GWMLabel *label, const char *text);
 void gwmSetLabelWidth(GWMLabel *label, int width);
 
 /**
+ * Set the font of a label.
+ */
+void gwmSetLabelFont(GWMLabel *label, DDIFont *font);
+
+/**
+ * Set the alignment of a label.
+ */
+void gwmSetLabelAlignment(GWMLabel *label, int align);
+
+/**
  * Get the icon surface ID of a window.
  */
 uint32_t gwmGetGlobIcon(GWMGlobWinRef *ref);
@@ -2715,5 +2734,62 @@ void gwmDestroyDataCtrl(GWMDataCtrl *ctrl);
  * node if found, or NULL if not found (at that index).
  */
 GWMDataNode* gwmGetDataSelection(GWMDataCtrl *ctrl, int index);
+
+/**
+ * Create a new text dialog.
+ */
+GWMTextDialog* gwmNewTextDialog(GWMWindow *parent);
+
+/**
+ * Set the caption of a text dialog.
+ */
+void gwmSetTextDialogCaption(GWMTextDialog *txt, const char *caption);
+
+/**
+ * Set the text in a text dialog.
+ */
+void gwmSetTextDialog(GWMTextDialog *txt, const char *text);
+
+/**
+ * Run a text dialog.
+ * NOTE: This also destroys it.
+ */
+void gwmRunTextDialog(GWMTextDialog *txt);
+
+/**
+ * A quick convenience wrapper to display text dialogs.
+ */
+void gwmTextDialog(GWMWindow *parent, const char *caption, const char *text);
+
+/**
+ * Create a new "about" dialog.
+ */
+GWMAboutDialog* gwmNewAboutDialog(GWMWindow *parent);
+
+/**
+ * Set the caption of an about dialog.
+ */
+void gwmSetAboutCaption(GWMAboutDialog *about, const char *caption);
+
+/**
+ * Set the description in an "about" dialog.
+ */
+void gwmSetAboutDesc(GWMAboutDialog *about, const char *desc);
+
+/**
+ * Set credits in an "about" dialog.
+ */
+void gwmSetAboutCredits(GWMAboutDialog *about, const char *credits);
+
+/**
+ * Set the license in an "about" dialog.
+ */
+void gwmSetAboutLicense(GWMAboutDialog *about, const char *license);
+
+/**
+ * Run an about dialog. Returns once the user closes the dialog.
+ * NOTE: This also destroys the dialog.
+ */
+void gwmRunAbout(GWMAboutDialog *about);
 
 #endif

@@ -341,7 +341,7 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 				if (ev->type == GWM_EVENT_COMMAND)
 				{
 					GWMCommandEvent *cmdev = (GWMCommandEvent*) ev;
-					if (cmdev->symbol == GWM_SYM_EXIT)
+					if (cmdev->symbol == GWM_SYM_EXIT || cmdev->symbol == GWM_SYM_CLOSE)
 					{
 						GWMEvent closeev;
 						memset(&closeev, 0, sizeof(GWMEvent));

@@ -108,12 +108,17 @@ void gwmRedrawTextField(GWMWindow *field)
 	static DDIColor normalBorderColor = {0, 0, 0, 0xFF};
 	static DDIColor focusBorderColor = {0, 0xAA, 0, 0xFF};
 	DDIColor *color = &normalBorderColor;
-	if ((data->focused) && ((data->flags & GWM_TXT_DISABLED) == 0))
+	if (data->focused)
 	{
 		color = &focusBorderColor;
 	};
 
-	static DDIColor disabledBackground = {0x77, 0x77, 0x77, 0xFF};
+	if (data->flags & GWM_TXT_DISABLED)
+	{
+		color = &transparent;
+	};
+	
+	static DDIColor disabledBackground = {0x00, 0x00, 0x00, 0x00};
 	DDIColor *background = GWM_COLOR_EDITOR;
 	if (data->flags & GWM_TXT_DISABLED)
 	{
@@ -632,8 +637,11 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 		{
 			if (data->flags & GWM_TXT_MULTILINE)
 			{
-				ddiWriteUTF8(buf, '\n');
-				gwmTextFieldInsert(field, buf);
+				if (!disabled)
+				{
+					ddiWriteUTF8(buf, '\n');
+					gwmTextFieldInsert(field, buf);
+				};
 			}
 			else
 			{
@@ -755,6 +763,9 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->sbarY = gwmNewScrollbar(field);
 	gwmSetScrollbarFlags(data->sbarX, GWM_SCROLLBAR_HORIZ);
 
+	gwmHide(data->sbarX);
+	gwmHide(data->sbarY);
+	
 	gwmPushEventHandler(field, gwmTextFieldHandler, data);
 	gwmPostUpdate(field);
 	gwmSetWindowCursor(field, GWM_CURSOR_TEXT);

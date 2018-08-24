@@ -49,6 +49,16 @@ typedef struct
 	 * Resulting preferred width and height after drawing the text.
 	 */
 	int prefWidth, prefHeight;
+	
+	/**
+	 * Font.
+	 */
+	DDIFont* font;
+	
+	/**
+	 * Alignment.
+	 */
+	int align;
 } LabelData;
 
 static int labelHandler(GWMEvent *ev, GWMWindow *win, void *context)
@@ -63,9 +73,14 @@ static void gwmRedrawLabel(GWMWindow *label)
 	LabelData *data = (LabelData*) gwmGetData(label, labelHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(label);
 	
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, data->width, 0, 0, 0, NULL);
+	int width = data->width;
+	if (width == 0) width = canvas->width;
+	if (canvas->width != 0 && width > canvas->width) width = canvas->width;
+	
+	DDIPen *pen = ddiCreatePen(&canvas->format, data->font, 0, 0, width, 0, 0, 0, NULL);
 	assert(pen != NULL);
 	if (data->width == 0) ddiSetPenWrap(pen, 0);
+	ddiSetPenAlignment(pen, data->align);
 	ddiWritePen(pen, data->text);
 	ddiGetPenSize(pen, &data->prefWidth, &data->prefHeight);
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &trans);
@@ -98,6 +113,8 @@ GWMWindow* gwmNewLabel(GWMWindow *parent)
 	data->width = 0;
 	data->prefWidth = 0;
 	data->prefHeight = 0;
+	data->font = gwmGetDefaultFont();
+	data->align = DDI_ALIGN_LEFT;
 	
 	label->getMinSize = label->getPrefSize = gwmSizeLabel;
 	label->position = gwmPositionLabel;
@@ -135,4 +152,18 @@ void gwmDestroyLabel(GWMWindow *label)
 	gwmDestroyWindow(label);
 	free(data->text);
 	free(data);
+};
+
+void gwmSetLabelFont(GWMLabel *label, DDIFont *font)
+{
+	LabelData *data = (LabelData*) gwmGetData(label, labelHandler);
+	data->font = font;
+	gwmRedrawLabel(label);
+};
+
+void gwmSetLabelAlignment(GWMLabel *label, int align)
+{
+	LabelData *data = (LabelData*) gwmGetData(label, labelHandler);
+	data->align = align;
+	gwmRedrawLabel(label);
 };

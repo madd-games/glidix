@@ -114,6 +114,39 @@ int trySave(int forceChoice)
 	return 0;
 };
 
+void showAbout()
+{
+	GWMAboutDialog *about = gwmNewAboutDialog(topWindow);
+	gwmSetAboutCaption(about, "Minipad");
+	gwmSetAboutDesc(about, "The native text editor of Glidix.");
+	gwmSetAboutLicense(about, "Glidix GUI\n\
+\n\
+Copyright (c) 2014-2017, Madd Games.\n\
+All rights reserved.\n\
+\n\
+Redistribution and use in source and binary forms, with or without\n\
+modification, are permitted provided that the following conditions are met:\n\
+\n\
+* Redistributions of source code must retain the above copyright notice, this\n\
+  list of conditions and the following disclaimer.\n\
+\n\
+* Redistributions in binary form must reproduce the above copyright notice,\n\
+  this list of conditions and the following disclaimer in the documentation\n\
+  and/or other materials provided with the distribution.\n\
+\n\
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\"\n\
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE\n\
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\n\
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE\n\
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL\n\
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR\n\
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER\n\
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,\n\
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\n\
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n");
+	gwmRunAbout(about);
+};
+
 int minipadCommand(GWMCommandEvent *ev)
 {
 	switch (ev->symbol)
@@ -147,6 +180,9 @@ int minipadCommand(GWMCommandEvent *ev)
 		return GWM_EVSTATUS_OK;
 	case GWM_SYM_SAVE_AS:
 		trySave(1);
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_ABOUT:
+		showAbout();
 		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
@@ -236,6 +272,11 @@ int main(int argc, char *argv[])
 	gwmMenuAddCommand(menuFile, GWM_SYM_SAVE_AS, NULL, NULL);
 	gwmMenuAddSeparator(menuFile);
 	gwmMenuAddCommand(menuFile, GWM_SYM_EXIT, NULL, NULL);
+	
+	GWMMenu *menuHelp = gwmCreateMenu();
+	gwmMenubarAdd(menubar, "Help", menuHelp);
+	
+	gwmMenuAddCommand(menuHelp, GWM_SYM_ABOUT, NULL, NULL);
 	
 	txtEditor = gwmNewTextField(topWindow);
 	gwmBoxLayoutAddWindow(boxLayout, txtEditor, 1, 0, GWM_BOX_FILL);

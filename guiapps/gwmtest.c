@@ -141,19 +141,12 @@ int main()
 		return 1;
 	};
 	
-	GWMFileChooser *fc = gwmCreateFileChooser(NULL, "Chooser test", GWM_FILE_SAVE);
-	//gwmAddFileChooserFilter(fc, "Some random files", "*.mip;*.c", ".mip");
-	gwmAddFileChooserFilter(fc, "All the files!!!", "*", "");
-	char *result = gwmRunFileChooser(fc);
-	
-	if (result == NULL)
-	{
-		printf("User cancelled.\n");
-	}
-	else
-	{
-		printf("User selected: `%s'\n", result);
-	};
+	GWMAboutDialog *about = gwmNewAboutDialog(NULL);
+	gwmSetAboutCaption(about, "GWM Test");
+	gwmSetAboutDesc(about, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent pellentesque risus nec bibendum imperdiet. Nulla auctor purus quis turpis euismod lacinia. Nulla et placerat nibh.");
+	gwmSetAboutCredits(about, "Thanks Obama");
+	gwmSetAboutLicense(about, "le license");
+	gwmRunAbout(about);
 	
 	gwmQuit();
 	return 0;

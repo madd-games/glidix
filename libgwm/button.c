@@ -231,7 +231,7 @@ void gwmSetButtonCallback(GWMWindow *button, GWMButtonCallback callback, void *p
 
 GWMWindow* gwmCreateStockButton(GWMWindow *parent, int symbol)
 {
-	return gwmCreateButton(parent, gwmGetStockLabel(symbol), 0, 0, 0, 0);
+	return gwmCreateButtonWithLabel(parent, symbol, NULL);
 };
 
 GWMWindow *gwmNewButton(GWMWindow *parent)
