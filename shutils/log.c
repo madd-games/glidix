@@ -35,7 +35,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#define	DEFAULT_MAX_SIZE			(1 * 1024 * 1024)
+#define	DEFAULT_MAX_SIZE			(20 * 1024)
 #define	DEFAULT_MAX_BACKLOGS			7
 #define	DEFAULT_BUFFER_SIZE			1024
 #define	DEFAULT_MODE				0600
