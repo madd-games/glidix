@@ -131,7 +131,7 @@ GWMAboutDialog* gwmNewAboutDialog(GWMWindow *parent)
 	gwmSetButtonFlags(data->btnCredits, GWM_BUTTON_DISABLED);
 	
 	data->btnLicense = gwmCreateButtonWithLabel(about, SYM_LICENSE, "License");
-	gwmBoxLayoutAddWindow(data->btnBox, data->btnLicense, 0, 0, 0);
+	gwmBoxLayoutAddWindow(data->btnBox, data->btnLicense, 0, 5, GWM_BOX_RIGHT);
 	gwmSetButtonFlags(data->btnLicense, GWM_BUTTON_DISABLED);
 	
 	gwmBoxLayoutAddSpacer(data->btnBox, 1, 0, 0);

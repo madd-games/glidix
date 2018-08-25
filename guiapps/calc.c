@@ -64,6 +64,7 @@ typedef struct CalcToken_
 } CalcToken;
 
 GWMTextField *txtCalc;
+DDISurface *icon;
 
 static const char* pad[] = {
 	"7", "8", "9", "+",
@@ -323,6 +324,16 @@ static int commandHandler(GWMCommandEvent *ev)
 	
 	switch (ev->symbol)
 	{
+	case GWM_SYM_ABOUT:
+		{
+			GWMAboutDialog *about = gwmNewAboutDialog(NULL);
+			gwmSetAboutIcon(about, icon, 16+24+32+48, 0, 64, 64);
+			gwmSetAboutCaption(about, "Calculator");
+			gwmSetAboutDesc(about, "A basic calculator for Glidix.");
+			gwmSetAboutLicense(about, GWM_LICENSE);
+			gwmRunAbout(about);
+		};
+		return GWM_EVSTATUS_OK;
 	case GWM_SYM_OK:
 		doCalc();
 		return GWM_EVSTATUS_OK;
@@ -379,7 +390,7 @@ int main()
 	DDISurface *surface = gwmGetWindowCanvas(topWindow);
 	
 	const char *error;
-	DDISurface *icon = ddiLoadAndConvertPNG(&surface->format, "/usr/share/images/calc.png", &error);
+	icon = ddiLoadAndConvertPNG(&surface->format, "/usr/share/images/calc.png", &error);
 	if (icon == NULL)
 	{
 		printf("Failed to load calculator icon: %s\n", error);
@@ -403,6 +414,11 @@ int main()
 	gwmMenubarAdd(menubar, "File", menuFile);
 	
 	gwmMenuAddCommand(menuFile, GWM_SYM_EXIT, NULL, NULL);
+	
+	GWMMenu *menuHelp = gwmCreateMenu();
+	gwmMenubarAdd(menubar, "Help", menuHelp);
+	
+	gwmMenuAddCommand(menuHelp, GWM_SYM_ABOUT, NULL, NULL);
 	
 	txtCalc = gwmNewTextField(topWindow);
 	gwmBoxLayoutAddWindow(boxLayout, txtCalc, 0, 0, GWM_BOX_FILL);
