@@ -316,6 +316,9 @@ static int dvHandler(GWMEvent *ev, DirView *dv, void *context)
 	
 	switch (ev->type)
 	{
+	case GWM_EVENT_RETHEME:
+		dvRedraw(dv);
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{
@@ -367,9 +370,6 @@ static int dvHandler(GWMEvent *ev, DirView *dv, void *context)
 	case GWM_EVENT_DOUBLECLICK:
 		dvOpen(dv);
 		return GWM_EVSTATUS_OK;
-	case GWM_EVENT_RETHEME:
-		dvRedraw(dv);
-		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_EDIT_END:
 		doRename(dv, data);
 		return GWM_EVSTATUS_OK;

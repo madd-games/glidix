@@ -177,6 +177,8 @@ static int menuEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 			menu->selectedSub = -1;
 		};
 		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_RETHEME:
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_LEAVE:
 		redrawMenu(menu, menu->selectedSub);
 		return GWM_EVSTATUS_OK;

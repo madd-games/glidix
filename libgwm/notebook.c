@@ -185,7 +185,7 @@ static int notebookHandler(GWMEvent *ev, GWMWindow *notebook, void *context)
 	case GWM_EVENT_TAB_LIST_UPDATED:
 	case GWM_EVENT_RETHEME:
 		redrawNotebook(notebook);
-		return GWM_EVSTATUS_CONT;
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};

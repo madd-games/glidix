@@ -107,6 +107,8 @@ static int filemgrHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
+	case GWM_EVENT_RETHEME:
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_COMMAND:
 		return filemgrCommand((GWMCommandEvent*) ev, win);
 	case DV_EVENT_CHDIR:

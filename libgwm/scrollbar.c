@@ -95,8 +95,10 @@ static int sbarHandler(GWMEvent *ev, GWMWindow *sbar, void *context)
 	
 	switch (ev->type)
 	{
-	case GWM_EVENT_VALUE_CHANGED:
 	case GWM_EVENT_RETHEME:
+		redrawScrollbar(sbar);
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_VALUE_CHANGED:
 		redrawScrollbar(sbar);
 		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_DOWN:

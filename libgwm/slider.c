@@ -112,8 +112,10 @@ static int sliderHandler(GWMEvent *ev, GWMWindow *slider, void *context)
 	
 	switch (ev->type)
 	{
-	case GWM_EVENT_VALUE_CHANGED:
 	case GWM_EVENT_RETHEME:
+		redrawSlider(slider);
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_VALUE_CHANGED:
 		redrawSlider(slider);
 		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_UP:

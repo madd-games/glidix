@@ -123,6 +123,9 @@ static int menubarHandler(GWMEvent *ev, GWMWindow *menubar, void *context)
 	
 	switch (ev->type)
 	{
+	case GWM_EVENT_RETHEME:
+		gwmRenderMenubar(menubar);
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_UP:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT)
 		{

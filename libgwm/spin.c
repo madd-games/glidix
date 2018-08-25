@@ -101,6 +101,7 @@ static int spinHandler(GWMEvent *ev, GWMSpinner *spin, void *context)
 	
 	switch (ev->type)
 	{
+	case GWM_EVENT_RETHEME:
 	case GWM_EVENT_RESIZED:
 		redrawSpinner(spin);
 		return GWM_EVSTATUS_OK;

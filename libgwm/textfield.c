@@ -106,11 +106,10 @@ void gwmRedrawTextField(GWMWindow *field)
 	
 	static DDIColor transparent = {0, 0, 0, 0};
 	static DDIColor normalBorderColor = {0, 0, 0, 0xFF};
-	static DDIColor focusBorderColor = {0, 0xAA, 0, 0xFF};
 	DDIColor *color = &normalBorderColor;
 	if (data->focused)
 	{
-		color = &focusBorderColor;
+		color = GWM_COLOR_SELECTION;
 	};
 
 	if (data->flags & GWM_TXT_DISABLED)
@@ -702,6 +701,9 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 			return GWM_EVSTATUS_OK;		/* do not forward to parent */
 		};
 		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_RETHEME:
+		gwmPostUpdate(field);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};

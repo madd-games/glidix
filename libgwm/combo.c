@@ -152,6 +152,9 @@ static int comboHandler(GWMEvent *ev, GWMCombo *combo, void *context)
 			return GWM_EVSTATUS_OK;
 		};
 		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_RETHEME:
+		redrawCombo(combo);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};

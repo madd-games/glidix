@@ -50,7 +50,13 @@ typedef struct
 
 static int imageHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
-	return GWM_EVSTATUS_CONT;
+	switch (ev->type)
+	{
+	case GWM_EVENT_RETHEME:
+		return GWM_EVSTATUS_OK;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
 };
 
 static void gwmRedrawImage(GWMWindow *image)

@@ -69,6 +69,8 @@ static int progbarHandler(GWMEvent *ev, GWMWindow *progbar, void *context)
 	switch (ev->type)
 	{
 	case GWM_EVENT_RETHEME:
+		redrawProgressBar(progbar);
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_VALUE_CHANGED:
 		redrawProgressBar(progbar);
 		return GWM_EVSTATUS_CONT;

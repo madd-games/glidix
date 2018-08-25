@@ -328,6 +328,13 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_CLOSE:
 		return GWM_EVSTATUS_BREAK;
+	case GWM_EVENT_RETHEME:
+		{
+			DDISurface *canvas = gwmGetWindowCanvas(win);
+			ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, GWM_COLOR_BACKGROUND);
+			gwmPostDirty(win);
+		};
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_RESIZE_REQUEST:
 		gwmMoveWindow(win, ev->x, ev->y);
 		gwmLayout(win, ev->width, ev->height);
