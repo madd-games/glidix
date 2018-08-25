@@ -300,8 +300,8 @@ GWMWindow* newProcTab(GWMWindow *notebook)
 	
 	gwmBoxLayoutAddSpacer(btnBox, 1, 0, 0);
 	
-	gwmBoxLayoutAddWindow(btnBox, gwmCreateButtonWithLabel(tab, SYM_TERM, "Terminate"), 0, 0, 0);
-	gwmBoxLayoutAddWindow(btnBox, gwmCreateButtonWithLabel(tab, SYM_KILL, "Kill"), 0, 0, 0);
+	gwmBoxLayoutAddWindow(btnBox, gwmCreateButtonWithLabel(tab, SYM_TERM, "Terminate"), 0, 5, GWM_BOX_ALL);
+	gwmBoxLayoutAddWindow(btnBox, gwmCreateButtonWithLabel(tab, SYM_KILL, "Kill"), 0, 5, GWM_BOX_RIGHT | GWM_BOX_UP | GWM_BOX_DOWN);
 	
 	gwmCreateTimer(tab, 1000);
 	gwmPushEventHandler(tab, procHandler, NULL);

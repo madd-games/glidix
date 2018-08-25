@@ -107,6 +107,9 @@ static int plHandler(GWMEvent *ev, Places *pl, void *context)
 			};
 		};
 		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_RETHEME:
+		plRedraw(pl);
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};

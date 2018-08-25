@@ -813,20 +813,9 @@ size_t ddiCountUTF8(const char *str)
 
 DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error)
 {
-	DDIFont *font = (DDIFont*) malloc(sizeof(DDIFont));
-	if (font == NULL)
-	{
-		DDI_ERROR("Out of memory");
-		return NULL;
-	};
-	
-	memset(font, 0, sizeof(DDIFont));
-	
-	font->size = size;
 	if (strlen(family) > 64)
 	{
 		DDI_ERROR("Font name too long");
-		free(font);
 		return NULL;
 	};
 	
@@ -851,6 +840,22 @@ DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error
 		// bold italic
 		sprintf(fontfile, "/usr/share/fonts/bi/%s BoldItalic.ttf", family);
 	};
+
+	return ddiOpenFont(fontfile, size, error);
+};
+
+DDIFont* ddiOpenFont(const char *fontfile, int size, const char **error)
+{
+	DDIFont *font = (DDIFont*) malloc(sizeof(DDIFont));
+	if (font == NULL)
+	{
+		DDI_ERROR("Out of memory");
+		return NULL;
+	};
+	
+	memset(font, 0, sizeof(DDIFont));
+	
+	font->size = size;
 	
 	FT_Error fterr = FT_Init_FreeType(&font->lib);
 	if (fterr != 0)

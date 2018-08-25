@@ -432,6 +432,11 @@ void ddiWriteUTF8(char *buffer, long codepoint);
 size_t ddiCountUTF8(const char *str);
 
 /**
+ * Open the specified font file, and use the given size.
+ */
+DDIFont* ddiOpenFont(const char *fontfile, int size, const char **error);
+
+/**
  * Load the specified font.
  */
 DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error);

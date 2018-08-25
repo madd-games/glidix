@@ -98,6 +98,16 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 	case DV_SYM_TERMINAL:
 		dvTerminal(dirView);
 		return GWM_EVSTATUS_OK;
+	case GWM_SYM_ABOUT:
+		{
+			GWMAboutDialog *about = gwmNewAboutDialog(topWindow);
+			gwmSetAboutIcon(about, gwmGetFileIcon("dir", GWM_FICON_LARGE), 0, 0, 64, 64);
+			gwmSetAboutCaption(about, "Glidix File Manager");
+			gwmSetAboutDesc(about, "The native file manager of Glidix.");
+			gwmSetAboutLicense(about, GWM_LICENSE);
+			gwmRunAbout(about);
+		};
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -215,6 +225,11 @@ int main(int argc, char *argv[])
 	
 	makeEditMenu();
 	gwmMenubarAdd(menubar, "Edit", menuEdit);
+	
+	GWMMenu *menuHelp = gwmCreateMenu();
+	gwmMenubarAdd(menubar, "Help", menuHelp);
+	
+	gwmMenuAddCommand(menuHelp, GWM_SYM_ABOUT, NULL, NULL);
 	
 	GWMLayout *toolbar = wt.wtToolbar;
 	GWMWindow *toolBack = gwmNewToolButton(topWindow);

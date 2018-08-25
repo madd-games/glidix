@@ -1,0 +1,5 @@
+# font/ttf
+# TrueType font
+filename *.ttf
+label TrueType font
+icon font
