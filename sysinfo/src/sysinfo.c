@@ -51,7 +51,13 @@ int main()
 		return 1;
 	};
 	
-	GWMWindow *win = gwmCreateWindow(NULL, "System Information", GWM_POS_UNSPEC, GWM_POS_UNSPEC,
+	const char *caption = "System Information";
+	if (geteuid() == 0)
+	{
+		caption = "System Information (admin mode)";
+	};
+	
+	GWMWindow *win = gwmCreateWindow(NULL, caption, GWM_POS_UNSPEC, GWM_POS_UNSPEC,
 						0, 0, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
 	topWindow = win;
 	
