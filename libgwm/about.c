@@ -61,8 +61,6 @@ typedef struct
 	char*				license;
 } AboutData;
 
-static DDIFont* fntCaption;
-
 static int aboutCommand(GWMCommandEvent *ev, GWMWindow *win, AboutData *data)
 {
 	switch (ev->symbol)
@@ -101,21 +99,12 @@ GWMAboutDialog* gwmNewAboutDialog(GWMWindow *parent)
 	data->mainBox = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	gwmSetWindowLayout(about, data->mainBox);
 	
-	if (fntCaption == NULL)
-	{
-		fntCaption = ddiLoadFont("DejaVu Sans", 25, DDI_STYLE_BOLD, NULL);
-		if (fntCaption == NULL)
-		{
-			fntCaption = gwmGetDefaultFont();
-		};
-	};
-	
 	data->img = gwmNewImage(about);
 	gwmBoxLayoutAddWindow(data->mainBox, data->img, 0, 5, GWM_BOX_UP);
 	
 	data->lblCaption = gwmNewLabel(about);
 	gwmBoxLayoutAddWindow(data->mainBox, data->lblCaption, 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
-	gwmSetLabelFont(data->lblCaption, fntCaption);
+	gwmSetLabelFont(data->lblCaption, GWM_FONT_CAPTION);
 	gwmSetLabelAlignment(data->lblCaption, DDI_ALIGN_CENTER);
 	
 	data->lblDesc = gwmNewLabel(about);

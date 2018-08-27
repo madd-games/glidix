@@ -52,6 +52,9 @@ static DDIFont *defaultFont;
 static DDIPixelFormat screenFormat;
 static GWMWindow* currentModalMaster;
 
+DDIFont* gwmDefaultFontP;
+DDIFont* gwmCaptionFontP;
+
 typedef struct GWMWaiter_
 {
 	struct GWMWaiter_*		prev;
@@ -224,6 +227,16 @@ int gwmInit()
 	if (defaultFont == NULL)
 	{
 		fprintf(stderr, "gwm: failed to load default font (DejaVu Sans 12): %s\n", errmsg);
+		ddiQuit();
+		return -1;
+	};
+
+	gwmDefaultFontP = defaultFont;
+	
+	gwmCaptionFontP = ddiLoadFont("DejaVu Sans", 25, DDI_STYLE_BOLD, &errmsg);
+	if (gwmCaptionFontP == NULL)
+	{
+		fprintf(stderr, "gwm: failed to load caption font: %s\n", errmsg);
 		ddiQuit();
 		return -1;
 	};

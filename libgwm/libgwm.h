@@ -109,6 +109,14 @@ extern DDIColor* gwmBackColorP;
 extern DDIColor* gwmEditorColorP;
 
 /**
+ * Fonts.
+ */
+#define	GWM_FONT_DEFAULT			gwmDefaultFontP
+extern DDIFont* gwmDefaultFontP;
+#define	GWM_FONT_CAPTION			gwmCaptionFontP
+extern DDIFont* gwmCaptionFontP;
+
+/**
  * Unspecified window position.
  */
 #define	GWM_POS_UNSPEC				((unsigned int)-1)
