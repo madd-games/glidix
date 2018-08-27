@@ -34,6 +34,8 @@
 #include <string.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <pwd.h>
+#include <grp.h>
 
 #include "command.h"
 #include "strops.h"
@@ -176,6 +178,58 @@ static int executeGroup(CmdGroup *group)
 			if (chdir(dir) != 0)
 			{
 				fprintf(stderr, "cd: %s: %s\n", dir, strerror(errno));
+				member->status = 0x0100;
+				continue;
+			};
+			
+			member->status = 0;
+		}
+		else if (strcmp(*ptr, "setuid") == 0)
+		{
+			if (ptr[1] == NULL)
+			{
+				fprintf(stderr, "SYNTAX:\tsetuid <username>\n");
+				member->status = 0x0100;
+				continue;
+			};
+			
+			struct passwd *pw = getpwnam(ptr[1]);
+			if (pw == NULL)
+			{
+				perror("setuid: getpwnam");
+				member->status = 0x0100;
+				continue;
+			};
+			
+			if (setuid(pw->pw_uid) != 0)
+			{
+				perror("setuid");
+				member->status = 0x0100;
+				continue;
+			};
+			
+			member->status = 0;
+		}
+		else if (strcmp(*ptr, "setgid") == 0)
+		{
+			if (ptr[1] == NULL)
+			{
+				fprintf(stderr, "SYNTAX:\tsetgid <username>\n");
+				member->status = 0x0100;
+				continue;
+			};
+			
+			struct group *grp = getgrnam(ptr[1]);
+			if (grp == NULL)
+			{
+				perror("setgid: getgrnam");
+				member->status = 0x0100;
+				continue;
+			};
+			
+			if (setgid(grp->gr_gid) != 0)
+			{
+				perror("setgid");
 				member->status = 0x0100;
 				continue;
 			};
