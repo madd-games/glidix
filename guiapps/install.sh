@@ -5,3 +5,4 @@ do
 done
 
 chmod 6755 $DESTDIR/usr/bin/thman
+chmod 6755 $DESTDIR/usr/bin/gwmsudo
