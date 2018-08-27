@@ -2306,7 +2306,7 @@ int vfsUnmount(const char *path, int flags)
 			if (scan->refcount != expectedCount)
 			{
 				foundBusy = 1;
-				kprintf("vfs: inode %lu is busy (refcount=%d, expected %d)\n", scan->ino, scan->refcount, expectedCount);
+				kprintf("vfs: inode %lu is busy (refcount=%d, expected %d; dups=%d)\n", scan->ino, scan->refcount, expectedCount, scan->dups);
 				mutexUnlock(&scan->lock);
 				break;
 			};
@@ -2521,6 +2521,8 @@ int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const cha
 	if ((flags & allFlags) != flags)
 	{
 		// unknown bits set in 'flags'
+		vfsUnrefInode(startold);
+		vfsUnrefInode(startnew);
 		return EINVAL;
 	};
 	
@@ -2528,6 +2530,7 @@ int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const cha
 	DentryRef drefOld = vfsGetDentry(startold, oldpath, 0, &error);
 	if (drefOld.dent == NULL)
 	{
+		vfsUnrefInode(startnew);
 		vfsUnrefDentry(drefOld);
 		return error;
 	};
@@ -2535,12 +2538,14 @@ int vfsMove(InodeRef startold, const char *oldpath, InodeRef startnew, const cha
 	if (!vfsIsAllowed(drefOld.dent->dir, VFS_ACE_WRITE))
 	{
 		vfsUnrefDentry(drefOld);
+		vfsUnrefInode(startnew);
 		return EACCES;
 	};
 	
 	if (drefOld.dent->flags & VFS_DENTRY_TEMP)
 	{
 		vfsUnrefDentry(drefOld);
+		vfsUnrefInode(startnew);
 		return EPERM;
 	};
 	

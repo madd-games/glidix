@@ -161,6 +161,7 @@ int main(int argc, char *argv[])
 			};
 			
 			ftruncate(logfd, 0);
+			lseek(logfd, 0, SEEK_SET);
 		};
 		
 		write(logfd, buffer, sz);
