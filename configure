@@ -231,7 +231,7 @@ echo '#endif' >> glidix-config.h
 echo "generating Makefile..."
 echo >Makefile ".PHONY: all install clean mip tests $TARGETS"
 
-ISO_PACKAGES="libz libgpm shutils libc modules sh gxsetup gxboot dynld gxdbg"
+ISO_PACKAGES="libz libgpm shutils libc modules sh gxsetup gxboot dynld gxdbg gwmserver libddi libgwm guiapps minipad sysinfo filemgr freetype libpng fstools ddi-drivers"
 if [ "$iso_target" = "yes" ]
 then
 	mkdir -p isodir
@@ -257,6 +257,12 @@ then
 	echo >>Makefile "	mkdir -p isodir/sys/mod"
 	echo >>Makefile "	mkdir -p isodir/proc"
 	echo >>Makefile "	mkdir -p isodir/boot"
+	echo >>Makefile "	mkdir -p isodir/etc"
+	echo >>Makefile "	mkdir -p isodir/usr/bin"
+	echo >>Makefile "	echo 'display /dev/bootfb0' > isodir/etc/gwm.conf"
+	echo >>Makefile "	echo 'resolution auto' >> isodir/etc/gwm.conf"
+	echo >>Makefile "	echo 'log /run/gwm.log' >> isodir/etc/gwm.conf"
+	echo >>Makefile "	cp $srcdir/gwm-live-start.sh isodir/usr/bin/gwm-live-start.sh"
 	echo >>Makefile "	cp gxboot/eltorito.img isodir/boot/loader.sys"
 	echo >>Makefile "	mkisofs -R -V 'Glidix Installer' -b boot/loader.sys -no-emul-boot -boot-load-size 4 -boot-info-table -o \$@ isodir"
 fi

@@ -338,7 +338,7 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 
-	// root running sudo should just be like running env.
+	// root running sudo should just be like running grexec.
 	if (getuid() != 0 && !hasAuthed())
 	{
 		struct passwd *pwd = getpwuid(getuid());
@@ -389,7 +389,8 @@ int main(int argc, char *argv[])
 		
 		gwmFit(topWindow);
 		gwmPushEventHandler(topWindow, sudoHandler, NULL);
-		gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOSYSMENU);
+		gwmSetWindowFlags(topWindow, GWM_WINDOW_NOSYSMENU);
+		gwmFocus(txtPassword);
 		gwmMainLoop();
 		gwmQuit();
 		
@@ -411,8 +412,8 @@ int main(int argc, char *argv[])
 	};
 
 	// now run
-	argv[0] = "env";
-	execv("/usr/bin/env", argv);
+	argv[0] = "grexec";
+	execv("/usr/bin/grexec", argv);
 	perror("execv");
 	return 1;
 };

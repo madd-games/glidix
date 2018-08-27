@@ -93,6 +93,17 @@ int main()
 			
 			while (1) pause();
 		}
+		else if (option == WELCOME_OPT_GWM)
+		{
+			setColor(0x07);
+			write(1, "\e!", 2);
+			tcsetattr(0, TCSANOW, &tcOrig);
+			
+			execl("/usr/bin/gui", "gui", "/usr/bin/gwm-live-start.sh", NULL);
+			perror("execl");
+			
+			while (1) pause();
+		}
 		else
 		{
 			msgbox("ERROR", "Feature not yet implemented.");

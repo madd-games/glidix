@@ -39,7 +39,8 @@
 const char *optionLabels[WELCOME_OPT_COUNT] = {
 	"Upgrade current installation",
 	"Install Glidix",
-	"Drop to live shell"
+	"Drop to live shell",
+	"Drop to GUI",
 };
 
 static int startX, startY;
