@@ -240,7 +240,7 @@ int gwmInit()
 		ddiQuit();
 		return -1;
 	};
-
+	
 	queueFD = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
 	if (queueFD == -1)
 	{
@@ -580,6 +580,25 @@ void gwmWaitEvent(GWMEvent *ev)
 			
 			if (found) continue;
 		};
+		
+		if (ev->type & GWM_EVENT_AGG)
+		{
+			// general aggregating events
+			EventBuffer *buf;
+			int found = 0;
+			
+			for (buf=firstEvent; buf!=NULL; buf=buf->next)
+			{
+				if (firstEvent->payload.type == ev->type && firstEvent->payload.win == ev->win)
+				{
+					while (sem_wait(&semEventCounter) != 0);		// decrement count
+					found = 1;
+					break;
+				};
+			};
+			
+			if (found) continue;
+		};
 
 		if (ev->type == GWM_EVENT_RESIZE_REQUEST)
 		{
@@ -612,8 +631,14 @@ void gwmClearWindow(GWMWindow *win)
 
 void gwmPostUpdate(GWMWindow *win)
 {
+	gwmPostUpdateEx(win, GWM_EVENT_UPDATE, 0);
+};
+
+void gwmPostUpdateEx(GWMWindow *win, int type, int value)
+{
 	EventBuffer *buf = (EventBuffer*) malloc(sizeof(EventBuffer));
-	buf->payload.type = GWM_EVENT_UPDATE;
+	buf->payload.type = type;
+	buf->payload.value = value;
 	buf->payload.win = 0;
 	if (win != NULL)
 	{

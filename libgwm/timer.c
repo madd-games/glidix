@@ -33,10 +33,11 @@ void* timerThread(void *context)
 {
 	GWMTimer *timer = (GWMTimer*) context;
 	
+	int cycles = 0;
 	while (timer->running)
 	{
 		poll(NULL, 0, timer->period);
-		gwmPostUpdate(timer->win);
+		gwmPostUpdateEx(timer->win, timer->evtype, cycles++);
 	};
 	
 	free(timer);
@@ -45,12 +46,18 @@ void* timerThread(void *context)
 
 GWMTimer* gwmCreateTimer(GWMWindow *win, int period)
 {
+	return gwmCreateTimerEx(win, period, GWM_EVENT_UPDATE);
+};
+
+GWMTimer* gwmCreateTimerEx(GWMWindow *win, int period, int evtype)
+{
 	GWMTimer *timer = (GWMTimer*) malloc(sizeof(GWMTimer));
 	if (timer == NULL) return NULL;
 	
 	timer->period = period;
 	timer->running = 1;
 	timer->win = win;
+	timer->evtype = evtype;
 	
 	if (pthread_create(&timer->thread, NULL, timerThread, timer) != 0)
 	{

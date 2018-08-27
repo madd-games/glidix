@@ -730,9 +730,11 @@ typedef struct GWMDataColumn_ GWMDataColumn;
  * Starting numbers for event classes.
  * When bit 24 is set, the event is cascading.
  * When bit 25 is set, the event is user-defined (otherwise libgwm built-in).
+ * When bit 26 is set, the event aggreagtes (it is allowed to be ignored if more events of the same type arrive).
  */
 #define	GWM_EVENT_CASCADING			(1 << 24)
 #define	GWM_EVENT_USER				(1 << 25)
+#define	GWM_EVENT_AGG				(1 << 26)
 
 /**
  * Built-in events.
@@ -783,6 +785,7 @@ typedef struct GWMDataColumn_ GWMDataColumn;
 typedef struct
 {
 	int					type;
+	int					value;		// arbitary value associated with event
 	uint64_t				win;		// window ID
 	int					x;		// {mouse position relative to window; or window
 	int					y;		// {position for GWM_EVENT_RESIZE_REQUEST
@@ -1358,6 +1361,11 @@ typedef struct
 	 * The window to send update events to.
 	 */
 	GWMWindow*				win;
+	
+	/**
+	 * Update event type to send (default GWM_EVENT_UPDATE).
+	 */
+	int					evtype;
 } GWMTimer;
 
 /**
@@ -1562,6 +1570,11 @@ void gwmClearWindow(GWMWindow *win);
  * Post an update event. The window is allowed to be NULL.
  */
 void gwmPostUpdate(GWMWindow *win);
+
+/**
+ * Queue up an event of the specified type, with the specified 'value'.
+ */
+void gwmPostUpdateEx(GWMWindow *win, int type, int value);
 
 /**
  * Push a new event handler to the top of the handler stack for the given window.
@@ -2639,6 +2652,11 @@ float gwmGetSplitterProportion(GWMSplitter *split);
  * destroyed with gwmDestroyTimer().
  */
 GWMTimer* gwmCreateTimer(GWMWindow *win, int period);
+
+/**
+ * Same as gwmCreateTimer() except it sends a specific event.
+ */
+GWMTimer* gwmCreateTimerEx(GWMWindow *win, int period, int evtype);
 
 /**
  * Destroy a timer. NOTE: spurious GWM_EVENT_UPDATE events may be sent to the window before the timer is
