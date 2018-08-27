@@ -140,9 +140,15 @@ int main()
 		char *fullpath;
 		asprintf(&fullpath, "/usr/share/themes/%s", ent->d_name);
 		
+		char *name = strdup(ent->d_name);
+		char *dotPos = strrchr(name, '.');
+		*dotPos = 0;
+		
 		GWMDataNode *node = gwmAddDataNode(dcThemes, GWM_DATA_ADD_BOTTOM_CHILD, NULL);
-		gwmSetDataString(dcThemes, node, COL_NAME, ent->d_name);
+		gwmSetDataString(dcThemes, node, COL_NAME, name);
 		gwmSetDataNodeDesc(dcThemes, node, fullpath);
+		
+		free(name);
 	};
 	
 	closedir(dirp);
