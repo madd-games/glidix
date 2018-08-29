@@ -2587,6 +2587,11 @@ void gwmSetToolButtonSymbol(GWMWindow *toolbtn, int symbol);
 void gwmSetToolButtonIcon(GWMWindow *toolbtn, DDISurface *icon);
 
 /**
+ * Add a tool button with a specific symbol to the specified toolbar.
+ */
+GWMToolButton* gwmAddToolButtonBySymbol(GWMWindow *parent, GWMLayout *toolbar, int symbol);
+
+/**
  * Create a new splitter widget.
  */
 GWMSplitter* gwmNewSplitter(GWMWindow *parent);

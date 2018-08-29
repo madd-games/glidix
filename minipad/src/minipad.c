@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
 	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	
 	GWMWindowTemplate wt;
-	wt.wtComps = GWM_WTC_MENUBAR;
+	wt.wtComps = GWM_WTC_MENUBAR | GWM_WTC_TOOLBAR;
 	wt.wtWindow = topWindow;
 	wt.wtBody = boxLayout;
 	gwmCreateTemplate(&wt);
@@ -255,6 +255,12 @@ int main(int argc, char *argv[])
 	gwmMenubarAdd(menubar, "Help", menuHelp);
 	
 	gwmMenuAddCommand(menuHelp, GWM_SYM_ABOUT, NULL, NULL);
+	
+	GWMLayout *toolbar = wt.wtToolbar;
+	gwmAddToolButtonBySymbol(topWindow, toolbar, GWM_SYM_NEW_FILE);
+	gwmAddToolButtonBySymbol(topWindow, toolbar, GWM_SYM_OPEN_FILE);
+	gwmAddToolButtonBySymbol(topWindow, toolbar, GWM_SYM_SAVE);
+	gwmAddToolButtonBySymbol(topWindow, toolbar, GWM_SYM_SAVE_AS);
 	
 	txtEditor = gwmNewTextField(topWindow);
 	gwmBoxLayoutAddWindow(boxLayout, txtEditor, 1, 0, GWM_BOX_FILL);

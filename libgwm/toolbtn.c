@@ -187,3 +187,11 @@ void gwmSetToolButtonIcon(GWMWindow *toolbtn, DDISurface *icon)
 	ToolButtonData *data = (ToolButtonData*) gwmGetData(toolbtn, toolbtnHandler);
 	data->icon = icon;
 };
+
+GWMToolButton* gwmAddToolButtonBySymbol(GWMWindow *parent, GWMLayout *toolbar, int symbol)
+{
+	GWMToolButton *tool = gwmNewToolButton(parent);
+	gwmBoxLayoutAddWindow(toolbar, tool, 0, 0, 0);
+	gwmSetToolButtonSymbol(tool, symbol);
+	return tool;
+};
