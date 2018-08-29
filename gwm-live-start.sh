@@ -34,3 +34,6 @@ ln -s /usr/bin/filemgr /run/bin/-filemgr
 # Start the file manager and task bar (sysbar)
 fork -filemgr
 fork sysbar
+
+# Final message
+msgbox 'Session ready' 'Welcome to the live session. You can try out the operating system without installing it, but not all features will be available. To install Glidix, use the icon on the desktop.' --success --ok
