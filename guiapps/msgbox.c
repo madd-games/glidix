@@ -45,14 +45,14 @@ int main(int argc, char *argv[])
 		char *errmsg;
 		asprintf(&errmsg, "SYNTAX: %s <caption> <text> [options...]\n"
 			"\nDisplay a message box. The following options are available:\n"
-			"\n--error\tDisplay an error icon.\n"
-			"--info\tDisplay an info icon.\n"
-			"--warn\tDisplay a warning icon.\n"
-			"--quest\tDisplay a question icon.\n"
-			"--success\tDisplay a success icon.\n"
-			"\n--ok\tShow only an OK button.\n"
+			"\n--error\t\tDisplay an error icon.\n"
+			"--info\t\tDisplay an info icon.\n"
+			"--warn\t\tDisplay a warning icon.\n"
+			"--quest\t\tDisplay a question icon.\n"
+			"--success\t\tDisplay a success icon.\n"
+			"\n--ok\t\tShow only an OK button.\n"
 			"--ok-cancel\tShow OK/Cancel buttons.\n"
-			"--yes-no\tDisplay Yes/No buttons.\n"
+			"--yes-no\t\tDisplay Yes/No buttons.\n"
 			"--yes-no-cancel\tDisplay Yes/No/Cancel buttons.\n", argv[0]);
 		gwmMessageBox(NULL, argv[0], errmsg, GWM_MBICON_INFO | GWM_MBUT_OK);
 		return 1;
