@@ -168,7 +168,7 @@ void gwmSetFrameCaption(GWMWindow *frame, const char *caption)
 
 void gwmDestroyFrame(GWMWindow *frame)
 {
-	FrameData *data = (FrameData*) frame->data;
+	FrameData *data = (FrameData*) gwmGetData(frame, frameHandler);
 	gwmDestroyWindow(data->panel);
 	free(data->caption);
 	free(data);
