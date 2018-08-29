@@ -141,12 +141,18 @@ int main()
 		return 1;
 	};
 	
-	GWMAboutDialog *about = gwmNewAboutDialog(NULL);
-	gwmSetAboutCaption(about, "GWM Test");
-	gwmSetAboutDesc(about, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent pellentesque risus nec bibendum imperdiet. Nulla auctor purus quis turpis euismod lacinia. Nulla et placerat nibh.");
-	gwmSetAboutCredits(about, "Thanks Obama");
-	gwmSetAboutLicense(about, "le license");
-	gwmRunAbout(about);
+	DDIColor color = {25, 50, 100, 0xFF};
+	int symbol = gwmPickColor(NULL, "Pick some color", &color);
+	if (symbol == GWM_SYM_OK)
+	{
+		char buf[DDI_COLOR_STRING_SIZE];
+		ddiColorToString(&color, buf);
+		printf("You clicked OK and chose %s\n", buf);
+	}
+	else
+	{
+		printf("You clicked cancel\n");
+	};
 	
 	gwmQuit();
 	return 0;

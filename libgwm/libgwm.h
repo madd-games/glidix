@@ -1324,6 +1324,8 @@ typedef GWMWindow GWMOptionMenu;
 typedef GWMWindow GWMCheckbox;
 typedef GWMWindow GWMModal;
 typedef GWMWindow GWMImage;
+typedef GWMWindow GWMSlider;
+typedef GWMWindow GWMFrame;
 
 /**
  * Typedef modals.
@@ -1437,18 +1439,6 @@ typedef struct
 	uint16_t				cbType;
 	char					cbPad[60];		/* pad to 64 bytes */
 } GWMClipboardHeader;
-
-/**
- * Describes a tag.
- */
-typedef struct
-{
-	int					flags;			// which fields are set
-	DDIColor				fg;
-	DDIColor				bg;
-} GWMTag;
-extern GWMTag gwmTagSelection;
-#define	GWM_TAG_SELECTION			(&gwmTagSelection)
 
 /**
  * Flags for wtComps, indicating which template components to create.
@@ -2145,27 +2135,27 @@ void gwmDestroyRadioButton(GWMWindow *radio);
 /**
  * Create a slider.
  */
-GWMWindow* gwmNewSlider(GWMWindow *parent);
+GWMSlider* gwmNewSlider(GWMWindow *parent);
 
 /**
  * Destroy a slider.
  */
-void gwmDestroySlider(GWMWindow *slider);
+void gwmDestroySlider(GWMSlider *slider);
 
 /**
  * Set slider flags.
  */
-void gwmSetSliderFlags(GWMWindow *slider, int flags);
+void gwmSetSliderFlags(GWMSlider *slider, int flags);
 
 /**
  * Set the value of a slider. This function clamps it to the [0.0, 1.0] range.
  */
-void gwmSetSliderValue(GWMWindow *slider, float value);
+void gwmSetSliderValue(GWMSlider *slider, float value);
 
 /**
  * Get the value of a slider, in the [0.0, 1.0] range.
  */
-float gwmGetSliderValue(GWMWindow *slider);
+float gwmGetSliderValue(GWMSlider *slider);
 
 /**
  * Turn a window handle into a global window reference.
@@ -2251,43 +2241,23 @@ GWMWindow* gwmCreateFrame(GWMWindow *parent, const char *caption, int x, int y, 
 /**
  * Create a frame widget.
  */
-GWMWindow* gwmNewFrame(GWMWindow *parent);
+GWMFrame* gwmNewFrame(GWMWindow *parent);
 
 /**
  * Set the caption of a frame.
  */
-void gwmSetFrameCaption(GWMWindow *frame, const char *parent);
+void gwmSetFrameCaption(GWMFrame *frame, const char *caption);
 
 /**
  * Destroy a frame widget.
  */
-void gwmDestroyFrame(GWMWindow *frame);
+void gwmDestroyFrame(GWMFrame *frame);
 
 /**
  * Get the panel of the specified frame, into which children may be placed to put them in the frame.
  * The panel is owned by the frame; do not delete it. It will be deleted when the frame is deleted.
  */
-GWMWindow* gwmGetFramePanel(GWMWindow *frame);
-
-/**
- * Create a new text area tag.
- */
-GWMTag* gwmCreateTag();
-
-/**
- * Destroy a text area tag.
- */
-void gwmDestroyTag(GWMTag *tag);
-
-/**
- * Set the foreground color of a tag. Setting to NULL removes the foreground.
- */
-void gwmSetTagForeground(GWMTag *tag, DDIColor *fg);
-
-/**
- * Set the background color of a tag. Setting to NULL removed the background.
- */
-void gwmSetTagBackground(GWMTag *tag, DDIColor *bg);
+GWMWindow* gwmGetFramePanel(GWMFrame *frame);
 
 /**
  * Create a file chooser dialog. 'mode' is either GWM_FILE_OPEN or GWM_FILE_SAVE. You can set other settings then call
@@ -2857,5 +2827,14 @@ void gwmSetAboutLicense(GWMAboutDialog *about, const char *license);
  * NOTE: This also destroys the dialog.
  */
 void gwmRunAbout(GWMAboutDialog *about);
+
+/**
+ * Display a color picker dialog. 'color' points to the current color (which will be displayed as the "old" color,
+ * as well as the default.
+ *
+ * If the user clicks OK, this function returns GWM_SYM_OK, and sets 'color' to the color chosen by the user.
+ * If the user clicks Cancel, this function returns GWM_SYM_CANCEL, and doe snot update the color.
+ */
+int gwmPickColor(GWMWindow *parent, const char *caption, DDIColor *color);
 
 #endif
