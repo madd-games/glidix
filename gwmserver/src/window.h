@@ -149,9 +149,10 @@ int wndDestroy(Window *wnd);
 void wndInvalidate(int x, int y, int width, int height);
 
 /**
- * Make the specified window dirty. This causes it to be rendered to the screen.
+ * Make the specified window dirty. This causes it to be rendered to the screen. Returns -1 if the window is
+ * invisible (and thus no change was made to the screen), or 0 if visible. The front buffer is updated regardless.
  */
-void wndDirty(Window *wnd);
+int wndDirty(Window *wnd);
 
 /**
  * Draw the screen (call after wndDirty()).
@@ -188,6 +189,11 @@ void wndSendEvent(Window *win, GWMEvent *ev);
  * Call this when the left mouse button has been pressed.
  */
 void wndOnLeftDown();
+
+/**
+ * Call this when the right mouse button has been pressed.
+ */
+void wndOnRightDown();
 
 /**
  * Call this when the left mouse button has been released.

@@ -290,9 +290,9 @@ void* clientThreadFunc(void *context)
 				resp.postDirtyResp.status = 0;
 				write(sockfd, &resp, sizeof(GWMMessage));
 				
-				wndDirty(win);
+				int status = wndDirty(win);
 				wndDown(win);
-				wndDrawScreen();
+				if (status == 0) wndDrawScreen();
 			};
 		}
 		else if (cmd.cmd == GWM_CMD_DESTROY_WINDOW)

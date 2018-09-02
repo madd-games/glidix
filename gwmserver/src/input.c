@@ -59,6 +59,10 @@ static void* inputThreadFunc(void *context)
 			if (hev.button.keycode == GWM_KC_MOUSE_LEFT)
 			{
 				wndOnLeftDown();
+			}
+			else if (hev.button.keycode == GWM_KC_MOUSE_RIGHT)
+			{
+				wndOnRightDown();
 			};
 			
 			wndInputEvent(GWM_EVENT_DOWN, hev.button.scancode, hev.button.keycode);

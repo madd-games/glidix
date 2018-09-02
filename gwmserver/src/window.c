@@ -43,7 +43,7 @@
 /**
  * Maximum frames per second.
  */
-#define	FRAME_RATE				30
+#define	FRAME_RATE				60
 
 /**
  * Maximum number of resizes per second.
@@ -712,11 +712,11 @@ void wndInvalidate(int x, int y, int width, int height)
 	pthread_mutex_unlock(&invalidateLock);
 };
 
-void wndDirty(Window *wnd)
+int wndDirty(Window *wnd)
 {
 	// figure out our absolute coordinates then call wndInvalidate() on that region
 	int x, y;
-	if (wndRelToAbs(wnd, wnd->scrollX, wnd->scrollY, &x, &y) != 0) return;
+	if (wndRelToAbs(wnd, wnd->scrollX, wnd->scrollY, &x, &y) != 0) return -1;
 	
 	int width, height;
 	pthread_mutex_lock(&wnd->lock);
@@ -725,6 +725,7 @@ void wndDirty(Window *wnd)
 	pthread_mutex_unlock(&wnd->lock);
 	
 	wndInvalidate(x, y, width, height);
+	return 0;
 };
 
 void wndDrawScreen()
@@ -1213,6 +1214,13 @@ void wndSetFocused(Window *wnd)
 	};
 };
 
+void wndOnRightDown()
+{
+	pthread_mutex_lock(&wincacheLock);
+	wndSetFocused(wndHovering);
+	pthread_mutex_unlock(&wincacheLock);
+};
+
 void wndOnLeftDown()
 {
 	Window *toRedecorate = NULL;
@@ -1460,6 +1468,11 @@ int wndSetIcon(Window *wnd, uint32_t surfID)
 
 int wndRelToAbs(Window *win, int relX, int relY, int *absX, int *absY)
 {
+	if (win->params.flags & GWM_WINDOW_HIDDEN)
+	{
+		return -1;
+	};
+	
 	if (win == desktopWindow)
 	{
 		*absX = relX;
