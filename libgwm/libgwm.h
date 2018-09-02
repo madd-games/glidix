@@ -664,6 +664,12 @@ typedef struct GWMDataColumn_ GWMDataColumn;
 #define	GWM_GRID_FILL				2		/* fill child on the specified axis */
 
 /**
+ * Flex layout scaling.
+ */
+#define	GWM_FLEX_CENTER				1		/* center child along specified axis */
+#define	GWM_FLEX_FILL				2		/* fill child on the specified axis */
+
+/**
  * Flags for @keymod.
  */
 #define	GWM_KM_CTRL				(1 << 0)
@@ -1326,6 +1332,13 @@ typedef GWMWindow GWMModal;
 typedef GWMWindow GWMImage;
 typedef GWMWindow GWMSlider;
 typedef GWMWindow GWMFrame;
+typedef GWMWindow GWMTabList;
+typedef GWMWindow GWMTab;
+
+/**
+ * Typedef tab lists.
+ */
+typedef GWMTabList GWMNotebook;
 
 /**
  * Typedef modals.
@@ -2431,8 +2444,28 @@ void gwmGridLayoutAddWindow(GWMLayout *grid, GWMWindow *child, int colspan, int 
 void gwmDestroyGridLayout(GWMLayout *grid);
 
 /**
+ * Create a flex layout with the specified number of columns.
+ */
+GWMLayout* gwmCreateFlexLayout(int cols);
+
+/**
+ * Add a sub-layout to a flex layout.
+ */
+void gwmFlexLayoutAddLayout(GWMLayout *flex, GWMLayout *sublayout, int xProp, int yProp, int xScaling, int yScaling);
+
+/**
+ * Add a window to a flex layout.
+ */
+void gwmFlexLayoutAddWindow(GWMLayout *flex, GWMWindow *child, int xProp, int yProp, int xScaling, int yScaling);
+
+/**
+ * Destroy a flex layout.
+ */
+void gwmDestroyFlexLayout(GWMLayout *flex);
+
+/**
  * Given a stock symbol, return its label (in the correct language).
- * Returns "??" for invalid labels.
+ * Returns "??" for invalid symbols.
  */
 const char *gwmGetStockLabel(int symbol);
 

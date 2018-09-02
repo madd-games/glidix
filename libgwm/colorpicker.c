@@ -189,61 +189,52 @@ int gwmPickColor(GWMWindow *parent, const char *caption, DDIColor *color)
 	gwmSetFrameCaption(frCustom, "Custom");
 	
 	GWMWindow *pnlCustom = gwmGetFramePanel(frCustom);
-	GWMLayout *gridCustom = gwmCreateGridLayout(4);
-	gwmSetWindowLayout(pnlCustom, gridCustom);
+	GWMLayout *flexCustom = gwmCreateFlexLayout(3);
+	gwmSetWindowLayout(pnlCustom, flexCustom);
 	
 	GWMLabel *lblRed = gwmNewLabel(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, lblRed, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmFlexLayoutAddWindow(flexCustom, lblRed, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	gwmSetLabelText(lblRed, "Red:");
 	
 	GWMSlider *slRed = gwmNewSlider(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, slRed, 2, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmFlexLayoutAddWindow(flexCustom, slRed, 3, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	gwmSetSliderFlags(slRed, GWM_SLIDER_HORIZ);
 	gwmSetSliderValue(slRed, (float) color->red / 255.0);
 	
 	char buf[16];
 	
 	GWMTextField *txtRed = gwmNewTextField(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, txtRed, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmFlexLayoutAddWindow(flexCustom, txtRed, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	sprintf(buf, "%hhu", color->red);
 	gwmWriteTextField(txtRed, buf);
 
 	GWMLabel *lblGreen = gwmNewLabel(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, lblGreen, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmFlexLayoutAddWindow(flexCustom, lblGreen, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	gwmSetLabelText(lblGreen, "Green:");
 	
 	GWMSlider *slGreen = gwmNewSlider(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, slGreen, 2, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmFlexLayoutAddWindow(flexCustom, slGreen, 3, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	gwmSetSliderFlags(slGreen, GWM_SLIDER_HORIZ);
 	gwmSetSliderValue(slGreen, (float) color->green / 255.0);
 	
 	GWMTextField *txtGreen = gwmNewTextField(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, txtGreen, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmFlexLayoutAddWindow(flexCustom, txtGreen, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	sprintf(buf, "%hhu", color->green);
 	gwmWriteTextField(txtGreen, buf);
 
 	GWMLabel *lblBlue = gwmNewLabel(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, lblBlue, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmFlexLayoutAddWindow(flexCustom, lblBlue, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	gwmSetLabelText(lblBlue, "Blue:");
 	
 	GWMSlider *slBlue = gwmNewSlider(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, slBlue, 2, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmFlexLayoutAddWindow(flexCustom, slBlue, 3, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	gwmSetSliderFlags(slBlue, GWM_SLIDER_HORIZ);
 	gwmSetSliderValue(slBlue, (float) color->blue / 255.0);
 	
 	GWMTextField *txtBlue = gwmNewTextField(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, txtBlue, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmFlexLayoutAddWindow(flexCustom, txtBlue, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	sprintf(buf, "%hhu", color->blue);
 	gwmWriteTextField(txtBlue, buf);
-
-	GWMLabel* lblSpec = gwmNewLabel(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, lblSpec, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
-	gwmSetLabelText(lblSpec, "Color spec:");
-	
-	GWMTextField* txtSpec = gwmNewTextField(pnlCustom);
-	gwmGridLayoutAddWindow(gridCustom, txtSpec, 3, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
-	ddiColorToString(color, buf);
-	gwmWriteTextField(txtSpec, buf);
 	
 	GWMFrame *frPreview = gwmNewFrame(picker);
 	gwmBoxLayoutAddWindow(topBox, frPreview, 0, 0, 0);
@@ -268,7 +259,16 @@ int gwmPickColor(GWMWindow *parent, const char *caption, DDIColor *color)
 	
 	GWMLayout *btnBox = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
 	gwmBoxLayoutAddLayout(mainBox, btnBox, 0, 5, GWM_BOX_DOWN | GWM_BOX_FILL);
+
+	GWMLabel* lblSpec = gwmNewLabel(picker);
+	gwmBoxLayoutAddWindow(btnBox, lblSpec, 0, 5, GWM_BOX_LEFT);
+	gwmSetLabelText(lblSpec, "Color spec:");
 	
+	GWMTextField* txtSpec = gwmNewTextField(picker);
+	gwmBoxLayoutAddWindow(btnBox, txtSpec, 0, 5, GWM_BOX_LEFT | GWM_BOX_RIGHT);
+	ddiColorToString(color, buf);
+	gwmWriteTextField(txtSpec, buf);
+
 	gwmBoxLayoutAddSpacer(btnBox, 1, 0, 0);
 	
 	GWMButton *btnOK = gwmCreateStockButton(picker, GWM_SYM_OK);
@@ -313,7 +313,7 @@ int gwmPickColor(GWMWindow *parent, const char *caption, DDIColor *color)
 	gwmDestroyTextField(txtRed);
 	gwmDestroySlider(slRed);
 	gwmDestroyLabel(lblRed);
-	gwmDestroyGridLayout(gridCustom);
+	gwmDestroyFlexLayout(flexCustom);
 	gwmDestroyFrame(frCustom);
 	gwmDestroyBoxLayout(topBox);
 	gwmDestroyBoxLayout(mainBox);
