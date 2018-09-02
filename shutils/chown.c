@@ -138,11 +138,6 @@ void doChangeOwner(const char *filename)
 	}
 	else
 	{
-		if (S_ISDIR(st.st_mode))
-		{
-			doChangeOwnerRecur(filename);
-		};
-
 		if (verbose)
 		{
 			printf("chown %lu:%lu %s\n", newUID, newGID, filename);
@@ -159,6 +154,11 @@ void doChangeOwner(const char *filename)
 			{
 				exit(1);
 			};
+		};
+
+		if (S_ISDIR(st.st_mode) && recur)
+		{
+			doChangeOwnerRecur(filename);
 		};
 	};
 };
