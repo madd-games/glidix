@@ -26,42 +26,11 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef FILEMGR_H_
-#define FILEMGR_H_
+#ifndef PROPS_H_
+#define PROPS_H_
 
-#include <libgwm.h>
+#include <fstools.h>
 
-extern GWMWindow *topWindow;
-extern GWMMenu *menuEdit;
-extern DDIFont *fntCategory;
-extern int desktopMode;
-
-/**
- * File manager events.
- */
-enum
-{
-	FILEMGR_EVENT_ = (GWM_EVENT_CASCADING | GWM_EVENT_USER),
-	
-	/**
-	 * DirView events.
-	 */
-	DV_EVENT_CHDIR,
-};
-
-/**
- * File manager symbols.
- */
-enum
-{
-	FILEMGR_SYM_ = GWM_SYM_USER,
-	
-	/**
-	 * DirView-related commands.
-	 */
-	DV_SYM_MKDIR,
-	DV_SYM_TERMINAL,
-	DV_SYM_PROPS,
-};
+void propShow(const char *path, FSMimeType *type);
 
 #endif

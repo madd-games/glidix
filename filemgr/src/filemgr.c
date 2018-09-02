@@ -98,6 +98,9 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 	case DV_SYM_TERMINAL:
 		dvTerminal(dirView);
 		return GWM_EVSTATUS_OK;
+	case DV_SYM_PROPS:
+		dvProps(dirView);
+		return GWM_EVSTATUS_OK;
 	case GWM_SYM_ABOUT:
 		{
 			GWMAboutDialog *about = gwmNewAboutDialog(topWindow);
@@ -152,6 +155,9 @@ void makeEditMenu()
 	
 	gwmMenuAddSeparator(menuEdit);
 	gwmMenuAddCommand(menuEdit, GWM_SYM_RENAME, NULL, NULL);
+	
+	gwmMenuAddSeparator(menuEdit);
+	gwmMenuAddCommand(menuEdit, DV_SYM_PROPS, "Propierties", NULL);
 };
 
 int main(int argc, char *argv[])

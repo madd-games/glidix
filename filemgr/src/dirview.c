@@ -36,6 +36,7 @@
 
 #include "dirview.h"
 #include "filemgr.h"
+#include "props.h"
 
 extern GWMWindow *topWindow;
 
@@ -1059,4 +1060,21 @@ void dvForward(DirView *dv)
 	// move there
 	dvGoToEx(dv, location, 0);
 	free(location);
+};
+
+void dvProps(DirView *dv)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	
+	// find a selected DirEntry
+	DirEntry *ent;
+	for (ent=data->ents; ent!=NULL; ent=ent->next)
+	{
+		if (ent->selected) break;
+	};
+	
+	if (ent != NULL)
+	{
+		propShow(ent->path, ent->mime);
+	};
 };

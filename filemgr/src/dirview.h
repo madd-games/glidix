@@ -205,4 +205,9 @@ void dvBack(DirView *dv);
  */
 void dvForward(DirView *dv);
 
+/**
+ * Show the properties dialog about the currently-selected element.
+ */
+void dvProps(DirView *dv);
+
 #endif
