@@ -301,7 +301,7 @@ void propShow(const char *path, FSMimeType *mime)
 	};
 	
 	// == END TABS ==
-	gwmLayout(props, 400, 600);
+	gwmFit(props);
 	gwmPushEventHandler(props, propsHandler, data);
 	gwmRunModal(props, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_NOTASKBAR);
 	gwmSetWindowFlags(props, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
