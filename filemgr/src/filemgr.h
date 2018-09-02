@@ -62,6 +62,13 @@ enum
 	DV_SYM_MKDIR,
 	DV_SYM_TERMINAL,
 	DV_SYM_PROPS,
+	
+	/**
+	 * Properties dialog "chmod" commands.
+	 */
+	PROP_CHMOD,
+	PROP_CHMOD_END = PROP_CHMOD + 12,
+	
 };
 
 #endif
