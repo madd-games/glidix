@@ -157,7 +157,7 @@ void makeEditMenu()
 	gwmMenuAddCommand(menuEdit, GWM_SYM_RENAME, NULL, NULL);
 	
 	gwmMenuAddSeparator(menuEdit);
-	gwmMenuAddCommand(menuEdit, DV_SYM_PROPS, "Propierties", NULL);
+	gwmMenuAddCommand(menuEdit, DV_SYM_PROPS, "Properties", NULL);
 };
 
 int main(int argc, char *argv[])
