@@ -446,6 +446,10 @@ void gwmTextFieldSelectWord(GWMWindow *field)
 int txtPaste(void *context)
 {
 	GWMWindow *field = (GWMWindow*) context;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	
+	if (data->flags & GWM_TXT_DISABLED) return 0;
+	
 	size_t size;
 	char *text = gwmClipboardGetText(&size);
 	if (text != NULL)
@@ -455,46 +459,6 @@ int txtPaste(void *context)
 	};
 
 	gwmFocus(field);
-	return 0;
-};
-
-int txtCut(void *context)
-{
-	GWMWindow *field = (GWMWindow*) context;
-	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
-	
-	if (data->selectStart != data->selectEnd)
-	{
-		char *temp = (char*) malloc(strlen(data->text) + 1);
-		temp[0] = 0;
-		
-		const char *scan = data->text;
-		
-		// skip the text before selection
-		size_t count = data->selectStart;
-		while (count--)
-		{
-			ddiReadUTF8(&scan);
-		};
-		
-		// now copy selection into buffer
-		count = data->selectEnd - data->selectStart;
-		while (count--)
-		{
-			long codepoint = ddiReadUTF8(&scan);
-			if (codepoint == 0) break;
-			ddiWriteUTF8(&temp[strlen(temp)], codepoint);
-		};
-		
-		// store in the clipboard
-		gwmClipboardPutText(temp, strlen(temp));
-		free(temp);
-	};
-	
-	gwmTextFieldDeleteSelection(field);
-	gwmPostUpdate(field);
-	gwmFocus(field);
-
 	return 0;
 };
 
@@ -532,6 +496,48 @@ int txtCopy(void *context)
 	};
 	
 	gwmFocus(field);
+	return 0;
+};
+
+int txtCut(void *context)
+{
+	GWMWindow *field = (GWMWindow*) context;
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	
+	if (data->flags & GWM_TXT_DISABLED) return txtCopy(context);
+
+	if (data->selectStart != data->selectEnd)
+	{
+		char *temp = (char*) malloc(strlen(data->text) + 1);
+		temp[0] = 0;
+		
+		const char *scan = data->text;
+		
+		// skip the text before selection
+		size_t count = data->selectStart;
+		while (count--)
+		{
+			ddiReadUTF8(&scan);
+		};
+		
+		// now copy selection into buffer
+		count = data->selectEnd - data->selectStart;
+		while (count--)
+		{
+			long codepoint = ddiReadUTF8(&scan);
+			if (codepoint == 0) break;
+			ddiWriteUTF8(&temp[strlen(temp)], codepoint);
+		};
+		
+		// store in the clipboard
+		gwmClipboardPutText(temp, strlen(temp));
+		free(temp);
+	};
+	
+	gwmTextFieldDeleteSelection(field);
+	gwmPostUpdate(field);
+	gwmFocus(field);
+
 	return 0;
 };
 
