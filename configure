@@ -259,6 +259,7 @@ then
 	echo >>Makefile "	mkdir -p isodir/boot"
 	echo >>Makefile "	mkdir -p isodir/etc"
 	echo >>Makefile "	mkdir -p isodir/usr/bin"
+	echo >>Makefile "	mkdir -p isodir/root"
 	echo >>Makefile "	echo 'display /dev/bootfb0' > isodir/etc/gwm.conf"
 	echo >>Makefile "	echo 'resolution auto' >> isodir/etc/gwm.conf"
 	echo >>Makefile "	echo 'log /run/gwm.log' >> isodir/etc/gwm.conf"
