@@ -129,11 +129,11 @@ static void getRowInfo(FlexLayoutData *data, FlexGridInfo *info)
 			FlexChild *child = row->ents[i];
 			if (child != NULL)
 			{
-				int minWidth, minHeight;
-				child->layout->getMinSize(child->layout, &minWidth, &minHeight);
+				int minWidth=0, minHeight=0;
+				if (child->layout != NULL) child->layout->getMinSize(child->layout, &minWidth, &minHeight);
 				
-				int prefWidth, prefHeight;
-				child->layout->getPrefSize(child->layout, &prefWidth, &prefHeight);
+				int prefWidth=0, prefHeight=0;
+				if (child->layout != NULL) child->layout->getPrefSize(child->layout, &prefWidth, &prefHeight);
 				
 				if (minHeight > rowInfo->minLen) rowInfo->minLen = minHeight;
 				if (prefHeight > rowInfo->prefLen) rowInfo->prefLen = prefHeight;
@@ -160,11 +160,11 @@ static void getColInfo(FlexLayoutData *data, FlexGridInfo *info)
 			FlexChild *child = row->ents[i];
 			if (child != NULL)
 			{
-				int minWidth, minHeight;
-				child->layout->getMinSize(child->layout, &minWidth, &minHeight);
+				int minWidth=0, minHeight=0;
+				if (child->layout != NULL) child->layout->getMinSize(child->layout, &minWidth, &minHeight);
 				
-				int prefWidth, prefHeight;
-				child->layout->getPrefSize(child->layout, &prefWidth, &prefHeight);
+				int prefWidth=0, prefHeight=0;
+				if (child->layout != NULL) child->layout->getPrefSize(child->layout, &prefWidth, &prefHeight);
 				
 				if (minWidth > colInfo->minLen) colInfo->minLen = minWidth;
 				if (prefWidth > colInfo->prefLen) colInfo->prefLen = prefWidth;
@@ -347,7 +347,7 @@ static void flexRun(GWMLayout *flex, int x, int y, int width, int height)
 			
 			// assign this space to the child
 			FlexChild *child = row->ents[colno];
-			if (child != NULL)
+			if (child != NULL && child->layout != NULL)
 			{
 				int childX = x + xOffset;
 				int childY = y + yOffset;
