@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#define	BUTTON_TEMPL_WIDTH	17
 #define	BUTTON_HEIGHT		30
 
 enum
@@ -54,16 +55,25 @@ typedef struct
 	int			symbol;
 	int			minWidth;
 	int			prefWidth;
+	int			focused;
 } GWMButtonData;
 
 static void gwmRedrawButton(GWMWindow *button);
 
 int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
 {
-	int retval = GWM_EVSTATUS_OK;
+	int retval = GWM_EVSTATUS_CONT;
 	GWMButtonData *data = (GWMButtonData*) context;
 	switch (ev->type)
 	{
+	case GWM_EVENT_FOCUS_IN:
+		data->focused = 1;
+		gwmRedrawButton(button);
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_FOCUS_OUT:
+		data->focused = 0;
+		gwmRedrawButton(button);
+		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_ENTER:
 		data->state = BUTTON_STATE_HOVERING;
 		gwmRedrawButton(button);
@@ -73,14 +83,14 @@ int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
 		gwmRedrawButton(button);
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
-		if (ev->keycode == GWM_KC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT || ev->keycode == GWM_KC_RETURN)
 		{
 			data->state = BUTTON_STATE_CLICKED;
 			gwmRedrawButton(button);
 		};
-		return GWM_EVSTATUS_OK;
+		return GWM_EVSTATUS_CONT;
 	case GWM_EVENT_UP:
-		if (ev->keycode == GWM_KC_MOUSE_LEFT)
+		if (ev->keycode == GWM_KC_MOUSE_LEFT || ev->keycode == GWM_KC_RETURN)
 		{
 			if (data->state == BUTTON_STATE_CLICKED)
 			{
@@ -133,9 +143,9 @@ static void gwmRedrawButton(GWMWindow *button)
 		};
 	};
 
-	DDISurface *temp = ddiCreateSurface(&canvas->format, imgButton->width, BUTTON_HEIGHT, NULL, 0);
+	DDISurface *temp = ddiCreateSurface(&canvas->format, BUTTON_TEMPL_WIDTH, BUTTON_HEIGHT, NULL, 0);
 	assert(temp != NULL);
-	ddiOverlay(imgButton, 0, BUTTON_HEIGHT*whichImg, temp, 0, 0, imgButton->width, BUTTON_HEIGHT);
+	ddiOverlay(imgButton, BUTTON_TEMPL_WIDTH*data->focused, BUTTON_HEIGHT*whichImg, temp, 0, 0, BUTTON_TEMPL_WIDTH, BUTTON_HEIGHT);
 	DDISurface *scaled = ddiScale(temp, canvas->width, canvas->height, DDI_SCALE_BORDERED_GRADIENT);
 	assert(scaled != NULL);
 	ddiBlit(scaled, 0, 0, canvas, 0, 0, canvas->width, canvas->height);
@@ -199,10 +209,12 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
 	data->symbol = 0;
 	data->minWidth = 0;
 	data->prefWidth = 0;
+	data->focused = 0;
 	
 	button->getMinSize = button->getPrefSize = gwmSizeButton;
 	button->position = gwmPositionButton;
 	
+	gwmAcceptTabs(button);
 	gwmPushEventHandler(button, gwmButtonHandler, data);
 	gwmRedrawButton(button);
 	return button;

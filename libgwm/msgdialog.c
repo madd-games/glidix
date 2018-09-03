@@ -207,7 +207,8 @@ int gwmRunMessageDialog(GWMWindow *msg)
 	};
 	
 	gwmFit(msg);
-	gwmRunModal(msg, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_MKFOCUSED);
+	gwmFocus(buttons[data->numButtons-1]);
+	gwmRunModal(msg, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU);
 	gwmSetWindowFlags(msg, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
 	int answer = data->answer;

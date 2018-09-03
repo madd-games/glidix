@@ -276,7 +276,7 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	};
 	
 	// button
-	surf = surfaceSetup(format, &info->imgButton, 17, 120);
+	surf = surfaceSetup(format, &info->imgButton, 34, 120);
 	if (surf == NULL) return -1;
 	static DDIColor buttonNormal = {0xDD, 0xDD, 0xDD, 0xFF};
 	static DDIColor buttonHover = {0xEE, 0xEE, 0xEE, 0xFF};
@@ -285,6 +285,10 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	drawButton(surf, 0, 30, 17, 30, &buttonHover, 0);
 	drawButton(surf, 0, 60, 17, 30, &buttonNormal, 1);
 	drawButton(surf, 0, 90, 17, 30, &buttonDisabled, 0);
+	drawButton(surf, 17, 0, 17, 30, &buttonNormal, 0);
+	drawButton(surf, 17, 30, 17, 30, &buttonHover, 0);
+	drawButton(surf, 17, 60, 17, 30, &buttonNormal, 1);
+	drawButton(surf, 17, 90, 17, 30, &buttonDisabled, 0);
 	
 	// checkbox
 	surf = surfaceSetup(format, &info->imgCheckbox, 60, 80);
