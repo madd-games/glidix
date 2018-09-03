@@ -83,7 +83,7 @@ static void gwmRedrawLabel(GWMWindow *label)
 	if (width == 0) width = canvas->width;
 	if (canvas->width != 0 && width > canvas->width) width = canvas->width;
 	
-	DDIPen *pen = ddiCreatePen(&canvas->format, data->font, 0, 0, width, 0, 0, 0, NULL);
+	DDIPen *pen = ddiCreatePen(&canvas->format, data->font, 1, 1, width, 0, 0, 0, NULL);
 	assert(pen != NULL);
 	if (data->width == 0) ddiSetPenWrap(pen, 0);
 	ddiSetPenAlignment(pen, data->align);
@@ -92,6 +92,9 @@ static void gwmRedrawLabel(GWMWindow *label)
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &trans);
 	if (canvas->width != 0) ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
+	
+	data->prefWidth += 2;
+	data->prefHeight += 2;
 	
 	gwmPostDirty(label);
 };
