@@ -74,6 +74,7 @@ int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_FOCUS_OUT:
 		data->focused = 0;
+		data->state = BUTTON_STATE_NORMAL;
 		gwmRedrawButton(button);
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_ENTER:

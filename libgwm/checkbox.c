@@ -104,6 +104,7 @@ int gwmCheckboxHandler(GWMEvent *ev, GWMWindow *checkbox, void *context)
 		data->mstate = CB_MSTATE_HOVERING;
 		gwmRedrawCheckbox(checkbox);
 		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_FOCUS_OUT:
 	case GWM_EVENT_LEAVE:
 		data->mstate = CB_MSTATE_NORMAL;
 		gwmRedrawCheckbox(checkbox);

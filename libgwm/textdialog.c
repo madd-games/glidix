@@ -95,7 +95,8 @@ void gwmRunTextDialog(GWMTextDialog *txt)
 	TextData *data = (TextData*) gwmGetData(txt, txtHandler);
 
 	gwmLayout(txt, 600, 700);
-	gwmRunModal(txt, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
+	gwmFocus(data->btnClose);
+	gwmRunModal(txt, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_RESIZEABLE);
 	gwmSetWindowFlags(txt, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
 	gwmDestroyButton(data->btnClose);

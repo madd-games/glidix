@@ -691,7 +691,7 @@ static int gwmPostEventByWindowID(GWMEvent *ev, uint64_t targetID, uint64_t moda
 			return GWM_EVSTATUS_OK;
 		};
 		
-		if ((targetID == info->win->id) && (info->win->modalID == modalID))
+		if ((targetID == info->win->id) && (info->win->modalID == modalID || ev->type == GWM_EVENT_FOCUS_OUT))
 		{
 			info->refcount++;
 			int status = info->callback(ev, info->win, info->context);

@@ -157,6 +157,7 @@ static int gwmRadioHandler(GWMEvent *ev, GWMWindow *radio, void *context)
 		data->state = RADIO_HOVER;
 		gwmRedrawRadio(radio);
 		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_FOCUS_OUT:
 	case GWM_EVENT_LEAVE:
 		data->state = RADIO_NORMAL;
 		gwmRedrawRadio(radio);

@@ -183,7 +183,8 @@ void gwmRunAbout(GWMAboutDialog *about)
 	AboutData *data = (AboutData*) gwmGetData(about, aboutHandler);
 	
 	gwmFit(about);
-	gwmRunModal(about, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_MKFOCUSED);
+	gwmFocus(data->btnClose);
+	gwmRunModal(about, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU);
 	gwmSetWindowFlags(about, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
 	gwmDestroyImage(data->img);
