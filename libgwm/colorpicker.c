@@ -290,7 +290,9 @@ int gwmPickColor(GWMWindow *parent, const char *caption, DDIColor *color)
 	gwmPushEventHandler(preview, previewHandler, data);
 	gwmPostUpdate(preview);
 	gwmPushEventHandler(picker, pickerHandler, data);
-	gwmRunModal(picker, GWM_WINDOW_NOSYSMENU | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_MKFOCUSED);
+	gwmTextFieldSelectAll(txtSpec);
+	gwmFocus(txtSpec);
+	gwmRunModal(picker, GWM_WINDOW_NOSYSMENU | GWM_WINDOW_NOTASKBAR);
 	
 	gwmSetWindowFlags(picker, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
