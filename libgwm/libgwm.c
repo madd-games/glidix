@@ -434,24 +434,21 @@ GWMWindow* gwmCreateWindow(
 		win->flags = flags & (~GWM_WINDOW_MKFOCUSED);
 		win->caption = strdup(caption);
 		
-		if (parent != NULL)
+		if (parent == NULL)
 		{
-			if (parent->tabLastChild == NULL)
-			{
-				win->tabPrev = win->tabNext = NULL;
-				parent->tabLastChild = win;
-			}
-			else
-			{
-				parent->tabLastChild->tabNext = win;
-				win->tabPrev = parent->tabLastChild;
-				win->tabNext = NULL;
-				parent->tabLastChild = win;
-			};
+			win->tabPrev = win->tabNext = NULL;
+			win->tabLastChild = win;
 		}
 		else
 		{
-			win->tabPrev = win->tabNext = NULL;
+			GWMWindow *topWindow = parent;
+			while (topWindow->parent != NULL && topWindow->tabLastChild == NULL) topWindow = topWindow->parent;
+			
+			win->tabPrev = topWindow->tabLastChild;
+			if (win->tabPrev != NULL) win->tabPrev->tabNext = win;
+			win->tabNext = NULL;
+			win->tabLastChild = NULL;
+			topWindow->tabLastChild = win;
 		};
 		
 		win->tabLastChild = NULL;
@@ -497,9 +494,10 @@ void gwmDestroyWindow(GWMWindow *win)
 
 	if (win->parent != NULL)
 	{
-		if (win->parent->tabLastChild == win)
+		GWMWindow *parent;
+		for (parent=win->parent; parent!=NULL; parent=parent->parent)
 		{
-			win->parent->tabLastChild = win->tabPrev;
+			if (parent->tabLastChild == win) parent->tabLastChild = win->tabPrev;
 		};
 	};
 	

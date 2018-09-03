@@ -64,6 +64,8 @@ int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
 {
 	int retval = GWM_EVSTATUS_CONT;
 	GWMButtonData *data = (GWMButtonData*) context;
+	DDISurface *canvas = gwmGetWindowCanvas(button);
+	
 	switch (ev->type)
 	{
 	case GWM_EVENT_FOCUS_IN:
@@ -81,6 +83,13 @@ int gwmButtonHandler(GWMEvent *ev, GWMWindow *button, void *context)
 	case GWM_EVENT_LEAVE:
 		data->state = BUTTON_STATE_NORMAL;
 		gwmRedrawButton(button);
+		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_MOTION:
+		if (ev->x < 0 || ev->x >= canvas->width || ev->y < 0 || ev->y >= canvas->height)
+		{
+			data->state = BUTTON_STATE_NORMAL;
+			gwmRedrawButton(button);
+		};
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_DOWN:
 		if (ev->keycode == GWM_KC_MOUSE_LEFT || ev->keycode == GWM_KC_RETURN)
