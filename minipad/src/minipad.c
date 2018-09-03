@@ -84,7 +84,20 @@ int trySave(int forceChoice)
 {
 	if (filePath == NULL || forceChoice)
 	{
+		char *defaultName;
+		if (filePath == NULL)
+		{
+			defaultName = "Untitled";
+		}
+		else
+		{
+			char *slashPos = strrchr(filePath, '/');
+			if (slashPos != NULL) defaultName = slashPos+1;
+			else defaultName = filePath;
+		};
+		
 		GWMFileChooser *fc = gwmCreateFileChooser(topWindow, "Select location to save file", GWM_FILE_SAVE);
+		gwmSetFileChooserName(fc, defaultName);
 		char *newPath = gwmRunFileChooser(fc);
 		
 		if (newPath == NULL) return -1;

@@ -514,7 +514,9 @@ char* gwmRunFileChooser(GWMFileChooser *fc)
 	};
 	
 	gwmLayout(fc, FC_WIDTH, FC_HEIGHT);
-	gwmRunModal(fc, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_MKFOCUSED);
+	gwmTextFieldSelectAll(data->txtFileName);
+	gwmFocus(data->txtFileName);
+	gwmRunModal(fc, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU);
 	gwmSetWindowFlags(fc, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
 	gwmDestroyButton(data->btnCancel);
