@@ -303,7 +303,8 @@ void propShow(const char *path, FSMimeType *mime)
 	// == END TABS ==
 	gwmFit(props);
 	gwmPushEventHandler(props, propsHandler, data);
-	gwmRunModal(props, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_NOTASKBAR);
+	gwmFocus(btnClose);
+	gwmRunModal(props, GWM_WINDOW_NOSYSMENU | GWM_WINDOW_NOTASKBAR);
 	gwmSetWindowFlags(props, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
 	gwmDestroyLabel(lblFileName);
@@ -322,6 +323,7 @@ void propShow(const char *path, FSMimeType *mime)
 	gwmDestroyTextField(txtAccess);
 	gwmDestroyFrame(frUnix);
 	gwmDestroyNotebook(notebook);
+	gwmDestroyButton(btnClose);
 	
 	for (i=0; i<3; i++)
 	{
