@@ -36,6 +36,7 @@ uint32_t if_nametoindex(const char *ifname)
 	_glidix_netstat info;
 	if (_glidix_netconf_stat(ifname, &info, sizeof(_glidix_netstat)) == -1)
 	{
+		errno = ENXIO;
 		return 0;
 	};
 	
