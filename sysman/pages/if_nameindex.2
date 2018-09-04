@@ -1,0 +1,33 @@
+>NAME
+
+if_nameindex - get a list of network interfaces
+
+>SYNOPSIS
+
+	#include <net/if.h>
+	
+	struct if_nameindex* if_nameindex();
+
+>DESCRIPTION
+
+This function returns an array of network interfaces, described by 'struct if_nameindex', which has at least the following fields:
+
+	struct if_nameindex
+	{
+		unsigned int				'if_index';
+		char*					'if_name';
+	};
+
+The list is terminated by an entry with 'if_index' set to 0, and 'if_name' set to *NULL*. For all other entries, 'if_index' contains the interface index, and 'if_name' contains its name. The returned list must later be freed using [if_freenameindex.2].
+
+>RETURN VALUE
+
+This function returns a pointer to the interface array on success. On error, it returns *NULL* and sets [errno.6] appropriately.
+
+>ERRORS
+
+On error, this function returns *NULL* and sets [errno.6] appropriately. Under Glidix, this currently never happens, but it is recommended to check the return value for portability.
+
+>SEE ALSO
+
+[if_freenameindex.2]

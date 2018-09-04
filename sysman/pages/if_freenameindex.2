@@ -1,0 +1,25 @@
+>NAME
+
+if_freenameindex - free the list of network interfaces
+
+>SYNOPSIS
+
+	#include <net/if.h>
+	
+	void if_freenameindex(struct if_nameindex *'list');
+
+>DESCRIPTION
+
+This function frees the 'list' of network interfaces previously returned by [if_nameindex.2].
+
+>RETURN VALUE
+
+This function does not return anything.
+
+>ERRORS
+
+This function always succeeds.
+
+>SEE ALSO
+
+[if_nameindex.2]

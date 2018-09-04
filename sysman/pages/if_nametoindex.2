@@ -1,0 +1,27 @@
+>NAME
+
+if_nametoindex - convert network interface name to index
+
+>SYNOPSIS
+
+	#include <net/if.h>
+	
+	unsigned int if_nametoindex(const char *ifname);
+
+>DESCRIPTION
+
+This function returns the index of the network interface named by 'ifname'.
+
+>RETURN VALUE
+
+This function returns the index corresponding to the network interface named 'ifname'. If no such interface is found, this function returns 0 and sets [errno.6] to *ENXIO*.
+
+>ERRORS
+
+On error, this function returns 0 and sets [errno.6] to one of the following:
+
+\* *ENXIO* - no interface named 'ifname' exists.
+
+>SEE ALSO
+
+[if_indextoname.2]

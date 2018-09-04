@@ -1,0 +1,27 @@
+>NAME
+
+if_indextoname - convert network interface index to name
+
+>SYNOPSIS
+
+	#include <net/if.h>
+	
+	char* if_indextoname(unsigned int 'index', char *'ifbuf');
+
+>DESCRIPTION
+
+This function writes the name of the network interface with index 'index' into 'ifbuf'. 'ifbuf' must be a buffer with at least *IF_NAMESIZE* bytes.
+
+>RETURN VALUE
+
+On success, this function returns 'ifbuf'. On error (the interface with the given index does not exist), it returns *NULL* and sets [errno.6] to *ENXIO*.
+
+>ERRORS
+
+On error, this function returns *NULL* and sets [errno.6] to one of the following:
+
+\* *ENXIO* - 'index' does not correspond to an existing network interface.
+
+>SEE ALSO
+
+[if_nametoindex.2]
