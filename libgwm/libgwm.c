@@ -357,6 +357,22 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 			};
 			
 			return gwmPostEvent((GWMEvent*) &cmdev, win);
+		}
+		else if (ev->keycode == GWM_KC_F4)
+		{
+			if (ev->keymod & GWM_KM_ALT)
+			{
+				GWMWindow *topWindow = win;
+				while (topWindow->parent != NULL) topWindow = topWindow->parent;
+				
+				if ((topWindow->flags & GWM_WINDOW_NOSYSMENU) == 0)
+				{
+					GWMEvent cev;
+					memset(&cev, 0, sizeof(GWMEvent));
+					cev.type = GWM_EVENT_CLOSE;
+					return gwmPostEvent(&cev, topWindow);
+				};
+			};
 		};
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_CLOSE:
