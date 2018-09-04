@@ -113,6 +113,8 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.stock.italic",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockItalic)},
 	{"gwm.toolkit.stock.underline",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockUnderline)},
 	{"gwm.toolkit.stock.strike",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockStrike)},
+	{"gwm.toolkit.border.light",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colBorderLight)},
+	{"gwm.toolkit.border.dark",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colBorderDark)},
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
@@ -458,6 +460,10 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	
 	// frame color
 	memcpy(&info->colFrame, &white, sizeof(DDIColor));
+	
+	// border
+	memcpy(&info->colBorderDark, &white, sizeof(DDIColor));
+	memcpy(&info->colBorderLight, &white, sizeof(DDIColor));
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

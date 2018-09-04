@@ -107,6 +107,10 @@ extern DDIColor* gwmColorSelectionP;
 extern DDIColor* gwmBackColorP;
 #define	GWM_COLOR_EDITOR			gwmEditorColorP
 extern DDIColor* gwmEditorColorP;
+#define	GWM_COLOR_BORDER_LIGHT			gwmBorderLightColorP
+extern DDIColor* gwmBorderLightColorP;
+#define	GWM_COLOR_BORDER_DARK			gwmBorderDarkColorP
+extern DDIColor* gwmBorderDarkColorP;
 
 /**
  * Fonts.
@@ -137,6 +141,13 @@ extern DDIFont* gwmCaptionFontP;
 #define	GWM_TXT_DISABLED			(1 << 1)
 #define	GWM_TXT_MASKED				(1 << 2)
 #define	GWM_TXT_MULTILINE			(1 << 3)
+
+/**
+ * Label border styles.
+ */
+#define	GWM_BORDER_NONE				0
+#define	GWM_BORDER_RAISED			1
+#define	GWM_BORDER_SUNKEN			2
 
 /**
  * Checkbox flags.
@@ -602,6 +613,12 @@ typedef struct
 	 * Frame color.
 	 */
 	DDIColor				colFrame;
+	
+	/**
+	 * "Light" and "dark" parts of a border.
+	 */
+	DDIColor				colBorderLight;
+	DDIColor				colBorderDark;
 } GWMInfo;
 
 /**
@@ -2516,6 +2533,11 @@ void gwmSetLabelFont(GWMLabel *label, DDIFont *font);
  * Set the alignment of a label.
  */
 void gwmSetLabelAlignment(GWMLabel *label, int align);
+
+/**
+ * Set the border of a label.
+ */
+void gwmSetLabelBorder(GWMLabel *label, int style, int width);
 
 /**
  * Get the icon surface ID of a window.

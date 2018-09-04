@@ -141,18 +141,36 @@ int main()
 		return 1;
 	};
 	
-	DDIColor color = {25, 50, 100, 0xFF};
-	int symbol = gwmPickColor(NULL, "Pick some color", &color);
-	if (symbol == GWM_SYM_OK)
+	GWMWindow *win = gwmCreateWindow(NULL, "Test", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
+	GWMLayout *grid = gwmCreateGridLayout(4);
+	gwmSetWindowLayout(win, grid);
+	
+	gwmGridLayoutAddLayout(grid, NULL, 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(win, "GWM_BORDER_NONE", 0), 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(win, "GWM_BORDER_RAISED", 0), 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(win, "GWM_BORDER_SUNKEN", 0), 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
+	
+	int width;
+	for (width=0; width<9; width++)
 	{
-		char buf[DDI_COLOR_STRING_SIZE];
-		ddiColorToString(&color, buf);
-		printf("You clicked OK and chose %s\n", buf);
-	}
-	else
-	{
-		printf("You clicked cancel\n");
+		char buffer[256];
+		sprintf(buffer, "Border width = %d", width);
+		gwmGridLayoutAddWindow(grid, gwmCreateLabel(win, buffer, 0), 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
+		
+		int style;
+		for (style=0; style<3; style++)
+		{
+			GWMLabel *label = gwmNewLabel(win);
+			gwmSetLabelText(label, "Hello world");
+			gwmSetLabelAlignment(label, DDI_ALIGN_CENTER);
+			gwmSetLabelBorder(label, style, width);
+			gwmGridLayoutAddWindow(grid, label, 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
+		};
 	};
+	
+	gwmFit(win);
+	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
+	gwmMainLoop();
 	
 	gwmQuit();
 	return 0;

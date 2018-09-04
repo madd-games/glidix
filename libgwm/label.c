@@ -59,13 +59,22 @@ typedef struct
 	 * Alignment.
 	 */
 	int align;
+	
+	/**
+	 * Border.
+	 */
+	int borderStyle;
+	int borderWidth;
 } LabelData;
+
+static void gwmRedrawLabel(GWMWindow *label);
 
 static int labelHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	switch (ev->type)
 	{
 	case GWM_EVENT_RETHEME:
+		gwmRedrawLabel(win);
 		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
@@ -83,7 +92,7 @@ static void gwmRedrawLabel(GWMWindow *label)
 	if (width == 0) width = canvas->width;
 	if (canvas->width != 0 && width > canvas->width) width = canvas->width;
 	
-	DDIPen *pen = ddiCreatePen(&canvas->format, data->font, 1, 1, width, 0, 0, 0, NULL);
+	DDIPen *pen = ddiCreatePen(&canvas->format, data->font, 1+data->borderWidth, 1+data->borderWidth, width-2*data->borderWidth-2, 0, 0, 0, NULL);
 	assert(pen != NULL);
 	if (data->width == 0) ddiSetPenWrap(pen, 0);
 	ddiSetPenAlignment(pen, data->align);
@@ -93,8 +102,35 @@ static void gwmRedrawLabel(GWMWindow *label)
 	if (canvas->width != 0) ddiExecutePen(pen, canvas);
 	ddiDeletePen(pen);
 	
-	data->prefWidth += 2;
-	data->prefHeight += 2;
+	if (data->borderStyle != GWM_BORDER_NONE)
+	{
+		DDIColor *top;
+		DDIColor *bottom;
+		
+		if (data->borderStyle == GWM_BORDER_RAISED)
+		{
+			top = GWM_COLOR_BORDER_LIGHT;
+			bottom = GWM_COLOR_BORDER_DARK;
+		}
+		else
+		{
+			top = GWM_COLOR_BORDER_DARK;
+			bottom = GWM_COLOR_BORDER_LIGHT;
+		};
+		
+		int i;
+		for (i=0; i<data->borderWidth; i++)
+		{
+			ddiFillRect(canvas, i, i, canvas->width-2*i, 1, top);
+			ddiFillRect(canvas, i, i, 1, canvas->height-2*i, top);
+			
+			ddiFillRect(canvas, i, canvas->height-1-i, canvas->width-i, 1, bottom);
+			ddiFillRect(canvas, canvas->width-1-i, i, 1, canvas->height-i, bottom);
+		};
+	};
+	
+	data->prefWidth += 2 + 2*data->borderWidth;
+	data->prefHeight += 2 + 2*data->borderWidth;
 	
 	gwmPostDirty(label);
 };
@@ -124,6 +160,8 @@ GWMWindow* gwmNewLabel(GWMWindow *parent)
 	data->prefHeight = 0;
 	data->font = gwmGetDefaultFont();
 	data->align = DDI_ALIGN_LEFT;
+	data->borderStyle = GWM_BORDER_NONE;
+	data->borderWidth = 0;
 	
 	label->getMinSize = label->getPrefSize = gwmSizeLabel;
 	label->position = gwmPositionLabel;
@@ -174,5 +212,13 @@ void gwmSetLabelAlignment(GWMLabel *label, int align)
 {
 	LabelData *data = (LabelData*) gwmGetData(label, labelHandler);
 	data->align = align;
+	gwmRedrawLabel(label);
+};
+
+void gwmSetLabelBorder(GWMLabel *label, int style, int width)
+{
+	LabelData *data = (LabelData*) gwmGetData(label, labelHandler);
+	data->borderStyle = style;
+	data->borderWidth = width;
 	gwmRedrawLabel(label);
 };

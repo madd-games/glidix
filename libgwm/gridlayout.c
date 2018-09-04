@@ -117,7 +117,7 @@ static void gridMinSize(GWMLayout *grid, int *width, int *height)
 		for (col=0; col<data->cols; col++)
 		{
 			int w, h;
-			if (row->ents[col] != NULL)
+			if (row->ents[col] != NULL && row->ents[col]->layout != NULL)
 			{
 				GridChild *child = row->ents[col];
 				child->layout->getMinSize(child->layout, &w, &h);
@@ -146,7 +146,7 @@ static void gridPrefSize(GWMLayout *grid, int *width, int *height)
 		for (col=0; col<data->cols; col++)
 		{
 			int w, h;
-			if (row->ents[col] != NULL)
+			if (row->ents[col] != NULL && row->ents[col]->layout != NULL)
 			{
 				GridChild *child = row->ents[col];
 				child->layout->getPrefSize(child->layout, &w, &h);
@@ -178,7 +178,7 @@ static void gridRun(GWMLayout *grid, int x, int y, int width, int height)
 		int col;
 		for (col=0; col<data->cols; col++)
 		{
-			if (row->ents[col] != NULL)
+			if (row->ents[col] != NULL && row->ents[col]->layout != NULL)
 			{
 				GridChild *child = row->ents[col];
 				

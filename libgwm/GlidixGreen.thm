@@ -111,6 +111,11 @@ namespace gwm {
 			image underline /usr/share/images/underline.png
 			image strike /usr/share/images/strike.png
 		}
+		
+		namespace border {
+			color light #EEEEEE:255
+			color dark #AAAAAA:255
+		}
 	}
 	
 	namespace sysbar {

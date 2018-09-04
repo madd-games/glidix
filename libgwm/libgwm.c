@@ -92,6 +92,8 @@ static FileIconCache *fileIconCache = NULL;
 DDIColor* gwmColorSelectionP;
 DDIColor* gwmBackColorP;
 DDIColor* gwmEditorColorP;
+DDIColor* gwmBorderLightColorP;
+DDIColor* gwmBorderDarkColorP;
 
 static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 {
@@ -274,10 +276,14 @@ int gwmInit()
 	gwmColorSelectionP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.selection", GWM_TYPE_COLOR, NULL);
 	gwmBackColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.winback", GWM_TYPE_COLOR, NULL);
 	gwmEditorColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.editor", GWM_TYPE_COLOR, NULL);
+	gwmBorderLightColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.border.light", GWM_TYPE_COLOR, NULL);
+	gwmBorderDarkColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.border.dark", GWM_TYPE_COLOR, NULL);
 	
 	assert(gwmColorSelectionP != NULL);
 	assert(gwmBackColorP != NULL);
 	assert(gwmEditorColorP != NULL);
+	assert(gwmBorderLightColorP != NULL);
+	assert(gwmBorderDarkColorP != NULL);
 	
 	return 0;
 };
