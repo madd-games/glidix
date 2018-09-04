@@ -52,6 +52,23 @@ int gwmCreateTemplate(GWMWindowTemplate *wt)
 	};
 	
 	gwmBoxLayoutAddLayout(layout, wt->wtBody, 1, 0, GWM_BOX_FILL);
+	
+	if (wt->wtComps & GWM_WTC_STATUSBAR)
+	{
+		GWMWindow *statbar = gwmCreateWindow(wt->wtWindow, "GWMStatusBar", 0, 0, 0, 0, 0);
+		gwmBoxLayoutAddWindow(layout, statbar, 0, 2, GWM_BOX_ALL | GWM_BOX_FILL);
+		
+		GWMLayout *statLayout = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
+		gwmSetWindowLayout(statbar, statLayout);
+		
+		GWMLabel *label = gwmCreateLabel(statbar, "Ready.", 0);
+		gwmBoxLayoutAddWindow(statLayout, label, 0, 2, GWM_BOX_RIGHT);
+		gwmBoxLayoutAddSpacer(statLayout, 1, 0, 0);
+		
+		wt->wtStatusLabel = label;
+		wt->wtStatusBar = statbar;
+	};
+	
 	return 0;
 };
 

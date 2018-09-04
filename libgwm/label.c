@@ -222,3 +222,11 @@ void gwmSetLabelBorder(GWMLabel *label, int style, int width)
 	data->borderWidth = width;
 	gwmRedrawLabel(label);
 };
+
+GWMLabel* gwmNewStatusBarLabel(GWMWindow *statbar)
+{
+	GWMLabel *label = gwmNewLabel(statbar);
+	gwmBoxLayoutAddWindow(statbar->layout, label, 0, 2, GWM_BOX_LEFT);
+	gwmSetLabelBorder(label, GWM_BORDER_SUNKEN, 1);
+	return label;
+};

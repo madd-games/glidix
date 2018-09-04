@@ -1476,6 +1476,7 @@ typedef struct
  */
 #define	GWM_WTC_MENUBAR				(1 << 0)
 #define	GWM_WTC_TOOLBAR				(1 << 1)
+#define	GWM_WTC_STATUSBAR			(1 << 2)
 
 /**
  * Template descriptor for gwmCreateTemplate() and gwmDestroyTemplate().
@@ -1512,6 +1513,13 @@ typedef struct
 	 * This field is set to the toolbar layout manager if it is requested in wtComps.
 	 */
 	GWMLayout*				wtToolbar;
+	
+	/**
+	 * These fields are set to the status bar and the "status label" if a GWM_WTC_STATUSBAR
+	 * was requested.
+	 */
+	GWMLabel*				wtStatusLabel;
+	GWMWindow*				wtStatusBar;
 } GWMWindowTemplate;
 
 /**
@@ -2897,5 +2905,10 @@ void gwmRunAbout(GWMAboutDialog *about);
  * If the user clicks Cancel, this function returns GWM_SYM_CANCEL, and doe snot update the color.
  */
 int gwmPickColor(GWMWindow *parent, const char *caption, DDIColor *color);
+
+/**
+ * Create a label in a status bar.
+ */
+GWMLabel* gwmNewStatusBarLabel(GWMWindow *statbar);
 
 #endif
