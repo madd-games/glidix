@@ -79,6 +79,7 @@ static StockLabel labels[] = {
 	{GWM_SYM_SAVE,			"Save"},
 	{GWM_SYM_CLOSE,			"Close"},
 	{GWM_SYM_ABOUT,			"About..."},
+	{GWM_SYM_HELP,			"Help..."},
 	
 	// LIST TERMINATOR
 	{GWM_SYM_NONE, ""},

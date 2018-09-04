@@ -337,6 +337,20 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 			{
 				gwmFocus(scan);
 			};
+		}
+		else if (ev->keycode == GWM_KC_F1)
+		{
+			GWMCommandEvent cmdev;
+			memset(&cmdev, 0, sizeof(GWMCommandEvent));
+			cmdev.header.type = GWM_EVENT_COMMAND;
+			cmdev.symbol = GWM_SYM_HELP;
+			
+			if (ev->keymod & GWM_KM_CTRL)
+			{
+				cmdev.symbol = GWM_SYM_ABOUT;
+			};
+			
+			return gwmPostEvent((GWMEvent*) &cmdev, win);
 		};
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_CLOSE:
