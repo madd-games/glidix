@@ -131,8 +131,9 @@ void userSetup()
 	// create the home directory and set the owner to be the new user
 	char homedir[256];
 	sprintf(homedir, "/mnt/home/%s", username);
-	mkdir(homedir, 0755);
+	mkdir(homedir, 0700);
 	chown(homedir, 1000, 1000);
+	chmod(homedir, 0700);
 	
 	// create the /etc/passwd file
 	FILE *fp = fopen("/mnt/etc/passwd", "w");
