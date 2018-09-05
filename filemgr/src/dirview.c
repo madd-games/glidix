@@ -1076,5 +1076,10 @@ void dvProps(DirView *dv)
 	if (ent != NULL)
 	{
 		propShow(ent->path, ent->mime);
+	}
+	else
+	{
+		FSMimeType *mime = fsGetType(data->location);
+		propShow(data->location, mime);
 	};
 };
