@@ -417,6 +417,11 @@ void gwmTextFieldBackspace(GWMWindow *field)
 		style = style->next;
 	};
 
+	GWMCommandEvent cmdev;
+	memset(&cmdev, 0, sizeof(GWMCommandEvent));
+	cmdev.header.type = GWM_EVENT_VALUE_CHANGED;
+	gwmPostEvent((GWMEvent*) &cmdev, field);
+
 	gwmPostUpdate(field);
 };
 
