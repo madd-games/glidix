@@ -34,6 +34,22 @@
 
 #define	TEXTFIELD_MIN_WIDTH	100
 
+#define	TXT_STYLE_SET_FG	1
+#define	TXT_STYLE_SET_BG	2
+
+typedef struct TextStyle_
+{
+	struct TextStyle_*	prev;
+	struct TextStyle_*	next;
+	uint64_t		offset;		// in unicode characters
+	int			type;
+	
+	union
+	{
+		DDIColor	color;
+	};
+} TextStyle;
+
 typedef struct
 {
 	char			*text;
@@ -93,6 +109,11 @@ typedef struct
 	 */
 	GWMScrollbar*		sbarX;
 	GWMScrollbar*		sbarY;
+	
+	/**
+	 * List of text styles.
+	 */
+	TextStyle*		styles;
 } GWMTextFieldData;
 
 static DDIFont *fntPlaceHolder;
@@ -143,46 +164,63 @@ void gwmRedrawTextField(GWMWindow *field)
 		ddiSetPenAlignment(data->pen, data->align);
 		if (data->flags & GWM_TXT_MASKED) ddiPenSetMask(data->pen, 1);
 		if (data->focused) ddiSetPenCursor(data->pen, data->cursorPos);
+
+		char *buffer = (char*) malloc(strlen(data->text)+1);
+		const char *scan = data->text;
+		size_t currentPos = 0;
+		size_t totalChars = ddiCountUTF8(data->text);
+		TextStyle *style = data->styles;
 		
-		if (data->selectStart == data->selectEnd)
+		while (*scan != 0)
 		{
-			ddiWritePen(data->pen, data->text);
-		}
-		else
-		{
-			char *buffer = (char*) malloc(strlen(data->text)+1);
-			buffer[0] = 0;
-			
-			const char *scan = data->text;
-			
-			// first print the text before selection
-			size_t count = data->selectStart;
-			while (count--)
+			// process all current styles
+			while (style != NULL && style->offset == currentPos)
 			{
-				long codepoint = ddiReadUTF8(&scan);
-				if (codepoint == 0) break;
-				ddiWriteUTF8(&buffer[strlen(buffer)], codepoint);
+				switch (style->type)
+				{
+				case TXT_STYLE_SET_FG:
+					ddiSetPenColor(data->pen, &style->color);
+					break;
+				case TXT_STYLE_SET_BG:
+					ddiSetPenBackground(data->pen, &style->color);
+					break;
+				};
+				
+				style = style->next;
 			};
 			
-			ddiWritePen(data->pen, buffer);
-			
-			// now the selection part
-			ddiSetPenBackground(data->pen, GWM_COLOR_SELECTION);
-			buffer[0] = 0;
-			count = data->selectEnd - data->selectStart;
-			while (count--)
+			// process selection
+			if (currentPos == data->selectStart && data->selectStart != data->selectEnd)
 			{
-				long codepoint = ddiReadUTF8(&scan);
-				if (codepoint == 0) break;
-				ddiWriteUTF8(&buffer[strlen(buffer)], codepoint);
+				ddiSetPenBackground(data->pen, GWM_COLOR_SELECTION);
 			};
+			
+			if (currentPos == data->selectEnd && data->selectStart != data->selectEnd)
+			{
+				// TODO: this should actually restore the correct style!
+				ddiSetPenBackground(data->pen, &transparent);
+			};
+			
+			// figure out how far we're going
+			size_t nextCount = totalChars - currentPos;
+			if (style != NULL) nextCount = style->offset - currentPos;
+			if (data->selectStart != data->selectEnd && data->selectStart > currentPos
+				&& (data->selectStart - currentPos) < nextCount) nextCount = data->selectStart - currentPos;
+			if (data->selectStart != data->selectEnd && data->selectEnd > currentPos
+				&& (data->selectEnd - currentPos) < nextCount) nextCount = data->selectEnd - currentPos;
+			
+			// copy that into the buffer
+			const char *endpos = ddiGetOffsetUTF8(scan, nextCount);
+			size_t byteSize = endpos - scan;
+			memcpy(buffer, scan, byteSize);
+			buffer[byteSize] = 0;
+			
+			// write it
 			ddiWritePen(data->pen, buffer);
 			
-			// write the rest
-			ddiSetPenBackground(data->pen, &transparent);
-			ddiWritePen(data->pen, scan);
-			
-			free(buffer);
+			// advance
+			currentPos += nextCount;
+			scan = endpos;
 		};
 		
 		if ((data->flags & GWM_TXT_MULTILINE) == 0)
@@ -756,6 +794,7 @@ GWMWindow *gwmCreateTextField(GWMWindow *parent, const char *text, int x, int y,
 	data->wrap = 0;
 	data->align = DDI_ALIGN_LEFT;
 	data->font = gwmGetDefaultFont();
+	data->styles = NULL;
 	
 	field->getMinSize = field->getPrefSize = txtGetSize;
 	field->position = txtPosition;
@@ -881,5 +920,136 @@ void gwmSetTextFieldFont(GWMTextField *field, DDIFont *font)
 {
 	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
 	data->font = font;
+	gwmPostUpdate(field);
+};
+
+void gwmClearTextFieldStyles(GWMTextField *field)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	while (data->styles != NULL)
+	{
+		TextStyle *style = data->styles;
+		data->styles = style->next;
+		free(style);
+	};
+	
+	gwmPostUpdate(field);
+};
+
+static void removeStyle(GWMTextFieldData *data, size_t start, size_t end, int type)
+{
+	TextStyle *scan = data->styles;
+	while (scan != NULL)
+	{
+		if (scan->type == type && scan->offset >= start && scan->offset < end)
+		{
+			if (data->styles == scan) data->styles = scan->next;
+			if (scan->prev != NULL) scan->prev->next = scan->next;
+			if (scan->next != NULL) scan->next->prev = scan->prev;
+			
+			TextStyle *next = scan->next;
+			free(scan);
+			scan = next;
+		}
+		else
+		{
+			scan = scan->next;
+		};
+	};
+};
+
+static void insertStyle(GWMTextFieldData *data, size_t pos, TextStyle *style)
+{
+	style->offset = pos;
+	
+	if (data->styles == NULL)
+	{
+		style->prev = NULL;
+		style->next = NULL;
+		data->styles = style;
+	}
+	else
+	{
+		TextStyle *scan = data->styles;
+		while (scan != NULL)
+		{
+			if (scan->offset < pos)
+			{
+				if (scan->next == NULL)
+				{
+					style->prev = scan;
+					style->next = NULL;
+					scan->next = style;
+					return;
+				}
+				else if (scan->next->offset >= pos)
+				{
+					style->prev = scan;
+					style->next = scan->next;
+					scan->next->prev = style;
+					scan->next = style;
+					return;
+				};
+			}
+			else
+			{
+				style->prev = scan->prev;
+				if (scan->prev == NULL) data->styles = style;
+				style->next = scan;
+				scan->prev->next = style;
+				scan->prev = style;
+				return;
+			};
+			
+			scan = scan->next;
+		};
+	};
+};
+
+void gwmSetTextFieldColorRange(GWMTextField *field, size_t start, size_t end, DDIColor *color)
+{
+	GWMTextFieldData *data = (GWMTextFieldData*) gwmGetData(field, gwmTextFieldHandler);
+	
+	size_t totalChars = ddiCountUTF8(data->text);
+	if (end > totalChars) end = totalChars;
+	
+	TextStyle *style = (TextStyle*) malloc(sizeof(TextStyle));
+	memset(style, 0, sizeof(TextStyle));
+	
+	style->type = TXT_STYLE_SET_FG;
+	memcpy(&style->color, color, sizeof(DDIColor));
+	
+	// figure out the current color at 'end'
+	DDIColor endColor = {0, 0, 0, 0xFF};
+	TextStyle *scan;
+	int needsEnd = 1;
+	for (scan=data->styles; scan!=NULL; scan=scan->next)
+	{
+		if (scan->offset == end) needsEnd = 0;
+		if (scan->offset >= end) break;
+		if (scan->type == TXT_STYLE_SET_FG)
+		{
+			memcpy(&endColor, &scan->color, sizeof(DDIColor));
+		};
+	};
+	
+	// remove all foreground settings inbetween
+	removeStyle(data, start, end, TXT_STYLE_SET_FG);
+	
+	// place our new style at 'start'
+	insertStyle(data, start, style);
+	
+	// if needed, restore the original color at the end
+	if (needsEnd)
+	{
+		style = (TextStyle*) malloc(sizeof(TextStyle));
+		memset(style, 0, sizeof(TextStyle));
+
+		style->type = TXT_STYLE_SET_FG;
+		memcpy(&style->color, &endColor, sizeof(DDIColor));
+		
+		insertStyle(data, end, style);
+	};
+	
 	gwmPostUpdate(field);
 };

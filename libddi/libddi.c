@@ -811,6 +811,16 @@ size_t ddiCountUTF8(const char *str)
 	return out;
 };
 
+const char* ddiGetOffsetUTF8(const char *str, size_t n)
+{
+	while (n--)
+	{
+		ddiReadUTF8(&str);
+	};
+	
+	return str;
+};
+
 DDIFont* ddiLoadFont(const char *family, int size, int style, const char **error)
 {
 	if (strlen(family) > 64)

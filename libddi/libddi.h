@@ -432,6 +432,14 @@ void ddiWriteUTF8(char *buffer, long codepoint);
 size_t ddiCountUTF8(const char *str);
 
 /**
+ * Return a pointer within the specified UTF-8 string, to the "n"th UTF-8 character (which may not correspond 1:1 to the
+ * byte position).
+ *
+ * If n is equal to the total number of characters, or is out of range, this function returns the end of the string.
+ */
+const char* ddiGetOffsetUTF8(const char *str, size_t n);
+
+/**
  * Open the specified font file, and use the given size.
  */
 DDIFont* ddiOpenFont(const char *fontfile, int size, const char **error);

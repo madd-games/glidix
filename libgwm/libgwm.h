@@ -1804,6 +1804,17 @@ void gwmSetTextFieldAlignment(GWMTextField *field, int align);
 void gwmSetTextFieldFont(GWMTextField *field, DDIFont *font);
 
 /**
+ * Clear all styles currently applied in a text field.
+ */
+void gwmClearTextFieldStyles(GWMTextField *field);
+
+/**
+ * Set the foreground color in the specified range in a text field. The range is given in CHARACTER, not BYTE
+ * units! (Each character may have a different length in UTF-8 encoding).
+ */
+void gwmSetTextFieldColorRange(GWMTextField *field, size_t start, size_t end, DDIColor *color);
+
+/**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
  * Returns 0 on success, -1 on error.
  */

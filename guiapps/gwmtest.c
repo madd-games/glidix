@@ -142,31 +142,15 @@ int main()
 	};
 	
 	GWMWindow *win = gwmCreateWindow(NULL, "Test", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
-	GWMLayout *grid = gwmCreateGridLayout(4);
-	gwmSetWindowLayout(win, grid);
+	GWMLayout *box = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(win, box);
 	
-	gwmGridLayoutAddLayout(grid, NULL, 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
-	gwmGridLayoutAddWindow(grid, gwmCreateLabel(win, "GWM_BORDER_NONE", 0), 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
-	gwmGridLayoutAddWindow(grid, gwmCreateLabel(win, "GWM_BORDER_RAISED", 0), 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
-	gwmGridLayoutAddWindow(grid, gwmCreateLabel(win, "GWM_BORDER_SUNKEN", 0), 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
+	GWMTextField *field = gwmNewTextField(win);
+	gwmBoxLayoutAddWindow(box, field, 1, 0, GWM_BOX_FILL);
 	
-	int width;
-	for (width=0; width<9; width++)
-	{
-		char buffer[256];
-		sprintf(buffer, "Border width = %d", width);
-		gwmGridLayoutAddWindow(grid, gwmCreateLabel(win, buffer, 0), 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
-		
-		int style;
-		for (style=0; style<3; style++)
-		{
-			GWMLabel *label = gwmNewLabel(win);
-			gwmSetLabelText(label, "Hello world");
-			gwmSetLabelAlignment(label, DDI_ALIGN_CENTER);
-			gwmSetLabelBorder(label, style, width);
-			gwmGridLayoutAddWindow(grid, label, 1, 1, GWM_GRID_CENTER, GWM_GRID_CENTER);
-		};
-	};
+	gwmWriteTextField(field, "Hello world! This is a styling test");
+	DDIColor blue = {0x00, 0x00, 0xFF, 0xFF};
+	gwmSetTextFieldColorRange(field, 6, 11, &blue);
 	
 	gwmFit(win);
 	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
