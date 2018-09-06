@@ -326,6 +326,35 @@ static void gwmTextFieldDeleteSelection(GWMWindow *field)
 		ddiWriteUTF8(&newBuffer[strlen(newBuffer)], codepoint);
 	};
 	
+	// process styles
+	size_t delta = data->selectEnd - data->selectStart;
+	TextStyle *style = data->styles;
+	while (style != NULL)
+	{
+		if (style->offset > data->selectStart)
+		{
+			if (style->offset < data->selectEnd)
+			{
+				// it's within the selection, delete it
+				if (style->prev != NULL) style->prev->next = style->next;
+				if (style->next != NULL) style->next->prev = style->prev;
+				if (data->styles == style) data->styles = style->next;
+				
+				TextStyle *next = style->next;
+				free(style);
+				style = next;
+				continue;
+			}
+			else
+			{
+				// push back
+				style->offset -= delta;
+			};
+		};
+		
+		style = style->next;
+	};
+	
 	// update
 	data->cursorPos = data->selectStart;
 	data->selectStart = data->selectEnd = 0;
@@ -375,6 +404,19 @@ void gwmTextFieldBackspace(GWMWindow *field)
 	data->text = newBuffer;
 	data->cursorPos--;
 	
+	// all styles at the new cursor position must be deleted, and all styles after that must be pushed back
+	TextStyle *style = data->styles;
+	while (style != NULL)
+	{
+		if (style->offset > data->cursorPos)
+		{
+			// push back
+			style->offset--;
+		};
+		
+		style = style->next;
+	};
+
 	gwmPostUpdate(field);
 };
 
@@ -388,6 +430,17 @@ void gwmTextFieldInsert(GWMWindow *field, const char *str)
 	
 	char *newBuffer = (char*) malloc(strlen(data->text) + strlen(str) + 1);
 	newBuffer[0] = 0;
+	
+	// push all styles after the cursor forward
+	size_t textCount = ddiCountUTF8(str);
+	TextStyle *style;
+	for (style=data->styles; style!=NULL; style=style->next)
+	{
+		if (style->offset >= data->cursorPos)
+		{
+			style->offset += textCount;
+		};
+	};
 	
 	const char *scan = data->text;
 	
