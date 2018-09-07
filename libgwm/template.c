@@ -89,3 +89,8 @@ int gwmDestroyTemplate(GWMWindowTemplate *wt)
 	
 	return 0;
 };
+
+void gwmAddStatusBarWindow(GWMWindow *statbar, GWMWindow *child)
+{
+	gwmBoxLayoutAddWindow(statbar->layout, child, 0, 2, GWM_BOX_LEFT);
+};

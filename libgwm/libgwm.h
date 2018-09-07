@@ -2922,4 +2922,9 @@ int gwmPickColor(GWMWindow *parent, const char *caption, DDIColor *color);
  */
 GWMLabel* gwmNewStatusBarLabel(GWMWindow *statbar);
 
+/**
+ * Add the requested window to the status bar.
+ */
+void gwmAddStatusBarWindow(GWMWindow *statbar, GWMWindow *child);
+
 #endif
