@@ -118,6 +118,14 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
+	{"gwm.syntax.keyword",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colSyntaxKeyword)},
+	{"gwm.syntax.type",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colSyntaxType)},
+	{"gwm.syntax.const",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colSyntaxConstant)},
+	{"gwm.syntax.number",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colSyntaxNumber)},
+	{"gwm.syntax.builtin",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colSyntaxBuiltin)},
+	{"gwm.syntax.comment",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colSyntaxComment)},
+	{"gwm.syntax.string",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colSyntaxString)},
+	{"gwm.syntax.preproc",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colSyntaxPreproc)},
 
 	// LIST TERMINATOR
 	{NULL, 0, 0}

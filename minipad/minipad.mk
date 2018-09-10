@@ -22,6 +22,8 @@ install:
 	@mkdir -p $(DESTDIR)/usr/bin
 	@mkdir -p $(DESTDIR)/usr/share/apps
 	@mkdir -p $(DESTDIR)/usr/share/images
+	@mkdir -p $(DESTDIR)/usr/share/minipad/langs
 	cp minipad $(DESTDIR)/usr/bin/minipad
 	cp -RT $(SRCDIR)/apps $(DESTDIR)/usr/share/apps
 	cp -RT $(SRCDIR)/images $(DESTDIR)/usr/share/images
+	cp -RT $(SRCDIR)/langs $(DESTDIR)/usr/share/minipad/langs

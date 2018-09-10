@@ -42,11 +42,15 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#include "codefield.h"
+#include "lang.h"
+
 #define	DEFAULT_WIDTH			500
 #define	DEFAULT_HEIGHT			500
 
 GWMWindow *topWindow;
-GWMTextField *txtEditor;
+CodeField *txtEditor;
+GWMOptionMenu *optLang;
 char *filePath = NULL;
 int fileDirty = 0;
 DDISurface* icon;
@@ -207,6 +211,12 @@ int minipadHandler(GWMEvent *ev, GWMWindow *win, void *context)
 		return GWM_EVSTATUS_BREAK;
 	case GWM_EVENT_COMMAND:
 		return minipadCommand((GWMCommandEvent*) ev);
+	case GWM_EVENT_OPTION_SET:
+		if (ev->win == optLang->id)
+		{
+			SetCodeLang(txtEditor, (LangRule*) gwmReadOptionMenu(optLang));
+			return GWM_EVSTATUS_CONT;
+		};
 	case GWM_EVENT_VALUE_CHANGED:
 		if (!fileDirty)
 		{
@@ -275,7 +285,13 @@ int main(int argc, char *argv[])
 	gwmAddToolButtonBySymbol(topWindow, toolbar, GWM_SYM_SAVE);
 	gwmAddToolButtonBySymbol(topWindow, toolbar, GWM_SYM_SAVE_AS);
 	
-	txtEditor = gwmNewTextField(topWindow);
+	GWMWindow *statbar = wt.wtStatusBar;
+	optLang = gwmNewOptionMenu(statbar);
+	gwmAddStatusBarWindow(statbar, optLang);
+	gwmSetOptionMenu(optLang, 0, "Plain text");
+	loadLangs(optLang);
+	
+	txtEditor = NewCodeField(topWindow);
 	gwmBoxLayoutAddWindow(boxLayout, txtEditor, 1, 0, GWM_BOX_FILL);
 	gwmSetTextFieldFlags(txtEditor, GWM_TXT_MULTILINE);
 	gwmSetTextFieldWrap(txtEditor, GWM_TRUE);

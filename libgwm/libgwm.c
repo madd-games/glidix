@@ -1055,12 +1055,11 @@ void gwmRelToAbs(GWMWindow *win, int relX, int relY, int *absX, int *absY)
 
 int gwmClassifyChar(long c)
 {
-	if ((c == ' ') || (c == '\t') || (c == '\n'))
-	{
-		return 0;
-	};
-	
-	return 1;
+	if (c == 0) return 0;
+	else if (c > 0x7F) return 3;
+	else if (strchr(" \t\n ", (char) c) != NULL) return 1;
+	else if (strchr("~`!@#$%^&*()_+-={}[];'\\:\"|<>?,./", (char) c) != NULL) return 2;
+	else return 3;
 };
 
 GWMWindow* gwmCreateModal(const char *caption, int x, int y, int width, int height)

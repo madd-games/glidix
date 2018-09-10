@@ -619,6 +619,18 @@ typedef struct
 	 */
 	DDIColor				colBorderLight;
 	DDIColor				colBorderDark;
+	
+	/**
+	 * Syntax highlighting colors.
+	 */
+	DDIColor				colSyntaxKeyword;
+	DDIColor				colSyntaxType;
+	DDIColor				colSyntaxConstant;
+	DDIColor				colSyntaxNumber;
+	DDIColor				colSyntaxBuiltin;
+	DDIColor				colSyntaxComment;
+	DDIColor				colSyntaxString;
+	DDIColor				colSyntaxPreproc;
 } GWMInfo;
 
 /**

@@ -123,4 +123,15 @@ namespace gwm {
 		image menu /usr/share/images/sysmenubutton.png
 		image taskbtn /usr/share/images/taskbtn.png
 	}
+	
+	namespace syntax {
+		color keyword #5500FF:255
+		color type #990099:255
+		color const #DD00DD:255
+		color number #DD00DD:255
+		color builtin #007777:255
+		color comment #BB0000:255
+		color string #009900:255
+		color preproc #777700:255
+	}
 }
