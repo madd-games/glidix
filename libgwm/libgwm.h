@@ -1827,6 +1827,11 @@ void gwmClearTextFieldStyles(GWMTextField *field);
 void gwmSetTextFieldColorRange(GWMTextField *field, size_t start, size_t end, DDIColor *color);
 
 /**
+ * Insert text into a text field, at the cursor position.
+ */
+void gwmTextFieldInsert(GWMWindow *field, const char *str);
+
+/**
  * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
  * Returns 0 on success, -1 on error.
  */
