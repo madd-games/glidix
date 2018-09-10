@@ -351,7 +351,8 @@ int main(int argc, char *argv[])
 	setCaption();
 	gwmLayout(topWindow, DEFAULT_WIDTH, DEFAULT_HEIGHT);
 	gwmPushEventHandler(topWindow, minipadHandler, NULL);
-	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
+	gwmFocus(txtEditor);
+	gwmSetWindowFlags(topWindow, GWM_WINDOW_RESIZEABLE);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;
