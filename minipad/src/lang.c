@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <dirent.h>
+#include <fstools.h>
 
 #include "lang.h"
 
@@ -96,17 +97,19 @@ int getTokenType(const char *name)
 	};
 };
 
-void loadLangFile(GWMOptionMenu *optLang, const char *filename)
+LangRule* loadLangFile(GWMOptionMenu *optLang, const char *filename, const char *mimename)
 {
 	FILE *fp = fopen(filename, "r");
 	if (fp == NULL)
 	{
 		fprintf(stderr, "Error: failed to read `%s': %s\n", filename, strerror(errno));
-		return;
+		return NULL;
 	};
 	
 	const char *langName = NULL;
 	ContextMap *ctxMap = NULL;
+	
+	int thisLang = 0;
 	
 	char linebuf[2048];
 	while (fgets(linebuf, 2048, fp) != NULL)
@@ -136,7 +139,17 @@ void loadLangFile(GWMOptionMenu *optLang, const char *filename)
 		}
 		else if (strcmp(cmd, "mime") == 0)
 		{
-			// TODO
+			char *candidate = strtok(NULL, "");
+			if (candidate == NULL)
+			{
+				fprintf(stderr, "Error: %s: The `mime` directive expects a parameter\n", filename);
+				break;
+			};
+			
+			if (strcmp(candidate, mimename) == 0)
+			{
+				thisLang = 1;
+			};
 		}
 		else if (strcmp(cmd, "context") == 0)
 		{
@@ -196,7 +209,7 @@ void loadLangFile(GWMOptionMenu *optLang, const char *filename)
 					{
 						fprintf(stderr, "Error: %s: The `match' directive expects a parameter\n", filename);
 						fclose(fp);
-						return;
+						return NULL;
 					};
 					
 					char *expr = strtok(NULL, "");
@@ -211,7 +224,7 @@ void loadLangFile(GWMOptionMenu *optLang, const char *filename)
 						fprintf(stderr, "Error: %s: failed due to invalid regular expression\n", filename);
 						fprintf(stderr, "Failing expression: %s\n", expr);
 						fclose(fp);
-						return;
+						return NULL;
 					};
 					
 					LangRule *rule = (LangRule*) malloc(sizeof(LangRule));
@@ -227,7 +240,7 @@ void loadLangFile(GWMOptionMenu *optLang, const char *filename)
 						{
 							fprintf(stderr, "Error: %s: `%s' is not a valid token type\n", filename, targetName);
 							fclose(fp);
-							return;
+							return NULL;
 						};
 					}
 					else
@@ -239,7 +252,7 @@ void loadLangFile(GWMOptionMenu *optLang, const char *filename)
 							fprintf(stderr, "Error: %s: referring to undefined context `%s'\n",
 								filename, targetName);
 							fclose(fp);
-							return;
+							return NULL;
 						};
 					};
 					
@@ -257,7 +270,7 @@ void loadLangFile(GWMOptionMenu *optLang, const char *filename)
 				{
 					fprintf(stderr, "Error: %s: Unknown directive `%s' inside context\n", filename, cmd);
 					fclose(fp);
-					return;
+					return NULL;
 				};
 			};
 			
@@ -279,20 +292,30 @@ void loadLangFile(GWMOptionMenu *optLang, const char *filename)
 	if (langName == NULL)
 	{
 		fprintf(stderr, "Error: %s: No language name specified\n", filename);
-		return;
+		return NULL;
 	};
 	
 	LangRule *ctxMain = getContext(ctxMap, "main");
 	if (ctxMain == NULL)
 	{
 		fprintf(stderr, "Error: %s: `main' context not defined\n", filename);
-		return;
+		return NULL;
 	};
 	
 	gwmAddOptionMenu(optLang, (uint64_t) ctxMain, langName);
+	
+	if (thisLang)
+	{
+		gwmSetOptionMenu(optLang, (uint64_t) ctxMain, langName);
+		return ctxMain;
+	}
+	else
+	{
+		return NULL;
+	};
 };
 
-void loadLangs(GWMOptionMenu *optLang)
+LangRule* loadLangs(GWMOptionMenu *optLang, const char *mimename)
 {
 	gwmAddOptionMenu(optLang, 0, "Plain text");
 	
@@ -300,8 +323,10 @@ void loadLangs(GWMOptionMenu *optLang)
 	if (dirp == NULL)
 	{
 		fprintf(stderr, "Error: could not scan langs directory: %s\n", strerror(errno));
-		return;
+		return NULL;
 	};
+	
+	LangRule *rules = NULL;
 	
 	struct dirent *ent;
 	while ((ent = readdir(dirp)) != NULL)
@@ -311,12 +336,15 @@ void loadLangs(GWMOptionMenu *optLang)
 		if (strcmp(&ent->d_name[strlen(ent->d_name)-5], ".lang") != 0) continue;
 		
 		char *filename;
-		asprintf(&filename, "/usr/share/minipad/langs/%s", ent->d_name);
+		asprintf(&filename, "/usr/share/minipad/langs/%s", ent->d_name, mimename);
 		
 		fprintf(stderr, "Loading language file `%s'\n", filename);
-		loadLangFile(optLang, filename);
+		LangRule *candidate = loadLangFile(optLang, filename, mimename);
 		free(filename);
+		
+		if (candidate != NULL) rules = candidate;
 	};
 	
 	closedir(dirp);
+	return rules;
 };

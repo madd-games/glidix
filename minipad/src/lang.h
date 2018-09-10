@@ -55,6 +55,6 @@ typedef struct LangRule_
 	int					type;		// token type to output if subctx == NULL
 } LangRule;
 
-void loadLangs(GWMOptionMenu *optLang);
+LangRule* loadLangs(GWMOptionMenu *optLang, const char *mimename);
 
 #endif

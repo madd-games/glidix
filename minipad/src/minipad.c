@@ -41,6 +41,7 @@
 #include <poll.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <fstools.h>
 
 #include "codefield.h"
 #include "lang.h"
@@ -285,12 +286,6 @@ int main(int argc, char *argv[])
 	gwmAddToolButtonBySymbol(topWindow, toolbar, GWM_SYM_SAVE);
 	gwmAddToolButtonBySymbol(topWindow, toolbar, GWM_SYM_SAVE_AS);
 	
-	GWMWindow *statbar = wt.wtStatusBar;
-	optLang = gwmNewOptionMenu(statbar);
-	gwmAddStatusBarWindow(statbar, optLang);
-	gwmSetOptionMenu(optLang, 0, "Plain text");
-	loadLangs(optLang);
-	
 	txtEditor = NewCodeField(topWindow);
 	gwmBoxLayoutAddWindow(boxLayout, txtEditor, 1, 0, GWM_BOX_FILL);
 	gwmSetTextFieldFlags(txtEditor, GWM_TXT_MULTILINE);
@@ -306,6 +301,7 @@ int main(int argc, char *argv[])
 		gwmSetTextFieldFont(txtEditor, font);
 	};
 	
+	const char *mimename = "text/plain";
 	if (argc >= 2)
 	{
 		filePath = realpath(argv[1], NULL);
@@ -314,6 +310,9 @@ int main(int argc, char *argv[])
 			gwmMessageBox(NULL, "Minipad", "Could not resolve the specified path", GWM_MBICON_ERROR | GWM_MBUT_OK);
 			return 1;
 		};
+		
+		FSMimeType *mime = fsGetType(filePath);
+		mimename = mime->mimename;
 		
 		int fd = open(filePath, O_RDONLY);
 		if (fd == -1)
@@ -340,6 +339,14 @@ int main(int argc, char *argv[])
 		
 		gwmWriteTextField(txtEditor, buffer);
 	};
+
+	GWMWindow *statbar = wt.wtStatusBar;
+	optLang = gwmNewOptionMenu(statbar);
+	gwmAddStatusBarWindow(statbar, optLang);
+	gwmSetOptionMenu(optLang, 0, "Plain text");
+	LangRule *rules = loadLangs(optLang, mimename);
+
+	SetCodeLang(txtEditor, rules);
 	
 	setCaption();
 	gwmLayout(topWindow, DEFAULT_WIDTH, DEFAULT_HEIGHT);
