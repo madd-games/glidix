@@ -39,8 +39,8 @@
 #include <glidix/hw/dma.h>
 #include <glidix/thread/waitcnt.h>
 
-#define NUM_TX_DESC_LOG2 3
-#define NUM_RX_DESC_LOG2 3
+#define NUM_TX_DESC_LOG2 6
+#define NUM_RX_DESC_LOG2 6
 
 #define PCNET_RDESC_BAM 	(1 << 4)
 #define PCNET_RDESC_LAFM	(1 << 5)
