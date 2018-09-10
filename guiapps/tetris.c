@@ -64,15 +64,38 @@ typedef struct
 	int occupied;
 } Cell;
 
+enum
+{
+	SYM_RESET = GWM_SYM_USER,
+};
+
 Piece *currentPiece;
 int pieceX, pieceY;
 int pieceRot[4];
 
+int score;
 int gameOver;
 Cell grid[GRID_COLS * GRID_ROWS];
 
 DDIFont *fntGameOver;
 DDISurface *imgGameOver;
+DDISurface *icon;
+GWMLabel *lblStatus;
+GWMWindow *tetris;
+
+const char *tetrisHelp = "\
+GLIDIX TETRIS\n\
+=============\n\
+\n\
+Game Rules\n\
+----------\n\
+There are shapes, made up of 4 blocks each, moving from the top of the screen to the bottom, in a grid. Once the shape touches the bottom of the screen, or some other shape, it stops and settles. You can move the shapes as they fall. If you make an entire row filled with blocks, that row disappears, and all blocks above it move down. The more rows you delete, the more score you get: and if the shapes stack to the very top, you lose!\n\
+\n\
+Controls\n\
+--------\n\
+Left/right arrow key - move current shape left or right\n\
+Up arrow key - rotate the shape (there must be enough space to rotate it!)\n\
+";
 
 Piece pieces[NUM_PIECES] = {
 	/* "S" shape */
@@ -153,6 +176,8 @@ Piece pieces[NUM_PIECES] = {
 	},
 };
 
+void resetGame();
+
 void getPiecePos(Coords *positions)
 {
 	int i;
@@ -219,9 +244,40 @@ void nextPiece()
 	};
 };
 
+int tetrisCommand(GWMCommandEvent *ev)
+{
+	switch (ev->symbol)
+	{
+	case SYM_RESET:
+		resetGame();
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_ABOUT:
+		{
+			GWMAboutDialog *about = gwmNewAboutDialog(NULL);
+			gwmSetAboutIcon(about, icon, 0, 0, 16, 16);
+			gwmSetAboutCaption(about, "Tetris");
+			gwmSetAboutDesc(about, "A game about arranging shapes.");
+			gwmSetAboutLicense(about, GWM_LICENSE);
+			gwmRunAbout(about);
+		};
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_HELP:
+		gwmTextDialog(NULL, "How to play Tetris", tetrisHelp);
+		return GWM_EVSTATUS_OK;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
+};
+
 int myHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
-	return GWM_EVSTATUS_CONT;
+	switch (ev->type)
+	{
+	case GWM_EVENT_COMMAND:
+		return tetrisCommand((GWMCommandEvent*) ev);
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
 };
 
 static void redrawTetris(GWMWindow *tetris)
@@ -342,8 +398,13 @@ void checkRows()
 			};
 			
 			y++;
+			score++;
 		};
 	};
+	
+	char txtbuf[64];
+	sprintf(txtbuf, "Score: %d", score);
+	gwmSetLabelText(lblStatus, txtbuf);
 };
 
 int tetrisHandler(GWMEvent *ev, GWMWindow *win, void *context)
@@ -423,15 +484,18 @@ static void positionTetris(GWMWindow *tetris, int x, int y, int width, int heigh
 void resetGame()
 {
 	gameOver = 0;
+	score = 0;
 	
 	static DDIColor black = {0x00, 0x00, 0x00, 0xFF};
 	int i;
 	for (i=0; i<GRID_ROWS*GRID_COLS; i++)
 	{
 		memcpy(&grid[i].color, &black, sizeof(DDIColor));
+		grid[i].occupied = 0;
 	};
 	
 	nextPiece();
+	if (tetris != NULL) gwmFocus(tetris);
 };
 
 int main()
@@ -456,7 +520,7 @@ int main()
 	assert(fntGameOver != NULL);
 	
 	DDISurface *canvas = gwmGetWindowCanvas(topWindow);
-	DDISurface *icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/tetris.png", NULL);
+	icon = ddiLoadAndConvertPNG(&canvas->format, "/usr/share/images/tetris.png", NULL);
 	if (icon != NULL) gwmSetWindowIcon(topWindow, icon);
 	
 	static DDIColor colGameOver = {0xFF, 0xFF, 0x00, 0xFF};
@@ -468,14 +532,29 @@ int main()
 	GWMLayout *boxLayout = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	
 	GWMWindowTemplate wt;
-	wt.wtComps = 0;
+	wt.wtComps = GWM_WTC_MENUBAR | GWM_WTC_STATUSBAR;
 	wt.wtWindow = topWindow;
 	wt.wtBody = boxLayout;
 	gwmCreateTemplate(&wt);
 	
+	GWMWindow *menubar = wt.wtMenubar;
+	
+	GWMMenu *menuGame = gwmCreateMenu();
+	gwmMenubarAdd(menubar, "Game", menuGame);
+	gwmMenuAddCommand(menuGame, SYM_RESET, "Reset", NULL);
+	gwmMenuAddCommand(menuGame, GWM_SYM_EXIT, NULL, NULL);
+	
+	GWMMenu *menuHelp = gwmCreateMenu();
+	gwmMenubarAdd(menubar, "Help", menuHelp);
+	gwmMenuAddCommand(menuHelp, GWM_SYM_HELP, NULL, NULL);
+	gwmMenuAddCommand(menuHelp, GWM_SYM_ABOUT, NULL, NULL);
+	
+	lblStatus = wt.wtStatusLabel;
+	gwmSetLabelText(lblStatus, "Score: 0");
+	
 	resetGame();
 	
-	GWMWindow *tetris = gwmCreateWindow(
+	tetris = gwmCreateWindow(
 		topWindow,
 		"Tetris",
 		GWM_POS_UNSPEC, GWM_POS_UNSPEC,
@@ -491,7 +570,8 @@ int main()
 	gwmCreateTimer(tetris, 250);
 	
 	gwmFit(topWindow);
-	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED);
+	gwmFocus(tetris);
+	gwmSetWindowFlags(topWindow, 0);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;

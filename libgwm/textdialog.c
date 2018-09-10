@@ -66,6 +66,7 @@ GWMTextDialog* gwmNewTextDialog(GWMWindow *parent)
 	data->txt = gwmNewTextField(txt);
 	gwmBoxLayoutAddWindow(data->mainBox, data->txt, 1, 5, GWM_BOX_ALL | GWM_BOX_FILL);
 	gwmSetTextFieldFlags(data->txt, GWM_TXT_MULTILINE | GWM_TXT_DISABLED);
+	gwmSetTextFieldWrap(data->txt, 1);
 	
 	data->btnBox = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
 	gwmBoxLayoutAddLayout(data->mainBox, data->btnBox, 0, 5, GWM_BOX_DOWN | GWM_BOX_FILL);
