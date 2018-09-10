@@ -51,6 +51,14 @@ context identifier {
 	match _type enum%
 	match _type extern%
 	match _type float%
+	match _type int8_t%
+	match _type int16_t%
+	match _type int32_t%
+	match _type int64_t%
+	match _type uint8_t%
+	match _type uint16_t%
+	match _type uint32_t%
+	match _type uint64_t%
 	
 	# C keywords
 	match _keyword break%
@@ -80,6 +88,7 @@ context main {
 	match identifier [_a-zA-Z][_0-9a-zA-Z]*
 	match _preproc #.*?(\n|%)
 	match _comment //.*?(\n|%)
+	match _comment \/\*.*?(\*\/|%)
 	match _string "(.|\\.)*?("|%)
 	match _string ('.'|'\\'')
 	match _number [0-9]*\.[0-9]+([eE][-+][0-9]+)?[fF]?

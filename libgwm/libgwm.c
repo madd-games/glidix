@@ -385,8 +385,8 @@ static int gwmDefaultHandler(GWMEvent *ev, GWMWindow *win, void *context)
 		};
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_RESIZE_REQUEST:
-		gwmMoveWindow(win, ev->x, ev->y);
 		gwmLayout(win, ev->width, ev->height);
+		gwmMoveWindow(win, ev->x, ev->y);
 		return GWM_EVSTATUS_OK;
 	default:
 		if (ev->type & GWM_EVENT_CASCADING)
@@ -1058,7 +1058,7 @@ int gwmClassifyChar(long c)
 	if (c == 0) return 0;
 	else if (c > 0x7F) return 3;
 	else if (strchr(" \t\n ", (char) c) != NULL) return 1;
-	else if (strchr("~`!@#$%^&*()_+-={}[];'\\:\"|<>?,./", (char) c) != NULL) return 2;
+	else if (strchr("~`!@#$%^&*()+-={}[];'\\:\"|<>?,./", (char) c) != NULL) return 2;
 	else return 3;
 };
 
