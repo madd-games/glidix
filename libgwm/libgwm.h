@@ -763,6 +763,7 @@ typedef struct GWMDataColumn_ GWMDataColumn;
 #define	GWM_SYM_CLOSE				37
 #define	GWM_SYM_ABOUT				38
 #define	GWM_SYM_HELP				39
+#define	GWM_SYM_HIGHSCORE			40
 
 /**
  * Starting numbers for event classes.

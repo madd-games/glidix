@@ -241,6 +241,7 @@ void nextPiece()
 	if (occupied)
 	{
 		gameOver = 1;
+		gwmHighScore("tetris", score);
 	};
 };
 
@@ -263,6 +264,9 @@ int tetrisCommand(GWMCommandEvent *ev)
 		return GWM_EVSTATUS_OK;
 	case GWM_SYM_HELP:
 		gwmTextDialog(NULL, "How to play Tetris", tetrisHelp);
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_HIGHSCORE:
+		gwmHighScore("tetris", -1);
 		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
@@ -542,6 +546,7 @@ int main()
 	GWMMenu *menuGame = gwmCreateMenu();
 	gwmMenubarAdd(menubar, "Game", menuGame);
 	gwmMenuAddCommand(menuGame, SYM_RESET, "Reset", NULL);
+	gwmMenuAddCommand(menuGame, GWM_SYM_HIGHSCORE, NULL, NULL);
 	gwmMenuAddCommand(menuGame, GWM_SYM_EXIT, NULL, NULL);
 	
 	GWMMenu *menuHelp = gwmCreateMenu();
