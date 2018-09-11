@@ -415,7 +415,11 @@ MODULE_INIT(const char *opt)
 			__sync_synchronize();
 			sleep(1);
 		} while ((*regCtrl) & (1 << 26));
-		(*regCtrl) |= (1 << 6);							// UP
+		(*regCtrl) = ((*regCtrl)
+			| (1 << 6)							// set SLU
+			| (1 << 5))							// set ASDE
+			& ~(1 << 3)							// clear LRST
+		;
 		__sync_synchronize();
 		
 		// zero out the MTA
