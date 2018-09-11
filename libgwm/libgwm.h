@@ -119,6 +119,8 @@ extern DDIColor* gwmBorderDarkColorP;
 extern DDIFont* gwmDefaultFontP;
 #define	GWM_FONT_CAPTION			gwmCaptionFontP
 extern DDIFont* gwmCaptionFontP;
+#define	GWM_FONT_STRONG				gwmStrongFontP
+extern DDIFont* gwmStrongFontP;
 
 /**
  * Unspecified window position.
@@ -2943,5 +2945,12 @@ GWMLabel* gwmNewStatusBarLabel(GWMWindow *statbar);
  * Add the requested window to the status bar.
  */
 void gwmAddStatusBarWindow(GWMWindow *statbar, GWMWindow *child);
+
+/**
+ * Display a "high score" dialog. If 'score' is -1, then the scores are simply displayed; if it is a positive integer,
+ * and the score would actually get on the table, the user is asked for their name and added to it. 'gameName' is simply
+ * the name of a game, and is used to decide which file should store the score.
+ */
+void gwmHighScore(const char *gameName, int score);
 
 #endif

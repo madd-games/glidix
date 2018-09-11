@@ -54,6 +54,7 @@ static GWMWindow* currentModalMaster;
 
 DDIFont* gwmDefaultFontP;
 DDIFont* gwmCaptionFontP;
+DDIFont* gwmStrongFontP;
 
 typedef struct GWMWaiter_
 {
@@ -239,6 +240,14 @@ int gwmInit()
 	if (gwmCaptionFontP == NULL)
 	{
 		fprintf(stderr, "gwm: failed to load caption font: %s\n", errmsg);
+		ddiQuit();
+		return -1;
+	};
+	
+	gwmStrongFontP = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_BOLD, &errmsg);
+	if (gwmStrongFontP == NULL)
+	{
+		fprintf(stderr, "gwm: failed to load strong font: %s\n", errmsg);
 		ddiQuit();
 		return -1;
 	};

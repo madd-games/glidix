@@ -133,7 +133,7 @@ int myHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	};
 };
 
-int main()
+int main(int argc, char *argv[])
 {
 	if (gwmInit() != 0)
 	{
@@ -141,20 +141,13 @@ int main()
 		return 1;
 	};
 	
-	GWMWindow *win = gwmCreateWindow(NULL, "Test", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
-	GWMLayout *box = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
-	gwmSetWindowLayout(win, box);
+	int score = -1;
+	if (argc == 2)
+	{
+		sscanf(argv[1], "%d", &score);
+	};
 	
-	GWMTextField *field = gwmNewTextField(win);
-	gwmBoxLayoutAddWindow(box, field, 1, 0, GWM_BOX_FILL);
-	
-	gwmWriteTextField(field, "Hello world! This is a styling test");
-	DDIColor blue = {0x00, 0x00, 0xFF, 0xFF};
-	gwmSetTextFieldColorRange(field, 6, 11, &blue);
-	
-	gwmFit(win);
-	gwmSetWindowFlags(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
-	gwmMainLoop();
+	gwmHighScore("gwmtest", score);
 	
 	gwmQuit();
 	return 0;
