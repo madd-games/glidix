@@ -250,6 +250,7 @@ typedef struct
 
 // video modes that we accept; those are the safe modes that all monitors should support
 static ScreenSize okSizes[] = {
+	{1024, 768},
 	{720, 480},
 	{640, 480},
 	
@@ -277,7 +278,7 @@ static int isOkSize(word_t width, word_t height)
 
 void bmain()
 {
-	safeMode = 0;
+	safeMode = 1;
 	consoleX = 0;
 	consoleY = 0;
 	memset(vidmem, 0, 80*25*2);
