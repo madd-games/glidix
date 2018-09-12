@@ -204,7 +204,7 @@ test_command tar
 
 if [ "$iso_target" = "yes" ]
 then
-	test_command mkisofs
+	test_command genisoimage
 fi
 
 for target in $TARGETS
@@ -265,7 +265,7 @@ then
 	echo >>Makefile "	echo 'log /run/gwm.log' >> isodir/etc/gwm.conf"
 	echo >>Makefile "	cp $srcdir/gwm-live-start.sh isodir/usr/bin/gwm-live-start.sh"
 	echo >>Makefile "	cp gxboot/eltorito.img isodir/boot/loader.sys"
-	echo >>Makefile "	mkisofs -R -V 'Glidix Installer' -b boot/loader.sys -no-emul-boot -boot-load-size 4 -boot-info-table -o \$@ isodir"
+	echo >>Makefile "	genisoimage -R -V 'Glidix Installer' -b boot/loader.sys -no-emul-boot -boot-load-size 4 -boot-info-table -o \$@ isodir"
 fi
 
 echo >>Makefile "all: $TARGETS"
