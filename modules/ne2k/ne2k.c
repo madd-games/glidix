@@ -34,6 +34,7 @@
 #include <glidix/util/memory.h>
 #include <glidix/hw/port.h>
 #include <glidix/thread/spinlock.h>
+#include <glidix/thread/semaphore.h>
 #include <glidix/thread/sched.h>
 #include <glidix/hw/idt.h>
 #include <glidix/net/ethernet.h>
@@ -76,11 +77,12 @@ typedef struct NeInterface_
 	PCIDevice*			pcidev;
 	NetIf*				netif;
 	uint16_t			iobase;
-	Spinlock			lock;
+	Semaphore			lock;
 	int				running;
 	Thread*				thread;
 	int				numIntRX;
 	WaitCounter			wcInts;
+	Spinlock			reglock;
 } NeInterface;
 
 static NeInterface *interfaces = NULL;
@@ -88,17 +90,40 @@ static NeInterface *lastIf = NULL;
 
 static uint8_t readRegister(NeInterface *nif, uint8_t page, uint8_t index)
 {
+	uint64_t flags = getFlagsRegister();
+	cli();
+	spinlockAcquire(&nif->reglock);
+	
 	// select page
 	outb(nif->iobase, page << 6);
 	
 	// read the register
-	return inb(nif->iobase + index);
+	uint8_t result = inb(nif->iobase + index);
+	
+	spinlockRelease(&nif->reglock);
+	setFlagsRegister(flags);
+	return result;
+};
+
+static void writeRegister(NeInterface *nif, uint8_t page, uint8_t index, uint8_t value)
+{
+	uint64_t flags = getFlagsRegister();
+	cli();
+	spinlockAcquire(&nif->reglock);
+	
+	outb(nif->iobase, page << 6);
+	outb(nif->iobase + index, value);
+	
+	spinlockRelease(&nif->reglock);
+	setFlagsRegister(flags);
 };
 
 static int ne2k_int(void *context)
 {
 	NeInterface *nif = (NeInterface*) context;
 	uint8_t isr = readRegister(nif, 0, 0x07);
+	writeRegister(nif, 0, 0x07, isr & 0x01);
+	
 	if (isr == 0)
 	{
 		return -1;
@@ -113,22 +138,16 @@ static int ne2k_int(void *context)
 	return 0;
 };
 
-static void writeRegister(NeInterface *nif, uint8_t page, uint8_t index, uint8_t value)
-{
-	outb(nif->iobase, page << 6);
-	outb(nif->iobase + index, value);
-};
-
 static void ne2k_setremaddr(NeInterface *nif, uint32_t val)
 {
-	outb(nif->iobase + 0x08, (uint8_t) (val & 0xFF));
-	outb(nif->iobase + 0x09, (uint8_t) ((val >> 8) & 0xFF));
+	writeRegister(nif, 0, 0x08, (val & 0xFF));
+	writeRegister(nif, 0, 0x09, ((val >> 8) & 0xFF));
 };
 
 static void ne2k_setremcount(NeInterface *nif, size_t val)
 {
-	outb(nif->iobase + 0x0A, (uint8_t) (val & 0xFF));
-	outb(nif->iobase + 0x0B, (uint8_t) ((val >> 8) & 0xFF));
+	writeRegister(nif, 0, 0x0A, (val & 0xFF));
+	writeRegister(nif, 0, 0x0B, ((val >> 8) & 0xFF));
 };
 
 static void ne2k_write(NeInterface *nif, uint32_t addr, const void *buffer, size_t size)
@@ -136,10 +155,13 @@ static void ne2k_write(NeInterface *nif, uint32_t addr, const void *buffer, size
 	ne2k_setremaddr(nif, addr);
 	ne2k_setremcount(nif, size);
 
-	outb(nif->iobase + 0x0E, 0x48);		// set byte-wide access
+	//outb(nif->iobase + 0x0E, 0x48);		// set byte-wide access
+	writeRegister(nif, 0, 0x0E, 0x48);		// set byte-wide access
+	
 	const uint8_t *scan = (const uint8_t*) buffer;
 
-	outb(nif->iobase, 0x12);		// write DMA + start
+	//outb(nif->iobase, 0x12);		// write DMA + start
+	writeRegister(nif, 0, 0x00, 0x12);
 	while (size--)
 	{
 		outb(nif->iobase + 0x10, *scan++);
@@ -172,7 +194,7 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 	framelen -= 4;
 
 	NeInterface *nif = (NeInterface*) netif->drvdata;
-	spinlockAcquire(&nif->lock);
+	semWait(&nif->lock);
 	
 	// write the frame to the transmit buffer
 	ne2k_write(nif, 16*1024, frame, framelen);
@@ -187,12 +209,12 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 	outb(nif->iobase, 0x26);
 	
 	// wait for transmit to complete
-	while ((inb(nif->iobase) & 0x04) == 0);
+	while ((inb(nif->iobase) & 0x04) != 0);
 	
 	// go to START mode
 	outb(nif->iobase, 0x02);
 	
-	spinlockRelease(&nif->lock);
+	semSignal(&nif->lock);
 	__sync_fetch_and_add(&netif->numTrans, 1);
 };
 
@@ -210,10 +232,9 @@ static void ne2k_thread(void *context)
 	
 	while (nif->running)
 	{
-		//pciWaitInt(nif->pcidev);
 		wcDown(&nif->wcInts);
 		
-		spinlockAcquire(&nif->lock);
+		semWait(&nif->lock);
 		if (nif->numIntRX)
 		{
 			__sync_fetch_and_add(&nif->numIntRX, -1);
@@ -238,10 +259,10 @@ static void ne2k_thread(void *context)
 			writeRegister(nif, 0, 0x07, 0x01);
 			
 			// increment reception counter
-			__sync_fetch_and_add(&nif->netif->numRecv, 1);	
+			__sync_fetch_and_add(&nif->netif->numRecv, 1);
 		};
 		
-		spinlockRelease(&nif->lock);
+		semSignal(&nif->lock);
 	};
 };
 
@@ -259,7 +280,8 @@ static int ne2k_enumerator(PCIDevice *dev, void *ignore)
 			intf->next = NULL;
 			intf->pcidev = dev;
 			intf->netif = NULL;
-			spinlockRelease(&intf->lock);
+			semInit(&intf->lock);
+			spinlockRelease(&intf->reglock);
 			if (lastIf == NULL)
 			{
 				interfaces = intf;
