@@ -137,7 +137,7 @@ static EDevice knownDevices[] = {
 static int e1000_int(void *context)
 {
 	EInterface *nif = (EInterface*) context;
-	uint32_t *volatile regICR = (uint32_t*volatile) (nif->mmioAddr + 0x00C0);
+	volatile uint32_t * regICR = (volatile uint32_t *) (nif->mmioAddr + 0x00C0);
 	uint32_t icr = *regICR;
 	
 	if (icr == 0)
@@ -249,7 +249,7 @@ static void e1000_send(NetIf *netif, const void *frame, size_t framelen)
 	sha->txdesc[index].special = 0;
 	
 	// write new tail
-	uint32_t *volatile regTail = (uint32_t*volatile) (nif->mmioAddr + 0x3818);
+	volatile uint32_t * regTail = (volatile uint32_t *) (nif->mmioAddr + 0x3818);
 	*regTail = (uint32_t) nif->nextTX;
 	
 	semSignal(&nif->lock);
@@ -259,7 +259,7 @@ static uint16_t e1000_eeprom_read(EInterface *nif, uint8_t addr)
 {
 	uint16_t data = 0;
 	uint32_t tmp = 0;
-	*((uint32_t*volatile)(nif->mmioAddr + 0x0014)) = (1) | ((uint32_t)(addr) << 8);
+	*((volatile uint32_t *)(nif->mmioAddr + 0x0014)) = (1) | ((uint32_t)(addr) << 8);
 	
 	while (!((tmp = *((uint32_t*)(nif->mmioAddr + 0x0014))) & (1 << 4)));
 		
@@ -285,7 +285,7 @@ static void e1000_thread(void *context)
 			__sync_fetch_and_add(&nif->numIntTX, -1);
 			ESharedArea *sha = (ESharedArea*) dmaGetPtr(&nif->dmaSharedArea);
 			
-			uint32_t *volatile regTXHead = (uint32_t*volatile) (nif->mmioAddr + 0x3810);
+			volatile uint32_t * regTXHead = (volatile uint32_t *) (nif->mmioAddr + 0x3810);
 			while ((sha->txdesc[nif->nextWaitingTX].sta & 1) && ((uint32_t)nif->nextWaitingTX != (*regTXHead)))
 			{
 				// it's done with this descriptor
@@ -312,7 +312,7 @@ static void e1000_thread(void *context)
 			ESharedArea *sha = (ESharedArea*) dmaGetPtr(&nif->dmaSharedArea);
 			int index = nif->nextRX & (NUM_RX_DESC-1);
 
-			uint32_t *volatile regRXHead = (uint32_t*volatile) (nif->mmioAddr + 0x2810);
+			volatile uint32_t * regRXHead = (volatile uint32_t *) (nif->mmioAddr + 0x2810);
 
 			while ((sha->rxdesc[index].status & 1) && ((uint32_t)index != (*regRXHead)))
 			{
@@ -361,7 +361,7 @@ static void e1000_thread(void *context)
 				// return the buffer to the NIC
 				sha->rxdesc[index].status = 0;
 				nif->nextRX = (++index) & (NUM_RX_DESC-1);
-				uint32_t *volatile regRXTail = (uint32_t*volatile) (nif->mmioAddr + 0x2818);
+				volatile uint32_t * regRXTail = (volatile uint32_t *) (nif->mmioAddr + 0x2818);
 				*regRXTail = nif->nextRX;
 				__sync_synchronize();
 				
@@ -408,7 +408,7 @@ MODULE_INIT(const char *opt)
 		memcpy(ifconfig.ethernet.mac.addr, macbits, 6);
 
 		// set the link UP
-		uint32_t *volatile regCtrl = (uint32_t*volatile) nif->mmioAddr;
+		volatile uint32_t *regCtrl = (volatile uint32_t*) nif->mmioAddr;
 		do
 		{
 			(*regCtrl) |= (1 << 26);					// reset
@@ -423,7 +423,7 @@ MODULE_INIT(const char *opt)
 		__sync_synchronize();
 		
 		// zero out the MTA
-		uint32_t *volatile regMTA = (uint32_t*volatile) (nif->mmioAddr + 0x5200);
+		volatile uint32_t * regMTA = (volatile uint32_t*) (nif->mmioAddr + 0x5200);
 		for (i=0; i<128; i++)
 		{
 			regMTA[i] = 0;
@@ -434,7 +434,7 @@ MODULE_INIT(const char *opt)
 		memset(&addrFilters, 0, 8*16);
 		addrFilters[0] = e1000_make_filter(&ifconfig.ethernet.mac);
 		
-		uint32_t *volatile regRA = (uint32_t*volatile) (nif->mmioAddr + 0x5400);
+		volatile uint32_t *regRA = (volatile uint32_t*) (nif->mmioAddr + 0x5400);
 		uint32_t *filtScan = (uint32_t*) addrFilters;
 		for (i=0; i<32; i++)
 		{
@@ -454,17 +454,17 @@ MODULE_INIT(const char *opt)
 		
 		ESharedArea *physShared = (ESharedArea*) dmaGetPhys(&nif->dmaSharedArea);
 		uint64_t txBase = (uint64_t) (physShared->txdesc);
-		uint32_t *volatile regTDB = (uint32_t*volatile) (nif->mmioAddr + 0x3800);
+		volatile uint32_t *regTDB = (volatile uint32_t*) (nif->mmioAddr + 0x3800);
 		regTDB[0] = (uint32_t) txBase;
 		regTDB[1] = (uint32_t) (txBase >> 32);
 		regTDB[2] = 16 * NUM_TX_DESC;			// length
 		
-		uint32_t *volatile regTXHead = (uint32_t*volatile) (nif->mmioAddr + 0x3810);
+		volatile uint32_t *regTXHead = (volatile uint32_t*) (nif->mmioAddr + 0x3810);
 		*regTXHead = 0;
-		uint32_t *volatile regTXTail = (uint32_t*volatile) (nif->mmioAddr + 0x3818);
+		volatile uint32_t *regTXTail = (volatile uint32_t*) (nif->mmioAddr + 0x3818);
 		*regTXTail = NUM_TX_DESC;
 		
-		uint32_t *volatile regTCTL = (uint32_t*volatile) (nif->mmioAddr + 0x0400);
+		volatile uint32_t *regTCTL = (volatile uint32_t*) (nif->mmioAddr + 0x0400);
 		*regTCTL = (1 << 1) | (1 << 3);			// enable, pad short packets
 		
 		// initialize the counter for number of free TX buffers
@@ -498,20 +498,20 @@ MODULE_INIT(const char *opt)
 		pciSetIrqHandler(nif->pcidev, e1000_int, nif);
 
 		// enable interrupts
-		uint32_t *volatile regIMS = (uint32_t*volatile) (nif->mmioAddr + 0x00D0);
+		volatile uint32_t *regIMS = (volatile uint32_t*) (nif->mmioAddr + 0x00D0);
 		*regIMS = 0x1FFFF;			// all interrupts
 
 		// set up receive base and size
-		uint32_t *volatile regRDB = (uint32_t*volatile) (nif->mmioAddr + 0x2800);
+		volatile uint32_t *regRDB = (volatile uint32_t*) (nif->mmioAddr + 0x2800);
 		uint64_t rxBase = (uint64_t) physShared->rxdesc;
 		regRDB[0] = (uint32_t) rxBase;
 		regRDB[1] = (uint32_t) (rxBase >> 32);
 		regRDB[2] = 16 * NUM_RX_DESC;			// length
 		
 		// receive head and tail
-		uint32_t *volatile regRXHead = (uint32_t*volatile) (nif->mmioAddr + 0x2810);
+		volatile uint32_t *regRXHead = (volatile uint32_t*) (nif->mmioAddr + 0x2810);
 		*regRXHead = 0;
-		uint32_t *volatile regRXTail = (uint32_t*volatile) (nif->mmioAddr + 0x2818);
+		volatile uint32_t *regRXTail = (volatile uint32_t*) (nif->mmioAddr + 0x2818);
 		*regRXTail = NUM_RX_DESC;
 		
 		// enable bus mastering before receiving
@@ -519,7 +519,7 @@ MODULE_INIT(const char *opt)
 		
 		// TODO: let's not be promiscuous
 		// a value of 0 for BSEX and BSIZE means 2KB buffers, just like we want
-		uint32_t *volatile regRCTL = (uint32_t*volatile) (nif->mmioAddr + 0x0100);
+		volatile uint32_t *regRCTL = (volatile uint32_t*) (nif->mmioAddr + 0x0100);
 		*regRCTL = 0
 			| (1 << 1)				// enable receiver
 			| (1 << 4)				// multicast promiscous
