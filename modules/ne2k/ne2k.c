@@ -131,6 +131,7 @@ static int ne2k_int(void *context)
 	
 	if (isr & 1)
 	{
+		//kprintf("[ne2k] got a receive interrupt\n");
 		__sync_fetch_and_add(&nif->numIntRX, 1);
 		wcUp(&nif->wcInts);
 	};
@@ -168,6 +169,7 @@ static void ne2k_write(NeInterface *nif, uint32_t addr, const void *buffer, size
 	};
 	
 	while ((inb(nif->iobase + 0x07) & 0x40) == 0);
+	outb(nif->iobase + 0x07, 0x40);
 };
 
 static void ne2k_read(NeInterface *nif, uint32_t addr, void *buffer, size_t size)
@@ -214,6 +216,9 @@ static void ne2k_send(NetIf *netif, const void *frame, size_t framelen)
 	// go to START mode
 	outb(nif->iobase, 0x02);
 	
+	// acknowldge transmission
+	outb(nif->iobase + 0x07, 0x02);
+	
 	semSignal(&nif->lock);
 	__sync_fetch_and_add(&netif->numTrans, 1);
 };
@@ -235,31 +240,35 @@ static void ne2k_thread(void *context)
 		wcDown(&nif->wcInts);
 		
 		semWait(&nif->lock);
+		uint32_t currPage = readRegister(nif, 1, 0x07);
+		
 		if (nif->numIntRX)
 		{
 			__sync_fetch_and_add(&nif->numIntRX, -1);
 			
-			// received a frame!
-			uint32_t addr = readRegister(nif, 0, 0x03) * 256;	// get address using boundary register
-			ne2k_read(nif, addr, &packetHeader, sizeof(NePacketHeader));
-			
-			size_t frameSize = packetHeader.totalSize-sizeof(NePacketHeader);
-			
-			// copy frame from NIC memory to buffer
-			ne2k_read(nif, addr+sizeof(NePacketHeader), recvBuffer, frameSize);
-			
-			// release the buffer, go to next boundary
-			writeRegister(nif, 0, 0x03, packetHeader.next);
-
-			// we append a random uninitialised CRC (4 bytes) to the end, as this is required,
-			// but we tell Glidix to ignore it
-			onEtherFrame(nif->netif, recvBuffer, frameSize+4, ETHER_IGNORE_CRC);
-			
-			// acknowledge the receive
-			writeRegister(nif, 0, 0x07, 0x01);
-			
-			// increment reception counter
-			__sync_fetch_and_add(&nif->netif->numRecv, 1);
+			uint32_t page;
+			for (page=readRegister(nif, 0, 0x03); page!=currPage; page=packetHeader.next)
+			{
+				uint32_t addr = page * 256;
+				
+				// received a frame!
+				ne2k_read(nif, addr, &packetHeader, sizeof(NePacketHeader));
+				
+				size_t frameSize = packetHeader.totalSize-sizeof(NePacketHeader);
+				
+				// copy frame from NIC memory to buffer
+				ne2k_read(nif, addr+sizeof(NePacketHeader), recvBuffer, frameSize);
+				
+				// release the buffer, go to next boundary
+				writeRegister(nif, 0, 0x03, packetHeader.next);
+				
+				// we append a random uninitialised CRC (4 bytes) to the end, as this is required,
+				// but we tell Glidix to ignore it
+				onEtherFrame(nif->netif, recvBuffer, frameSize+4, ETHER_IGNORE_CRC);
+				
+				// increment reception counter
+				__sync_fetch_and_add(&nif->netif->numRecv, 1);
+			};
 		};
 		
 		semSignal(&nif->lock);
@@ -324,8 +333,6 @@ MODULE_INIT(const char *opt)
 		outb(nif->iobase + 0x0B, 0);
 		outb(nif->iobase + 0x0F, 0);		// mask completion IRQ
 		outb(nif->iobase + 0x07, 0xFF);
-		//outb(nif->iobase + 0x0C, 0x20);		// set to monitor
-		//outb(nif->iobase + 0x0D, 0x02);		// and loopback mode.
 		outb(nif->iobase + 0x0A, 32);		// reading 32 bytes
 		outb(nif->iobase + 0x0B, 0);		// count high
 		outb(nif->iobase + 0x08, 0);		// start DMA at 0
@@ -369,7 +376,7 @@ MODULE_INIT(const char *opt)
 		
 		KernelThreadParams pars;
 		memset(&pars, 0, sizeof(KernelThreadParams));
-		pars.name = "NE2000 Interrupt Handler";
+		pars.name = "NE2000 Receiver Thread";
 		pars.stackSize = DEFAULT_STACK_SIZE;
 		nif->thread = CreateKernelThread(ne2k_thread, &pars, nif);
 		
