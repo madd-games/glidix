@@ -2334,7 +2334,7 @@ int sys_setpgid(int pid, int pgid)
 		
 		do
 		{
-			if (scan->creds->pgid == pgid)
+			if (scan->creds != NULL && scan->creds->pgid == pgid)
 			{
 				ex = scan;
 				break;

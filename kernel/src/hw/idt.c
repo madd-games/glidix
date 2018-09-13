@@ -254,7 +254,7 @@ static void onPageFault(Regs *regs)
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
 	
-	sti();
+	if (regs->rflags & (1 << 9)) sti();
 	if (getCurrentThread() != NULL)
 	{
 		if (regs->rip == TRAP_SIGRET)
@@ -286,7 +286,7 @@ static void onPageFault(Regs *regs)
 		};
 	};
 
-	if ((getCurrentThread() == NULL) || (regs->cs == 8))
+	if ((getCurrentThread() == NULL) || ((regs->cs & 0xFFFF) == 8))
 	{
 		throw(EX_PAGE_FAULT);
 		
