@@ -258,11 +258,15 @@ static ScreenSize okSizes[] = {
 	{0, 0}
 };
 
-static int safeMode;
+static int fixedWidth;
+static int fixedHeight;
 
 static int isOkSize(word_t width, word_t height)
 {
-	if (!safeMode) return 1;
+	if (fixedWidth != 0)
+	{
+		return (width == fixedWidth) && (height == fixedHeight);
+	};
 	
 	ScreenSize *scan;
 	for (scan=okSizes; scan->width!=0; scan++)
@@ -276,23 +280,121 @@ static int isOkSize(word_t width, word_t height)
 	return 0;
 };
 
+char *nextToken(char delim, char **saveptr)
+{
+	char *pos = *saveptr;
+	while (*pos == delim) pos++;
+	
+	if (*pos == 0) return NULL;
+	
+	char *result = pos;
+	while (*pos != delim && *pos != 0) pos++;
+	while (*pos == delim) *pos++ = 0;
+	*saveptr = pos;
+	
+	return result;
+};
+
+static int parseInt(const char *spec)
+{
+	int result = 0;
+	
+	while (*spec != 0)
+	{
+		if (*spec < '0' || *spec > '9')
+		{
+			return -1;
+		};
+		
+		result = result * 10 + ((*spec) - '0');
+		spec++;
+	};
+	
+	return result;
+};
+
+static void parseConfigLine(char *line)
+{
+	if (line[0] == '#') return;
+	
+	char *cmd = nextToken(' ', &line);
+	if (cmd == NULL) return;
+	
+	if (strcmp(cmd, "vesa-res") == 0)
+	{
+		char *widthSpec = nextToken('x', &line);
+		char *heightSpec = nextToken('x', &line);
+		
+		if (widthSpec == NULL || heightSpec == NULL)
+		{
+			termput("ERROR: vesa-res: invalid syntax\n");
+			return;
+		};
+		
+		fixedWidth = parseInt(widthSpec);
+		fixedHeight = parseInt(heightSpec);
+		
+		if (fixedWidth < 1 || fixedHeight < 1)
+		{
+			termput("ERROR: vesa-res: invalid resolution specified");
+			fixedWidth = 0;
+			return;
+		};
+	}
+	else
+	{
+		termput("ERROR: invalid command: "); termput(cmd); termput("\n");
+	};
+};
+
 void bmain()
 {
-	safeMode = 1;
+	fixedWidth = 0;
 	consoleX = 0;
 	consoleY = 0;
 	memset(vidmem, 0, 80*25*2);
 	
 	int i;
+
+	// initialize placement allocator
+	placement = (dword_t) 0x100000;
+
+	fsInit();
+
+	dtermput("Loading /boot/loader.conf... ");
+	FileHandle conf;
+	if (openFile(&conf, "/boot/loader.conf") != 0)
+	{
+		dtermput("FAILED\n");
+		dtermput("NOTE: /boot/loader.conf not found: using default settings\n");
+	}
+	else
+	{
+		dtermput("OK\n");
+		
+		char *data = (char*) balloc(1, conf.size);
+		readFile(&conf, data, conf.size, 0);
+		
+		char *line;
+		for (line=nextToken('\n', &data); line!=NULL; line=nextToken('\n', &data))
+		{
+			termput(line);
+			termput("\n");
+			parseConfigLine(line);
+		};
+	};
 	
+	dtermput("Finding a suitable video mode... ");
 	if (vbeInfoBlock.sig != (*((const dword_t*)"VESA")))
 	{
+		dtermput("FAILED\n");
 		termput("ERROR: Invalid VBE information block");
 		return;
 	};
 	
 	if (vbeInfoBlock.version < 0x0200)
 	{
+		dtermput("FAILED\n");
 		termput("ERROR: VBE 2.0 not supported");
 		return;
 	};
@@ -350,12 +452,49 @@ void bmain()
 	
 	if (videoMode == 0xFFFF)
 	{
+		dtermput("FAILED\n");
 		termput("ERROR: No acceptable video mode found\n");
+		
+		termput("Listing all supported modes:\n");
+		for (modes=(word_t*)modesAddr; *modes!=0xFFFF; modes++)
+		{
+			if (vbeGetModeInfo(*modes) != 0)
+			{
+				continue;
+			};
+			
+			if ((vbeModeInfo.attributes & 0x90) != 0x90)
+			{
+				// this is not a graphics mode with LFB
+				continue;
+			};
+			
+			if (vbeModeInfo.memory_model != 6)
+			{
+				// not a direct color mode
+				continue;
+			};
+
+			if (vbeModeInfo.bpp != 32)
+			{
+				// not 32-bit
+				continue;
+			};
+
+			if (vbeModeInfo.red_mask != 8 || vbeModeInfo.green_mask != 8 || vbeModeInfo.blue_mask != 8 || vbeModeInfo.rsv_mask != 8)
+			{
+				// channels are not all 8-bit
+				continue;
+			};
+			
+			termputd(vbeModeInfo.width); termput("x"); termputd(vbeModeInfo.height); termput("\n");
+		};
+	
 		return;
 	};
-	
-	fsInit();
 
+	dtermput("OK\n");
+	
 	dtermput("Finding /boot/vmglidix.tar... ");
 	FileHandle initrd;
 	if (openFile(&initrd, "/boot/vmglidix.tar") != 0)
@@ -452,9 +591,6 @@ void bmain()
 	};
 	
 	dtermput("OK\n");
-
-	// initialize placement allocator
-	placement = (dword_t) 0x100000;
 
 	dtermput("Loading initrd to memory... ");
 	
