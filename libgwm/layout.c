@@ -59,7 +59,7 @@ void gwmFit(GWMWindow *win)
 	win->layout->run(win->layout, 0, 0, width, height);
 };
 
-void gwmLayout(GWMWindow *win, int width, int height)
+void gwmLayoutEx(GWMWindow *win, int width, int height, int flags)
 {
 	if (win->layout == NULL)
 	{
@@ -73,15 +73,23 @@ void gwmLayout(GWMWindow *win, int width, int height)
 	if (width < minWidth) width = minWidth;
 	if (height < minHeight) height = minHeight;
 
-	if (win->parent == NULL)
+	if (flags & GWM_LAYOUT_CENTER)
 	{
-		int screenWidth, screenHeight;
-		gwmScreenSize(&screenWidth, &screenHeight);
-		gwmMoveWindow(win, (screenWidth-width)/2, (screenHeight-height)/2);
+		if (win->parent == NULL)
+		{
+			int screenWidth, screenHeight;
+			gwmScreenSize(&screenWidth, &screenHeight);
+			gwmMoveWindow(win, (screenWidth-width)/2, (screenHeight-height)/2);
+		};
 	};
 
 	gwmResizeWindow(win, width, height);
 	win->layout->run(win->layout, 0, 0, width, height);
+};
+
+void gwmLayout(GWMWindow *win, int width, int height)
+{
+	gwmLayoutEx(win, width, height, GWM_LAYOUT_CENTER);
 };
 
 void gwmSetWindowLayout(GWMWindow *win, GWMLayout *layout)

@@ -701,6 +701,11 @@ typedef struct GWMDataColumn_ GWMDataColumn;
 #define	GWM_FLEX_FILL				2		/* fill child on the specified axis */
 
 /**
+ * Flags for gwmLayoutEx().
+ */
+#define	GWM_LAYOUT_CENTER			(1 << 0)
+
+/**
  * Flags for @keymod.
  */
 #define	GWM_KM_CTRL				(1 << 0)
@@ -2411,9 +2416,15 @@ void gwmFit(GWMWindow *win);
 
 /**
  * Resize a window to a specific size, and lay out the children. If the size is less than the minimum, then the
- * minimum size is used instead.
+ * minimum size is used instead. If the window is top-level, it is also centered.
  */
 void gwmLayout(GWMWindow *win, int width, int height);
+
+/**
+ * Resize a window to a specific size and lay out the children. Acceptable flags:
+ * 	GWM_LAYOUT_CENTER	Center the window on the screen, if it has no parent.
+ */
+void gwmLayoutEx(GWMWindow *win, int width, int height, int flags);
 
 /**
  * Set the layout manager for a window.
