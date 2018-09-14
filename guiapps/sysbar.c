@@ -488,6 +488,7 @@ int sysbarEventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 		currentMouseX = ev->x;
 		currentMouseY = ev->y;
 		newSelect = (ev->x-40)/34;
+		if (ev->x < 40) newSelect = -1;
 		if (newSelect != lastSelect)
 		{
 			lastSelect = newSelect;
