@@ -217,7 +217,7 @@ int main(int argc, char *argv[])
 	while (strstr(headers, "\r\n\r\n") == NULL)
 	{
 		char rcvbuf[1024];
-		ssize_t sizeGot = read(sockfd, rcvbuf, 1024);
+		ssize_t sizeGot = read(sockfd, rcvbuf, 1);
 		
 		if (sizeGot == -1)
 		{
@@ -244,21 +244,13 @@ int main(int argc, char *argv[])
 	char *terminator = strstr(headers, "\r\n\r\n");
 	*terminator = 0;
 	
-	terminator += 4;
-	size_t dataOff = terminator - headers;
-	size_t toWrite = headSize - dataOff;
-	
-	if (toWrite > 0)
-	{
-		write(fd, terminator, toWrite);
-	};
-	
 	// parse the headers now
 	char *respline = strtok(headers, "\r\n");
 	printf("%s\n", respline);
 	
 	ssize_t contentLen = -1;
 	char *line;
+	int chunked = 0;
 	
 	while ((line = strtok(NULL, "\r\n")) != NULL)
 	{
@@ -275,70 +267,184 @@ int main(int argc, char *argv[])
 				};
 			};
 		};
+		
+		if (strcmp(line, "Transfer-Encoding: chunked") == 0)
+		{
+			chunked = 1;
+		};
 	};
 	
 	printf("Downloading...\n");
 	
-	ssize_t downloaded = (ssize_t) toWrite;
-	while ((downloaded < contentLen) || (contentLen == -1))
+	if (chunked)
 	{
-		if (contentLen == -1)
+		ssize_t downloaded = 0;
+		
+		while (1)
 		{
-			printf("\rDownloaded: %20ld bytes", downloaded);
-		}
-		else
-		{
-			ssize_t percent = (100*downloaded)/contentLen;
-			ssize_t scale = (70*downloaded)/contentLen;
-			ssize_t pad = 70 - scale;
-			printf("\r[");
-			while (scale--)
+			printf("\rDownloaded %016ld bytes", downloaded);
+			fflush(stdout);
+			
+			size_t nextChunkSize = 0;
+			while (1)
 			{
-				printf("=");
+				char c;
+				if (read(sockfd, &c, 1) != 1)
+				{
+					fprintf(stderr, "\nerror: premature end of stream\n");
+					return 1;
+				};
+				
+				if (c >= '0' && c <= '9')
+				{
+					nextChunkSize = (nextChunkSize << 4) | (c - '0');
+				}
+				else if (c >= 'a' && c <= 'f')
+				{
+					nextChunkSize = (nextChunkSize << 4) | (c - 'a' + 10);
+				}
+				else if (c >= 'A' && c <= 'F')
+				{
+					nextChunkSize = (nextChunkSize << 4) | (c - 'A' + 10);
+				}
+				else if (c == '\r')
+				{
+					break;
+				}
+				else
+				{
+					fprintf(stderr, "\nerror: invalid character in chunk header\n");
+					return 1;
+				};
 			};
 			
-			while (pad--)
+			char c;
+			if (read(sockfd, &c, 1) != 1)
 			{
-				printf(" ");
+				fprintf(stderr, "\nerror: premature end of stream\n");
+				return 1;
 			};
 			
-			printf("] %3ld%%", percent);
+			if (c != '\n')
+			{
+				fprintf(stderr, "\nerror: invalid termination of chunk header\n");
+				return 1;
+			};
+			
+			if (nextChunkSize == 0)
+			{
+				break;
+			};
+			
+			while (nextChunkSize > 0)
+			{
+				char buffer[1024];
+				
+				size_t toRecv = nextChunkSize;
+				if (toRecv > 1024) toRecv = 1024;
+				
+				ssize_t actuallyRecv = read(sockfd, buffer, toRecv);
+				if (actuallyRecv < 2)
+				{
+					fprintf(stderr, "\nerror: failed to read chunk data\n");
+					return 1;
+				};
+				
+				write(fd, buffer, (size_t) actuallyRecv);
+				nextChunkSize -= actuallyRecv;
+			};
+			
+			if (read(sockfd, &c, 1) != 1)
+			{
+				fprintf(stderr, "\nerror: premature end of stream\n");
+				return 1;
+			};
+			
+			if (c != '\r')
+			{
+				fprintf(stderr, "\nerror: invalid chunk terminator\n");
+				return 1;
+			};
+			
+			if (read(sockfd, &c, 1) != 1)
+			{
+				fprintf(stderr, "\nerror: premature end of stream\n");
+				return 1;
+			};
+			
+			if (c != '\n')
+			{
+				fprintf(stderr, "\nerror: invalid chunk terminator\n");
+				return 1;
+			};
 		};
 		
-		char buf[4096];
-		ssize_t sz = read(sockfd, buf, 4096);
-		
-		if (sz == -1)
+		printf("\rDownload complete.%-16s\n", "");
+	}
+	else
+	{
+		ssize_t downloaded = 0;
+		while ((downloaded < contentLen) || (contentLen == -1))
 		{
-			int error = errno;
-			printf("\r[XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX] ERR%%\n");
-			printf("read: %s\n", strerror(error));
-			close(fd);
-			close(sockfd);
-			return 1;
+			if (contentLen == -1)
+			{
+				printf("\rDownloaded: %20ld bytes", downloaded);
+			}
+			else
+			{
+				ssize_t percent = (100*downloaded)/contentLen;
+				ssize_t scale = (70*downloaded)/contentLen;
+				ssize_t pad = 70 - scale;
+				printf("\r[");
+				while (scale--)
+				{
+					printf("=");
+				};
+				
+				while (pad--)
+				{
+					printf(" ");
+				};
+				
+				printf("] %3ld%%", percent);
+			};
+			
+			char buf[4096];
+			ssize_t sz = read(sockfd, buf, 4096);
+			
+			if (sz == -1)
+			{
+				int error = errno;
+				printf("\r[XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX] ERR%%\n");
+				printf("read: %s\n", strerror(error));
+				close(fd);
+				close(sockfd);
+				return 1;
+			};
+			
+			if (sz == 0)
+			{
+				break;
+			};
+			
+			write(fd, buf, (size_t)sz);
+			downloaded += sz;
 		};
-		
-		if (sz == 0)
+
+		if (contentLen != -1)
 		{
-			break;
+			if (downloaded < contentLen)
+			{
+				printf("\n%s: connection terminated before full file received\n", argv[0]);
+				return 1;
+			};
 		};
 		
-		write(fd, buf, (size_t)sz);
-		downloaded += sz;
+		printf("\r[======================================================================] 100%%\n");
 	};
 	
 	close(fd);
 	close(sockfd);
 	
-	if (contentLen != -1)
-	{
-		if (downloaded < contentLen)
-		{
-			printf("\n%s: connection terminated before full file received\n", argv[0]);
-			return 1;
-		};
-	};
-	
-	printf("\r[======================================================================] 100%%\n");
 	return 0;
 };
