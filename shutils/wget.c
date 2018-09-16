@@ -1,5 +1,5 @@
 /*
-	Glidix kernel
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
