@@ -162,6 +162,19 @@ void pkgInstall()
 	// create the package database
 	mkdir("/mnt/etc/gpm", 0755);
 	
+	// create the repo list
+	int fd = open("/mnt/etc/gpm/repos.conf", O_CREAT | O_WRONLY | O_EXCL, 0644);
+	if (fd != -1)
+	{
+		FILE *fp = fdopen(fd, "w");
+		fprintf(fp, "# /etc/gpm/repos.conf\n");
+		fprintf(fp, "# Repository configuration file. List URLs of GPM repositories here.\n");
+		fprintf(fp, "# Run `gpm reindex' after changing this list to update the indexes!\n");
+		fprintf(fp, "# See repos(3) for more information.\n");
+		fprintf(fp, "http://glidix.madd-games.org/experimental.gpm\n");
+		fclose(fp);
+	};
+	
 	GPMContext *ctx = gpmCreateContext("/mnt", NULL);
 	if (ctx == NULL)
 	{
