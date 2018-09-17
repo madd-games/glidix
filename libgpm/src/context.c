@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/log.h>
 
 #include "libgpm.h"
 
@@ -85,6 +86,38 @@ GPMContext* gpmCreateContext(const char *dest, int *error)
 	
 	ctx->dest = strdup(dest);
 	ctx->lockfd = fd;
+	
+	char *logpath;
+	if (asprintf(&logpath, "%s/var/log/gpm.log", dest) == -1)
+	{
+		close(fd);
+		free(ctx->basedir);
+		free(ctx);
+		if (error != NULL) *error = GPM_ERR_ALLOC;
+	};
+	
+	int logfd = __log_open(logpath);
+	if (logfd == -1)
+	{
+		free(logpath);
+		close(fd);
+		free(ctx->basedir);
+		free(ctx);
+		if (error != NULL) *error = GPM_ERR_LOCK;
+		return NULL;
+	};
+	
+	ctx->log = fdopen(logfd, "w");
+	if (ctx->log == NULL)
+	{
+		close(logfd);
+		close(fd);
+		free(ctx->basedir);
+		free(ctx);
+		if (error != NULL) *error = GPM_ERR_LOCK;
+		return NULL;
+	};
+	
 	return ctx;
 };
 
@@ -92,6 +125,7 @@ void gpmDestroyContext(GPMContext *ctx)
 {
 	free(ctx->basedir);
 	close(ctx->lockfd);
+	fclose(ctx->log);
 	free(ctx);
 };
 

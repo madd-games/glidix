@@ -94,6 +94,11 @@ typedef struct
 	 * lock for this database.
 	 */
 	int				lockfd;
+	
+	/**
+	 * File pointer for the GPM log file.
+	 */
+	FILE*				log;
 } GPMContext;
 
 /**
@@ -239,6 +244,12 @@ void gpmDestroyContext(GPMContext *ctx);
  * Get the currently-installed version of the specified package. Returns 0 if not installed.
  */
 uint32_t gpmGetPackageVersion(GPMContext *ctx, const char *name);
+
+/**
+ * Rebuild the repository index. Information about the process is written to the GPM log. Returns 0 on success,
+ * or -1 on error.
+ */
+int gpmReindex(GPMContext *ctx);
 
 /**
  * Create an installation request on the specified database. Returns an empty request on success, or NULL
