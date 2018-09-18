@@ -79,6 +79,7 @@ static int propsHandler(GWMEvent *ev, GWMWindow *win, void *context)
 			};
 			
 			// change was successful, flip the checkbox
+			data->mode = newMode;
 			return GWM_EVSTATUS_CONT;
 		};
 		return GWM_EVSTATUS_CONT;
