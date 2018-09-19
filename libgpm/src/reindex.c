@@ -38,39 +38,39 @@
 
 #include "libgpm.h"
 
-static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
+int gpmFetch(GPMContext *ctx, FILE *out, const char *url, float *progPtr)
 {
 	if (strlen(url) < strlen("http://"))
 	{
 		fprintf(ctx->log, "ERROR: Unsupported URL: %s\n", url);
-		return;
+		return -1;
 	};
 	
 	if (memcmp(url, "http://", strlen("http://")) != 0)
 	{
 		fprintf(ctx->log, "ERROR: Unsupported URL: %s\n", url);
-		return;
+		return -1;
 	};
 	
 	const char *server = &url[strlen("http://")];
 	if (*server == 0)
 	{
 		fprintf(ctx->log, "ERROR: Unsupported URL: %s\n", url);
-		return;
+		return -1;
 	};
 	
 	const char *pathname = strchr(server, '/');
 	if (pathname == NULL)
 	{
 		fprintf(ctx->log, "ERROR: Unsupported URL: %s\n", url);
-		return;
+		return -1;
 	};
 	
 	char nodename[256];
 	if ((pathname-server) > 255)
 	{
 		fprintf(ctx->log, "ERROR: Unsupported URL: %s\n", url);
-		return;
+		return -1;
 	};
 	
 	memset(nodename, 0, 256);
@@ -90,7 +90,7 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 	if (status != 0)
 	{
 		fprintf(ctx->log, "ERROR: Failed to resolve '%s': %s\n", nodename, gai_strerror(status));
-		return;
+		return -1;
 	};
 	
 	int sockfd;
@@ -144,7 +144,7 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 	if (ai == NULL)
 	{
 		fprintf(ctx->log, "ERROR: failed to connect to %s\n", nodename);
-		return;
+		return -1;
 	};
 	
 	freeaddrinfo(info);
@@ -160,14 +160,14 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 	{
 		fprintf(ctx->log, "ERROR:%s\n", strerror(errno));
 		close(sockfd);
-		return;
+		return -1;
 	};
 	
 	if (sz < strlen(request))
 	{
 		fprintf(ctx->log, "Failed to send the whole request\n");
 		close(sockfd);
-		return;
+		return -1;
 	};
 	
 	fprintf(ctx->log, "Awaiting response...\n");
@@ -184,14 +184,14 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 		{
 			printf("%s\n", strerror(errno));
 			close(sockfd);
-			return;
+			return -1;
 		};
 		
 		if (sizeGot == 0)
 		{
 			printf("EOF before end of headers\n");
 			close(sockfd);
-			return;
+			return -1;
 		};
 		
 		size_t offset = headSize;
@@ -223,7 +223,7 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 				{
 					fprintf(ctx->log, "ERROR: Invalid Content-Length!\n");
 					close(sockfd);
-					return;
+					return -1;
 				};
 			};
 		};
@@ -235,7 +235,6 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 	};
 	
 	fprintf(ctx->log, "Downloading...\n");
-	fprintf(out, "\n# Source: %s\n", url);
 	
 	if (chunked)
 	{
@@ -248,7 +247,7 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 				if (read(sockfd, &c, 1) != 1)
 				{
 					fprintf(ctx->log, "\nerror: premature end of stream\n");
-					return;
+					return -1;
 				};
 				
 				if (c >= '0' && c <= '9')
@@ -270,7 +269,7 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 				else
 				{
 					fprintf(ctx->log, "\nerror: invalid character in chunk header\n");
-					return;
+					return -1;
 				};
 			};
 			
@@ -278,13 +277,13 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 			if (read(sockfd, &c, 1) != 1)
 			{
 				fprintf(ctx->log, "\nerror: premature end of stream\n");
-				return;
+				return -1;
 			};
 			
 			if (c != '\n')
 			{
 				fprintf(ctx->log, "\nerror: invalid termination of chunk header\n");
-				return;
+				return -1;
 			};
 			
 			if (nextChunkSize == 0)
@@ -303,7 +302,7 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 				if (actuallyRecv < 2)
 				{
 					fprintf(ctx->log, "\nerror: failed to read chunk data\n");
-					return;
+					return -1;
 				};
 				
 				fwrite(buffer, (size_t) actuallyRecv, 1, out);
@@ -313,25 +312,25 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 			if (read(sockfd, &c, 1) != 1)
 			{
 				fprintf(ctx->log, "\nerror: premature end of stream\n");
-				return;
+				return -1;
 			};
 			
 			if (c != '\r')
 			{
 				fprintf(ctx->log, "\nerror: invalid chunk terminator\n");
-				return;
+				return -1;
 			};
 			
 			if (read(sockfd, &c, 1) != 1)
 			{
 				fprintf(ctx->log, "\nerror: premature end of stream\n");
-				return;
+				return -1;
 			};
 			
 			if (c != '\n')
 			{
 				fprintf(ctx->log, "\nerror: invalid chunk terminator\n");
-				return;
+				return -1;
 			};
 		};
 	}
@@ -348,7 +347,7 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 				int error = errno;
 				fprintf(ctx->log, "read: %s\n", strerror(error));
 				close(sockfd);
-				return;
+				return -1;
 			};
 			
 			if (sz == 0)
@@ -358,6 +357,8 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 			
 			fwrite(buf, (size_t)sz, 1, out);
 			downloaded += sz;
+			
+			if (progPtr != NULL && contentLen > 0) *progPtr = (float) downloaded / (float) contentLen;
 		};
 
 		if (contentLen != -1)
@@ -366,13 +367,14 @@ static void gpmFetch(GPMContext *ctx, FILE *out, const char *url)
 			{
 				fprintf(ctx->log, "\nERROR: Connection terminated before full file received\n");
 				close(sockfd);
-				return;
+				return -1;
 			};
 		};
 	};
 	
 	close(sockfd);
 	fprintf(ctx->log, "Download OK.\n");
+	return 0;
 };
 
 int gpmReindex(GPMContext *ctx)
@@ -432,7 +434,8 @@ int gpmReindex(GPMContext *ctx)
 		while (*line != 0 && (line[strlen(line)-1] == ' ' || line[strlen(line)-1] == '\t')) line[strlen(line)-1] = 0;
 		if (*line == 0) continue;
 		
-		gpmFetch(ctx, out, line);
+		fprintf(out, "\n# Source: %s\n", line);
+		gpmFetch(ctx, out, line, NULL);
 	};
 	
 	fclose(fp);
@@ -440,6 +443,49 @@ int gpmReindex(GPMContext *ctx)
 	fprintf(out, "\n# END OF INDEX\n");
 	fprintf(ctx->log, "*** REINDEX COMPLETE ***\n");
 	fclose(out);
+	
+	return 0;
+};
+
+int gpmMaybeReindex(GPMContext *ctx)
+{
+	char *confpath;
+	if (asprintf(&confpath, "%s/repos.conf", ctx->basedir) == -1)
+	{
+		fprintf(ctx->log, "ERROR: Out of memory\n");
+		return -1;
+	};
+	
+	struct stat stconf;
+	if (stat(confpath, &stconf) != 0)
+	{
+		fprintf(ctx->log, "ERROR: Cannot stat `%s': %s\n", confpath, strerror(errno));
+		free(confpath);
+		return -1;
+	};
+	
+	free(confpath);
+	
+	char *indexpath;
+	if (asprintf(&indexpath, "%s/repos.index", ctx->basedir) == -1)
+	{
+		fprintf(ctx->log, "ERROR: Out of memory\n");
+		return -1;
+	};
+	
+	struct stat stidx;
+	if (stat(indexpath, &stidx) != 0)
+	{
+		free(indexpath);
+		return gpmReindex(ctx);
+	};
+	
+	free(indexpath);
+	if (stconf.st_mtime > stidx.st_mtime)
+	{
+		// configuration was modified after the current index was created
+		return gpmReindex(ctx);
+	};
 	
 	return 0;
 };

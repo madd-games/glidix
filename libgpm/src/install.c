@@ -96,7 +96,7 @@ static int addPkg(GPMInstallRequest *req, const char *pkgname, uint32_t version,
 	return 0;
 };
 
-static void formatVersion(char *buffer, uint32_t version)
+void gpmFormatVersion(char *buffer, uint32_t version)
 {
 	if (version == 0)
 	{
@@ -228,7 +228,7 @@ int gpmInstallRequestMIP(GPMInstallRequest *req, const char *filename, int *erro
 			};
 			
 			char verspec[64];
-			formatVersion(verspec, depver);
+			gpmFormatVersion(verspec, depver);
 			
 			char *newdepcmd;
 			asprintf(&newdepcmd, "%sdepends %s %s\n", depcmd, depname, verspec);
@@ -275,6 +275,123 @@ int gpmInstallRequestMIP(GPMInstallRequest *req, const char *filename, int *erro
 	return 0;
 };
 
+typedef struct
+{
+	GPMInstallRequest*			req;
+	GPMContext*				ctx;
+	const char*				pkgname;
+	uint32_t				version;
+} AddPackageData;
+
+static void* addPackageTask(void *context)
+{
+	GPMTaskProgress *prog = (GPMTaskProgress*) context;
+	AddPackageData *data = (AddPackageData*) prog->data;
+	
+	uint32_t currentVersion = gpmGetPackageVersion(data->ctx, data->pkgname);
+	if (data->version == 0) data->version = gpmGetLatestVersion(data->ctx, data->pkgname);
+	if (data->version == 0)
+	{
+		if (currentVersion != 0)
+		{
+			asprintf(&prog->status, "Package `%s' is already in the latest version", data->pkgname);
+			prog->done = 1;
+			return NULL;
+		}
+		else
+		{
+			asprintf(&prog->status, "Package `%s' was not found", data->pkgname);
+			prog->done = 1;
+			return NULL;
+		};
+	};
+	
+	if (data->version <= currentVersion)
+	{
+		asprintf(&prog->status, "Package `%s' is already installed in the selected, or newer, version", data->pkgname);
+		prog->done = 1;
+		return NULL;
+	};
+	
+	char *url = gpmGetPackageURL(data->ctx, data->pkgname, data->version);
+	if (url == NULL)
+	{
+		char verbuf[64];
+		gpmFormatVersion(verbuf, data->version);
+		asprintf(&prog->status, "Failed to find a URL for package `%s', version %s", data->pkgname, verbuf);
+		prog->done = 1;
+		return NULL;
+	};
+	
+	// download the file
+	char *temp;
+	static int counter = 1;
+	asprintf(&temp, "%s/%d.mip", data->ctx->tempdir, __sync_fetch_and_add(&counter, 1));
+	FILE *out = fopen(temp, "wb");
+	if (out == NULL)
+	{
+		asprintf(&prog->status, "Failed to create temporary file `%s'", temp);
+		free(temp);
+		free(url);
+		prog->done = 1;
+		return NULL;
+	};
+	
+	int status = gpmFetch(data->ctx, out, url, &prog->progress);
+	fclose(out);
+	
+	if (status == -1)
+	{
+		asprintf(&prog->status, "Failed to download `%s'. See GPM log for details.", url);
+		free(url);
+		free(temp);
+		prog->done = 1;
+		return NULL;
+	};
+	
+	free(url);
+	
+	// try adding to the installation request
+	int error;
+	if (gpmInstallRequestMIP(data->req, temp, &error) != 0)
+	{
+		asprintf(&prog->status, "Failed to add to installation request: error %d", error);
+		free(temp);
+		prog->done = 1;
+		return NULL;
+	};
+	
+	// all worked
+	prog->status = NULL;
+	prog->done = 1;
+	return NULL;
+};
+
+GPMTaskProgress* gpmInstallRequestAdd(GPMInstallRequest *req, const char *pkgname, uint32_t version)
+{
+	GPMTaskProgress *prog = (GPMTaskProgress*) malloc(sizeof(GPMTaskProgress));
+	if (prog == NULL) return NULL;
+	
+	AddPackageData *data = (AddPackageData*) malloc(sizeof(AddPackageData));
+	data->req = req;
+	data->ctx = req->ctx;
+	data->pkgname = pkgname;
+	data->version = version;
+	
+	prog->progress = 0;
+	prog->done = 0;
+	prog->status = NULL;
+	prog->data = data;
+	
+	if (pthread_create(&prog->thread, NULL, addPackageTask, prog) != 0)
+	{
+		free(prog);
+		return NULL;
+	};
+	
+	return prog;
+};
+
 static void* installTask(void *context)
 {
 	GPMTaskProgress *prog = (GPMTaskProgress*) context;
@@ -294,9 +411,9 @@ static void* installTask(void *context)
 			if (currentVersion < node->version)
 			{
 				char depver[64];
-				formatVersion(depver, node->version);
+				gpmFormatVersion(depver, node->version);
 				char havever[64];
-				formatVersion(havever, currentVersion);
+				gpmFormatVersion(havever, currentVersion);
 				asprintf(&prog->status, "dependency not satisfied: need %s %s but have %s",
 						node->name, depver, havever);
 				prog->done = 1;
@@ -328,7 +445,7 @@ static void* installTask(void *context)
 			};
 			
 			char verspec[64];
-			formatVersion(verspec, node->version);
+			gpmFormatVersion(verspec, node->version);
 			fprintf(pkg, "version %s\n", verspec);
 			fprintf(pkg, "%s", node->depcmd);
 			

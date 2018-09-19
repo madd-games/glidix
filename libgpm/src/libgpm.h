@@ -99,6 +99,11 @@ typedef struct
 	 * File pointer for the GPM log file.
 	 */
 	FILE*				log;
+	
+	/**
+	 * Path to the temporary directory.
+	 */
+	char*				tempdir;
 } GPMContext;
 
 /**
@@ -236,6 +241,14 @@ float gpmGetDecoderProgress(GPMDecoder *decoder);
 GPMContext* gpmCreateContext(const char *dest, int *error);
 
 /**
+ * Fetch a file from the specified URL, and write its contents to 'out'. If 'progPtr' is not NULL, it is
+ * periodically set to the current download progress, in the 0-1 range. Returns 0 on success (file fully
+ * downloaded), or -1 on error. If an error occured, additional information is written to the GPM log,
+ * and the state of 'out' is undefined.
+ */
+int gpmFetch(GPMContext *ctx, FILE *out, const char *url, float *progPtr);
+
+/**
  * Destroy a database context.
  */
 void gpmDestroyContext(GPMContext *ctx);
@@ -246,10 +259,26 @@ void gpmDestroyContext(GPMContext *ctx);
 uint32_t gpmGetPackageVersion(GPMContext *ctx, const char *name);
 
 /**
+ * Return the latest available version of the specified package. Returns 0 if not found in the index.
+ */
+uint32_t gpmGetLatestVersion(GPMContext *ctx, const char *name);
+
+/**
+ * Return the URL from which the specified version of a package is to be downloaded. Returns NULL if not found.
+ * Otherwise, the returned string must later be freed using free().
+ */
+char* gpmGetPackageURL(GPMContext *ctx, const char *name, uint32_t version);
+
+/**
  * Rebuild the repository index. Information about the process is written to the GPM log. Returns 0 on success,
  * or -1 on error.
  */
 int gpmReindex(GPMContext *ctx);
+
+/**
+ * Rebuild the repository index if necessary. Returns 0 if successful or not needed.
+ */
+int gpmMaybeReindex(GPMContext *ctx);
 
 /**
  * Create an installation request on the specified database. Returns an empty request on success, or NULL
@@ -273,6 +302,16 @@ GPMInstallRequest* gpmCreateInstallRequest(GPMContext *ctx, int *error);
 int gpmInstallRequestMIP(GPMInstallRequest *req, const char *filename, int *error);
 
 /**
+ * Add the named package to an installation request. If 'version' is 0, the latest version is automatically
+ * chosen. If the package is not installed, it is pulled from the appropriate URL. Returns a GPMTaskProgress
+ * representing the progress of the download.
+ *
+ * When the task completes, if successful, the package will be added to the install request. If it fails,
+ * the request will remain unchanged.
+ */
+GPMTaskProgress* gpmInstallRequestAdd(GPMInstallRequest *req, const char *pkgname, uint32_t version);
+
+/**
  * Run an installation task, and return a structure that can be used to track it. Returns NULL on memory
  * allocation error.
  */
@@ -293,5 +332,15 @@ float gpmGetProgress(GPMTaskProgress *prog);
  * a string containing an error message.
  */
 char* gpmWait(GPMTaskProgress *prog);
+
+/**
+ * Write a string representing the specifeid 'version' into 'buffer'. The buffer must be at least 64 bytes long.
+ */
+void gpmFormatVersion(char *buffer, uint32_t version);
+
+/**
+ * Parse a version string into a version number.
+ */
+uint32_t gpmParseVersion(const char *str);
 
 #endif
