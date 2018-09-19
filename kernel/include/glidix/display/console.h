@@ -66,6 +66,7 @@ void setGfxTerm(int value);
 void enableDebugTerm();
 void disableConsole();
 void enableConsole();
+void setConsoleFrameBuffer(uint8_t *framebuffer, PixelFormat *format, int width, int height);
 void getConsoleSize(unsigned short *width, unsigned short *height);
 void initKlogFile();
 

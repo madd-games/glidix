@@ -158,6 +158,19 @@ static void undrawCursor()
 	};
 };
 
+void setConsoleFrameBuffer(uint8_t *framebuffer, PixelFormat *format, int width, int height)
+{
+	consoleState.width = width / 9;
+	consoleState.height = height / 16;
+	consoleState.fb = framebuffer;
+	consoleState.fbSize = height * (width * (format->bpp + format->pixelSpacing) + format->scanlineSpacing);
+	consoleState.pitch = format->bpp * width + format->scanlineSpacing;
+	memcpy(&consoleState.format, format, sizeof(PixelFormat));
+	consoleState.cursorDrawn = 0;
+	consoleState.pixelWidth = width;
+	consoleState.pixelHeight = height;
+};
+
 void initConsole()
 {
 	if ((bootInfo->features & KB_FEATURE_VIDEO) == 0)
@@ -182,16 +195,8 @@ void initConsole()
 	};
 	
 	mutexInit(&consoleLock);
-	consoleState.width = bootInfo->fbWidth / 9;
-	consoleState.height = bootInfo->fbHeight / 16;
 	consoleState.enabled = 1;
-	consoleState.fb = bootInfo->framebuffer;
-	consoleState.fbSize = bootInfo->fbHeight * (bootInfo->fbWidth * (bootInfo->fbFormat.bpp + bootInfo->fbFormat.pixelSpacing) + bootInfo->fbFormat.scanlineSpacing);
-	consoleState.pitch = bootInfo->fbFormat.bpp * bootInfo->fbWidth + bootInfo->fbFormat.scanlineSpacing;
-	memcpy(&consoleState.format, &bootInfo->fbFormat, sizeof(PixelFormat));
-	consoleState.cursorDrawn = 0;
-	consoleState.pixelWidth = bootInfo->fbWidth;
-	consoleState.pixelHeight = bootInfo->fbHeight;
+	setConsoleFrameBuffer(bootInfo->framebuffer, &bootInfo->fbFormat, bootInfo->fbWidth, bootInfo->fbHeight);
 	clearScreen();
 	
 	// set up kernel log
