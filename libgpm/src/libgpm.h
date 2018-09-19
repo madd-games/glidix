@@ -104,6 +104,11 @@ typedef struct
 	 * Path to the temporary directory.
 	 */
 	char*				tempdir;
+	
+	/**
+	 * Log PID.
+	 */
+	pid_t				logpid;
 } GPMContext;
 
 /**

@@ -104,7 +104,7 @@ GPMContext* gpmCreateContext(const char *dest, int *error)
 		if (error != NULL) *error = GPM_ERR_ALLOC;
 	};
 	
-	int logfd = __log_open(logpath);
+	int logfd = __log_open(logpath, &ctx->logpid);
 	if (logfd == -1)
 	{
 		free(logpath);
@@ -152,6 +152,7 @@ void gpmDestroyContext(GPMContext *ctx)
 	free(ctx->basedir);
 	close(ctx->lockfd);
 	fclose(ctx->log);
+	waitpid(ctx->logpid, NULL, 0);
 	free(ctx);
 };
 

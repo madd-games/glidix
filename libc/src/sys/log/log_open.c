@@ -29,7 +29,7 @@
 #include <sys/log.h>
 #include <unistd.h>
 
-int __log_open(const char *prefix)
+int __log_open(const char *prefix, pid_t *pidOut)
 {
 	int pipefd[2];
 	if (pipe(pipefd) != 0)
@@ -54,6 +54,8 @@ int __log_open(const char *prefix)
 	}
 	else
 	{
+		if (pidOut != NULL) *pidOut = pid;
+		
 		close(pipefd[0]);
 		return pipefd[1];
 	};

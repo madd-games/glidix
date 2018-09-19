@@ -29,11 +29,13 @@
 #ifndef _SYS_LOG_H
 #define _SYS_LOG_H
 
+#include <sys/types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int __log_open(const char *prefix);
+int __log_open(const char *prefix, pid_t *pid);
 #define	log_open __log_open
 
 #ifdef __cplusplus
