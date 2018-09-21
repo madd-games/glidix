@@ -73,6 +73,12 @@
 #define	DDI_IOCTL_VIDEO_GETINFO			_GLIDIX_IOCTL_ARG(DDIDisplayInfo, _GLIDIX_IOCTL_INT_VIDEO, 2)
 
 /**
+ * Macro for constructing DDI commands (GPU IOCTLs).
+ */
+#define	DDI_COMMAND_NOARG(x)			_GLIDIX_IOCTL_NOARG(_GLIDIX_IOCTL_INT_GPU, x)
+#define	DDI_COMMAND_ARG(type, x)		_GLIDIX_IOCTL_ARG(type, _GLIDIX_IOCTL_INT_GPU, x)
+
+/**
  * Resolution specifications (bottom 8 bits are the setting type).
  */
 #define DDI_RES_AUTO				0		/* best resolution for screen (or safe if not detected) */
@@ -295,6 +301,12 @@ typedef struct
 	 * All coordinates are allowed. Pixels written outside of bounds are discarded.
 	 */
 	void (*rect)(void *drvctx, DDISurface *surf, int x, int y, int width, int height, DDIColor *color);
+	
+	/**
+	 * Initialize the framebuffer after a call to ddiSetVideoMode(). The 'fbuf' surface passed as an argument
+	 * is the surface returned by ddiSetVideoMode().
+	 */
+	void (*initfbuf)(void *drvctx, DDISurface *fbuf);
 } DDIDriver;
 extern DDIDriver* ddiDriver;
 
@@ -331,6 +343,13 @@ void ddiQuit();
  * Only available when compiled for Glidix.
  */
 DDISurface* ddiSetVideoMode(uint64_t res);
+
+/**
+ * Send a command to the kernel-mode driver. 'cmd' must be constructed using DDI_COMMAND_* macros, and the final
+ * argument 'argp' depends on the command. Everything else is command-dependent and driver-dependent. This function
+ * may set 'errno'.
+ */
+int ddiCommand(uint64_t cmd, void *argp);
 
 /**
  * Returns the amount of data required to represent an image of a certain size in the given format.

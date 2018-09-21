@@ -311,7 +311,13 @@ DDISurface* ddiSetVideoMode(uint64_t res)
 		return NULL;
 	};
 	
+	if (ddiDriver->initfbuf != NULL) ddiDriver->initfbuf(ddiDrvCtx, surface);
 	return surface;
+};
+
+int ddiCommand(uint64_t cmd, void *argp)
+{
+	return ioctl(ddiFD, cmd, argp);
 };
 
 size_t ddiGetFormatDataSize(DDIPixelFormat *format, unsigned int width, unsigned int height)

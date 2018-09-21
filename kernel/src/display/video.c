@@ -65,6 +65,17 @@ int video_ioctl(Inode *inode, File *fp, uint64_t cmd, void *argp)
 {
 	VideoDisplay *disp = inode->fsdata;
 	
+	if (IOCTL_INTF(cmd) == IOCTL_INT_GPU)
+	{
+		if (disp->ops->command == NULL)
+		{
+			ERRNO = ENODEV;
+			return -1;
+		};
+		
+		return disp->ops->command(disp, cmd, argp);
+	};
+	
 	switch (cmd)
 	{
 	case IOCTL_VIDEO_MODESET:

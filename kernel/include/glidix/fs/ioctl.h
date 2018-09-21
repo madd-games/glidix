@@ -45,6 +45,11 @@
 #define	IOCTL_ARG(type, intf, cmd)				((sizeof(type) << 32) | IOCTL_NOARG(intf, cmd))
 
 /**
+ * Macros to extract parts of the ioctl command value.
+ */
+#define	IOCTL_INTF(val)						(((val) >> 16) & 0xFFFF)
+
+/**
  * Interface types (see docs/ioctl.html for more info).
  */
 #define	IOCTL_INT_PCI						0x0001

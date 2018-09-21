@@ -37,6 +37,12 @@
 #define	IOCTL_VIDEO_GETINFO			IOCTL_ARG(VideoInfo, IOCTL_INT_VIDEO, 2)
 
 /**
+ * Convenience macro to define GPU commands.
+ */
+#define	VIDEO_COMMAND_NOARG(x)			IOCTL_NOARG(IOCTL_INT_GPU, x)
+#define	VIDEO_COMMAND_ARG(type, x)		IOCTL_ARG(type, IOCTL_INT_GPU, x)
+
+/**
  * Resolution specifications (bottom 8 bits are the setting type).
  */
 #define	VIDEO_RES_AUTO				0		/* best resolution for screen (or safe if not detected) */
@@ -114,6 +120,13 @@ typedef struct
 	 * memory (this is the offset used with mmap()). Return 0 if no such page exists.
 	 */
 	uint64_t (*getpage)(struct VideoDisplay_ *display, off_t off);
+	
+	/**
+	 * Dispatch a command to the kernel-mode driver. This is called whenever an ioctl() is issued
+	 * where the interface is IOCTL_INT_GPU. Return 0 on success, -1 on error. If an error occurs,
+	 * ERRNO must also be set.
+	 */
+	int (*command)(struct VideoDisplay_ *display, uint64_t cmd, void *argp);
 } VideoOps;
 
 /**

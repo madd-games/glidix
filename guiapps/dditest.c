@@ -34,6 +34,15 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#define	VMGPU_CMD_UPDATE				DDI_COMMAND_ARG(VMGPU_CmdUpdate, 1)
+typedef struct
+{
+	uint32_t					x;
+	uint32_t					y;
+	uint32_t					width;
+	uint32_t					height;
+} VMGPU_CmdUpdate;
+
 int main(int argc, char *argv[])
 {
 	if (argc != 2)
@@ -54,6 +63,18 @@ int main(int argc, char *argv[])
 	ddiFillRect(fbuf, 0, 0, fbuf->width, fbuf->height, &color);
 	
 	sleep(5);
+	
+	DDIColor pink = {0xFF, 0x00, 0xFF, 0xFF};
+	ddiFillRect(fbuf, 0, 0, fbuf->width, fbuf->height, &pink);
+
+	VMGPU_CmdUpdate update;
+	update.x = 0;
+	update.y = 0;
+	update.width = fbuf->width;
+	update.height = fbuf->height;
+	ddiCommand(VMGPU_CMD_UPDATE, &update);
+
+	while (1) pause();
 	
 	ddiQuit();
 	return 0;
