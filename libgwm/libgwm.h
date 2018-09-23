@@ -1372,6 +1372,8 @@ typedef GWMWindow GWMSlider;
 typedef GWMWindow GWMFrame;
 typedef GWMWindow GWMTabList;
 typedef GWMWindow GWMTab;
+typedef GWMWindow GWMScale;
+typedef GWMWindow GWMProgressBar;
 
 /**
  * Typedef tab lists.
