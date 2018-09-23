@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #include "libgpm.h"
 
@@ -481,9 +482,10 @@ int gpmMaybeReindex(GPMContext *ctx)
 	};
 	
 	free(indexpath);
-	if (stconf.st_mtime > stidx.st_mtime)
+	if (stconf.st_mtime > stidx.st_mtime || stidx.st_mtime < (time(NULL)-7*24*60*60))
 	{
-		// configuration was modified after the current index was created
+		// configuration was modified after the current index was created,
+		// or the index was not refreshed for a week
 		return gpmReindex(ctx);
 	};
 	
