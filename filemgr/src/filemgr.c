@@ -95,6 +95,15 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 	case GWM_SYM_NEW_FILE:
 		dvMakeFile(dirView, NULL, 0);
 		return GWM_EVSTATUS_OK;
+	case GWM_SYM_CUT:
+		dvCut(dirView);
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_COPY:
+		dvCopy(dirView);
+		return GWM_EVSTATUS_OK;
+	case GWM_SYM_PASTE:
+		dvPaste(dirView);
+		return GWM_EVSTATUS_OK;
 	case DV_SYM_TERMINAL:
 		dvTerminal(dirView);
 		return GWM_EVSTATUS_OK;
@@ -149,6 +158,11 @@ void makeEditMenu()
 	gwmMenuAddCommand(menuNew, DV_SYM_MKDIR, "Directory", NULL);
 	gwmMenuAddCommand(menuNew, GWM_SYM_NEW_FILE, "Empty file", NULL);
 
+	gwmMenuAddSeparator(menuEdit);
+	gwmMenuAddCommand(menuEdit, GWM_SYM_CUT, NULL, NULL);
+	gwmMenuAddCommand(menuEdit, GWM_SYM_COPY, NULL, NULL);
+	gwmMenuAddCommand(menuEdit, GWM_SYM_PASTE, NULL, NULL);
+	
 	gwmMenuAddSeparator(menuEdit);
 	gwmMenuAddCommand(menuEdit, DV_SYM_TERMINAL, "Open terminal", NULL);
 	gwmMenuSetIcon(menuEdit, iconTerm);

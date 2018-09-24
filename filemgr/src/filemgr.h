@@ -41,7 +41,14 @@ extern int desktopMode;
  */
 enum
 {
-	FILEMGR_EVENT_ = (GWM_EVENT_CASCADING | GWM_EVENT_USER),
+	FILEMGR_EVENT_NONCASCADING_ = GWM_EVENT_USER,
+	
+	/**
+	 * Task events.
+	 */
+	TASK_EVENT_MSGBOX,
+	
+	FILEMGR_EVENT_CASCADING_ = (GWM_EVENT_CASCADING | GWM_EVENT_USER),
 	
 	/**
 	 * DirView events.
@@ -68,7 +75,6 @@ enum
 	 */
 	PROP_CHMOD,
 	PROP_CHMOD_END = PROP_CHMOD + 12,
-	
 };
 
 #endif

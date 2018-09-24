@@ -37,6 +37,7 @@
 #include "dirview.h"
 #include "filemgr.h"
 #include "props.h"
+#include "task.h"
 
 extern GWMWindow *topWindow;
 
@@ -1082,4 +1083,437 @@ void dvProps(DirView *dv)
 		FSMimeType *mime = fsGetType(data->location);
 		propShow(data->location, mime);
 	};
+};
+
+static void doClipboardOp(DirView *dv, DirViewData *data, const char *op)
+{
+	char *cbspec = strdup(op);
+
+	// find all selected entries and append them	
+	DirEntry *ent;
+	for (ent=data->ents; ent!=NULL; ent=ent->next)
+	{
+		if (ent->selected)
+		{
+			if (strchr(ent->path, '\n') != NULL)
+			{
+				gwmMessageBox(dv, "Error",
+					"Some of the selected files contain invalid characters in their names.",
+					GWM_MBICON_ERROR | GWM_MBUT_OK);
+				free(cbspec);
+				return;
+			};
+			
+			char *newspec;
+			asprintf(&newspec, "%s\n%s", cbspec, ent->path);
+			free(cbspec);
+			cbspec = newspec;
+		};
+	};
+	
+	// see if we actually have any files select
+	if (strchr(cbspec, '\n') == NULL)
+	{
+		return;
+	};
+	
+	// done
+	gwmClipboardPutText(cbspec, strlen(cbspec));
+	free(cbspec);
+};
+
+void dvCut(DirView *dv)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	doClipboardOp(dv, data, "*CUT*");
+};
+
+void dvCopy(DirView *dv)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	doClipboardOp(dv, data, "*COPY*");
+};
+
+static void addPathObjects(const char *destdir, int defaultOp, const char *path, FileOpObject **firstPtr, FileOpObject **lastPtr, int *numPtr, TaskData *data)
+{
+	if (path[0] != '/') return;
+
+	struct stat st;
+	if (lstat(path, &st) != 0)
+	{
+		return;
+	};
+	
+	if (S_ISDIR(st.st_mode))
+	{
+		// TODO: recursively move/copy
+	}
+	else if (S_ISLNK(st.st_mode) || S_ISREG(st.st_mode))
+	{
+		const char *basename = path;
+		char *slashPos = strrchr(basename, '/');
+		if (slashPos != NULL) basename = slashPos+1;
+		
+		FileOpObject *obj = (FileOpObject*) malloc(sizeof(FileOpObject));
+		memset(obj, 0, sizeof(FileOpObject));
+		obj->op = defaultOp;
+		obj->src = strdup(path);
+		asprintf(&obj->dest, "%s/%s", destdir, basename);
+		obj->size = st.st_size;
+		if (S_ISLNK(st.st_mode)) obj->size = 0;
+		obj->mode = st.st_mode & 0xFFF;
+		
+		if (*firstPtr == NULL)
+		{
+			*firstPtr = *lastPtr = obj;
+		}
+		else
+		{
+			(*lastPtr)->next = obj;
+			*lastPtr = obj;
+		};
+		
+		(*numPtr)++;
+		
+		char txtbuf[256];
+		sprintf(txtbuf, "Counting objects... %d", *numPtr);
+		taskSetText(data, txtbuf);
+	};
+};
+
+typedef struct
+{
+	const char*					destdir;
+	char*						cbspec;
+} PasteData;
+
+static void updateProgress(TaskData *data, const char *op, int counter, int numObj, size_t dataDone, size_t dataTotal)
+{
+	char textbuf[256];
+	sprintf(textbuf, "%s file %d/%d...", op, counter, numObj);
+	
+	taskSetText(data, textbuf);
+	taskSetProgress(data, (float) dataDone / (float) dataTotal);
+};
+
+static void pasteTask(TaskData *data, void *context)
+{
+	PasteData *pdata = (PasteData*) context;
+	char *cbspec = pdata->cbspec;
+	char *saveptr;
+	
+	char *cmd = strtok_r(cbspec, "\n", &saveptr);
+	if (cmd == NULL) return;
+	
+	int op;
+	const char *opname;
+	if (strcmp(cmd, "*CUT*") == 0)
+	{
+		op = FILEOP_MOVE;
+		opname = "Moving";
+	}
+	else if (strcmp(cmd, "*COPY*") == 0)
+	{
+		op = FILEOP_COPY;
+		opname = "Copying";
+	}
+	else
+	{
+		return;
+	};
+	
+	FileOpObject *firstObj = NULL;
+	FileOpObject *lastObj = NULL;
+	int numObj = 0;
+	
+	taskSetText(data, "Counting objects...");
+	
+	char *path;
+	for (path=strtok_r(NULL, "\n", &saveptr); path!=NULL; path=strtok_r(NULL, "\n", &saveptr))
+	{
+		addPathObjects(pdata->destdir, op, path, &firstObj, &lastObj, &numObj, data);
+	};
+	
+	size_t dataDone = 0;
+	size_t dataTotal = 0;
+	
+	FileOpObject *obj;
+	for (obj=firstObj; obj!=NULL; obj=obj->next)
+	{
+		dataTotal += obj->size;
+	};
+	
+	// do it
+	int objCounter = 0;
+	for (obj=firstObj; obj!=NULL; obj=obj->next)
+	{
+		objCounter++;
+		updateProgress(data, opname, objCounter, numObj, dataDone, dataTotal);
+		
+		if (obj->op == FILEOP_MOVE)
+		{
+			if (strcmp(obj->src, obj->dest) == 0)
+			{
+				// NOP
+				dataDone += obj->size;
+				continue;
+			};
+			
+			if (__syscall(__SYS_mv, AT_FDCWD, obj->src, AT_FDCWD, obj->dest, __MV_EXCL) != 0)
+			{
+				if (errno == EXDEV)
+				{
+					// cannot do cross-device moves directly; must copy
+					int src = open(obj->src, O_RDONLY);
+					if (src == -1)
+					{
+						char *errmsg;
+						asprintf(&errmsg, "Cannot read %s: %s", obj->src, strerror(errno));
+						taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+						free(errmsg);
+						break;
+					};
+					
+					int dest = open(obj->dest, O_WRONLY | O_CREAT | O_EXCL, obj->mode);
+					if (dest == -1)
+					{
+						if (errno == EEXIST)
+						{
+							char *questmsg;
+							asprintf(&questmsg, "The file %s already exists. Would you like "
+									"to replace it?", obj->dest);
+							if (taskMessageBox(data, "File exists", questmsg,
+								GWM_MBICON_WARN | GWM_MBUT_YESNO) == GWM_SYM_YES)
+							{
+								free(questmsg);
+								dest = open(obj->dest, O_WRONLY | O_CREAT | O_TRUNC,
+											obj->mode);
+								if (dest == -1)
+								{
+									char *errmsg;
+									asprintf(&errmsg, "Cannot write %s: %s", obj->dest, strerror(errno));
+									taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+									free(errmsg);
+									break;
+								};
+							}
+							else
+							{
+								free(questmsg);
+								continue;
+							};
+						}
+						else
+						{
+							char *errmsg;
+							asprintf(&errmsg, "Cannot write %s: %s", obj->dest, strerror(errno));
+							taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+							free(errmsg);
+							break;
+						};
+					};
+					
+					char buffer[64*1024];
+					ssize_t sz;
+					
+					while ((sz = read(src, buffer, 64*1024)) != 0)
+					{
+						if (sz == -1)
+						{
+							char *errmsg;
+							asprintf(&errmsg, "Read failed: %s", strerror(errno));
+							taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+							free(errmsg);
+							break;
+						};
+						
+						ssize_t wrsz;
+						if ((wrsz = write(dest, buffer, (size_t) sz)) != (size_t) sz)
+						{
+							if (wrsz != -1) errno = ENOSPC;
+							char *errmsg;
+							asprintf(&errmsg, "Write failed: %s", strerror(errno));
+							taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+							free(errmsg);
+							break;
+						};
+						
+						dataDone += (size_t) sz;
+						updateProgress(data, opname, objCounter, numObj, dataDone, dataTotal);
+					};
+					
+					close(src);
+					close(dest);
+					unlink(obj->src);
+				}
+				else if (errno == EEXIST)
+				{
+					char *questmsg;
+					asprintf(&questmsg, "The file %s already exists. Would you like "
+							"to replace it?", obj->dest);
+					if (taskMessageBox(data, "File exists", questmsg,
+						GWM_MBICON_WARN | GWM_MBUT_YESNO) == GWM_SYM_YES)
+					{
+						free(questmsg);
+						if (__syscall(__SYS_mv, AT_FDCWD, obj->src, AT_FDCWD, obj->dest, 0) != 0)
+						{
+							char *errmsg;
+							asprintf(&errmsg, "Move failed: %s", strerror(errno));
+							taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+							free(errmsg);
+							break;
+						};
+					}
+					else
+					{
+						free(questmsg);
+						continue;
+					};
+				}
+				else
+				{
+					char *errmsg;
+					asprintf(&errmsg, "Move failed: %s", strerror(errno));
+					taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+					free(errmsg);
+					break;
+					break;
+				};
+			}
+			else
+			{
+				dataDone += obj->size;
+			};
+		}
+		else if (obj->op == FILEOP_COPY)
+		{
+			if (strcmp(obj->src, obj->dest) == 0)
+			{
+				int i;
+				char *proposed = NULL;
+				
+				for (i=1;;i++)
+				{
+					free(proposed);
+					asprintf(&proposed, "%s (%d)", obj->dest, i);
+					
+					struct stat st;
+					if (stat(proposed, &st) != 0) break;
+				};
+				
+				free(obj->dest);
+				obj->dest = proposed;
+			};
+			
+			int src = open(obj->src, O_RDONLY);
+			if (src == -1)
+			{
+				char *errmsg;
+				asprintf(&errmsg, "Cannot read %s: %s", obj->src, strerror(errno));
+				taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+				free(errmsg);
+				break;
+			};
+			
+			int dest = open(obj->dest, O_WRONLY | O_CREAT | O_EXCL, obj->mode);
+			if (dest == -1)
+			{
+				if (errno == EEXIST)
+				{
+					char *questmsg;
+					asprintf(&questmsg, "The file %s already exists. Would you like "
+							"to replace it?", obj->dest);
+					if (taskMessageBox(data, "File exists", questmsg,
+						GWM_MBICON_WARN | GWM_MBUT_YESNO) == GWM_SYM_YES)
+					{
+						free(questmsg);
+						dest = open(obj->dest, O_WRONLY | O_CREAT | O_TRUNC,
+									obj->mode);
+						if (dest == -1)
+						{
+							char *errmsg;
+							asprintf(&errmsg, "Cannot write %s: %s", obj->dest, strerror(errno));
+							taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+							free(errmsg);
+							break;
+						};
+					}
+					else
+					{
+						free(questmsg);
+						continue;
+					};
+				}
+				else
+				{
+					char *errmsg;
+					asprintf(&errmsg, "Cannot write %s: %s", obj->dest, strerror(errno));
+					taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+					free(errmsg);
+					break;
+				};
+			};
+			
+			char buffer[64*1024];
+			ssize_t sz;
+			
+			while ((sz = read(src, buffer, 64*1024)) != 0)
+			{
+				if (sz == -1)
+				{
+					char *errmsg;
+					asprintf(&errmsg, "Read failed: %s", strerror(errno));
+					taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+					free(errmsg);
+					break;
+				};
+				
+				ssize_t wrsz;
+				if ((wrsz = write(dest, buffer, (size_t) sz)) != (size_t) sz)
+				{
+					if (wrsz != -1) errno = ENOSPC;
+					char *errmsg;
+					asprintf(&errmsg, "Write failed: %s", strerror(errno));
+					taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+					free(errmsg);
+					break;
+				};
+				
+				dataDone += (size_t) sz;
+				updateProgress(data, opname, objCounter, numObj, dataDone, dataTotal);
+			};
+			
+			close(src);
+			close(dest);
+		}
+		else if (obj->op == FILEOP_MKDIR)
+		{
+			if (mkdir(obj->dest, 0755) != 0)
+			{
+				char *errmsg;
+				asprintf(&errmsg, "Failed to create directory %s: %s", obj->dest, strerror(errno));
+				taskMessageBox(data, "Error", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+				free(errmsg);
+				break;
+			};
+		};
+	};
+};
+
+void dvPaste(DirView *dv)
+{
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	
+	size_t cbsize;
+	char *cbspec = gwmClipboardGetText(&cbsize);
+	if (cbspec == NULL) return;
+	
+	PasteData pdata;
+	pdata.destdir = data->location;
+	pdata.cbspec = cbspec;
+	
+	taskRun("File operation", pasteTask, &pdata);
+	free(cbspec);
+	
+	dvGoTo(dv, dvGetLocation(dv));
 };

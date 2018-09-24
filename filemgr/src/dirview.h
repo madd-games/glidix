@@ -97,6 +97,43 @@ typedef struct DirEntry_
 	int (*open)(GWMWindow *dv, struct DirEntry_*);
 } DirEntry;
 
+enum
+{
+	FILEOP_MOVE,
+	FILEOP_COPY,
+	FILEOP_MKDIR,
+};
+
+typedef struct FileOpObject_
+{
+	struct FileOpObject_*				next;
+	
+	/**
+	 * Which operation to perform.
+	 */
+	int						op;
+	
+	/**
+	 * Source path if applicable, or NULL.
+	 */
+	char*						src;
+	
+	/**
+	 * Destination path.
+	 */
+	char*						dest;
+	
+	/**
+	 * File size if applicable, or zero.
+	 */
+	size_t						size;
+	
+	/**
+	 * File mode (if applicable).
+	 */
+	mode_t						mode;
+} FileOpObject;
+
 /**
  * A node on the history stack.
  */
@@ -209,5 +246,20 @@ void dvForward(DirView *dv);
  * Show the properties dialog about the currently-selected element.
  */
 void dvProps(DirView *dv);
+
+/**
+ * Cut the currently selected file(s).
+ */
+void dvCut(DirView *dv);
+
+/**
+ * Copy the currently selected file(s).
+ */
+void dvCopy(DirView *dv);
+
+/**
+ * Paste.
+ */
+void dvPaste(DirView *dv);
 
 #endif
