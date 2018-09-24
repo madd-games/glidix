@@ -106,7 +106,7 @@ void taskRun(const char *caption, void (*taskfunc)(TaskData*, void *), void *con
 	};
 	
 	gwmRunModal(win, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_NOTASKBAR);
-	gwmSetWindowFlags(win, GWM_WINDOW_HIDDEN);
+	gwmSetWindowFlags(win, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 	
 	gwmDestroyProgressBar(progbar);
 	gwmDestroyLabel(label);
@@ -114,6 +114,8 @@ void taskRun(const char *caption, void (*taskfunc)(TaskData*, void *), void *con
 	gwmDestroyBoxLayout(box);
 	
 	gwmDestroyWindow(win);
+	
+	pthread_join(data.thread, NULL);
 };
 
 void taskSetText(TaskData *data, const char *text)
