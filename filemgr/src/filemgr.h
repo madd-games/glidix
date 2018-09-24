@@ -41,6 +41,13 @@ extern int desktopMode;
  */
 enum
 {
+	FILEMGR_EVENT_AGG_ = GWM_EVENT_AGG,
+	
+	/**
+	 * DirView aggregating events.
+	 */
+	DV_EVENT_CHECK,
+	
 	FILEMGR_EVENT_NONCASCADING_ = GWM_EVENT_USER,
 	
 	/**

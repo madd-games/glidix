@@ -185,6 +185,11 @@ typedef struct
 	 */
 	HistoryNode*					back;
 	HistoryNode*					forward;
+	
+	/**
+	 * Time of last refresh.
+	 */
+	time_t						refreshTime;
 } DirViewData;
 
 /**
@@ -262,5 +267,10 @@ void dvCopy(DirView *dv);
  * Paste.
  */
 void dvPaste(DirView *dv);
+
+/**
+ * Remove the selected file(s).
+ */
+void dvRemove(DirView *dv);
 
 #endif

@@ -86,6 +86,9 @@ static int filemgrCommand(GWMCommandEvent *ev, GWMWindow *win)
 		assert(pwd != NULL);
 		dvGoTo(dirView, pwd->pw_dir);
 		return GWM_EVSTATUS_OK;
+	case GWM_SYM_REMOVE:
+		dvRemove(dirView);
+		return GWM_EVSTATUS_OK;
 	case GWM_SYM_RENAME:
 		dvRename(dirView);
 		return GWM_EVSTATUS_OK;
@@ -168,6 +171,7 @@ void makeEditMenu()
 	gwmMenuSetIcon(menuEdit, iconTerm);
 	
 	gwmMenuAddSeparator(menuEdit);
+	gwmMenuAddCommand(menuEdit, GWM_SYM_REMOVE, NULL, NULL);
 	gwmMenuAddCommand(menuEdit, GWM_SYM_RENAME, NULL, NULL);
 	
 	gwmMenuAddSeparator(menuEdit);

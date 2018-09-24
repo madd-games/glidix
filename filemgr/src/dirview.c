@@ -315,6 +315,7 @@ static int dvCommandHandler(GWMCommandEvent *ev, DirView *dv, DirViewData *data)
 static int dvHandler(GWMEvent *ev, DirView *dv, void *context)
 {
 	DirViewData *data = (DirViewData*) context;
+	struct stat st;
 	
 	switch (ev->type)
 	{
@@ -377,6 +378,15 @@ static int dvHandler(GWMEvent *ev, DirView *dv, void *context)
 		return GWM_EVSTATUS_OK;
 	case GWM_EVENT_COMMAND:
 		return dvCommandHandler((GWMCommandEvent*) ev, dv, data);
+	case DV_EVENT_CHECK:
+		if (stat(data->location, &st) == 0)
+		{
+			if (st.st_mtime > data->refreshTime)
+			{
+				dvGoTo(dv, data->location);
+			};
+		};
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -436,6 +446,8 @@ DirView* dvNew(GWMWindow *parent)
 
 	gwmPushEventHandler(dv, dvHandler, data);
 	dvRedraw(dv);
+	
+	gwmCreateTimerEx(dv, 500, DV_EVENT_CHECK);
 	return dv;
 };
 
@@ -811,6 +823,7 @@ int dvGoToEx(DirView *dv, const char *path, int stack)
 	if (data->sbar != NULL) gwmSetScaleValue(data->sbar, 0.0);
 	
 	dvRedraw(dv);
+	data->refreshTime = time(NULL);
 	return 0;
 };
 
@@ -1560,4 +1573,35 @@ void dvPaste(DirView *dv)
 	free(cbspec);
 	
 	dvGoTo(dv, dvGetLocation(dv));
+};
+
+void dvRemove(DirView *dv)
+{
+	// TODO: trash. this will also take care of removing directories (since we can move an entire directory
+	// to the trash in one go)
+
+	if (gwmMessageBox(dv, "Remove files", "Are you sure you want to PERMANENTLY delete the selected file(s)?",
+				GWM_MBICON_WARN | GWM_MBUT_YESNO) != GWM_SYM_YES)
+	{
+		return;
+	};
+	
+	DirViewData *data = (DirViewData*) gwmGetData(dv, dvHandler);
+	
+	DirEntry *ent;
+	for (ent=data->ents; ent!=NULL; ent=ent->next)
+	{
+		if (ent->selected)
+		{
+			if (unlink(ent->path) != 0)
+			{
+				char *errmsg;
+				asprintf(&errmsg, "Cannot delete %s: %s", ent->name, strerror(errno));
+				gwmMessageBox(dv, "Remove files", errmsg, GWM_MBICON_ERROR | GWM_MBUT_OK);
+				free(errmsg);
+			};
+		};
+	};
+	
+	dvGoTo(dv, data->location);
 };
