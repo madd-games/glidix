@@ -102,6 +102,7 @@ enum
 	FILEOP_MOVE,
 	FILEOP_COPY,
 	FILEOP_MKDIR,
+	FILEOP_RMDIR,
 };
 
 typedef struct FileOpObject_
@@ -119,7 +120,7 @@ typedef struct FileOpObject_
 	char*						src;
 	
 	/**
-	 * Destination path.
+	 * Destination path. This stores the path for FILEOP_RMDIR.
 	 */
 	char*						dest;
 	
