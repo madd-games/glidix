@@ -88,6 +88,32 @@ static int propsHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	};
 };
 
+static void writeSizeInfo(GWMTextField *txt, struct stat *st)
+{
+	if (!S_ISREG(st->st_mode))
+	{
+		gwmWriteTextField(txt, "N/A");
+	}
+	else
+	{
+		static const char *unitNames[] = {"B", "KB", "MB", "GB", "TB", "PB", "EB"};
+		int unitIndex = 0;
+		
+		size_t size = st->st_size;
+		while (size >= 1024)
+		{
+			size /= 1024;
+			unitIndex++;
+		};
+		
+		char *result;
+		asprintf(&result, "%lu %s (%lu bytes)", size, unitNames[unitIndex], st->st_size);
+		free(result);
+		
+		gwmWriteTextField(txt, result);
+	};
+};
+
 void propShow(const char *path, FSMimeType *mime)
 {
 	struct stat st;
@@ -164,6 +190,15 @@ void propShow(const char *path, FSMimeType *mime)
 	gwmWriteTextField(txtType, typespec);
 	gwmSetTextFieldFlags(txtType, GWM_TXT_DISABLED);
 	free(typespec);
+	
+	GWMLabel *lblSize = gwmNewLabel(tabGeneral);
+	gwmFlexLayoutAddWindow(flexGeneral, lblSize, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
+	gwmSetLabelText(lblSize, "Size:");
+	
+	GWMTextField *txtSize = gwmNewTextField(tabGeneral);
+	gwmFlexLayoutAddWindow(flexGeneral, txtSize, 1, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
+	writeSizeInfo(txtSize, &st);
+	gwmSetTextFieldFlags(txtSize, GWM_TXT_DISABLED);
 	
 	GWMLabel *lblLocation = gwmNewLabel(tabGeneral);
 	gwmFlexLayoutAddWindow(flexGeneral, lblLocation, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
