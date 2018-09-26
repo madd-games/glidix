@@ -888,6 +888,7 @@ int modStat(int block, ModuleState *state)
 		{
 			strcpy(state->mod_name, module->name);
 			state->mod_block = module->block;
+			state->mod_refcount = module->refcount;
 			spinlockRelease(&modLock);
 			return 0;
 		};

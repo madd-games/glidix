@@ -55,7 +55,7 @@ int main()
 	{
 		if (modstat(i, &ms) == 0)
 		{
-			printf("%s\n", ms.mod_name);
+			printf("%-50s %d\n", ms.mod_name, ms.mod_refcount);
 		};
 	};
 };

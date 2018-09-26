@@ -45,7 +45,8 @@ struct modstat
 {
 	char				mod_name[128];
 	int				mod_block;
-	char				mod_resv[64];
+	int				mod_refcount;
+	char				mod_resv[60];
 };
 
 #ifdef __cplusplus
