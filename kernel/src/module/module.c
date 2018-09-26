@@ -175,9 +175,20 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	{
 		if (strcmp(scanmod->name, modname) == 0)
 		{
-			spinlockRelease(&modLock);
-			kprintf("insmod(%s): a module with this name is already loaded\n", modname);
-			return -1;
+			if (flags & INSMOD_EXCL)
+			{
+				spinlockRelease(&modLock);
+				kprintf("insmod(%s): a module with this name is already loaded\n", modname);
+				ERRNO = EEXIST;
+				return -1;
+			}
+			else
+			{
+				scanmod->refcount++;
+				spinlockRelease(&modLock);
+				kprintf("insmod(%s): already loaded; refcount incremented\n", modname);
+				return 0;
+			};
 		};
 
 		scanmod = scanmod->next;
@@ -189,14 +200,16 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	{
 		kprintf("insmod(%s): failed to open %s: %d\n", modname, path, error);
 		spinlockRelease(&modLock);
+		ERRNO = error;
 		return -1;
 	};
 
 	if (fp->iref.inode->ft == NULL)
 	{
-		kprintf("insmod(%s): %s: cannot seek\n", modname, path);
+		kprintf("insmod(%s): %s: not a regular file\n", modname, path);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = ENODEV;
 		return -1;
 	};
 
@@ -206,6 +219,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): %s: file too small to contain ELF64 header\n", modname, path);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -214,6 +228,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): %s: not an ELF64 file: magic number incorrect\n", modname, path);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -222,6 +237,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): %s: not an ELF64 file: this is an ELF32 file\n", modname, path);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -230,6 +246,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): %s: not a kernel module image: data is in big endian\n", modname, path);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -238,6 +255,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): %s: ELF version should be 1, got %d\n", modname, path, elfHeader.e_ident[EI_VERSION]);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -246,6 +264,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): %s: not a kernel module image: this is not a relocatable object\n", modname, path);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -254,6 +273,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): %s: e_shentsize is %d, should be %lu\n", modname, path, elfHeader.e_shentsize, sizeof(Elf64_Shdr));
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -264,6 +284,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): %s: EOF while reading string section header\n", modname, path);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -275,6 +296,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		vfsClose(fp);
 		kfree(strings);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -301,6 +323,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			kfree(strings);
 			vfsClose(fp);
 			spinlockRelease(&modLock);
+			ERRNO = EINVAL;
 			return -1;
 		};
 
@@ -318,6 +341,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 				vfsClose(fp);
 				kfree(strings);
 				spinlockRelease(&modLock);
+				ERRNO = EINVAL;
 				return -1;
 			};
 
@@ -327,6 +351,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 				vfsClose(fp);
 				kfree(strings);
 				spinlockRelease(&modLock);
+				ERRNO = EINVAL;
 				return -1;
 			};
 
@@ -341,6 +366,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 				vfsClose(fp);
 				kfree(strings);
 				spinlockRelease(&modLock);
+				ERRNO = EINVAL;
 				return -1;
 			};
 
@@ -355,6 +381,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 				vfsClose(fp);
 				kfree(strings);
 				spinlockRelease(&modLock);
+				ERRNO = EINVAL;
 				return -1;
 			};
 
@@ -373,6 +400,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): section .modbody not found\n", modname);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -381,6 +409,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): section .rela.modbody not found\n", modname);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -389,6 +418,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): section .symtab not found\n", modname);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -397,6 +427,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		kprintf("insmod(%s): section .strtab not found\n", modname);
 		vfsClose(fp);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -422,6 +453,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 		vfsClose(fp);
 		kfree(strings);
 		spinlockRelease(&modLock);
+		ERRNO = EINVAL;
 		return -1;
 	};
 
@@ -444,6 +476,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 	strcpy(module->name, modname);
 	module->block = modblock;
 	module->numSectors = modbodySection.sh_size / MODULE_SECTOR_SIZE;
+	module->refcount = 1;
 	if (modbodySection.sh_size % MODULE_SECTOR_SIZE) module->numSectors++;
 	if (flags & INSMOD_VERBOSE)
 	{
@@ -555,6 +588,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 					kfree(symtab);
 					unmapModuleArea(module);
 					spinlockRelease(&modLock);
+					ERRNO = EINVAL;
 					return -1;
 				};
 			};
@@ -573,6 +607,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			kfree(symtab);
 			unmapModuleArea(module);
 			spinlockRelease(&modLock);
+			ERRNO = EINVAL;
 			return -1;
 		};
 
@@ -597,6 +632,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			unmapModuleArea(module);
 			spinlockRelease(&modLock);
 			kfree(module);
+			ERRNO = EINVAL;
 			return -1;
 		};
 	};
@@ -630,30 +666,7 @@ int insmod(const char *modname, const char *path, const char *opt, int flags)
 			kprintf("insmod(%s): calling module init event\n", modname);
 		};
 		
-		int status = moduleInitEvent(opt);
-		if (status != MODINIT_OK)
-		{
-			// TODO: add rmmod() below but read TODO
-			//rmmod(modname, 0);
-			if (status == MODINIT_CANCEL)
-			{
-				if (flags & INSMOD_VERBOSE)
-				{
-					kprintf("insmod(%s): module not needed\n", modname);
-				};
-				
-				return 0;
-			}
-			else if (status == MODINIT_FATAL)
-			{
-				if (flags & INSMOD_VERBOSE)
-				{
-					kprintf("insmod(%s): module init fatal error\n", modname);
-				};
-				
-				return -1;
-			};
-		};
+		moduleInitEvent(opt);
 	};
 
 	if (flags & INSMOD_VERBOSE)
@@ -690,6 +703,13 @@ int rmmod(const char *modname, int flags)
 		mod = mod->next;
 	};
 
+	if ((--mod->refcount) > 0)
+	{
+		// don't remove yet
+		spinlockRelease(&modLock);
+		return 0;
+	};
+	
 	if (mod->modfini != NULL)
 	{
 		if (flags & RMMOD_VERBOSE)
@@ -755,11 +775,10 @@ int rmmod(const char *modname, int flags)
 		kprintf("rmmod(%s): unlinking module from kernel\n", modname);
 	};
 
-	if (prevmod == NULL)
-	{
-		firstModule = mod->next;
-	}
-	else
+	if (firstModule == mod) firstModule = mod->next;
+	if (lastModule == mod) lastModule = prevmod;
+	
+	if (prevmod != NULL)
 	{
 		prevmod->next = mod->next;
 	};

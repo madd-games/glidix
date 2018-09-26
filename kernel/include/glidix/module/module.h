@@ -41,6 +41,7 @@
  * Flags for _glidix_insmod().
  */
 #define	INSMOD_VERBOSE			(1 << 0)
+#define	INSMOD_EXCL			(1 << 1)
 
 /**
  * Flags for _glidix_rmmod().
@@ -81,6 +82,7 @@ typedef struct _Module
 	struct _Module*			next;
 	void (*fini)(void);
 	int (*modfini)(void);
+	int				refcount;
 } Module;
 
 /**
