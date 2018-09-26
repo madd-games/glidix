@@ -435,7 +435,10 @@ GWMWindow* gwmCreateWindow(
 	uint64_t id = __sync_fetch_and_add(&nextWindowID, 1);
 	uint64_t seq = __sync_fetch_and_add(&nextSeq, 1);
 	
-	DDISurface *canvas = ddiCreateSurface(&screenFormat, width, height, NULL, DDI_SHARED);
+	int surfFlags = DDI_SHARED;
+	if (flags & GWM_WINDOW_RENDER_TARGET) surfFlags |= DDI_RENDER_TARGET;
+	
+	DDISurface *canvas = ddiCreateSurface(&screenFormat, width, height, NULL, surfFlags);
 	if (canvas == NULL)
 	{
 		return NULL;
@@ -985,7 +988,9 @@ void gwmResizeWindow(GWMWindow *win, int width, int height)
 	memcpy(&format, &win->canvas->format, sizeof(DDIPixelFormat));
 	
 	// resize the canvas
-	DDISurface *newCanvas = ddiCreateSurface(&format, width, height, NULL, DDI_SHARED);
+	int surfFlags = DDI_SHARED;
+	if (win->flags & GWM_WINDOW_RENDER_TARGET) surfFlags |= DDI_RENDER_TARGET;
+	DDISurface *newCanvas = ddiCreateSurface(&format, width, height, NULL, surfFlags);
 	ddiFillRect(newCanvas, 0, 0, width, height, gwmBackColorP);
 	ddiBlit(win->canvas, 0, 0, newCanvas, 0, 0, win->canvas->width, win->canvas->height);
 	ddiDeleteSurface(win->canvas);

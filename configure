@@ -168,7 +168,7 @@ done
 
 # targets
 # NOTE: Those need to be in order; a target must come AFTER all the targets that it depends on.
-TARGETS="kernel build-tools libc dynld libz libgpm shutils init modules sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libpng freetype libddi fstools libgwm gwmserver guiapps netman klogd sysinfo filemgr minipad gxdbg ddi-drivers"
+TARGETS="kernel build-tools libc dynld libz libgpm shutils init modules sh $maybe_gxsetup $maybe_binutils $maybe_gcc sysman $maybe_gxboot libpng freetype libddi libgl fstools libgwm gwmserver guiapps netman klogd sysinfo filemgr minipad gxdbg ddi-drivers"
 
 # determine build parameters
 export GLIDIX_SYSROOT="$sysroot"
@@ -231,7 +231,7 @@ echo '#endif' >> glidix-config.h
 echo "generating Makefile..."
 echo >Makefile ".PHONY: all install clean mip tests $TARGETS"
 
-ISO_PACKAGES="libz libgpm shutils libc modules sh gxsetup gxboot dynld gxdbg gwmserver libddi libgwm guiapps minipad sysinfo filemgr freetype libpng fstools ddi-drivers"
+ISO_PACKAGES="libz libgpm shutils libc modules sh gxsetup gxboot dynld gxdbg gwmserver libddi libgl libgwm guiapps minipad sysinfo filemgr freetype libpng fstools ddi-drivers"
 if [ "$iso_target" = "yes" ]
 then
 	mkdir -p isodir

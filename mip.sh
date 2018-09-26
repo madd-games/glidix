@@ -97,6 +97,13 @@ make install || exit 1
 cd ..
 build-tools/mkmip mipdir $1/libddi.mip -i libddi $GLIDIX_VERSION -d libc $GLIDIX_VERSION
 
+# libgl
+rm -rf mipdir || exit 1
+cd libgl
+make install || exit 1
+cd ..
+build-tools/mkmip mipdir $1/libgl.mip -i libgl 3.0 -d libc $GLIDIX_VERSION -d libddi $GLIDIX_VERSION
+
 # libgwm
 rm -rf mipdir || exit 1
 cd libgwm || exit 1

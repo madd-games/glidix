@@ -45,6 +45,7 @@
 #define	GWM_WINDOW_RESIZEABLE			(1 << 5)
 #define	GWM_WINDOW_NOICON			(1 << 6)
 #define	GWM_WINDOW_NORESTACK			(1 << 7)
+#define	GWM_WINDOW_RENDER_TARGET		(1 << 8)
 
 /**
  * Error codes.

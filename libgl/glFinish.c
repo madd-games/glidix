@@ -1,5 +1,5 @@
 /*
-	Madd Software Renderer
+	Glidix GL
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,31 +26,9 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <libddi.h>
+#include <GL/gl.h>
 
-#include "surface.h"
-#include "context.h"
-
-/**
- * Initialize softrender. We don't need to do anything.
- */
-void* srInit(int fd)
+void glFinish()
 {
-	(void)fd;
-	return NULL;
-};
-
-/**
- * DDI driver implementation for softrender.
- */
-DDIDriver ddidrv_softrender = {
-	.size = sizeof(DDIDriver),
-	.renderString = "Madd Games Software Renderer",
-	.init = srInit,
-	.createSurface = srCreateSurface,
-	.openSurface = srOpenSurface,
-	.blit = srBlit,
-	.overlay = srOverlay,
-	.rect = srRect,
-	.initgl = srInitGL
+	glFlush();
 };

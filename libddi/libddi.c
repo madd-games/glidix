@@ -214,7 +214,7 @@ static int ddiFD;
 DDIDisplayInfo ddiDisplayInfo;
 DDIDriver* ddiDriver;
 static void *libDriver;
-static void *ddiDrvCtx;
+void *ddiDrvCtx;
 
 int ddiInit(const char *display, int oflag)
 {

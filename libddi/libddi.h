@@ -228,6 +228,8 @@ typedef struct
 /**
  * Describes a DDI driver by providing pointers to implementations of functions.
  */
+struct __ddigl_params;
+struct __ddigl_ctx;
 typedef struct
 {
 	/**
@@ -307,8 +309,18 @@ typedef struct
 	 * is the surface returned by ddiSetVideoMode().
 	 */
 	void (*initfbuf)(void *drvctx, DDISurface *fbuf);
+	
+	/**
+	 * Create a GL context. 'drvctx' is the driver context (like in the other callbacks); 'format' is the pixel
+	 * format to use for the GL context; 'params' is the context parameter structure and 'glctx' is the GL
+	 * context structure. These structures are defined separately by libgl; see there for definitions.
+	 *
+	 * Return 0 (aka GL_NO_ERROR) on success, or an OpenGL error number on error.
+	 */
+	int (*initgl)(void *drvctx, DDIPixelFormat *format, struct __ddigl_params *params, struct __ddigl_ctx *glctx);
 } DDIDriver;
 extern DDIDriver* ddiDriver;
+extern void *ddiDrvCtx;
 
 /**
  * Describes a pen that draws text.

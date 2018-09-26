@@ -5,7 +5,7 @@ echo >Makefile "SRCDIR := $srcdir"
 echo >>Makefile "HOST_GCC := $HOST_GCC"
 echo >>Makefile "HOST_AS := $HOST_AS"
 echo >>Makefile "SYSROOT := $GLIDIX_SYSROOT"
-echo >>Makefile "CFLAGS := -Wall -Werror -fPIC -ggdb -I\$(SRCDIR)/../libddi -O3"
+echo >>Makefile "CFLAGS := -Wall -Werror -fPIC -ggdb -I\$(SRCDIR)/../libddi -O3 -I\$(SRCDIR)/../libgl/include"
 
 # Get the list of drivers
 driver_list_tmp="`ls -l $srcdir | grep '^d' | awk 'NF>1{print $NF}'`"
