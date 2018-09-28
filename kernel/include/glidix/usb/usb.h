@@ -31,6 +31,7 @@
 
 #include <glidix/util/common.h>
 #include <glidix/thread/semaphore.h>
+#include <glidix/module/module.h>
 
 /**
  * bmRequestType
@@ -335,6 +336,11 @@ typedef struct USBDevice_
 	 * Default control pipe.
 	 */
 	struct USBControlPipe_*				ctrlPipe;
+	
+	/**
+	 * A semaphore signalled every time the device flags change.
+	 */
+	Semaphore					semFlagsUpdate;
 } USBDevice;
 
 /**
@@ -357,6 +363,42 @@ typedef struct USBControlPipe_
 	 */
 	size_t						maxPacketLen;
 } USBControlPipe;
+
+/**
+ * USB driver description.
+ */
+typedef struct USBDriver_
+{
+	/**
+	 * Links.
+	 */
+	struct USBDriver_*				prev;
+	struct USBDriver_*				next;
+	
+	/**
+	 * The module corresponding to this driver.
+	 */
+	Module*						mod;
+	
+	/**
+	 * Driver-specific data.
+	 */
+	void*						drvdata;
+	
+	/**
+	 * Device enumerator. This function is given every connected device, either at device detection
+	 * time or at driver registration time, and it must decide whether it supports this device.
+	 * Return -1 if not supported, 0 if supported. Do not change any device state! If the device is
+	 * supported, passdev() is called.
+	 */
+	int (*enumerator)(void *drvdata, USBDevice *dev);
+	
+	/**
+	 * This function is called when enumerator() reports that a device is supported. Do whatever is
+	 * needed with this device, and return once you wish to "release" the device.
+	 */
+	void (*passdev)(void *drvdata, USBDevice *dev);
+} USBDriver;
 
 /**
  * Initialize the USB subsystem.

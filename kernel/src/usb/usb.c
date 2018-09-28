@@ -291,7 +291,8 @@ USBDevice* usbCreateDevice(usb_addr_t addr, USBCtrl *ctrl, int flags, void *data
 	dev->usbver = usbver;
 	dev->refcount = 2;		/* one returned, one for the init thread */
 	semInit(&dev->lock);
-
+	semInit2(&dev->semFlagsUpdate, 0);
+	
 	KernelThreadParams pars;
 	memset(&pars, 0, sizeof(KernelThreadParams));
 	pars.stackSize = DEFAULT_STACK_SIZE;
@@ -307,6 +308,8 @@ void usbHangup(USBDevice *dev)
 	dev->flags |= USB_DEV_HANGUP;
 	dev->ctrl = &ctrlNop;
 	semSignal(&dev->lock);
+	
+	semSignal(&dev->semFlagsUpdate);
 	
 	usbDown(dev);
 };
