@@ -31,15 +31,9 @@
 #include <glidix/util/memory.h>
 #include <glidix/thread/sched.h>
 #include <glidix/display/console.h>
-#include <glidix/thread/mutex.h>
 
 static uint8_t addrBitmap[16];
 static USBCtrl ctrlNop;
-
-static Mutex mtxDevList;
-static USBDevice *devHead;
-static USBDriver *drvHead;
-static Semaphore semDevUpdate;
 
 static USBTransferInfo tiGetDeviceDescriptor[] = {
 	{USB_SETUP, 0, sizeof(USBSetupPacket)},
@@ -79,6 +73,11 @@ void usbDevInitFunc(void *context)
 {
 	// the device is alread upreffered for us
 	USBDevice *dev = (USBDevice*) context;
+	
+	// detach us. the idea is that this thread gets spawned upon detection of a device,
+	// and we look for the appropriate driver to handle the device. if the driver is found,
+	// then this thread shall continue to exist, running the driver code, managing the device,
+	// and exiting once the device is disconnected. if the driver isn't found, we just exit.
 	detachMe();
 	
 	// set up the default control pipe
@@ -221,29 +220,9 @@ void usbDevInitFunc(void *context)
 		kprintf("\n");
 	};
 	
-	// done
+	// done; references were taken as necessary
 	kfree(confbuf);
-	
-	// put this device on the device list. we keep the reference to it
-	mutexLock(&mtxDevList);
-	semWait(&dev->lock);
-	
-	if (dev->flags & USB_DEV_HANGUP)
-	{
-		// the device already hanged up
-		semSignal(&dev->lock);
-		mutexUnlock(&mtxDevList);
-		return;
-	};
-	
-	dev->next = devHead;
-	devHead = dev;
-	
-	semSignal(&dev->lock);
-	mutexUnlock(&mtxDevList);
-	
-	// report that the list has been update
-	semSignal(&semDevUpdate);
+	usbDown(dev);
 };
 
 void usbPrintDeviceDescriptor(USBDeviceDescriptor *desc)
@@ -272,80 +251,9 @@ void usbPrintConfigurationDescriptor(USBConfigurationDescriptor *desc)
 	kprintf("  Max. Power:                %hu mA\n", 2 * (uint16_t) desc->bMaxPower);
 };
 
-void usbDriverFunc(void *context)
-{
-	USBDevice *dev = (USBDevice*) context;
-	detachMe();
-	
-	dev->driver->attach(dev->driver->drvdata, dev);
-	
-	// OK, "undrive" me
-	mutexLock(&mtxDevList);
-	semWait(&dev->lock);
-	dev->driver = NULL;
-	semSignal(&dev->lock);
-	mutexUnlock(&mtxDevList);
-	
-	usbDown(dev);
-};
-
-void usbDriverAllocFunc(void *context)
-{
-	// the job of this thread is to simply loop, waiting for device/driver list updates,
-	// and then scan the lists to attach devices to drivers
-	while (1)
-	{
-		semWait(&semDevUpdate);
-		
-		mutexLock(&mtxDevList);
-		
-		USBDevice *dev;
-		for (dev=devHead; dev!=NULL; dev=dev->next)
-		{
-			semWait(&dev->lock);
-			if (dev->driver != NULL)
-			{
-				semSignal(&dev->lock);
-				continue;
-			};
-			
-			USBDriver *drv;
-			for (drv=drvHead; drv!=NULL; drv=drv->next)
-			{
-				if (drv->isSupportedDev(drv->drvdata, dev))
-				{
-					// attach the driver
-					usbUp(dev);
-					dev->driver = drv;
-					
-					KernelThreadParams pars;
-					memset(&pars, 0, sizeof(KernelThreadParams));
-					pars.stackSize = DEFAULT_STACK_SIZE;
-					pars.name = "USB Driver Thread";
-					CreateKernelThread(usbDriverFunc, &pars, dev);
-					
-					break;
-				};
-			};
-			
-			semSignal(&dev->lock);
-		};
-		
-		mutexUnlock(&mtxDevList);
-	};
-};
-
 void usbInit()
 {
 	addrBitmap[0] = 1;		// address 0 reserved
-	mutexInit(&mtxDevList);
-	semInit2(&semDevUpdate, 0);
-
-	KernelThreadParams pars;
-	memset(&pars, 0, sizeof(KernelThreadParams));
-	pars.stackSize = DEFAULT_STACK_SIZE;
-	pars.name = "USB Driver Allocator Thread";
-	CreateKernelThread(usbDriverAllocFunc, &pars, NULL);
 };
 
 usb_addr_t usbAllocAddr()
@@ -383,7 +291,7 @@ USBDevice* usbCreateDevice(usb_addr_t addr, USBCtrl *ctrl, int flags, void *data
 	dev->usbver = usbver;
 	dev->refcount = 2;		/* one returned, one for the init thread */
 	semInit(&dev->lock);
-	
+
 	KernelThreadParams pars;
 	memset(&pars, 0, sizeof(KernelThreadParams));
 	pars.stackSize = DEFAULT_STACK_SIZE;
@@ -395,30 +303,12 @@ USBDevice* usbCreateDevice(usb_addr_t addr, USBCtrl *ctrl, int flags, void *data
 
 void usbHangup(USBDevice *dev)
 {
-	mutexLock(&mtxDevList);
 	semWait(&dev->lock);
 	dev->flags |= USB_DEV_HANGUP;
 	dev->ctrl = &ctrlNop;
 	semSignal(&dev->lock);
 	
-	int doubleDown = 0;
-	if (dev->prev != NULL || devHead == dev)
-	{
-		if (dev->prev != NULL) dev->prev->next = dev->next;
-		if (dev->next != NULL) dev->next->prev = dev->prev;
-		if (devHead == dev) devHead = dev->next;
-		
-		doubleDown = 1;
-	};
-	
-	mutexUnlock(&mtxDevList);
-	
 	usbDown(dev);
-	if (doubleDown) usbDown(dev);
-	
-	// NOTE: here we do not need to signal the list update semaphore. this is because no action needs to
-	//       be taken by the attachment thread when a device hangs up; only if a new device is connected,
-	//       or if a new driver becomes available.
 };
 
 USBControlPipe* usbCreateControlPipe(USBDevice *dev, usb_epno_t epno, size_t maxPacketLen)
@@ -583,37 +473,4 @@ void usbPostComplete(USBRequest *urb)
 int usbGetRequestStatus(USBRequest *urb)
 {
 	return urb->header.status;
-};
-
-USBDriver* usbCreateDriver(Module *mod, void *drvdata,
-	int (*isSupportedDev)(void *drvdata, USBDevice *dev),
-	void (*attach)(void *drvdata, USBDevice *dev)
-)
-{
-	USBDriver *drv = NEW(USBDriver);
-	memset(drv, 0, sizeof(USBDriver));
-	drv->mod = mod;
-	drv->drvdata = drvdata;
-	drv->isSupportedDev = isSupportedDev;
-	drv->attach = attach;
-	
-	mutexLock(&mtxDevList);
-	drv->next = drvHead;
-	drvHead = drv;
-	mutexUnlock(&mtxDevList);
-	
-	semSignal(&semDevUpdate);
-	
-	return drv;
-};
-
-void usbDestroyDriver(USBDriver *drv)
-{
-	mutexLock(&mtxDevList);
-	if (drv->prev != NULL) drv->prev->next = drv->next;
-	if (drv->next != NULL) drv->next->prev = drv->prev;
-	if (drvHead == drv) drvHead = drv->next;
-	mutexUnlock(&mtxDevList);
-	
-	kfree(drv);
 };
