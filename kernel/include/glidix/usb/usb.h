@@ -78,6 +78,8 @@
  */
 #define	USB_DEV_HANGUP					(1 << 0)	/* device has been disconnected */
 
+struct USBDriver_;
+
 /**
  * USB-related data types.
  */
@@ -291,6 +293,12 @@ typedef struct
 typedef struct USBDevice_
 {
 	/**
+	 * Links on the device list.
+	 */
+	struct USBDevice_*				prev;
+	struct USBDevice_*				next;
+	
+	/**
 	 * Address of the device (1-127).
 	 */
 	usb_addr_t					addr;
@@ -338,9 +346,9 @@ typedef struct USBDevice_
 	struct USBControlPipe_*				ctrlPipe;
 	
 	/**
-	 * A semaphore signalled every time the device flags change.
+	 * Currently-attached driver. NULL if no driver.
 	 */
-	Semaphore					semFlagsUpdate;
+	struct USBDriver_*				driver;
 } USBDevice;
 
 /**
@@ -386,18 +394,18 @@ typedef struct USBDriver_
 	void*						drvdata;
 	
 	/**
-	 * Device enumerator. This function is given every connected device, either at device detection
-	 * time or at driver registration time, and it must decide whether it supports this device.
-	 * Return -1 if not supported, 0 if supported. Do not change any device state! If the device is
-	 * supported, passdev() is called.
+	 * Decide if a device with the specified descriptor is supported by this driver.
+	 * Return true (1) if supported, false (0) if not.
 	 */
-	int (*enumerator)(void *drvdata, USBDevice *dev);
+	int (*isSupportedDev)(void *drvdata, USBDeviceDescriptor *devdesc);
 	
 	/**
-	 * This function is called when enumerator() reports that a device is supported. Do whatever is
-	 * needed with this device, and return once you wish to "release" the device.
+	 * Attach a device to this driver. This is called after isSupportedDev() returned true
+	 * for its descriptor, and is called in a special detached thread. This function is NOT
+	 * expected to return until the driver has been finished with using this device (for example
+	 * because it hanged up).
 	 */
-	void (*passdev)(void *drvdata, USBDevice *dev);
+	void (*attach)(void *drvdata, USBDevice *dev);
 } USBDriver;
 
 /**
@@ -492,5 +500,19 @@ void usbPrintDeviceDescriptor(USBDeviceDescriptor *desc);
  * Print a configuration descriptor, for debugging purposes.
  */
 void usbPrintConfigurationDescriptor(USBConfigurationDescriptor *desc);
+
+/**
+ * Create a USB driver.
+ */
+USBDriver* usbCreateDriver(Module *mod, void *drvdata,
+	int (*isSupportedDev)(void *drvdata, USBDeviceDescriptor *devdesc),
+	void (*attach)(void *drvdata, USBDevice *dev)
+);
+
+/**
+ * Destroy a USB driver. This must ONLY be called by the module which called usbCreateDriver(), and only when
+ * NO threads using the driver are running.
+ */
+void usbDestroyDriver(USBDriver *drv);
 
 #endif
