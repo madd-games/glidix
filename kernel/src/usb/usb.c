@@ -312,7 +312,7 @@ void usbDriverAllocFunc(void *context)
 			USBDriver *drv;
 			for (drv=drvHead; drv!=NULL; drv=drv->next)
 			{
-				if (drv->isSupportedDev(drv->drvdata, &dev->descDev))
+				if (drv->isSupportedDev(drv->drvdata, dev))
 				{
 					// attach the driver
 					usbUp(dev);
@@ -586,7 +586,7 @@ int usbGetRequestStatus(USBRequest *urb)
 };
 
 USBDriver* usbCreateDriver(Module *mod, void *drvdata,
-	int (*isSupportedDev)(void *drvdata, USBDeviceDescriptor *devdesc),
+	int (*isSupportedDev)(void *drvdata, USBDevice *dev),
 	void (*attach)(void *drvdata, USBDevice *dev)
 )
 {

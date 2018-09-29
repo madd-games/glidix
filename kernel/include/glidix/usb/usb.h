@@ -394,10 +394,10 @@ typedef struct USBDriver_
 	void*						drvdata;
 	
 	/**
-	 * Decide if a device with the specified descriptor is supported by this driver.
+	 * Decide if a is supported by this driver.
 	 * Return true (1) if supported, false (0) if not.
 	 */
-	int (*isSupportedDev)(void *drvdata, USBDeviceDescriptor *devdesc);
+	int (*isSupportedDev)(void *drvdata, USBDevice *dev);
 	
 	/**
 	 * Attach a device to this driver. This is called after isSupportedDev() returned true
@@ -505,7 +505,7 @@ void usbPrintConfigurationDescriptor(USBConfigurationDescriptor *desc);
  * Create a USB driver.
  */
 USBDriver* usbCreateDriver(Module *mod, void *drvdata,
-	int (*isSupportedDev)(void *drvdata, USBDeviceDescriptor *devdesc),
+	int (*isSupportedDev)(void *drvdata, USBDevice *dev),
 	void (*attach)(void *drvdata, USBDevice *dev)
 );
 
