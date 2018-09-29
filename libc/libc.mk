@@ -26,10 +26,12 @@ libc.so: $(OBJ_DYN)
 	$(HOST_GCC) -shared -o $@ $^ -nostdlib -lgcc
 
 libc.a: $(OBJ_STATIC)
+	rm -f libc.a
 	$(HOST_AR) rc $@ $^
 	$(HOST_RANLIB) $@
 
 libc32.a: $(SRCDIR)/libc32.s
+	rm -f libc32.a
 	$(HOST_AS) -c $< -o libc32.o --32
 	$(HOST_AR) rc $@ libc32.o
 	$(HOST_RANLIB) $@
