@@ -86,6 +86,18 @@ static void srClearColor(DDIGL_Context *ctx, GLclampf red, GLclampf green, GLcla
 	srctx->clearColor = redPart | greenPart | bluePart | alphaPart;
 };
 
+static void srClearDepth(DDIGL_Context *ctx, GLclampd depth)
+{
+	SRContext *srctx = (SRContext*) ctx->drvdata;
+	srctx->clearDepth = 0xFFFF * depth;
+};
+
+static void srClearStencil(DDIGL_Context *ctx, GLint s)
+{
+	SRContext *srctx = (SRContext*) ctx->drvdata;
+	srctx->clearStencil = s;
+};
+
 static GLenum srClear(DDIGL_Context *ctx, GLbitfield mask)
 {
 	SRContext *srctx = (SRContext*) ctx->drvdata;
@@ -114,7 +126,7 @@ static GLenum srClear(DDIGL_Context *ctx, GLbitfield mask)
 			if (buffer->bits == 8)
 			{
 				uint8_t *put = (uint8_t*) buffer->data;
-				while (count--) *put++ = (uint8_t) srctx->clearDepth;
+				while (count--) *put++ = (uint8_t) (srctx->clearDepth >> 8);
 			}
 			else
 			{
@@ -204,7 +216,9 @@ int srInitGL(void *drvctx, DDIPixelFormat *format, DDIGL_ContextParams *params, 
 	// finalize our work
 	ctx->drvdata = srctx;
 	ctx->setRenderTarget = srSetRenderTarget;
+	ctx->clearDepth = srClearDepth;
 	ctx->clearColor = srClearColor;
+	ctx->clearStencil = srClearStencil;
 	ctx->clear = srClear;
 	
 	// OK

@@ -84,6 +84,16 @@ typedef struct __ddigl_ctx
 	 * Block until all previous GL commands have completed.
 	 */
 	void (*flush)(struct __ddigl_ctx *ctx);
+	
+	/**
+	 * Set the clear depth for the specified context.
+	 */
+	void (*clearDepth)(struct __ddigl_ctx *ctx, GLclampd depth);
+	
+	/**
+	 * Set the clear stencil value for the specified context.
+	 */
+	void (*clearStencil)(struct __ddigl_ctx *ctx, GLint s);
 } DDIGL_Context;
 
 extern DDIGL_Context* __ddigl_current;

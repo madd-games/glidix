@@ -120,6 +120,9 @@ GLenum glGetError();
 /**
  * Buffer clearing.
  */
+void glClearDepth(GLclampd depth);
+void glClearDepthf(GLclampf depth);
+void glClearStencil(GLint s);
 void glClearColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha);
 void glClear(GLbitfield mask);
 
