@@ -38,6 +38,8 @@
 #include <libgwm.h>
 #include <time.h>
 #include <errno.h>
+#include <pwd.h>
+#include <grp.h>
 
 #include "props.h"
 #include "filemgr.h"
@@ -252,6 +254,39 @@ void propShow(const char *path, FSMimeType *mime)
 	GWMLayout *boxPerms = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
 	gwmSetWindowLayout(tabPerms, boxPerms);
 	
+	GWMLayout *flexUser = gwmCreateFlexLayout(2);
+	gwmBoxLayoutAddLayout(boxPerms, flexUser, 0, 5, GWM_BOX_FILL | GWM_BOX_UP);
+	
+	GWMLabel *lblOwner = gwmNewLabel(tabPerms);
+	gwmFlexLayoutAddWindow(flexUser, lblOwner, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
+	gwmSetLabelText(lblOwner, "Owner:");
+	
+	GWMTextField *txtOwner = gwmNewTextField(tabPerms);
+	gwmFlexLayoutAddWindow(flexUser, txtOwner, 1, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
+	
+	struct passwd *pwOwner = getpwuid(st.st_uid);
+	if (pwOwner != NULL)
+	{
+		gwmWriteTextField(txtOwner, pwOwner->pw_name);
+	};
+	
+	gwmSetTextFieldFlags(txtOwner, GWM_TXT_DISABLED);
+	
+	GWMLabel *lblGroup = gwmNewLabel(tabPerms);
+	gwmFlexLayoutAddWindow(flexUser, lblGroup, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
+	gwmSetLabelText(lblGroup, "Group:");
+	
+	GWMTextField *txtGroup = gwmNewTextField(tabPerms);
+	gwmFlexLayoutAddWindow(flexUser, txtGroup, 1, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
+	
+	struct group *grp = getgrgid(st.st_gid);
+	if (grp != NULL)
+	{
+		gwmWriteTextField(txtGroup, grp->gr_name);
+	};
+	
+	gwmSetTextFieldFlags(txtGroup, GWM_TXT_DISABLED);
+	
 	GWMFrame *frUnix = gwmNewFrame(tabPerms);
 	gwmBoxLayoutAddWindow(boxPerms, frUnix, 0, 5, GWM_BOX_FILL | GWM_BOX_ALL);
 	gwmSetFrameCaption(frUnix, "Basic permissions");
@@ -347,6 +382,8 @@ void propShow(const char *path, FSMimeType *mime)
 	gwmDestroyTextField(txtFileName);
 	gwmDestroyLabel(lblType);
 	gwmDestroyTextField(txtType);
+	gwmDestroyLabel(lblSize);
+	gwmDestroyTextField(txtSize);
 	gwmDestroyLabel(lblLocation);
 	gwmDestroyTextField(txtLocation);
 	gwmDestroyLabel(lblCreated);
@@ -357,6 +394,10 @@ void propShow(const char *path, FSMimeType *mime)
 	gwmDestroyTextField(txtMod);
 	gwmDestroyLabel(lblAccess);
 	gwmDestroyTextField(txtAccess);
+	gwmDestroyLabel(lblOwner);
+	gwmDestroyTextField(txtOwner);
+	gwmDestroyLabel(lblGroup);
+	gwmDestroyTextField(txtGroup);
 	gwmDestroyFrame(frUnix);
 	gwmDestroyNotebook(notebook);
 	gwmDestroyButton(btnClose);
@@ -380,6 +421,7 @@ void propShow(const char *path, FSMimeType *mime)
 	gwmDestroyBoxLayout(btnBox);
 	gwmDestroyFlexLayout(flexGeneral);
 	gwmDestroyBoxLayout(boxPerms);
+	gwmDestroyFlexLayout(flexUser);
 	gwmDestroyBoxLayout(boxUnixMain);
 	gwmDestroyFlexLayout(flexUnix);
 	gwmDestroyBoxLayout(boxUnixMisc);
