@@ -394,7 +394,7 @@ typedef struct USBDriver_
 	void*						drvdata;
 	
 	/**
-	 * Decide if a is supported by this driver.
+	 * Decide if device a is supported by this driver.
 	 * Return true (1) if supported, false (0) if not.
 	 */
 	int (*isSupportedDev)(void *drvdata, USBDevice *dev);
