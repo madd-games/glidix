@@ -349,6 +349,11 @@ typedef struct USBDevice_
 	 * Currently-attached driver. NULL if no driver.
 	 */
 	struct USBDriver_*				driver;
+	
+	/**
+	 * Device ID. This is uniquely allocated by the kernel, immutable, and never reused.
+	 */
+	uint64_t					devid;
 } USBDevice;
 
 /**
@@ -514,5 +519,18 @@ USBDriver* usbCreateDriver(Module *mod, void *drvdata,
  * NO threads using the driver are running.
  */
 void usbDestroyDriver(USBDriver *drv);
+
+/**
+ * List currently-available devices. 'list' points to an array of 256 uint64_t's, which this function then
+ * fills with device IDs. No end-of-list marker is used by this function; you should zero out the array to
+ * detect the end of the list.
+ */
+void usbList(uint64_t *list);
+
+/**
+ * Get the device descriptor for the specified device. Return 0 on success, or an error number on error.
+ * Currently, ENOENT is returned if the device does not exist.
+ */
+int usbGetDeviceDesc(uint64_t devid, USBDeviceDescriptor *desc);
 
 #endif

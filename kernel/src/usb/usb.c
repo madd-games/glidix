@@ -36,6 +36,8 @@
 static uint8_t addrBitmap[16];
 static USBCtrl ctrlNop;
 
+static uint64_t nextDevID = 1;
+
 static Mutex mtxDevList;
 static USBDevice *devHead;
 static USBDriver *drvHead;
@@ -383,6 +385,7 @@ USBDevice* usbCreateDevice(usb_addr_t addr, USBCtrl *ctrl, int flags, void *data
 	dev->usbver = usbver;
 	dev->refcount = 2;		/* one returned, one for the init thread */
 	semInit(&dev->lock);
+	dev->devid = __sync_fetch_and_add(&nextDevID, 1);
 	
 	KernelThreadParams pars;
 	memset(&pars, 0, sizeof(KernelThreadParams));
@@ -616,4 +619,36 @@ void usbDestroyDriver(USBDriver *drv)
 	mutexUnlock(&mtxDevList);
 	
 	kfree(drv);
+};
+
+void usbList(uint64_t *list)
+{
+	mutexLock(&mtxDevList);
+	
+	USBDevice *dev;
+	for (dev=devHead; dev!=NULL; dev=dev->next)
+	{
+		*list++ = dev->devid;
+	};
+	
+	mutexUnlock(&mtxDevList);
+};
+
+int usbGetDeviceDesc(uint64_t devid, USBDeviceDescriptor *desc)
+{
+	mutexLock(&mtxDevList);
+	
+	USBDevice *dev;
+	for (dev=devHead; dev!=NULL; dev=dev->next)
+	{
+		if (dev->devid == devid)
+		{
+			memcpy(desc, &dev->descDev, sizeof(USBDeviceDescriptor));
+			mutexUnlock(&mtxDevList);
+			return 0;
+		};
+	};
+	
+	mutexUnlock(&mtxDevList);
+	return ENOENT;
 };

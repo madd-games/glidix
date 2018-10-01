@@ -54,6 +54,7 @@
 #include <glidix/hw/msr.h>
 #include <glidix/int/trace.h>
 #include <glidix/fs/procfs.h>
+#include <glidix/usb/usb.h>
 
 /**
  * Options for _glidix_kopt().
@@ -3570,11 +3571,46 @@ int sys_pathctl(const char *path, uint64_t cmd, void *argp)
 	return sys_pathctlat(VFS_AT_FDCWD, path, cmd, argp);
 };
 
+int sys_usb_list(uint64_t *ulist)
+{
+	uint64_t list[256];
+	memset(list, 0, sizeof(list));
+	usbList(list);
+	
+	if (memcpy_k2u(ulist, list, sizeof(list)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	return 0;
+};
+
+int sys_usb_devdesc(uint64_t devid, USBDeviceDescriptor *udesc)
+{
+	USBDeviceDescriptor desc;
+	int status = usbGetDeviceDesc(devid, &desc);
+	
+	if (status != 0)
+	{
+		ERRNO = status;
+		return -1;
+	};
+	
+	if (memcpy_k2u(udesc, &desc, sizeof(USBDeviceDescriptor)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	return 0;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 153
+#define SYSCALL_NUMBER 155
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3729,6 +3765,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_mv,				// 150
 	&sys_pathctlat,				// 151
 	&sys_pathctl,				// 152
+	&sys_usb_list,				// 153
+	&sys_usb_devdesc,			// 154
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

@@ -182,6 +182,8 @@
 #define	__SYS_mv				150
 #define	__SYS_pathctlat				151
 #define	__SYS_pathctl				152
+#define	__SYS_usb_list				153
+#define	__SYS_usb_devdesc			154
 
 /* flags for __SYS_mv */
 #define	__MV_EXCL				(1 << 0)
