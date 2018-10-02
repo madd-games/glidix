@@ -74,11 +74,45 @@ int main(int argc, char *argv[])
 		if (devs[i] == 0) break;
 		
 		USBDeviceDescriptor desc;
-		if (__syscall(__SYS_usb_devdesc, devs[i], &desc) == 0)
+		if (__syscall(__SYS_usb_devdesc, devs[i], &desc) != 0)
 		{
-			printf("[%04hX:%04hX] (class %02hhX/%02hhX)\n", desc.idVendor, desc.idProduct, desc.bDeviceClass,
-									desc.bDeviceSubClass);
+			continue;
 		};
+
+		uint16_t langids[128];
+		int langCount;
+		
+		if (__syscall(__SYS_usb_langids, devs[i], langids, &langCount) != 0)
+		{
+			continue;
+		};
+		
+		int haveEnglish = 0;
+		int j;
+		for (j=0; j<langCount; j++)
+		{
+			if (langids[j] == 0x0409)
+			{
+				haveEnglish = 1;
+				break;
+			};
+		};
+		
+		char devname[128];
+		if (desc.iProduct == 0 || !haveEnglish)
+		{
+			strcpy(devname, "(no name detected)\n");
+		}
+		else
+		{
+			if (__syscall(__SYS_usb_getstr, devs[i], desc.iProduct, (uint16_t)0x0409, devname) != 0)
+			{
+				continue;
+			};
+		};
+		
+		printf("[%04hX:%04hX] (class %02hhX/%02hhX) %s\n", desc.idVendor, desc.idProduct, desc.bDeviceClass,
+								desc.bDeviceSubClass, devname);
 	};
 	
 	return 0;

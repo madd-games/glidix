@@ -3606,11 +3606,60 @@ int sys_usb_devdesc(uint64_t devid, USBDeviceDescriptor *udesc)
 	return 0;
 };
 
+int sys_usb_langids(uint64_t devid, uint16_t *ulangids, int *uoutCount)
+{
+	uint16_t langids[128];
+	memset(langids, 0, sizeof(langids));
+	int count;
+	
+	int status = usbGetLangIDs(devid, langids, &count);
+	if (status != 0)
+	{
+		ERRNO = status;
+		return -1;
+	};
+	
+	if (memcpy_k2u(ulangids, langids, sizeof(langids)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	if (memcpy_k2u(uoutCount, &count, sizeof(int)) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	return 0;
+};
+
+int sys_usb_getstr(uint64_t devid, uint8_t index, uint16_t langid, char *ubuffer)
+{
+	char buffer[128];
+	memset(buffer, 0, 128);
+	
+	int status = usbGetString(devid, index, langid, buffer);
+	if (status != 0)
+	{
+		ERRNO = status;
+		return -1;
+	};
+	
+	if (memcpy_k2u(ubuffer, buffer, 128) != 0)
+	{
+		ERRNO = EFAULT;
+		return -1;
+	};
+	
+	return 0;
+};
+
 /**
  * System call table for fast syscalls, and the number of system calls.
  * Do not use NULL entries! Instead, for unused entries, enter SYS_NULL.
  */
-#define SYSCALL_NUMBER 155
+#define SYSCALL_NUMBER 157
 void* sysTable[SYSCALL_NUMBER] = {
 	&sys_exit,				// 0
 	&sys_write,				// 1
@@ -3767,6 +3816,8 @@ void* sysTable[SYSCALL_NUMBER] = {
 	&sys_pathctl,				// 152
 	&sys_usb_list,				// 153
 	&sys_usb_devdesc,			// 154
+	&sys_usb_langids,			// 155
+	&sys_usb_getstr,			// 156
 };
 uint64_t sysNumber = SYSCALL_NUMBER;
 

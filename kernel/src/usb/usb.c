@@ -652,3 +652,111 @@ int usbGetDeviceDesc(uint64_t devid, USBDeviceDescriptor *desc)
 	mutexUnlock(&mtxDevList);
 	return ENOENT;
 };
+
+int usbGetLangIDs(uint64_t devid, uint16_t *langids, int *numOut)
+{
+	mutexLock(&mtxDevList);
+	
+	USBDevice *dev;
+	for (dev=devHead; dev!=NULL; dev=dev->next)
+	{
+		if (dev->devid == devid)
+		{
+			usbUp(dev);
+			break;
+		};
+	};
+	
+	mutexUnlock(&mtxDevList);
+	
+	if (dev == NULL) return ENOENT;
+
+	// get the language list
+	USBLangList desc;
+	
+	if (usbControlIn(dev->ctrlPipe, USB_REQ_DEVICE_TO_HOST | USB_REQ_STANDARD | USB_REQ_DEVICE,
+				USB_REQ_GET_DESCRIPTOR,
+				0x0300,				// string descriptor zero
+				0,				// language list
+				2,
+				&desc) != 0)
+	{
+		usbDown(dev);
+		return EIO;
+	};
+	
+	// actually get it now that we know its size
+	if (usbControlIn(dev->ctrlPipe, USB_REQ_DEVICE_TO_HOST | USB_REQ_STANDARD | USB_REQ_DEVICE,
+				USB_REQ_GET_DESCRIPTOR,
+				0x0300,
+				0,
+				desc.bLength,
+				&desc) != 0)
+	{
+		usbDown(dev);
+		return EIO;
+	};
+	
+	usbDown(dev);
+	memcpy(langids, desc.wLANGID, desc.bLength-2);
+	*numOut = (desc.bLength-2) >> 1;
+	return 0;
+};
+
+int usbGetString(uint64_t devid, uint8_t index, uint16_t langid, char *buffer)
+{
+	if (index == 0) return EINVAL;
+	
+	mutexLock(&mtxDevList);
+	
+	USBDevice *dev;
+	for (dev=devHead; dev!=NULL; dev=dev->next)
+	{
+		if (dev->devid == devid)
+		{
+			usbUp(dev);
+			break;
+		};
+	};
+	
+	mutexUnlock(&mtxDevList);
+	
+	if (dev == NULL) return ENOENT;
+	
+	USBStringDescriptor desc;
+	
+	if (usbControlIn(dev->ctrlPipe, USB_REQ_DEVICE_TO_HOST | USB_REQ_STANDARD | USB_REQ_DEVICE,
+				USB_REQ_GET_DESCRIPTOR,
+				0x0300 | (uint16_t)index,
+				langid,
+				2,
+				&desc) != 0)
+	{
+		usbDown(dev);
+		return EIO;
+	};
+	
+	if (usbControlIn(dev->ctrlPipe, USB_REQ_DEVICE_TO_HOST | USB_REQ_STANDARD | USB_REQ_DEVICE,
+				USB_REQ_GET_DESCRIPTOR,
+				0x0300 | (uint16_t)index,
+				langid,
+				desc.bLength,
+				&desc) != 0)
+	{
+		usbDown(dev);
+		return EIO;
+	};
+	
+	usbDown(dev);
+	
+	size_t numChars = (desc.bLength-2) >> 1;
+	const uint16_t *scan = desc.wString;
+	
+	while (numChars--)
+	{
+		*buffer++ = (uint8_t) *scan++;
+	};
+	
+	*buffer = 0;
+	return 0;
+};

@@ -165,6 +165,26 @@ typedef struct
 } USBEndpointDescriptor;
 
 /**
+ * String descriptor zero, the list of language IDs.
+ */
+typedef struct
+{
+	uint8_t						bLength;
+	uint8_t						bDescritporType;
+	uint16_t					wLANGID[127];
+} USBLangList;
+
+/**
+ * String descriptor.
+ */
+typedef struct
+{
+	uint8_t						bLength;
+	uint8_t						bDescriptorType;
+	uint16_t					wString[127];
+} USBStringDescriptor;
+
+/**
  * Describes an element of a transaction. Used for control and bulk transactions.
  */
 typedef struct
@@ -532,5 +552,24 @@ void usbList(uint64_t *list);
  * Currently, ENOENT is returned if the device does not exist.
  */
 int usbGetDeviceDesc(uint64_t devid, USBDeviceDescriptor *desc);
+
+/**
+ * Get a list of language IDs from the specified USB device. Return 0 on success, or an error number on error.
+ *	ENOENT			There is no device with this ID.
+ *	EIO			I/O error (failed to complete request).
+ * The array 'langids' must have space for 128 IDs.
+ */
+int usbGetLangIDs(uint64_t devid, uint16_t *langids, int *numOut);
+
+/**
+ * Get a string descriptor of the specified index in the specified language. The string is stored in 'buffer',
+ * which must have a size of at least 128 bytes. The returned string is converted to ASCII (TODO: UTF-8).
+ *
+ * Returns 0 on success, or an error number on error.
+ *	ENOENT			There is no device with this ID.
+ *	EIO			I/O error (failed to complete request).
+ *	EINVAL			'index' is 0.
+ */
+int usbGetString(uint64_t devid, uint8_t index, uint16_t langid, char *buffer);
 
 #endif
