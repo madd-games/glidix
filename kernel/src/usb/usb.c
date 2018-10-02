@@ -116,7 +116,7 @@ void usbDevInitFunc(void *context)
 		return;
 	};
 	
-	kprintf("[USB] device connected:\n");
+	kprintf_debug("[USB] device connected:\n");
 	usbPrintDeviceDescriptor(&reqDev.desc);
 	
 	// copy the device descriptor into the device struct
@@ -152,7 +152,7 @@ void usbDevInitFunc(void *context)
 		return;
 	};
 	
-	kprintf("[USB] Default configuration descriptor:\n");
+	kprintf_debug("[USB] Default configuration descriptor:\n");
 	usbPrintConfigurationDescriptor(&reqConf.desc);
 	
 	// set the configuration
@@ -170,7 +170,7 @@ void usbDevInitFunc(void *context)
 		return;
 	};
 	
-	kprintf("[USB] Device configured.\n");
+	kprintf_debug("[USB] Device configured.\n");
 	
 	// scan through the interface descriptors and create interface objects
 	uint8_t *confbuf = (uint8_t*) kmalloc(reqConf.desc.wTotalLength);
@@ -183,17 +183,15 @@ void usbDevInitFunc(void *context)
 		usbDown(dev);
 	};
 	
-	kprintf("[USB] The following configuration is in use:\n");
+	kprintf_debug("[USB] The following configuration is in use:\n");
 	
 	uint8_t *scan = confbuf + reqConf.desc.bLength;
 	size_t numInterfaces = reqConf.desc.bNumInterfaces;
 	
 	while (numInterfaces--)
 	{
-		// TODO: spawn threads for the interfaces, and create their descriptions.
-		
 		USBInterfaceDescriptor *descIntf = (USBInterfaceDescriptor*) scan;
-		kprintf("INTF (len=0x%02hhX, type=0x%02hhX, intno=0x%02hhX, alt=0x%02hhX, epcount=%hhu, class=0x%02hhX:0x%02hhX:0x%02hhX)\n",
+		kprintf_debug("INTF (len=0x%02hhX, type=0x%02hhX, intno=0x%02hhX, alt=0x%02hhX, epcount=%hhu, class=0x%02hhX:0x%02hhX:0x%02hhX)\n",
 			descIntf->bLength,
 			descIntf->bDescriptorType,
 			descIntf->bInterfaceNumber,
@@ -210,7 +208,7 @@ void usbDevInitFunc(void *context)
 		while (numEndpoints--)
 		{
 			USBEndpointDescriptor *descEp = (USBEndpointDescriptor*) scan;
-			kprintf("  ENDPOINT (addr=0x%02hhX, attr=0x%02hhX, maxpacket=%hu, interval=%hhu)\n",
+			kprintf_debug("  ENDPOINT (addr=0x%02hhX, attr=0x%02hhX, maxpacket=%hu, interval=%hhu)\n",
 				descEp->bEndpointAddress,
 				descEp->bmAttributes,
 				descEp->wMaxPacketSize,
@@ -220,7 +218,7 @@ void usbDevInitFunc(void *context)
 			scan += descEp->bLength;
 		};
 		
-		kprintf("\n");
+		kprintf_debug("\n");
 	};
 	
 	// done
@@ -250,28 +248,28 @@ void usbDevInitFunc(void *context)
 
 void usbPrintDeviceDescriptor(USBDeviceDescriptor *desc)
 {
-	kprintf("  USB Version:               %hu.%hu\n", desc->bcdUSB >> 8, desc->bcdUSB & 0xFF);
-	kprintf("  USB Device Class:          0x%02hhX\n", desc->bDeviceClass);
-	kprintf("  USB Device Subclass:       0x%02hhX\n", desc->bDeviceSubClass);
-	kprintf("  USB Device Protocol:       0x%02hhX\n", desc->bDeviceProtocol);
-	kprintf("  Max. Packet Size:          %hhu bytes\n", desc->bMaxPacketSize);
-	kprintf("  USB Vendor ID:             0x%04hX\n", desc->idVendor);
-	kprintf("  USB Product ID:            0x%04hX\n", desc->idProduct);
-	kprintf("  USB Device Version:        %hu.%hu\n", desc->bcdDevice >> 8, desc->bcdDevice & 0xFF);
-	kprintf("  Manufacturer String ID:    %hhu\n", desc->iManufacturer);
-	kprintf("  Product String ID:         %hhu\n", desc->iProduct);
-	kprintf("  Serial Number String ID:   %hhu\n", desc->iSerialNumber);
-	kprintf("  Number of Configurations:  %hhu\n", desc->bNumConfigurations);
+	kprintf_debug("  USB Version:               %hu.%hu\n", desc->bcdUSB >> 8, desc->bcdUSB & 0xFF);
+	kprintf_debug("  USB Device Class:          0x%02hhX\n", desc->bDeviceClass);
+	kprintf_debug("  USB Device Subclass:       0x%02hhX\n", desc->bDeviceSubClass);
+	kprintf_debug("  USB Device Protocol:       0x%02hhX\n", desc->bDeviceProtocol);
+	kprintf_debug("  Max. Packet Size:          %hhu bytes\n", desc->bMaxPacketSize);
+	kprintf_debug("  USB Vendor ID:             0x%04hX\n", desc->idVendor);
+	kprintf_debug("  USB Product ID:            0x%04hX\n", desc->idProduct);
+	kprintf_debug("  USB Device Version:        %hu.%hu\n", desc->bcdDevice >> 8, desc->bcdDevice & 0xFF);
+	kprintf_debug("  Manufacturer String ID:    %hhu\n", desc->iManufacturer);
+	kprintf_debug("  Product String ID:         %hhu\n", desc->iProduct);
+	kprintf_debug("  Serial Number String ID:   %hhu\n", desc->iSerialNumber);
+	kprintf_debug("  Number of Configurations:  %hhu\n", desc->bNumConfigurations);
 };
 
 void usbPrintConfigurationDescriptor(USBConfigurationDescriptor *desc)
 {
-	kprintf("  Total length:              %hu bytes\n", desc->wTotalLength);
-	kprintf("  Number of Interfaces:      %hhu\n", desc->bNumInterfaces);
-	kprintf("  Configuration Value:       0x%02hhX\n", desc->bConfigurationValue);
-	kprintf("  Configuration String ID:   %hhu\n", desc->iConfiguration);
-	kprintf("  Attributes:                0x%02hhX\n", desc->bmAttributes);
-	kprintf("  Max. Power:                %hu mA\n", 2 * (uint16_t) desc->bMaxPower);
+	kprintf_debug("  Total length:              %hu bytes\n", desc->wTotalLength);
+	kprintf_debug("  Number of Interfaces:      %hhu\n", desc->bNumInterfaces);
+	kprintf_debug("  Configuration Value:       0x%02hhX\n", desc->bConfigurationValue);
+	kprintf_debug("  Configuration String ID:   %hhu\n", desc->iConfiguration);
+	kprintf_debug("  Attributes:                0x%02hhX\n", desc->bmAttributes);
+	kprintf_debug("  Max. Power:                %hu mA\n", 2 * (uint16_t) desc->bMaxPower);
 };
 
 void usbDriverFunc(void *context)
