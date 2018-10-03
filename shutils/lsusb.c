@@ -98,6 +98,19 @@ int main(int argc, char *argv[])
 			};
 		};
 		
+		char vendor[128];
+		if (desc.iManufacturer == 0 || !haveEnglish)
+		{
+			vendor[0] = 0;
+		}
+		else
+		{
+			if (__syscall(__SYS_usb_getstr, devs[i], desc.iManufacturer, (uint16_t)0x0409, vendor) != 0)
+			{
+				continue;
+			};
+		};
+		
 		char devname[128];
 		if (desc.iProduct == 0 || !haveEnglish)
 		{
@@ -111,8 +124,8 @@ int main(int argc, char *argv[])
 			};
 		};
 		
-		printf("[%04hX:%04hX] (class %02hhX/%02hhX) %s\n", desc.idVendor, desc.idProduct, desc.bDeviceClass,
-								desc.bDeviceSubClass, devname);
+		printf("[%04hX:%04hX] (class %02hhX/%02hhX) %s %s\n", desc.idVendor, desc.idProduct, desc.bDeviceClass,
+								desc.bDeviceSubClass, vendor, devname);
 	};
 	
 	return 0;
