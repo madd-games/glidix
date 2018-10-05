@@ -78,7 +78,7 @@ DDIGL_Context* ddiglCreateContext(DDIPixelFormat *format, DDIGL_ContextParams *p
 		free(ctx);
 		return NULL;
 	};
-	
+
 	return ctx;
 };
 

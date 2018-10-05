@@ -33,6 +33,46 @@
 #include <libddi.h>
 
 /**
+ * Opaque structure for GL buffer driver data. Pointers to this are used throughout the library,
+ * and a driver may actually define the structure.
+ */
+typedef struct __ddigl_buffer DDIGL_Buffer;
+
+/**
+ * GL object.
+ */
+#define	DDIGL_OBJ_FREE				0		/* object name unused */
+#define	DDIGL_OBJ_RESV				1		/* object name allocated but not yet created */
+#define	DDIGL_OBJ_BUFFER			2		/* GL buffer object */
+typedef struct
+{
+	/**
+	 * Type (one of the above).
+	 */
+	int					type;
+	
+	/**
+	 * Pointer to the object.
+	 */
+	union
+	{
+		struct __ddigl_buffer*		asBuffer;
+	};
+} DDIGL_Object;
+
+/**
+ * 4-level tree mapping object names to objects.
+ */
+typedef struct __ddigl_objnode
+{
+	union
+	{
+		struct __ddigl_objnode*		nodes[256];
+		DDIGL_Object*			objs[256];
+	};
+} DDIGL_ObjNode;
+
+/**
  * Context parameters structure.
  */
 typedef struct __ddigl_params
@@ -94,6 +134,53 @@ typedef struct __ddigl_ctx
 	 * Set the clear stencil value for the specified context.
 	 */
 	void (*clearStencil)(struct __ddigl_ctx *ctx, GLint s);
+	
+	/**
+	 * Mapping of object names to objects.
+	 */
+	DDIGL_ObjNode objRoot;
+	
+	/**
+	 * Create a buffer object in the specified context. Return NULL on error and set 'error' to an
+	 * OpenGL error number.
+	 */
+	DDIGL_Buffer* (*createBuffer)(struct __ddigl_ctx *ctx, GLenum *error);
+	
+	/**
+	 * Bind the specified buffer to the specified target. Return GL_NO_ERROR on success, or an error
+	 * number on error. If 'buffer' is NULL, remove the binding.
+	 */
+	GLenum (*bindBuffer)(struct __ddigl_ctx *ctx, GLenum target, DDIGL_Buffer *buffer);
+	
+	/**
+	 * Current buffer bindings.
+	 */
+	DDIGL_Buffer* arrayBuffer;
+	DDIGL_Buffer* atomicCounterBuffer;
+	DDIGL_Buffer* copyReadBuffer;
+	DDIGL_Buffer* copyWriteBuffer;
+	DDIGL_Buffer* dispatchIndirectBuffer;
+	DDIGL_Buffer* drawIndirectBuffer;
+	DDIGL_Buffer* elementArrayBuffer;
+	DDIGL_Buffer* pixelPackBuffer;
+	DDIGL_Buffer* pixelUnpackBuffer;
+	DDIGL_Buffer* queryBuffer;
+	DDIGL_Buffer* shaderStorageBuffer;
+	DDIGL_Buffer* textureBuffer;
+	DDIGL_Buffer* transformFeedbackBuffer;
+	DDIGL_Buffer* uniformBuffer;
+	
+	/**
+	 * Set the buffer store to the specified data and usage. If 'data' is NULL, allocate the store but
+	 * leave it uninitialized. Basically implements glBufferData() and glNamedBufferData(). If successful,
+	 * return GL_NO_ERROR; otherwise, return an error number.
+	 */
+	GLenum (*bufferData)(struct __ddigl_ctx *ctx, DDIGL_Buffer *buffer, GLsizeiptr size, const GLvoid *data, GLenum usage);
+	
+	/**
+	 * Delete the specified buffer.
+	 */
+	void (*deleteBuffer)(struct __ddigl_ctx *ctx, DDIGL_Buffer *buffer);
 } DDIGL_Context;
 
 extern DDIGL_Context* __ddigl_current;
@@ -130,5 +217,26 @@ void ddiglSetError(GLenum error);
  * Convenience function to clamp values.
  */
 GLclampf ddiglClampf(GLclampf value, GLclampf minval, GLclampf maxval);
+
+/**
+ * Get an object by name. This function never returns NULL; but it might return an object marked as "free" or
+ * "reserved".
+ */
+DDIGL_Object* ddiglGetObject(GLuint name);
+
+/**
+ * Generate object names.
+ */
+void ddiglGenObjects(GLsizei n, GLuint *names);
+
+/**
+ * Check if the specified argument is a valid buffer binding target.
+ */
+int ddiglIsBufferTarget(GLenum target);
+
+/**
+ * Return the buffer bound to the specified target; NULL if no binding.
+ */
+DDIGL_Buffer* ddiglGetBuffer(GLenum target);
 
 #endif

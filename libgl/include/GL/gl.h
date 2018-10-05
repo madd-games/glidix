@@ -58,6 +58,12 @@ extern "C" {
 #endif
 
 /**
+ * Booleans.
+ */
+#define	GL_TRUE					(1 == 1)
+#define	GL_FALSE				(1 == 0)
+
+/**
  * Attribute bits for glClear() etc.
  */
 #define GL_CURRENT_BIT				0x00000001
@@ -94,6 +100,37 @@ extern "C" {
 #define GL_OUT_OF_MEMORY			0x0505
 
 /**
+ * Buffer binding targets.
+ */
+#define GL_ARRAY_BUFFER				0x8892
+#define GL_ATOMIC_COUNTER_BUFFER		0x92C0
+#define GL_COPY_READ_BUFFER			0x8F36
+#define GL_COPY_WRITE_BUFFER			0x8F37
+#define GL_DISPATCH_INDIRECT_BUFFER		0x90EE
+#define GL_DRAW_INDIRECT_BUFFER			0x8F3F
+#define GL_ELEMENT_ARRAY_BUFFER			0x8893
+#define GL_PIXEL_PACK_BUFFER			0x88EB
+#define GL_PIXEL_UNPACK_BUFFER			0x88EC
+#define GL_QUERY_BUFFER				0x9192
+#define GL_SHADER_STORAGE_BUFFER		0x90D2
+#define GL_TEXTURE_BUFFER			0x8C2A
+#define GL_TRANSFORM_FEEDBACK_BUFFER		0x8C8E
+#define GL_UNIFORM_BUFFER			0x8A11
+
+/**
+ * Buffer usage values.
+ */
+#define GL_STREAM_DRAW				0x88E0
+#define GL_STREAM_READ				0x88E1
+#define GL_STREAM_COPY				0x88E2
+#define GL_STATIC_DRAW				0x88E4
+#define GL_STATIC_READ				0x88E5
+#define GL_STATIC_COPY				0x88E6
+#define GL_DYNAMIC_DRAW				0x88E8
+#define GL_DYNAMIC_READ				0x88E9
+#define GL_DYNAMIC_COPY				0x88EA
+
+/**
  * Types.
  */
 typedef unsigned int				GLenum;
@@ -111,6 +148,7 @@ typedef float					GLfloat;
 typedef float					GLclampf;
 typedef double					GLdouble;
 typedef double					GLclampd;
+typedef long					GLsizeiptr;
 
 /**
  * Error handling.
@@ -131,6 +169,14 @@ void glClear(GLbitfield mask);
  */
 void glFlush();
 void glFinish();
+
+/**
+ * Buffers.
+ */
+void glGenBuffers(GLsizei n, GLuint *buffers);
+void glDeleteBuffers(GLsizei n, GLuint *buffers);
+void glBindBuffer(GLenum target, GLuint bufname);
+void glBufferData(GLenum target, GLsizeiptr size, const GLvoid *data, GLenum usage);
 
 #ifdef __cplusplus
 }	/* extern "C" */
