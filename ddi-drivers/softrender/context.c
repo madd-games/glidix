@@ -27,6 +27,7 @@
 */
 
 #include "context.h"
+#include "buffer.h"
 
 static int getShift(uint32_t mask)
 {
@@ -220,6 +221,10 @@ int srInitGL(void *drvctx, DDIPixelFormat *format, DDIGL_ContextParams *params, 
 	ctx->clearColor = srClearColor;
 	ctx->clearStencil = srClearStencil;
 	ctx->clear = srClear;
+	ctx->createBuffer = srCreateBuffer;
+	ctx->bindBuffer = srBindBuffer;
+	ctx->bufferData = srBufferData;
+	ctx->deleteBuffer = srDeleteBuffer;
 	
 	// OK
 	return GL_NO_ERROR;
