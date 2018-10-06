@@ -145,7 +145,6 @@ static uint64_t frameFromCache()
 		}
 		else
 		{
-			phmFreeFrameEx(frame+1, 7);
 			return frame;
 		};
 	};
@@ -162,11 +161,6 @@ static int tryFreeMemory()
 		if (frame == 0)
 		{
 			return -1;
-		}
-		else
-		{
-			phmFreeFrameEx(frame, 8);
-			return 0;
 		};
 	};
 	

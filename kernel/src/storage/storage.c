@@ -65,14 +65,7 @@ static char sdAllocLetter()
 static void sdDownref(StorageDevice *sd)
 {
 	if (__sync_add_and_fetch(&sd->refcount, -1) == 0)
-	{
-		while (sd->cmdq != NULL)
-		{
-			SDCommand *cmd = sd->cmdq;
-			sd->cmdq = cmd->next;
-			kfree(cmd);
-		};
-		
+	{	
 		kfree(sd);
 	};
 };
@@ -86,24 +79,6 @@ static void sdFreeLetter(char c)
 {
 	uint32_t mask = ~(1 << (c-'a'));
 	__sync_fetch_and_and(&sdLetters, mask);
-};
-
-static void sdPush(StorageDevice *sd, SDCommand *cmd)
-{
-	// sd must already be locked!
-	cmd->next = NULL;
-	if (sd->cmdq == NULL)
-	{
-		sd->cmdq = cmd;
-	}
-	else
-	{
-		SDCommand *last = sd->cmdq;
-		while (last->next != NULL) last = last->next;
-		last->next = cmd;
-	};
-	
-	semSignal(&sd->semCommands);
 };
 
 void sdInit()
@@ -136,22 +111,24 @@ static int sdfile_ioctl(Inode *inode, File *fp, uint64_t cmd, void *params)
 		if (data->sd->totalSize != 0)
 		{
 			// non-removable
+			ERRNO = EINVAL;
 			return -1;
 		};
 		
-		Semaphore lock;
-		semInit2(&lock, 0);
-
-		SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
-		cmd->type = SD_CMD_EJECT;
-		cmd->block = NULL;
-		cmd->cmdlock = &lock;
-		cmd->flags = 0;
-
-		sdPush(data->sd, cmd);
-		semWait(&lock);				// wait for the eject operation to finish
+		if (!IMPLEMENTS(data->sd->ops, eject))
+		{
+			// driver does not implement the 'eject' operation
+			ERRNO = ENODEV;
+			return -1;
+		};
+		
+		int status = data->sd->ops->eject(data->sd->drvdata);
+		if (status != 0)
+		{
+			ERRNO = status;
+			return -1;
+		};
 	
-		// (cmd was freed by the driver)
 		return 0;
 	};
 
@@ -192,22 +169,10 @@ static void sdFlushTree(StorageDevice *sd, BlockTreeNode *node, int level, uint6
 			if (level == 6)
 			{
 				uint64_t canaddr = (node->entries[i] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
-				uint64_t *pte = (uint64_t*) ((canaddr >> 9) | 0xffffff8000000000L);
-				uint64_t phys = (*pte) & 0x0000fffffffff000L;
-				
-				Semaphore semCmd;
-				semInit2(&semCmd, 0);
-				
-				SDCommand *cmd = NEW(SDCommand);
-				cmd->type = SD_CMD_WRITE_TRACK;
-				cmd->block = (void*) phys;
-				cmd->pos = ((pos << 7) | i) << 15;
-				cmd->cmdlock = &semCmd;
-				cmd->status = NULL;
-				cmd->flags = 0;
-				sdPush(sd, cmd);
-				
-				semWait(&semCmd);
+				size_t bytepos = ((pos << 7) | i) << 15;
+				size_t startBlock = bytepos / sd->blockSize;
+				size_t numBlocks = SD_TRACK_SIZE / sd->blockSize;
+				sd->ops->writeBlocks(sd->drvdata, startBlock, numBlocks, (const void*) canaddr);
 			}
 			else
 			{
@@ -321,52 +286,52 @@ static ssize_t sdRead(StorageDevice *sd, uint64_t pos, void *buf, size_t size)
 		uint64_t trackAddr;
 		if (node->entries[track] == 0)
 		{
-			// we need to load the track
-			uint64_t physStartFrame = phmAllocFrameEx(8, 0);
-			if (physStartFrame == 0)
+			uint64_t frames[8];
+			int k;
+			for (k=0; k<8; k++)
 			{
-				mutexUnlock(&sd->cacheLock);
-				
-				if (sizeRead == 0)
+				frames[k] = phmAllocFrame();
+				if (frames[k] == 0)
 				{
-					ERRNO = ENOMEM;
-					return -1;
+					int l;
+					for (l=0; l<k; l++)
+					{
+						phmFreeFrame(frames[l]);
+					};
+					
+					mutexUnlock(&sd->cacheLock);
+					
+					if (sizeRead == 0)
+					{
+						ERRNO = ENOMEM;
+						return -1;
+					};
+					
+					return sizeRead;
 				};
-				
-				break;
 			};
 			
-			Semaphore semCmd;
-			semInit2(&semCmd, 0);
-			
-			int status = 0;
-			
-			SDCommand *cmd = NEW(SDCommand);
-			cmd->type = SD_CMD_READ_TRACK;
-			cmd->block = (void*) (physStartFrame << 12);
-			cmd->pos = pos & ~0x7FFFUL;
-			cmd->cmdlock = &semCmd;
-			cmd->status = &status;
-			cmd->flags = 0;
-			sdPush(sd, cmd);
-			
-			semWait(&semCmd);
-			
+			void *vptr = mapPhysMemoryList(frames, 8);
+			int status = sd->ops->readBlocks(sd->drvdata, (pos & ~0x7FFFUL) / sd->blockSize,
+								SD_TRACK_SIZE / sd->blockSize,
+								vptr);
 			if (status != 0)
 			{
+				unmapPhysMemory(vptr, 0x8000);
+				for (k=0; k<8; k++) phmFreeFrame(frames[k]);
+				
 				mutexUnlock(&sd->cacheLock);
 				
 				if (sizeRead == 0)
 				{
-					ERRNO = EIO;
+					ERRNO = status;
 					return -1;
 				};
 				
-				break;
+				return sizeRead;
 			};
 			
-			void *vptr = mapPhysMemory(physStartFrame << 12, 0x8000);
-			node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56);
+			node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56) | SD_BLOCK_DIRTY;
 			trackAddr = (uint64_t) vptr;
 		}
 		else
@@ -450,51 +415,51 @@ static ssize_t sdWrite(StorageDevice *sd, uint64_t pos, const void *buf, size_t 
 		uint64_t trackAddr;
 		if (node->entries[track] == 0)
 		{
-			// we need to load the track
-			uint64_t physStartFrame = phmAllocFrameEx(8, 0);
-			if (physStartFrame == 0)
+			uint64_t frames[8];
+			int k;
+			for (k=0; k<8; k++)
 			{
-				mutexUnlock(&sd->cacheLock);
-				
-				if (sizeWritten == 0)
+				frames[k] = phmAllocFrame();
+				if (frames[k] == 0)
 				{
-					ERRNO = ENOMEM;
-					return -1;
+					int l;
+					for (l=0; l<k; l++)
+					{
+						phmFreeFrame(frames[l]);
+					};
+					
+					mutexUnlock(&sd->cacheLock);
+					
+					if (sizeWritten == 0)
+					{
+						ERRNO = ENOMEM;
+						return -1;
+					};
+					
+					return sizeWritten;
 				};
-				
-				break;
 			};
 			
-			Semaphore semCmd;
-			semInit2(&semCmd, 0);
-			
-			int status = 0;
-			
-			SDCommand *cmd = NEW(SDCommand);
-			cmd->type = SD_CMD_READ_TRACK;
-			cmd->block = (void*) (physStartFrame << 12);
-			cmd->pos = pos & ~0x7FFFUL;
-			cmd->cmdlock = &semCmd;
-			cmd->status = &status;
-			cmd->flags = 0;
-			sdPush(sd, cmd);
-			
-			semWait(&semCmd);
-			
+			void *vptr = mapPhysMemoryList(frames, 8);
+			int status = sd->ops->readBlocks(sd->drvdata, (pos & ~0x7FFFUL) / sd->blockSize,
+								SD_TRACK_SIZE / sd->blockSize,
+								vptr);
 			if (status != 0)
 			{
+				unmapPhysMemory(vptr, 0x8000);
+				for (k=0; k<8; k++) phmFreeFrame(frames[k]);
+				
 				mutexUnlock(&sd->cacheLock);
 				
 				if (sizeWritten == 0)
 				{
-					ERRNO = EIO;
+					ERRNO = status;
 					return -1;
 				};
 				
-				break;
+				return sizeWritten;
 			};
 			
-			void *vptr = mapPhysMemory(physStartFrame << 12, 0x8000);
 			node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56) | SD_BLOCK_DIRTY;
 			trackAddr = (uint64_t) vptr;
 		}
@@ -614,31 +579,19 @@ static size_t sdfile_getsize(Inode *inode)
 	if (fdev->size != 0)
 	{
 		size = fdev->size;
-		mutexUnlock(&fdev->sd->lock);
 	}
 	else
 	{
 		if (size == 0)
 		{
-			Semaphore lock;
-			semInit2(&lock, 0);
-
-			SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
-			cmd->type = SD_CMD_GET_SIZE;
-			cmd->block = &size;
-			cmd->cmdlock = &lock;
-			cmd->flags = 0;
-
-			sdPush(fdev->sd, cmd);
-			mutexUnlock(&fdev->sd->lock);
-			semWait(&lock);		// cmd freed by the driver
-		}
-		else
-		{
-			mutexUnlock(&fdev->sd->lock);
+			if (IMPLEMENTS(fdev->sd->ops, getSize))
+			{
+				size = fdev->sd->ops->getSize(fdev->sd->drvdata);
+			};
 		};
 	};
 	
+	mutexUnlock(&fdev->sd->lock);
 	return size;
 };
 
@@ -957,7 +910,7 @@ static void sdFlushThread(void *context)
 	};
 };
 
-StorageDevice* sdCreate(SDParams *params, const char *name)
+StorageDevice* sdCreate(SDParams *params, const char *name, SDOps *ops, void *drvdata)
 {
 	char letter = sdAllocLetter();
 	if (letter == 0)
@@ -972,6 +925,9 @@ StorageDevice* sdCreate(SDParams *params, const char *name)
 		return NULL;
 	};
 	
+	sd->ops = ops;
+	sd->drvdata = drvdata;
+	
 	mutexInit(&sd->lock);
 	sd->refcount = 1;
 	sd->flags = params->flags;
@@ -979,8 +935,6 @@ StorageDevice* sdCreate(SDParams *params, const char *name)
 	sd->totalSize = params->totalSize;
 	sd->letter = letter;
 	sd->numSubs = 0;
-	sd->cmdq = NULL;
-	semInit2(&sd->semCommands, 0);
 	sd->openParts = 0;
 	semInit2(&sd->semFlush, 0);
 	
@@ -1093,42 +1047,6 @@ void sdHangup(StorageDevice *sd)
 	};
 };
 
-SDCommand* sdPop(StorageDevice *sd)
-{
-	semWait(&sd->semCommands);
-	
-	mutexLock(&sd->lock);
-	SDCommand *cmd = sd->cmdq;
-	sd->cmdq = cmd->next;
-	cmd->next = NULL;
-	mutexUnlock(&sd->lock);
-	
-	return cmd;
-};
-
-void sdPostComplete(SDCommand *cmd)
-{
-	if (cmd->flags & SD_CMD_NOFREE)
-	{
-		if (cmd->cmdlock != NULL) semSignal(cmd->cmdlock);
-	}
-	else
-	{
-		if (cmd->cmdlock != NULL) semSignal(cmd->cmdlock);
-		kfree(cmd);
-	};
-};
-
-void sdSignal(StorageDevice *dev)
-{
-	SDCommand *cmd = (SDCommand*) kmalloc(sizeof(SDCommand));
-	cmd->type = SD_CMD_SIGNAL;
-	cmd->cmdlock = NULL;
-	cmd->flags = 0;
-	
-	sdPush(dev, cmd);
-};
-
 void sdSync()
 {
 	mutexLock(&mtxList);
@@ -1148,7 +1066,7 @@ void sdSync()
 	mutexUnlock(&mtxList);
 };
 
-static int sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t addr)
+static uint64_t sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t addr)
 {
 	while (1)
 	{
@@ -1187,33 +1105,26 @@ static int sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uint64_t
 			if (node->entries[lowestIndex] & SD_BLOCK_DIRTY)
 			{
 				uint64_t canaddr = (node->entries[lowestIndex] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
-				uint64_t *pte = (uint64_t*) ((canaddr >> 9) | 0xffffff8000000000L);
-				uint64_t phys = (*pte) & 0x0000fffffffff000L;
-			
-				Semaphore semCmd;
-				semInit2(&semCmd, 0);
-			
-				SDCommand cmd;
-				cmd.type = SD_CMD_WRITE_TRACK;
-				cmd.block = (void*) phys;
-				cmd.pos = ((addr << 7) | lowestIndex) << 15;
-				cmd.cmdlock = &semCmd;
-				cmd.status = NULL;
-				cmd.flags = SD_CMD_NOFREE;
-				sdPush(sd, &cmd);
-			
-				semWait(&semCmd);
+				uint64_t bytepos = ((addr << 7) | lowestIndex) << 15;
+				uint64_t startBlock = bytepos / sd->blockSize;
+				uint64_t numBlocks = SD_TRACK_SIZE / sd->blockSize;
+				sd->ops->writeBlocks(sd->drvdata, startBlock, numBlocks, (const void*) canaddr);
 			};
 		
 			uint64_t canaddr = (node->entries[lowestIndex] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
-			uint64_t *pte = (uint64_t*) ((canaddr >> 9) | 0xffffff8000000000L);
-			uint64_t phys = (*pte) & 0x0000fffffffff000L;
-		
+
 			node->entries[lowestIndex] = 0;
-			//phmFreeFrameEx(phys >> 12, 8);
-			unmapPhysMemory((void*)canaddr, 0x8000);
 			
-			return phys >> 12;
+			uint64_t frames[8];
+			unmapPhysMemoryAndGet((void*)canaddr, 0x8000, frames);
+			
+			int k;
+			for (k=1; k<8; k++)
+			{
+				phmFreeFrame(frames[k]);
+			};
+			
+			return frames[0];
 		}
 		else
 		{
