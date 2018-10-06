@@ -30,6 +30,8 @@
 #define SDIDE_H_
 
 #include <glidix/util/common.h>
+#include <glidix/storage/storage.h>
+#include <glidix/hw/pci.h>
 
 /* status register */
 #define ATA_SR_BSY			0x80    // Busy
@@ -113,5 +115,81 @@
 
 /* command sets */
 #define	ATA_CMDSET_LBA_EXT		(1 << 26)
+
+/**
+ * Describes a channel.
+ */
+typedef struct
+{
+	uint16_t				base;	// I/O base
+	uint16_t				ctrl;	// control base
+} IDEChannel;
+
+struct IDEController_;
+
+/**
+ * Describes an attached device.
+ */
+typedef struct
+{
+	/**
+	 * Device type (IDE_ATA or IDE_ATAPI).
+	 */
+	int					type;
+	
+	/**
+	 * Channel (primary or secondary) and slot (master or slave).
+	 */
+	int					channel, slot;
+	
+	/**
+	 * The controller.
+	 */
+	struct IDEController_*			ctrl;
+	
+	/**
+	 * The storage device object.
+	 */
+	StorageDevice*				sd;
+	
+	/**
+	 * The thread which handles this device.
+	 */
+	Thread*					thread;
+} IDEDevice;
+
+/**
+ * Describes an IDE controller.
+ */
+typedef struct IDEController_
+{
+	/**
+	 * Next controller.
+	 */
+	struct IDEController_*			next;
+	
+	/**
+	 * The PCI device description associated with the controller.
+	 */
+	PCIDevice*				pcidev;
+	
+	/**
+	 * Primary and secondary channels.
+	 */
+	IDEChannel				channels[2];
+	
+	/**
+	 * Lock for accessing devices on this controller.
+	 */
+	Semaphore				lock;
+	
+	/**
+	 * Devices, and the number of them.
+	 */
+	IDEDevice				devs[4];
+	int					numDevs;
+} IDEController;
+
+extern volatile int ideInts[2];
 
 #endif
