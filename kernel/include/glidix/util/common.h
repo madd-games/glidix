@@ -77,6 +77,14 @@
 #define	VIRT_TO_PML4E(ptr)	((PML4e*)(((((uint64_t)ptr) >> 36) & (~(0x7UL | 0xFFFF000000000000UL))) | 0xFFFFFFFFFFFFF000))
 
 /**
+ * Test whether a specified function is implemented in 'inst'. 'inst' must be a pointer to a structure
+ * which includes a field called 'size' which defines its size; and must also contain a member called
+ * 'func'. This macro evaluates to true if and only if the size is sufficient to include 'func',
+ * and 'func' is not set to NULL.
+ */
+#define	IMPLEMENTS(inst, func)	((inst->size > ((size_t)(&inst->func) - (size_t)(inst))) && inst->func != NULL)
+
+/**
  * Special traps. If a userspace process jumps to one of these, it will trigger
  * a page fault with a faultAddr equal to the given trap, and with the "fetch" flag
  * set. The kernel will then perform a specific job, as if a function was called.
@@ -262,7 +270,9 @@ uint64_t atomic_compare_and_swap64(void *ptr, uint64_t oldval, uint64_t newval);
  * the mess amirite?
  */
 void* mapPhysMemory(uint64_t phaddr, uint64_t len);
+void* mapPhysMemoryList(uint64_t *frames, uint64_t numFrames);
 void unmapPhysMemory(void *laddr, uint64_t len);
+void unmapPhysMemoryAndGet(void *laddr, uint64_t len, uint64_t *framesOut);
 
 /**
  * Defined in sched.c. Initializes a register structure for userspace.
