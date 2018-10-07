@@ -43,6 +43,7 @@
 
 #include "sdide.h"
 #include "atapi.h"
+#include "ata.h"
 
 IDEController *ctrlFirst;
 IDEController *ctrlLast;
@@ -153,7 +154,47 @@ static void ideInit(IDEController *ctrl)
 			
 			if (type == IDE_ATA)
 			{
-				// TODO
+				SDParams sdpars;
+				sdpars.flags = 0;
+				sdpars.blockSize = 512;
+
+				uint32_t commandSets = *((uint32_t*)(identBuf + ATA_IDENT_COMMANDSETS));
+				
+				if (commandSets & ATA_CMDSET_LBA_EXT)
+				{
+					uint32_t blocks = *((uint32_t*)(identBuf + ATA_IDENT_MAX_LBA_EXT));
+					sdpars.totalSize = (uint64_t)blocks << 9;
+				}
+				else
+				{
+					// don't bother with devices that do not support 48-bit LBA
+					kprintf_debug("sdide: skipping device which does not support 48-bit LBA\n");
+					continue;
+				};
+
+				int k;
+				char model[41];
+				for (k=0; k<40; k+=2)
+				{
+					model[k] = identBuf[ATA_IDENT_MODEL + k + 1];
+					model[k + 1] = identBuf[ATA_IDENT_MODEL + k];
+				};
+				
+				model[40] = 0;
+
+				char *check = &model[39];
+				while (*check == ' ')
+				{
+					if (check == model) break;
+					*check-- = 0;
+				};
+
+				int index = ctrl->numDevs++;
+				ctrl->devs[index].type = IDE_ATA;
+				ctrl->devs[index].channel = channel;
+				ctrl->devs[index].slot = slot;
+				ctrl->devs[index].ctrl = ctrl;
+				ctrl->devs[index].sd = sdCreate(&sdpars, model, &ataOps, &ctrl->devs[index]);
 			}
 			else if (type == IDE_ATAPI)
 			{

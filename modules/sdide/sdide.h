@@ -100,6 +100,7 @@
 /* ATA registers, from I/O base */
 #define	ATA_IOREG_DATA			0x00
 #define	ATA_IOREG_FEATURES		0x01
+#define	ATA_IOREG_SECCOUNT		0x02
 #define ATA_IOREG_LBA0			0x03
 #define ATA_IOREG_LBA1			0x04
 #define ATA_IOREG_LBA2			0x05
@@ -112,6 +113,7 @@
 
 /* control bits */
 #define	ATA_CTRL_NIEN			0x02
+#define	ATA_CTRL_HOB			0x80
 
 /* command sets */
 #define	ATA_CMDSET_LBA_EXT		(1 << 26)
