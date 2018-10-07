@@ -131,7 +131,15 @@ int atapiReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *bu
 		while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
 		
 		// receive the data
-		insw(ctrl->channels[channel].base + ATA_IOREG_DATA, buffer, totalSize >> 1);
+		size_t i;
+		char *put = (char*) buffer;
+		
+		for (i=0; i<numBlocks; i++)
+		{
+			while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
+			insw(ctrl->channels[channel].base + ATA_IOREG_DATA, put, 1024);
+			put += 2048;
+		};
 		
 		// wait for it to stop being busy
 		while (!ideInts[dev->channel]);
