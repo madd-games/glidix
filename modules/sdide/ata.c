@@ -48,28 +48,47 @@ static int ataTransferBlocks(int direction, IDEDevice *dev, size_t startBlock, s
 	// wait for it to stop being busy
 	while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
 	
-	// select drive, use LBA
-	outb(ctrl->channels[channel].base + ATA_IOREG_HDDEVSEL, 0xE0 | (dev->slot << 4));
+	int lba48 = 0;
+	if (startBlock > 0x10000000) lba48 = 1;
 
-	// select starting block and count; first write high-order bytes
-	outb(dev->ctrl->channels[dev->channel].ctrl + ATA_CREG_CONTROL, ATA_CTRL_NIEN | ATA_CTRL_HOB);
-	outb(ctrl->channels[channel].base + ATA_IOREG_LBA0, (startBlock >> 24) & 0xFF);
-	outb(ctrl->channels[channel].base + ATA_IOREG_LBA1, (startBlock >> 32) & 0xFF);
-	outb(ctrl->channels[channel].base + ATA_IOREG_LBA2, (startBlock >> 40) & 0xFF);
-	outb(ctrl->channels[channel].base + ATA_IOREG_SECCOUNT, (numBlocks >> 8) & 0xFF);
-
-	// now the low-order bytes
-	outb(dev->ctrl->channels[dev->channel].ctrl + ATA_CREG_CONTROL, ATA_CTRL_NIEN);
-	outb(ctrl->channels[channel].base + ATA_IOREG_LBA0, startBlock & 0xFF);
-	outb(ctrl->channels[channel].base + ATA_IOREG_LBA1, (startBlock >> 8) & 0xFF);
-	outb(ctrl->channels[channel].base + ATA_IOREG_LBA2, (startBlock >> 16) & 0xFF);
-	outb(ctrl->channels[channel].base + ATA_IOREG_SECCOUNT, numBlocks & 0xFF);
+	if (lba48)
+	{
+		// select drive, use LBA
+		outb(ctrl->channels[channel].base + ATA_IOREG_HDDEVSEL, 0xE0 | (dev->slot << 4));
 	
+		// select starting block and count; first write high-order bytes
+		outb(dev->ctrl->channels[dev->channel].ctrl + ATA_CREG_CONTROL, ATA_CTRL_NIEN | ATA_CTRL_HOB);
+		outb(ctrl->channels[channel].base + ATA_IOREG_LBA0, (startBlock >> 24) & 0xFF);
+		outb(ctrl->channels[channel].base + ATA_IOREG_LBA1, (startBlock >> 32) & 0xFF);
+		outb(ctrl->channels[channel].base + ATA_IOREG_LBA2, (startBlock >> 40) & 0xFF);
+		outb(ctrl->channels[channel].base + ATA_IOREG_SECCOUNT, (numBlocks >> 8) & 0xFF);
+
+		// now the low-order bytes
+		outb(dev->ctrl->channels[dev->channel].ctrl + ATA_CREG_CONTROL, ATA_CTRL_NIEN);
+		outb(ctrl->channels[channel].base + ATA_IOREG_LBA0, startBlock & 0xFF);
+		outb(ctrl->channels[channel].base + ATA_IOREG_LBA1, (startBlock >> 8) & 0xFF);
+		outb(ctrl->channels[channel].base + ATA_IOREG_LBA2, (startBlock >> 16) & 0xFF);
+		outb(ctrl->channels[channel].base + ATA_IOREG_SECCOUNT, numBlocks & 0xFF);
+	}
+	else
+	{
+		// select drive, use LBA
+		uint8_t head = (startBlock & 0xF000000) >> 24;
+		outb(ctrl->channels[channel].base + ATA_IOREG_HDDEVSEL, 0xE0 | (dev->slot << 4) | head);
+		
+		// select starting block and count
+		outb(ctrl->channels[channel].base + ATA_IOREG_LBA0, startBlock & 0xFF);
+		outb(ctrl->channels[channel].base + ATA_IOREG_LBA1, (startBlock >> 8) & 0xFF);
+		outb(ctrl->channels[channel].base + ATA_IOREG_LBA2, (startBlock >> 16) & 0xFF);
+		outb(ctrl->channels[channel].base + ATA_IOREG_SECCOUNT, numBlocks & 0xFF);
+	};
 	
 	// send the appropriate command
 	uint8_t cmd;
-	if (direction == ATA_READ) cmd = ATA_CMD_READ_PIO_EXT;
-	else cmd = ATA_CMD_WRITE_PIO_EXT;
+	if (direction == ATA_READ && lba48) cmd = ATA_CMD_READ_PIO_EXT;
+	else if (direction == ATA_WRITE && lba48) cmd = ATA_CMD_WRITE_PIO_EXT;
+	else if (direction == ATA_READ) cmd = ATA_CMD_READ_PIO;
+	else cmd = ATA_CMD_WRITE_PIO;
 	outb(ctrl->channels[channel].base + ATA_IOREG_COMMAND, cmd);
 	
 	// wait for it to stop being busy

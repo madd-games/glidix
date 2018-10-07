@@ -184,9 +184,8 @@ static void ideInit(IDEController *ctrl)
 				}
 				else
 				{
-					// don't bother with devices that do not support 48-bit LBA
-					kprintf_debug("sdide: skipping device which does not support 48-bit LBA\n");
-					continue;
+					uint32_t blocks = *((uint32_t*)(identBuf + ATA_IDENT_MAX_LBA));
+					sdpars.totalSize = (uint64_t)blocks << 9;
 				};
 
 				int index = ctrl->numDevs++;
