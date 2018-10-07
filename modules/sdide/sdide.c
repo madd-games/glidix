@@ -151,7 +151,24 @@ static void ideInit(IDEController *ctrl)
 			{
 				*put++ = ind(ctrl->channels[channel].base + ATA_IOREG_DATA);
 			};
+
+			int k;
+			char model[41];
+			for (k=0; k<40; k+=2)
+			{
+				model[k] = identBuf[ATA_IDENT_MODEL + k + 1];
+				model[k + 1] = identBuf[ATA_IDENT_MODEL + k];
+			};
 			
+			model[40] = 0;
+
+			char *check = &model[39];
+			while (*check == ' ')
+			{
+				if (check == model) break;
+				*check-- = 0;
+			};
+
 			if (type == IDE_ATA)
 			{
 				SDParams sdpars;
@@ -170,23 +187,6 @@ static void ideInit(IDEController *ctrl)
 					// don't bother with devices that do not support 48-bit LBA
 					kprintf_debug("sdide: skipping device which does not support 48-bit LBA\n");
 					continue;
-				};
-
-				int k;
-				char model[41];
-				for (k=0; k<40; k+=2)
-				{
-					model[k] = identBuf[ATA_IDENT_MODEL + k + 1];
-					model[k + 1] = identBuf[ATA_IDENT_MODEL + k];
-				};
-				
-				model[40] = 0;
-
-				char *check = &model[39];
-				while (*check == ' ')
-				{
-					if (check == model) break;
-					*check-- = 0;
 				};
 
 				int index = ctrl->numDevs++;
@@ -209,7 +209,7 @@ static void ideInit(IDEController *ctrl)
 				ctrl->devs[index].channel = channel;
 				ctrl->devs[index].slot = slot;
 				ctrl->devs[index].ctrl = ctrl;
-				ctrl->devs[index].sd = sdCreate(&sdpars, "IDE ATAPI UNKNOWN", &atapiOps, &ctrl->devs[index]);
+				ctrl->devs[index].sd = sdCreate(&sdpars, model, &atapiOps, &ctrl->devs[index]);
 			};
 		};
 	};

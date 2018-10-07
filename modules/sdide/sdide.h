@@ -71,6 +71,7 @@
 /* ATAPI commands */
 #define ATAPI_CMD_READ			0xA8
 #define ATAPI_CMD_EJECT			0x1B
+#define	ATAPI_CMD_READ_CAPACITY		0x25
 
 /* identification packet */
 #define ATA_IDENT_DEVICETYPE		0
