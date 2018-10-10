@@ -37,6 +37,10 @@
 #include <glidix/hw/pagetab.h>
 #include <glidix/fs/ftree.h>
 
+uint64_t phmTotalFrames;
+uint64_t phmUsedFrames;
+uint64_t phmCachedFrames;
+
 /**
  * The next frame to return if we are allocating using placement. This is done before
  * we can allocate the frame bitmap on the heap.
@@ -215,6 +219,7 @@ static uint64_t phmAllocSingle()
 		{
 			if (phmTryFrame(i) == 0)
 			{
+				__sync_fetch_and_add(&phmUsedFrames, 1);
 				return i;
 			};
 		};
@@ -262,6 +267,7 @@ static uint64_t phmAlloc8()
 			if (atomic_compare_and_swap8(&bitmap8[i], 0, 0xFF) == 0)
 			{
 				// just claimed the 8 frames at this location
+				__sync_fetch_and_add(&phmUsedFrames, 8);
 				return i << 3;
 			};
 		};
@@ -291,6 +297,7 @@ static uint64_t phmAlloc16()
 			if (atomic_compare_and_swap16(&bitmap16[i], 0, 0xFFFF) == 0)
 			{
 				// just claimed the 16 frames at this location
+				__sync_fetch_and_add(&phmUsedFrames, 16);
 				return i << 4;
 			};
 		};
@@ -317,6 +324,7 @@ static uint64_t phmAlloc32()
 			if (atomic_compare_and_swap32(&bitmap32[i], 0, 0xFFFFFFFF) == 0)
 			{
 				// just claimed the 32 frames at this location
+				__sync_fetch_and_add(&phmUsedFrames, 32);
 				return i << 5;
 			};
 		};
@@ -343,6 +351,7 @@ static uint64_t phmAlloc64()
 			if (atomic_compare_and_swap64(&bitmap64[i], 0, 0xFFFFFFFFFFFFFFFF) == 0)
 			{
 				// just claimed the 64 frames at this location
+				__sync_fetch_and_add(&phmUsedFrames, 64);
 				return i << 6;
 			};
 		};
@@ -364,6 +373,8 @@ void initPhysMem2()
 	// ranges. This way, phmAllocFrame() will never return memory holes.
 	memset(frameBitmap, 0xFF, numSystemFrames/8+1);
 	
+	phmTotalFrames = 0;
+	
 	MultibootMemoryMap *mmap = memoryMapStart;
 	while ((uint64_t) mmap < memoryMapEnd)
 	{
@@ -378,6 +389,7 @@ void initPhysMem2()
 				if (i >= placementFrame)
 				{
 					phmClearFrame(i);
+					phmTotalFrames++;
 				};
 			};
 		};
@@ -394,6 +406,8 @@ void initPhysMem2()
 			break;
 		};
 	};
+	
+	phmUsedFrames = 0;
 };
 
 static void loadNextMemory()
@@ -500,5 +514,6 @@ uint64_t phmAllocFrameEx(uint64_t count, int flags)
 void phmFreeFrame(uint64_t frame)
 {
 	if (frame == 0) panic("attempted to free a null frame!");
+	__sync_fetch_and_add(&phmUsedFrames, -1);
 	phmClearFrame(frame);
 };

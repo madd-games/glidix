@@ -311,6 +311,7 @@ static ssize_t sdRead(StorageDevice *sd, uint64_t pos, void *buf, size_t size)
 				};
 			};
 			
+			
 			void *vptr = mapPhysMemoryList(frames, 8);
 			int status = sd->ops->readBlocks(sd->drvdata, (pos & ~0x7FFFUL) / sd->blockSize,
 								SD_TRACK_SIZE / sd->blockSize,
@@ -331,6 +332,8 @@ static ssize_t sdRead(StorageDevice *sd, uint64_t pos, void *buf, size_t size)
 				return sizeRead;
 			};
 			
+			__sync_fetch_and_add(&phmCachedFrames, 8);
+		
 			node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56) | SD_BLOCK_DIRTY;
 			trackAddr = (uint64_t) vptr;
 		}
@@ -459,6 +462,8 @@ static ssize_t sdWrite(StorageDevice *sd, uint64_t pos, const void *buf, size_t 
 				
 				return sizeWritten;
 			};
+			
+			__sync_fetch_and_add(&phmCachedFrames, 8);
 			
 			node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56) | SD_BLOCK_DIRTY;
 			trackAddr = (uint64_t) vptr;
@@ -1123,6 +1128,8 @@ static uint64_t sdTryFree(StorageDevice *sd, BlockTreeNode *node, int level, uin
 			{
 				phmFreeFrame(frames[k]);
 			};
+			
+			__sync_fetch_and_add(&phmCachedFrames, -8);
 			
 			return frames[0];
 		}

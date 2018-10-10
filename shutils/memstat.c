@@ -1,5 +1,6 @@
 /*
-	Glidix Runtime
+	Glidix Shell Utilities
+
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
 	
@@ -25,20 +26,47 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __SYS_SYSTAT_H
-#define __SYS_SYSTAT_H
+#include <stdio.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/glidix.h>
+#include <sys/fsinfo.h>
+#include <sys/mman.h>
+#include <sys/call.h>
+#include <sys/systat.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <time.h>
+#include <errno.h>
+#include <sys/mount.h>
+#include <sys/statvfs.h>
+#include <sys/module.h>
 
-#include <inttypes.h>
-
-/**
- * The structure filled in by sys_systat().
- */
-struct system_state
+void printFrames(const char *label, size_t frames)
 {
-	uint8_t				sst_bootid[16];		/* boot ID */
-	uint64_t			sst_frames_total;	/* total number of physical memory frames */
-	uint64_t			sst_frames_used;	/* number on frames in application use */
-	uint64_t			sst_frames_cached;	/* number of cached frames */
+	printf("%-40s %-20lu %-10lu MB\n", label, frames, frames/256);
 };
 
-#endif
+int main(int argc, char *argv[])
+{
+	struct system_state sst;
+	if (__syscall(__SYS_systat, &sst, sizeof(struct system_state)) != 0)
+	{
+		fprintf(stderr, "%s: failed to get system state: %s\n", argv[0], strerror(errno));
+		return 1;
+	};
+	
+	printf("%-40s %-20s %-10s\n", "TYPE", "FRAMES", "SIZE");
+	printFrames("Total memory:", sst.sst_frames_total);
+	printFrames("Memory in use:", sst.sst_frames_used - sst.sst_frames_cached);
+	printFrames("Cache memory:", sst.sst_frames_cached);
+	printFrames("Available memory:", sst.sst_frames_total - sst.sst_frames_used + sst.sst_frames_cached);
+	printFrames("Unallocated memory:", sst.sst_frames_total - sst.sst_frames_used);
+	
+	return 0;
+};

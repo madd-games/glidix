@@ -170,6 +170,9 @@ typedef struct
 typedef struct
 {
 	uint8_t				sst_bootid[16];
+	uint64_t			sst_frames_total;
+	uint64_t			sst_frames_used;
+	uint64_t			sst_frames_cached;
 } SystemState;
 
 typedef struct
