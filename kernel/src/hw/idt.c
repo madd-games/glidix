@@ -231,6 +231,7 @@ void initIDT()
 	
 	// set up IST for some
 	setGateIST(I_NMI, 1);
+	setGateIST(I_DOUBLE, 1);
 	
 	// PIC IRQs to be ignored
 	int i;
@@ -429,6 +430,9 @@ void isrHandler(Regs *regs)
 		break;
 	case I_DIV_ZERO:
 		sendCPUErrorSignal(regs, SIGFPE, FPE_INTDIV, (void*) regs->rip);
+		break;
+	case I_DOUBLE_FAULT:
+		panic("double fault");
 		break;
 	case I_NMI:
 		if (panicking)
