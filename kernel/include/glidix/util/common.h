@@ -209,6 +209,7 @@ typedef enum
 extern KernelStatus kernelStatus;
 
 extern KernelBootInfo *bootInfo;
+extern int kernelDead;
 
 uint64_t	getFlagsRegister();
 void		setFlagsRegister(uint64_t flags);

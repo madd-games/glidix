@@ -431,10 +431,11 @@ void isrHandler(Regs *regs)
 	case I_DIV_ZERO:
 		sendCPUErrorSignal(regs, SIGFPE, FPE_INTDIV, (void*) regs->rip);
 		break;
-	case I_DOUBLE_FAULT:
+	case I_DOUBLE:
 		panic("double fault");
 		break;
 	case I_NMI:
+		kernelDead = 1;
 		if (panicking)
 		{
 			while (1)
