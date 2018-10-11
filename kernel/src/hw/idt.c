@@ -137,6 +137,11 @@ static void setGate(int index, void *isr)
 	idt[index].reserved = 0;
 };
 
+static void setGateIST(int index, int ist)
+{
+	idt[index].reservedIst = ist;
+};
+
 void initIDT()
 {
 	// remap PIC interrups to the 0x80-0x8F range, so that we can ignore
@@ -223,6 +228,9 @@ void initIDT()
 	setGate(65, isr65);
 	setGate(0x70, isr112);
 	setGate(0x71, isr113);
+	
+	// set up IST for some
+	setGateIST(I_NMI, 1);
 	
 	// PIC IRQs to be ignored
 	int i;

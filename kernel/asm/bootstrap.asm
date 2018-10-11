@@ -96,11 +96,17 @@ _tss_limit:
 [extern localGDTPtr]
 _tss_reload_access:
 	mov al,		11101001b
-	;mov rdi,	qword GDT64.TSS_Access
 	mov rdi,	qword localGDTPtr
 	mov rdi,	[rdi]
 	add rdi,	0x35
 	stosb
+	ret
+
+[global initTR]
+initTR:
+	; initialize the task register for IST stuff
+	mov ax,		0x33
+	ltr ax
 	ret
 
 [global tssPrepare]

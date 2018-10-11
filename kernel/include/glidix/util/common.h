@@ -179,6 +179,9 @@ typedef struct
 {
 	uint32_t ignore;
 	uint64_t rsp0;
+	uint64_t rsp1;			/* unused */
+	uint64_t rsp2;			/* unused */
+	uint64_t ist[8];		/* entry 0 reserved */
 } PACKED TSS;
 
 #ifndef _SYS_TYPES_H

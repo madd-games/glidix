@@ -267,6 +267,10 @@ extern TSS _tss;
 extern PER_CPU TSS* localTSSPtr;
 extern char GDT64;
 extern PER_CPU char* localGDTPtr;
+extern void initTR();
+
+#define	NMI_STACK_SIZE			0x4000
+char nmiStack[NMI_STACK_SIZE];
 
 #define	PLACEMENT_HEAP_SIZE		(1 * 1024 * 1024)
 
@@ -296,6 +300,10 @@ void kmain(KernelBootInfo *info)
 	{
 		panic("the boot ID has not been passed by the bootloader");
 	};
+	
+	tssPrepare();
+	_tss.ist[1] = (uint64_t) (nmiStack + NMI_STACK_SIZE - 16);
+	initTR();
 	
 	kprintf("Initializing the IDT... ");
 	initIDT();
