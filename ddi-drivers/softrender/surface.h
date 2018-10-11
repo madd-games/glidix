@@ -56,4 +56,9 @@ void srOverlay(void *drvctx, DDISurface *src, int srcX, int srcY, DDISurface *de
  */
 void srRect(void *drvctx, DDISurface *surf, int x, int y, int width, int height, DDIColor *color);
 
+/**
+ * Delete a surface. Implements ddiDriver->delsurf().
+ */
+void srDeleteSurface(void *drvctx, DDISurface *surf);
+
 #endif

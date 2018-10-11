@@ -318,6 +318,11 @@ typedef struct
 	 * Return 0 (aka GL_NO_ERROR) on success, or an OpenGL error number on error.
 	 */
 	int (*initgl)(void *drvctx, DDIPixelFormat *format, struct __ddigl_params *params, struct __ddigl_ctx *glctx);
+	
+	/**
+	 * Called just before the specified surface is deleted.
+	 */
+	void (*delsurf)(void *drvctx, DDISurface *surf);
 } DDIDriver;
 extern DDIDriver* ddiDriver;
 extern void *ddiDrvCtx;

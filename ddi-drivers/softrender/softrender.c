@@ -52,5 +52,6 @@ DDIDriver ddidrv_softrender = {
 	.blit = srBlit,
 	.overlay = srOverlay,
 	.rect = srRect,
-	.initgl = srInitGL
+	.initgl = srInitGL,
+	.delsurf = srDeleteSurface,
 };

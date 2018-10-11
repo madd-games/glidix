@@ -374,7 +374,7 @@ DDISurface* ddiOpenSurface(uint32_t id)
 
 void ddiDeleteSurface(DDISurface *surface)
 {
-	munmap(surface->data, ddiGetSurfaceDataSize(surface));
+	if (ddiDriver->delsurf != NULL) ddiDriver->delsurf(ddiDrvCtx, surface);
 	free(surface);
 };
 
