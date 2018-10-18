@@ -223,6 +223,120 @@ static void sdfile_close(Inode *inode, void *filedata)
 	kfree(handle);
 };
 
+/**
+ * Return a pointer to the specified cache track. If 'make' is 0, and the track does not exist,
+ * NULL is returned (if 'make' is 1, the track is read from disk on a cache miss). If 'dirty' is
+ * 1, the track is marked dirty. Call this ONLY while the cacheLock is locked.
+ *
+ * NULL can also be returned on error, in whcih case *error is set to the errno.
+ *
+ * If 'make' is zero and the track was not found, NULL is returned, and *error set to EAGAIN.
+ */
+static void* sdGetCache(StorageDevice *sd, uint64_t pos, int make, int dirty, int *error)
+{
+	uint64_t i;
+	BlockTreeNode *node = &sd->cacheTop;
+	for (i=0; i<6; i++)
+	{
+		uint64_t sub = (pos >> (15 + 7 * (6 - i))) & 0x7F;
+		uint64_t entry = node->entries[sub];
+		
+		if (entry == 0)
+		{
+			if (!make)
+			{
+				*error = EAGAIN;
+				return NULL;
+			};
+			
+			getCurrentThread()->sdMissNow = 1;
+			BlockTreeNode *nextNode = NEW(BlockTreeNode);
+			memset(nextNode, 0, sizeof(BlockTreeNode));
+			getCurrentThread()->sdMissNow = 0;
+			
+			// bottom 48 bits of address, set usage counter to 1, dirty if needed
+			node->entries[sub] = ((uint64_t) nextNode & 0xFFFFFFFFFFFF) | (1UL << 56);
+			if (dirty) node->entries[sub] |= SD_BLOCK_DIRTY;
+			
+			node = nextNode;
+		}
+		else
+		{
+			// increment usage counter
+			uint64_t ucnt = entry >> 56;
+			if (ucnt != 255)
+			{
+				node->entries[sub] += (1UL << 56);
+			};
+			if (dirty) node->entries[sub] |= SD_BLOCK_DIRTY;
+			
+			// get canonical address
+			uint64_t canaddr = (node->entries[sub] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+			
+			// follow
+			node = (BlockTreeNode*) canaddr;
+		};
+	};
+	
+	uint64_t track = (pos >> 15) & 0x7F;
+	uint64_t trackAddr;
+	if (node->entries[track] == 0)
+	{
+		if (!make)
+		{
+			*error = EAGAIN;
+			return NULL;
+		};
+		
+		getCurrentThread()->sdMissNow = 1;
+		uint64_t frames[8];
+		int k;
+		for (k=0; k<8; k++)
+		{
+			frames[k] = phmAllocFrame();
+			if (frames[k] == 0)
+			{
+				int l;
+				for (l=0; l<k; l++)
+				{
+					phmFreeFrame(frames[l]);
+				};
+				
+				getCurrentThread()->sdMissNow = 0;
+				*error = ENOMEM;
+				return NULL;
+			};
+		};
+		
+		void *vptr = mapPhysMemoryList(frames, 8);
+		getCurrentThread()->sdMissNow = 0;
+		int status = sd->ops->readBlocks(sd->drvdata, (pos & ~0x7FFFUL) / sd->blockSize,
+							SD_TRACK_SIZE / sd->blockSize,
+							vptr);
+		if (status != 0)
+		{
+			unmapPhysMemory(vptr, 0x8000);
+			for (k=0; k<8; k++) phmFreeFrame(frames[k]);
+			
+			*error = status;
+			return NULL;
+		};
+		
+		__sync_fetch_and_add(&phmCachedFrames, 8);
+		
+		node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56);
+		if (dirty) node->entries[track] |= SD_BLOCK_DIRTY;
+		trackAddr = (uint64_t) vptr;
+	}
+	else
+	{
+		trackAddr = (node->entries[track] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
+		if (dirty) node->entries[track] |= SD_BLOCK_DIRTY;
+	};
+	
+	return (void*) trackAddr;
+};
+
 static ssize_t sdRead(StorageDevice *sd, uint64_t pos, void *buf, size_t size)
 {
 	if (sd->flags & SD_HANGUP)
@@ -247,99 +361,36 @@ static ssize_t sdRead(StorageDevice *sd, uint64_t pos, void *buf, size_t size)
 		// see if this page is in the cache; otherwise load it
 		mutexLock(&sd->cacheLock);
 		
-		uint64_t i;
-		BlockTreeNode *node = &sd->cacheTop;
-		for (i=0; i<6; i++)
+		int error;
+		uint64_t trackAddr = (uint64_t) sdGetCache(sd, pos, !getCurrentThread()->allocFromCacheNow, 0, &error);
+		if (trackAddr == 0)
 		{
-			uint64_t sub = (pos >> (15 + 7 * (6 - i))) & 0x7F;
-			uint64_t entry = node->entries[sub];
-			
-			if (entry == 0)
+			int fixed = 0;
+			if (error == EAGAIN || error == ENOMEM)
 			{
-				BlockTreeNode *nextNode = NEW(BlockTreeNode);
-				memset(nextNode, 0, sizeof(BlockTreeNode));
+				// cache miss but allocations banned
+				char tmp[SD_TRACK_SIZE];
+				int status = sd->ops->readBlocks(sd->drvdata, (pos & ~0x7FFFUL) / sd->blockSize,
+									SD_TRACK_SIZE / sd->blockSize,
+									tmp);
+				if (status == 0) fixed = 1;
+				else error = status;
 				
-				// bottom 48 bits of address, set usage counter to 1, not dirty
-				node->entries[sub] = ((uint64_t) nextNode & 0xFFFFFFFFFFFF) | (1UL << 56);
-				
-				node = nextNode;
-			}
-			else
-			{
-				// increment usage counter
-				uint64_t ucnt = entry >> 56;
-				if (ucnt != 255)
-				{
-					node->entries[sub] += (1UL << 56);
-				};
-				
-				// get canonical address
-				uint64_t canaddr = (node->entries[sub] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
-				
-				// follow
-				node = (BlockTreeNode*) canaddr;
-			};
-		};
-		
-		// see if an entry exists for this track
-		uint64_t track = (pos >> 15) & 0x7F;
-		uint64_t trackAddr;
-		if (node->entries[track] == 0)
-		{
-			uint64_t frames[8];
-			int k;
-			for (k=0; k<8; k++)
-			{
-				frames[k] = phmAllocFrame();
-				if (frames[k] == 0)
-				{
-					int l;
-					for (l=0; l<k; l++)
-					{
-						phmFreeFrame(frames[l]);
-					};
-					
-					mutexUnlock(&sd->cacheLock);
-					
-					if (sizeRead == 0)
-					{
-						ERRNO = ENOMEM;
-						return -1;
-					};
-					
-					return sizeRead;
-				};
+				trackAddr = (uint64_t) tmp;
 			};
 			
-			
-			void *vptr = mapPhysMemoryList(frames, 8);
-			int status = sd->ops->readBlocks(sd->drvdata, (pos & ~0x7FFFUL) / sd->blockSize,
-								SD_TRACK_SIZE / sd->blockSize,
-								vptr);
-			if (status != 0)
-			{
-				unmapPhysMemory(vptr, 0x8000);
-				for (k=0; k<8; k++) phmFreeFrame(frames[k]);
-				
+			if (!fixed)
+			{	
 				mutexUnlock(&sd->cacheLock);
 				
 				if (sizeRead == 0)
 				{
-					ERRNO = status;
+					ERRNO = error;
 					return -1;
 				};
 				
 				return sizeRead;
 			};
-			
-			__sync_fetch_and_add(&phmCachedFrames, 8);
-		
-			node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56) | SD_BLOCK_DIRTY;
-			trackAddr = (uint64_t) vptr;
-		}
-		else
-		{
-			trackAddr = (node->entries[track] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
 		};
 		
 		memcpy(put, (void*)(trackAddr + offsetIntoPage), toRead);
@@ -378,107 +429,54 @@ static ssize_t sdWrite(StorageDevice *sd, uint64_t pos, const void *buf, size_t 
 		// see if this page is in the cache; otherwise load it
 		mutexLock(&sd->cacheLock);
 		
-		uint64_t i;
-		BlockTreeNode *node = &sd->cacheTop;
-		for (i=0; i<6; i++)
+		int immediateFlush = 0;
+		int error;
+		uint64_t trackAddr = (uint64_t) sdGetCache(sd, pos, !getCurrentThread()->allocFromCacheNow, 1, &error);
+		if (trackAddr == 0)
 		{
-			uint64_t sub = (pos >> (15 + 7 * (6 - i))) & 0x7F;
-			uint64_t entry = node->entries[sub];
-			
-			if (entry == 0)
+			int fixed = 0;
+			if (error == EAGAIN || error == ENOMEM)
 			{
-				BlockTreeNode *nextNode = NEW(BlockTreeNode);
-				memset(nextNode, 0, sizeof(BlockTreeNode));
+				// cache miss but allocations banned
+				char tmp[SD_TRACK_SIZE];
+				int status = sd->ops->readBlocks(sd->drvdata, (pos & ~0x7FFFUL) / sd->blockSize,
+									SD_TRACK_SIZE / sd->blockSize,
+									tmp);
+				if (status == 0) fixed = 1;
+				else error = status;
 				
-				// bottom 48 bits of address, set usage counter to 1, not dirty
-				node->entries[sub] = ((uint64_t) nextNode & 0xFFFFFFFFFFFF) | (1UL << 56) | SD_BLOCK_DIRTY;
-				
-				node = nextNode;
-			}
-			else
-			{
-				// increment usage counter
-				uint64_t ucnt = entry >> 56;
-				if (ucnt != 255)
-				{
-					node->entries[sub] += (1UL << 56);
-				};
-				node->entries[sub] |= SD_BLOCK_DIRTY;
-				
-				// get canonical address
-				uint64_t canaddr = (node->entries[sub] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
-				
-				// follow
-				node = (BlockTreeNode*) canaddr;
-			};
-		};
-		
-		// see if an entry exists for this track
-		uint64_t track = (pos >> 15) & 0x7F;
-		uint64_t trackAddr;
-		if (node->entries[track] == 0)
-		{
-			uint64_t frames[8];
-			int k;
-			for (k=0; k<8; k++)
-			{
-				frames[k] = phmAllocFrame();
-				if (frames[k] == 0)
-				{
-					int l;
-					for (l=0; l<k; l++)
-					{
-						phmFreeFrame(frames[l]);
-					};
-					
-					mutexUnlock(&sd->cacheLock);
-					
-					if (sizeWritten == 0)
-					{
-						ERRNO = ENOMEM;
-						return -1;
-					};
-					
-					return sizeWritten;
-				};
+				trackAddr = (uint64_t) tmp;
+				immediateFlush = 1;
 			};
 			
-			void *vptr = mapPhysMemoryList(frames, 8);
-			int status = sd->ops->readBlocks(sd->drvdata, (pos & ~0x7FFFUL) / sd->blockSize,
-								SD_TRACK_SIZE / sd->blockSize,
-								vptr);
-			if (status != 0)
-			{
-				unmapPhysMemory(vptr, 0x8000);
-				for (k=0; k<8; k++) phmFreeFrame(frames[k]);
-				
+			if (!fixed)
+			{	
 				mutexUnlock(&sd->cacheLock);
 				
 				if (sizeWritten == 0)
 				{
-					ERRNO = status;
+					ERRNO = error;
 					return -1;
 				};
 				
 				return sizeWritten;
 			};
-			
-			__sync_fetch_and_add(&phmCachedFrames, 8);
-			
-			node->entries[track] = ((uint64_t) vptr & 0xFFFFFFFFFFFF) | (1UL << 56) | SD_BLOCK_DIRTY;
-			trackAddr = (uint64_t) vptr;
-		}
-		else
-		{
-			trackAddr = (node->entries[track] & 0xFFFFFFFFFFFF) | 0xFFFF800000000000;
-			node->entries[track] |= SD_BLOCK_DIRTY;
 		};
+		
+		size_t orgpos = pos;
 		
 		memcpy((void*)(trackAddr + offsetIntoPage), scan, toWrite);
 		scan += toWrite;
 		sizeWritten += toWrite;
 		pos += toWrite;
 		size -= toWrite;
+		
+		if (immediateFlush)
+		{
+			sd->ops->readBlocks(sd->drvdata, (orgpos & ~0x7FFFUL) / sd->blockSize,
+						SD_TRACK_SIZE / sd->blockSize,
+						(void*)trackAddr);
+		};
 		
 		mutexUnlock(&sd->cacheLock);
 	};

@@ -139,36 +139,35 @@ static int phmTryFrame(uint64_t frame)
 
 static uint64_t frameFromCache()
 {
+	getCurrentThread()->allocFromCacheNow = 1;
+	
 	uint64_t frame = ftGetFreePage();
 	if (frame == 0)
 	{
 		frame = sdFreeMemory();
-		if (frame == 0)
-		{
-			return 0;
-		}
-		else
-		{
-			return frame;
-		};
 	};
 	
+	getCurrentThread()->allocFromCacheNow = 0;
 	return frame;
 };
 
 static int tryFreeMemory()
 {
+	getCurrentThread()->allocFromCacheNow = 1;
+	
 	uint64_t frame = ftGetFreePage();
 	if (frame == 0)
 	{
 		frame = sdFreeMemory();
 		if (frame == 0)
 		{
+			getCurrentThread()->allocFromCacheNow = 0;
 			return -1;
 		};
 	};
 	
 	phmFreeFrame(frame);
+	getCurrentThread()->allocFromCacheNow = 0;
 	return 0;
 };
 

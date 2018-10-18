@@ -497,6 +497,17 @@ typedef struct _Thread
 	 */
 	struct _Thread			*prev;
 	struct _Thread			*next;
+
+	/**
+	 * Whether or not this thread is currently called frameFromCache(). See physmem.c.
+	 */
+	int				allocFromCacheNow;
+	
+	/**
+	 * Whether or not this thread is performing an SD cache miss. In this case it is not allowed
+	 * to allocate from the file cache.
+	 */
+	int				sdMissNow;
 } Thread;
 
 typedef struct

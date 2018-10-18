@@ -514,6 +514,8 @@ static uint64_t tryFreeFrame(FileTree *ft, int level, FileNode *node, uint64_t b
 static int currentlyInFreePage = 0;
 uint64_t ftGetFreePage()
 {
+	if (getCurrentThread()->sdMissNow) return 0;
+	
 	mutexLock(&ftMtx);
 	
 	if (currentlyInFreePage)
