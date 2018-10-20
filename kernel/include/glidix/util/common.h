@@ -66,7 +66,7 @@
 /**
  * Virtual address (pointer) to physical frame number.
  */
-#define	VIRT_TO_FRAME(ptr)	(((PTe*)((((uint64_t)ptr) >> 9) | 0xFFFFFF8000000000))->framePhysAddr)
+#define	VIRT_TO_FRAME(ptr)	(((PTe*)(((((uint64_t)ptr) >> 9) & (~(0x7UL))) | 0xFFFFFF8000000000UL))->framePhysAddr)
 
 /**
  * Virtual address (pointer) to its describing PDPT, PD, PT and PTE.
@@ -90,6 +90,11 @@
  * set. The kernel will then perform a specific job, as if a function was called.
  */
 #define	TRAP_SIGRET			0xFFFFFFFFFFFF0000
+
+/**
+ * Page size.
+ */
+#define	PAGE_SIZE			0x1000
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
