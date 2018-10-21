@@ -26,6 +26,8 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// TODO: ensure 64-bit addressing is supported
+
 #include <glidix/module/module.h>
 #include <glidix/display/console.h>
 #include <glidix/thread/sched.h>
@@ -40,13 +42,143 @@
 #include <glidix/hw/dma.h>
 
 #include "sdahci.h"
+#include "ata.h"
+#include "atapi.h"
+
+static AHCIController *firstCtrl;
+static AHCIController *lastCtrl;
+static int numCtrlFound;
+
+void ahciStopCmd(volatile AHCIPort *port)
+{
+	port->cmd &= ~CMD_ST;
+	port->cmd &= ~CMD_FRE;
+	while ((port->cmd & CMD_FR) || (port->cmd & CMD_CR));
+};
+
+void ahciStartCmd(volatile AHCIPort *port)
+{
+	while (port->cmd & CMD_CR);
+	port->cmd |= CMD_FRE;
+	port->cmd |= CMD_ST;
+};
+
+static void ahciInit(AHCIController *ctrl)
+{
+	// map MMIO regs
+	ctrl->regs = mapPhysMemory((uint64_t) (ctrl->pcidev->bar[5] & ~0xF), sizeof(AHCIMemoryRegs));
+	
+	// take ownership of the device from firmware
+	ctrl->regs->bohc |= BOHC_OOS;
+	while (ctrl->regs->bohc & BOHC_BOS);
+	
+	// make sure bus mastering is enabled and perform port initialization
+	pciSetBusMastering(ctrl->pcidev, 1);
+	ctrl->numAtaDevices = 0;
+	
+	int i;
+	for (i=0; i<32; i++)
+	{
+		if (ctrl->regs->pi & (1 << i))
+		{
+			uint32_t ssts = ctrl->regs->ports[i].ssts;
+			
+			uint8_t ipm = (ssts >> 8) & 0x0F;
+			uint8_t det = ssts & 0x0F;
+			
+			if (det != SSTS_DET_OK)
+			{
+				continue;
+			};
+			
+			if (ipm != SSTS_IPM_ACTIVE)
+			{
+				continue;
+			};
+			
+			uint32_t sig = ctrl->regs->ports[i].sig;
+			if (sig == AHCI_SIG_ATA)
+			{
+				kprintf("sdahci: detected ATA drive on port %d\n", i);
+				ataInit(ctrl, i);
+			}
+			else if (sig == AHCI_SIG_ATAPI)
+			{
+				kprintf("sdahci: detected ATAPI drive on port %d\n", i);
+				atapiInit(ctrl, i);
+			}
+			else
+			{
+				kprintf("sdahci: unknown device: signature 0x%08X (port %d)\n", sig, i);
+			};
+		};
+	};
+};
+
+static int ahciEnumerator(PCIDevice *dev, void *ignore)
+{
+	if (dev->type == 0x0106)
+	{
+		strcpy(dev->deviceName, "AHCI Controller");
+		
+		AHCIController *ctrl = NEW(AHCIController);
+		ctrl->next = NULL;
+		ctrl->pcidev = dev;
+		
+		if (lastCtrl == NULL)
+		{
+			firstCtrl = lastCtrl = ctrl;
+		}
+		else
+		{
+			lastCtrl->next = ctrl;
+			lastCtrl = ctrl;
+		};
+		
+		numCtrlFound++;
+		return 1;
+	};
+	
+	return 0;
+};
 
 MODULE_INIT()
 {
+	pciEnumDevices(THIS_MODULE, ahciEnumerator, NULL);
+	
+	kprintf("sdahci: found %d controllers, initializing\n", numCtrlFound);
+	AHCIController *ctrl;
+	for (ctrl=firstCtrl; ctrl!=NULL; ctrl=ctrl->next)
+	{
+		ahciInit(ctrl);
+	};
+	
 	return MODINIT_OK;
 };
 
 MODULE_FINI()
 {
+	kprintf("sdahci: removing controllers\n");
+	
+	AHCIController *ctrl;
+	while (firstCtrl != NULL)
+	{
+		ctrl = firstCtrl;
+		firstCtrl = ctrl->next;
+		
+		int i;
+		for (i=0; i<ctrl->numAtaDevices; i++)
+		{
+			if (ctrl->ataDevices[i]->sd != NULL) sdHangup(ctrl->ataDevices[i]->sd);
+			ahciStopCmd(ctrl->ataDevices[i]->port);
+			dmaReleaseBuffer(&ctrl->ataDevices[i]->dmabuf);
+		};
+		
+		unmapPhysMemory(ctrl->regs, sizeof(AHCIMemoryRegs));
+		pciSetBusMastering(ctrl->pcidev, 0);
+		pciReleaseDevice(ctrl->pcidev);
+		kfree(ctrl);
+	};
+	
 	return 0;
 };
