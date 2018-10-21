@@ -47,6 +47,7 @@
 
 IDEController *ctrlFirst;
 IDEController *ctrlLast;
+int numCtrlFound;
 
 /**
  * Interrupt flags.
@@ -237,6 +238,7 @@ static int ideEnumerator(PCIDevice *dev, void *param)
 			ctrlLast = ctrl;
 		};
 		
+		numCtrlFound++;
 		return 1;
 	};
 	
@@ -251,6 +253,7 @@ MODULE_INIT(const char *opt)
 	ctrlFirst = ctrlLast = NULL;
 	kprintf("sdide: detecting IDE controllers\n");
 	pciEnumDevices(THIS_MODULE, ideEnumerator, NULL);
+	kprintf("sdide: found %d controllers\n", numCtrlFound);
 	if (ctrlFirst == NULL) return MODINIT_CANCEL;
 	
 	IDEController *ctrl;
