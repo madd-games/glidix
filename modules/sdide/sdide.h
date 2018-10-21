@@ -30,6 +30,8 @@
 #define SDIDE_H_
 
 #include <glidix/util/common.h>
+#include <glidix/storage/storage.h>
+#include <glidix/hw/pci.h>
 
 /* status register */
 #define ATA_SR_BSY			0x80    // Busy
@@ -69,6 +71,7 @@
 /* ATAPI commands */
 #define ATAPI_CMD_READ			0xA8
 #define ATAPI_CMD_EJECT			0x1B
+#define	ATAPI_CMD_READ_CAPACITY		0x25
 
 /* identification packet */
 #define ATA_IDENT_DEVICETYPE		0
@@ -98,6 +101,7 @@
 /* ATA registers, from I/O base */
 #define	ATA_IOREG_DATA			0x00
 #define	ATA_IOREG_FEATURES		0x01
+#define	ATA_IOREG_SECCOUNT		0x02
 #define ATA_IOREG_LBA0			0x03
 #define ATA_IOREG_LBA1			0x04
 #define ATA_IOREG_LBA2			0x05
@@ -110,8 +114,85 @@
 
 /* control bits */
 #define	ATA_CTRL_NIEN			0x02
+#define	ATA_CTRL_HOB			0x80
 
 /* command sets */
 #define	ATA_CMDSET_LBA_EXT		(1 << 26)
+
+/**
+ * Describes a channel.
+ */
+typedef struct
+{
+	uint16_t				base;	// I/O base
+	uint16_t				ctrl;	// control base
+} IDEChannel;
+
+struct IDEController_;
+
+/**
+ * Describes an attached device.
+ */
+typedef struct
+{
+	/**
+	 * Device type (IDE_ATA or IDE_ATAPI).
+	 */
+	int					type;
+	
+	/**
+	 * Channel (primary or secondary) and slot (master or slave).
+	 */
+	int					channel, slot;
+	
+	/**
+	 * The controller.
+	 */
+	struct IDEController_*			ctrl;
+	
+	/**
+	 * The storage device object.
+	 */
+	StorageDevice*				sd;
+	
+	/**
+	 * The thread which handles this device.
+	 */
+	Thread*					thread;
+} IDEDevice;
+
+/**
+ * Describes an IDE controller.
+ */
+typedef struct IDEController_
+{
+	/**
+	 * Next controller.
+	 */
+	struct IDEController_*			next;
+	
+	/**
+	 * The PCI device description associated with the controller.
+	 */
+	PCIDevice*				pcidev;
+	
+	/**
+	 * Primary and secondary channels.
+	 */
+	IDEChannel				channels[2];
+	
+	/**
+	 * Lock for accessing devices on this controller.
+	 */
+	Semaphore				lock;
+	
+	/**
+	 * Devices, and the number of them.
+	 */
+	IDEDevice				devs[4];
+	int					numDevs;
+} IDEController;
+
+extern volatile int ideInts[2];
 
 #endif

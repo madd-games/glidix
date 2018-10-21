@@ -553,6 +553,26 @@ void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS phaddr, ACPI_SIZE len)
 	return (void*) outAddr;
 };
 
+void* mapPhysMemoryList(uint64_t *frames, uint64_t numFrames)
+{
+	mutexLock(&acpiMemoryLock);
+	uint64_t outAddr = 0xFFFF830000000000 + nextFreePage * 0x1000;
+	
+	int i;
+	for (i=0; i<numFrames; i++)
+	{
+		PTe *pte = acgetPage(nextFreePage++);
+		pte->present = 1;
+		pte->framePhysAddr = frames[i];
+		pte->pcd = 1;
+		pte->rw = 1;
+	};
+	
+	refreshAddrSpace();
+	mutexUnlock(&acpiMemoryLock);
+	return (void*) outAddr;
+};
+
 void AcpiOsUnmapMemory(void *laddr, ACPI_SIZE len)
 {
 	TRACE();
@@ -572,14 +592,33 @@ void AcpiOsUnmapMemory(void *laddr, ACPI_SIZE len)
 	mutexUnlock(&acpiMemoryLock);
 };
 
+void unmapPhysMemoryAndGet(const volatile void *laddr, uint64_t len, uint64_t *framesOut)
+{
+	mutexLock(&acpiMemoryLock);
+	uint64_t startLog = ((uint64_t)laddr-0xFFFF830000000000) >> 12;
+	uint64_t endLog = ((uint64_t)laddr-0xFFFF830000000000+len) >> 12;
+	uint64_t idx;
+	
+	for (idx=startLog; idx<=endLog; idx++)
+	{
+		PTe *pte = acgetPage(idx);
+		*framesOut++ = pte->framePhysAddr;
+		pte->present = 0;
+		pte->framePhysAddr = 0;
+	};
+	
+	refreshAddrSpace();
+	mutexUnlock(&acpiMemoryLock);
+};
+
 void* mapPhysMemory(uint64_t phaddr, uint64_t len)
 {
 	return AcpiOsMapMemory(phaddr, len);
 };
 
-void unmapPhysMemory(void *laddr, uint64_t len)
+void unmapPhysMemory(const volatile void *laddr, uint64_t len)
 {
-	AcpiOsUnmapMemory(laddr, len);
+	AcpiOsUnmapMemory((void*)laddr, len);
 };
 
 ACPI_STATUS AcpiOsCreateMutex(ACPI_MUTEX *out)

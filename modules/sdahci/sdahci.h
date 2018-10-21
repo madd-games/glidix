@@ -31,6 +31,8 @@
 
 #include <glidix/util/common.h>
 #include <glidix/hw/pci.h>
+#include <glidix/hw/dma.h>
+#include <glidix/storage/storage.h>
 
 #define	AHCI_SIG_ATA	0x00000101
 #define	AHCI_SIG_ATAPI	0xEB140101
@@ -65,6 +67,33 @@
 
 #define	ATAPI_CMD_READ					0xA8
 #define	ATAPI_CMD_EJECT					0x1B
+#define	ATAPI_CMD_READ_CAPACITY				0x25
+
+#define	BOHC_BOS					(1 << 0)
+#define	BOHC_OOS					(1 << 1)
+#define	BOHC_SOOE					(1 << 2)
+#define	BOHC_OOC					(1 << 3)
+#define	BOHC_BB						(1 << 4)
+
+#define	SSTS_DET_NONE					0x00
+#define	SSTS_DET_NOPHY					0x01
+#define	SSTS_DET_OK					0x03
+#define	SSTS_DET_DISABLED				0x04
+
+#define	SSTS_IPM_NONE					0x00
+#define	SSTS_IPM_ACTIVE					0x01
+#define	SSTS_IPM_PARTIAL				0x02
+#define	SSTS_IPM_SLUMBER				0x06
+#define	SSTS_IPM_DEVSLEEP				0x08
+
+#define	CMD_ST						(1 << 0)
+#define	CMD_FRE						(1 << 4)
+#define	CMD_FR						(1 << 14)
+#define	CMD_CR						(1 << 15)
+
+#define	STS_BSY						(1 << 7)
+#define	STS_DRQ						(1 << 3)
+#define	STS_ERR						(1 << 0)
 
 typedef enum
 {
@@ -119,7 +148,7 @@ typedef struct
 
 typedef struct
 {
-	uint8_t				cfl:5;		// Command FIS length in Duint16_tS, 2 ~ 16
+	uint8_t				cfl:5;		// Command FIS length in DWORDS, 2 ~ 16
 	uint8_t				a:1;		// ATAPI
 	uint8_t				w:1;		// Write, 1: H2D, 0: D2H
 	uint8_t				p:1;		// Prefetchable
@@ -156,10 +185,9 @@ typedef struct ATADevice_	/* or ATAPI */
 	AHCIController*			ctrl;
 	int				portno;
 	volatile AHCIPort*		port;
-	DMABuffer			dmabuf;
-	DMABuffer			iobuf;
 	StorageDevice*			sd;
-	Thread*				ctlThread;
+	DMABuffer			dmabuf;
+	Mutex				lock;
 } ATADevice;
 
 typedef struct tagHBA_PRDT_ENTRY
@@ -168,7 +196,7 @@ typedef struct tagHBA_PRDT_ENTRY
 	uint32_t			rsv0;		// Reserved
  
 	// DW3
-	uint32_t			dbc:22;		// uint8_t count, 4M max
+	uint32_t			dbc:22;		// byte count, 4M max
 	uint32_t			rsv1:9;		// Reserved
 	uint32_t			i:1;		// Interrupt on completion
 } AHCI_PRDT;
@@ -179,13 +207,13 @@ typedef struct tagHBA_CMD_TBL
 	uint8_t				cfis[64];	// Command FIS
  
 	// 0x40
-	uint8_t				acmd[16];	// ATAPI command, 12 or 16 uint8_ts
+	uint8_t				acmd[16];	// ATAPI command, 12 or 16 bytess
  
 	// 0x50
 	uint8_t				rsv[48];	// Reserved
  
 	// 0x80
-	AHCI_PRDT			prdt_entry[8];
+	AHCI_PRDT			prdt[9];
 } AHCICommandTable;
 
 typedef struct tagFIS_REG_H2D
@@ -221,5 +249,42 @@ typedef struct tagFIS_REG_H2D
 	// DWORD 4
 	uint8_t				rsv1[4];	// Reserved
 } FIS_REG_H2D;
+
+/**
+ * "Operations area", all DMA structures are allocated within this.
+ */
+typedef struct
+{
+	/**
+	 * Command list.
+	 */
+	AHCICommandHeader		cmdlist[32];
+	
+	/**
+	 * FIS Area
+	 * TODO: what even is the point of it?
+	 */
+	char				fisArea[256];
+	
+	/**
+	 * Command table.
+	 */
+	AHCICommandTable		cmdtab;
+	
+	/**
+	 * Identify area.
+	 */
+	char				id[1024];
+} AHCIOpArea;
+
+/**
+ * Stop the commmand engine on a port.
+ */
+void ahciStopCmd(volatile AHCIPort *port);
+
+/**
+ * Start the command engine on a port.
+ */
+void ahciStartCmd(volatile AHCIPort *port);
 
 #endif

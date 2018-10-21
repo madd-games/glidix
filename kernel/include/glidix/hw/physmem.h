@@ -32,6 +32,22 @@
 #include <glidix/util/common.h>
 #include <stdint.h>
 
+/**
+ * Variables specifying the current state of physical memory. 'phmTotalFrames' is immutable after
+ * initPhysMem2() the other two are read-only outside physmem.c, and they must be accessed by
+ * atomic operations.
+ *
+ * phmTotalFrames			Total number of frames of physical memory.
+ * phmUsedFrames			Number of frames currently allocated, either to applications or to the cache.
+ * phmCachedFrames			Number of frames, out of phmUsedFrames, which are in the cache (and can be reallocated).
+ */
+extern uint64_t phmTotalFrames;
+extern uint64_t phmUsedFrames;
+extern uint64_t phmCachedFrames;
+
+/**
+ * Initialize the physical memory manager.
+ */
 void initPhysMem(uint64_t numPages, MultibootMemoryMap *mmap, uint64_t mmapEnd, uint64_t end);
 void initPhysMem2();
 

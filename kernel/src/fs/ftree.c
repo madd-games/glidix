@@ -34,6 +34,7 @@
 #include <glidix/hw/pagetab.h>
 #include <glidix/thread/sched.h>
 #include <glidix/display/console.h>
+#include <glidix/hw/physmem.h>
 
 static Mutex ftMtx;
 static FileTree* ftFirst;
@@ -434,8 +435,40 @@ void ftUncache(FileTree *ft)
 	mutexUnlock(&ftMtx);
 };
 
-static uint64_t tryFreeFrame(FileTree *ft, int level, FileNode *node, uint64_t base)
+static void ftDumpTree(FileTree *ft, int level, FileNode *node, uint64_t base)
 {
+	char tabs[16];
+	memset(tabs, 0, 16);
+	memset(tabs, ' ', level+1);
+
+	int i;
+	for (i=0; i<16; i++)
+	{
+		uint64_t pos = (base << 4) | (uint64_t)i;
+		if (level == 12)
+		{
+			if (node->entries[i] != 0)
+			{
+				uint64_t flags = piGetInfo(node->entries[i]);
+				kprintf("%sEntry %d = 0x%016lX (refcount=%lu, cache=%d)\n", tabs,
+							i, node->entries[i],
+							flags & 0xFFFFFFFF, !!(flags & PI_CACHE));
+			};
+		}
+		else
+		{
+			FileNode *subnode = node->nodes[i];
+			if (subnode != NULL)
+			{
+				kprintf("%sEntry %d:\n", tabs, i);
+				ftDumpTree(ft, level+1, subnode, pos);
+			};
+		};
+	};
+};
+
+static uint64_t tryFreeFrame(FileTree *ft, int level, FileNode *node, uint64_t base)
+{	
 	int i;
 	for (i=0; i<16; i++)
 	{
@@ -459,6 +492,7 @@ static uint64_t tryFreeFrame(FileTree *ft, int level, FileNode *node, uint64_t b
 					
 					uint64_t ent = node->entries[i];
 					node->entries[i] = 0;
+					__sync_fetch_and_add(&phmCachedFrames, -1);
 					return ent;
 				};
 			};
@@ -480,6 +514,8 @@ static uint64_t tryFreeFrame(FileTree *ft, int level, FileNode *node, uint64_t b
 static int currentlyInFreePage = 0;
 uint64_t ftGetFreePage()
 {
+	if (getCurrentThread()->sdMissNow) return 0;
+	
 	mutexLock(&ftMtx);
 	
 	if (currentlyInFreePage)
@@ -552,5 +588,6 @@ void ftDumpInfo()
 	for (ft=ftFirst; ft!=NULL; ft=ft->next)
 	{
 		kprintf("FileTree@%p (size=%lu, getpage=%p)\n", ft, ft->size, ft->getpage);
+		ftDumpTree(ft, 0, &ft->top, 0);
 	};
 };

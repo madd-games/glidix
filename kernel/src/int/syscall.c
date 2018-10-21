@@ -52,6 +52,7 @@
 #include <glidix/hw/cpu.h>
 #include <glidix/thread/pageinfo.h>
 #include <glidix/hw/msr.h>
+#include <glidix/hw/physmem.h>
 #include <glidix/int/trace.h>
 #include <glidix/fs/procfs.h>
 #include <glidix/usb/usb.h>
@@ -2964,6 +2965,9 @@ int sys_systat(void *buffer, size_t sz)
 {
 	SystemState sst;
 	memcpy(sst.sst_bootid, bootInfo->bootID, 16);
+	sst.sst_frames_total = phmTotalFrames;
+	sst.sst_frames_used = phmUsedFrames;
+	sst.sst_frames_cached = phmCachedFrames;
 	
 	if (sz > sizeof(SystemState))
 	{

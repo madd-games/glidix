@@ -95,7 +95,7 @@ rm -rf mipdir || exit 1
 cd libddi
 make install || exit 1
 cd ..
-build-tools/mkmip mipdir $1/libddi.mip -i libddi $GLIDIX_VERSION -d libc $GLIDIX_VERSION
+build-tools/mkmip mipdir $1/libddi.mip -i libddi $GLIDIX_VERSION -d libc $GLIDIX_VERSION -d libpng 1.6.21 -d freetype 2.6.3
 
 # libgl
 rm -rf mipdir || exit 1

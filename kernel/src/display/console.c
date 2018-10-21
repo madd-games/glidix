@@ -339,7 +339,7 @@ static void kputch(char c)
 		outb(0x3F8, c);
 	};
 	
-	if (!conOutCom)
+	if (!conOutCom && !kernelDead)
 	{
 		*klogput++ = c;
 		semSignal2(&semLog, 1);		// DO NOT use semSignal(); see semaphore.c as to why

@@ -66,7 +66,7 @@
 /**
  * Virtual address (pointer) to physical frame number.
  */
-#define	VIRT_TO_FRAME(ptr)	(((PTe*)((((uint64_t)ptr) >> 9) | 0xFFFFFF8000000000))->framePhysAddr)
+#define	VIRT_TO_FRAME(ptr)	(((PTe*)(((((uint64_t)ptr) >> 9) & (~(0x7UL))) | 0xFFFFFF8000000000UL))->framePhysAddr)
 
 /**
  * Virtual address (pointer) to its describing PDPT, PD, PT and PTE.
@@ -77,11 +77,24 @@
 #define	VIRT_TO_PML4E(ptr)	((PML4e*)(((((uint64_t)ptr) >> 36) & (~(0x7UL | 0xFFFF000000000000UL))) | 0xFFFFFFFFFFFFF000))
 
 /**
+ * Test whether a specified function is implemented in 'inst'. 'inst' must be a pointer to a structure
+ * which includes a field called 'size' which defines its size; and must also contain a member called
+ * 'func'. This macro evaluates to true if and only if the size is sufficient to include 'func',
+ * and 'func' is not set to NULL.
+ */
+#define	IMPLEMENTS(inst, func)	((inst->size > ((size_t)(&inst->func) - (size_t)(inst))) && inst->func != NULL)
+
+/**
  * Special traps. If a userspace process jumps to one of these, it will trigger
  * a page fault with a faultAddr equal to the given trap, and with the "fetch" flag
  * set. The kernel will then perform a specific job, as if a function was called.
  */
 #define	TRAP_SIGRET			0xFFFFFFFFFFFF0000
+
+/**
+ * Page size.
+ */
+#define	PAGE_SIZE			0x1000
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
@@ -162,12 +175,18 @@ typedef struct
 typedef struct
 {
 	uint8_t				sst_bootid[16];
+	uint64_t			sst_frames_total;
+	uint64_t			sst_frames_used;
+	uint64_t			sst_frames_cached;
 } SystemState;
 
 typedef struct
 {
 	uint32_t ignore;
 	uint64_t rsp0;
+	uint64_t rsp1;			/* unused */
+	uint64_t rsp2;			/* unused */
+	uint64_t ist[8];		/* entry 0 reserved */
 } PACKED TSS;
 
 #ifndef _SYS_TYPES_H
@@ -195,6 +214,7 @@ typedef enum
 extern KernelStatus kernelStatus;
 
 extern KernelBootInfo *bootInfo;
+extern int kernelDead;
 
 uint64_t	getFlagsRegister();
 void		setFlagsRegister(uint64_t flags);
@@ -262,7 +282,9 @@ uint64_t atomic_compare_and_swap64(void *ptr, uint64_t oldval, uint64_t newval);
  * the mess amirite?
  */
 void* mapPhysMemory(uint64_t phaddr, uint64_t len);
-void unmapPhysMemory(void *laddr, uint64_t len);
+void* mapPhysMemoryList(uint64_t *frames, uint64_t numFrames);
+void unmapPhysMemory(const volatile void *laddr, uint64_t len);
+void unmapPhysMemoryAndGet(const volatile void *laddr, uint64_t len, uint64_t *framesOut);
 
 /**
  * Defined in sched.c. Initializes a register structure for userspace.

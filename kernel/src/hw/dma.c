@@ -205,3 +205,32 @@ void* dmaGetPtr(DMABuffer *handle)
 	uint64_t addr = 0xFFFF838000000000 + (handle->firstPage << 12);
 	return (void*) addr;
 };
+
+void dmaFirstRegion(DMARegion *reg, const void *ptr, size_t bufsize, size_t maxRegion)
+{
+	reg->virtNext = (uint64_t) ptr;
+	reg->remSize = bufsize;
+	reg->maxRegion = maxRegion;
+	
+	dmaNextRegion(reg);
+};
+
+void dmaNextRegion(DMARegion *reg)
+{
+	if (reg->remSize == 0)
+	{
+		reg->physAddr = reg->physSize = 0;
+		return;
+	};
+	
+	uint64_t frame = VIRT_TO_FRAME(reg->virtNext);
+	reg->physAddr = (frame << 12) | (reg->virtNext & 0xFFF);
+	
+	size_t sizeNow = PAGE_SIZE - (reg->virtNext & 0xFFF);
+	if (sizeNow > reg->remSize) sizeNow = reg->remSize;
+	if (sizeNow > reg->maxRegion && reg->maxRegion != 0) sizeNow = reg->maxRegion;
+	
+	reg->physSize = sizeNow;
+	reg->virtNext += sizeNow;
+	reg->remSize -= sizeNow;
+};

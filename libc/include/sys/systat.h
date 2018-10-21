@@ -36,6 +36,9 @@
 struct system_state
 {
 	uint8_t				sst_bootid[16];		/* boot ID */
+	uint64_t			sst_frames_total;	/* total number of physical memory frames */
+	uint64_t			sst_frames_used;	/* number on frames in application use */
+	uint64_t			sst_frames_cached;	/* number of cached frames */
 };
 
 #endif

@@ -29,12 +29,12 @@
 #ifndef __glidix_port_h
 #define __glidix_port_h
 
-void outb(unsigned int port, uint8_t value);
-uint8_t inb(unsigned int port);
-void outw(unsigned int port, uint16_t value);
-uint16_t inw(unsigned int port);
-void outd(unsigned int port, uint32_t value);
-uint32_t ind(unsigned int port);
+void outb(unsigned int port, unsigned char value);
+unsigned char inb(unsigned int port);
+void outw(unsigned int port, unsigned short value);
+unsigned short inw(unsigned int port);
+void outd(unsigned int port, unsigned int value);
+unsigned int ind(unsigned int port);
 void outsb(unsigned int port, const void *buffer, unsigned long count);
 void insw(unsigned int port, void *buffer, unsigned long count);
 void outsw(unsigned int port, const void *buffer, unsigned long count);

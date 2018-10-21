@@ -1,5 +1,5 @@
 /*
-	Madd Software Renderer
+	Glidix kernel
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,39 +26,14 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SOFTRENDER_SURFACE_H_
-#define SOFTRENDER_SURFACE_H_
+#ifndef ATA_H_
+#define ATA_H_
 
-#include <libddi.h>
-
-/**
- * Creates a surface. Implements ddiDriver->createSurface().
- */
-int srCreateSurface(void *drvctx, DDISurface *surface, char *data);
+#include "sdahci.h"
 
 /**
- * Opens a shared surface. Implements ddiDriver->openSurface().
+ * Initialize an ATA device which was detected on the specified port of an AHCI controller.
  */
-int srOpenSurface(void *drvctx, DDISurface *surface);
-
-/**
- * Blit surfaces. Implements ddiDriver->blit().
- */
-void srBlit(void *drvctx, DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height);
-
-/**
- * Overlay surfaces. Implements ddiDriver->overlay().
- */
-void srOverlay(void *drvctx, DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height);
-
-/**
- * Fill a rectangle. Implements ddiDriver->rect().
- */
-void srRect(void *drvctx, DDISurface *surf, int x, int y, int width, int height, DDIColor *color);
-
-/**
- * Delete a surface. Implements ddiDriver->delsurf().
- */
-void srDeleteSurface(void *drvctx, DDISurface *surf);
+void ataInit(AHCIController *ctrl, int portno);
 
 #endif

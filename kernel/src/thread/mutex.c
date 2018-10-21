@@ -38,6 +38,8 @@ void mutexInit(Mutex *mutex)
 
 void mutexLock(Mutex *mutex)
 {
+	if (kernelDead) return;
+	
 	// mutexes are unnecessary while we still have no multithreading working
 	if (getCurrentThread() == NULL) return;
 	
@@ -100,6 +102,8 @@ void mutexLock(Mutex *mutex)
 
 int mutexTryLock(Mutex *mutex)
 {
+	if (kernelDead) return 0;
+	
 	if (mutex->owner == getCurrentThread())
 	{
 		mutex->numLocks++;
@@ -125,6 +129,8 @@ int mutexTryLock(Mutex *mutex)
 
 void mutexUnlock(Mutex *mutex)
 {
+	if (kernelDead) return;
+	
 	// mutexes are unnecessary while we still have no multithreading working
 	if (getCurrentThread() == NULL) return;
 	

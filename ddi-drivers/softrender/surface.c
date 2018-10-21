@@ -510,3 +510,8 @@ void srRect(void *drvctx, DDISurface *surface, int x, int y, int width, int heig
 		put += scanlineSize;
 	};
 };
+
+void srDeleteSurface(void *drvctx, DDISurface *surf)
+{
+	munmap(surf->data, ddiGetFormatDataSize(&surf->format, surf->width, surf->height));
+};

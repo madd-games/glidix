@@ -56,6 +56,37 @@ typedef struct
 } DMABuffer;
 
 /**
+ * Describes a region extracted by dmaFirstRegion() and dmaNextRegion().
+ */
+typedef struct
+{
+	/**
+	 * Physical address of region.
+	 */
+	uint64_t			physAddr;
+	
+	/**
+	 * Size of this region.
+	 */
+	uint64_t			physSize;
+	
+	/**
+	 * Virtual address of remainder of buffer.
+	 */
+	uint64_t			virtNext;
+	
+	/**
+	 * Size left in the buffer.
+	 */
+	size_t				remSize;
+	
+	/**
+	 * Maximum size of a region, or 0 if no limit.
+	 */
+	size_t				maxRegion;
+} DMARegion;
+
+/**
  * Initialize the DMA subsystem.
  */
 void dmaInit();
@@ -87,5 +118,19 @@ uint64_t dmaGetPhys(DMABuffer *handle);
  * Return the pointer to virtual memory where the buffer contents can be accessed.
  */
 void* dmaGetPtr(DMABuffer *handle);
+
+/**
+ * These functions convert virtual buffers into physical addresses. A call to dmaFirstRegion() returns the
+ * first physically consecutive region in the buffer; following calls to dmaNextRegion() return the next
+ * regions until, at the end, 'physAddr' is set to 0. Results are returned into the DMARegion structure.
+ *
+ * If 'maxRegion' is zero, then there is no limit on the size of the returned regions. Otherwise, a region
+ * will have at most 'maxRegion' bytes.
+ *
+ * These functions will trigger a undefined behaviour if one or more pages of the buffer are not correctly mapped.
+ * In other words, pass only trusted buffers, allocated by the kernel!
+ */
+void dmaFirstRegion(DMARegion *reg, const void *buffer, size_t bufsize, size_t maxRegion);
+void dmaNextRegion(DMARegion *reg);
 
 #endif

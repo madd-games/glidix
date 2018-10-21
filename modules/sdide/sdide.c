@@ -42,83 +42,12 @@
 #include <glidix/hw/pagetab.h>
 
 #include "sdide.h"
-
-/**
- * Describes a channel.
- */
-typedef struct
-{
-	uint16_t				base;	// I/O base
-	uint16_t				ctrl;	// control base
-} IDEChannel;
-
-struct IDEController_;
-
-/**
- * Describes an attached device.
- */
-typedef struct
-{
-	/**
-	 * Device type (IDE_ATA or IDE_ATAPI).
-	 */
-	int					type;
-	
-	/**
-	 * Channel (primary or secondary) and slot (master or slave).
-	 */
-	int					channel, slot;
-	
-	/**
-	 * The controller.
-	 */
-	struct IDEController_*			ctrl;
-	
-	/**
-	 * The storage device object.
-	 */
-	StorageDevice*				sd;
-	
-	/**
-	 * The thread which handles this device.
-	 */
-	Thread*					thread;
-} IDEDevice;
-
-/**
- * Describes an IDE controller.
- */
-typedef struct IDEController_
-{
-	/**
-	 * Next controller.
-	 */
-	struct IDEController_*			next;
-	
-	/**
-	 * The PCI device description associated with the controller.
-	 */
-	PCIDevice*				pcidev;
-	
-	/**
-	 * Primary and secondary channels.
-	 */
-	IDEChannel				channels[2];
-	
-	/**
-	 * Lock for accessing devices on this controller.
-	 */
-	Semaphore				lock;
-	
-	/**
-	 * Devices, and the number of them.
-	 */
-	IDEDevice				devs[4];
-	int					numDevs;
-} IDEController;
+#include "atapi.h"
+#include "ata.h"
 
 IDEController *ctrlFirst;
 IDEController *ctrlLast;
+int numCtrlFound;
 
 /**
  * Interrupt flags.
@@ -128,210 +57,6 @@ volatile int ideInts[2];
 static void ideIrqHandler(int irq)
 {
 	ideInts[irq-14] = 1;
-};
-
-static int ideEnumerator(PCIDevice *dev, void *param)
-{
-	if (dev->type == 0x101)
-	{
-		strcpy(dev->deviceName, "IDE Controller");
-		
-		IDEController *ctrl = NEW(IDEController);
-		memset(ctrl, 0, sizeof(IDEController));
-		ctrl->pcidev = dev;
-		
-		if (ctrlLast == NULL)
-		{
-			ctrlFirst = ctrlLast = ctrl;
-		}
-		else
-		{
-			ctrlLast->next = ctrl;
-			ctrlLast = ctrl;
-		};
-		
-		return 1;
-	};
-	
-	return 0;
-};
-
-static void ideAtaThread(void *param)
-{
-	IDEDevice *dev = (IDEDevice*) param;
-	
-	char zeroes[0x1000];
-	memset(zeroes, 0, 0x1000);
-	
-	while (1)
-	{
-		SDCommand *cmd = sdPop(dev->sd);
-		if (cmd->type == SD_CMD_SIGNAL)
-		{
-			sdPostComplete(cmd);
-			break;
-		};
-		
-		
-		if (cmd->type == SD_CMD_READ_TRACK)
-		{
-			uint64_t i;
-			for (i=0; i<8; i++)
-			{
-				frameWrite(((uint64_t)cmd->block >> 9) + i, zeroes);
-			};
-		};
-		
-		sdPostComplete(cmd);
-	};
-	
-	sdHangup(dev->sd);
-};
-
-static void ideAtapiThread(void *param)
-{
-	IDEDevice *dev = (IDEDevice*) param;
-	IDEController *ctrl = dev->ctrl;
-	int channel = dev->channel;
-	
-	while (1)
-	{
-		SDCommand *cmd = sdPop(dev->sd);
-		if (cmd->type == SD_CMD_SIGNAL)
-		{
-			sdPostComplete(cmd);
-			break;
-		}
-		else if (cmd->type == SD_CMD_GET_SIZE)
-		{
-			panic("ATAPI: SD_CMD_GET_SIZE");
-		}
-		else if (cmd->type == SD_CMD_EJECT)
-		{
-			kprintf_debug("eject: not implemented\n");
-			sdPostComplete(cmd);
-		}
-		else if (cmd->type == SD_CMD_READ_TRACK)
-		{
-			semWait(&dev->ctrl->lock);
-			
-			// enable interrupts
-			outb(dev->ctrl->channels[dev->channel].ctrl + ATA_CREG_CONTROL, 0);
-			ideInts[dev->channel] = 0;
-			
-			// ATAPI packet to send
-			uint8_t atapiPacket[12];
-			uint64_t index = cmd->pos >> 11;
-			atapiPacket[0] = ATAPI_CMD_READ;
-			atapiPacket[1] = 0;
-			atapiPacket[2] = (index >> 24) & 0xFF;
-			atapiPacket[3] = (index >> 16) & 0xFF;
-			atapiPacket[4] = (index >> 8) & 0xFF;
-			atapiPacket[5] = index & 0xFF;
-			atapiPacket[6] = 0;
-			atapiPacket[7] = 0;
-			atapiPacket[8] = 0;
-			atapiPacket[9] = 16;		// 2KB sectors * 16 = 32 KB track
-			atapiPacket[10] = 0;
-			atapiPacket[11] = 0;
-			
-			// select drive
-			outb(ctrl->channels[channel].base + ATA_IOREG_HDDEVSEL, dev->slot << 4);
-			int i;
-			for (i=0; i<4; i++)
-			{
-				inb(ctrl->channels[channel].ctrl + ATA_CREG_CONTROL);
-			};
-			
-			// use PIO mode
-			outb(ctrl->channels[channel].base + ATA_IOREG_FEATURES, 0);
-			
-			// specify the size in bytes (32 KB = 0x8000, so low byte = 0x00, high byte = 0x80)
-			outb(ctrl->channels[channel].base + ATA_IOREG_LBA1, 0x00);		// low byte
-			outb(ctrl->channels[channel].base + ATA_IOREG_LBA2, 0x80);		// high byte
-			
-			// send the packet command
-			outb(ctrl->channels[channel].base + ATA_IOREG_COMMAND, ATA_CMD_PACKET);
-			for (i=0; i<4; i++)
-			{
-				inb(ctrl->channels[channel].ctrl + ATA_CREG_CONTROL);
-			};
-			
-			// wait for it to stop being busy
-			while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
-			
-			// check for errors
-			uint8_t status = inb(ctrl->channels[channel].base + ATA_IOREG_STATUS);
-			int error = 0;
-			
-			if (status & ATA_SR_ERR)
-			{
-				error = 1;
-			};
-			
-			if (status & ATA_SR_DF)
-			{
-				error = 1;
-			};
-			
-			if ((status & ATA_SR_DRQ) == 0)
-			{
-				error = 1;
-			};
-						
-			if (!error)
-			{
-				// send the packet over
-				outsw(ctrl->channels[channel].base + ATA_IOREG_DATA, atapiPacket, 6);
-
-				int k;
-				for (k=0; k<4; k++)
-				{
-					inb(ctrl->channels[channel].ctrl + ATA_CREG_CONTROL);
-				};
-
-				// wait for it to stop being busy
-				while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
-
-				// wait for interrupt
-				while (!ideInts[dev->channel]);
-				ideInts[dev->channel] = 0;
-
-				for (k=0; k<4; k++)
-				{
-					inb(ctrl->channels[channel].ctrl + ATA_CREG_CONTROL);
-				};
-
-				// wait for it to stop being busy
-				while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & ATA_SR_BSY);
-				
-				// receive the data (8 pages)
-				for (i=0; i<8; i++)
-				{
-					// 2 sectors per page
-					int j;
-					uint8_t pagebuf[0x1000];
-					
-					for (j=0; j<2; j++)
-					{
-						insw(ctrl->channels[channel].base + ATA_IOREG_DATA, &pagebuf[0x800*j], 0x400);
-					};
-					
-					frameWrite(((uint64_t)cmd->block >> 12) + i, pagebuf);
-				};
-				
-				// wait for it to stop being busy
-				while (!ideInts[dev->channel]);
-				ideInts[dev->channel] = 0;
-				while (inb(ctrl->channels[channel].base + ATA_IOREG_STATUS) & (ATA_SR_BSY | ATA_SR_DRQ));
-			};
-			
-			sdPostComplete(cmd);
-			semSignal(&dev->ctrl->lock);
-		};
-	};
-	
-	sdHangup(dev->sd);
 };
 
 static void ideInit(IDEController *ctrl)
@@ -427,7 +152,24 @@ static void ideInit(IDEController *ctrl)
 			{
 				*put++ = ind(ctrl->channels[channel].base + ATA_IOREG_DATA);
 			};
+
+			int k;
+			char model[41];
+			for (k=0; k<40; k+=2)
+			{
+				model[k] = identBuf[ATA_IDENT_MODEL + k + 1];
+				model[k + 1] = identBuf[ATA_IDENT_MODEL + k];
+			};
 			
+			model[40] = 0;
+
+			char *check = &model[39];
+			while (*check == ' ')
+			{
+				if (check == model) break;
+				*check-- = 0;
+			};
+
 			if (type == IDE_ATA)
 			{
 				SDParams sdpars;
@@ -443,22 +185,16 @@ static void ideInit(IDEController *ctrl)
 				}
 				else
 				{
-					// don't bother with devices that do not support 48-bit LBA
-					continue;
+					uint32_t blocks = *((uint32_t*)(identBuf + ATA_IDENT_MAX_LBA));
+					sdpars.totalSize = (uint64_t)blocks << 9;
 				};
-				
+
 				int index = ctrl->numDevs++;
 				ctrl->devs[index].type = IDE_ATA;
 				ctrl->devs[index].channel = channel;
 				ctrl->devs[index].slot = slot;
 				ctrl->devs[index].ctrl = ctrl;
-				ctrl->devs[index].sd = sdCreate(&sdpars, "IDE UNKNOWN");
-				
-				KernelThreadParams thpars;
-				memset(&thpars, 0, sizeof(KernelThreadParams));
-				thpars.stackSize = 0x4000;
-				thpars.name = "IDE/ATA drive";
-				ctrl->devs[index].thread = CreateKernelThread(ideAtaThread, &thpars, &ctrl->devs[index]);
+				ctrl->devs[index].sd = sdCreate(&sdpars, model, &ataOps, &ctrl->devs[index]);
 			}
 			else if (type == IDE_ATAPI)
 			{
@@ -473,19 +209,40 @@ static void ideInit(IDEController *ctrl)
 				ctrl->devs[index].channel = channel;
 				ctrl->devs[index].slot = slot;
 				ctrl->devs[index].ctrl = ctrl;
-				ctrl->devs[index].sd = sdCreate(&sdpars, "IDE UNKNOWN");
-				
-				KernelThreadParams thpars;
-				memset(&thpars, 0, sizeof(KernelThreadParams));
-				thpars.stackSize = 0x4000;
-				thpars.name = "IDE/ATAPI drive";
-				ctrl->devs[index].thread = CreateKernelThread(ideAtapiThread, &thpars, &ctrl->devs[index]);
+				ctrl->devs[index].sd = sdCreate(&sdpars, model, &atapiOps, &ctrl->devs[index]);
 			};
 		};
 	};
 	
 	// release lock
 	semSignal(&ctrl->lock);
+};
+
+static int ideEnumerator(PCIDevice *dev, void *param)
+{
+	if (dev->type == 0x101)
+	{
+		strcpy(dev->deviceName, "IDE Controller");
+		
+		IDEController *ctrl = NEW(IDEController);
+		memset(ctrl, 0, sizeof(IDEController));
+		ctrl->pcidev = dev;
+		
+		if (ctrlLast == NULL)
+		{
+			ctrlFirst = ctrlLast = ctrl;
+		}
+		else
+		{
+			ctrlLast->next = ctrl;
+			ctrlLast = ctrl;
+		};
+		
+		numCtrlFound++;
+		return 1;
+	};
+	
+	return 0;
 };
 
 MODULE_INIT(const char *opt)
@@ -496,6 +253,7 @@ MODULE_INIT(const char *opt)
 	ctrlFirst = ctrlLast = NULL;
 	kprintf("sdide: detecting IDE controllers\n");
 	pciEnumDevices(THIS_MODULE, ideEnumerator, NULL);
+	kprintf("sdide: found %d controllers\n", numCtrlFound);
 	if (ctrlFirst == NULL) return MODINIT_CANCEL;
 	
 	IDEController *ctrl;
@@ -510,6 +268,7 @@ MODULE_INIT(const char *opt)
 MODULE_FINI()
 {
 	kprintf("sdide: releasing IDE controllers\n");
+	
 	IDEController *ctrl = ctrlFirst;
 	while (ctrl != NULL)
 	{
@@ -518,8 +277,7 @@ MODULE_FINI()
 		int i;
 		for (i=0; i<ctrl->numDevs; i++)
 		{
-			sdSignal(ctrl->devs[i].sd);
-			ReleaseKernelThread(ctrl->devs[i].thread);
+			sdHangup(ctrl->devs[i].sd);
 		};
 
 		pciReleaseDevice(ctrl->pcidev);
@@ -527,6 +285,6 @@ MODULE_FINI()
 		
 		ctrl = next;
 	};
-	
+
 	return 0;
 };

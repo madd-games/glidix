@@ -77,9 +77,14 @@ uint64_t piNew(uint64_t flags)
 
 void piIncref(uint64_t frame)
 {
-	__sync_add_and_fetch(
+	uint64_t newEnt = __sync_add_and_fetch(
 		&piRoot.branches[(frame>>27)&0x1FF]->branches[(frame>>18)&0x1FF]->branches[(frame>>9)&0x1FF]->entries[frame&0x1FF],
 		1);
+	
+	if ((newEnt & 0xFFFFFFFF) == 1)
+	{
+		__sync_fetch_and_add(&phmCachedFrames, -1);
+	};
 };
 
 void piDecref(uint64_t frame)
@@ -93,6 +98,10 @@ void piDecref(uint64_t frame)
 		if ((newEnt & PI_CACHE) == 0)
 		{
 			phmFreeFrame(frame);
+		}
+		else
+		{
+			__sync_fetch_and_add(&phmCachedFrames, 1);
 		};
 	};
 };
@@ -131,6 +140,7 @@ void piUncache(uint64_t frame)
 
 	if ((newEnt & 0xFFFFFFFF) == 0)
 	{
+		__sync_fetch_and_add(&phmCachedFrames, -1);
 		phmFreeFrame(frame);
 	};
 };

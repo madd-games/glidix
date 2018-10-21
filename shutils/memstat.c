@@ -1,5 +1,5 @@
 /*
-	Madd Software Renderer
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,39 +26,47 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SOFTRENDER_SURFACE_H_
-#define SOFTRENDER_SURFACE_H_
+#include <stdio.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/glidix.h>
+#include <sys/fsinfo.h>
+#include <sys/mman.h>
+#include <sys/call.h>
+#include <sys/systat.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <time.h>
+#include <errno.h>
+#include <sys/mount.h>
+#include <sys/statvfs.h>
+#include <sys/module.h>
 
-#include <libddi.h>
+void printFrames(const char *label, size_t frames)
+{
+	printf("%-40s %-20lu %-10lu MB\n", label, frames, frames/256);
+};
 
-/**
- * Creates a surface. Implements ddiDriver->createSurface().
- */
-int srCreateSurface(void *drvctx, DDISurface *surface, char *data);
-
-/**
- * Opens a shared surface. Implements ddiDriver->openSurface().
- */
-int srOpenSurface(void *drvctx, DDISurface *surface);
-
-/**
- * Blit surfaces. Implements ddiDriver->blit().
- */
-void srBlit(void *drvctx, DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height);
-
-/**
- * Overlay surfaces. Implements ddiDriver->overlay().
- */
-void srOverlay(void *drvctx, DDISurface *src, int srcX, int srcY, DDISurface *dest, int destX, int destY, int width, int height);
-
-/**
- * Fill a rectangle. Implements ddiDriver->rect().
- */
-void srRect(void *drvctx, DDISurface *surf, int x, int y, int width, int height, DDIColor *color);
-
-/**
- * Delete a surface. Implements ddiDriver->delsurf().
- */
-void srDeleteSurface(void *drvctx, DDISurface *surf);
-
-#endif
+int main(int argc, char *argv[])
+{
+	struct system_state sst;
+	if (__syscall(__SYS_systat, &sst, sizeof(struct system_state)) != 0)
+	{
+		fprintf(stderr, "%s: failed to get system state: %s\n", argv[0], strerror(errno));
+		return 1;
+	};
+	
+	printf("%-40s %-20s %-10s\n", "TYPE", "FRAMES", "SIZE");
+	printFrames("Total memory:", sst.sst_frames_total);
+	printFrames("Memory in use:", sst.sst_frames_used - sst.sst_frames_cached);
+	printFrames("Cache memory:", sst.sst_frames_cached);
+	printFrames("Available memory:", sst.sst_frames_total - sst.sst_frames_used + sst.sst_frames_cached);
+	printFrames("Unallocated memory:", sst.sst_frames_total - sst.sst_frames_used);
+	
+	return 0;
+};
