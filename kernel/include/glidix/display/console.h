@@ -39,6 +39,7 @@ typedef struct
 	uint64_t curColor;
 	uint8_t putcon;
 	uint8_t *fb;
+	uint8_t *wtb;					/* write-through buffer */
 	size_t fbSize;
 	size_t pitch;
 	int width, height;
@@ -47,6 +48,7 @@ typedef struct
 	int cursorDrawn;
 	uint32_t behindCursor[16];
 	uint8_t *cursorPtr;
+	uint8_t *cursorPtr2;
 	uint64_t pixelWidth, pixelHeight;		/* framebuffer size in pixels */
 } ConsoleState;
 extern ConsoleState consoleState;
@@ -66,7 +68,7 @@ void setGfxTerm(int value);
 void enableDebugTerm();
 void disableConsole();
 void enableConsole();
-void setConsoleFrameBuffer(uint8_t *framebuffer, PixelFormat *format, int width, int height);
+void setConsoleFrameBuffer(uint8_t *framebuffer, uint8_t *backbuffer, PixelFormat *format, int width, int height);
 void getConsoleSize(unsigned short *width, unsigned short *height);
 void initKlogFile();
 

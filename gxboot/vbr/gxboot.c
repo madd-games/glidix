@@ -742,7 +742,12 @@ void bmain()
 	};
 
 	// map the framebuffer
-	mmap(0xFFFF840000000000, vbeModeInfo.physbase & ~0xFFF, vbeModeInfo.height * vbeModeInfo.pitch);
+	mmap(0xFFFF840000000000UL, vbeModeInfo.physbase & ~0xFFF, vbeModeInfo.height * vbeModeInfo.pitch);
+	void *backbuffer = balloc(0x1000, vbeModeInfo.height * vbeModeInfo.pitch);
+	qword_t backvirt = 0xFFFF840000000000UL + vbeModeInfo.height * vbeModeInfo.pitch
+				+ (vbeModeInfo.physbase & 0xFFF);
+	backvirt = (backvirt + 0xFFF) & ~0xFFF;
+	mmap(backvirt, (dword_t)backbuffer, vbeModeInfo.height * vbeModeInfo.pitch);
 	
 	kinfo->pml4Phys = (dword_t) pml4;
 	kinfo->mmapSize = mmapSize;
@@ -755,6 +760,7 @@ void bmain()
 	memcpy(kinfo->bootID, fsBootID, 16);
 	
 	kinfo->framebuffer = 0xFFFF840000000000 + (vbeModeInfo.physbase & 0xFFF);
+	kinfo->backbuffer = backvirt;
 	kinfo->screenWidth = (dword_t) vbeModeInfo.width;
 	kinfo->screenHeight = (dword_t) vbeModeInfo.height;
 	kinfo->pixelFormat.bpp = 4;

@@ -167,6 +167,7 @@ typedef struct
 	
 	/* only when KB_FEATURE_VIDEO is set */
 	uint8_t*			framebuffer;
+	uint8_t*			backbuffer;
 	uint32_t			fbWidth;
 	uint32_t			fbHeight;
 	PixelFormat			fbFormat;

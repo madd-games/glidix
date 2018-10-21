@@ -146,23 +146,28 @@ static void undrawCursor()
 	{
 		const uint32_t *fetch = consoleState.behindCursor;
 		uint8_t *put = consoleState.cursorPtr;
+		uint8_t *put2 = consoleState.cursorPtr2;
 		
 		int count = 16;
 		while (count--)
 		{
-			*((uint32_t*)put) = *fetch++;
+			*((uint32_t*)put2) = *fetch++;
+			*((uint32_t*)put) = *((uint32_t*)put2);
+			
 			put += consoleState.pitch;
+			put2 += consoleState.pitch;
 		};
 		
 		consoleState.cursorDrawn = 0;
 	};
 };
 
-void setConsoleFrameBuffer(uint8_t *framebuffer, PixelFormat *format, int width, int height)
+void setConsoleFrameBuffer(uint8_t *framebuffer, uint8_t *backbuffer, PixelFormat *format, int width, int height)
 {
 	consoleState.width = width / 9;
 	consoleState.height = height / 16;
 	consoleState.fb = framebuffer;
+	consoleState.wtb = backbuffer;
 	consoleState.fbSize = height * (width * (format->bpp + format->pixelSpacing) + format->scanlineSpacing);
 	consoleState.pitch = format->bpp * width + format->scanlineSpacing;
 	memcpy(&consoleState.format, format, sizeof(PixelFormat));
@@ -196,7 +201,7 @@ void initConsole()
 	
 	mutexInit(&consoleLock);
 	consoleState.enabled = 1;
-	setConsoleFrameBuffer(bootInfo->framebuffer, &bootInfo->fbFormat, bootInfo->fbWidth, bootInfo->fbHeight);
+	setConsoleFrameBuffer(bootInfo->framebuffer, bootInfo->backbuffer, &bootInfo->fbFormat, bootInfo->fbWidth, bootInfo->fbHeight);
 	clearScreen();
 	
 	// set up kernel log
@@ -213,16 +218,21 @@ static void updateVGACursor()
 	if (consoleState.curY >= consoleState.height || consoleState.curX >= consoleState.width) return;
 
 	consoleState.cursorPtr = consoleState.fb + 16 * consoleState.curY * consoleState.pitch + 4 * 9 * consoleState.curX;
+	consoleState.cursorPtr2 = consoleState.wtb + 16 * consoleState.curY * consoleState.pitch + 4 * 9 * consoleState.curX;
+	
 	uint32_t *put = consoleState.behindCursor;
 	uint8_t *buf = consoleState.cursorPtr;
+	uint8_t *buf2 = consoleState.cursorPtr2;
 	
 	int count = 16;
 	while (count--)
 	{
-		*put++ = *((uint32_t*)buf);
+		*put++ = *((uint32_t*)buf2);
 		*((uint32_t*)buf) = 0x66666666;
+		*((uint32_t*)buf2) = 0x66666666;
 		
 		buf += consoleState.pitch;
+		buf2 += consoleState.pitch;
 	};
 	
 	consoleState.cursorDrawn = 1;
@@ -240,6 +250,7 @@ void clearScreen()
 	consoleState.cursorDrawn = 0;
 	
 	memset(consoleState.fb, 0, consoleState.fbSize);
+	memset(consoleState.wtb, 0, consoleState.fbSize);
 	
 	updateVGACursor();
 	mutexUnlock(&consoleLock);
@@ -275,18 +286,22 @@ static void scroll()
 	if (!consoleState.enabled) return;
 	undrawCursor();
 	
+	// scroll the write-through buffer
 	int y;
 	for (y=0; y<consoleState.height-1; y++)
 	{
-		uint8_t *thisLine = consoleState.fb + (16*y) * consoleState.pitch;
+		uint8_t *thisLine = consoleState.wtb + (16*y) * consoleState.pitch;
 		uint8_t *nextLine = thisLine + 16 * consoleState.pitch;
 		
 		memcpy(thisLine, nextLine, 16 * consoleState.pitch);
 	};
 	
-	uint8_t *end = consoleState.fb + 16*(consoleState.height - 1) * consoleState.pitch;
+	uint8_t *end = consoleState.wtb + 16*(consoleState.height - 1) * consoleState.pitch;
 	memset(end, 0, 16 * consoleState.pitch);
 
+	// copy into real framebuffer
+	memcpy(consoleState.fb, consoleState.wtb, consoleState.fbSize);
+	
 	consoleState.curY--;
 	updateVGACursor();
 };
@@ -295,6 +310,7 @@ static void renderChar(int x, int y, char c)
 {
 	const uint8_t *fetch = &confont[16*(unsigned int)(unsigned char)c];
 	uint8_t *put = consoleState.fb + (16*y) * consoleState.pitch + (9*x) * 4;
+	uint8_t *put2 = consoleState.wtb + (16*y) * consoleState.pitch + (9*x) * 4;
 	
 	if (put == consoleState.cursorPtr)
 	{
@@ -305,6 +321,7 @@ static void renderChar(int x, int y, char c)
 	while (height--)
 	{
 		uint32_t *put32 = (uint32_t*) put;
+		uint32_t *put32back = (uint32_t*) put2;
 		
 		int i;
 		for (i=0; i<9; i++)
@@ -318,15 +335,18 @@ static void renderChar(int x, int y, char c)
 			if ((*fetch) & masks[index])
 			{
 				*put32++ = consolePixels[consoleState.curColor & 0xF];
+				*put32back++ = consolePixels[consoleState.curColor & 0xF];
 			}
 			else
 			{
 				*put32++ = consolePixels[consoleState.curColor >> 4];
+				*put32back++ = consolePixels[consoleState.curColor >> 4];
 			};
 		};
 		
 		fetch++;
 		put += consoleState.pitch;
+		put2 += consoleState.pitch;
 	};
 };
 

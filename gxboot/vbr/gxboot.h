@@ -513,9 +513,10 @@ typedef struct
 	
 	/* only when KB_FEATURE_VIDEO is set */
 	qword_t				framebuffer;			/* 0x60 */
-	dword_t				screenWidth;			/* 0x68 */
-	dword_t				screenHeight;			/* 0x6C */
-	PixelFormat			pixelFormat;			/* 0x70 */
+	qword_t				backbuffer;			/* 0x68 */
+	dword_t				screenWidth;			/* 0x70 */
+	dword_t				screenHeight;			/* 0x74 */
+	PixelFormat			pixelFormat;			/* 0x78 */
 } KernelInfo;
 
 extern DAP dap;
