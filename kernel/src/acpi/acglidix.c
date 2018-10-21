@@ -592,7 +592,7 @@ void AcpiOsUnmapMemory(void *laddr, ACPI_SIZE len)
 	mutexUnlock(&acpiMemoryLock);
 };
 
-void unmapPhysMemoryAndGet(void *laddr, uint64_t len, uint64_t *framesOut)
+void unmapPhysMemoryAndGet(const volatile void *laddr, uint64_t len, uint64_t *framesOut)
 {
 	mutexLock(&acpiMemoryLock);
 	uint64_t startLog = ((uint64_t)laddr-0xFFFF830000000000) >> 12;
@@ -616,9 +616,9 @@ void* mapPhysMemory(uint64_t phaddr, uint64_t len)
 	return AcpiOsMapMemory(phaddr, len);
 };
 
-void unmapPhysMemory(void *laddr, uint64_t len)
+void unmapPhysMemory(const volatile void *laddr, uint64_t len)
 {
-	AcpiOsUnmapMemory(laddr, len);
+	AcpiOsUnmapMemory((void*)laddr, len);
 };
 
 ACPI_STATUS AcpiOsCreateMutex(ACPI_MUTEX *out)

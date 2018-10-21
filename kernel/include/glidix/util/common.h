@@ -283,8 +283,8 @@ uint64_t atomic_compare_and_swap64(void *ptr, uint64_t oldval, uint64_t newval);
  */
 void* mapPhysMemory(uint64_t phaddr, uint64_t len);
 void* mapPhysMemoryList(uint64_t *frames, uint64_t numFrames);
-void unmapPhysMemory(void *laddr, uint64_t len);
-void unmapPhysMemoryAndGet(void *laddr, uint64_t len, uint64_t *framesOut);
+void unmapPhysMemory(const volatile void *laddr, uint64_t len);
+void unmapPhysMemoryAndGet(const volatile void *laddr, uint64_t len, uint64_t *framesOut);
 
 /**
  * Defined in sched.c. Initializes a register structure for userspace.
