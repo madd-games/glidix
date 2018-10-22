@@ -96,20 +96,39 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 	cmdfis->counth = (numBlocks >> 8) & 0xFF;
 	
 	// issue the command
-	dev->port->ci |= 1;
-	while (dev->port->ci & 1);
-	
-	int busy = STS_BSY | STS_DRQ;
-	while (dev->port->tfd & busy);
-	
-	if (dev->port->tfd & STS_ERR)
+	int status = ahciIssueCmd(dev->port);
+	if (status != 0)
 	{
 		mutexUnlock(&dev->lock);
-		return EIO;
+		return status;
 	};
 	
+	// do a cache flush
+	opArea->cmdlist[0].w = 0;
+	opArea->cmdlist[0].p = 0;
+	opArea->cmdlist[0].c = 0;
+	opArea->cmdlist[0].prdtl = 0;
+
+	cmdfis->fis_type = FIS_TYPE_REG_H2D;
+	cmdfis->c = 1;
+	cmdfis->command = ATA_CMD_CACHE_FLUSH_EXT;
+	
+	cmdfis->lba0 = 0;
+	cmdfis->lba1 = 0;
+	cmdfis->lba2 = 0;
+	cmdfis->device = 1<<6;	// LBA mode
+ 
+	cmdfis->lba3 = 0;
+	cmdfis->lba4 = 0;
+	cmdfis->lba5 = 0;
+	
+	cmdfis->countl = 0;
+	cmdfis->counth = 0;
+	
+	// issue the flush command
+	status = ahciIssueCmd(dev->port);
 	mutexUnlock(&dev->lock);
-	return 0;
+	return status;
 };
 
 int ataReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buffer)
@@ -186,15 +205,9 @@ void ataInit(AHCIController *ctrl, int portno)
 	
 	// issue the command and await completion
 	__sync_synchronize();
-	dev->port->ci = 1;
-	while (dev->port->ci & 1);
-
-	int busy = STS_BSY | STS_DRQ;
-	while (dev->port->tfd & busy);
-
-	if (dev->port->tfd & STS_ERR)
+	if (ahciIssueCmd(dev->port) != 0)
 	{
-		kprintf("sdahci: AHCI error during identification\n");
+		kprintf("sdahci: error during identification\n");
 		return;
 	};
 	

@@ -86,20 +86,9 @@ int atapiReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *bu
 	cmdfis->counth = (numBlocks >> 8) & 0xFF;
 
 	// issue the command
-	dev->port->ci |= 1;
-	while (dev->port->ci & 1);
-	
-	int busy = STS_BSY | STS_DRQ;
-	while (dev->port->tfd & busy);
-	
-	if (dev->port->tfd & STS_ERR)
-	{
-		mutexUnlock(&dev->lock);
-		return EIO;
-	};
-
+	int status = ahciIssueCmd(dev->port);
 	mutexUnlock(&dev->lock);
-	return 0;
+	return status;
 };
 
 int atapiWriteBlocks(void *drvdata, size_t startBlock, size_t numBlocks, const void *buffer)
@@ -146,22 +135,18 @@ size_t atapiGetSize(void *drvdata)
 	cmdfis->counth = 0;
 
 	// issue the command
-	dev->port->ci |= 1;
-	while (dev->port->ci & 1);
-	
-	int busy = STS_BSY | STS_DRQ;
-	while (dev->port->tfd & busy);
-	
-	if (dev->port->tfd & STS_ERR)
-	{
-		mutexUnlock(&dev->lock);
-		return 0;
-	};
-
+	int status = ahciIssueCmd(dev->port);
 	mutexUnlock(&dev->lock);
 	
-	uint32_t *ptr = (uint32_t*) opArea->id;
-	return (uint64_t)(__builtin_bswap32(*ptr)) * 2048;
+	if (status == 0)
+	{
+		uint32_t *ptr = (uint32_t*) opArea->id;
+		return (uint64_t)(__builtin_bswap32(*ptr)) * 2048;
+	}
+	else
+	{
+		return 0;
+	};
 };
 
 int atapiEject(void *drvdata)
@@ -199,20 +184,9 @@ int atapiEject(void *drvdata)
 	cmdfis->counth = 0;
 
 	// issue the command
-	dev->port->ci |= 1;
-	while (dev->port->ci & 1);
-	
-	int busy = STS_BSY | STS_DRQ;
-	while (dev->port->tfd & busy);
-	
-	if (dev->port->tfd & STS_ERR)
-	{
-		mutexUnlock(&dev->lock);
-		return EIO;
-	};
-	
+	int status = ahciIssueCmd(dev->port);
 	mutexUnlock(&dev->lock);
-	return 0;
+	return status;
 };
 
 SDOps atapiOps = {
@@ -279,13 +253,7 @@ void atapiInit(AHCIController *ctrl, int portno)
 	
 	// issue the command and await completion
 	__sync_synchronize();
-	dev->port->ci = 1;
-	while (dev->port->ci & 1);
-
-	int busy = STS_BSY | STS_DRQ;
-	while (dev->port->tfd & busy);
-
-	if (dev->port->tfd & STS_ERR)
+	if (ahciIssueCmd(dev->port) != 0)
 	{
 		kprintf("sdahci: AHCI error during identification\n");
 		return;

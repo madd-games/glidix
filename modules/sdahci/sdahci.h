@@ -95,6 +95,26 @@
 #define	STS_DRQ						(1 << 3)
 #define	STS_ERR						(1 << 0)
 
+#define	IS_CPDS						(1 << 31)
+#define	IS_TFES						(1 << 30)
+#define	IS_HBFS						(1 << 29)
+#define	IS_HBDS						(1 << 28)
+#define	IS_IFS						(1 << 27)
+#define	IS_INFS						(1 << 26)
+#define	IS_OFS						(1 << 24)
+#define	IS_IPMS						(1 << 23)
+#define	IS_PRCS						(1 << 22)
+#define	IS_DMPS						(1 << 7)
+#define	IS_PCS						(1 << 6)
+#define	IS_DPS						(1 << 5)
+#define	IS_UFS						(1 << 4)
+#define	IS_SDBS						(1 << 3)
+#define	IS_DSS						(1 << 2)
+#define	IS_PSS						(1 << 1)
+#define	IS_DHRS						(1 << 0)
+
+#define	IS_ERR_FATAL					(IS_HBFS | IS_HBDS | IS_IFS | IS_TFES)
+
 typedef enum
 {
 	FIS_TYPE_REG_H2D	= 0x27,	// Register FIS - host to device
@@ -286,5 +306,14 @@ void ahciStopCmd(volatile AHCIPort *port);
  * Start the command engine on a port.
  */
 void ahciStartCmd(volatile AHCIPort *port);
+
+/**
+ * Issue a command on the specified port. Command 0 in the port's command list is expected to be filled in,
+ * and that's the command which will be issued. This function will wait until the command is completed.
+ *
+ * Upon success (command completed successfully), this function returns 0. If an error occurs, this function
+ * returns EIO and prints error information to the kernel console.
+ */
+int ahciIssueCmd(volatile AHCIPort *port);
 
 #endif

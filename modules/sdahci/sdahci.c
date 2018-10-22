@@ -63,6 +63,40 @@ void ahciStartCmd(volatile AHCIPort *port)
 	port->cmd |= CMD_ST;
 };
 
+int ahciIssueCmd(volatile AHCIPort *port)
+{
+	port->is = port->is;
+	port->ci = 1;
+	
+	while (1)
+	{
+		if (port->is & IS_ERR_FATAL)
+		{
+			// a fatal error occured
+			kprintf("sdahci: fatal error. IS=0x%08X, SERR=0x%08X\n", port->is, port->serr);
+			
+			ahciStopCmd(port);
+			ahciStartCmd(port);
+			return EIO;
+		};
+		
+		if ((port->ci & 1) == 0)
+		{
+			break;
+		};
+	};
+	
+	int busy = STS_BSY | STS_DRQ;
+	while (port->tfd & busy);
+	
+	if (port->tfd & STS_ERR)
+	{
+		return EIO;
+	};
+	
+	return 0;
+};
+
 static void ahciInit(AHCIController *ctrl)
 {
 	// map MMIO regs
