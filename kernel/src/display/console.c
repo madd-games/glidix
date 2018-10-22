@@ -300,7 +300,6 @@ static void scroll()
 	memset(end, 0, 16 * consoleState.pitch);
 
 	// copy into real framebuffer
-	//memcpy(consoleState.fb, consoleState.wtb, consoleState.fbSize);
 	uint64_t *put = (uint64_t*) consoleState.fb;
 	uint64_t *fetch = (uint64_t*) consoleState.wtb;
 	uint64_t count = consoleState.fbSize/8;
