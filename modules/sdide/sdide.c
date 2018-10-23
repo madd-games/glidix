@@ -200,7 +200,7 @@ static void ideInit(IDEController *ctrl)
 			{
 				// report it to the kernel
 				SDParams sdpars;
-				sdpars.flags = SD_READONLY;
+				sdpars.flags = SD_READONLY | SD_EJECTABLE;
 				sdpars.blockSize = 2048;
 				sdpars.totalSize = 0;
 				

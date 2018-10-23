@@ -277,7 +277,7 @@ void atapiInit(AHCIController *ctrl, int portno)
 	kprintf("sdahci: ATAPI model: %s\n", model);
 	
 	SDParams sdpars;
-	sdpars.flags = SD_READONLY;
+	sdpars.flags = SD_READONLY | SD_EJECTABLE;
 	sdpars.blockSize = 2048;
 	sdpars.totalSize = 0;
 	
