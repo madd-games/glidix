@@ -249,8 +249,10 @@ void clearScreen()
 	consoleState.putcon = 1;
 	consoleState.cursorDrawn = 0;
 	
-	memset(consoleState.fb, 0, consoleState.fbSize);
-	memset(consoleState.wtb, 0, consoleState.fbSize);
+	uint64_t *put1 = (uint64_t*) consoleState.fb;
+	uint64_t *put2 = (uint64_t*) consoleState.wtb;
+	uint64_t count = consoleState.fbSize/8;
+	while (count--) *put1++ = *put2++ = 0;
 	
 	updateVGACursor();
 	mutexUnlock(&consoleLock);
