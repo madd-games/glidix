@@ -452,6 +452,13 @@ static int __printf_conv_fixedfloat(FILE *fp, int flags, int lenmod, int fieldWi
 		precision = 1;
 	};
 
+	int negative = 0;
+	if (x < 0)
+	{
+		negative = 1;
+		x = -x;
+	};
+	
 	// do the integer part
 	char intconvbuf[30];
 	uint64_t intPart = (uint64_t) x;
@@ -475,6 +482,8 @@ static int __printf_conv_fixedfloat(FILE *fp, int flags, int lenmod, int fieldWi
 		
 		*(--put) = c;
 	} while (intPart != 0);
+	
+	if (negative) *(--put) = '-';
 	
 	char *convbuf = (char*) malloc(strlen(put) + 1 + precision + 1);
 	strcpy(convbuf, put);
