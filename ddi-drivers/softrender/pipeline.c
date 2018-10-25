@@ -46,7 +46,7 @@ static void srDefaultFragmentShader(const void *uniforms, const void *inputs1, c
 };
 
 /**
- * Default pipeline. This is use if no shader program was set yet.
+ * Default pipeline. This is used if no shader program was set yet.
  */
 DDIGL_Pipeline srDefaultPipeline = {
 	// no memory-mapped area, all functions are static
