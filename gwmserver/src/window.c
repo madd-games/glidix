@@ -463,17 +463,7 @@ Window* wndCreate(Window *parent, GWMWindowParams *pars, uint64_t id, int fd, DD
 	if (pars->flags & GWM_WINDOW_MKFOCUSED)
 	{
 		pthread_mutex_lock(&wincacheLock);
-		if (wndFocused != NULL)
-		{
-			GWMEvent ev;
-			memset(&ev, 0, sizeof(GWMEvent));
-			ev.type = GWM_EVENT_FOCUS_OUT;
-			ev.win = wndFocused->id;
-			wndSendEvent(wndFocused, &ev);
-			wndDown(wndFocused);
-		};
-		wndUp(wnd);
-		wndFocused = wnd;
+		wndSetFocused(wnd);
 		pthread_mutex_unlock(&wincacheLock);
 	};
 	

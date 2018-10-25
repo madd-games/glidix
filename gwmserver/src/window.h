@@ -267,4 +267,9 @@ int wndScreenshot(DDISurface *target, GWMGlobWinRef *ref, int *outWidth, int *ou
  */
 int wndGetGlobIcon(GWMGlobWinRef *ref, uint32_t *outSurf);
 
+/**
+ * Set the focused window.
+ */
+void wndSetFocused(Window *wnd);
+
 #endif
