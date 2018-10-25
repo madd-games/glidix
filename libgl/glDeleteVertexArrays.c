@@ -1,5 +1,5 @@
 /*
-	Madd Software Renderer
+	Glidix GL
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,45 +26,30 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "buffer.h"
+#include <GL/ddigl.h>
 
-DDIGL_Buffer* srCreateBuffer(DDIGL_Context *ctx, GLenum *error)
+static void deleteVertexArray(GLuint name)
 {
-	DDIGL_Buffer *buffer = (DDIGL_Buffer*) malloc(sizeof(DDIGL_Buffer));
-	if (buffer == NULL)
+	DDIGL_Object *obj = ddiglGetObject(name);
+	if (obj->type == DDIGL_OBJ_RESV)
 	{
-		*error = GL_OUT_OF_MEMORY;
-		return NULL;
-	};
-	
-	buffer->data = NULL;
-	buffer->size = 0;
-	return buffer;
-};
-
-GLenum srBindBuffer(DDIGL_Context *ctx, GLenum target, DDIGL_Buffer *buffer)
-{
-	return GL_NO_ERROR;
-};
-
-GLenum srBufferData(DDIGL_Context *ctx, DDIGL_Buffer *buffer, GLsizeiptr size, const GLvoid *data, GLenum usage)
-{
-	void *newData = malloc(size);
-	if (newData == NULL)
+		obj->type = DDIGL_OBJ_FREE;
+	}
+	else if (obj->type == DDIGL_OBJ_VAO)
 	{
-		return GL_OUT_OF_MEMORY;
+		if (__ddigl_current->deleteVertexArray != NULL)
+		{
+			__ddigl_current->deleteVertexArray(__ddigl_current, obj->asVAO);
+		};
+		
+		memset(obj, 0, sizeof(DDIGL_Object));
 	};
-	
-	free(buffer->data);
-	buffer->data = newData;
-	buffer->size = size;
-	
-	memcpy(buffer->data, data, size);
-	return GL_NO_ERROR;
 };
 
-void srDeleteBuffer(DDIGL_Context *ctx, DDIGL_Buffer *buffer)
+void glDeleteVertexArrays(GLsizei n, GLuint *arrays)
 {
-	free(buffer->data);
-	free(buffer);
+	while (n--)
+	{
+		deleteVertexArray(*arrays++);
+	};
 };

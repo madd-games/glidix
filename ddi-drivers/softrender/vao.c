@@ -26,45 +26,62 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "buffer.h"
+#include "context.h"
+#include "vao.h"
 
-DDIGL_Buffer* srCreateBuffer(DDIGL_Context *ctx, GLenum *error)
+DDIGL_VertexArray* srCreateVertexArray(DDIGL_Context *ctx, GLenum *error)
 {
-	DDIGL_Buffer *buffer = (DDIGL_Buffer*) malloc(sizeof(DDIGL_Buffer));
-	if (buffer == NULL)
+	DDIGL_VertexArray *vao = (DDIGL_VertexArray*) malloc(sizeof(DDIGL_VertexArray));
+	if (vao == NULL)
 	{
 		*error = GL_OUT_OF_MEMORY;
 		return NULL;
 	};
 	
-	buffer->data = NULL;
-	buffer->size = 0;
-	return buffer;
+	memset(vao, 0, sizeof(DDIGL_VertexArray));
+	return vao;
 };
 
-GLenum srBindBuffer(DDIGL_Context *ctx, GLenum target, DDIGL_Buffer *buffer)
+GLenum srBindVertexArray(DDIGL_Context *ctx, DDIGL_VertexArray *vao)
 {
+	// no-op: we can just use ctx->vaoCurrent when we need the binding
 	return GL_NO_ERROR;
 };
 
-GLenum srBufferData(DDIGL_Context *ctx, DDIGL_Buffer *buffer, GLsizeiptr size, const GLvoid *data, GLenum usage)
+void srDeleteVertexArray(DDIGL_Context *ctx, DDIGL_VertexArray *vao)
 {
-	void *newData = malloc(size);
-	if (newData == NULL)
+	free(vao);
+};
+
+GLenum srSetAttribEnable(DDIGL_Context *ctx, GLuint index, GLboolean enable)
+{
+	if (index >= 64) return GL_INVALID_VALUE;
+	
+	if (enable)
 	{
-		return GL_OUT_OF_MEMORY;
+		ctx->vaoCurrent->enable |= (1 << index);
+	}
+	else
+	{
+		ctx->vaoCurrent->enable &= ~(1 << index);
 	};
 	
-	free(buffer->data);
-	buffer->data = newData;
-	buffer->size = size;
-	
-	memcpy(buffer->data, data, size);
 	return GL_NO_ERROR;
 };
 
-void srDeleteBuffer(DDIGL_Context *ctx, DDIGL_Buffer *buffer)
+GLenum srAttribPointer(DDIGL_Context *ctx, GLuint index, GLint size, GLenum type, GLboolean normalized,
+				GLsizei stride, GLsizeiptr offset)
 {
-	free(buffer->data);
-	free(buffer);
+	if (index >= 64) return GL_INVALID_VALUE;
+	if (ctx->arrayBuffer == NULL) return GL_INVALID_OPERATION;
+	
+	SRVertexAttrib *attrib = &ctx->vaoCurrent->attribs[index];
+	attrib->buffer = ctx->arrayBuffer;
+	attrib->size = size;
+	attrib->type = type;
+	attrib->normalized = normalized;
+	attrib->stride = stride;
+	attrib->offset = offset;
+	
+	return GL_NO_ERROR;
 };

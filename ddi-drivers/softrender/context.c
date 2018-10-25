@@ -28,6 +28,9 @@
 
 #include "context.h"
 #include "buffer.h"
+#include "vao.h"
+#include "draw.h"
+#include "pipeline.h"
 
 static int getShift(uint32_t mask)
 {
@@ -160,6 +163,15 @@ static GLenum srClear(DDIGL_Context *ctx, GLbitfield mask)
 	return GL_NO_ERROR;
 };
 
+static void srViewport(DDIGL_Context *ctx, GLint x, GLint y, GLsizei w, GLsizei h)
+{
+	SRContext *srctx = (SRContext*) ctx->drvdata;
+	srctx->viewX = x;
+	srctx->viewY = y;
+	srctx->viewW = w;
+	srctx->viewH = h;
+};
+
 int srInitGL(void *drvctx, DDIPixelFormat *format, DDIGL_ContextParams *params, DDIGL_Context *ctx)
 {
 	// make sure the pixel format is suitable
@@ -206,6 +218,7 @@ int srInitGL(void *drvctx, DDIPixelFormat *format, DDIGL_ContextParams *params, 
 	memset(srctx, 0, sizeof(SRContext));
 	srctx->defaultBuffer = fbuf;
 	srctx->currentBuffer = fbuf;
+	srctx->currentPipeline = &srDefaultPipeline;
 	srctx->redShift = redShift;
 	srctx->greenShift = greenShift;
 	srctx->blueShift = blueShift;
@@ -213,7 +226,7 @@ int srInitGL(void *drvctx, DDIPixelFormat *format, DDIGL_ContextParams *params, 
 	srctx->clearColor = 0;
 	srctx->clearDepth = 0xFFFF;
 	srctx->clearStencil = 0;
-	
+
 	// finalize our work
 	ctx->drvdata = srctx;
 	ctx->setRenderTarget = srSetRenderTarget;
@@ -225,6 +238,13 @@ int srInitGL(void *drvctx, DDIPixelFormat *format, DDIGL_ContextParams *params, 
 	ctx->bindBuffer = srBindBuffer;
 	ctx->bufferData = srBufferData;
 	ctx->deleteBuffer = srDeleteBuffer;
+	ctx->createVertexArray = srCreateVertexArray;
+	ctx->bindVertexArray = srBindVertexArray;
+	ctx->deleteVertexArray = srDeleteVertexArray;
+	ctx->setAttribEnable = srSetAttribEnable;
+	ctx->attribPointer = srAttribPointer;
+	ctx->drawArrays = srDrawArrays;
+	ctx->viewport = srViewport;
 	
 	// OK
 	return GL_NO_ERROR;

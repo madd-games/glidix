@@ -101,6 +101,11 @@ typedef struct
 	SRFramebuffer*					currentBuffer;
 
 	/**
+	 * Current pipeline.
+	 */
+	DDIGL_Pipeline*					currentPipeline;
+	
+	/**
 	 * Number of bits that need to be appended to the right of an 8-bit value to place it in
 	 * the correct bits of a color word.
 	 */
@@ -115,6 +120,12 @@ typedef struct
 	uint32_t					clearColor;
 	uint16_t					clearDepth;
 	uint16_t					clearStencil;
+	
+	/**
+	 * Viewport.
+	 */
+	int						viewX, viewY;
+	int						viewW, viewH;
 } SRContext;
 
 int srInitGL(void *drvctx, DDIPixelFormat *format, DDIGL_ContextParams *params, DDIGL_Context *ctx);

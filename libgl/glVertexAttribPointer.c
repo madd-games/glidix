@@ -1,5 +1,5 @@
 /*
-	Madd Software Renderer
+	Glidix GL
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,45 +26,71 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "buffer.h"
+#include <GL/ddigl.h>
 
-DDIGL_Buffer* srCreateBuffer(DDIGL_Context *ctx, GLenum *error)
+static int getTypeSize(GLenum type)
 {
-	DDIGL_Buffer *buffer = (DDIGL_Buffer*) malloc(sizeof(DDIGL_Buffer));
-	if (buffer == NULL)
+	switch (type)
 	{
-		*error = GL_OUT_OF_MEMORY;
-		return NULL;
+	case GL_BYTE:
+		return 1;
+	case GL_UNSIGNED_BYTE:
+		return 1;
+	case GL_SHORT:
+		return 2;
+	case GL_UNSIGNED_SHORT:
+		return 2;
+	case GL_INT:
+		return 4;
+	case GL_UNSIGNED_INT:
+		return 4;
+	case GL_FLOAT:
+		return 4;
+	case GL_2_BYTES:
+		return 2;
+	case GL_3_BYTES:
+		return 3;
+	case GL_4_BYTES:
+		return 4;
+	case GL_DOUBLE:
+		return 8;
+	default:
+		return -1;
+	};
+};
+
+void glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid *pointer)
+{
+	if (__ddigl_current->attribPointer == NULL)
+	{
+		ddiglSetError(GL_INVALID_OPERATION);
+		return;
 	};
 	
-	buffer->data = NULL;
-	buffer->size = 0;
-	return buffer;
-};
-
-GLenum srBindBuffer(DDIGL_Context *ctx, GLenum target, DDIGL_Buffer *buffer)
-{
-	return GL_NO_ERROR;
-};
-
-GLenum srBufferData(DDIGL_Context *ctx, DDIGL_Buffer *buffer, GLsizeiptr size, const GLvoid *data, GLenum usage)
-{
-	void *newData = malloc(size);
-	if (newData == NULL)
+	int typeSize = getTypeSize(type);
+	if (typeSize == -1)
 	{
-		return GL_OUT_OF_MEMORY;
+		ddiglSetError(GL_INVALID_ENUM);
+		return;
 	};
 	
-	free(buffer->data);
-	buffer->data = newData;
-	buffer->size = size;
-	
-	memcpy(buffer->data, data, size);
-	return GL_NO_ERROR;
-};
+	if (size != 1 && size != 2 && size != 3 && size != 4 && size != GL_BGRA)
+	{
+		ddiglSetError(GL_INVALID_VALUE);
+	};
 
-void srDeleteBuffer(DDIGL_Context *ctx, DDIGL_Buffer *buffer)
-{
-	free(buffer->data);
-	free(buffer);
+	if (stride == 0)
+	{
+		stride = typeSize * size;
+	};
+	
+	GLenum error = __ddigl_current->attribPointer(
+			__ddigl_current,
+			index, size, type, normalized, stride, (GLsizeiptr) pointer
+	);
+
+	if (error != GL_NO_ERROR)
+	{
+		ddiglSetError(error);
+	};
 };

@@ -78,6 +78,20 @@ DDIGL_Context* ddiglCreateContext(DDIPixelFormat *format, DDIGL_ContextParams *p
 		free(ctx);
 		return NULL;
 	};
+	
+	if (ctx->createVertexArray != NULL)
+	{
+		GLenum verror;
+		ctx->vaoDefault = ctx->createVertexArray(ctx, &verror);
+		ctx->vaoCurrent = ctx->vaoDefault;
+		
+		if (ctx->vaoDefault == NULL)
+		{
+			free(ctx);
+			if (error != NULL) *error = verror;
+			return NULL;
+		};
+	};
 
 	return ctx;
 };

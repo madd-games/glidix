@@ -26,45 +26,32 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "buffer.h"
+#ifndef DRAW_H_
+#define DRAW_H_
 
-DDIGL_Buffer* srCreateBuffer(DDIGL_Context *ctx, GLenum *error)
+#include <GL/ddigl.h>
+
+#include "pipeline.h"
+
+/**
+ * Vertex.
+ */
+typedef struct
 {
-	DDIGL_Buffer *buffer = (DDIGL_Buffer*) malloc(sizeof(DDIGL_Buffer));
-	if (buffer == NULL)
-	{
-		*error = GL_OUT_OF_MEMORY;
-		return NULL;
-	};
+	/**
+	 * Vertex position in screen space.
+	 */
+	SRVector pos;
 	
-	buffer->data = NULL;
-	buffer->size = 0;
-	return buffer;
-};
+	/**
+	 * Vertex data. This is output from the vertex shader.
+	 */
+	char data[];
+} SRVertex;
 
-GLenum srBindBuffer(DDIGL_Context *ctx, GLenum target, DDIGL_Buffer *buffer)
-{
-	return GL_NO_ERROR;
-};
+/**
+ * Draw primitives from a vertex array.
+ */
+GLenum srDrawArrays(DDIGL_Context *ctx, GLenum mode, GLint first, GLsizei count);
 
-GLenum srBufferData(DDIGL_Context *ctx, DDIGL_Buffer *buffer, GLsizeiptr size, const GLvoid *data, GLenum usage)
-{
-	void *newData = malloc(size);
-	if (newData == NULL)
-	{
-		return GL_OUT_OF_MEMORY;
-	};
-	
-	free(buffer->data);
-	buffer->data = newData;
-	buffer->size = size;
-	
-	memcpy(buffer->data, data, size);
-	return GL_NO_ERROR;
-};
-
-void srDeleteBuffer(DDIGL_Context *ctx, DDIGL_Buffer *buffer)
-{
-	free(buffer->data);
-	free(buffer);
-};
+#endif

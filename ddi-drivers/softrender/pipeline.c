@@ -26,45 +26,43 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "buffer.h"
+#include "pipeline.h"
 
-DDIGL_Buffer* srCreateBuffer(DDIGL_Context *ctx, GLenum *error)
+/**
+ * Default vertex shader: output the vertex position and do nothing else.
+ */
+static SRVector srDefaultVertexShader(const void *uniforms, const void *inputs, void *outputs)
 {
-	DDIGL_Buffer *buffer = (DDIGL_Buffer*) malloc(sizeof(DDIGL_Buffer));
-	if (buffer == NULL)
-	{
-		*error = GL_OUT_OF_MEMORY;
-		return NULL;
-	};
-	
-	buffer->data = NULL;
-	buffer->size = 0;
-	return buffer;
+	return *((SRVector*)inputs);
 };
 
-GLenum srBindBuffer(DDIGL_Context *ctx, GLenum target, DDIGL_Buffer *buffer)
+/**
+ * Default fragment shader: output white.
+ */
+static void srDefaultFragmentShader(const void *uniforms, const void *inputs1, const void *inputs2, const void *inputs3, SRVector *outputs, SRVector bary)
 {
-	return GL_NO_ERROR;
+	static SRVector white = {1.0, 1.0, 1.0, 1.0};
+	outputs[0] = white;
 };
 
-GLenum srBufferData(DDIGL_Context *ctx, DDIGL_Buffer *buffer, GLsizeiptr size, const GLvoid *data, GLenum usage)
-{
-	void *newData = malloc(size);
-	if (newData == NULL)
-	{
-		return GL_OUT_OF_MEMORY;
-	};
+/**
+ * Default pipeline. This is use if no shader program was set yet.
+ */
+DDIGL_Pipeline srDefaultPipeline = {
+	// no memory-mapped area, all functions are static
+	.ptr = NULL,
+	.size = 0,
 	
-	free(buffer->data);
-	buffer->data = newData;
-	buffer->size = size;
+	// vertex shader input is 16 bytes long (position)
+	// everything else is size 0
+	.szVertex = 16,
 	
-	memcpy(buffer->data, data, size);
-	return GL_NO_ERROR;
-};
-
-void srDeleteBuffer(DDIGL_Context *ctx, DDIGL_Buffer *buffer)
-{
-	free(buffer->data);
-	free(buffer);
+	// shaders
+	.vertexShader = srDefaultVertexShader,
+	.fragmentShader = srDefaultFragmentShader,
+	
+	// one input attribute: the vertex position itself (vec4)
+	.attribs = {
+		{GL_FLOAT, 4, 0}
+	},
 };

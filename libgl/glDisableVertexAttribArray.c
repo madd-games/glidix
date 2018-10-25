@@ -1,5 +1,5 @@
 /*
-	Madd Software Renderer
+	Glidix GL
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,45 +26,19 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "buffer.h"
+#include <GL/ddigl.h>
 
-DDIGL_Buffer* srCreateBuffer(DDIGL_Context *ctx, GLenum *error)
+void glDisableVertexAttribArray(GLuint index)
 {
-	DDIGL_Buffer *buffer = (DDIGL_Buffer*) malloc(sizeof(DDIGL_Buffer));
-	if (buffer == NULL)
+	if (__ddigl_current->setAttribEnable == NULL)
 	{
-		*error = GL_OUT_OF_MEMORY;
-		return NULL;
+		ddiglSetError(GL_INVALID_OPERATION);
+		return;
 	};
 	
-	buffer->data = NULL;
-	buffer->size = 0;
-	return buffer;
-};
-
-GLenum srBindBuffer(DDIGL_Context *ctx, GLenum target, DDIGL_Buffer *buffer)
-{
-	return GL_NO_ERROR;
-};
-
-GLenum srBufferData(DDIGL_Context *ctx, DDIGL_Buffer *buffer, GLsizeiptr size, const GLvoid *data, GLenum usage)
-{
-	void *newData = malloc(size);
-	if (newData == NULL)
+	GLenum error = __ddigl_current->setAttribEnable(__ddigl_current, index, 0);
+	if (error != GL_NO_ERROR)
 	{
-		return GL_OUT_OF_MEMORY;
+		ddiglSetError(error);
 	};
-	
-	free(buffer->data);
-	buffer->data = newData;
-	buffer->size = size;
-	
-	memcpy(buffer->data, data, size);
-	return GL_NO_ERROR;
-};
-
-void srDeleteBuffer(DDIGL_Context *ctx, DDIGL_Buffer *buffer)
-{
-	free(buffer->data);
-	free(buffer);
 };

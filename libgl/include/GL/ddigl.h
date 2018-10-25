@@ -39,11 +39,24 @@
 typedef struct __ddigl_buffer DDIGL_Buffer;
 
 /**
+ * Opaque structure for GL vertex array (VAO) driver data. Pointers to this are used throughout the library,
+ * and a driver may actually define the structure.
+ */
+typedef struct __ddigl_vao DDIGL_VertexArray;
+
+/**
+ * Opaque structure for pipeline objects. A pipeline object is a driver-specific representation of a fully linked
+ * shader program. Pointers to this are used throughout the library, and a driver may actually define the structure.
+ */
+typedef struct __ddigl_pipeline DDIGL_Pipeline;
+
+/**
  * GL object.
  */
 #define	DDIGL_OBJ_FREE				0		/* object name unused */
 #define	DDIGL_OBJ_RESV				1		/* object name allocated but not yet created */
 #define	DDIGL_OBJ_BUFFER			2		/* GL buffer object */
+#define	DDIGL_OBJ_VAO				3		/* vertex array object */
 typedef struct
 {
 	/**
@@ -56,7 +69,8 @@ typedef struct
 	 */
 	union
 	{
-		struct __ddigl_buffer*		asBuffer;
+		DDIGL_Buffer*			asBuffer;
+		DDIGL_VertexArray*		asVAO;
 	};
 } DDIGL_Object;
 
@@ -181,6 +195,67 @@ typedef struct __ddigl_ctx
 	 * Delete the specified buffer.
 	 */
 	void (*deleteBuffer)(struct __ddigl_ctx *ctx, DDIGL_Buffer *buffer);
+	
+	/**
+	 * Create a vertex array object in the specified context. Returns NULL on error and sets 'error' to
+	 * a GL error number.
+	 */
+	DDIGL_VertexArray* (*createVertexArray)(struct __ddigl_ctx *ctx, GLenum *error);
+	
+	/**
+	 * The default (0) VAO and the currently-bound one.
+	 */
+	DDIGL_VertexArray *vaoDefault;
+	DDIGL_VertexArray *vaoCurrent;
+	
+	/**
+	 * Bind the specified VAO. Return GL_NO_ERROR on success, or a GL error number on error.
+	 */
+	GLenum (*bindVertexArray)(struct __ddigl_ctx *ctx, DDIGL_VertexArray *vao);
+	
+	/**
+	 * Delete the specified VAO.
+	 */
+	void (*deleteVertexArray)(struct __ddigl_ctx *ctx, DDIGL_VertexArray *vao);
+	
+	/**
+	 * Enable/disable vertex attribute arrays. Return GL_NO_ERROR on success, or a GL error number
+	 * on error.
+	 */
+	GLenum (*setAttribEnable)(struct __ddigl_ctx *ctx, GLuint index, GLboolean enable);
+	
+	/**
+	 * Set the location from which to fetch a vertex attribute. This change shall be applied to the
+	 * currently-bound VAO (which, if necessary, can be access via 'ctx->vaoCurrent'). The attribute
+	 * values shall be pulled from the currently-bound array buffer ('ctx->arrayBuffer').
+	 *
+	 * 'index' is the attribute index (location).
+	 *
+	 * 'type' and 'size' can be any valid combination as defined for glVertexAttribPointer() or its
+	 * other 2 versions. 'normalized' is ignored with the other 2 versions (they don't take the value),
+	 * and is taken into account when applicable.
+	 *
+	 * 'stride' is never 0. If a stride of 0 was passed to an API entry point, it will automatically
+	 * calculate it.
+	 *
+	 * 'offset' is the offset into the current array buffer, to the first value of the attribute. The
+	 * next value is at 'offset+stride' bytes, and so on.
+	 *
+	 * Returns GL_NO_ERROR on success, or a GL error number on error.
+	 */
+	GLenum (*attribPointer)(struct __ddigl_ctx *ctx, GLuint index, GLint size, GLenum type, GLboolean normalized,
+				GLsizei stride, GLsizeiptr offset);
+				
+	/**
+	 * Draw the specified range of vertices from the current vertex array, using the specified mode.
+	 * Return GL_NO_ERROR on success, or a GL error number on error.
+	 */
+	GLenum (*drawArrays)(struct __ddigl_ctx *ctx, GLenum mode, GLint first, GLsizei count);
+	
+	/**
+	 * Set the viewport.
+	 */
+	void (*viewport)(struct __ddigl_ctx *ctx, GLint x, GLint y, GLsizei width, GLsizei height);
 } DDIGL_Context;
 
 extern DDIGL_Context* __ddigl_current;

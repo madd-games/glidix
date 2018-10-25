@@ -238,7 +238,7 @@ int ddiInit(const char *display, int oflag)
 	sprintf(renderPath, "/usr/lib/ddidrv/%s.so", ddiDisplayInfo.renderer);
 	sprintf(renderName, "ddidrv_%s", ddiDisplayInfo.renderer);
 	
-	libDriver = dlopen(renderPath, RTLD_LOCAL | RTLD_LAZY);
+	libDriver = dlopen(renderPath, RTLD_GLOBAL | RTLD_LAZY);
 	if (libDriver == NULL)
 	{
 		int errnum = errno;

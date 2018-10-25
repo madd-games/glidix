@@ -1,5 +1,5 @@
 /*
-	Madd Software Renderer
+	Glidix GL
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,45 +26,55 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "buffer.h"
+#include <GL/ddigl.h>
 
-DDIGL_Buffer* srCreateBuffer(DDIGL_Context *ctx, GLenum *error)
+void glBindVertexArray(GLuint name)
 {
-	DDIGL_Buffer *buffer = (DDIGL_Buffer*) malloc(sizeof(DDIGL_Buffer));
-	if (buffer == NULL)
+	if (__ddigl_current->createVertexArray == NULL || __ddigl_current->bindVertexArray == NULL)
 	{
-		*error = GL_OUT_OF_MEMORY;
-		return NULL;
+		ddiglSetError(GL_INVALID_OPERATION);
+		return;
 	};
 	
-	buffer->data = NULL;
-	buffer->size = 0;
-	return buffer;
-};
-
-GLenum srBindBuffer(DDIGL_Context *ctx, GLenum target, DDIGL_Buffer *buffer)
-{
-	return GL_NO_ERROR;
-};
-
-GLenum srBufferData(DDIGL_Context *ctx, DDIGL_Buffer *buffer, GLsizeiptr size, const GLvoid *data, GLenum usage)
-{
-	void *newData = malloc(size);
-	if (newData == NULL)
+	if (name == 0)
 	{
-		return GL_OUT_OF_MEMORY;
+		GLenum error = __ddigl_current->bindVertexArray(__ddigl_current, __ddigl_current->vaoDefault);
+		if (error != GL_NO_ERROR) ddiglSetError(error);
+		else
+		{
+			__ddigl_current->vaoCurrent = __ddigl_current->vaoDefault;
+		};
+		
+		return;
 	};
 	
-	free(buffer->data);
-	buffer->data = newData;
-	buffer->size = size;
+	DDIGL_Object *obj = ddiglGetObject(name);
+	if (obj->type == DDIGL_OBJ_RESV)
+	{
+		GLenum error;
+		DDIGL_VertexArray *newvao = __ddigl_current->createVertexArray(__ddigl_current, &error);
+		if (newvao == NULL)
+		{
+			ddiglSetError(error);
+			return;
+		};
+		
+		obj->type = DDIGL_OBJ_VAO;
+		obj->asVAO = newvao;
+	};
 	
-	memcpy(buffer->data, data, size);
-	return GL_NO_ERROR;
-};
-
-void srDeleteBuffer(DDIGL_Context *ctx, DDIGL_Buffer *buffer)
-{
-	free(buffer->data);
-	free(buffer);
+	if (obj->type != DDIGL_OBJ_VAO)
+	{
+		ddiglSetError(GL_INVALID_OPERATION);
+		return;
+	};
+	
+	GLenum error = __ddigl_current->bindVertexArray(__ddigl_current, obj->asVAO);
+	if (error != GL_NO_ERROR)
+	{
+		ddiglSetError(error);
+		return;
+	};
+	
+	__ddigl_current->vaoCurrent = obj->asVAO;
 };

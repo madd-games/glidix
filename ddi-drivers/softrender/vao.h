@@ -26,45 +26,73 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifndef VAO_H_
+#define VAO_H_
+
+#include <GL/ddigl.h>
+
 #include "buffer.h"
 
-DDIGL_Buffer* srCreateBuffer(DDIGL_Context *ctx, GLenum *error)
+/**
+ * VAO attribute specification.
+ */
+typedef struct
 {
-	DDIGL_Buffer *buffer = (DDIGL_Buffer*) malloc(sizeof(DDIGL_Buffer));
-	if (buffer == NULL)
-	{
-		*error = GL_OUT_OF_MEMORY;
-		return NULL;
-	};
+	/**
+	 * Buffer from which to take this attribute.
+	 */
+	DDIGL_Buffer *buffer;
 	
-	buffer->data = NULL;
-	buffer->size = 0;
-	return buffer;
+	/**
+	 * Parameters supplied through attribPointer().
+	 */
+	GLint size;
+	GLenum type;
+	GLboolean normalized;
+	GLsizei stride;
+	GLsizeiptr offset;
+} SRVertexAttrib;
+
+/**
+ * Definition of DDIGL_VertexArray for softrender.
+ */
+struct __ddigl_vao
+{
+	/**
+	 * Bitset defining which attributes are enabled.
+	 */
+	uint64_t enable;
+	
+	/**
+	 * Attribute settings.
+	 */
+	SRVertexAttrib attribs[64];
 };
 
-GLenum srBindBuffer(DDIGL_Context *ctx, GLenum target, DDIGL_Buffer *buffer)
-{
-	return GL_NO_ERROR;
-};
+/**
+ * Create a new softrender vertex array.
+ */
+DDIGL_VertexArray* srCreateVertexArray(DDIGL_Context *ctx, GLenum *error);
 
-GLenum srBufferData(DDIGL_Context *ctx, DDIGL_Buffer *buffer, GLsizeiptr size, const GLvoid *data, GLenum usage)
-{
-	void *newData = malloc(size);
-	if (newData == NULL)
-	{
-		return GL_OUT_OF_MEMORY;
-	};
-	
-	free(buffer->data);
-	buffer->data = newData;
-	buffer->size = size;
-	
-	memcpy(buffer->data, data, size);
-	return GL_NO_ERROR;
-};
+/**
+ * Bind a vertex array.
+ */
+GLenum srBindVertexArray(DDIGL_Context *ctx, DDIGL_VertexArray *vao);
 
-void srDeleteBuffer(DDIGL_Context *ctx, DDIGL_Buffer *buffer)
-{
-	free(buffer->data);
-	free(buffer);
-};
+/**
+ * Delete a vertex array.
+ */
+void srDeleteVertexArray(DDIGL_Context *ctx, DDIGL_VertexArray *vao);
+
+/**
+ * Set whether an attribute in a vertex array is enabled.
+ */
+GLenum srSetAttribEnable(DDIGL_Context *ctx, GLuint index, GLboolean enable);
+
+/**
+ * Set an attribute pointer.
+ */
+GLenum srAttribPointer(DDIGL_Context *ctx, GLuint index, GLint size, GLenum type, GLboolean normalized,
+				GLsizei stride, GLsizeiptr offset);
+
+#endif
