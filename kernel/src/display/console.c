@@ -357,13 +357,15 @@ static void renderChar(int x, int y, char c)
 
 static void kputch(char c)
 {
+#if 0
 	outb(0xE9, c);
 	if (conOutCom)
 	{
 		while ((inb(0x3F8 + 5) & 0x20) == 0);
 		outb(0x3F8, c);
 	};
-	
+#endif
+
 	if (!conOutCom && !kernelDead)
 	{
 		*klogput++ = c;

@@ -403,6 +403,8 @@ extern int panicking;	/* panic.c */
 extern char initVideoRAM[];
 void isrHandler(Regs *regs)
 {
+	static int gotNMI = 0;
+	
 	// ignore spurious IRQs
 	Thread *thread;
 	if (regs->intNo == IRQ7)
@@ -436,6 +438,15 @@ void isrHandler(Regs *regs)
 		break;
 	case I_NMI:
 		kernelDead = 1;
+		if (__sync_fetch_and_add(&gotNMI, 1) != 0)
+		{
+			while (1)
+			{
+				cli();
+				hlt();
+			};
+		};
+		
 		if (panicking)
 		{
 			while (1)
@@ -446,6 +457,7 @@ void isrHandler(Regs *regs)
 		};
 		
 		enableDebugTerm();
+		haltAllCPU();
 		dumpRunqueue();
 		stackTraceHere();
 		
@@ -456,6 +468,9 @@ void isrHandler(Regs *regs)
 			kdumpregs(&thread->regs);
 			stackTrace(thread->regs.rip, thread->regs.rbp);
 			thread = thread->next;
+			
+			uint32_t count = 0xF000F000;
+			while (count--);
 		} while (thread != &firstThread);
 		
 		panic("NMI");

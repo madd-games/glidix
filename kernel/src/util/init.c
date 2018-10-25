@@ -419,7 +419,8 @@ static void spawnProc(void *stack)
 extern uint64_t getFlagsRegister();
 
 static UINT32 onPowerButton(void *ignore)
-{	
+{
+#if 0
 	siginfo_t info;
 	info.si_signo = SIGHUP;
 	info.si_code = 0;
@@ -431,6 +432,12 @@ static UINT32 onPowerButton(void *ignore)
 	info.si_band = 0;
 	info.si_value.sival_int = 0;
 	signalPidEx(1, &info, SP_NOPERM);
+	return 0;
+#endif
+
+	// for now we NMI
+	cli();
+	ASM ("int $0x02");
 	return 0;
 };
 
