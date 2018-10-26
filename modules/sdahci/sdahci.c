@@ -40,6 +40,7 @@
 #include <glidix/thread/semaphore.h>
 #include <glidix/hw/idt.h>
 #include <glidix/hw/dma.h>
+#include <glidix/util/time.h>
 
 #include "sdahci.h"
 #include "ata.h"
@@ -65,11 +66,22 @@ void ahciStartCmd(volatile AHCIPort *port)
 
 int ahciIssueCmd(volatile AHCIPort *port)
 {
+	uint64_t startTime = getNanotime();
+	
 	port->is = port->is;
 	port->ci = 1;
 	
 	while (1)
 	{
+		if (getNanotime()-startTime > 8*NANO_PER_SEC)
+		{
+			// taking longer than 8 seconds
+			kprintf("sdahci: timeout; aborting command. IS=0x%08X, SERR=0x%08X, TFD=0x%08X\n", port->is, port->serr, port->tfd);
+			ahciStopCmd(port);
+			ahciStartCmd(port);
+			return EIO;
+		};
+		
 		if (port->is & IS_ERR_FATAL)
 		{
 			// a fatal error occured
@@ -87,7 +99,16 @@ int ahciIssueCmd(volatile AHCIPort *port)
 	};
 	
 	int busy = STS_BSY | STS_DRQ;
-	while (port->tfd & busy);
+	while (port->tfd & busy)
+	{
+		if (getNanotime()-startTime > 8*NANO_PER_SEC)
+		{
+			kprintf("sdahci: timeout; aborting command. IS=0x%08X, SERR=0x%08X, TFD=0x%08X\n", port->is, port->serr, port->tfd);
+			ahciStopCmd(port);
+			ahciStartCmd(port);
+			return EIO;
+		};
+	};
 	
 	if (port->tfd & STS_ERR)
 	{
