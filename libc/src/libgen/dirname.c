@@ -36,20 +36,25 @@ char* dirname(char *buf)
 		return (char*) ".";
 	};
 	
-	char *slashPos = &buf[strlen(buf-1)];
-	while (*slashPos == '/' && slashPos != buf) slashPos--;
-	if (slashPos == buf)
+	char *end = &buf[strlen(buf)-1];
+	while (*end == '/' && end != (buf-1)) *end-- = 0;
+	
+	if (buf[0] == 0)
 	{
 		return (char*) "/";
 	};
 	
-	while (*slashPos != '/' && slashPos != buf) slashPos--;
-	
-	if (slashPos == buf) return (char*) ".";
-	else
+	char *finalSlash = strrchr(buf, '/');
+	if (finalSlash == NULL)
 	{
-		*slashPos = 0;
-		if (buf[0] == 0) return (char*) "/";
-		else return buf;
+		return (char*) ".";
 	};
+	
+	if (finalSlash == buf)
+	{
+		return (char*) "/";
+	};
+	
+	*finalSlash = 0;
+	return buf;
 };

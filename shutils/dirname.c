@@ -1,5 +1,5 @@
 /*
-	Glidix Runtime
+	Glidix Shell Utilities
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,25 +26,18 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <libgen.h>
-#include <string.h>
 
-char* basename(char *buf)
+int main(int argc, char *argv[])
 {
-	if (buf == NULL || buf[0] == 0)
+	if (argc != 2)
 	{
-		return (char*) ".";
+		fprintf(stderr, "USAGE:\t%s <path>\n", argv[0]);
+		fprintf(stderr, "\tPrint the directory component of 'path'\n");
+		return 1;
 	};
 	
-	char *end = &buf[strlen(buf)-1];
-	while (*end == '/' && end != (buf-1)) *end-- = 0;
-
-	if (buf[0] == 0)
-	{
-		return (char*) "/";
-	};
-
-	char *lastSlash = strrchr(buf, '/');
-	if (lastSlash == NULL) return buf;
-	else return lastSlash+1;
+	printf("%s\n", dirname(argv[1]));
 };
