@@ -79,6 +79,7 @@ int ahciIssueCmd(volatile AHCIPort *port)
 			kprintf("sdahci: timeout; aborting command. IS=0x%08X, SERR=0x%08X, TFD=0x%08X\n", port->is, port->serr, port->tfd);
 			ahciStopCmd(port);
 			ahciStartCmd(port);
+			port->serr = port->serr;
 			return EIO;
 		};
 		
@@ -89,6 +90,7 @@ int ahciIssueCmd(volatile AHCIPort *port)
 			
 			ahciStopCmd(port);
 			ahciStartCmd(port);
+			port->serr = port->serr;
 			return EIO;
 		};
 		
@@ -106,6 +108,7 @@ int ahciIssueCmd(volatile AHCIPort *port)
 			kprintf("sdahci: timeout; aborting command. IS=0x%08X, SERR=0x%08X, TFD=0x%08X\n", port->is, port->serr, port->tfd);
 			ahciStopCmd(port);
 			ahciStartCmd(port);
+			port->serr = port->serr;
 			return EIO;
 		};
 	};
@@ -136,6 +139,7 @@ static void ahciInit(AHCIController *ctrl)
 	{
 		if (ctrl->regs->pi & (1 << i))
 		{
+			ahciStopCmd(&ctrl->regs->ports[i]);
 			uint32_t ssts = ctrl->regs->ports[i].ssts;
 			
 			uint8_t ipm = (ssts >> 8) & 0x0F;

@@ -185,6 +185,7 @@ void ataInit(AHCIController *ctrl, int portno)
 	
 	// start the command engine
 	ahciStartCmd(dev->port);
+	dev->port->serr = dev->port->serr;
 	dev->port->is = dev->port->is;
 	
 	// send the IDENTIFY command.
