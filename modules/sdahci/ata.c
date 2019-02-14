@@ -248,6 +248,32 @@ void ataInit(AHCIController *ctrl, int portno)
 	sdpars.flags = 0;
 	sdpars.blockSize = 512;
 	sdpars.totalSize = size * 512;
+
+	// do a cache flush
+	opArea->cmdlist[0].w = 0;
+	opArea->cmdlist[0].p = 0;
+	opArea->cmdlist[0].c = 0;
+	opArea->cmdlist[0].prdtl = 0;
+
+	cmdfis->fis_type = FIS_TYPE_REG_H2D;
+	cmdfis->c = 1;
+	cmdfis->command = ATA_CMD_CACHE_FLUSH_EXT;
+	
+	cmdfis->lba0 = 0;
+	cmdfis->lba1 = 0;
+	cmdfis->lba2 = 0;
+	cmdfis->device = 1<<6;	// LBA mode
+ 
+	cmdfis->lba3 = 0;
+	cmdfis->lba4 = 0;
+	cmdfis->lba5 = 0;
+	
+	cmdfis->countl = 0;
+	cmdfis->counth = 0;
+	
+	// issue the flush command
+	int status = ahciIssueCmd(dev->port);
+	kprintf("sdahci: cache flush status: %d\n", status);
 	
 	dev->sd = sdCreate(&sdpars, model, &ataOps, dev);
 	if (dev->sd == NULL)
