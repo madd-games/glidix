@@ -33,6 +33,6 @@ __longjmp_ok:
 	mov	48(%rdi),	%r15
 	mov	56(%rdi),	%rcx
 	mov	%rsi,		%rax
-	add	%rsp,		8
+	add	$8,		%rsp
 	jmp	%rcx
 .size longjmp, .-longjmp
