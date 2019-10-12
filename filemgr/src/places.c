@@ -50,7 +50,7 @@ void plRedraw(Places *pl)
 	Category *cat;
 	for (cat=data->cats; cat!=NULL; cat=cat->next)
 	{
-		DDIPen *pen = ddiCreatePen(&canvas->format, fntCategory, 2, drawY+3, canvas->width-4, 16, 0, 0, NULL);
+		DDIPen *pen = ddiCreatePen(&canvas->format, fntCategory, 2, drawY, canvas->width-4, 16, 0, 0, NULL);
 		assert(pen != NULL);
 		ddiWritePen(pen, cat->label);
 		ddiExecutePen(pen, canvas);
@@ -69,7 +69,7 @@ void plRedraw(Places *pl)
 			
 			ddiBlit(bm->icon, 0, 0, canvas, 14, drawY+2, 16, 16);
 			
-			pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 32, drawY+4, canvas->width-34, 16, 0, 0, NULL);
+			pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 32, drawY, canvas->width-34, 16, 0, 0, NULL);
 			assert(pen != NULL);
 			ddiWritePen(pen, bm->label);
 			ddiExecutePen(pen, canvas);

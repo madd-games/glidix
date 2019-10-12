@@ -246,7 +246,7 @@ void wndInit()
 	};
 	
 	const char *error;
-	fntCaption = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_BOLD, &error);
+	fntCaption = ddiLoadFont("Lato", 16, DDI_STYLE_BOLD, &error);
 	if (fntCaption == NULL)
 	{
 		fprintf(stderr, "[gwmserver] failed to load caption font (DejaVu Sans Bold, 16): %s\n", error);
@@ -361,7 +361,7 @@ void wndDecorate(Window *decor, Window *child)
 	pthread_mutex_unlock(&child->lock);
 	
 	// caption
-	DDIPen *pen = ddiCreatePen(&decor->canvas->format, fntCaption, 30, 3, decor->params.width-30, WINDOW_CAPTION_HEIGHT-6, 0, 0, NULL);
+	DDIPen *pen = ddiCreatePen(&decor->canvas->format, fntCaption, 30, 0, decor->params.width-30, WINDOW_CAPTION_HEIGHT-6, 0, 0, NULL);
 	if (pen != NULL)
 	{
 		DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};

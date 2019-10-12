@@ -437,7 +437,7 @@ int main()
 		gwmGridLayoutAddWindow(grid, btn, 1, 1, GWM_GRID_FILL, GWM_GRID_FILL);
 	};
 	
-	gwmFit(topWindow);
+	gwmLayout(topWindow, 320, 200);
 	gwmPushEventHandler(topWindow, eventHandler, NULL);
 	gwmSetWindowFlags(topWindow, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_RESIZEABLE);
 	gwmMainLoop();

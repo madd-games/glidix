@@ -157,7 +157,7 @@ void gwmRedrawTextField(GWMWindow *field)
 		penX = 20;
 	};
 	
-	data->pen = ddiCreatePen(&canvas->format, data->font, penX, 2, canvas->width-penX-10, canvas->height-13, 0, 0, NULL);
+	data->pen = ddiCreatePen(&canvas->format, data->font, penX, 0, canvas->width-penX-10, canvas->height-13, 0, 0, NULL);
 	if (data->pen != NULL)
 	{
 		ddiSetPenWrap(data->pen, data->wrap);
@@ -272,16 +272,16 @@ void gwmRedrawTextField(GWMWindow *field)
 		if (fntPlaceHolder == NULL)
 		{
 			const char *error;
-			fntPlaceHolder = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_ITALIC, &error);
+			fntPlaceHolder = ddiLoadFont("OpenSans", 13, DDI_STYLE_ITALIC, &error);
 			if (fntPlaceHolder == NULL)
 			{
-				fprintf(stderr, "Failed to load DejaVu Sans 12 italic: %s\n", error);
+				fprintf(stderr, "Failed to load OpenSans 13 italic: %s\n", error);
 				abort();
 			};
 		};
 		
 		static DDIColor colPlaceHolder = {0x77, 0x77, 0x77, 0xFF};
-		DDIPen *pen = ddiCreatePen(&canvas->format, fntPlaceHolder, penX, 2, canvas->width-penX, canvas->height-3, 0, 0, NULL);
+		DDIPen *pen = ddiCreatePen(&canvas->format, fntPlaceHolder, penX, 0, canvas->width-penX, canvas->height-3, 0, 0, NULL);
 		ddiSetPenAlignment(pen, data->align);
 		ddiSetPenColor(pen, &colPlaceHolder);
 		ddiSetPenWrap(pen, data->wrap);

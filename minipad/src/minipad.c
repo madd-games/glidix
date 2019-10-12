@@ -291,7 +291,7 @@ int main(int argc, char *argv[])
 	gwmSetTextFieldFlags(txtEditor, GWM_TXT_MULTILINE);
 	gwmSetTextFieldWrap(txtEditor, GWM_TRUE);
 	
-	DDIFont *font = ddiLoadFont("Hack", 14, 0, NULL);
+	DDIFont *font = ddiLoadFont("Roboto Mono", 13, 0, NULL);
 	if (font == NULL)
 	{
 		fprintf(stderr, "Failed to load font!\n");

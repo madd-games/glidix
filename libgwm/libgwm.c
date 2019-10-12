@@ -226,7 +226,7 @@ int gwmInit()
 	};
 
 	const char *errmsg;
-	defaultFont = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_REGULAR, &errmsg);
+	defaultFont = ddiLoadFont("OpenSans", 13, DDI_STYLE_REGULAR, &errmsg);
 	if (defaultFont == NULL)
 	{
 		fprintf(stderr, "gwm: failed to load default font (DejaVu Sans 12): %s\n", errmsg);
@@ -236,7 +236,7 @@ int gwmInit()
 
 	gwmDefaultFontP = defaultFont;
 	
-	gwmCaptionFontP = ddiLoadFont("DejaVu Sans", 25, DDI_STYLE_BOLD, &errmsg);
+	gwmCaptionFontP = ddiLoadFont("Lato", 25, DDI_STYLE_BOLD, &errmsg);
 	if (gwmCaptionFontP == NULL)
 	{
 		fprintf(stderr, "gwm: failed to load caption font: %s\n", errmsg);
@@ -244,7 +244,7 @@ int gwmInit()
 		return -1;
 	};
 	
-	gwmStrongFontP = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_BOLD, &errmsg);
+	gwmStrongFontP = ddiLoadFont("OpenSans", 13, DDI_STYLE_BOLD, &errmsg);
 	if (gwmStrongFontP == NULL)
 	{
 		fprintf(stderr, "gwm: failed to load strong font: %s\n", errmsg);

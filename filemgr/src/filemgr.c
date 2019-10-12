@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	fntCategory = ddiLoadFont("DejaVu Sans", 12, DDI_STYLE_BOLD, NULL);
+	fntCategory = GWM_FONT_STRONG;
 	assert(fntCategory != NULL);
 	
 	if (argv[0][0] == '-')

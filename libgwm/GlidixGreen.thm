@@ -44,7 +44,7 @@ namespace gwm {
 	
 	namespace toolkit {
 		color selection #00AA00:255
-		color winback #DDDDDD:255
+		color winback #E0E0E0:255
 		color editor #FFFFFF:255
 		
 		image mbicons /usr/share/images/mbicons.png
