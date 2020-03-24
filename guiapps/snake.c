@@ -307,7 +307,7 @@ int main()
 		return 1;
 	};
 	
-	fntGameOver = ddiLoadFont("DejaVu Sans", 50, DDI_STYLE_BOLD, NULL);
+	fntGameOver = ddiLoadFont("Roboto Mono", 50, DDI_STYLE_BOLD, NULL);
 	if (fntGameOver == NULL)
 	{
 		fprintf(stderr, "Failed to load the 'GAME OVER' font!\n");

@@ -112,6 +112,8 @@ extern DDIColor* gwmEditorColorP;
 extern DDIColor* gwmBorderLightColorP;
 #define	GWM_COLOR_BORDER_DARK			gwmBorderDarkColorP
 extern DDIColor* gwmBorderDarkColorP;
+#define	GWM_COLOR_FAINT				gwmFaintColorP
+extern DDIColor* gwmFaintColorP;
 
 /**
  * Fonts.
@@ -634,6 +636,11 @@ typedef struct
 	DDIColor				colSyntaxComment;
 	DDIColor				colSyntaxString;
 	DDIColor				colSyntaxPreproc;
+	
+	/**
+	 * "Faint" color, border of most widgets.
+	 */
+	DDIColor				colFaint;
 } GWMInfo;
 
 /**
@@ -1375,6 +1382,7 @@ typedef GWMWindow GWMTabList;
 typedef GWMWindow GWMTab;
 typedef GWMWindow GWMScale;
 typedef GWMWindow GWMProgressBar;
+typedef GWMWindow GWMRadioButton;
 
 /**
  * Typedef tab lists.
@@ -1558,8 +1566,7 @@ void gwmQuit();
 
 /**
  * Post an event to the given window. Returns the final event status:
- *	GWM_EVSTATUS_OK if all handlers returned GWM_EVSTATUS_OK or GWM_EVSTATUS_CONT
- *	GWM_EVSTATUS_BREAK if some handler returned it
+ *	GWM_EVSTATUS_DEFAULT if the default action should be performed
  */
 int gwmPostEvent(GWMEvent *ev, GWMWindow *win);
 
@@ -1577,6 +1584,16 @@ GWMWindow* gwmCreateWindow(
 	int x, int y,
 	int width, int height,
 	int flags);
+
+/**
+ * Create a new child window (widget).
+ */
+GWMWindow* gwmNewChildWindow(GWMWindow *parent);
+
+/**
+ * Create a new top-level window (initially hidden, and off the taskbar).
+ */
+GWMWindow* gwmNewTopLevelWindow();
 
 /**
  * Return the DDI surface representing the window.
@@ -1634,6 +1651,22 @@ void gwmPostUpdateEx(GWMWindow *win, int type, int value);
 void gwmPushEventHandler(GWMWindow *win, GWMEventHandler handler, void *context);
 
 /**
+ * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
+ * Returns 0 on success, -1 on error.
+ */
+int gwmSetWindowCursor(GWMWindow *win, int cursor);
+
+/**
+ * Sets the icon of a window. The specified surface must use the "GWM icon layout".
+ */
+int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon);
+
+/**
+ * Get the current icon surface of the specified window.
+ */
+DDISurface* gwmGetWindowIcon(GWMWindow *win);
+
+/**
  * Starts the main loop. Returns after an event handler requests an exit by returning -1.
  * You must use this when using the widget toolkit.
  */
@@ -1643,6 +1676,8 @@ void gwmMainLoop();
  * Creates a new button in the specified window, with absolute coordinates. Use is discouraged; use
  * gwmNewButton(), followed by appropriate calls to property-setting functions. Alternatively, you
  * could use a convenience wrapper such as gwmCreateStockButton() or gwmCreateButtonWithLabel().
+ * 
+ * DEPRECATED
  */
 GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, int width, int flags);
 
@@ -1650,47 +1685,49 @@ GWMWindow* gwmCreateButton(GWMWindow *parent, const char *text, int x, int y, in
  * Create a new button in the specified window. This call should be followed by property-setting
  * calls.
  */
-GWMWindow *gwmNewButton(GWMWindow *parent);
+GWMButton *gwmNewButton(GWMWindow *parent);
 
 /**
  * Create a stock button with the given symbol.
  */
-GWMWindow* gwmCreateStockButton(GWMWindow *parent, int symbol);
+GWMButton* gwmCreateStockButton(GWMWindow *parent, int symbol);
 
 /**
  * Create a button with the given symbol and label. For common system buttons (stock buttons), use
  * gwmCreateStockButton() to get the correctly-translated label.
  */
-GWMWindow* gwmCreateButtonWithLabel(GWMWindow *parent, int symbol, const char *label);
+GWMButton* gwmCreateButtonWithLabel(GWMWindow *parent, int symbol, const char *label);
 
 /**
  * Destroys a button.
  */
-void gwmDestroyButton(GWMWindow *button);
+void gwmDestroyButton(GWMButton *button);
 
 /**
  * Set the label of a button.
  */
-void gwmSetButtonLabel(GWMWindow *button, const char *label);
+void gwmSetButtonLabel(GWMButton *button, const char *label);
 
 /**
  * Set button flags.
  */
-void gwmSetButtonFlags(GWMWindow *button, int flags);
+void gwmSetButtonFlags(GWMButton *button, int flags);
 
 /**
  * Set the symbol of a button.
  */
-void gwmSetButtonSymbol(GWMWindow *button, int symbol);
+void gwmSetButtonSymbol(GWMButton *button, int symbol);
 
 /**
  * Set the preferred width of a button. If set to 0 (the default), the preferred width is the same as
  * the minimum width required to fit the text.
  */
-void gwmSetButtonPrefWidth(GWMWindow *button, int width);
+void gwmSetButtonPrefWidth(GWMButton *button, int width);
 
 /**
  * Set the callback function for a button. Return value is the same as for event handlers.
+ * 
+ * DEPRECATED
  */
 typedef int (*GWMButtonCallback)(void *param);
 void gwmSetButtonCallback(GWMWindow *button, GWMButtonCallback callback, void *param);
@@ -1841,22 +1878,6 @@ void gwmSetTextFieldColorRange(GWMTextField *field, size_t start, size_t end, DD
  * Insert text into a text field, at the cursor position.
  */
 void gwmTextFieldInsert(GWMWindow *field, const char *str);
-
-/**
- * Sets which cursor should be used by a window. The cursor is one of the GWM_CURSOR_* macros.
- * Returns 0 on success, -1 on error.
- */
-int gwmSetWindowCursor(GWMWindow *win, int cursor);
-
-/**
- * Sets the icon of a window. The specified surface must use the "GWM icon layout".
- */
-int gwmSetWindowIcon(GWMWindow *win, DDISurface *icon);
-
-/**
- * Get the current icon surface of the specified window.
- */
-DDISurface* gwmGetWindowIcon(GWMWindow *win);
 
 /**
  * Returns the default font for use with DDI.
@@ -2187,28 +2208,28 @@ GWMWindow* gwmCreateRadioButton(GWMWindow *parent, int x, int y, GWMRadioGroup *
 /**
  * Create a radio button within the specified group, with the specified parent.
  */
-GWMWindow* gwmNewRadioButton(GWMWindow *parent, GWMRadioGroup *group);
+GWMRadioButton* gwmNewRadioButton(GWMWindow *parent, GWMRadioGroup *group);
 
 /**
  * Change the value associated with a radio button; this is the value that the group will be set to when the
  * radio button is selected.
  */
-void gwmSetRadioButtonValue(GWMWindow *radio, int value);
+void gwmSetRadioButtonValue(GWMRadioButton *radio, int value);
 
 /**
  * Change the label of a radio button.
  */
-void gwmSetRadioButtonLabel(GWMWindow *radio, const char *text);
+void gwmSetRadioButtonLabel(GWMRadioButton *radio, const char *text);
 
 /**
  * Set the symbol of a radio button.
  */
-void gwmSetRadioButtonSymbol(GWMWindow *radio, int symbol);
+void gwmSetRadioButtonSymbol(GWMRadioButton *radio, int symbol);
 
 /**
  * Destroy a radio button.
  */
-void gwmDestroyRadioButton(GWMWindow *radio);
+void gwmDestroyRadioButton(GWMRadioButton *radio);
 
 /**
  * Create a slider.

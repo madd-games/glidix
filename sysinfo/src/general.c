@@ -38,6 +38,8 @@
 #include <pthread.h>
 #include <poll.h>
 #include <sys/utsname.h>
+#include <sys/systat.h>
+#include <sys/call.h>
 #include <errno.h>
 #include <libddi.h>
 
@@ -46,6 +48,9 @@ GWMWindow* newGeneralTab(GWMWindow *notebook)
 	struct utsname info;
 	uname(&info);
 
+	struct system_state sst;
+	__syscall(__SYS_systat, &sst, sizeof(struct system_state));
+	
 	char *dispdev = realpath("/run/gwmdisp", NULL);
 	if (dispdev == NULL)
 	{
@@ -71,6 +76,11 @@ GWMWindow* newGeneralTab(GWMWindow *notebook)
 	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, ddiDriver->renderString, 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, "GWM display device:", 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
 	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, dispdev, 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmGridLayoutAddWindow(grid, gwmCreateLabel(tab, "RAM use:", 0), 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	
+	GWMProgressBar *progMemUsage = gwmNewProgressBar(tab);
+	gwmGridLayoutAddWindow(grid, progMemUsage, 1, 1, GWM_GRID_FILL, GWM_GRID_CENTER);
+	gwmSetScaleValue(progMemUsage, (double) (sst.sst_frames_used - sst.sst_frames_cached) / (double) sst.sst_frames_total);
 
 	free(dispdev);
 	return tab;

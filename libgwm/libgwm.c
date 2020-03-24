@@ -95,6 +95,7 @@ DDIColor* gwmBackColorP;
 DDIColor* gwmEditorColorP;
 DDIColor* gwmBorderLightColorP;
 DDIColor* gwmBorderDarkColorP;
+DDIColor* gwmFaintColorP;
 
 static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 {
@@ -287,6 +288,7 @@ int gwmInit()
 	gwmEditorColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.editor", GWM_TYPE_COLOR, NULL);
 	gwmBorderLightColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.border.light", GWM_TYPE_COLOR, NULL);
 	gwmBorderDarkColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.border.dark", GWM_TYPE_COLOR, NULL);
+	gwmFaintColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.faint", GWM_TYPE_COLOR, NULL);
 	
 	assert(gwmColorSelectionP != NULL);
 	assert(gwmBackColorP != NULL);
@@ -509,6 +511,16 @@ GWMWindow* gwmCreateWindow(
 	// failed to create it
 	ddiDeleteSurface(canvas);
 	return NULL;
+};
+
+GWMWindow* gwmNewChildWindow(GWMWindow *parent)
+{
+	return gwmCreateWindow(parent, "", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0, 0);
+};
+
+GWMWindow* gwmNewTopLevelWindow()
+{
+	return gwmCreateWindow(NULL, "GWMWindow", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 };
 
 void gwmAcceptTabs(GWMWindow *win)

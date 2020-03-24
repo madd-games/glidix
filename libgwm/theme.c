@@ -61,6 +61,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.tools.shutdown",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgShutdown)},
 	{"gwm.toolkit.selection",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colSelection)},
 	{"gwm.toolkit.winback",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colWinBack)},
+	{"gwm.toolkit.faint",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colFaint)},
 	{"gwm.toolkit.editor",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colEditor)},
 	{"gwm.toolkit.mbicons",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgMessageIcons)},
 	{"gwm.toolkit.button",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgButton)},

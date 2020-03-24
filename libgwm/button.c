@@ -132,7 +132,6 @@ static void gwmRedrawButton(GWMWindow *button)
 {
 	GWMButtonData *data = (GWMButtonData*) gwmGetData(button, gwmButtonHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(button);
-	if (canvas->width == 0 && data->minWidth != 0) return;
 
 	static DDIColor transparent = {0, 0, 0, 0};
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);

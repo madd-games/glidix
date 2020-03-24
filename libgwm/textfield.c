@@ -126,8 +126,7 @@ void gwmRedrawTextField(GWMWindow *field)
 	DDISurface *canvas = gwmGetWindowCanvas(field);
 	
 	static DDIColor transparent = {0, 0, 0, 0};
-	static DDIColor normalBorderColor = {0, 0, 0, 0xFF};
-	DDIColor *color = &normalBorderColor;
+	DDIColor *color = GWM_COLOR_FAINT;
 	if (data->focused)
 	{
 		color = GWM_COLOR_SELECTION;

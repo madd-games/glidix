@@ -59,12 +59,11 @@ static void redrawNotebook(GWMWindow *notebook)
 		};
 	};
 	
-	static DDIColor black = {0, 0, 0, 0xFF};
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, GWM_COLOR_BACKGROUND);
-	ddiFillRect(canvas, 0, 20, 1, canvas->height-20, &black);
-	ddiFillRect(canvas, 0, canvas->height-1, canvas->width, 1, &black);
-	ddiFillRect(canvas, canvas->width-1, 20, 1, canvas->height-20, &black);
-	ddiFillRect(canvas, 0, 19, canvas->width, 1, &black);
+	ddiFillRect(canvas, 0, 20, 1, canvas->height-20, GWM_COLOR_FAINT);
+	ddiFillRect(canvas, 0, canvas->height-1, canvas->width, 1, GWM_COLOR_FAINT);
+	ddiFillRect(canvas, canvas->width-1, 20, 1, canvas->height-20, GWM_COLOR_FAINT);
+	ddiFillRect(canvas, 0, 19, canvas->width, 1, GWM_COLOR_FAINT);
 	
 	// draw tabs
 	GWMWindow* activeTab = gwmGetActiveTab(notebook);

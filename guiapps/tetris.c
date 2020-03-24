@@ -520,7 +520,7 @@ int main()
 	);
 	assert(topWindow != NULL);
 
-	fntGameOver = ddiLoadFont("DejaVu Sans", 25, DDI_STYLE_BOLD, NULL);
+	fntGameOver = ddiLoadFont("Roboto Mono", 25, DDI_STYLE_BOLD, NULL);
 	assert(fntGameOver != NULL);
 	
 	DDISurface *canvas = gwmGetWindowCanvas(topWindow);

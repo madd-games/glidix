@@ -57,8 +57,9 @@ int main()
 		caption = "System Information (admin mode)";
 	};
 	
-	GWMWindow *win = gwmCreateWindow(NULL, caption, GWM_POS_UNSPEC, GWM_POS_UNSPEC,
-						0, 0, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_HIDDEN);
+	GWMWindow *win = gwmNewTopLevelWindow();
+	gwmSetWindowCaption(win, caption);
+	
 	topWindow = win;
 	
 	DDISurface *canvas = gwmGetWindowCanvas(win);
@@ -73,7 +74,7 @@ int main()
 	gwmSetWindowLayout(win, box);
 	
 	GWMWindow *notebook = gwmNewNotebook(win);
-	gwmBoxLayoutAddWindow(box, notebook, 1, 0, GWM_BOX_FILL);
+	gwmBoxLayoutAddWindow(box, notebook, 1, 2, GWM_BOX_FILL | GWM_BOX_ALL);
 	
 	GWMWindow *defTab = newGeneralTab(notebook);
 	newProcTab(notebook);
