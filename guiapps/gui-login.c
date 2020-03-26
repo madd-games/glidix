@@ -40,14 +40,10 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#define	WIN_WIDTH	232
-#define	WIN_HEIGHT	78
+GWMTextField* txtUsername;
+GWMTextField* txtPassword;
+GWMButton* btnLogin;
 
-GWMWindow *txtUsername;
-GWMWindow *txtPassword;
-
-//char username[128];
-//char password[128];
 const char *username;
 const char *password;
 char passcrypt[128];
@@ -163,7 +159,7 @@ int findPassword(const char *username)
 	return -1;
 };
 
-int logInCallback(void *ignore)
+int doLogin()
 {
 	username = gwmReadTextField(txtUsername);
 	password = gwmReadTextField(txtPassword);
@@ -173,13 +169,13 @@ int logInCallback(void *ignore)
 	{
 		sleep(3);
 		gwmMessageBox(NULL, "Error", "Invalid username or password.", GWM_MBICON_ERROR | GWM_MBUT_OK);
-		return 0;
+		return GWM_EVSTATUS_CONT;
 	};
 
 	if (findPassword(username) != 0)
 	{
 		gwmMessageBox(NULL, "Error", "This user is not in /etc/shadow!", GWM_MBICON_WARN | GWM_MBUT_OK);
-		return 0;
+		return GWM_EVSTATUS_CONT;
 	};
 
 	if (strcmp(crypt(password, passcrypt), passcrypt) == 0)
@@ -264,7 +260,7 @@ int logInCallback(void *ignore)
 			_exit(1);
 		};
 		
-		return -1;
+		return GWM_EVSTATUS_BREAK;
 	}
 	else
 	{
@@ -272,11 +268,41 @@ int logInCallback(void *ignore)
 		gwmMessageBox(NULL, "Error", "Invalid username or password.", GWM_MBICON_ERROR | GWM_MBUT_OK);
 	};
 	
-	return 0;
+	return GWM_EVSTATUS_CONT;
+};
+
+int eventHandler(GWMEvent *ev, GWMWindow *win, void *context)
+{
+	GWMCommandEvent *cmd = (GWMCommandEvent*) ev;
+	
+	switch (ev->type)
+	{
+	case GWM_EVENT_COMMAND:
+		if (cmd->symbol == GWM_SYM_OK)
+		{
+			return doLogin();
+		};
+		return GWM_EVSTATUS_CONT;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
 };
 
 int main(int argc, char *argv[])
 {
+	if (gwmInit() != 0)
+	{
+		fprintf(stderr, "%s: could not initialize GWM!\n", argv[0]);
+		return 1;
+	};
+	
+	if ((geteuid() != 0) || (getuid() != 0))
+	{
+		gwmMessageBox(NULL, "Error", "Login program requires root privileges.", GWM_MBICON_ERROR | GWM_MBUT_OK);
+		gwmQuit();
+		return 1;
+	};
+	
 	// set up default background
 	pid_t pid = fork();
 	if (pid == -1)
@@ -313,56 +339,51 @@ int main(int argc, char *argv[])
 		waitpid(pid, NULL, 0);
 	};
 	
-	if (gwmInit() != 0)
-	{
-		fprintf(stderr, "%s: could not initialize GWM!\n", argv[0]);
-		return 1;
-	};
+	GWMWindow *top = gwmNewPlainWindow();
+	gwmPushEventHandler(top, eventHandler, NULL);
 	
-	if ((geteuid() != 0) || (getuid() != 0))
-	{
-		gwmMessageBox(NULL, "Error", "Login program requires root privileges.", GWM_MBICON_ERROR | GWM_MBUT_OK);
-		gwmQuit();
-		return 1;
-	};
+	GWMLayout *box = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(top, box);
 	
-	int width, height;
-	gwmScreenSize(&width, &height);
+	GWMLayout *flex = gwmCreateFlexLayout(3);
+	gwmBoxLayoutAddLayout(box, flex, 0, 2, GWM_BOX_ALL);
 	
-	GWMWindow *win = gwmCreateWindow(NULL, "Login", width/2-WIN_WIDTH/2, height/2-WIN_HEIGHT/2,
-						WIN_WIDTH, WIN_HEIGHT, GWM_WINDOW_MKFOCUSED | GWM_WINDOW_NODECORATE);
-	if (win == NULL)
-	{
-		fprintf(stderr, "Failed to create window!\n");
-		gwmQuit();
-		return 1;
-	};
+	GWMLabel *lblUsername = gwmNewLabel(top);
+	gwmSetLabelText(lblUsername, "Username:");
+	gwmFlexLayoutAddWindow(flex, lblUsername, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	
-	DDISurface *canvas = gwmGetWindowCanvas(win);
-	DDIColor background = {0x00, 0x00, 0xAA, 0x77};
-	ddiFillRect(canvas, 0, 0, WIN_WIDTH, WIN_HEIGHT, &background);
+	gwmFlexLayoutAddLayout(flex, gwmCreateStaticLayout(2, 2, 2, 2), 0, 0, GWM_FLEX_FILL, GWM_FLEX_FILL);
 	
-	DDIColor white = {0xFF, 0xFF, 0xFF, 0xFF};
+	txtUsername = gwmNewTextField(top);
+	gwmFlexLayoutAddWindow(flex, txtUsername, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 	
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, 4, 100, 20, 0, 0, NULL);
-	ddiSetPenColor(pen, &white);
-	ddiWritePen(pen, "Username:");
-	ddiExecutePen(pen, canvas);
-	ddiDeletePen(pen);
+	gwmFlexLayoutAddLayout(flex, gwmCreateStaticLayout(2, 2, 2, 2), 0, 0, GWM_FLEX_FILL, GWM_FLEX_FILL);
+	gwmFlexLayoutAddLayout(flex, gwmCreateStaticLayout(2, 2, 2, 2), 0, 0, GWM_FLEX_FILL, GWM_FLEX_FILL);
+	gwmFlexLayoutAddLayout(flex, gwmCreateStaticLayout(2, 2, 2, 2), 0, 0, GWM_FLEX_FILL, GWM_FLEX_FILL);
+	
+	GWMLabel *lblPassword = gwmNewLabel(top);
+	gwmSetLabelText(lblPassword, "Password:");
+	gwmFlexLayoutAddWindow(flex, lblPassword, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
+	
+	gwmFlexLayoutAddLayout(flex, gwmCreateStaticLayout(2, 2, 2, 2), 0, 0, GWM_FLEX_FILL, GWM_FLEX_FILL);
+	
+	txtPassword = gwmNewTextField(top);
+	gwmSetTextFieldFlags(txtPassword, GWM_TXT_MASKED);
+	gwmFlexLayoutAddWindow(flex, txtPassword, 0, 0, GWM_FLEX_FILL, GWM_FLEX_CENTER);
 
-	pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, 26, 100, 20, 0, 0, NULL);
-	ddiSetPenColor(pen, &white);
-	ddiWritePen(pen, "Password:");
-	ddiExecutePen(pen, canvas);
-	ddiDeletePen(pen);
+	GWMSeparator *sep = gwmNewSeparator(top);
+	gwmBoxLayoutAddWindow(box, sep, 0, 2, GWM_BOX_LEFT | GWM_BOX_RIGHT | GWM_BOX_FILL);
 	
-	txtUsername = gwmCreateTextField(win, "", 80, 2, 150, 0);
-	txtPassword = gwmCreateTextField(win, "", 80, 24, 150, GWM_TXT_MASKED);
+	GWMLayout *btnbox = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
+	gwmBoxLayoutAddLayout(box, btnbox, 0, 2, GWM_BOX_FILL | GWM_BOX_ALL);
 	
-	GWMWindow *btnLogIn = gwmCreateButton(win, "Log in", 2, 46, 50, 0);
-	gwmSetButtonCallback(btnLogIn, logInCallback, NULL);
+	gwmBoxLayoutAddSpacer(btnbox, 1, 0, 0);
 	
-	gwmPostDirty(win);
+	btnLogin = gwmCreateButtonWithLabel(top, GWM_SYM_OK, "Log in");
+	gwmBoxLayoutAddWindow(btnbox, btnLogin, 0, 0, 0);
+	
+	gwmFit(top);
+	gwmSetWindowFlags(top, GWM_WINDOW_MKFOCUSED);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;
