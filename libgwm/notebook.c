@@ -39,8 +39,6 @@ typedef struct
 	int			hoveredTab;
 } NotebookData;
 
-static DDISurface *imgNotebook = NULL;
-
 static int notebookHandler(GWMEvent *ev, GWMWindow *tablist, void *context);
 
 static void redrawNotebook(GWMWindow *notebook)
@@ -48,16 +46,8 @@ static void redrawNotebook(GWMWindow *notebook)
 	NotebookData *data = (NotebookData*) gwmGetData(notebook, notebookHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(notebook);
 	if (canvas->width == 0) return;
-
-	if (imgNotebook == NULL)
-	{
-		imgNotebook = (DDISurface*) gwmGetThemeProp("gwm.toolkit.notebook", GWM_TYPE_SURFACE, NULL);
-		if (imgNotebook == NULL)
-		{
-			fprintf(stderr, "Failed to load notebook image\n");
-			abort();
-		};
-	};
+	
+	DDISurface *imgNotebook = gwmGetThemeSurface("gwm.toolkit.notebook");
 	
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, GWM_COLOR_BACKGROUND);
 	ddiFillRect(canvas, 0, 20, 1, canvas->height-20, GWM_COLOR_FAINT);

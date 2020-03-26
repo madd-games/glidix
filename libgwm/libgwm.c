@@ -523,6 +523,11 @@ GWMWindow* gwmNewTopLevelWindow()
 	return gwmCreateWindow(NULL, "GWMWindow", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
 };
 
+GWMWindow* gwmNewPlainWindow()
+{
+	return gwmCreateWindow(NULL, "GWMWindow", GWM_POS_UNSPEC, GWM_POS_UNSPEC, 0, 0, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NODECORATE);
+};
+
 void gwmAcceptTabs(GWMWindow *win)
 {
 	win->tabAccept = 1;

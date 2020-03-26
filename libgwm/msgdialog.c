@@ -35,8 +35,6 @@
 
 #define	MSG_MAX_BUTTONS				4
 
-static DDISurface *imgMessageIcons;
-
 typedef struct
 {
 	/**
@@ -95,17 +93,6 @@ GWMWindow* gwmNewMessageDialog(GWMWindow *parent)
 	data->width = data->height = 0;
 	data->parent = parent;
 	
-	if (imgMessageIcons == NULL)
-	{
-		int error;
-		imgMessageIcons = (DDISurface*) gwmGetThemeProp("gwm.toolkit.mbicons", GWM_TYPE_SURFACE, &error);
-		if (imgMessageIcons == NULL)
-		{
-			fprintf(stderr, "libgwm: could not get theme property `gwm.toolkit.mbicons': error %d\n", error);
-			abort();
-		};
-	};
-	
 	gwmPushEventHandler(win, msgHandler, data);
 	return win;
 };
@@ -140,7 +127,7 @@ void gwmSetMessageIconStd(GWMWindow *msg, int inum)
 	}
 	else
 	{
-		data->surf = imgMessageIcons;
+		data->surf = gwmGetThemeSurface("gwm.toolkit.mbicons");
 		data->x = 32 * (inum-1);
 		data->y = 0;
 		data->width = 32;

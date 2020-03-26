@@ -67,8 +67,6 @@ typedef struct
 	char*					format;
 } IntSpinnerData;
 
-static DDISurface* imgSpin;
-
 static int spinHandler(GWMEvent *ev, GWMSpinner *spin, void *context);
 
 static void redrawSpinner(GWMSpinner *spin)
@@ -76,15 +74,7 @@ static void redrawSpinner(GWMSpinner *spin)
 	SpinnerData *data = (SpinnerData*) gwmGetData(spin, spinHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(spin);
 	
-	if (imgSpin == NULL)
-	{
-		imgSpin = (DDISurface*) gwmGetThemeProp("gwm.toolkit.spin", GWM_TYPE_SURFACE, NULL);
-		if (imgSpin == NULL)
-		{
-			fprintf(stderr, "Failed to load spinner image\n");
-			abort();
-		};
-	};
+	DDISurface *imgSpin = gwmGetThemeSurface("gwm.toolkit.spin");
 	
 	static DDIColor transparent = {0x00, 0x00, 0x00, 0x00};
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);

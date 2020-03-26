@@ -60,8 +60,6 @@ typedef struct
 	OptmenuOption*		optStack;
 } OptmenuData;
 
-static DDISurface *imgOptmenu;
-
 static int optmenuHandler(GWMEvent *ev, GWMWindow *optmenu, void *context);
 
 static void redrawOptmenu(GWMWindow *optmenu)
@@ -69,15 +67,7 @@ static void redrawOptmenu(GWMWindow *optmenu)
 	OptmenuData *data = (OptmenuData*) gwmGetData(optmenu, optmenuHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(optmenu);
 	
-	if (imgOptmenu == NULL)
-	{
-		imgOptmenu = (DDISurface*) gwmGetThemeProp("gwm.toolkit.optmenu", GWM_TYPE_SURFACE, NULL);
-		if (imgOptmenu == NULL)
-		{
-			fprintf(stderr, "Failed to load option menu image\n");
-			abort();
-		};
-	};
+	DDISurface *imgOptmenu = gwmGetThemeSurface("gwm.toolkit.optmenu");
 	
 	DDIColor transparent = {0, 0, 0, 0};
 	ddiFillRect(canvas, 0, 0, canvas->width, OPTMENU_HEIGHT, &transparent);

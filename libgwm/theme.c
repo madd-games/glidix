@@ -513,3 +513,54 @@ void* gwmGetThemeProp(const char *name, int type, int *errOut)
 	if (errOut != NULL) *errOut = GWM_ERR_NOENT;
 	return NULL;
 };
+
+static unsigned long computeHash(const char *name_)
+{
+	const unsigned char *name = (const unsigned char*) name_;
+	unsigned long h = 0;
+	int c;
+	
+	while ((c = *name++))
+	{
+		h = c + (h << 6) + (h << 16) - h;
+	};
+
+	return h;
+};
+
+typedef struct ImageCacheEntry_ ImageCacheEntry;
+struct ImageCacheEntry_
+{
+	ImageCacheEntry *next;
+	char *name;
+	DDISurface *surface;
+};
+
+DDISurface* gwmGetThemeSurface(const char *name)
+{
+	static ImageCacheEntry* table[64];
+	int bucket = computeHash(name) % 64;
+	
+	ImageCacheEntry *ent;
+	for (ent=table[bucket]; ent!=NULL; ent=ent->next)
+	{
+		if (strcmp(ent->name, name) == 0)
+		{
+			return ent->surface;
+		};
+	};
+	
+	ent = (ImageCacheEntry*) malloc(sizeof(ImageCacheEntry));
+	ent->next = table[bucket];
+	ent->name = strdup(name);
+	ent->surface = (DDISurface*) gwmGetThemeProp(name, GWM_TYPE_SURFACE, NULL);
+	
+	if (ent->surface == NULL)
+	{
+		fprintf(stderr, "libgwm: failed to load theme image %s\n", name);
+		abort();
+	};
+	
+	table[bucket] = ent;
+	return ent->surface;
+};

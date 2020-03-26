@@ -39,8 +39,6 @@ enum
 	CB_MSTATE_CLICKED
 };
 
-static DDISurface *imgCheckbox = NULL;
-
 typedef struct
 {
 	int					state;
@@ -67,15 +65,7 @@ static void gwmRedrawCheckbox(GWMWindow *checkbox)
 		whichY = 3;
 	};
 	
-	if (imgCheckbox == NULL)
-	{
-		imgCheckbox = (DDISurface*) gwmGetThemeProp("gwm.toolkit.checkbox", GWM_TYPE_SURFACE, NULL);
-		if (imgCheckbox == NULL)
-		{
-			fprintf(stderr, "Failed to load checkbox image\n");
-			abort();
-		};
-	};
+	DDISurface *imgCheckbox = gwmGetThemeSurface("gwm.toolkit.checkbox");
 	
 	ddiBlit(imgCheckbox, 20*data->state, 20*whichY, canvas, 0, 0, 20, 20);
 

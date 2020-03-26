@@ -39,8 +39,6 @@ enum
 	TOOL_BUTTON_STATE_CLICKED
 };
 
-static DDISurface *imgToolButton = NULL;
-
 typedef struct
 {
 	DDISurface*		icon;
@@ -111,16 +109,7 @@ static void redrawToolButton(GWMWindow *toolbtn)
 	
 	int whichImg = data->state;
 	
-	if (imgToolButton == NULL)
-	{
-		imgToolButton = (DDISurface*) gwmGetThemeProp("gwm.toolkit.toolbtn", GWM_TYPE_SURFACE, NULL);
-		if (imgToolButton == NULL)
-		{
-			fprintf(stderr, "Failed to load tool button image\n");
-			abort();
-		};
-	};
-	
+	DDISurface *imgToolButton = gwmGetThemeSurface("gwm.toolkit.toolbtn");
 	ddiBlit(imgToolButton, 0, 30*whichImg, canvas, 0, 0, 30, 30);
 	
 	DDISurface *icon = data->icon;

@@ -1383,6 +1383,7 @@ typedef GWMWindow GWMTab;
 typedef GWMWindow GWMScale;
 typedef GWMWindow GWMProgressBar;
 typedef GWMWindow GWMRadioButton;
+typedef GWMWindow GWMSeparator;
 
 /**
  * Typedef tab lists.
@@ -1594,6 +1595,11 @@ GWMWindow* gwmNewChildWindow(GWMWindow *parent);
  * Create a new top-level window (initially hidden, and off the taskbar).
  */
 GWMWindow* gwmNewTopLevelWindow();
+
+/**
+ * Create a new plain top-level window (no window decorations).
+ */
+GWMWindow* gwmNewPlainWindow();
 
 /**
  * Return the DDI surface representing the window.
@@ -1818,7 +1824,7 @@ void gwmDestroyTextField(GWMTextField *txt);
 /**
  * Returns a READ-ONLY NUL-terminated UTF-8 string containing the text field text. This string must
  * not be used after further calls to text field functions are made, or if the main loop is used!
- * The text field continues to won this function.
+ * The text field continues to own this string.
  */
 const char* gwmReadTextField(GWMTextField *field);
 
@@ -2410,6 +2416,11 @@ int gwmGlobalThemeInit(DDIPixelFormat *format);
 void* gwmGetThemeProp(const char *name, int type, int *errOut);
 
 /**
+ * Get a surface from the theme, with the specified property name. Aborts on failure.
+ */
+DDISurface* gwmGetThemeSurface(const char *name);
+
+/**
  * Inform all applications and the window manager that the theme has changed.
  */
 void gwmRetheme();
@@ -2988,5 +2999,15 @@ void gwmAddStatusBarWindow(GWMWindow *statbar, GWMWindow *child);
  * the name of a game, and is used to decide which file should store the score.
  */
 void gwmHighScore(const char *gameName, int score);
+
+/**
+ * Create a separator.
+ */
+GWMSeparator* gwmNewSeparator(GWMWindow *parent);
+
+/**
+ * Destroy a separator.
+ */
+void gwmDestroySeparator(GWMSeparator *sep);
 
 #endif

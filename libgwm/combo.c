@@ -78,8 +78,6 @@ typedef struct
 	int					state;
 } ComboData;
 
-static DDISurface *imgCombo;
-
 static int comboHandler(GWMEvent *ev, GWMCombo *combo, void *context);
 
 static void redrawCombo(GWMCombo *combo)
@@ -87,15 +85,7 @@ static void redrawCombo(GWMCombo *combo)
 	ComboData *data = (ComboData*) gwmGetData(combo, comboHandler);
 	DDISurface *canvas = gwmGetWindowCanvas(combo);
 	
-	if (imgCombo == NULL)
-	{
-		imgCombo = (DDISurface*) gwmGetThemeProp("gwm.toolkit.combo", GWM_TYPE_SURFACE, NULL);
-		if (imgCombo == NULL)
-		{
-			fprintf(stderr, "Failed to load combo image\n");
-			abort();
-		};
-	};
+	DDISurface *imgCombo = gwmGetThemeSurface("gwm.toolkit.combo");
 	
 	static DDIColor transparent = {0x00, 0x00, 0x00, 0x00};
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);

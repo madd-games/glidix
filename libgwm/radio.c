@@ -50,8 +50,6 @@ enum
 	RADIO_DISABLED
 };
 
-static DDISurface *imgRadio = NULL;
-
 typedef struct GWMRadioData_
 {
 	GWMWindow*				win;
@@ -99,17 +97,8 @@ static void gwmRedrawRadio(GWMWindow *radio)
 
 	static DDIColor transparent = {0, 0, 0, 0};
 	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
-
-	if (imgRadio == NULL)
-	{
-		imgRadio = (DDISurface*) gwmGetThemeProp("gwm.toolkit.radio", GWM_TYPE_SURFACE, NULL);
-		if (imgRadio == NULL)
-		{
-			fprintf(stderr, "Failed to load radio button image\n");
-			abort();
-		};
-	};
 	
+	DDISurface *imgRadio = gwmGetThemeSurface("gwm.toolkit.radio");
 	ddiBlit(imgRadio, RADIO_WIDTH*ix, RADIO_HEIGHT*iy, canvas, 0, 0, RADIO_WIDTH, RADIO_HEIGHT);
 
 	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height, 0, 0, NULL);

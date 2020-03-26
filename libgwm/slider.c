@@ -39,7 +39,6 @@ typedef struct
 	int				clicked;
 } SliderData;
 
-static DDISurface* imgSlider;
 static DDIColor *colSliderActive;
 static DDIColor *colSliderInactive;
 static DDIColor *colSliderDisabled;
@@ -49,16 +48,10 @@ static int sliderHandler(GWMEvent *ev, GWMWindow *slider, void *context);
 static void redrawSlider(GWMWindow *slider)
 {
 	SliderData *data = (SliderData*) gwmGetData(slider, sliderHandler);
-
-	if (imgSlider == NULL)
+	DDISurface *imgSlider = gwmGetThemeSurface("gwm.toolkit.slider");
+	
+	if (colSliderActive == NULL)
 	{
-		imgSlider = (DDISurface*) gwmGetThemeProp("gwm.toolkit.slider", GWM_TYPE_SURFACE, NULL);
-		if (imgSlider == NULL)
-		{
-			fprintf(stderr, "libgwm: failed to load slider image\n");
-			abort();
-		};
-		
 		colSliderActive = (DDIColor*) gwmGetThemeProp("gwm.toolkit.slider.active", GWM_TYPE_COLOR, NULL);
 		colSliderInactive = (DDIColor*) gwmGetThemeProp("gwm.toolkit.slider.inactive", GWM_TYPE_COLOR, NULL);
 		colSliderDisabled = (DDIColor*) gwmGetThemeProp("gwm.toolkit.slider.disabled", GWM_TYPE_COLOR, NULL);

@@ -43,8 +43,6 @@ enum
 	BUTTON_STATE_CLICKED
 };
 
-static DDISurface *imgButton = NULL;
-
 typedef struct
 {
 	char			*text;
@@ -142,15 +140,7 @@ static void gwmRedrawButton(GWMWindow *button)
 		whichImg = 3;
 	};
 	
-	if (imgButton == NULL)
-	{
-		imgButton = (DDISurface*) gwmGetThemeProp("gwm.toolkit.button", GWM_TYPE_SURFACE, NULL);
-		if (imgButton == NULL)
-		{
-			fprintf(stderr, "Failed to load button image\n");
-			abort();
-		};
-	};
+	DDISurface *imgButton = gwmGetThemeSurface("gwm.toolkit.button");
 
 	DDISurface *temp = ddiCreateSurface(&canvas->format, BUTTON_TEMPL_WIDTH, BUTTON_HEIGHT, NULL, 0);
 	assert(temp != NULL);

@@ -42,8 +42,6 @@
 #define	DATA_ROW_HEIGHT				20
 #define	DATA_CHILD_INDENT			20
 
-static DDISurface* imgTreePtr;
-
 /**
  * Represents a column of data in a data control. Structure is opaquely typedefed to GWMDataColumn by libgwm.h.
  */
@@ -273,6 +271,8 @@ void gwmSetDataNodeIcon(GWMDataCtrl *ctrl, GWMDataNode *node, DDISurface *icon)
 
 static int drawNode(DDISurface *canvas, DataCtrlData *data, GWMDataNode *parent, int firstIndent, int plotY)
 {
+	DDISurface *imgTreePtr = gwmGetThemeSurface("gwm.toolkit.treeptr");
+	
 	static DDIColor transparent = {0, 0, 0, 0};
 	int plotX = 1;
 	
@@ -376,17 +376,7 @@ static int drawNode(DDISurface *canvas, DataCtrlData *data, GWMDataNode *parent,
 
 static int ctrlHandler(GWMEvent *ev, GWMSpinner *spin, void *context);
 static void ctrlRedraw(GWMDataCtrl *ctrl)
-{
-	if (imgTreePtr == NULL)
-	{
-		imgTreePtr = (DDISurface*) gwmGetThemeProp("gwm.toolkit.treeptr", GWM_TYPE_SURFACE, NULL);
-		if (imgTreePtr == NULL)
-		{
-			fprintf(stderr, "Failed to load tree pointer image\n");
-			abort();
-		};
-	};
-	
+{	
 	DataCtrlData *data = (DataCtrlData*) gwmGetData(ctrl, ctrlHandler);
 
 	static DDIColor border = {0x00, 0x00, 0x00, 0xFF};

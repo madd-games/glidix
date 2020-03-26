@@ -142,7 +142,7 @@ DDISurface* gwmGetStockIcon(int symbol)
 		{
 			if (scan->surf == NULL)
 			{
-				scan->surf = (DDISurface*) gwmGetThemeProp(scan->themeProp, GWM_TYPE_SURFACE, NULL);
+				scan->surf = gwmGetThemeSurface(scan->themeProp);
 			};
 			
 			return scan->surf;
