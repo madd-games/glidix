@@ -283,6 +283,9 @@ int eventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 			return doLogin();
 		};
 		return GWM_EVSTATUS_CONT;
+	case GWM_EVENT_CLOSE:
+		// prevent closing by Alt-F4
+		return GWM_EVSTATUS_OK;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
