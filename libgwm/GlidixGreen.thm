@@ -59,7 +59,8 @@ namespace gwm {
 		image combo /usr/share/images/combo.png
 		image spin /usr/share/images/spin.png
 		image treeptr /usr/share/images/treeptr.png
-		
+		image textfield /usr/share/images/textfield.png
+
 		color frame #5555FF:255
 		
 		namespace slider {

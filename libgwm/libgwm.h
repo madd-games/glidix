@@ -146,6 +146,8 @@ extern DDIFont* gwmStrongFontP;
 #define	GWM_TXT_DISABLED			(1 << 1)
 #define	GWM_TXT_MASKED				(1 << 2)
 #define	GWM_TXT_MULTILINE			(1 << 3)
+#define	GWM_TXT_STRIP_RIGHT			(1 << 4)
+#define	GWM_TXT_STRIP_LEFT			(1 << 5)
 
 /**
  * Label border styles.
@@ -641,6 +643,11 @@ typedef struct
 	 * "Faint" color, border of most widgets.
 	 */
 	DDIColor				colFaint;
+	
+	/**
+	 * Text field graphic.
+	 */
+	uint32_t				imgTextField;
 } GWMInfo;
 
 /**

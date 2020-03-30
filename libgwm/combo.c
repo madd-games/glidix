@@ -161,6 +161,7 @@ GWMCombo* gwmNewCombo(GWMWindow *parent)
 	
 	data->field = gwmNewTextField(combo);
 	gwmBoxLayoutAddWindow(data->layout, data->field, 1, 20, GWM_BOX_RIGHT | GWM_BOX_FILL);
+	gwmSetTextFieldFlags(data->field, GWM_TXT_STRIP_RIGHT);
 	
 	data->menu = gwmCreateMenu();
 	data->opts = NULL;

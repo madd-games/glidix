@@ -32,10 +32,13 @@
 #include <string.h>
 #include <assert.h>
 
-#define	TEXTFIELD_MIN_WIDTH	100
+#define	TEXTFIELD_MIN_WIDTH	150
 
 #define	TXT_STYLE_SET_FG	1
 #define	TXT_STYLE_SET_BG	2
+
+#define	TXT_TEMPL_WIDTH		17
+#define	TXT_HEIGHT		30
 
 typedef struct TextStyle_
 {
@@ -126,37 +129,86 @@ void gwmRedrawTextField(GWMWindow *field)
 	DDISurface *canvas = gwmGetWindowCanvas(field);
 	
 	static DDIColor transparent = {0, 0, 0, 0};
-	DDIColor *color = GWM_COLOR_FAINT;
-	if (data->focused)
-	{
-		color = GWM_COLOR_SELECTION;
-	};
-
-	if (data->flags & GWM_TXT_DISABLED)
-	{
-		color = &transparent;
-	};
-	
-	static DDIColor disabledBackground = {0x00, 0x00, 0x00, 0x00};
-	DDIColor *background = GWM_COLOR_EDITOR;
-	if (data->flags & GWM_TXT_DISABLED)
-	{
-		background = &disabledBackground;
-	};
-	
-	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, color);
-	ddiFillRect(canvas, 1, 1, canvas->width-2, canvas->height-2, background);
-
-	if (data->pen != NULL) ddiDeletePen(data->pen);
 	
 	int penX = 3;
 	if (data->icon != NULL)
 	{
-		ddiBlit(data->icon, 0, 0, canvas, 2, 2, 16, 16);
 		penX = 20;
 	};
 	
-	data->pen = ddiCreatePen(&canvas->format, data->font, penX, 0, canvas->width-penX-10, canvas->height-13, 0, 0, NULL);
+	int penY = 0;
+	
+	if (data->flags & GWM_TXT_MULTILINE)
+	{
+		DDIColor *color = GWM_COLOR_FAINT;
+		if (data->focused)
+		{
+			color = GWM_COLOR_SELECTION;
+		};
+
+		if (data->flags & GWM_TXT_DISABLED)
+		{
+			color = &transparent;
+		};
+		
+		static DDIColor disabledBackground = {0x00, 0x00, 0x00, 0x00};
+		DDIColor *background = GWM_COLOR_EDITOR;
+		if (data->flags & GWM_TXT_DISABLED)
+		{
+			background = &disabledBackground;
+		};
+		
+		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, color);
+		ddiFillRect(canvas, 1, 1, canvas->width-2, canvas->height-2, background);
+	}
+	else
+	{
+		ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &transparent);
+		
+		int whichImg = 0;
+		if (data->focused)
+		{
+			whichImg = 1;
+		};
+		
+		if (data->flags & GWM_TXT_DISABLED)
+		{
+			whichImg = 2;
+		};
+		
+		// which horizontal image we use depends on stripping: starting with bit 4 of the
+		// flags, we have 2 bits indicating this, and they can be interpreted as an index
+		int templateOffsetX = 17 * ((data->flags >> 4) & 0x3);
+		
+		DDISurface *imgTextField = gwmGetThemeSurface("gwm.toolkit.textfield");
+
+		DDISurface *temp = ddiCreateSurface(&canvas->format, TXT_TEMPL_WIDTH, TXT_HEIGHT, NULL, 0);
+		assert(temp != NULL);
+		ddiOverlay(imgTextField, templateOffsetX, TXT_HEIGHT*whichImg, temp, 0, 0, TXT_TEMPL_WIDTH, TXT_HEIGHT);
+		DDISurface *scaled = ddiScale(temp, canvas->width, canvas->height, DDI_SCALE_BORDERED_GRADIENT);
+		assert(scaled != NULL);
+		ddiBlit(scaled, 0, 0, canvas, 0, 0, canvas->width, canvas->height);
+		ddiDeleteSurface(scaled);
+		ddiDeleteSurface(temp);
+		
+		penX += 2;
+		penY = 6;
+	};
+
+	if (data->icon != NULL)
+	{
+		int iconX = 2;
+		if ((data->flags & GWM_TXT_MULTILINE) == 0)
+		{
+			iconX = 5;
+		};
+		
+		ddiBlit(data->icon, 0, 0, canvas, iconX, (TXT_HEIGHT-16)/2, 16, 16);
+	};
+	
+	if (data->pen != NULL) ddiDeletePen(data->pen);
+	
+	data->pen = ddiCreatePen(&canvas->format, data->font, penX, penY, canvas->width-penX-10, canvas->height-13-penY, 0, 0, NULL);
 	if (data->pen != NULL)
 	{
 		ddiSetPenWrap(data->pen, data->wrap);
@@ -280,7 +332,7 @@ void gwmRedrawTextField(GWMWindow *field)
 		};
 		
 		static DDIColor colPlaceHolder = {0x77, 0x77, 0x77, 0xFF};
-		DDIPen *pen = ddiCreatePen(&canvas->format, fntPlaceHolder, penX, 0, canvas->width-penX, canvas->height-3, 0, 0, NULL);
+		DDIPen *pen = ddiCreatePen(&canvas->format, fntPlaceHolder, penX, penY, canvas->width-penX, canvas->height-3, 0, 0, NULL);
 		ddiSetPenAlignment(pen, data->align);
 		ddiSetPenColor(pen, &colPlaceHolder);
 		ddiSetPenWrap(pen, data->wrap);
@@ -813,7 +865,7 @@ int gwmTextFieldHandler(GWMEvent *ev, GWMWindow *field, void *context)
 static void txtGetSize(GWMWindow *field, int *width, int *height)
 {
 	*width = TEXTFIELD_MIN_WIDTH;
-	*height = 20;
+	*height = TXT_HEIGHT;
 };
 
 static void txtPosition(GWMWindow *field, int x, int y, int width, int height)

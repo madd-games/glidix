@@ -116,6 +116,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.stock.strike",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgStockStrike)},
 	{"gwm.toolkit.border.light",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colBorderLight)},
 	{"gwm.toolkit.border.dark",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colBorderDark)},
+	{"gwm.toolkit.textfield",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTextField)},
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
@@ -473,6 +474,18 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 	// border
 	memcpy(&info->colBorderDark, &white, sizeof(DDIColor));
 	memcpy(&info->colBorderLight, &white, sizeof(DDIColor));
+	
+	// text field
+	static DDIColor black = {0x00, 0x00, 0x00, 0xFF};
+	surf = surfaceSetup(format, &info->imgTextField, 68, 90);
+	for (i=0; i<68; i+=17)
+	{
+		ddiFillRect(surf, i, 0, 17, 30, &black);
+		ddiFillRect(surf, i+1, 1, 15, 28, &white);
+		ddiFillRect(surf, i, 30, 17, 30, &colWinActive);
+		ddiFillRect(surf, i+1, 31, 15, 28, &white);
+		ddiFillRect(surf, i, 60, 17, 30, &black);
+	};
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;
