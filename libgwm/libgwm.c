@@ -96,6 +96,7 @@ DDIColor* gwmEditorColorP;
 DDIColor* gwmBorderLightColorP;
 DDIColor* gwmBorderDarkColorP;
 DDIColor* gwmFaintColorP;
+DDIColor* gwmWinTextColorP;
 
 static void gwmPostWaiter(uint64_t seq, GWMMessage *resp, const GWMCommand *cmd)
 {
@@ -289,12 +290,14 @@ int gwmInit()
 	gwmBorderLightColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.border.light", GWM_TYPE_COLOR, NULL);
 	gwmBorderDarkColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.border.dark", GWM_TYPE_COLOR, NULL);
 	gwmFaintColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.faint", GWM_TYPE_COLOR, NULL);
+	gwmWinTextColorP = (DDIColor*) gwmGetThemeProp("gwm.toolkit.wintext", GWM_TYPE_COLOR, NULL);
 	
 	assert(gwmColorSelectionP != NULL);
 	assert(gwmBackColorP != NULL);
 	assert(gwmEditorColorP != NULL);
 	assert(gwmBorderLightColorP != NULL);
 	assert(gwmBorderDarkColorP != NULL);
+	assert(gwmFaintColorP != NULL);
 	
 	return 0;
 };
@@ -789,6 +792,15 @@ void gwmThrow(int errcode)
 	abort();
 };
 
+DDIPen* gwmGetPen(GWMWindow *win, int x, int y, int width, int height)
+{
+	DDISurface *canvas = gwmGetWindowCanvas(win);
+	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), x, y, width, height, 0, 0, NULL);
+	assert(pen != NULL);
+	ddiSetPenColor(pen, GWM_COLOR_WINTEXT);
+	return pen;
+};
+
 static void gwmModalLoop(GWMWindow *master, uint64_t modalID)
 {
 	GWMEvent ev;
@@ -1101,10 +1113,20 @@ GWMWindow* gwmCreateModal(const char *caption, int x, int y, int width, int heig
 	return win;
 };
 
+GWMModal* gwmNewModal(GWMWindow *parent)
+{
+	return gwmCreateModal("GWMModal", 0, 0, 0, 0);
+};
+
 void gwmRunModal(GWMWindow *modal, int flags)
 {
 	gwmSetWindowFlags(modal, flags);
 	gwmModalLoop(modal, modal->modalID);
+};
+
+void gwmDestroyModal(GWMModal *modal)
+{
+	gwmDestroyWindow(modal);
 };
 
 GWMInfo *gwmGetInfo()

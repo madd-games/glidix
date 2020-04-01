@@ -69,7 +69,7 @@ static void gwmRedrawCheckbox(GWMWindow *checkbox)
 	
 	ddiBlit(imgCheckbox, 20*data->state, 20*whichY, canvas, 0, 0, 20, 20);
 
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height, 0, 0, NULL);
+	DDIPen *pen = gwmGetPen(checkbox, 0, 0, canvas->width, canvas->height);
 	ddiSetPenWrap(pen, 0);
 	ddiWritePen(pen, data->text);
 	

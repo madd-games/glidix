@@ -151,7 +151,7 @@ static void gwmRedrawButton(GWMWindow *button)
 	ddiDeleteSurface(scaled);
 	ddiDeleteSurface(temp);
 	
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height-11, 0, 0, NULL);
+	DDIPen *pen = gwmGetPen(button, 0, 0, canvas->width, canvas->height-11);
 	ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);
 	ddiSetPenWrap(pen, 0);
 	ddiWritePen(pen, data->text);

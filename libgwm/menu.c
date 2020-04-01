@@ -308,9 +308,7 @@ void gwmOpenMenu(GWMMenu *menu, GWMWindow *win, int relX, int relY)
 			ddiBlit(menu->entries[i].icon, 0, 0, menu->overlay, 2, MENU_ENTRY_HEIGHT*i+2, 16, 16);
 		};
 		
-		DDIPen *pen = ddiCreatePen(&menu->overlay->format, gwmGetDefaultFont(), 20,
-						MENU_ENTRY_HEIGHT*i+MENU_ENTRY_HEIGHT-6,
-						MENU_WIDTH-4, MENU_ENTRY_HEIGHT-4, 0, 0, NULL);
+		DDIPen *pen = gwmGetPen(win, 20, MENU_ENTRY_HEIGHT*i+MENU_ENTRY_HEIGHT-6, MENU_WIDTH-4, MENU_ENTRY_HEIGHT-4);
 		if (pen != NULL)
 		{
 			ddiSetPenWrap(pen, 0);

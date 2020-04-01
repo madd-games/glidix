@@ -101,7 +101,7 @@ static void gwmRedrawRadio(GWMWindow *radio)
 	DDISurface *imgRadio = gwmGetThemeSurface("gwm.toolkit.radio");
 	ddiBlit(imgRadio, RADIO_WIDTH*ix, RADIO_HEIGHT*iy, canvas, 0, 0, RADIO_WIDTH, RADIO_HEIGHT);
 
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 0, 0, canvas->width, canvas->height, 0, 0, NULL);
+	DDIPen *pen = gwmGetPen(radio, 0, 0, canvas->width, canvas->height);
 	ddiSetPenWrap(pen, 0);
 	ddiWritePen(pen, data->text);
 	

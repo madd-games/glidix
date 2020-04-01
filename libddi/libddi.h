@@ -496,6 +496,11 @@ DDIPen* ddiCreatePen(DDIPixelFormat *format, DDIFont *font, int x, int y, int wi
 void ddiDeletePen(DDIPen *pen);
 
 /**
+ * Set the font on a pen.
+ */
+void ddiSetPenFont(DDIPen *pen, DDIFont *font);
+
+/**
  * Set whether the text written by a pen should be wrapped. Default is true.
  */
 void ddiSetPenWrap(DDIPen *pen, int wrap);

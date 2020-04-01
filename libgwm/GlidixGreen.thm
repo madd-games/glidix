@@ -47,6 +47,7 @@ namespace gwm {
 		color winback #E0E0E0:255
 		color editor #FFFFFF:255
 		color faint #B3B3B3:255
+		color wintext #000000:255
 		
 		image mbicons /usr/share/images/mbicons.png
 		image button /usr/share/images/button.png

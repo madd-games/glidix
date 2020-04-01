@@ -117,6 +117,7 @@ static ThemeProperty themeInfo[] = {
 	{"gwm.toolkit.border.light",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colBorderLight)},
 	{"gwm.toolkit.border.dark",		GWM_TYPE_COLOR,		offsetof(GWMInfo, colBorderDark)},
 	{"gwm.toolkit.textfield",		GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTextField)},
+	{"gwm.toolkit.wintext",			GWM_TYPE_COLOR,		offsetof(GWMInfo, colWinText)},
 	{"gwm.sysbar.sysbar",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbar)},
 	{"gwm.sysbar.menu",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgSysbarMenu)},
 	{"gwm.sysbar.taskbtn",			GWM_TYPE_SURFACE,	offsetof(GWMInfo, imgTaskButton)},
@@ -486,6 +487,9 @@ int gwmGlobalThemeInit(DDIPixelFormat *format)
 		ddiFillRect(surf, i+1, 31, 15, 28, &white);
 		ddiFillRect(surf, i, 60, 17, 30, &black);
 	};
+	
+	// window text color
+	memcpy(&info->colWinText, &black, sizeof(DDIColor));
 	
 	munmap(addr, sizeof(GWMInfo));
 	return 0;

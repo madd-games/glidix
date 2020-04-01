@@ -271,6 +271,16 @@ int doLogin()
 	return GWM_EVSTATUS_CONT;
 };
 
+void redrawBackground(GWMWindow *win)
+{
+	DDISurface *canvas = gwmGetWindowCanvas(win);
+	
+	static DDIColor bg = {0x00, 0xAA, 0x00, 0xAA};
+	ddiFillRect(canvas, 0, 0, canvas->width, canvas->height, &bg);
+	
+	gwmPostDirty(win);
+};
+
 int eventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 {
 	GWMCommandEvent *cmd = (GWMCommandEvent*) ev;
@@ -286,6 +296,9 @@ int eventHandler(GWMEvent *ev, GWMWindow *win, void *context)
 	case GWM_EVENT_CLOSE:
 		// prevent closing by Alt-F4
 		return GWM_EVSTATUS_OK;
+	case GWM_EVENT_RESIZED:
+		redrawBackground(win);
+		return GWM_EVSTATUS_CONT;
 	default:
 		return GWM_EVSTATUS_CONT;
 	};
@@ -386,7 +399,8 @@ int main(int argc, char *argv[])
 	gwmBoxLayoutAddWindow(btnbox, btnLogin, 0, 0, 0);
 	
 	gwmFit(top);
-	gwmSetWindowFlags(top, GWM_WINDOW_MKFOCUSED);
+	gwmFocus(txtUsername);
+	gwmSetWindowFlags(top, 0);
 	gwmMainLoop();
 	gwmQuit();
 	return 0;

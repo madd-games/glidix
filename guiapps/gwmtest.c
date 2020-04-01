@@ -141,13 +141,15 @@ int main(int argc, char *argv[])
 		return 1;
 	};
 	
-	int score = -1;
-	if (argc == 2)
+	char *result = gwmGetInput(NULL, "Example", "Enter some text:", "Initial text");
+	if (result == NULL)
 	{
-		sscanf(argv[1], "%d", &score);
+		printf("You clicked cancel\n");
+	}
+	else
+	{
+		printf("You clicked OK and typed: %s\n", result);
 	};
-	
-	gwmHighScore("gwmtest", score);
 	
 	gwmQuit();
 	return 0;

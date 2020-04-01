@@ -269,9 +269,10 @@ void gwmSetDataNodeIcon(GWMDataCtrl *ctrl, GWMDataNode *node, DDISurface *icon)
 	gwmPostUpdate(ctrl);
 };
 
-static int drawNode(DDISurface *canvas, DataCtrlData *data, GWMDataNode *parent, int firstIndent, int plotY)
+static int drawNode(GWMWindow *datactrl, DataCtrlData *data, GWMDataNode *parent, int firstIndent, int plotY)
 {
 	DDISurface *imgTreePtr = gwmGetThemeSurface("gwm.toolkit.treeptr");
+	DDISurface *canvas = gwmGetWindowCanvas(datactrl);
 	
 	static DDIColor transparent = {0, 0, 0, 0};
 	int plotX = 1;
@@ -345,9 +346,7 @@ static int drawNode(DDISurface *canvas, DataCtrlData *data, GWMDataNode *parent,
 					{
 						if (cell->strval != NULL)
 						{
-							DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), indent, 0,
-											col->width, DATA_ROW_HEIGHT,
-											0, 0, NULL);
+							DDIPen *pen = gwmGetPen(datactrl, indent, 0, col->width, DATA_ROW_HEIGHT);
 							ddiSetPenWrap(pen, 0);
 							ddiWritePen(pen, cell->strval);
 							
@@ -367,7 +366,7 @@ static int drawNode(DDISurface *canvas, DataCtrlData *data, GWMDataNode *parent,
 		
 		if (node->expanded)
 		{
-			plotY = drawNode(canvas, data, node, firstIndent+DATA_CHILD_INDENT, plotY);
+			plotY = drawNode(datactrl, data, node, firstIndent+DATA_CHILD_INDENT, plotY);
 		};
 	};
 	
@@ -389,7 +388,7 @@ static void ctrlRedraw(GWMDataCtrl *ctrl)
 	int plotY = 1;
 	if (data->flags & GWM_DATA_SHOW_HEADERS) plotY = DATA_ROW_HEIGHT;
 	
-	int maxY = drawNode(canvas, data, data->root, 0, plotY);
+	int maxY = drawNode(ctrl, data, data->root, 0, plotY);
 	
 	if (data->flags & GWM_DATA_SHOW_HEADERS)
 	{
@@ -404,9 +403,7 @@ static void ctrlRedraw(GWMDataCtrl *ctrl)
 			ddiFillRect(canvas, drawX, 0, col->width, DATA_ROW_HEIGHT, &border);
 			ddiFillRect(canvas, drawX, 1, col->width-1, DATA_ROW_HEIGHT-2, GWM_COLOR_BACKGROUND);
 			
-			DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), drawX+2, 1,
-							col->width, DATA_ROW_HEIGHT,
-							0, 0, NULL);
+			DDIPen *pen = gwmGetPen(ctrl, drawX+2, 1, col->width, DATA_ROW_HEIGHT);
 			ddiSetPenWrap(pen, 0);
 			ddiWritePen(pen, col->label);
 			

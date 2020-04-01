@@ -72,7 +72,7 @@ static void redrawFrame(GWMWindow *frame)
 	ddiFillRect(canvas, canvas->width-3, 10, 1, canvas->height-13, colFrame);
 	ddiFillRect(canvas, 2, canvas->height-3, canvas->width-4, 1, colFrame);
 	
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 15, 2, canvas->width-19, 20, 0, 0, NULL);
+	DDIPen *pen = gwmGetPen(frame, 15, 2, canvas->width-19, 20);
 	if (pen != NULL)
 	{
 		ddiSetPenAlignment(pen, DDI_ALIGN_CENTER);

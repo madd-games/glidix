@@ -114,6 +114,8 @@ extern DDIColor* gwmBorderLightColorP;
 extern DDIColor* gwmBorderDarkColorP;
 #define	GWM_COLOR_FAINT				gwmFaintColorP
 extern DDIColor* gwmFaintColorP;
+#define	GWM_COLOR_WINTEXT			gwmWinTextColorP
+extern DDIColor* gwmWinTextColorP;
 
 /**
  * Fonts.
@@ -648,6 +650,11 @@ typedef struct
 	 * Text field graphic.
 	 */
 	uint32_t				imgTextField;
+	
+	/**
+	 * Window text color.
+	 */
+	uint32_t				colWinText;
 } GWMInfo;
 
 /**
@@ -1584,6 +1591,11 @@ int gwmPostEvent(GWMEvent *ev, GWMWindow *win);
 void gwmThrow(int errcode);
 
 /**
+ * Create a DDI pen with defaults settings for the specified window.
+ */
+DDIPen* gwmGetPen(GWMWindow *win, int x, int y, int width, int height);
+
+/**
  * Creates a new window. On success, returns a window handle; on error, returns NULL.
  */
 GWMWindow* gwmCreateWindow(
@@ -2162,23 +2174,35 @@ void gwmClipboardPutText(const char *text, size_t textSize);
 char* gwmClipboardGetText(size_t *sizeOut);
 
 /**
+ * Create a new modal dialog with the specified transient parent. The transinet parent is allowed to be NULL.
+ */
+GWMModal* gwmNewModal(GWMWindow *parent);
+
+/**
  * Create a modal dialog. You may place children in it, and then run it using gwmRunModal(). You can set an
  * event handler as for a normal window. A modal dialog closes when an event handler returns -1 (the application
  * does not close in this case). You may also use the "data" field in the window in whatever way you wish.
+ * 
+ * DEPRECATED
  */
 GWMWindow* gwmCreateModal(const char *caption, int x, int y, int width, int height);
 
 /**
- * Run a modal dialog. This function will return when an event handler within the modal dialog returns -1.
+ * Run a modal dialog. This function will return when an event handler within the modal dialog returns GWM_EVSTATUS_BREAK.
  */
-void gwmRunModal(GWMWindow *modal, int flags);
+void gwmRunModal(GWMModal *modal, int flags);
+
+/**
+ * Destroy a modal dialog.
+ */
+void gwmDestroyModal(GWMModal *modal);
 
 /**
  * Displays a dialog asking the user to input a line of text. If the user clicks "Cancel", returns NULL.
  * Otherwise, returns the string that was typed in. The string is placed on the heap, so you must call
  * free() on it.
  */
-char* gwmGetInput(const char *caption, const char *prompt, const char *initialText);
+char* gwmGetInput(GWMWindow *parent, const char *caption, const char *prompt, const char *initialText);
 
 /**
  * Return a pointer to the GWM information structure.

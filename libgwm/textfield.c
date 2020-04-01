@@ -208,9 +208,10 @@ void gwmRedrawTextField(GWMWindow *field)
 	
 	if (data->pen != NULL) ddiDeletePen(data->pen);
 	
-	data->pen = ddiCreatePen(&canvas->format, data->font, penX, penY, canvas->width-penX-10, canvas->height-13-penY, 0, 0, NULL);
+	data->pen = gwmGetPen(field, penX, penY, canvas->width-penX-10, canvas->height-13-penY);
 	if (data->pen != NULL)
 	{
+		ddiSetPenFont(data->pen, data->font);
 		ddiSetPenWrap(data->pen, data->wrap);
 		ddiSetPenAlignment(data->pen, data->align);
 		if (data->flags & GWM_TXT_MASKED) ddiPenSetMask(data->pen, 1);

@@ -86,7 +86,7 @@ void gwmRenderMenubar(GWMWindow *menubar)
 	data->textSurface = ddiCreateSurface(&canvas->format, canvas->width, canvas->height, NULL, 0);
 	ddiFillRect(data->textSurface, 0, 0, canvas->width, canvas->height, &transparent);
 	
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 2, MENUBAR_HEIGHT-6, canvas->width, MENUBAR_HEIGHT-4, 0, 0, NULL);
+	DDIPen *pen = gwmGetPen(menubar, 2, MENUBAR_HEIGHT-6, canvas->width, MENUBAR_HEIGHT-4);
 	if (pen != NULL)
 	{
 		ddiSetPenWrap(pen, 0);

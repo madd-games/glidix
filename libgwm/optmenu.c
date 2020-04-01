@@ -88,7 +88,7 @@ static void redrawOptmenu(GWMWindow *optmenu)
 			canvas, canvas->width - OPTMENU_BUTTON_WIDTH, 0,
 			OPTMENU_BUTTON_WIDTH, OPTMENU_HEIGHT);
 	
-	DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), 3, canvas->height-6, canvas->width-3, canvas->height-3, 0, 0, NULL);
+	DDIPen *pen = gwmGetPen(optmenu, 3, canvas->height-6, canvas->width-3, canvas->height-3);
 	if (pen != NULL)
 	{
 		ddiWritePen(pen, data->currentText);

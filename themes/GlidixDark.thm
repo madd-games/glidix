@@ -24,58 +24,28 @@
 '	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 '	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-' StoneAge.thm
-' A "stone age" theme for Glidix; very "classic" and simple
+' GlidixDark.thm
+' A dark theme for glidix.
 
 namespace gwm {
 	namespace server {
-		image wincap /usr/share/themes/StoneAge/wincap.png
-		image winbuttons /usr/share/themes/StoneAge/winbuttons.png
+		image wincap /usr/share/themes/GlidixDark/wincap.png
+		image winbuttons /usr/share/themes/GlidixDark/winbuttons.png
 		
 		namespace wincolor {
-			color inactive #777777:255
-			color active #000077:255
+			color inactive #353535:255
+			color active #353535:255
 		}
 	}
-
+	
 	namespace toolkit {
-		color selection #000077:255
-		color winback #777777:255
-		color editor #FFFFFF:255
-
-		image button /usr/share/themes/StoneAge/button.png
-		image checkbox /usr/share/themes/StoneAge/checkbox.png
-		image radio /usr/share/themes/StoneAge/radiobutton.png
-		image optmenu /usr/share/themes/StoneAge/optmenu.png
-		image notebook /usr/share/themes/StoneAge/notebook.png
-		image toolbtn /usr/share/themes/StoneAge/toolbtn.png
-		image combo /usr/share/themes/StoneAge/combo.png
-		image spin /usr/share/themes/StoneAge/spin.png
-		image treeptr /usr/share/themes/StoneAge/treeptr.png
-
-		color frame #000077:255
+		color selection #253470:255
+		color winback #2a2a2a:255
+		color editor #555555:255
+		color faint #404040:255
+		color wintext #EEEEEE:255
 		
-		namespace slider {
-			color active #000077:255
-			color inactive #555555:255
-			color disabled #555555:255
-		}
-		
-		namespace scrollbar {
-			color bg #555555:255
-			color fg #000077:255
-			color disabled #555555:255
-		}
-		
-		namespace progress {
-			color bg #555555:255
-			color left #000077:255
-			color right #0000AA:255
-		}
-	}
-
-	namespace sysbar {
-		image sysbar /usr/share/themes/StoneAge/sysbar.png
-		image taskbtn /usr/share/themes/StoneAge/taskbtn.png
+		image button /usr/share/themes/GlidixDark/button.png
+		image textfield /usr/share/themes/GlidixDark/textfield.png
 	}
 }

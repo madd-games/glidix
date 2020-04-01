@@ -82,7 +82,7 @@ static void redrawNotebook(GWMWindow *notebook)
 			};
 		};
 		
-		DDIPen *pen = ddiCreatePen(&canvas->format, gwmGetDefaultFont(), drawX+20, 2, canvas->width, canvas->height, 0, 0, NULL);
+		DDIPen *pen = gwmGetPen(notebook, drawX+20, 2, canvas->width, canvas->height);
 		ddiSetPenWrap(pen, 0);
 		ddiWritePen(pen, gwmGetWindowCaption(tab));
 	

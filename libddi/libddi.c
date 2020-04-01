@@ -939,6 +939,11 @@ DDIPen* ddiCreatePen(DDIPixelFormat *format, DDIFont *font, int x, int y, int wi
 	return pen;
 };
 
+void ddiSetPenFont(DDIPen *pen, DDIFont *font)
+{
+	pen->font = font;
+};
+
 void ddiSetPenCursor(DDIPen *pen, int cursorPos)
 {
 	pen->cursorPos = cursorPos;

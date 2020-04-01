@@ -103,7 +103,7 @@ void gwmHighScore(const char *gameName, int score)
 		if (i != 10)
 		{
 			// someone scored less than us!
-			char *playerName = gwmGetInput("High score", "Please enter your name:", pwd->pw_name);
+			char *playerName = gwmGetInput(NULL, "High score", "Please enter your name:", pwd->pw_name);
 			if (playerName != NULL)
 			{
 				if (strlen(playerName) > 31) playerName[31] = 0;

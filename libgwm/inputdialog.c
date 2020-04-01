@@ -31,63 +31,73 @@
 #include <stdio.h>
 #include <string.h>
 
-#define	DIALOG_WIDTH							200
-
-int inputOK(void *context)
+static int inputDialogHandler(GWMEvent *ev, GWMWindow *window, void *context)
 {
-	GWMWindow *dialog = (GWMWindow*) context;
-	GWMWindow *txtInput = (GWMWindow*) dialog->data;
+	int *answerPtr = (int*) context;
+	GWMCommandEvent *cmd = (GWMCommandEvent*) ev;
 	
-	const char *text = gwmReadTextField(txtInput);
-	if (text[0] == 0) return 0;
-	
-	dialog->data = strdup(text);
-	return -1;
+	switch (ev->type)
+	{
+	case GWM_EVENT_COMMAND:
+		*answerPtr = cmd->symbol;
+		return GWM_EVSTATUS_BREAK;
+	default:
+		return GWM_EVSTATUS_CONT;
+	};
 };
 
-int inputCancel(void *context)
+char* gwmGetInput(GWMWindow *parent, const char *caption, const char *prompt, const char *initialText)
 {
-	GWMWindow *dialog = (GWMWindow*) context;
-	dialog->data = NULL;
-	return -1;
-};
-
-char* gwmGetInput(const char *caption, const char *prompt, const char *initialText)
-{
-	DDIPixelFormat screenFormat;
-	gwmGetScreenFormat(&screenFormat);
+	GWMModal *modal = gwmNewModal(parent);
+	gwmSetWindowCaption(modal, caption);
 	
-	DDIPen *pen = ddiCreatePen(&screenFormat, gwmGetDefaultFont(), 2, 2, DIALOG_WIDTH-4, 20, 0, 0, NULL);
-	ddiWritePen(pen, prompt);
+	GWMLayout *mainBox = gwmCreateBoxLayout(GWM_BOX_VERTICAL);
+	gwmSetWindowLayout(modal, mainBox);
 	
-	int width, height;
-	ddiGetPenSize(pen, &width, &height);
+	GWMLabel *label = gwmNewLabel(modal);
+	gwmSetLabelText(label, prompt);
+	gwmBoxLayoutAddWindow(mainBox, label, 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
 	
-	GWMWindow *dialog = gwmCreateModal(caption, GWM_POS_UNSPEC, GWM_POS_UNSPEC, DIALOG_WIDTH, height + 20 + 30 + 8);
-	DDISurface *canvas = gwmGetWindowCanvas(dialog);
+	GWMTextField *txt = gwmNewTextField(modal);
+	gwmWriteTextField(txt, initialText);
+	gwmBoxLayoutAddWindow(mainBox, txt, 0, 5, GWM_BOX_LEFT | GWM_BOX_RIGHT | GWM_BOX_DOWN | GWM_BOX_FILL);
 	
-	ddiExecutePen(pen, canvas);
-	ddiDeletePen(pen);
+	GWMSeparator *sep = gwmNewSeparator(modal);
+	gwmBoxLayoutAddWindow(mainBox, sep, 0, 5, GWM_BOX_LEFT | GWM_BOX_RIGHT | GWM_BOX_FILL);
 	
-	GWMWindow *txtInput = gwmCreateTextField(dialog, initialText, 2, height+4, DIALOG_WIDTH-4, 0);
-
-	int buttonWidth = (DIALOG_WIDTH-6)/2;
-	GWMWindow *btnOK = gwmCreateButton(dialog, "OK", 2, height+26, buttonWidth, 0);
-	gwmSetButtonCallback(btnOK, inputOK, dialog);
-	GWMWindow *btnCancel = gwmCreateButton(dialog, "Cancel", 4+buttonWidth, height+26, buttonWidth, 0);
-	gwmSetButtonCallback(btnCancel, inputCancel, dialog);
+	GWMLayout *btnBox = gwmCreateBoxLayout(GWM_BOX_HORIZONTAL);
+	gwmBoxLayoutAddLayout(mainBox, btnBox, 0, 5, GWM_BOX_ALL | GWM_BOX_FILL);
+	gwmBoxLayoutAddSpacer(btnBox, 1, 0, 0);
 	
-	dialog->data = txtInput;
-	gwmSetWindowFlags(txtInput, GWM_WINDOW_MKFOCUSED);
-	gwmPostDirty(dialog);
-	gwmRunModal(dialog, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU | GWM_WINDOW_NOICON);
+	GWMButton *btnOK = gwmCreateStockButton(modal, GWM_SYM_OK);
+	gwmBoxLayoutAddWindow(btnBox, btnOK, 0, 5, GWM_BOX_LEFT);
 	
-	gwmDestroyTextField(txtInput);
-	gwmDestroyButton(btnOK);
+	GWMButton *btnCancel = gwmCreateStockButton(modal, GWM_SYM_CANCEL);
+	gwmBoxLayoutAddWindow(btnBox, btnCancel, 0, 5, GWM_BOX_LEFT);
+	
+	int answer;
+	
+	gwmPushEventHandler(modal, inputDialogHandler, &answer);
+	gwmFit(modal);
+	gwmTextFieldSelectAll(txt);
+	gwmFocus(txt);
+	gwmRunModal(modal, GWM_WINDOW_NOTASKBAR | GWM_WINDOW_NOSYSMENU);
+	gwmSetWindowFlags(modal, GWM_WINDOW_HIDDEN | GWM_WINDOW_NOTASKBAR);
+	
+	char *result = NULL;
+	if (answer == GWM_SYM_OK)
+	{
+		result = strdup(gwmReadTextField(txt));
+	};
+	
 	gwmDestroyButton(btnCancel);
-	
-	char *result = (char*) dialog->data;
-	gwmDestroyWindow(dialog);
+	gwmDestroyButton(btnOK);
+	gwmDestroyBoxLayout(btnBox);
+	gwmDestroySeparator(sep);
+	gwmDestroyTextField(txt);
+	gwmDestroyLabel(label);
+	gwmDestroyBoxLayout(mainBox);
+	gwmDestroyModal(modal);
 	
 	return result;
 };
