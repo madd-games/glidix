@@ -274,7 +274,7 @@ void acpiInit()
 		if (memcmp(head.sig, "APIC", 4) == 0)
 		{
 			uint32_t searching = payloadPhysAddr + 8;
-			while (searching < payloadPhysAddr+head.len)
+			while (searching < payloadPhysAddr+head.len-sizeof(ACPI_SDTHeader))
 			{
 				MADTRecordHeader rhead;
 				pmem_read(&rhead, searching, sizeof(MADTRecordHeader));
