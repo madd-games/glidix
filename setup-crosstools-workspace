@@ -3,6 +3,7 @@ srcdir="`dirname $0`"
 binutils_version="2.27"
 gcc_version="6.2.0"
 sysroot=""
+should_patch="yes"
 
 for i in "$@"
 do
@@ -19,6 +20,10 @@ case $i in
 		gcc_version=`echo $i | sed 's/[-a-zA-Z0-9]*=//'`
 		;;
 	
+	--no-patch)
+		should_patch="no"
+		;;
+
 	*)
 		echo >&2 "$0: unrecognised command-line option: $i"
 		exit 1
@@ -38,10 +43,19 @@ then
 	exit 1
 fi
 
-if [ ! -f $srcdir/binutils/binutils-$binutils_version.patch ]
+if [ "$should_patch" = "yes" ]
 then
-	echo >&2 "$0: no patch for version $binutils_version of binutils!"
-	exit 1
+	if [ ! -f $srcdir/binutils/binutils-$binutils_version.patch ]
+	then
+		echo >&2 "$0: no patch for version $binutils_version of binutils!"
+		exit 1
+	fi
+
+	if [ ! -f $srcdir/gcc/gcc-$gcc_version.patch ]
+	then
+		echo >&2 "$0: no patch for version $gcc_version of gcc!"
+		exit 1
+	fi
 fi
 
 echo "Downloading binutils..."
@@ -63,15 +77,18 @@ cd ../glidix-gcc
 ./contrib/download_prerequisites
 cd ..
 
-echo "Patching binutils..."
-cd glidix-binutils
-patch -p1 < ../$srcdir/binutils/binutils-$binutils_version.patch || exit 1
-cd ..
+if [ "$should_patch" = "yes" ]
+then
+	echo "Patching binutils..."
+	cd glidix-binutils
+	patch -p1 < ../$srcdir/binutils/binutils-$binutils_version.patch || exit 1
+	cd ..
 
-echo "Patching GCC..."
-cd glidix-gcc
-patch -p1 < ../$srcdir/gcc/gcc-$gcc_version.patch || exit 1
-cd ..
+	echo "Patching GCC..."
+	cd glidix-gcc
+	patch -p1 < ../$srcdir/gcc/gcc-$gcc_version.patch || exit 1
+	cd ..
+fi
 
 echo "Generating install script..."
 echo >install.sh "#! /bin/sh"
