@@ -23,9 +23,6 @@ should be as follows:
   [cd here]
 ```
 
-**TODO:** For now, you must edit `install.sh` and add the following line at the end of the constants at the top:
-`export CXXFLAGS="-fpermissive -O2"`.
-
 Inside the `glidix-cross` directory we run the following commands:
 
 ```

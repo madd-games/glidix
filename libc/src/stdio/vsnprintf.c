@@ -29,6 +29,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+
 int vsnprintf(char *s, size_t n, const char *fmt, va_list ap)
 {
 	FILE temp;

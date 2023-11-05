@@ -100,6 +100,7 @@
  */
 
 //#include "headers.h"
+#define ANSI_C 1
 
 #include <time.h>
 #include <stdio.h>

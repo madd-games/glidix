@@ -127,9 +127,20 @@ int	_glidix_aclput(const char *path, int type, int id, int perms);
 int	_glidix_aclclear(const char *path, int type, int id);
 int	mkfifo(const char *path, mode_t mode);
 
-#define	stat(a, b)	_glidix_stat((a), (b), sizeof(struct stat))
-#define	fstat(a, b)	_glidix_fstat((a), (b), sizeof(struct stat))
-#define	lstat(a, b)	_glidix_lstat((a), (b), sizeof(struct stat))
+static inline int stat(const char *path, struct stat *buf)
+{
+	return _glidix_stat(path, buf, sizeof(struct stat));
+};
+
+static inline int fstat(int fd, struct stat *buf)
+{
+	return _glidix_fstat(fd, buf, sizeof(struct stat));
+};
+
+static inline int lstat(const char *path, struct stat *buf)
+{
+	return _glidix_lstat(path, buf, sizeof(struct stat));
+};
 
 #ifdef _GLIDIX_SOURCE
 #define	aclput		_glidix_aclput

@@ -53,6 +53,12 @@ extern "C" {
 #define	M_SQRT2							1.41421356237
 #define	M_SQRT1_2						0.70710678118
 
+#define	FP_NAN							0
+#define FP_INFINITE						1
+#define	FP_ZERO							2
+#define	FP_SUBNORMAL						3
+#define	FP_NORMAL						4
+
 double acos(double);
 double asin(double);
 double atan(double);

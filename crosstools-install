@@ -14,7 +14,15 @@ echo "Building binutils..."
 rm -rf binutils-build
 mkdir binutils-build || exit 1
 cd binutils-build
-../glidix-binutils/configure --target=x86_64-glidix --prefix=$SYSROOT/usr --with-sysroot=$SYSROOT --disable-werror --disable-nls || exit 1
+../glidix-binutils/configure \
+	--target=x86_64-glidix \
+	--prefix=$SYSROOT/usr \
+	--with-sysroot=$SYSROOT \
+	--disable-werror \
+	--disable-nls \
+	--enable-shared \
+	|| exit 1
+
 make || exit 1
 make install || exit 1
 cd ..
@@ -30,7 +38,17 @@ echo "Building GCC..."
 rm -rf gcc-build
 mkdir gcc-build || exit 1
 cd gcc-build
-../glidix-gcc/configure --target=x86_64-glidix --prefix=$SYSROOT/usr --with-sysroot=$SYSROOT --enable-languages=c,c++ --enable-multilib --enable-multiarch --with-system-zlib || exit 1
+../glidix-gcc/configure \
+	--target=x86_64-glidix \
+	--prefix=$SYSROOT/usr \
+	--with-sysroot=$SYSROOT \
+	--enable-languages=c,c++ \
+	--enable-multilib \
+	--enable-multiarch \
+	--enable-shared \
+	--with-system-zlib \
+	|| exit 1
+
 make all-gcc all-target-libgcc || exit 1
 make install-gcc install-target-libgcc || exit 1
 cd ..
