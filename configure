@@ -72,8 +72,8 @@ maybe_binutils=""
 maybe_gxboot=""
 maybe_gcc=""
 
-binutils_version="2.27"
-gcc_version="6.2.0"
+binutils_version="2.38"
+gcc_version="11.4.0"
 
 heap_mode="slab"
 
