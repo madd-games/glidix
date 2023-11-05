@@ -58,10 +58,6 @@ asm/%.o: $(SRCDIR)/asm/%.s
 	@mkdir -p asm
 	$(HOST_AS) -c $< -o $@
 
-sasm/%.o: $(SRCDIR)/sasm/%.s
-	@mkdir -p sasm
-	$(HOST_AS) -c $< -o $@
-
 support/%.so: $(SRCDIR)/support/%.c
 	@mkdir -p support
 	$(HOST_GCC) -shared $< -o $@ $(CFLAGS) -L. -ggdb
