@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 	struct dirent *ent;
 	
 	char path[512];
-	char filename[512];
+	char filename[256];
 	char modname[512];
 	while ((ent = readdir(dirp)) != NULL)
 	{

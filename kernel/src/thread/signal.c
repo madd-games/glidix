@@ -49,7 +49,7 @@ typedef struct
 	uint64_t			sigmask;
 	siginfo_t			si;
 	MachineState			mstate;			// must be aligned on 16 byte boundary
-} PACKED SignalStackFrame;
+} SignalStackFrame;
 
 uint64_t sizeSignalStackFrame = sizeof(SignalStackFrame);
 

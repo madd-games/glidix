@@ -93,7 +93,7 @@ typedef struct
 
 typedef struct
 {
-	char mntpoint[256];
+	char mntpoint[512];
 	char type[256];
 	char device[256];
 } FSTabEntry;
@@ -373,7 +373,7 @@ static void drawTable()
 			setColor(COLOR_WINDOW);
 		};
 		
-		char label[60];
+		char label[129];
 		if (drive->dirty)
 		{
 			sprintf(label, "%s*", drive->name);
@@ -395,7 +395,7 @@ static void drawTable()
 			
 			setCursor((uint8_t)startX, (uint8_t)(startY+i+1));
 			
-			char name[12];
+			char name[256];
 			if (part->type == PART_TYPE_UNALLOCATED)
 			{
 				strcpy(name, "UNALLOCATED");
@@ -842,7 +842,7 @@ int isTableOK()
 			{
 				if (haveMountpointExcept(part->mntpoint, part))
 				{
-					char msg[70];
+					char msg[512];
 					sprintf(msg, "Duplicate mountpoint: %s", part->mntpoint);
 					msgbox("ERROR", msg);
 					return 0;
@@ -1057,7 +1057,7 @@ void partFlush()
 	{
 		if (drive->dirty)
 		{
-			char msg[30];
+			char msg[256];
 			sprintf(msg, "Partitioning %s...", drive->name);
 			drawProgress("WRITING PARTITIONS", msg, drivesDone, numDrivesToEdit);
 			
@@ -1250,7 +1250,7 @@ void partFlush()
 		makeMountPointDirs(fstab[idx].mntpoint);
 		if (mount(fstab[idx].type, fstab[idx].device, fstab[idx].mntpoint, 0, NULL, 0) != 0)
 		{
-			char errmsg[256];
+			char errmsg[1024];
 			sprintf(errmsg, "Cannot mount %s at %s: %s", fstab[idx].device, fstab[idx].mntpoint, strerror(errno));
 			msgbox("ERROR", errmsg);
 		};
@@ -1374,7 +1374,7 @@ void partUnmount()
 	{
 		if (unmount(fstab[idx].mntpoint, 0) != 0)
 		{
-			char errmsg[256];
+			char errmsg[1024];
 			sprintf(errmsg, "Cannot unmount %s: %s", fstab[idx].mntpoint, strerror(errno));
 			msgbox("ERROR", errmsg);
 		};
