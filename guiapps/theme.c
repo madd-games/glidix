@@ -236,7 +236,7 @@ int themeLoad(const char *filename)
 				break;
 			};
 			
-			char fullname[1024];
+			char fullname[1025];
 			sprintf(fullname, "%s.%s", currentNamespace, name);
 			
 			status = status || themeSet(cmd, fullname, value);

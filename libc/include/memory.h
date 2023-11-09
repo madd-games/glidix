@@ -1,5 +1,5 @@
 /*
-	Glidix GUI
+	Glidix Runtime
 
 	Copyright (c) 2014-2017, Madd Games.
 	All rights reserved.
@@ -26,18 +26,4 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SCREEN_H
-#define SCREEN_H
-
-#include <libddi.h>
-#include <libgwm.h>
-
-extern DDISurface *frontBuffer;
-extern DDISurface *screen;
-extern DDISurface *desktopBackground;
-extern GWMInfo *gwminfo;
-
-extern DDISurface *imgWincap;
-extern DDISurface *imgWinbut;
-
-#endif
+#include <string.h>

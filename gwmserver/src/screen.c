@@ -31,3 +31,7 @@
 DDISurface *frontBuffer;
 DDISurface *screen;
 DDISurface *desktopBackground;
+GWMInfo *gwminfo;
+
+DDISurface *imgWincap;
+DDISurface *imgWinbut;
