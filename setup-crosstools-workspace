@@ -105,7 +105,6 @@ chmod +x install-stage2.sh
 
 echo "Generating make-patches script..."
 echo >make-patches.sh "#! /bin/sh"
-echo >>make-patches.sh "rm -f gcc-$gcc_version/isl gcc-$gcc_version/mpc gcc-$gcc_version/gmp gcc-$gcc_version/mpfr glidix-gcc/isl glidix-gcc/mpc glidix-gcc/gmp glidix-gcc/mpfr || exit 1"
-echo >>make-patches.sh "diff -urN binutils-$binutils_version glidix-binutils > $srcdir/binutils/binutils-$binutils_version.patch"
-echo >>make-patches.sh "diff -urN gcc-$gcc_version glidix-gcc > $srcdir/gcc/gcc-$gcc_version.patch"
+echo >>make-patches.sh "diff --no-dereference -urN binutils-$binutils_version glidix-binutils > $srcdir/binutils/binutils-$binutils_version.patch"
+echo >>make-patches.sh "diff --no-dereference -urN gcc-$gcc_version glidix-gcc > $srcdir/gcc/gcc-$gcc_version.patch"
 chmod +x make-patches.sh
