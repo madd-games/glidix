@@ -54,10 +54,32 @@ extern "C" {
 
 #define	MAP_FAILED			((void*)-1)
 
+#define	MADV_NORMAL			1
+#define	MADV_RANDOM			2
+#define	MADV_SEQUENTIAL			3
+#define MADV_WILLNEED			4
+#define MADV_DONTNEED			5
+
+#define MS_ASYNC			0
+#define	MS_SYNC				1
+#define MS_INVALIDATE			2
+
 /* implemented by libglidix directly */
 int mprotect(void *addr, size_t len, int prot);
 int munmap(void *addr, size_t len);
 void* mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset);
+
+static inline int madvise(void *addr, size_t length, int advice)
+{
+	// TODO
+	return 0;
+};
+
+static inline int msync(void *addr, size_t len, int flags)
+{
+	// TODO
+	return 0;
+};
 
 #ifdef __cplusplus
 }	/* extern "C" */
