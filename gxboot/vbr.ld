@@ -5,9 +5,10 @@ phys = 0x7C00;
 
 SECTIONS
 {
+	. = phys;
 	code = .;
 
-	.text phys : AT(phys) {
+	.text . : {
 		*(.entry_text)
 		*(.text)
 		*(.rodata)
@@ -15,14 +16,18 @@ SECTIONS
 		*(.eh_frame)
 	}
 
+	. = ALIGN(8);
+
 	data = .;
-	.data (phys + (data - code)) : AT(phys + (data - code))
+	.data . :
 	{
 		*(.data)
 	}
 
+	. = ALIGN(8);
+
 	bss = .;
-	.bss (phys + (bss - code)) : AT(phys + (bss - code))
+	.bss . :
 	{
 		*(.bss)
 	}
