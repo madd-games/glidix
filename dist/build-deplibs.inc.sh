@@ -20,4 +20,6 @@ DESTDIR=$DIST_SYSROOT make install-fstools
 make libgwm
 DESTDIR=$DIST_SYSROOT make install-libgwm
 
+cd .. || exit 1
+
 log_success "Dependency libraries built successfully."

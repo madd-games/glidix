@@ -45,3 +45,4 @@ cd build || exit 1
 . ../dist/configure-iso-build.inc.sh
 . ../dist/crosstools-stage2.inc.sh
 . ../dist/build-deplibs.inc.sh
+. ../dist/do-iso-build.inc.sh
