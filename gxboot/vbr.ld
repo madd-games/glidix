@@ -5,22 +5,25 @@ phys = 0x7C00;
 
 SECTIONS
 {
+	code = .;
+
 	.text phys : AT(phys) {
-		code = .;
 		*(.entry_text)
 		*(.text)
 		*(.rodata)
+		*(.rodata*)
+		*(.eh_frame)
 	}
 
+	data = .;
 	.data (phys + (data - code)) : AT(phys + (data - code))
 	{
-		data = .;
 		*(.data)
 	}
 
+	bss = .;
 	.bss (phys + (bss - code)) : AT(phys + (bss - code))
 	{
-		bss = .;
 		*(.bss)
 	}
 	
