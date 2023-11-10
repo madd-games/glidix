@@ -8,6 +8,14 @@ To install all required packages, run:
 sudo apt install g++ nasm
 ```
 
+## Set up cross-compiler `PATH`
+
+We recommend adding this to `~/.profile` to add the cross-compiler binary directory to the `PATH`:
+
+```
+export PATH="$PATH:$HOME/glidix/cross/bin"
+```
+
 ## Building the cross-compiler (stage 1)
 
 To build the first stage of the cross-compiler, which allows us to then build the dependencies of the second stage,
@@ -27,8 +35,7 @@ Inside the `glidix-cross` directory we run the following commands:
 
 ```
 ../glidix/setup-crosstools-workspace --sysroot=$HOME/glidix        # Downloads and patches the build tools source code.
-sudo ./install.sh                                                  # Builds and installs the cross-compiler.
-sudo chown -R $USER:$USER $HOME/glidix                             # TODO: Temporary workaround
+./install.sh                                                       # Builds and installs the cross-compiler.
 ```
 
 ## Configuring the Glidix ISO build
@@ -71,7 +78,6 @@ which depends on it. Back in `glidix-cross`, run:
 
 ```
 sudo ./install-stage2.sh                    # Install the second stage
-chown -R $USER:$USER $HOME/glidix           # TODO: Temporary workaround
 ```
 
 ## Installing other libraries in the sysroot

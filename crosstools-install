@@ -1,14 +1,8 @@
-gcc_list="x86_64-glidix-addr2line x86_64-glidix-ar x86_64-glidix-as x86_64-glidix-c++ x86_64-glidix-c++filt x86_64-glidix-cpp x86_64-glidix-elfedit x86_64-glidix-g++ x86_64-glidix-gcc x86_64-glidix-gcc-4.9.0 x86_64-glidix-gcc-6.2.0 x86_64-glidix-gcc-ar x86_64-glidix-gcc-nm x86_64-glidix-gcc-ranlib x86_64-glidix-gcov x86_64-glidix-gcov-tool x86_64-glidix-gprof x86_64-glidix-ld x86_64-glidix-ld.bfd x86_64-glidix-nm x86_64-glidix-objcopy x86_64-glidix-objdump x86_64-glidix-ranlib x86_64-glidix-readelf x86_64-glidix-size x86_64-glidix-strings x86_64-glidix-strip"
-binutils_list="x86_64-glidix-ld x86_64-glidix-as x86_64-glidix-ar x86_64-glidix-strip"
+mkdir -p $SYSROOT/usr/include || exit 1
+mkdir -p $SYSROOT/cross/bin || exit 1
+cp -RT $SRCDIR/libc/include $SYSROOT/usr/include || exit 1
 
-if [ "`id -u`" != "0" ]
-then
-	echo "$0: you must run me as root!"
-	exit 1
-fi
-
-mkdir -p $SYSROOT/usr/include
-cp -RT $SRCDIR/libc/include $SYSROOT/usr/include
+export PATH="$PATH:$SYROOT/cross/bin"
 
 echo "Building binutils..."
 rm -rf binutils-build
@@ -16,7 +10,7 @@ mkdir binutils-build || exit 1
 cd binutils-build
 ../glidix-binutils/configure \
 	--target=x86_64-glidix \
-	--prefix=$SYSROOT/usr \
+	--prefix=$SYSROOT/cross \
 	--with-sysroot=$SYSROOT \
 	--disable-werror \
 	--disable-nls \
@@ -27,20 +21,13 @@ make || exit 1
 make install || exit 1
 cd ..
 
-echo "Creating links..."
-for name in $binutils_list
-do
-	rm -f /usr/bin/$name
-	ln -s $SYSROOT/usr/bin/$name /usr/bin/$name
-done
-
 echo "Building GCC..."
 rm -rf gcc-build
 mkdir gcc-build || exit 1
 cd gcc-build
 ../glidix-gcc/configure \
 	--target=x86_64-glidix \
-	--prefix=$SYSROOT/usr \
+	--prefix=$SYSROOT/cross \
 	--with-sysroot=$SYSROOT \
 	--enable-languages=c,c++ \
 	--enable-multilib \
@@ -52,12 +39,5 @@ cd gcc-build
 make all-gcc all-target-libgcc || exit 1
 make install-gcc install-target-libgcc || exit 1
 cd ..
-
-echo "Creating all links..."
-for name in $gcc_list
-do
-	rm -f /usr/bin/$name
-	ln -s $SYSROOT/usr/bin/$name /usr/bin/$name
-done
 
 echo "Cross-compiler built"
