@@ -140,6 +140,65 @@ static void findRootPin(PCIDevice *dev, uint8_t slot, uint8_t intpin, PCIBridge 
 };
 
 static void checkBus(uint8_t bus, PCIBridge *bridge);
+static void checkFunc(uint8_t bus, uint8_t slot, uint8_t func, PCIBridge *bridge)
+{
+	PCIDeviceConfig config;
+	pciGetDeviceConfig(bus, slot, func, &config);
+
+	if (config.std.vendor == 0xFFFF)
+	{
+		return;
+	};
+
+	if ((config.std.headerType & 0x7F) == 0x01)
+	{
+		// PCI-to-PCI bridge, scan secondary bus
+		PCIBridge newBridge;
+		newBridge.up = bridge;
+		newBridge.masterSlot = slot;
+		checkBus(config.bridge.secondaryBus, &newBridge);
+	};
+
+	PCIDevice *dev = (PCIDevice*) kmalloc(sizeof(PCIDevice));
+	dev->next = NULL;
+	dev->bus = bus;
+	dev->slot = slot;
+	dev->func = func;
+	dev->id = nextPCIID++;
+	dev->vendor = config.std.vendor;
+	dev->device = config.std.device;
+	dev->progif = config.std.progif;
+	uint16_t classcode16 = (uint16_t) config.std.classcode;
+	uint16_t subclass16 = (uint16_t) config.std.subclass;
+	dev->type = (classcode16 << 8) | (subclass16 & 0xFF);
+	dev->intpin = config.std.intpin;
+	dev->driver = NULL;
+	strcpy(dev->driverName, "null");
+	strcpy(dev->deviceName, "Unknown");
+	memcpy(dev->bar, config.std.bar, 4*6);
+	
+	uint32_t i;
+	for (i=0; i<6; i++)
+	{
+		dev->barsz[i] = pciGetBarSize(dev, i);
+	};
+	
+	dev->intNo = 0;
+	dev->irqHandler = NULL;
+	
+	findRootPin(dev, dev->slot, dev->intpin, bridge);
+	if (lastDevice == NULL)
+	{
+		pciDevices = dev;
+		lastDevice = dev;
+	}
+	else
+	{
+		lastDevice->next = dev;
+		lastDevice = dev;
+	};
+};
+
 static void checkSlot(uint8_t bus, uint8_t slot, PCIBridge *bridge)
 {
 	PCIDeviceConfig config;
@@ -152,68 +211,10 @@ static void checkSlot(uint8_t bus, uint8_t slot, PCIBridge *bridge)
 	{
 		funcs = 8;
 	};
-	
-	if ((config.std.headerType & 0x7F) == 0x01)
+
+	for (uint8_t func=0; func<funcs; func++)
 	{
-		// PCI-to-PCI bridge, scan secondary bus
-		PCIBridge newBridge;
-		newBridge.up = bridge;
-		newBridge.masterSlot = slot;
-		checkBus(config.bridge.secondaryBus, &newBridge);
-	}
-	else
-	{
-		uint8_t func = 0;
-		do
-		{
-			if (config.std.vendor != 0xFFFF)
-			{
-				PCIDevice *dev = (PCIDevice*) kmalloc(sizeof(PCIDevice));
-				dev->next = NULL;
-				dev->bus = bus;
-				dev->slot = slot;
-				dev->func = func;
-				dev->id = nextPCIID++;
-				dev->vendor = config.std.vendor;
-				dev->device = config.std.device;
-				dev->progif = config.std.progif;
-				uint16_t classcode16 = (uint16_t) config.std.classcode;
-				uint16_t subclass16 = (uint16_t) config.std.subclass;
-				dev->type = (classcode16 << 8) | (subclass16 & 0xFF);
-				dev->intpin = config.std.intpin;
-				dev->driver = NULL;
-				strcpy(dev->driverName, "null");
-				strcpy(dev->deviceName, "Unknown");
-				memcpy(dev->bar, config.std.bar, 4*6);
-				
-				uint32_t i;
-				for (i=0; i<6; i++)
-				{
-					dev->barsz[i] = pciGetBarSize(dev, i);
-				};
-				
-				dev->intNo = 0;
-				dev->irqHandler = NULL;
-				
-				findRootPin(dev, dev->slot, dev->intpin, bridge);
-				if (lastDevice == NULL)
-				{
-					pciDevices = dev;
-					lastDevice = dev;
-				}
-				else
-				{
-					lastDevice->next = dev;
-					lastDevice = dev;
-				};
-			};
-			
-			func++;
-			if (func != 8)
-			{
-				pciGetDeviceConfig(bus, slot, func, &config);
-			};
-		} while (func < funcs);
+		checkFunc(bus, slot, func, bridge);
 	};
 };
 
@@ -419,7 +420,27 @@ void pciInit()
 {
 	mutexInit(&pciLock);
 	spinlockRelease(&confLock);
-	checkBus(0, NULL);
+
+	PCIDeviceConfig rootCtrlConfig;
+	pciGetDeviceConfig(0, 0, 0, &rootCtrlConfig);
+
+	if (rootCtrlConfig.std.headerType & 0x80)
+	{
+		// Multiple host controllers.
+		uint8_t func;
+		for (func=0; func<8; func++)
+		{
+			pciGetDeviceConfig(0, 0, func, &rootCtrlConfig);
+			if (rootCtrlConfig.std.vendor != 0xFFFF)
+			{
+				checkBus(func, NULL);
+			};
+		};
+	}
+	else
+	{
+		checkBus(0, NULL);
+	};
 };
 
 void pciInitACPI()
