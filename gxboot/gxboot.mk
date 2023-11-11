@@ -1,5 +1,5 @@
 TOOLS_CFLAGS := -Wall -Werror -L../libc
-GXBOOT_CFLAGS := -Wall -Werror -m32 -ffreestanding -fno-builtin
+GXBOOT_CFLAGS := -Wall -Werror -m32 -ffreestanding -fno-builtin -mno-mmx -mno-sse2 -mno-sse
 GXBOOT_LDFLAGS := -T $(SRCDIR)/vbr.ld -m32 -ffreestanding -nostdlib -lgcc
 
 C_SRC := $(shell find $(SRCDIR)/vbr -name '*.c')
