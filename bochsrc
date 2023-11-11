@@ -3,3 +3,4 @@ ata0-master: type=cdrom, path="build/iso/glidix.iso", status=inserted
 boot: cdrom
 magic_break: enabled=1
 cpu: reset_on_triple_fault=0
+megs: 2048
