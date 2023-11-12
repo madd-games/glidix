@@ -579,11 +579,11 @@ void pciSetBusMastering(PCIDevice *dev, int enable)
 	
 	if (enable)
 	{
-		statcmd |= (1 << 2);
+		statcmd |= PCI_CMD_BME;
 	}
 	else
 	{
-		statcmd &= ~(1 << 2);
+		statcmd &= ~PCI_CMD_BME;
 	};
 	
 	pciConfWrite(addr, statcmd);

@@ -38,6 +38,12 @@
 
 #define	IOCTL_PCI_DEVINFO				IOCTL_ARG(PCIDevinfoRequest, IOCTL_INT_PCI, 0x01)
 
+/**
+ * Flags for the configuration space command register.
+ */
+#define PCI_CMD_BME					(1 << 2)
+#define PCI_CMD_MWIE					(1 << 4)
+
 typedef union
 {
 	struct
