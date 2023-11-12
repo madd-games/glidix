@@ -127,6 +127,13 @@ static void ahciInit(AHCIController *ctrl)
 	// map MMIO regs
 	ctrl->regs = mapPhysMemory((uint64_t) (ctrl->pcidev->bar[5] & ~0xF), sizeof(AHCIMemoryRegs));
 	
+	// Don't use the controller if it does not support 64-bit addressing.
+	if ((ctrl->regs->cap & CAP_S64A) == 0)
+	{
+		kprintf("sdahci: AHCI controller does not support 64-bit addressing, skipping.");
+		return;
+	};
+
 	// take ownership of the device from firmware
 	ctrl->regs->bohc |= BOHC_OOS;
 	while (ctrl->regs->bohc & BOHC_BOS);

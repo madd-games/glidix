@@ -122,6 +122,7 @@
 #define	GHC_AE						(1 << 31)
 #define GHC_HR						(1 << 0)
 
+#define CAP_S64A					(1 << 31)
 #define CAP_SSS						(1 << 27)
 
 typedef enum
