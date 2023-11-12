@@ -115,6 +115,9 @@
 
 #define	IS_ERR_FATAL					(IS_HBFS | IS_HBDS | IS_IFS | IS_TFES)
 
+#define	GHC_AE						(1 << 31)
+#define GHC_HR						(1 << 0)
+
 typedef enum
 {
 	FIS_TYPE_REG_H2D	= 0x27,	// Register FIS - host to device

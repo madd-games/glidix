@@ -53,8 +53,9 @@ static int numCtrlFound;
 void ahciStopCmd(volatile AHCIPort *port)
 {
 	port->cmd &= ~CMD_ST;
+	while (port->cmd & CMD_CR);
 	port->cmd &= ~CMD_FRE;
-	while ((port->cmd & CMD_FR) || (port->cmd & CMD_CR));
+	while (port->cmd & CMD_FR);
 };
 
 void ahciStartCmd(volatile AHCIPort *port)
@@ -130,10 +131,15 @@ static void ahciInit(AHCIController *ctrl)
 	ctrl->regs->bohc |= BOHC_OOS;
 	while (ctrl->regs->bohc & BOHC_BOS);
 	
-	// make sure bus mastering is enabled and perform port initialization
+	// Make sure bus mastering is enabled.
 	pciSetBusMastering(ctrl->pcidev, 1);
 	ctrl->numAtaDevices = 0;
+
+	// Perform a HBA reset and enable AHCI mode.
+	ctrl->regs->ghc |= GHC_AE | GHC_HR;
+	while (ctrl->regs->ghc & GHC_HR);
 	
+	// Initialize the ports.
 	int i;
 	for (i=0; i<32; i++)
 	{
