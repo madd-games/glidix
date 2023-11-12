@@ -146,6 +146,22 @@ static void ahciInit(AHCIController *ctrl)
 		if (ctrl->regs->pi & (1 << i))
 		{
 			ahciStopCmd(&ctrl->regs->ports[i]);
+			ctrl->regs->ports[i].cmd |= CMD_SUD;
+
+			// If staggered spin-up is supported, spin up the device.
+			if (ctrl->regs->cap & CAP_SSS)
+			{
+				ctrl->regs->ports[i].sctl = (ctrl->regs->ports[i].sctl & ~SCTL_DET_MASK) | SCTL_DET_COMRESET;
+
+				sleep(10);
+
+				ctrl->regs->ports[i].sctl &= ~SCTL_DET_MASK;
+
+				sleep(10);
+
+				ctrl->regs->ports[i].serr = ~0;
+			};
+
 			uint32_t ssts = ctrl->regs->ports[i].ssts;
 			
 			uint8_t ipm = (ssts >> 8) & 0x0F;

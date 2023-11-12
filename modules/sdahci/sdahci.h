@@ -86,7 +86,11 @@
 #define	SSTS_IPM_SLUMBER				0x06
 #define	SSTS_IPM_DEVSLEEP				0x08
 
+#define SCTL_DET_MASK					0xF
+#define SCTL_DET_COMRESET				0x1
+
 #define	CMD_ST						(1 << 0)
+#define CMD_SUD						(1 << 1)
 #define	CMD_FRE						(1 << 4)
 #define	CMD_FR						(1 << 14)
 #define	CMD_CR						(1 << 15)
@@ -117,6 +121,8 @@
 
 #define	GHC_AE						(1 << 31)
 #define GHC_HR						(1 << 0)
+
+#define CAP_SSS						(1 << 27)
 
 typedef enum
 {
