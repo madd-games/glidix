@@ -41,20 +41,19 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 	
 	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D) / 4;
+	opArea->cmdlist[0].c = 1;				// clear BSY when done
 	
 	if (dir == ATA_READ)
 	{
 		opArea->cmdlist[0].w = 0;
-		opArea->cmdlist[0].p = 0;
-		opArea->cmdlist[0].c = 0;
+		opArea->cmdlist[0].p = 1;
 	}
 	else
 	{
 		opArea->cmdlist[0].w = 1;
-		opArea->cmdlist[0].p = 1;
-		opArea->cmdlist[0].c = 1;
+		opArea->cmdlist[0].p = 0;
 	};
-	
+
 	uint16_t prdtl = 0;
 	
 	DMARegion reg;
@@ -86,11 +85,10 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 	cmdfis->lba0 = (uint8_t)startBlock;
 	cmdfis->lba1 = (uint8_t)(startBlock>>8);
 	cmdfis->lba2 = (uint8_t)(startBlock>>16);
-	cmdfis->device = 1<<6;	// LBA mode
- 
 	cmdfis->lba3 = (uint8_t)(startBlock>>24);
 	cmdfis->lba4 = (uint8_t)(startBlock>>32);
 	cmdfis->lba5 = (uint8_t)(startBlock>>40);
+	cmdfis->device = 1<<6;	// LBA mode
 	
 	cmdfis->countl = numBlocks & 0xFF;
 	cmdfis->counth = (numBlocks >> 8) & 0xFF;
@@ -106,7 +104,7 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 	// do a cache flush
 	opArea->cmdlist[0].w = 0;
 	opArea->cmdlist[0].p = 0;
-	opArea->cmdlist[0].c = 0;
+	opArea->cmdlist[0].c = 1;
 	opArea->cmdlist[0].prdtl = 0;
 
 	cmdfis->fis_type = FIS_TYPE_REG_H2D;
@@ -158,9 +156,6 @@ void ataInit(AHCIController *ctrl, int portno)
 	dev->ctrl = ctrl;
 	dev->port = &ctrl->regs->ports[portno];
 	dev->sd = NULL;
-	
-	// stop the command engine while setting up the commands and stuff
-	ahciStopCmd(dev->port);
 	
 	// create the operations area
 	if (dmaCreateBuffer(&dev->dmabuf, sizeof(AHCIOpArea), 0) != 0)
@@ -252,7 +247,7 @@ void ataInit(AHCIController *ctrl, int portno)
 	// do a cache flush
 	opArea->cmdlist[0].w = 0;
 	opArea->cmdlist[0].p = 0;
-	opArea->cmdlist[0].c = 0;
+	opArea->cmdlist[0].c = 1;
 	opArea->cmdlist[0].prdtl = 0;
 
 	cmdfis->fis_type = FIS_TYPE_REG_H2D;
