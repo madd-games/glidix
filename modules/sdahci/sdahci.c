@@ -26,8 +26,6 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// TODO: ensure 64-bit addressing is supported
-
 #include <glidix/module/module.h>
 #include <glidix/display/console.h>
 #include <glidix/thread/sched.h>
