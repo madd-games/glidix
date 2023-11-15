@@ -250,7 +250,6 @@ typedef struct
 
 // video modes that we accept; those are the safe modes that all monitors should support
 static ScreenSize okSizes[] = {
-	{1024, 768},
 	{720, 480},
 	{640, 480},
 	
@@ -430,7 +429,7 @@ void bmain()
 			continue;
 		};
 
-		if (vbeModeInfo.red_mask != 8 || vbeModeInfo.green_mask != 8 || vbeModeInfo.blue_mask != 8 || vbeModeInfo.rsv_mask != 8)
+		if (vbeModeInfo.red_mask != 8 || vbeModeInfo.green_mask != 8 || vbeModeInfo.blue_mask != 8)
 		{
 			// channels are not all 8-bit
 			continue;
@@ -481,7 +480,7 @@ void bmain()
 				continue;
 			};
 
-			if (vbeModeInfo.red_mask != 8 || vbeModeInfo.green_mask != 8 || vbeModeInfo.blue_mask != 8 || vbeModeInfo.rsv_mask != 8)
+			if (vbeModeInfo.red_mask != 8 || vbeModeInfo.green_mask != 8 || vbeModeInfo.blue_mask != 8)
 			{
 				// channels are not all 8-bit
 				continue;
