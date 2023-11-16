@@ -31,6 +31,8 @@
 #include <glidix/util/string.h>
 
 #include "ata.h"
+#include "glidix/hw/dma.h"
+#include "port.h"
 
 #define	ATA_READ					0
 #define	ATA_WRITE					1
@@ -250,51 +252,17 @@ SDOps ataOps = {
 	.writeBlocks = ataWriteBlocks,
 };
 
-void ataInit(AHCIController *ctrl, int portno)
+void ataInit(AHCIPort *port)
 {
-	AHCIPort *dev = NEW(AHCIPort);
-	ctrl->ports[ctrl->numPorts++] = dev;
-	mutexInit(&dev->lock);
-	
-	dev->ctrl = ctrl;
-	dev->regs = &ctrl->regs->ports[portno];
-	dev->sd = NULL;
-	
-	// create the operations area
-	if (dmaCreateBuffer(&dev->dmabuf, sizeof(AHCIOpArea), 0) != 0)
-	{
-		// it didn't work
-		kprintf("sdahci: failed to allocate operations area\n");
-		kfree(dev);
-		ctrl->numPorts--;
-		return;
-	};
-	
-	// set up the operations area
-	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
-	memset(opArea, 0, sizeof(AHCIOpArea));
-	
-	// set the command list and FIS area
-	dev->regs->clb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdlist);
-	dev->regs->fb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea);
+	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&port->dmabuf);
 
-	kprintf("FIS AREA PHYS: 0x%016lx\n", dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea));
-	
-	// we only use the first command header, so initialize it to point to the table
-	opArea->cmdlist[0].ctba = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdtab);
-	
-	// start the command engine
-	ahciStartCmd(dev->regs);
-	dev->regs->serr = dev->regs->serr;
-	dev->regs->is = dev->regs->is;
-	
 	// send the IDENTIFY command.
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D)/4;		// FIS length in dwords
 	opArea->cmdlist[0].w = 0;				// read data
 	opArea->cmdlist[0].prdtl = 1;				// only one PRDT entry
 	opArea->cmdlist[0].p = 1;
 	
-	opArea->cmdtab.prdt[0].dba = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, id);
+	opArea->cmdtab.prdt[0].dba = dmaGetPhys(&port->dmabuf) + __builtin_offsetof(AHCIOpArea, id);
 	opArea->cmdtab.prdt[0].dbc = 511;			// length-1
 	opArea->cmdtab.prdt[0].i = 0;				// do not interrupt
 	
@@ -305,7 +273,7 @@ void ataInit(AHCIController *ctrl, int portno)
 	cmdfis->command = ATA_CMD_IDENTIFY;
 	
 	// issue the command and await completion
-	if (ahciIssueCmd(dev->regs) != 0)
+	if (ahciIssueCmd(port->regs) != 0)
 	{
 		kprintf("sdahci: error during identification\n");
 		return;
@@ -374,11 +342,11 @@ void ataInit(AHCIController *ctrl, int portno)
 	cmdfis->counth = 0;
 	
 	// issue the flush command
-	int status = ahciIssueCmd(dev->regs);
+	int status = ahciIssueCmd(port->regs);
 	kprintf("sdahci: cache flush status: %d\n", status);
 
-	dev->sd = sdCreate(&sdpars, model, &ataOps, dev);
-	if (dev->sd == NULL)
+	port->sd = sdCreate(&sdpars, model, &ataOps, port);
+	if (port->sd == NULL)
 	{
 		kprintf("sdahci: SD creation failed\n");
 		// NOTE: do not free anything; this is done upon removing the driver

@@ -31,6 +31,7 @@
 #include <glidix/util/string.h>
 
 #include "atapi.h"
+#include "port.h"
 
 int atapiReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buffer)
 {
@@ -197,51 +198,17 @@ SDOps atapiOps = {
 	.eject = atapiEject
 };
 
-void atapiInit(AHCIController *ctrl, int portno)
+void atapiInit(AHCIPort *port)
 {
-	AHCIPort *dev = NEW(AHCIPort);
-	ctrl->ports[ctrl->numPorts++] = dev;
-	mutexInit(&dev->lock);
-	
-	dev->ctrl = ctrl;
-	dev->regs = &ctrl->regs->ports[portno];
-	dev->sd = NULL;
-	
-	// stop the command engine while setting up the commands and stuff
-	ahciStopCmd(dev->regs);
-	
-	// create the operations area
-	if (dmaCreateBuffer(&dev->dmabuf, sizeof(AHCIOpArea), 0) != 0)
-	{
-		// it didn't work
-		kprintf("sdahci: failed to allocate operations area\n");
-		kfree(dev);
-		ctrl->numPorts--;
-		return;
-	};
-	
-	// set up the operations area
-	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
-	memset(opArea, 0, sizeof(AHCIOpArea));
-	
-	// set the command list and FIS area
-	dev->regs->clb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdlist);
-	dev->regs->fb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea);
-	
-	// we only use the first command header, so initialize it to point to the table
-	opArea->cmdlist[0].ctba = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdtab);
-	
-	// start the command engine
-	ahciStartCmd(dev->regs);
-	dev->regs->is = dev->regs->is;
-	
+	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&port->dmabuf);
+
 	// send the IDENTIFY command.
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D)/4;		// FIS length in dwords
 	opArea->cmdlist[0].w = 0;				// read data
 	opArea->cmdlist[0].prdtl = 1;				// only one PRDT entry
 	opArea->cmdlist[0].p = 1;
 	
-	opArea->cmdtab.prdt[0].dba = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, id);
+	opArea->cmdtab.prdt[0].dba = dmaGetPhys(&port->dmabuf) + __builtin_offsetof(AHCIOpArea, id);
 	opArea->cmdtab.prdt[0].dbc = 511;			// length-1
 	opArea->cmdtab.prdt[0].i = 0;				// do not interrupt
 	
@@ -253,7 +220,7 @@ void atapiInit(AHCIController *ctrl, int portno)
 	
 	// issue the command and await completion
 	__sync_synchronize();
-	if (ahciIssueCmd(dev->regs) != 0)
+	if (ahciIssueCmd(port->regs) != 0)
 	{
 		kprintf("sdahci: AHCI error during identification\n");
 		return;
@@ -281,8 +248,8 @@ void atapiInit(AHCIController *ctrl, int portno)
 	sdpars.blockSize = 2048;
 	sdpars.totalSize = 0;
 	
-	dev->sd = sdCreate(&sdpars, model, &atapiOps, dev);
-	if (dev->sd == NULL)
+	port->sd = sdCreate(&sdpars, model, &atapiOps, port);
+	if (port->sd == NULL)
 	{
 		kprintf("sdahci: SD creation failed\n");
 		// NOTE: do not free anything; this is done upon removing the driver

@@ -30,10 +30,11 @@
 #define ATAPI_H_
 
 #include "sdahci.h"
+#include "port.h"
 
 /**
  * Initialize an ATAPI device which was detected on the specified port of an AHCI controller.
  */
-void atapiInit(AHCIController *ctrl, int portno);
+void atapiInit(AHCIPort *port);
 
 #endif

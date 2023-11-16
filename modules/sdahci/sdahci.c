@@ -43,6 +43,7 @@
 #include "sdahci.h"
 #include "ata.h"
 #include "atapi.h"
+#include "port.h"
 
 static AHCIController *firstCtrl;
 static AHCIController *lastCtrl;
@@ -129,6 +130,7 @@ static void ahciInit(AHCIController *ctrl)
 	if ((ctrl->regs->cap & CAP_S64A) == 0)
 	{
 		kprintf("sdahci: AHCI controller does not support 64-bit addressing, skipping.");
+		unmapPhysMemory(ctrl->regs, sizeof(AHCIMemoryRegs));
 		return;
 	};
 
@@ -151,58 +153,7 @@ static void ahciInit(AHCIController *ctrl)
 	{
 		if (ctrl->regs->pi & (1 << i))
 		{
-			ahciStopCmd(&ctrl->regs->ports[i]);
-			ctrl->regs->ports[i].cmd = (ctrl->regs->ports[i].cmd & ~CMD_ICC_MASK) | CMD_ICC_ACTIVE;
-
-			ctrl->regs->ports[i].sctl = (ctrl->regs->ports[i].sctl & ~SCTL_DET_MASK) | SCTL_DET_COMRESET;
-
-			sleep(10);
-
-			ctrl->regs->ports[i].sctl &= ~SCTL_DET_MASK;
-
-			sleep(1000);
-			
-			ctrl->regs->ports[i].cmd |= CMD_SUD | CMD_POD;
-
-			ctrl->regs->ports[i].serr = ~0;
-
-			uint32_t ssts = ctrl->regs->ports[i].ssts;
-			
-			uint8_t ipm = (ssts >> 8) & 0x0F;
-			uint8_t det = ssts & 0x0F;
-			
-			if (det != SSTS_DET_OK)
-			{
-				continue;
-			};
-			
-			if (ipm != SSTS_IPM_ACTIVE)
-			{
-				continue;
-			};
-			
-			uint32_t sig = ctrl->regs->ports[i].sig;
-			if (sig == AHCI_SIG_ATA)
-			{
-				kprintf("sdahci: detected ATA drive on port %d\n", i);
-				ataInit(ctrl, i);
-			}
-			else if (sig == AHCI_SIG_ATAPI)
-			{
-				kprintf("sdahci: detected ATAPI drive on port %d\n", i);
-				atapiInit(ctrl, i);
-			}
-			else if (sig == AHCI_SIG_EMPTY)
-			{
-				kprintf(
-					"sdahci: port %d reporing empty signature: serr=0x%08x, tfd=0x%08x\n",
-					i, ctrl->regs->ports[i].serr, ctrl->regs->ports[i].tfd
-				);
-			}
-			else
-			{
-				kprintf("sdahci: unknown device: signature 0x%08X (port %d)\n", sig, i);
-			};
+			portInit(ctrl, i);
 		};
 	};
 };
@@ -261,9 +212,10 @@ MODULE_FINI()
 		int i;
 		for (i=0; i<ctrl->numPorts; i++)
 		{
-			if (ctrl->ports[i]->sd != NULL) sdHangup(ctrl->ports[i]->sd);
-			ahciStopCmd(ctrl->ports[i]->regs);
-			dmaReleaseBuffer(&ctrl->ports[i]->dmabuf);
+			// if (ctrl->ports[i]->sd != NULL) sdHangup(ctrl->ports[i]->sd);
+			// ahciStopCmd(ctrl->ports[i]->regs);
+			// dmaReleaseBuffer(&ctrl->ports[i]->dmabuf);
+			portRelease(ctrl->ports[i]);
 		};
 		
 		unmapPhysMemory(ctrl->regs, sizeof(AHCIMemoryRegs));

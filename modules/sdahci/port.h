@@ -26,15 +26,29 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ATA_H_
-#define ATA_H_
+#ifndef PORT_H_
+#define PORT_H_
 
 #include "sdahci.h"
-#include "port.h"
+
+typedef struct AHCIPort_
+{
+	AHCIController*			ctrl;
+	int				portno;
+	volatile AHCIPortRegs*		regs;
+	StorageDevice*			sd;
+	DMABuffer			dmabuf;
+	Mutex				lock;
+} AHCIPort;
 
 /**
- * Initialize an ATA device which was detected on the specified port of an AHCI controller.
+ * Initialize a port, add it to the list if necessary.
  */
-void ataInit(AHCIPort *port);
+void portInit(AHCIController *ctrl, int portno);
+
+/**
+ * Release the port's structures.
+ */
+void portRelease(AHCIPort *port);
 
 #endif

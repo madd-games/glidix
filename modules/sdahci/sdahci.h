@@ -222,16 +222,6 @@ typedef struct AHCIController_
 	int				numPorts;
 } AHCIController;
 
-typedef struct AHCIPort_
-{
-	AHCIController*			ctrl;
-	int				portno;
-	volatile AHCIPortRegs*		regs;
-	StorageDevice*			sd;
-	DMABuffer			dmabuf;
-	Mutex				lock;
-} AHCIPort;
-
 typedef struct tagHBA_PRDT_ENTRY
 {
 	uint64_t			dba;		// Data base address
