@@ -34,7 +34,7 @@
 
 int atapiReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buffer)
 {
-	ATADevice *dev = (ATADevice*) drvdata;
+	AHCIPort *dev = (AHCIPort*) drvdata;
 	
 	mutexLock(&dev->lock);
 	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
@@ -86,7 +86,7 @@ int atapiReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *bu
 	cmdfis->counth = (numBlocks >> 8) & 0xFF;
 
 	// issue the command
-	int status = ahciIssueCmd(dev->port);
+	int status = ahciIssueCmd(dev->regs);
 	mutexUnlock(&dev->lock);
 	return status;
 };
@@ -99,7 +99,7 @@ int atapiWriteBlocks(void *drvdata, size_t startBlock, size_t numBlocks, const v
 
 size_t atapiGetSize(void *drvdata)
 {
-	ATADevice *dev = (ATADevice*) drvdata;
+	AHCIPort *dev = (AHCIPort*) drvdata;
 	
 	mutexLock(&dev->lock);
 	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
@@ -135,7 +135,7 @@ size_t atapiGetSize(void *drvdata)
 	cmdfis->counth = 0;
 
 	// issue the command
-	int status = ahciIssueCmd(dev->port);
+	int status = ahciIssueCmd(dev->regs);
 	mutexUnlock(&dev->lock);
 	
 	if (status == 0)
@@ -151,7 +151,7 @@ size_t atapiGetSize(void *drvdata)
 
 int atapiEject(void *drvdata)
 {
-	ATADevice *dev = (ATADevice*) drvdata;
+	AHCIPort *dev = (AHCIPort*) drvdata;
 	
 	mutexLock(&dev->lock);
 	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
@@ -184,7 +184,7 @@ int atapiEject(void *drvdata)
 	cmdfis->counth = 0;
 
 	// issue the command
-	int status = ahciIssueCmd(dev->port);
+	int status = ahciIssueCmd(dev->regs);
 	mutexUnlock(&dev->lock);
 	return status;
 };
@@ -199,16 +199,16 @@ SDOps atapiOps = {
 
 void atapiInit(AHCIController *ctrl, int portno)
 {
-	ATADevice *dev = NEW(ATADevice);
-	ctrl->ataDevices[ctrl->numAtaDevices++] = dev;
+	AHCIPort *dev = NEW(AHCIPort);
+	ctrl->ports[ctrl->numPorts++] = dev;
 	mutexInit(&dev->lock);
 	
 	dev->ctrl = ctrl;
-	dev->port = &ctrl->regs->ports[portno];
+	dev->regs = &ctrl->regs->ports[portno];
 	dev->sd = NULL;
 	
 	// stop the command engine while setting up the commands and stuff
-	ahciStopCmd(dev->port);
+	ahciStopCmd(dev->regs);
 	
 	// create the operations area
 	if (dmaCreateBuffer(&dev->dmabuf, sizeof(AHCIOpArea), 0) != 0)
@@ -216,7 +216,7 @@ void atapiInit(AHCIController *ctrl, int portno)
 		// it didn't work
 		kprintf("sdahci: failed to allocate operations area\n");
 		kfree(dev);
-		ctrl->numAtaDevices--;
+		ctrl->numPorts--;
 		return;
 	};
 	
@@ -225,15 +225,15 @@ void atapiInit(AHCIController *ctrl, int portno)
 	memset(opArea, 0, sizeof(AHCIOpArea));
 	
 	// set the command list and FIS area
-	dev->port->clb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdlist);
-	dev->port->fb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea);
+	dev->regs->clb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdlist);
+	dev->regs->fb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea);
 	
 	// we only use the first command header, so initialize it to point to the table
 	opArea->cmdlist[0].ctba = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdtab);
 	
 	// start the command engine
-	ahciStartCmd(dev->port);
-	dev->port->is = dev->port->is;
+	ahciStartCmd(dev->regs);
+	dev->regs->is = dev->regs->is;
 	
 	// send the IDENTIFY command.
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D)/4;		// FIS length in dwords
@@ -253,7 +253,7 @@ void atapiInit(AHCIController *ctrl, int portno)
 	
 	// issue the command and await completion
 	__sync_synchronize();
-	if (ahciIssueCmd(dev->port) != 0)
+	if (ahciIssueCmd(dev->regs) != 0)
 	{
 		kprintf("sdahci: AHCI error during identification\n");
 		return;

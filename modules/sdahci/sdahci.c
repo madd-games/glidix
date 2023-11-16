@@ -48,7 +48,7 @@ static AHCIController *firstCtrl;
 static AHCIController *lastCtrl;
 static int numCtrlFound;
 
-void ahciStopCmd(volatile AHCIPort *port)
+void ahciStopCmd(volatile AHCIPortRegs *port)
 {
 	port->cmd &= ~CMD_ST;
 	while (port->cmd & CMD_CR);
@@ -56,14 +56,14 @@ void ahciStopCmd(volatile AHCIPort *port)
 	while (port->cmd & CMD_FR);
 };
 
-void ahciStartCmd(volatile AHCIPort *port)
+void ahciStartCmd(volatile AHCIPortRegs *port)
 {
 	while (port->cmd & CMD_CR);
 	port->cmd |= CMD_FRE;
 	port->cmd |= CMD_ST;
 };
 
-int ahciIssueCmd(volatile AHCIPort *port)
+int ahciIssueCmd(volatile AHCIPortRegs *port)
 {
 	uint64_t startTime = getNanotime();
 	
@@ -138,7 +138,7 @@ static void ahciInit(AHCIController *ctrl)
 	
 	// Make sure bus mastering is enabled.
 	pciSetBusMastering(ctrl->pcidev, 1);
-	ctrl->numAtaDevices = 0;
+	ctrl->numPorts = 0;
 
 	// Perform a HBA reset and enable AHCI mode.
 	ctrl->regs->ghc = GHC_HR;
@@ -259,11 +259,11 @@ MODULE_FINI()
 		firstCtrl = ctrl->next;
 		
 		int i;
-		for (i=0; i<ctrl->numAtaDevices; i++)
+		for (i=0; i<ctrl->numPorts; i++)
 		{
-			if (ctrl->ataDevices[i]->sd != NULL) sdHangup(ctrl->ataDevices[i]->sd);
-			ahciStopCmd(ctrl->ataDevices[i]->port);
-			dmaReleaseBuffer(&ctrl->ataDevices[i]->dmabuf);
+			if (ctrl->ports[i]->sd != NULL) sdHangup(ctrl->ports[i]->sd);
+			ahciStopCmd(ctrl->ports[i]->regs);
+			dmaReleaseBuffer(&ctrl->ports[i]->dmabuf);
 		};
 		
 		unmapPhysMemory(ctrl->regs, sizeof(AHCIMemoryRegs));

@@ -168,7 +168,7 @@ typedef struct
 	uint32_t			fbs;
 	uint32_t			rsv1[11];
 	uint32_t			vendor[4];
-} AHCIPort;
+} AHCIPortRegs;
 
 typedef struct
 {
@@ -185,7 +185,7 @@ typedef struct
 	uint32_t			bohc;
 	uint8_t				rsv[0xA0-0x2C];
 	uint8_t				vendor[0x100-0xA0];
-	AHCIPort			ports[32];
+	AHCIPortRegs			ports[32];
 } AHCIMemoryRegs;
 
 typedef struct
@@ -218,19 +218,19 @@ typedef struct AHCIController_
 	struct AHCIController_*		next;
 	PCIDevice*			pcidev;
 	volatile AHCIMemoryRegs*	regs;
-	struct ATADevice_*		ataDevices[32];
-	int				numAtaDevices;
+	struct AHCIPort_*		ports[32];
+	int				numPorts;
 } AHCIController;
 
-typedef struct ATADevice_	/* or ATAPI */
+typedef struct AHCIPort_
 {
 	AHCIController*			ctrl;
 	int				portno;
-	volatile AHCIPort*		port;
+	volatile AHCIPortRegs*		regs;
 	StorageDevice*			sd;
 	DMABuffer			dmabuf;
 	Mutex				lock;
-} ATADevice;
+} AHCIPort;
 
 typedef struct tagHBA_PRDT_ENTRY
 {
@@ -321,12 +321,12 @@ typedef struct
 /**
  * Stop the commmand engine on a port.
  */
-void ahciStopCmd(volatile AHCIPort *port);
+void ahciStopCmd(volatile AHCIPortRegs *port);
 
 /**
  * Start the command engine on a port.
  */
-void ahciStartCmd(volatile AHCIPort *port);
+void ahciStartCmd(volatile AHCIPortRegs *port);
 
 /**
  * Issue a command on the specified port. Command 0 in the port's command list is expected to be filled in,
@@ -335,6 +335,6 @@ void ahciStartCmd(volatile AHCIPort *port);
  * Upon success (command completed successfully), this function returns 0. If an error occurs, this function
  * returns EIO and prints error information to the kernel console.
  */
-int ahciIssueCmd(volatile AHCIPort *port);
+int ahciIssueCmd(volatile AHCIPortRegs *port);
 
 #endif

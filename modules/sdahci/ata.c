@@ -35,12 +35,12 @@
 #define	ATA_READ					0
 #define	ATA_WRITE					1
 
-int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void *buffer, int dir)
+int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *buffer, int dir)
 {
 	mutexLock(&dev->lock);
 	dev->ctrl->regs->is = dev->ctrl->regs->is;
-	dev->port->is = dev->port->is;
-	dev->port->serr = dev->port->serr;
+	dev->regs->is = dev->regs->is;
+	dev->regs->serr = dev->regs->serr;
 	
 	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D) / 4;
@@ -123,13 +123,13 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 		"BEFORE ISSUE: PRDTL=%u, PRDC=0x%x, IS=0x%08x, SERR=0x%08x, TFD=0x%08x\n",
 		opArea->cmdlist[0].prdtl,
 		opArea->cmdlist[0].prdbc,
-		dev->port->is,
-		dev->port->serr,
-		dev->port->tfd
+		dev->regs->is,
+		dev->regs->serr,
+		dev->regs->tfd
 	);
 
 	// issue the command
-	int status = ahciIssueCmd(dev->port);
+	int status = ahciIssueCmd(dev->regs);
 	if (status != 0)
 	{
 		mutexUnlock(&dev->lock);
@@ -140,9 +140,9 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 		"AFTER ISSUE: PRDTL=%u, PRDC=0x%x, IS=0x%08x, SERR=0x%08x, TFD=0x%08x\n",
 		opArea->cmdlist[0].prdtl,
 		opArea->cmdlist[0].prdbc,
-		dev->port->is,
-		dev->port->serr,
-		dev->port->tfd
+		dev->regs->is,
+		dev->regs->serr,
+		dev->regs->tfd
 	);
 	
 	// do a cache flush
@@ -168,7 +168,7 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 	cmdfis->counth = 0;
 	
 	// issue the flush command
-	status = ahciIssueCmd(dev->port);
+	status = ahciIssueCmd(dev->regs);
 	mutexUnlock(&dev->lock);
 	return status;
 };
@@ -177,7 +177,7 @@ int ataReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buff
 {
 	int isBootedFromHDD = memcmp(bootInfo->bootID, "\0\0" "ISOBOOT" "\0\0\0\0\0\xF0\x0D", 16) != 0;
 
-	ATADevice *dev = (ATADevice*) drvdata;
+	AHCIPort *dev = (AHCIPort*) drvdata;
 	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
 
 	if (isBootedFromHDD && startBlock == 0)
@@ -240,7 +240,7 @@ int ataReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buff
 
 int ataWriteBlocks(void *drvdata, size_t startBlock, size_t numBlocks, const void *buffer)
 {
-	ATADevice *dev = (ATADevice*) drvdata;
+	AHCIPort *dev = (AHCIPort*) drvdata;
 	return ataTransferBlocks(dev, startBlock, numBlocks, (void*)buffer, ATA_WRITE);
 };
 
@@ -252,12 +252,12 @@ SDOps ataOps = {
 
 void ataInit(AHCIController *ctrl, int portno)
 {
-	ATADevice *dev = NEW(ATADevice);
-	ctrl->ataDevices[ctrl->numAtaDevices++] = dev;
+	AHCIPort *dev = NEW(AHCIPort);
+	ctrl->ports[ctrl->numPorts++] = dev;
 	mutexInit(&dev->lock);
 	
 	dev->ctrl = ctrl;
-	dev->port = &ctrl->regs->ports[portno];
+	dev->regs = &ctrl->regs->ports[portno];
 	dev->sd = NULL;
 	
 	// create the operations area
@@ -266,7 +266,7 @@ void ataInit(AHCIController *ctrl, int portno)
 		// it didn't work
 		kprintf("sdahci: failed to allocate operations area\n");
 		kfree(dev);
-		ctrl->numAtaDevices--;
+		ctrl->numPorts--;
 		return;
 	};
 	
@@ -275,8 +275,8 @@ void ataInit(AHCIController *ctrl, int portno)
 	memset(opArea, 0, sizeof(AHCIOpArea));
 	
 	// set the command list and FIS area
-	dev->port->clb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdlist);
-	dev->port->fb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea);
+	dev->regs->clb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdlist);
+	dev->regs->fb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea);
 
 	kprintf("FIS AREA PHYS: 0x%016lx\n", dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea));
 	
@@ -284,9 +284,9 @@ void ataInit(AHCIController *ctrl, int portno)
 	opArea->cmdlist[0].ctba = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdtab);
 	
 	// start the command engine
-	ahciStartCmd(dev->port);
-	dev->port->serr = dev->port->serr;
-	dev->port->is = dev->port->is;
+	ahciStartCmd(dev->regs);
+	dev->regs->serr = dev->regs->serr;
+	dev->regs->is = dev->regs->is;
 	
 	// send the IDENTIFY command.
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D)/4;		// FIS length in dwords
@@ -305,7 +305,7 @@ void ataInit(AHCIController *ctrl, int portno)
 	cmdfis->command = ATA_CMD_IDENTIFY;
 	
 	// issue the command and await completion
-	if (ahciIssueCmd(dev->port) != 0)
+	if (ahciIssueCmd(dev->regs) != 0)
 	{
 		kprintf("sdahci: error during identification\n");
 		return;
@@ -374,7 +374,7 @@ void ataInit(AHCIController *ctrl, int portno)
 	cmdfis->counth = 0;
 	
 	// issue the flush command
-	int status = ahciIssueCmd(dev->port);
+	int status = ahciIssueCmd(dev->regs);
 	kprintf("sdahci: cache flush status: %d\n", status);
 
 	dev->sd = sdCreate(&sdpars, model, &ataOps, dev);
