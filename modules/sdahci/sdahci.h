@@ -34,10 +34,11 @@
 #include <glidix/hw/dma.h>
 #include <glidix/storage/storage.h>
 
-#define	AHCI_SIG_ATA	0x00000101
-#define	AHCI_SIG_ATAPI	0xEB140101
-#define	AHCI_SIG_SEMB	0xC33C0101
-#define	AHCI_SIG_PM	0x96690101
+#define	AHCI_SIG_ATA					0x00000101
+#define	AHCI_SIG_ATAPI					0xEB140101
+#define	AHCI_SIG_SEMB					0xC33C0101
+#define	AHCI_SIG_PM					0x96690101
+#define AHCI_SIG_EMPTY					0xFFFFFFFF
 
 #define ATA_CMD_READ_PIO				0x20
 #define ATA_CMD_READ_PIO_EXT				0x24
@@ -52,6 +53,8 @@
 #define ATA_CMD_PACKET					0xA0
 #define ATA_CMD_IDENTIFY_PACKET				0xA1
 #define ATA_CMD_IDENTIFY				0xEC
+
+#define ATA_CMDSETS_LBA_EXT				(1 << 26)
 
 #define ATA_IDENT_DEVICETYPE				0
 #define ATA_IDENT_CYLINDERS				2
@@ -89,11 +92,20 @@
 #define SCTL_DET_MASK					0xF
 #define SCTL_DET_COMRESET				0x1
 
+#define SCTL_IPM_MASK					(0xF << 8)
+#define SCTL_IPM_NO_PARTIAL_OR_SLUMBER			(0x3 << 8)
+#define SCTL_IPM_NONE					(0x7 << 8)
+
 #define	CMD_ST						(1 << 0)
 #define CMD_SUD						(1 << 1)
+#define CMD_POD						(1 << 2)
 #define	CMD_FRE						(1 << 4)
 #define	CMD_FR						(1 << 14)
 #define	CMD_CR						(1 << 15)
+#define CMD_CPD						(1 << 20)
+
+#define CMD_ICC_MASK					(0xF << 28)
+#define CMD_ICC_ACTIVE					(0x1 << 28)
 
 #define	STS_BSY						(1 << 7)
 #define	STS_DRQ						(1 << 3)
@@ -291,8 +303,7 @@ typedef struct
 	AHCICommandHeader		cmdlist[32];
 	
 	/**
-	 * FIS Area
-	 * TODO: what even is the point of it?
+	 * FIS receive area.
 	 */
 	char				fisArea[256];
 	

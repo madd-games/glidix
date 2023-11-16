@@ -141,8 +141,9 @@ static void ahciInit(AHCIController *ctrl)
 	ctrl->numAtaDevices = 0;
 
 	// Perform a HBA reset and enable AHCI mode.
-	ctrl->regs->ghc |= GHC_AE | GHC_HR;
+	ctrl->regs->ghc = GHC_HR;
 	while (ctrl->regs->ghc & GHC_HR);
+	ctrl->regs->ghc = GHC_AE;
 	
 	// Initialize the ports.
 	int i;
@@ -151,21 +152,19 @@ static void ahciInit(AHCIController *ctrl)
 		if (ctrl->regs->pi & (1 << i))
 		{
 			ahciStopCmd(&ctrl->regs->ports[i]);
-			ctrl->regs->ports[i].cmd |= CMD_SUD;
+			ctrl->regs->ports[i].cmd = (ctrl->regs->ports[i].cmd & ~CMD_ICC_MASK) | CMD_ICC_ACTIVE;
 
-			// If staggered spin-up is supported, spin up the device.
-			if (ctrl->regs->cap & CAP_SSS)
-			{
-				ctrl->regs->ports[i].sctl = (ctrl->regs->ports[i].sctl & ~SCTL_DET_MASK) | SCTL_DET_COMRESET;
+			ctrl->regs->ports[i].sctl = (ctrl->regs->ports[i].sctl & ~SCTL_DET_MASK) | SCTL_DET_COMRESET;
 
-				sleep(10);
+			sleep(10);
 
-				ctrl->regs->ports[i].sctl &= ~SCTL_DET_MASK;
+			ctrl->regs->ports[i].sctl &= ~SCTL_DET_MASK;
 
-				sleep(10);
+			sleep(1000);
+			
+			ctrl->regs->ports[i].cmd |= CMD_SUD | CMD_POD;
 
-				ctrl->regs->ports[i].serr = ~0;
-			};
+			ctrl->regs->ports[i].serr = ~0;
 
 			uint32_t ssts = ctrl->regs->ports[i].ssts;
 			
@@ -192,6 +191,13 @@ static void ahciInit(AHCIController *ctrl)
 			{
 				kprintf("sdahci: detected ATAPI drive on port %d\n", i);
 				atapiInit(ctrl, i);
+			}
+			else if (sig == AHCI_SIG_EMPTY)
+			{
+				kprintf(
+					"sdahci: port %d reporing empty signature: serr=0x%08x, tfd=0x%08x\n",
+					i, ctrl->regs->ports[i].serr, ctrl->regs->ports[i].tfd
+				);
 			}
 			else
 			{

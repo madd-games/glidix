@@ -38,6 +38,9 @@
 int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void *buffer, int dir)
 {
 	mutexLock(&dev->lock);
+	dev->ctrl->regs->is = dev->ctrl->regs->is;
+	dev->port->is = dev->port->is;
+	dev->port->serr = dev->port->serr;
 	
 	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D) / 4;
@@ -60,6 +63,11 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 	for (dmaFirstRegion(&reg, buffer, 512*numBlocks, 0); reg.physAddr!=0; dmaNextRegion(&reg))
 	{
 		if (prdtl == 9) panic("unexpected input");
+
+		if (dir == ATA_READ && startBlock == 0)
+		{
+			kprintf("ATA_READ 0: Region: physAddr=0x%016lX, physSize=0x%04lX\n", reg.physAddr, reg.physSize);
+		};
 		
 		opArea->cmdtab.prdt[prdtl].dba = reg.physAddr;
 		opArea->cmdtab.prdt[prdtl].dbc = reg.physSize - 1;
@@ -69,6 +77,7 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 	};
 	
 	opArea->cmdlist[0].prdtl = prdtl;
+	opArea->cmdlist[0].prdbc = 0;
 
 	FIS_REG_H2D *cmdfis = (FIS_REG_H2D*)(&opArea->cmdtab.cfis);
 	cmdfis->fis_type = FIS_TYPE_REG_H2D;
@@ -92,7 +101,33 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 	
 	cmdfis->countl = numBlocks & 0xFF;
 	cmdfis->counth = (numBlocks >> 8) & 0xFF;
+
+	uint8_t *bytes = (uint8_t*) &opArea->cmdlist[0];
+	kprintf("COMMAND HEADER: ");
+	for (size_t i=0; i<sizeof(AHCICommandHeader); i++)
+	{
+		kprintf("%02hhx ", bytes[i]);
+	};
+	kprintf("\n");
+
+	kprintf("COMMAND FIS: ");
+	for (size_t i=0; i<sizeof(FIS_REG_H2D); i++)
+	{
+		kprintf("%02hhx ", opArea->cmdtab.cfis[i]);
+	};
+	kprintf("\n");
 	
+	opArea->cmdlist[0].prdbc = 69;
+	
+	kprintf(
+		"BEFORE ISSUE: PRDTL=%u, PRDC=0x%x, IS=0x%08x, SERR=0x%08x, TFD=0x%08x\n",
+		opArea->cmdlist[0].prdtl,
+		opArea->cmdlist[0].prdbc,
+		dev->port->is,
+		dev->port->serr,
+		dev->port->tfd
+	);
+
 	// issue the command
 	int status = ahciIssueCmd(dev->port);
 	if (status != 0)
@@ -100,6 +135,15 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 		mutexUnlock(&dev->lock);
 		return status;
 	};
+
+	kprintf(
+		"AFTER ISSUE: PRDTL=%u, PRDC=0x%x, IS=0x%08x, SERR=0x%08x, TFD=0x%08x\n",
+		opArea->cmdlist[0].prdtl,
+		opArea->cmdlist[0].prdbc,
+		dev->port->is,
+		dev->port->serr,
+		dev->port->tfd
+	);
 	
 	// do a cache flush
 	opArea->cmdlist[0].w = 0;
@@ -131,8 +175,67 @@ int ataTransferBlocks(ATADevice *dev, size_t startBlock, size_t numBlocks, void 
 
 int ataReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buffer)
 {
+	int isBootedFromHDD = memcmp(bootInfo->bootID, "\0\0" "ISOBOOT" "\0\0\0\0\0\xF0\x0D", 16) != 0;
+
 	ATADevice *dev = (ATADevice*) drvdata;
-	return ataTransferBlocks(dev, startBlock, numBlocks, buffer, ATA_READ);
+	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
+
+	if (isBootedFromHDD && startBlock == 0)
+	{
+		buffer = opArea->id;
+		numBlocks = 1;
+	};
+
+	// DEBUG
+	memset(buffer, 0, 512 * numBlocks);
+	
+	int result = ataTransferBlocks(dev, startBlock, numBlocks, buffer, ATA_READ);
+
+	if (startBlock == 0)
+	{
+		kprintf(
+			"The controller is [%04hx:%04hx] at (0x%x/0x%x/0x%x)\n",
+			dev->ctrl->pcidev->vendor,
+			dev->ctrl->pcidev->device,
+			dev->ctrl->pcidev->bus,
+			dev->ctrl->pcidev->slot,
+			dev->ctrl->pcidev->func
+		);
+		kprintf("Dumping first sector of ATA drive:");
+
+		uint8_t *buf = (uint8_t*) buffer;
+		for (size_t i=0; i<512; i++)
+		{
+			if ((i % 32) == 0)
+			{
+				kprintf("\n");
+			};
+
+			kprintf("%02hhx ", buf[i]);
+		};
+
+		kprintf("\n---------------------------\n");
+
+		kprintf("Dump of the received FIS:\n");
+		for (size_t i=0; i<256; i++)
+		{
+			if ((i % 32) == 0)
+			{
+				kprintf("\n");
+			};
+
+			kprintf("%02hhx ", opArea->fisArea[i]);
+		};
+
+		kprintf("\n---------------------------\n");
+
+		if (isBootedFromHDD)
+		{
+			while(1);
+		};
+	};
+
+	return result;
 };
 
 int ataWriteBlocks(void *drvdata, size_t startBlock, size_t numBlocks, const void *buffer)
@@ -174,6 +277,8 @@ void ataInit(AHCIController *ctrl, int portno)
 	// set the command list and FIS area
 	dev->port->clb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdlist);
 	dev->port->fb = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea);
+
+	kprintf("FIS AREA PHYS: 0x%016lx\n", dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea));
 	
 	// we only use the first command header, so initialize it to point to the table
 	opArea->cmdlist[0].ctba = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdtab);
@@ -200,26 +305,28 @@ void ataInit(AHCIController *ctrl, int portno)
 	cmdfis->command = ATA_CMD_IDENTIFY;
 	
 	// issue the command and await completion
-	__sync_synchronize();
 	if (ahciIssueCmd(dev->port) != 0)
 	{
 		kprintf("sdahci: error during identification\n");
 		return;
 	};
+
+	kprintf("IDENTIFY PRDC: 0x%08x\n", opArea->cmdlist[0].prdbc);
+	sleep(2000);
 	
 	uint32_t *cmdsetptr = (uint32_t*) &opArea->id[ATA_IDENT_COMMANDSETS];
 	
 	uint32_t cmdset = *cmdsetptr;
 	uint64_t size;
-	if (cmdset & (1 << 26))
+	if (cmdset & ATA_CMDSETS_LBA_EXT)
 	{
 		uint64_t *szptr = (uint64_t*) &opArea->id[ATA_IDENT_MAX_LBA_EXT];
 		size = (*szptr) & 0xFFFFFFFFFFFF;
 	}
 	else
 	{
-		uint32_t *szptr = (uint32_t*) &opArea->id[ATA_IDENT_MAX_LBA];
-		size = (uint64_t) (*szptr);
+		kprintf("sdahci: LBA48 not supported, skipping drive.\n");
+		return;
 	};
 
 	char model[41];
@@ -269,7 +376,7 @@ void ataInit(AHCIController *ctrl, int portno)
 	// issue the flush command
 	int status = ahciIssueCmd(dev->port);
 	kprintf("sdahci: cache flush status: %d\n", status);
-	
+
 	dev->sd = sdCreate(&sdpars, model, &ataOps, dev);
 	if (dev->sd == NULL)
 	{
