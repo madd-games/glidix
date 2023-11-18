@@ -37,14 +37,14 @@
 #define	ATA_READ					0
 #define	ATA_WRITE					1
 
-int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *buffer, int dir)
+int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void *buffer, int dir)
 {
-	mutexLock(&dev->lock);
-	dev->ctrl->regs->is = dev->ctrl->regs->is;
-	dev->regs->is = dev->regs->is;
-	dev->regs->serr = dev->regs->serr;
+	mutexLock(&port->lock);
+	port->ctrl->regs->is = port->ctrl->regs->is;
+	port->regs->is = port->regs->is;
+	port->regs->serr = port->regs->serr;
 	
-	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
+	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&port->dmabuf);
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D) / 4;
 	opArea->cmdlist[0].c = 1;				// clear BSY when done
 	
@@ -124,10 +124,10 @@ int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *
 #endif
 
 	// Issue the command.
-	int status = ahciIssueCmd(dev->regs);
+	int status = ahciIssueCmd(port->regs);
 	if (status != 0)
 	{
-		mutexUnlock(&dev->lock);
+		mutexUnlock(&port->lock);
 		return status;
 	};
 
@@ -143,12 +143,12 @@ int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *
 			"  PxSSTS  = 0x%08x\n"
 			"  PxSIG   = 0x%08x\n",
 			opArea->cmdlist[0].prdtl,
-			dev->regs->is,
-			dev->regs->serr,
-			dev->regs->tfd,
-			dev->regs->cmd,
-			dev->regs->ssts,
-			dev->regs->sig
+			port->regs->is,
+			port->regs->serr,
+			port->regs->tfd,
+			port->regs->cmd,
+			port->regs->ssts,
+			port->regs->sig
 		);	
 	};
 	
@@ -175,8 +175,8 @@ int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *
 	cmdfis->counth = 0;
 	
 	// issue the flush command
-	status = ahciIssueCmd(dev->regs);
-	mutexUnlock(&dev->lock);
+	status = ahciIssueCmd(port->regs);
+	mutexUnlock(&port->lock);
 	return status;
 };
 
