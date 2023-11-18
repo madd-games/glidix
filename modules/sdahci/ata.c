@@ -66,11 +66,13 @@ int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *
 	{
 		if (prdtl == 9) panic("unexpected input");
 
+#if 0
 		if (dir == ATA_READ && startBlock == 0)
 		{
 			kprintf("ATA_READ 0: Region: physAddr=0x%016lX, physSize=0x%04lX\n", reg.physAddr, reg.physSize);
 		};
-		
+#endif
+
 		opArea->cmdtab.prdt[prdtl].dba = reg.physAddr;
 		opArea->cmdtab.prdt[prdtl].dbc = reg.physSize - 1;
 		opArea->cmdtab.prdt[prdtl].i = 0;
@@ -104,6 +106,7 @@ int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *
 	cmdfis->countl = numBlocks & 0xFF;
 	cmdfis->counth = (numBlocks >> 8) & 0xFF;
 
+#if 0
 	uint8_t *bytes = (uint8_t*) &opArea->cmdlist[0];
 	kprintf("COMMAND HEADER: ");
 	for (size_t i=0; i<sizeof(AHCICommandHeader); i++)
@@ -118,19 +121,9 @@ int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *
 		kprintf("%02hhx ", opArea->cmdtab.cfis[i]);
 	};
 	kprintf("\n");
-	
-	opArea->cmdlist[0].prdbc = 69;
-	
-	kprintf(
-		"BEFORE ISSUE: PRDTL=%u, PRDC=0x%x, IS=0x%08x, SERR=0x%08x, TFD=0x%08x\n",
-		opArea->cmdlist[0].prdtl,
-		opArea->cmdlist[0].prdbc,
-		dev->regs->is,
-		dev->regs->serr,
-		dev->regs->tfd
-	);
+#endif
 
-	// issue the command
+	// Issue the command.
 	int status = ahciIssueCmd(dev->regs);
 	if (status != 0)
 	{
@@ -138,14 +131,26 @@ int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *
 		return status;
 	};
 
-	kprintf(
-		"AFTER ISSUE: PRDTL=%u, PRDC=0x%x, IS=0x%08x, SERR=0x%08x, TFD=0x%08x\n",
-		opArea->cmdlist[0].prdtl,
-		opArea->cmdlist[0].prdbc,
-		dev->regs->is,
-		dev->regs->serr,
-		dev->regs->tfd
-	);
+	if (opArea->cmdlist[0].prdbc == 0)
+	{
+		panic(
+			"sdahci: PRDBC=0 after transfer!\n"
+			"  PRDTL   = %u\n"
+			"  PxIS    = 0x%08x\n"
+			"  PxSERR  = 0x%08x\n"
+			"  PxTFD   = 0x%08x\n"
+			"  PxCMD   = 0x%08x\n"
+			"  PxSSTS  = 0x%08x\n"
+			"  PxSIG   = 0x%08x\n",
+			opArea->cmdlist[0].prdtl,
+			dev->regs->is,
+			dev->regs->serr,
+			dev->regs->tfd,
+			dev->regs->cmd,
+			dev->regs->ssts,
+			dev->regs->sig
+		);	
+	};
 	
 	// do a cache flush
 	opArea->cmdlist[0].w = 0;
@@ -177,6 +182,9 @@ int ataTransferBlocks(AHCIPort *dev, size_t startBlock, size_t numBlocks, void *
 
 int ataReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buffer)
 {
+	AHCIPort *port = (AHCIPort*) drvdata;
+	return ataTransferBlocks(port, startBlock, numBlocks, buffer, ATA_READ);
+#if 0
 	int isBootedFromHDD = memcmp(bootInfo->bootID, "\0\0" "ISOBOOT" "\0\0\0\0\0\xF0\x0D", 16) != 0;
 
 	AHCIPort *dev = (AHCIPort*) drvdata;
@@ -238,6 +246,7 @@ int ataReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buff
 	};
 
 	return result;
+#endif
 };
 
 int ataWriteBlocks(void *drvdata, size_t startBlock, size_t numBlocks, const void *buffer)
@@ -278,9 +287,6 @@ void ataInit(AHCIPort *port)
 		kprintf("sdahci: error during identification\n");
 		return;
 	};
-
-	kprintf("IDENTIFY PRDC: 0x%08x\n", opArea->cmdlist[0].prdbc);
-	sleep(2000);
 	
 	uint32_t *cmdsetptr = (uint32_t*) &opArea->id[ATA_IDENT_COMMANDSETS];
 	

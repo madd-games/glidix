@@ -90,8 +90,6 @@ void portInit(AHCIController *ctrl, int portno)
 	// Set the command list and FIS area.
 	port->regs->clb = dmaGetPhys(&port->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdlist);
 	port->regs->fb = dmaGetPhys(&port->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea);
-
-	kprintf("FIS AREA PHYS: 0x%016lx\n", dmaGetPhys(&port->dmabuf) + __builtin_offsetof(AHCIOpArea, fisArea));
 	
 	// We only use the first command header, so initialize it to point to the table.
 	opArea->cmdlist[0].ctba = dmaGetPhys(&port->dmabuf) + __builtin_offsetof(AHCIOpArea, cmdtab);
