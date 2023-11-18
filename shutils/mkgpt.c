@@ -34,6 +34,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <assert.h>
+#include <stdint.h>
 
 #define	MBR_SIG					0xAA55
 
@@ -170,6 +171,10 @@ int parsePartType(const char *type, uint8_t *buffer)
 	else if (strcmp(type, "gxfs") == 0)
 	{
 		return parseGUID("a38a2f2e-61ee-496f-b19f-cda55d34c0f8", buffer);
+	}
+	else if (strcmp(type, "gxfs-root") == 0)
+	{
+		return parseGUID("81C1AD9C-BDC4-4809-8D9F-DCB2A9B85D01", buffer);
 	}
 	else if (strcmp(type, "efisys") == 0)
 	{
