@@ -44,9 +44,14 @@ static void portStart(AHCIPort *port)
 static void portStop(AHCIPort *port)
 {
 	port->regs->cmd &= ~CMD_ST;
-	while (port->regs->cmd & CMD_CR);
 	port->regs->cmd &= ~CMD_FRE;
+	port->regs->cmd &= ~CMD_ICC_MASK;
+
 	while (port->regs->cmd & CMD_FR);
+	while (port->regs->cmd & CMD_CR);
+
+	port->regs->sctl = 0;
+	port->regs->serr = -1;
 };
 
 static void portReset(AHCIPort *port)
@@ -58,7 +63,7 @@ static void portReset(AHCIPort *port)
 
 	port->regs->sctl = 0;
 
-	sleep(100);
+	sleep(10);
 
 	port->regs->serr = port->regs->serr;
 	port->regs->is = port->regs->is;
