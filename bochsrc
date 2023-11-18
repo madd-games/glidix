@@ -1,6 +1,6 @@
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
-ata0-master: type=cdrom, path="build/iso/glidix.iso", status=inserted
-boot: cdrom
+ata0-master: type=disk, path="build/diskimg/glidix.img", status=inserted
+boot: disk
 magic_break: enabled=1
 cpu: reset_on_triple_fault=0
 megs: 2048
