@@ -20,6 +20,9 @@ build-tools/mkgpt $diskimg_file \
 	--part type=gxfs-root name='Glidix Installer' \
 || exit 1
 
+# Format the GXFS root partition and put the image files on it.
+build-tools/mkrootimg $diskimg_file $imgdir || exit 1
+
 # Install the bootloader on the image.
 GXBOOT_IMAGE_PATH=gxboot build-tools/gxboot-install $diskimg_file || exit 1
 
