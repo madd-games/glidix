@@ -90,7 +90,7 @@ case $i in
 		diskimg_target="yes"
 		;;
 	--diskimg)
-		expanded_options="$expanded_options --module-gxfs=initmod --module-isofs=initmod --module-sdide=initmod --module-sdahci=initmod --enable-gxboot"
+		expanded_options="$expanded_options --module-gxfs=initmod --module-isofs=initmod --module-sdide=initmod --module-sdahci=initmod --enable-gxboot --enable-gxsetup"
 		diskimg_target="yes"
 		;;
 	*)
@@ -231,7 +231,7 @@ echo '#endif' >> glidix-config.h
 echo "generating Makefile..."
 echo >Makefile ".PHONY: all install clean mip tests $TARGETS"
 
-DISKIMG_PACKAGES="libz libgpm shutils libc modules sh gxboot dynld gxdbg gwmserver libddi libgl libgwm guiapps minipad sysinfo filemgr freetype libpng fstools ddi-drivers"
+DISKIMG_PACKAGES="libz libgpm shutils libc modules sh gxboot dynld gxdbg gwmserver libddi libgl libgwm guiapps minipad sysinfo filemgr freetype libpng fstools ddi-drivers gxsetup"
 if [ "$diskimg_target" = "yes" ]
 then
 	mkdir -p imgdir
