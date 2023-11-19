@@ -19,3 +19,12 @@ build-tools/mkgpt $diskimg_file \
 	--part type=efisys size=$DISKIMG_EFISYS_MB name='EFI System Partition' \
 	--part type=gxfs-root name='Glidix Installer' \
 || exit 1
+
+# Install the bootloader on the image.
+GXBOOT_IMAGE_PATH=gxboot build-tools/gxboot-install $diskimg_file || exit 1
+
+# If we need to, create the VMDK file.
+if command -v VBoxManage >/dev/null 2>&1 && [ ! -e glidix.vmdk ]
+then
+	VBoxManage internalcommands createrawvmdk -filename glidix.vmdk -rawdisk $diskimg_file
+fi
