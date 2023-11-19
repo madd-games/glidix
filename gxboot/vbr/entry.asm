@@ -45,45 +45,18 @@ global vbeSwitchMode
 section .entry_text
 bits 16
 
-%ifdef GXBOOT_FS_GXFS
 _start:
-cli
 
-; figure out the size in sectors
-mov eax, [size]
-shr eax, 9
-inc eax
-mov [dap.count], ax
-
-; load starting from the second sector
-mov eax, [si+8]
-mov [part_start], eax
-inc eax
-mov [dap.lba], eax
-
-; save the disk number
-mov [boot_disk], dl
-
-; set up a new stack
-mov sp, 0x7C00
-
-; enable interrupts now
-sti
-
-; load the rest of the VBR
-mov ah, 0x42
-mov si, dap
-int 0x13
-jc boot_failed
-%endif
-
-; this is the starting point for El Torito. the first stage already loaded the whole VBR,
-; now we just need to go to protected mode and stuff. but we do still need to switch the stack
-; and save the disk number
-%ifdef GXBOOT_FS_ELTORITO
+; Save the disk number and set up the stack.
 mov [boot_disk], dl
 mov sp, 0x7C00
-%endif
+
+; Copy the partition starting LBA.
+add si, 0x20
+mov di, part_start
+mov cx, 8
+cld
+rep movsb
 
 ; enable A20
 mov ax, 0x2401
@@ -126,7 +99,7 @@ dw 0				; destination segment
 dd 0				; high 32 bits of LBA, unused
 
 boot_disk db 0
-part_start dd 0
+part_start dq 0
 
 vbeInfoBlock:
 db 'VBE2'			; needed, apparently?
