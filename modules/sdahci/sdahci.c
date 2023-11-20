@@ -212,9 +212,6 @@ MODULE_FINI()
 		int i;
 		for (i=0; i<ctrl->numPorts; i++)
 		{
-			// if (ctrl->ports[i]->sd != NULL) sdHangup(ctrl->ports[i]->sd);
-			// ahciStopCmd(ctrl->ports[i]->regs);
-			// dmaReleaseBuffer(&ctrl->ports[i]->dmabuf);
 			portRelease(ctrl->ports[i]);
 		};
 		
