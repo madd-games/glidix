@@ -7,13 +7,13 @@ Glidix is an operating system for the x86_64 platform. The custom-made kernel an
 
 The easiest way to build the OS is to run `./build-dist.sh` in the root directory. Note that it can be quite slow the first time you run it, as it will have to build the cross-compiler and then also build the native compiler. After that it should be a lot faster, because once the compiler is built is does not need to be re-built.
 
-`build-dist.sh` performs a contained build, inside the `build` directory, where it will install the cross-compiler and make a sysroot for it, and add it to its own `PATH`. This means you don't have to set up anything else on your machine. The end result of this script is the file `build/iso/glidix.iso` which is the bootable disk image of Glidix.
+`build-dist.sh` performs a contained build, inside the `build` directory, where it will install the cross-compiler and make a sysroot for it, and add it to its own `PATH`. This means you don't have to set up anything else on your machine. The end result of this script is the file `build/diskimg/glidix.img` which is the bootable disk image of Glidix.
 
 ## Running
 
 ### Bochs
 
-To run the ISO in Bochs after `build-dist.sh`, just run `bochs` in the root directory as `bochsrc` is already set up.
+To run the disk image in Bochs after `build-dist.sh`, just run `bochs` in the root directory as `bochsrc` is already set up.
 
 ## Status
 
@@ -34,7 +34,7 @@ The operating system is currently in _alpha_ state. It is currently therefore _n
 
 ## Features
 
- * Capable of booting from an MBR using a custom bootloader; UEFI boot planned.
+ * Capable of booting via BIOS from a GPT using a custom bootloader; UEFI boot planned.
  * A simple graphical interface, currently under heavy development.
  * Network stack supporting IPv4 and IPv6, ICMP to some degree, UDP, DNS and TCP. Supports autoconfiguration with DHCP, ALIC (*Automatic Local IP Configuration*, for IPv4 link-local addresses when DHCP is unavailable), and SLAAC for IPv6.
  * Supports the ISO 9660 filesystem, FAT32, and a custom filesystem called Glidix File System (GXFS), which can store Glidix-specific metadata such as application permissions.
