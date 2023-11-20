@@ -102,9 +102,7 @@ int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void 
 	cmdfis->lba4 = (uint8_t)(startBlock>>32);
 	cmdfis->lba5 = (uint8_t)(startBlock>>40);
 	cmdfis->device = 1<<6;	// LBA mode
-	
-	cmdfis->countl = numBlocks & 0xFF;
-	cmdfis->counth = (numBlocks >> 8) & 0xFF;
+	cmdfis->count = numBlocks;
 
 #if 0
 	uint8_t *bytes = (uint8_t*) &opArea->cmdlist[0];
@@ -141,14 +139,16 @@ int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void 
 			"  PxTFD   = 0x%08x\n"
 			"  PxCMD   = 0x%08x\n"
 			"  PxSSTS  = 0x%08x\n"
-			"  PxSIG   = 0x%08x\n",
+			"  PxSIG   = 0x%08x\n"
+			"  count   = %hu\n",
 			opArea->cmdlist[0].prdtl,
 			port->regs->is,
 			port->regs->serr,
 			port->regs->tfd,
 			port->regs->cmd,
 			port->regs->ssts,
-			port->regs->sig
+			port->regs->sig,
+			cmdfis->count
 		);	
 	};
 	
@@ -171,8 +171,7 @@ int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void 
 	cmdfis->lba4 = 0;
 	cmdfis->lba5 = 0;
 	
-	cmdfis->countl = 0;
-	cmdfis->counth = 0;
+	cmdfis->count = 0;
 	
 	// issue the flush command
 	status = ahciIssueCmd(port->regs);
@@ -344,8 +343,7 @@ void ataInit(AHCIPort *port)
 	cmdfis->lba4 = 0;
 	cmdfis->lba5 = 0;
 	
-	cmdfis->countl = 0;
-	cmdfis->counth = 0;
+	cmdfis->count = 0;
 	
 	// issue the flush command
 	int status = ahciIssueCmd(port->regs);

@@ -273,8 +273,7 @@ typedef struct tagFIS_REG_H2D
 	uint8_t				featureh;	// Feature register, 15:8
  
 	// DWORD 3
-	uint8_t				countl;		// Count register, 7:0
-	uint8_t				counth;		// Count register, 15:8
+	uint16_t			count;		// Sector count.
 	uint8_t				icc;		// Isochronous command completion
 	uint8_t				control;	// Control register
  
