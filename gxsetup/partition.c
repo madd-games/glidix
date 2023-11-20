@@ -37,12 +37,15 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include "render.h"
 #include "msgbox.h"
 #include "progress.h"
 
-#define	NUM_SETUP_OPS			4
+#define	NUM_SETUP_OPS				4
+
+#define	GPT_ATTR_MNTINFO			(1UL << 49)
 
 enum
 {
@@ -52,6 +55,34 @@ enum
 	
 	PART_TYPE_COUNT,
 };
+
+typedef struct
+{
+	uint64_t				sig;
+	uint32_t				rev;
+	uint32_t				headerSize;
+	uint32_t				headerCRC32;
+	uint32_t				zero;
+	uint64_t				myLBA;
+	uint64_t				altLBA;
+	uint64_t				firstUseableLBA;
+	uint64_t				lastUseableLBA;
+	uint8_t					diskGUID[16];
+	uint64_t				partListLBA;
+	uint32_t				numPartEnts;
+	uint32_t				partEntSize;
+	uint32_t				partArrayCRC32;
+} GPTHeader;
+
+typedef struct
+{
+	uint8_t					type[16];
+	uint8_t					partid[16];
+	uint64_t				startLBA;
+	uint64_t				endLBA;
+	uint64_t				attr;
+	uint16_t				partName[36];		/* UTF-16LE */
+} GPTPartition;
 
 typedef struct Partition_
 {
@@ -69,6 +100,7 @@ typedef struct Drive_
 	int dirty;			/* whether or not to write the partition table */
 	Partition* parts;		/* head of partition list or NULL if no table present */
 	int fd;				/* disk file handle */
+	GPTHeader gptHeader;
 	struct Drive_ *next;
 } Drive;
 
@@ -137,21 +169,46 @@ static const char *startupConf = "\
 logmgr=\"%s\"\n\
 ";
 
-Partition *splitArea(Partition *area, size_t offMB, size_t sizeMB)
+static uint8_t rootPartType[16] = {0x9C, 0xAD, 0xC1, 0x81, 0xC4, 0xBD, 0x09, 0x48, 0x8D, 0x9F, 0xDC, 0xB2, 0xA9, 0xB8, 0x5D, 0x01};
+static uint8_t gxfsPartType[16] = {0x2e, 0x2f, 0x8a, 0xa3, 0xee, 0x61, 0x6f, 0x49, 0xb1, 0x9f, 0xcd, 0xa5, 0x5d, 0x34, 0xc0, 0xf8};
+static uint8_t nullPartType[16];
+
+Partition *splitArea(Partition *area, size_t offMB, size_t sizeMB, GPTPartition *gptPart)
 {
 	if (area->type != PART_TYPE_UNALLOCATED)
 	{
-		// refuse to split it; it's an overlap
+		// Refuse to split it; it's an overlap.
 		return area;
 	};
 	
 	Partition *part = (Partition*) malloc(sizeof(Partition));
 	part->type = PART_TYPE_UNUSED;
-	part->mntpoint[0] = 0;
+	memset(part->mntpoint, 0, sizeof(part->mntpoint));
 	part->size = sizeMB;
 	part->format = 0;
 	part->prev = NULL;
 	part->next = NULL;
+
+	if (gptPart != NULL)
+	{
+		if (memcmp(gptPart->type, rootPartType, 16) == 0)
+		{
+			strcpy(part->mntpoint, "/");
+			part->type = PART_TYPE_GXFS;
+		}
+		else if (memcmp(gptPart->type, gxfsPartType, 16) == 0)
+		{
+			part->type = PART_TYPE_GXFS;
+
+			if (gptPart->attr & GPT_ATTR_MNTINFO)
+			{
+				for (int i=0; i<36; i++)
+				{
+					part->mntpoint[i] = (char) gptPart->partName[i];
+				};
+			};
+		};
+	};
 	
 	Partition *head;
 	if (offMB == 0)
@@ -216,6 +273,7 @@ void driveDetected(const char *name)
 	Drive *drive = (Drive*) malloc(sizeof(Drive));
 	if (drive == NULL)
 	{
+		close(fd);
 		return;
 	};
 	
@@ -236,58 +294,82 @@ void driveDetected(const char *name)
 		last->next = drive;
 	};
 	
-	// try to read the partition table
+	// Try to read the MBR.
 	MBR mbr;
 	read(fd, &mbr, 512);
 	
 	if (mbr.sig != 0xAA55)
 	{
-		// no partition table here
+		// No partition table here.
 		return;
 	};
 	
-	// make sure all partitions are valid
+	// Make sure this is a protective MBR.
 	int i;
 	for (i=0; i<4; i++)
 	{
-		if (mbr.parts[i].systemID != 0)
+		if (mbr.parts[i].systemID == 0xEE)
 		{
-			if ((mbr.parts[i].startLBA & 0x3F) != 0)
+			if (mbr.parts[i].startLBA != 1)
 			{
-				// start LBA not MB-aligned
+				// The GPT is not on block 1.
 				return;
 			};
-			
-			if ((mbr.parts[i].partSize & 0x3F) != 0)
-			{
-				// size not multiple of MB
-				return;
-			};
+
+			break;
 		};
 	};
-	
-	// parse the partitions, ignore overlappings
+
+	if (i == 4)
+	{
+		// No GPT.
+		return;
+	};
+
+	// Read the GPT.
+	if (pread(fd, &drive->gptHeader, sizeof(GPTHeader), 512) != sizeof(GPTHeader))
+	{
+		return;
+	};
+
+	if (drive->gptHeader.partEntSize != sizeof(GPTPartition))
+	{
+		return;
+	};
+
+	size_t partTableSize = sizeof(GPTPartition) * drive->gptHeader.numPartEnts;
+	GPTPartition *gptParts = (GPTPartition*) malloc(partTableSize);
+
+	if (pread(fd, gptParts, partTableSize, 512 * drive->gptHeader.partListLBA) != partTableSize)
+	{
+		free(gptParts);
+		return;
+	};
+
+	// Parse the partitions, ignore overlaps.
 	drive->parts = (Partition*) malloc(sizeof(Partition));
 	drive->parts->type = PART_TYPE_UNALLOCATED;
 	drive->parts->mntpoint[0] = 0;
-	drive->parts->size = (st.st_size - 512) / (1024*1024);
+	drive->parts->size = (512 * (drive->gptHeader.lastUseableLBA - drive->gptHeader.firstUseableLBA + 1)) / (1024*1024);
 	drive->parts->format = 0;
 	drive->parts->prev = NULL;
 	drive->parts->next = NULL;
 	
-	for (i=0; i<4; i++)
+	for (i=0; i<drive->gptHeader.numPartEnts; i++)
 	{
-		if (mbr.parts[i].systemID != 0)
+		if (memcmp(gptParts[i].type, nullPartType, 16) != 0)
 		{
-			// partition!
-			size_t offMB = (mbr.parts[i].startLBA >> 11) - 1;
-			size_t sizeMB = mbr.parts[i].partSize >> 11;
+			// Partition!
+			GPTPartition *gptPart = &gptParts[i];
+
+			size_t offMB = (gptPart->startLBA >> 11) - 1;
+			size_t sizeMB = (gptPart->endLBA - gptPart->startLBA + 1) >> 11;
 			size_t endMB = offMB + sizeMB;
 			
-			// see if it fits within the first unallocated area
+			// See if it fits within the first unallocated area.
 			if (endMB <= drive->parts->size)
 			{
-				drive->parts = splitArea(drive->parts, offMB, sizeMB);
+				drive->parts = splitArea(drive->parts, offMB, sizeMB, gptPart);
 			}
 			else
 			{
@@ -300,7 +382,8 @@ void driveDetected(const char *name)
 					
 					if (endMB <= scan->next->size)
 					{
-						scan->next = splitArea(scan->next, offMB, sizeMB);
+						scan->next = splitArea(scan->next, offMB, sizeMB, gptPart);
+						break;
 					};
 					
 					scan = scan->next;
@@ -308,6 +391,8 @@ void driveDetected(const char *name)
 			};
 		};
 	};
+
+	free(gptParts);
 };
 
 int partInit()
@@ -943,11 +1028,11 @@ void partEditor()
 							// new partition at start of area
 							if (selectedPart->prev != NULL)
 							{
-								selectedPart->prev->next = splitArea(selectedPart, 0, newSize);
+								selectedPart->prev->next = splitArea(selectedPart, 0, newSize, NULL);
 							}
 							else
 							{
-								parentDrive->parts = splitArea(selectedPart, 0, newSize);
+								parentDrive->parts = splitArea(selectedPart, 0, newSize, NULL);
 							};
 							
 							parentDrive->dirty = 1;
@@ -959,11 +1044,11 @@ void partEditor()
 							
 							if (selectedPart->prev != NULL)
 							{
-								selectedPart->prev->next = splitArea(selectedPart, off, newSize);
+								selectedPart->prev->next = splitArea(selectedPart, off, newSize, NULL);
 							}
 							else
 							{
-								parentDrive->parts = splitArea(selectedPart, off, newSize);
+								parentDrive->parts = splitArea(selectedPart, off, newSize, NULL);
 							};
 							
 							parentDrive->dirty = 1;
