@@ -30,6 +30,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/mount.h>
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -90,6 +91,8 @@ typedef struct Partition_
 	char mntpoint[256];		/* or empty string if mount not wanted */
 	size_t size;			/* in MB */
 	int format;			/* 0 = don't format, 1 = format (GXFS only) */
+	uint8_t partid[16];		/* partition GUID */
+	uint8_t origtype[16];		/* the partition type GUID loaded from disk */
 	struct Partition_ *prev;
 	struct Partition_ *next;
 } Partition;
@@ -173,6 +176,25 @@ static uint8_t rootPartType[16] = {0x9C, 0xAD, 0xC1, 0x81, 0xC4, 0xBD, 0x09, 0x4
 static uint8_t gxfsPartType[16] = {0x2e, 0x2f, 0x8a, 0xa3, 0xee, 0x61, 0x6f, 0x49, 0xb1, 0x9f, 0xcd, 0xa5, 0x5d, 0x34, 0xc0, 0xf8};
 static uint8_t nullPartType[16];
 
+#define CRCPOLY2 0xEDB88320UL  /* left-right reversal */
+
+static uint32_t crc32(const void *data, size_t n)
+{
+	const uint8_t *c = (const uint8_t*) data;
+	int i, j;
+	uint32_t r;
+
+	r = 0xFFFFFFFFUL;
+	for (i = 0; i < n; i++)
+	{
+		r ^= c[i];
+		for (j = 0; j < 8; j++)
+			if (r & 1) r = (r >> 1) ^ CRCPOLY2;
+			else       r >>= 1;
+	}
+	return r ^ 0xFFFFFFFFUL;
+}
+
 Partition *splitArea(Partition *area, size_t offMB, size_t sizeMB, GPTPartition *gptPart)
 {
 	if (area->type != PART_TYPE_UNALLOCATED)
@@ -191,6 +213,9 @@ Partition *splitArea(Partition *area, size_t offMB, size_t sizeMB, GPTPartition 
 
 	if (gptPart != NULL)
 	{
+		memcpy(part->partid, gptPart->partid, 16);
+		memcpy(part->origtype, gptPart->type, 16);
+
 		if (memcmp(gptPart->type, rootPartType, 16) == 0)
 		{
 			strcpy(part->mntpoint, "/");
@@ -208,6 +233,16 @@ Partition *splitArea(Partition *area, size_t offMB, size_t sizeMB, GPTPartition 
 				};
 			};
 		};
+	}
+	else
+	{
+		int rfd = open("/dev/urandom", O_RDONLY);
+		assert(rfd != -1);
+
+		read(rfd, part->partid, 16);
+		close(rfd);
+
+		memset(part->origtype, 0xFF, 16);
 	};
 	
 	Partition *head;
@@ -526,7 +561,7 @@ static void drawTable()
 
 static int getDriveAction()
 {
-	static const char *labels[2] = {"Go back", "Create MBR partition table"};
+	static const char *labels[2] = {"Go back", "Create a blank GPT"};
 	
 	int option = 0;
 	
@@ -597,16 +632,37 @@ static void newPartTable()
 		msgbox("ERROR", "Failed to stat the drive!");
 		return;
 	};
+
+	size_t diskSize = st.st_size / (1024 * 1024) - 1;
 	
 	selectedDrive->parts = (Partition*) malloc(sizeof(Partition));
 	selectedDrive->parts->type = PART_TYPE_UNALLOCATED;
 	selectedDrive->parts->mntpoint[0] = 0;
-	selectedDrive->parts->size = (st.st_size - 512) / (1024*1024);
 	selectedDrive->parts->format = 0;
 	selectedDrive->parts->prev = NULL;
 	selectedDrive->parts->next = NULL;
 	
 	selectedDrive->dirty = 1;
+
+	int rfd = open("/dev/urandom", O_RDONLY);
+	assert(rfd != -1);
+
+	memset(&selectedDrive->gptHeader, 0, sizeof(GPTHeader));
+	selectedDrive->gptHeader.sig = *((const uint64_t*)"EFI PART");
+	selectedDrive->gptHeader.rev = 0x00010000;
+	selectedDrive->gptHeader.headerSize = 92;
+	selectedDrive->gptHeader.myLBA = 1;
+	selectedDrive->gptHeader.altLBA = (diskSize + 1) * 2 * 1024 - 1;
+	selectedDrive->gptHeader.firstUseableLBA = 2 * 1024;
+	selectedDrive->gptHeader.lastUseableLBA = diskSize * 2 * 1024;
+	read(rfd, selectedDrive->gptHeader.diskGUID, 16);
+	selectedDrive->gptHeader.partListLBA = 2;
+	selectedDrive->gptHeader.numPartEnts = (1 * 1024 * 1024 - 2 * 512) / 128;
+	selectedDrive->gptHeader.partEntSize = 128;
+
+	close(rfd);
+
+	selectedDrive->parts->size = (selectedDrive->gptHeader.lastUseableLBA - selectedDrive->gptHeader.firstUseableLBA + 1) >> 11;
 };
 
 static int newPartDialog(size_t *sizeptr)
@@ -621,9 +677,9 @@ static int newPartDialog(size_t *sizeptr)
 		};
 	};
 	
-	if (numParts == 4)
+	if (numParts == parentDrive->gptHeader.numPartEnts)
 	{
-		msgbox("ERROR", "Only 4 partitions are possible!");
+		msgbox("ERROR", "Partition limit exceeded!");
 		return 2;		// cancel
 	};
 	
@@ -1154,34 +1210,88 @@ void partFlush()
 			mbr.bootstrap[1] = 0x18;
 			mbr.sig = 0xAA55;
 			
-			MBRPart *put = mbr.parts;
-			
+			MBRPart *mbrPart = mbr.parts;
+			mbrPart->systemID = 0xEE;
+			mbrPart->startLBA = 1;
+			mbrPart->partSize = ~0;
+
+			pwrite(drive->fd, &mbr, 512, 0);
+
+			// Create the partition table.
+			GPTPartition *parts = (GPTPartition*) calloc(sizeof(GPTPartition), drive->gptHeader.numPartEnts);
+			GPTPartition *put = parts;
+
 			Partition *part;
 			size_t offset = 1;
 			for (part=drive->parts; part!=NULL; part=part->next)
 			{
 				if (part->type != PART_TYPE_UNALLOCATED)
 				{
-					if (strcmp(part->mntpoint, "/") == 0)
+					put->startLBA = offset << 11;
+					put->endLBA = ((offset + part->size) << 11) - 1;
+					memcpy(put->partid, part->partid, 16);
+					memcpy(put->type, part->origtype, 16);
+
+					if (part->type == PART_TYPE_GXFS)
 					{
-						put->flags = 0x80;
-					}
-					else
-					{
-						put->flags = 0;
+						if (strcmp(part->mntpoint, "/") == 0)
+						{
+							memcpy(put->type, rootPartType, 16);
+						}
+						else if (part->mntpoint[0] != 0)
+						{
+							for (int i=0; i<36; i++)
+							{
+								if (part->mntpoint[i] == 0)
+								{
+									break;
+								};
+
+								put->partName[i] = part->mntpoint[i];
+							};
+
+							memcpy(put->type, gxfsPartType, 16);
+							put->attr |= GPT_ATTR_MNTINFO;
+						};
 					};
-					
-					put->systemID = 0x7F;
-					put->startLBA = (offset << 11);
-					put->partSize = (part->size << 11);
+
 					put++;
 				};
 				
 				offset += part->size;
 			};
 
-			lseek(drive->fd, 0, SEEK_SET);
-			write(drive->fd, &mbr, 512);
+			struct stat st;
+			if (fstat(drive->fd, &st) != 0)
+			{
+				msgbox("ERROR", "Failed to stat the drive!");
+				return;
+			};
+
+			size_t diskSize = st.st_size / (1024 * 1024) - 1;
+
+			// now create the GPT header
+			char sector[512];
+			memset(sector, 0, 512);
+			GPTHeader *header = (GPTHeader*) sector;
+			
+			memcpy(header, &drive->gptHeader, sizeof(GPTHeader));
+			header->headerCRC32 = 0;
+			header->partArrayCRC32 = crc32(parts, sizeof(GPTPartition) * header->numPartEnts);
+			header->headerCRC32 = crc32(header, 92);
+			pwrite(drive->fd, sector, 512, 512);
+			
+			// alternate header
+			header->myLBA = header->altLBA;
+			header->altLBA = 1;
+			header->headerCRC32 = 0;
+			header->partListLBA = diskSize * 2 * 1024 + 1;
+			header->headerCRC32 = crc32(header, 92);
+			pwrite(drive->fd, sector, 512, (diskSize+1) * 1024 * 1024 - 512);
+			
+			// write partitions
+			pwrite(drive->fd, parts, sizeof(GPTPartition) * header->numPartEnts, 1024);
+			pwrite(drive->fd, parts, sizeof(GPTPartition) * header->numPartEnts, diskSize * 1024 * 1024 + 512);
 			
 			drivesDone++;
 		};
@@ -1255,7 +1365,10 @@ void partFlush()
 					};
 				};
 				
-				partIndex++;
+				if (part->type != PART_TYPE_UNALLOCATED)
+				{
+					partIndex++;
+				};
 			};
 		};
 		
