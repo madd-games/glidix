@@ -30,7 +30,6 @@
 
 int consoleX, consoleY;
 char *vidmem = (char*) 0xB8000;
-extern dword_t part_start;
 qword_t blockBase;			/* LBA of start of block table */
 
 void termput(const char *str)

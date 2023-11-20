@@ -42,7 +42,10 @@ cd build || exit 1
 
 # Run the build stages.
 . ../dist/crosstools-stage1.inc.sh
-. ../dist/configure-iso-build.inc.sh
+. ../dist/configure-diskimg-build.inc.sh
 . ../dist/crosstools-stage2.inc.sh
 . ../dist/build-deplibs.inc.sh
-. ../dist/do-iso-build.inc.sh
+. ../dist/do-diskimg-build.inc.sh
+
+# Indicate success.
+log_success "DISTRO BUILD SUCCESSFUL."

@@ -30,7 +30,7 @@
 
 #include "gxboot.h"
 
-extern dword_t part_start;
+extern qword_t part_start;
 extern qword_t blockBase;			/* LBA of start of block table */
 byte_t fsBootID[16];
 
@@ -44,7 +44,7 @@ static void readBlock(qword_t index, void *buffer)
 void fsInit()
 {
 	dtermput("Validating superblock... ");
-	blockBase = (qword_t) part_start + 0x1000;
+	blockBase = part_start + 0x1000;
 	dap.numSectors = 8;
 	dap.offset = (word_t) (dword_t) sectorBuffer;
 	
