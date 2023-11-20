@@ -84,13 +84,8 @@ expanded_options=""
 for i in "$@"
 do
 case $i in
-	# TODO: enable binutils and gcc in the diskimg, and also remove iso.
-	--iso)
-		expanded_options="$expanded_options --module-gxfs=initmod --module-isofs=initmod --module-sdide=initmod --module-sdahci=initmod --module-ehci=initmod --enable-gxsetup --enable-binutils --enable-gxboot --enable-gcc"
-		diskimg_target="yes"
-		;;
 	--diskimg)
-		expanded_options="$expanded_options --module-gxfs=initmod --module-isofs=initmod --module-sdide=initmod --module-sdahci=initmod --enable-gxboot --enable-gxsetup"
+		expanded_options="$expanded_options --module-gxfs=initmod --module-isofs=initmod --module-sdide=initmod --module-sdahci=initmod --enable-gxsetup --enable-binutils --enable-gxboot --enable-gcc"
 		diskimg_target="yes"
 		;;
 	*)
