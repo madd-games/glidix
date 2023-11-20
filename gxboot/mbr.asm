@@ -135,13 +135,14 @@ mov cx, 128
 rep movsb
 sub si, 128
 
-; load 64KB (128 sectors) from the partition, regardless of the size. the bootloader is
-; assumed to fit in 64KB (that's the most we can read anyway), even if it has extra data.
+; Load 64KB-512 (127 sectors) from the partition, regardless of the size. The bootloader is
+; assumed to fit in this size (that's the most we can read anyway), even if it has extra data.
 ; if the partition is smaller than that, then the bootloader is padded with garbage which
-; is also OK
+; is also OK.
+; I found that loading 128 sectors (exactly 64KB) fails on some BIOSes.
 mov eax, [si+32]
 mov ebx, [si+36]
-mov cx, 128
+mov cx, 127
 call read_sectors
 
 ; load the boot drive number back into DL, and jump to the second stage
