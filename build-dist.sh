@@ -1,7 +1,5 @@
 #! /bin/bash
 
-export MIP_COMP_LEVEL=0
-
 # Useful functions for the stages.
 CSI="\e["
 RESET="${CSI}0m"
@@ -46,7 +44,7 @@ cd build || exit 1
 . ../dist/crosstools-stage1.inc.sh
 . ../dist/configure-diskimg-build.inc.sh
 . ../dist/crosstools-stage2.inc.sh
-#. ../dist/build-deplibs.inc.sh
+. ../dist/build-deplibs.inc.sh
 . ../dist/do-diskimg-build.inc.sh
 
 # Indicate success.
