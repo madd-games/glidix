@@ -51,4 +51,11 @@ void portInit(AHCIController *ctrl, int portno);
  */
 void portRelease(AHCIPort *port);
 
+/**
+ * Issue the current command on the port.
+ *
+ * Returns 0 on success, or an error number on error.
+ */
+int portIssueCmd(AHCIPort *port);
+
 #endif

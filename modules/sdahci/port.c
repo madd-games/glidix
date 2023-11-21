@@ -54,6 +54,68 @@ static void portStop(AHCIPort *port)
 	port->regs->serr = -1;
 };
 
+int portIssueCmd(AHCIPort *port)
+{
+	uint64_t startTime = getNanotime();
+
+	if (port->regs->tfd & STS_BSY)
+	{
+		panic("sdahci: device is busy prior to issuing a command!");
+	};
+	
+	port->regs->is = port->regs->is;
+	port->regs->ci = 1;
+	
+	while (1)
+	{
+		if (getNanotime()-startTime > 8*NANO_PER_SEC)
+		{
+			// taking longer than 8 seconds
+			kprintf("sdahci: timeout; aborting command. IS=0x%08X, SERR=0x%08X, TFD=0x%08X\n", port->regs->is, port->regs->serr, port->regs->tfd);
+			portStop(port);
+			portStart(port);
+			port->regs->serr = port->regs->serr;
+			return EIO;
+		};
+		
+		if (port->regs->is & IS_ERR_FATAL)
+		{
+			// a fatal error occured
+			kprintf("sdahci: fatal error. IS=0x%08X, SERR=0x%08X\n", port->regs->is, port->regs->serr);
+			
+			portStop(port);
+			portStart(port);
+			port->regs->serr = port->regs->serr;
+			return EIO;
+		};
+		
+		if ((port->regs->ci & 1) == 0)
+		{
+			break;
+		};
+	};
+	
+	int busy = STS_BSY | STS_DRQ;
+	while (port->regs->tfd & busy)
+	{
+		if (getNanotime()-startTime > 8*NANO_PER_SEC)
+		{
+			kprintf("sdahci: timeout; aborting command. IS=0x%08X, SERR=0x%08X, TFD=0x%08X\n", port->regs->is, port->regs->serr, port->regs->tfd);
+			portStop(port);
+			portStart(port);
+			port->regs->serr = port->regs->serr;
+			return EIO;
+		};
+	};
+	
+	if (port->regs->tfd & STS_ERR)
+	{
+		return EIO;
+	};
+	
+	return 0;
+};
+
 static void portReset(AHCIPort *port)
 {
 	port->regs->sctl = 0;

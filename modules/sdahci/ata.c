@@ -29,15 +29,23 @@
 #include <glidix/util/memory.h>
 #include <glidix/display/console.h>
 #include <glidix/util/string.h>
+#include <glidix/hw/dma.h>
 
 #include "ata.h"
-#include "glidix/hw/dma.h"
 #include "port.h"
+#include "sdahci.h"
 
 #define	ATA_READ					0
 #define	ATA_WRITE					1
 
-int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void *buffer, int dir)
+static int ataIssueCmd(
+	AHCIPort *port,
+	uint8_t cmd,
+	size_t startBlock,
+	size_t numBlocks,
+	void *buffer,
+	int dir
+)
 {
 	mutexLock(&port->lock);
 	port->ctrl->regs->is = port->ctrl->regs->is;
@@ -46,7 +54,7 @@ int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void 
 	
 	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&port->dmabuf);
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D) / 4;
-	opArea->cmdlist[0].c = 1;				// clear BSY when done
+	opArea->cmdlist[0].c = 0;
 	
 	if (dir == ATA_READ)
 	{
@@ -66,13 +74,6 @@ int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void 
 	{
 		if (prdtl == 9) panic("unexpected input");
 
-#if 0
-		if (dir == ATA_READ && startBlock == 0)
-		{
-			kprintf("ATA_READ 0: Region: physAddr=0x%016lX, physSize=0x%04lX\n", reg.physAddr, reg.physSize);
-		};
-#endif
-
 		opArea->cmdtab.prdt[prdtl].dba = reg.physAddr;
 		opArea->cmdtab.prdt[prdtl].dbc = reg.physSize - 1;
 		opArea->cmdtab.prdt[prdtl].i = 0;
@@ -83,17 +84,10 @@ int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void 
 	opArea->cmdlist[0].prdtl = prdtl;
 	opArea->cmdlist[0].prdbc = 0;
 
-	FIS_REG_H2D *cmdfis = (FIS_REG_H2D*)(&opArea->cmdtab.cfis);
+	FIS_REG_H2D *cmdfis = (FIS_REG_H2D*) opArea->cmdtab.cfis;
 	cmdfis->fis_type = FIS_TYPE_REG_H2D;
 	cmdfis->c = 1;
-	if (dir == ATA_READ)
-	{
-		cmdfis->command = ATA_CMD_READ_DMA_EXT;
-	}
-	else
-	{
-		cmdfis->command = ATA_CMD_WRITE_DMA_EXT;
-	};
+	cmdfis->command = cmd;
 	
 	cmdfis->lba0 = (uint8_t)startBlock;
 	cmdfis->lba1 = (uint8_t)(startBlock>>8);
@@ -122,13 +116,50 @@ int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void 
 #endif
 
 	// Issue the command.
-	int status = ahciIssueCmd(port->regs);
-	if (status != 0)
+	int status = portIssueCmd(port);
+	if (opArea->cmdlist[0].prdbc != 512 * numBlocks)
 	{
-		mutexUnlock(&port->lock);
-		return status;
+		panic(
+			"sdahci: PRDBC does not match amount of data requested (%lu blocks / %lu bytes)\n"
+			"  Command = 0x%hhx\n"
+			"  PRDTL   = %u\n"
+			"  PRDBC   = %u\n"
+			"  PxIS    = 0x%08x\n"
+			"  PxSERR  = 0x%08x\n"
+			"  PxTFD   = 0x%08x\n"
+			"  PxCMD   = 0x%08x\n"
+			"  PxSSTS  = 0x%08x\n"
+			"  PxSIG   = 0x%08x\n"
+			"  count   = %hu\n",
+			numBlocks,
+			512 * numBlocks,
+			cmd,
+			opArea->cmdlist[0].prdtl,
+			opArea->cmdlist[0].prdbc,
+			port->regs->is,
+			port->regs->serr,
+			port->regs->tfd,
+			port->regs->cmd,
+			port->regs->ssts,
+			port->regs->sig,
+			cmdfis->count
+		);	
 	};
 
+	mutexUnlock(&port->lock);
+	return status;
+};
+
+int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void *buffer, int dir)
+{
+	int cmd = dir == ATA_WRITE ? ATA_CMD_WRITE_DMA_EXT : ATA_CMD_READ_DMA_EXT;
+	int status = ataIssueCmd(port, cmd, startBlock, numBlocks, buffer, dir);
+
+	if (status != 0)
+	{
+		return status;
+	};
+#if 0
 	if (opArea->cmdlist[0].prdbc == 0)
 	{
 		panic(
@@ -151,32 +182,9 @@ int ataTransferBlocks(AHCIPort *port, size_t startBlock, size_t numBlocks, void 
 			cmdfis->count
 		);	
 	};
-	
-	// do a cache flush
-	opArea->cmdlist[0].w = 0;
-	opArea->cmdlist[0].p = 0;
-	opArea->cmdlist[0].c = 1;
-	opArea->cmdlist[0].prdtl = 0;
+#endif
 
-	cmdfis->fis_type = FIS_TYPE_REG_H2D;
-	cmdfis->c = 1;
-	cmdfis->command = ATA_CMD_CACHE_FLUSH_EXT;
-	
-	cmdfis->lba0 = 0;
-	cmdfis->lba1 = 0;
-	cmdfis->lba2 = 0;
-	cmdfis->device = 1<<6;	// LBA mode
- 
-	cmdfis->lba3 = 0;
-	cmdfis->lba4 = 0;
-	cmdfis->lba5 = 0;
-	
-	cmdfis->count = 0;
-	
-	// issue the flush command
-	status = ahciIssueCmd(port->regs);
-	mutexUnlock(&port->lock);
-	return status;
+	return ataIssueCmd(port, ATA_CMD_CACHE_FLUSH_EXT, 0, 0, NULL, ATA_READ);
 };
 
 int ataReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buffer)
@@ -263,25 +271,7 @@ SDOps ataOps = {
 void ataInit(AHCIPort *port)
 {
 	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&port->dmabuf);
-
-	// send the IDENTIFY command.
-	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D)/4;		// FIS length in dwords
-	opArea->cmdlist[0].w = 0;				// read data
-	opArea->cmdlist[0].prdtl = 1;				// only one PRDT entry
-	opArea->cmdlist[0].p = 1;
-	
-	opArea->cmdtab.prdt[0].dba = dmaGetPhys(&port->dmabuf) + __builtin_offsetof(AHCIOpArea, id);
-	opArea->cmdtab.prdt[0].dbc = 511;			// length-1
-	opArea->cmdtab.prdt[0].i = 0;				// do not interrupt
-	
-	// set up command FIS
-	FIS_REG_H2D *cmdfis = (FIS_REG_H2D*) opArea->cmdtab.cfis;
-	cmdfis->fis_type = FIS_TYPE_REG_H2D;
-	cmdfis->c = 1;
-	cmdfis->command = ATA_CMD_IDENTIFY;
-	
-	// issue the command and await completion
-	if (ahciIssueCmd(port->regs) != 0)
+	if (ataIssueCmd(port, ATA_CMD_IDENTIFY, 0, 1, opArea->id, ATA_READ) != 0)
 	{
 		kprintf("sdahci: error during identification\n");
 		return;
@@ -323,31 +313,6 @@ void ataInit(AHCIPort *port)
 	sdpars.flags = 0;
 	sdpars.blockSize = 512;
 	sdpars.totalSize = size * 512;
-
-	// do a cache flush
-	opArea->cmdlist[0].w = 0;
-	opArea->cmdlist[0].p = 0;
-	opArea->cmdlist[0].c = 1;
-	opArea->cmdlist[0].prdtl = 0;
-
-	cmdfis->fis_type = FIS_TYPE_REG_H2D;
-	cmdfis->c = 1;
-	cmdfis->command = ATA_CMD_CACHE_FLUSH_EXT;
-	
-	cmdfis->lba0 = 0;
-	cmdfis->lba1 = 0;
-	cmdfis->lba2 = 0;
-	cmdfis->device = 1<<6;	// LBA mode
- 
-	cmdfis->lba3 = 0;
-	cmdfis->lba4 = 0;
-	cmdfis->lba5 = 0;
-	
-	cmdfis->count = 0;
-	
-	// issue the flush command
-	int status = ahciIssueCmd(port->regs);
-	kprintf("sdahci: cache flush status: %d\n", status);
 
 	port->sd = sdCreate(&sdpars, model, &ataOps, port);
 	if (port->sd == NULL)

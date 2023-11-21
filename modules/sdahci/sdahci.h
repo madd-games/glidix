@@ -307,23 +307,4 @@ typedef struct
 	char				id[1024];
 } AHCIOpArea;
 
-/**
- * Stop the commmand engine on a port.
- */
-void ahciStopCmd(volatile AHCIPortRegs *port);
-
-/**
- * Start the command engine on a port.
- */
-void ahciStartCmd(volatile AHCIPortRegs *port);
-
-/**
- * Issue a command on the specified port. Command 0 in the port's command list is expected to be filled in,
- * and that's the command which will be issued. This function will wait until the command is completed.
- *
- * Upon success (command completed successfully), this function returns 0. If an error occurs, this function
- * returns EIO and prints error information to the kernel console.
- */
-int ahciIssueCmd(volatile AHCIPortRegs *port);
-
 #endif

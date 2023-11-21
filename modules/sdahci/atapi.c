@@ -35,10 +35,10 @@
 
 int atapiReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *buffer)
 {
-	AHCIPort *dev = (AHCIPort*) drvdata;
+	AHCIPort *port = (AHCIPort*) drvdata;
 	
-	mutexLock(&dev->lock);
-	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
+	mutexLock(&port->lock);
+	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&port->dmabuf);
 	
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D)/4;
 	opArea->cmdlist[0].w = 0;
@@ -83,12 +83,11 @@ int atapiReadBlocks(void *drvdata, size_t startBlock, size_t numBlocks, void *bu
 	cmdfis->lba4 = 0;
 	cmdfis->lba5 = 0;
 
-	cmdfis->countl = numBlocks & 0xFF;
-	cmdfis->counth = (numBlocks >> 8) & 0xFF;
+	cmdfis->count = numBlocks;
 
 	// issue the command
-	int status = ahciIssueCmd(dev->regs);
-	mutexUnlock(&dev->lock);
+	int status = portIssueCmd(port);
+	mutexUnlock(&port->lock);
 	return status;
 };
 
@@ -100,10 +99,10 @@ int atapiWriteBlocks(void *drvdata, size_t startBlock, size_t numBlocks, const v
 
 size_t atapiGetSize(void *drvdata)
 {
-	AHCIPort *dev = (AHCIPort*) drvdata;
+	AHCIPort *port = (AHCIPort*) drvdata;
 	
-	mutexLock(&dev->lock);
-	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
+	mutexLock(&port->lock);
+	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&port->dmabuf);
 	
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D)/4;
 	opArea->cmdlist[0].w = 0;
@@ -112,7 +111,7 @@ size_t atapiGetSize(void *drvdata)
 	memset(opArea->cmdtab.acmd, 0, 16);
 	opArea->cmdtab.acmd[0] = ATAPI_CMD_READ_CAPACITY;
 	
-	opArea->cmdtab.prdt[0].dba = dmaGetPhys(&dev->dmabuf) + __builtin_offsetof(AHCIOpArea, id);
+	opArea->cmdtab.prdt[0].dba = dmaGetPhys(&port->dmabuf) + __builtin_offsetof(AHCIOpArea, id);
 	opArea->cmdtab.prdt[0].dbc = 1023;				// size minus 1
 	opArea->cmdtab.prdt[0].i = 0;
 
@@ -132,12 +131,11 @@ size_t atapiGetSize(void *drvdata)
 	cmdfis->lba4 = 0;
 	cmdfis->lba5 = 0;
 
-	cmdfis->countl = 0;
-	cmdfis->counth = 0;
+	cmdfis->count = 0;
 
 	// issue the command
-	int status = ahciIssueCmd(dev->regs);
-	mutexUnlock(&dev->lock);
+	int status = portIssueCmd(port);
+	mutexUnlock(&port->lock);
 	
 	if (status == 0)
 	{
@@ -152,10 +150,10 @@ size_t atapiGetSize(void *drvdata)
 
 int atapiEject(void *drvdata)
 {
-	AHCIPort *dev = (AHCIPort*) drvdata;
+	AHCIPort *port = (AHCIPort*) drvdata;
 	
-	mutexLock(&dev->lock);
-	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&dev->dmabuf);
+	mutexLock(&port->lock);
+	AHCIOpArea *opArea = (AHCIOpArea*) dmaGetPtr(&port->dmabuf);
 	
 	opArea->cmdlist[0].cfl = sizeof(FIS_REG_H2D)/4;
 	opArea->cmdlist[0].w = 0;
@@ -181,12 +179,11 @@ int atapiEject(void *drvdata)
 	cmdfis->lba4 = 0;
 	cmdfis->lba5 = 0;
 
-	cmdfis->countl = 0;
-	cmdfis->counth = 0;
+	cmdfis->count = 0;
 
 	// issue the command
-	int status = ahciIssueCmd(dev->regs);
-	mutexUnlock(&dev->lock);
+	int status = portIssueCmd(port);
+	mutexUnlock(&port->lock);
 	return status;
 };
 
@@ -220,7 +217,7 @@ void atapiInit(AHCIPort *port)
 	
 	// issue the command and await completion
 	__sync_synchronize();
-	if (ahciIssueCmd(port->regs) != 0)
+	if (portIssueCmd(port) != 0)
 	{
 		kprintf("sdahci: AHCI error during identification\n");
 		return;
