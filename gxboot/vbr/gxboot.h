@@ -153,71 +153,71 @@
 #define	R_X86_64_JUMP_SLOT		7
 #define	R_X86_64_RELATIVE		8
 
-typedef unsigned char			byte_t;
-typedef	unsigned short			word_t;
-typedef	unsigned int			dword_t;
-typedef	unsigned long long		qword_t;
+typedef unsigned char			uint8_t;
+typedef	unsigned short			uint16_t;
+typedef	unsigned int			uint32_t;
+typedef	unsigned long long		uint64_t;
 
 typedef struct
 {
-	qword_t sbhMagic;
-	byte_t  sbhBootID[16];
-	qword_t sbhFormatTime;
-	qword_t sbhWriteFeatures;
-	qword_t sbhReadFeatures;
-	qword_t sbhOptionalFeatures;
-	qword_t sbhResv[2];
-	qword_t sbhChecksum;
+	uint64_t sbhMagic;
+	uint8_t  sbhBootID[16];
+	uint64_t sbhFormatTime;
+	uint64_t sbhWriteFeatures;
+	uint64_t sbhReadFeatures;
+	uint64_t sbhOptionalFeatures;
+	uint64_t sbhResv[2];
+	uint64_t sbhChecksum;
 } GXFS_SuperblockHeader;
 
 typedef struct
 {
-	qword_t ihNext;
+	uint64_t ihNext;
 } GXFS_InodeHeader;
 
 typedef struct
 {
-	dword_t rhType;
-	dword_t rhSize;
+	uint32_t rhType;
+	uint32_t rhSize;
 } GXFS_RecordHeader;
 
 typedef struct
 {
-	dword_t drType;
-	dword_t drRecordSize;
-	qword_t drInode;
-	byte_t drInoType;
+	uint32_t drType;
+	uint32_t drRecordSize;
+	uint64_t drInode;
+	uint8_t drInoType;
 	char drName[];
 } GXFS_DentRecord;
 
 typedef struct
 {
-	dword_t arType;
-	dword_t arRecordSize;
-	qword_t arLinks;
-	dword_t arFlags;
-	word_t arOwner;
-	word_t arGroup;
-	qword_t arSize;
-	qword_t arATime;
-	qword_t arMTime;
-	qword_t arCTime;
-	qword_t arBTime;
-	dword_t arANano;
-	dword_t arMNano;
-	dword_t arCNano;
-	dword_t arBNano;
-	qword_t arIXPerm;
-	qword_t arOXPerm;
-	qword_t arDXPerm;
+	uint32_t arType;
+	uint32_t arRecordSize;
+	uint64_t arLinks;
+	uint32_t arFlags;
+	uint16_t arOwner;
+	uint16_t arGroup;
+	uint64_t arSize;
+	uint64_t arATime;
+	uint64_t arMTime;
+	uint64_t arCTime;
+	uint64_t arBTime;
+	uint32_t arANano;
+	uint32_t arMNano;
+	uint32_t arCNano;
+	uint32_t arBNano;
+	uint64_t arIXPerm;
+	uint64_t arOXPerm;
+	uint64_t arDXPerm;
 } GXFS_AttrRecord;
 
 typedef struct
 {
-	dword_t trType;
-	dword_t trSize;
-	qword_t trDepth;
-	qword_t trHead;
+	uint32_t trType;
+	uint32_t trSize;
+	uint64_t trDepth;
+	uint64_t trHead;
 } GXFS_TreeRecord;
 
 typedef struct
@@ -229,29 +229,29 @@ typedef struct
 	char					minute[2];			// 0-59
 	char					second[2];			// 0-59
 	char					centiseconds[2];		// 0-99		(ignored really)
-	byte_t					timezone;			// from 0=GMT-12, to 100=GMT+13, in 15-minute intervals
+	uint8_t					timezone;			// from 0=GMT-12, to 100=GMT+13, in 15-minute intervals
 } __attribute__ ((packed)) ISOPrimaryDateTime;
 
 typedef struct
 {
-	byte_t					type;				// == 1
+	uint8_t					type;				// == 1
 	char					magic[5];			// "CD001"
-	byte_t					version;			// == 1
-	byte_t					unused;				// == 0
+	uint8_t					version;			// == 1
+	uint8_t					unused;				// == 0
 	char					bootsysname[32];		// ignore this
 	char					volumeID[32];
-	byte_t					zeroes[8];			// why? -_-
-	dword_t					volumeBlockCount;
-	dword_t					ignore1;
-	byte_t					ignore2[32];
-	word_t					volumeCount;
-	word_t					ignore3;
-	word_t					volumeIndex;
-	word_t					ignore4;
-	word_t					blockSize;
-	word_t					ignore5;
-	byte_t					ignore6[24];			// path table, we don't care
-	byte_t					rootDir[34];			// cast contents to ISODirentHeader.
+	uint8_t					zeroes[8];			// why? -_-
+	uint32_t					volumeBlockCount;
+	uint32_t					ignore1;
+	uint8_t					ignore2[32];
+	uint16_t					volumeCount;
+	uint16_t					ignore3;
+	uint16_t					volumeIndex;
+	uint16_t					ignore4;
+	uint16_t					blockSize;
+	uint16_t					ignore5;
+	uint8_t					ignore6[24];			// path table, we don't care
+	uint8_t					rootDir[34];			// cast contents to ISODirentHeader.
 	char					volumeSetID[128];
 	char					publisherID[128];
 	char					dataPreparerID[128];
@@ -263,39 +263,39 @@ typedef struct
 	ISOPrimaryDateTime			dtModification;
 	ISOPrimaryDateTime			dtObsolete;
 	ISOPrimaryDateTime			dtCanBeUsed;
-	byte_t					fileStructVersion;		// == 1
-	byte_t					ignore7;
+	uint8_t					fileStructVersion;		// == 1
+	uint8_t					ignore7;
 } __attribute__ ((packed)) ISOPrimaryVolumeDescriptor;
 
 typedef struct
 {
-	byte_t					size;
-	byte_t					xattrSize;
-	dword_t					startLBA;
-	dword_t					ignore1;
-	dword_t					fileSize;
-	dword_t					ignore2;
-	byte_t					year;				// since 1990
-	byte_t					month;				// 1-12
-	byte_t					day;				// 1-31
-	byte_t					hour;				// 0-23
-	byte_t					minute;				// 0-59
-	byte_t					second;				// 0-59
-	byte_t					timezone;
-	byte_t					flags;
-	byte_t					zeroes[2];
-	dword_t					ignore3;
-	byte_t					filenameLen;
+	uint8_t					size;
+	uint8_t					xattrSize;
+	uint32_t					startLBA;
+	uint32_t					ignore1;
+	uint32_t					fileSize;
+	uint32_t					ignore2;
+	uint8_t					year;				// since 1990
+	uint8_t					month;				// 1-12
+	uint8_t					day;				// 1-31
+	uint8_t					hour;				// 0-23
+	uint8_t					minute;				// 0-59
+	uint8_t					second;				// 0-59
+	uint8_t					timezone;
+	uint8_t					flags;
+	uint8_t					zeroes[2];
+	uint32_t					ignore3;
+	uint8_t					filenameLen;
 } __attribute__ ((packed)) ISODirentHeader;
 
 typedef struct
 {
-	byte_t				size;
-	byte_t				unused;
-	word_t				numSectors;
-	word_t				offset;
-	word_t				segment;
-	qword_t				lba;
+	uint8_t				size;
+	uint8_t				unused;
+	uint16_t				numSectors;
+	uint16_t				offset;
+	uint16_t				segment;
+	uint64_t				lba;
 } DAP;
 
 typedef struct
@@ -312,16 +312,16 @@ typedef struct
 	/**
 	 * Start with stuff defined for all filesystems.
 	 */
-	qword_t				size;
+	uint64_t				size;
 	
 	/**
 	 * Now filesystem-specific stuff.
 	 */
 #if defined(GXBOOT_FS_GXFS)
-	qword_t				depth;
-	qword_t				head;
-	qword_t				bufferBase;
-	byte_t				buffer[4096];
+	uint64_t				depth;
+	uint64_t				head;
+	uint64_t				bufferBase;
+	uint8_t				buffer[4096];
 #elif defined(GXBOOT_FS_ELTORITO)
 	qword_t				startLBA;
 	qword_t				currentLBA;
@@ -333,55 +333,55 @@ typedef struct
 
 typedef struct
 {
-	dword_t				sig;
-	word_t				version;
-	dword_t				oemStrFar;
-	byte_t				caps[4];
-	word_t				modeListOffset;
-	word_t				modeListSegment;
-	word_t				totalMemory;
+	uint32_t				sig;
+	uint16_t				version;
+	uint32_t				oemStrFar;
+	uint8_t				caps[4];
+	uint16_t				modeListOffset;
+	uint16_t				modeListSegment;
+	uint16_t				totalMemory;
 } __attribute__ ((packed)) VbeInfoBlock;
 extern VbeInfoBlock vbeInfoBlock;
 
 typedef struct
 {
-	word_t				attributes;
-	byte_t				winA, winB;
-	word_t				granularity;
-	word_t				winsize;
-	word_t				segA, segB;
-	dword_t				realFctPtr;
-	word_t				pitch;
+	uint16_t				attributes;
+	uint8_t				winA, winB;
+	uint16_t				granularity;
+	uint16_t				winsize;
+	uint16_t				segA, segB;
+	uint32_t				realFctPtr;
+	uint16_t				pitch;
 
-	word_t				width, height;
-	byte_t				Wchar, Ychar, planes, bpp, banks;
-	byte_t				memory_model, bank_size, image_pages;
-	byte_t				reserved0;
+	uint16_t				width, height;
+	uint8_t				Wchar, Ychar, planes, bpp, banks;
+	uint8_t				memory_model, bank_size, image_pages;
+	uint8_t				reserved0;
 
-	byte_t				red_mask, red_position;
-	byte_t				green_mask, green_position;
-	byte_t				blue_mask, blue_position;
-	byte_t				rsv_mask, rsv_position;
-	byte_t				directcolor_attributes;
+	uint8_t				red_mask, red_position;
+	uint8_t				green_mask, green_position;
+	uint8_t				blue_mask, blue_position;
+	uint8_t				rsv_mask, rsv_position;
+	uint8_t				directcolor_attributes;
  
-	dword_t				physbase;
-	dword_t				reserved1;
-	word_t				reserved2;
+	uint32_t				physbase;
+	uint32_t				reserved1;
+	uint16_t				reserved2;
 } __attribute__ ((packed)) VbeModeInfo;
 extern VbeModeInfo vbeModeInfo;
 
 /**
  * A buffer filled with the boot ID by fsInit().
  */
-extern byte_t fsBootID[16];
+extern uint8_t fsBootID[16];
 
-typedef	qword_t				Elf64_Addr;
-typedef	word_t				Elf64_Half;
-typedef	qword_t				Elf64_Off;
+typedef	uint64_t				Elf64_Addr;
+typedef	uint16_t				Elf64_Half;
+typedef	uint64_t				Elf64_Off;
 typedef	signed int			Elf64_Sword;
 typedef	signed long long		Elf64_Sxword;
-typedef	dword_t				Elf64_Word;
-typedef	qword_t				Elf64_Xword;
+typedef	uint32_t				Elf64_Word;
+typedef	uint64_t				Elf64_Xword;
 
 typedef struct
 {
@@ -456,10 +456,10 @@ typedef struct
 
 typedef struct
 {
-	dword_t			size;
-	qword_t			baseAddr;
-	qword_t			len;
-	dword_t			type;
+	uint32_t			size;
+	uint64_t			baseAddr;
+	uint64_t			len;
+	uint32_t			type;
 } __attribute__ ((packed)) MemoryMap;
 
 /**
@@ -470,23 +470,23 @@ typedef struct
 	/**
 	 * BYTES per pixel (1, 2, 3 or 4).
 	 */
-	dword_t					bpp;
+	uint32_t					bpp;
 	
 	/**
 	 * Red, green, blue and alpha masks. For less than 32 bits per pixel,
 	 * only the low bits shall be used. If a mask is zero, that means the
 	 * component is missing. For example, alpha may not be supported.
 	 */
-	dword_t					redMask;
-	dword_t					greenMask;
-	dword_t					blueMask;
-	dword_t					alphaMask;
+	uint32_t					redMask;
+	uint32_t					greenMask;
+	uint32_t					blueMask;
+	uint32_t					alphaMask;
 	
 	/**
 	 * Number of unused bytes between pixels and scanlines.
 	 */
-	dword_t					pixelSpacing;
-	dword_t					scanlineSpacing;
+	uint32_t					pixelSpacing;
+	uint32_t					scanlineSpacing;
 } PixelFormat;
 
 /**
@@ -496,31 +496,31 @@ typedef struct
 #define	KB_FEATURE_VIDEO		(1 << 1)
 typedef struct
 {
-	qword_t				features;			/* 0x00 */
-	qword_t				kernelMain;			/* 0x08 */
-	qword_t				gdtPointerVirt;			/* 0x10 */
-	dword_t				pml4Phys;			/* 0x18 */
-	dword_t				mmapSize;			/* 0x1C */
-	qword_t				mmapVirt;			/* 0x20 */
-	qword_t				initrdSize;			/* 0x28 */
-	qword_t				end;				/* 0x30 */
-	qword_t				initrdSymtabOffset;		/* 0x38 */
-	qword_t				initrdStrtabOffset;		/* 0x40 */
-	qword_t				numSymbols;			/* 0x48 */
+	uint64_t				features;			/* 0x00 */
+	uint64_t				kernelMain;			/* 0x08 */
+	uint64_t				gdtPointerVirt;			/* 0x10 */
+	uint32_t				pml4Phys;			/* 0x18 */
+	uint32_t				mmapSize;			/* 0x1C */
+	uint64_t				mmapVirt;			/* 0x20 */
+	uint64_t				initrdSize;			/* 0x28 */
+	uint64_t				end;				/* 0x30 */
+	uint64_t				initrdSymtabOffset;		/* 0x38 */
+	uint64_t				initrdStrtabOffset;		/* 0x40 */
+	uint64_t				numSymbols;			/* 0x48 */
 	
 	/* only when KB_FEATURE_BOOTID is set */
-	byte_t				bootID[16];			/* 0x50 */
+	uint8_t				bootID[16];			/* 0x50 */
 	
 	/* only when KB_FEATURE_VIDEO is set */
-	qword_t				framebuffer;			/* 0x60 */
-	qword_t				backbuffer;			/* 0x68 */
-	dword_t				screenWidth;			/* 0x70 */
-	dword_t				screenHeight;			/* 0x74 */
+	uint64_t				framebuffer;			/* 0x60 */
+	uint64_t				backbuffer;			/* 0x68 */
+	uint32_t				screenWidth;			/* 0x70 */
+	uint32_t				screenHeight;			/* 0x74 */
 	PixelFormat			pixelFormat;			/* 0x78 */
 } KernelInfo;
 
 extern DAP dap;
-extern byte_t sectorBuffer[];
+extern uint8_t sectorBuffer[];
 
 void memset(void *buffer, unsigned char b, unsigned int size);
 void memcpy(void *dest, const void *src, unsigned int size);
@@ -538,13 +538,13 @@ void biosRead();
  * Get information about a video mode. Implemented in entry.asm
  * Returns 0 on success, VBE error number (AH) on error.
  */
-int vbeGetModeInfo(word_t modeNumber);
+int vbeGetModeInfo(uint16_t modeNumber);
 
 /**
  * Switch VBE mode. Implemented in entry.asm. Returns 0 on success, VBE
  * error number (AH) on error.
  */
-int vbeSwitchMode(word_t modeNumber);
+int vbeSwitchMode(uint16_t modeNumber);
 
 /**
  * Initialize the filesystem driver.
@@ -559,18 +559,18 @@ int openFile(FileHandle *fh, const char *path);
 /**
  * Read a file.
  */
-void readFile(FileHandle *fh, void *buffer, qword_t size, qword_t offset);
+void readFile(FileHandle *fh, void *buffer, uint64_t size, uint64_t offset);
 
 /**
  * Get a BIOS memory map entry. Returns the index of the next entry. Sets 'ok' to 0 if the
  * carry flag has been set.
  */
-dword_t biosGetMap(dword_t index, void *put, int *ok);
+uint32_t biosGetMap(uint32_t index, void *put, int *ok);
 
 /**
  * Jump to the 64-bit kernel.
  */
-void go64(KernelInfo *kinfo, qword_t kinfoVirt);
+void go64(KernelInfo *kinfo, uint64_t kinfoVirt);
 
 /**
  * Write to the terminal.
@@ -580,6 +580,6 @@ void termput(const char *str);
 /**
  * Print a 64-bit hex number.
  */
-void termputp64(qword_t addr);
+void termputp64(uint64_t addr);
 
 #endif

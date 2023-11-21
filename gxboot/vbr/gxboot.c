@@ -30,7 +30,7 @@
 
 int consoleX, consoleY;
 char *vidmem = (char*) 0xB8000;
-qword_t blockBase;			/* LBA of start of block table */
+uint64_t blockBase;			/* LBA of start of block table */
 
 void termput(const char *str)
 {
@@ -89,7 +89,7 @@ void termput(const char *str)
 	};
 };
 
-void termputd(dword_t num)
+void termputd(uint32_t num)
 {
 	char buffer[64];
 	char *put = &buffer[63];
@@ -104,7 +104,7 @@ void termputd(dword_t num)
 	termput(put);
 };
 
-void termputp64(qword_t addr)
+void termputp64(uint64_t addr)
 {
 	termput("0x");
 	char buffer[64];
@@ -113,7 +113,7 @@ void termputp64(qword_t addr)
 	
 	do
 	{
-		qword_t digit = (addr % 16);
+		uint64_t digit = (addr % 16);
 		if (digit < 10)
 		{
 			*--put = '0' + digit;
@@ -128,23 +128,23 @@ void termputp64(qword_t addr)
 	termput(put);
 };
 
-dword_t placement;
-void *balloc(dword_t align, dword_t size)
+uint32_t placement;
+void *balloc(uint32_t align, uint32_t size)
 {
 	placement = (placement + align - 1) & ~(align-1);
-	dword_t result = placement;
+	uint32_t result = placement;
 	placement += size;
 	return (void*) result;
 };
 
-qword_t *pml4;
+uint64_t *pml4;
 
-qword_t *getPageEntry(qword_t addr)
+uint64_t *getPageEntry(uint64_t addr)
 {
-	qword_t pageIndex = (addr >> 12) & 0x1FFULL;
-	qword_t ptIndex = (addr >> 21) & 0x1FFULL;
-	qword_t pdIndex = (addr >> 30) & 0x1FFULL;
-	qword_t pdptIndex = (addr >> 39) & 0x1FFULL;
+	uint64_t pageIndex = (addr >> 12) & 0x1FFULL;
+	uint64_t ptIndex = (addr >> 21) & 0x1FFULL;
+	uint64_t pdIndex = (addr >> 30) & 0x1FFULL;
+	uint64_t pdptIndex = (addr >> 39) & 0x1FFULL;
 	
 	if (pdptIndex == 511)
 	{
@@ -152,46 +152,46 @@ qword_t *getPageEntry(qword_t addr)
 		while (1) asm volatile ("cli; hlt");
 	};
 	
-	qword_t *pdpt;
+	uint64_t *pdpt;
 	if (pml4[pdptIndex] == 0)
 	{
-		pdpt = (qword_t*) balloc(0x1000, 0x1000);
+		pdpt = (uint64_t*) balloc(0x1000, 0x1000);
 		memset(pdpt, 0, 0x1000);
-		pml4[pdptIndex] = (qword_t)(dword_t)pdpt | PT_PRESENT | PT_WRITE;
+		pml4[pdptIndex] = (uint64_t)(uint32_t)pdpt | PT_PRESENT | PT_WRITE;
 	}
 	else
 	{
-		pdpt = (qword_t*) ((dword_t) (pml4[pdptIndex] & ~0xFFFULL));
+		pdpt = (uint64_t*) ((uint32_t) (pml4[pdptIndex] & ~0xFFFULL));
 	};
 	
-	qword_t *pd;
+	uint64_t *pd;
 	if (pdpt[pdIndex] == 0)
 	{
-		pd = (qword_t*) balloc(0x1000, 0x1000);
+		pd = (uint64_t*) balloc(0x1000, 0x1000);
 		memset(pd, 0, 0x1000);
-		pdpt[pdIndex] = (qword_t)(dword_t)pd | PT_PRESENT | PT_WRITE;
+		pdpt[pdIndex] = (uint64_t)(uint32_t)pd | PT_PRESENT | PT_WRITE;
 	}
 	else
 	{
-		pd = (qword_t*) ((dword_t) (pdpt[pdIndex] & ~0xFFFULL));
+		pd = (uint64_t*) ((uint32_t) (pdpt[pdIndex] & ~0xFFFULL));
 	};
 	
-	qword_t *pt;
+	uint64_t *pt;
 	if (pd[ptIndex] == 0)
 	{
-		pt = (qword_t*) balloc(0x1000, 0x1000);
+		pt = (uint64_t*) balloc(0x1000, 0x1000);
 		memset(pt, 0, 0x1000);
-		pd[ptIndex] = (qword_t)(dword_t)pt | PT_PRESENT | PT_WRITE;
+		pd[ptIndex] = (uint64_t)(uint32_t)pt | PT_PRESENT | PT_WRITE;
 	}
 	else
 	{
-		pt = (qword_t*) ((dword_t) (pd[ptIndex] & ~0xFFF));
+		pt = (uint64_t*) ((uint32_t) (pd[ptIndex] & ~0xFFF));
 	};
 	
 	return &pt[pageIndex];
 };
 
-void mmap(qword_t vaddr, dword_t paddr, dword_t size)
+void mmap(uint64_t vaddr, uint32_t paddr, uint32_t size)
 {
 	size = (size + 0xFFF) & ~0xFFF;
 	
@@ -200,13 +200,13 @@ void mmap(qword_t vaddr, dword_t paddr, dword_t size)
 	termput(" -> ");
 	termputp64(paddr);
 	termput(" (");
-	termputp64((qword_t) size);
+	termputp64((uint64_t) size);
 	termput(")\n");
 	
-	qword_t i;
+	uint64_t i;
 	for (i=0; i<size; i+=0x1000)
 	{	
-		qword_t *pte = getPageEntry(vaddr+i);
+		uint64_t *pte = getPageEntry(vaddr+i);
 		*pte = (paddr+i) | PT_PRESENT | PT_WRITE;
 	};
 };
@@ -215,7 +215,7 @@ const char *strings;
 Elf64_Sym *symtab;
 int numSyms;
 
-qword_t getSymbol(const char *name)
+uint64_t getSymbol(const char *name)
 {
 	int i;
 	for (i=0; i<numSyms; i++)
@@ -230,21 +230,21 @@ qword_t getSymbol(const char *name)
 	return 0;
 };
 
-void* virt2phys(qword_t virt)
+void* virt2phys(uint64_t virt)
 {
-	qword_t *pte = getPageEntry(virt);
+	uint64_t *pte = getPageEntry(virt);
 	if (*pte == 0)
 	{
 		return NULL;
 	};
 	
-	dword_t addr = ((dword_t)(*pte) & (~0xFFF)) | (virt & 0xFFF);
+	uint32_t addr = ((uint32_t)(*pte) & (~0xFFF)) | (virt & 0xFFF);
 	return (void*) addr;
 };
 
 typedef struct
 {
-	word_t width, height;
+	uint16_t width, height;
 } ScreenSize;
 
 // video modes that we accept; those are the safe modes that all monitors should support
@@ -259,7 +259,7 @@ static ScreenSize okSizes[] = {
 static int fixedWidth;
 static int fixedHeight;
 
-static int isOkSize(word_t width, word_t height)
+static int isOkSize(uint16_t width, uint16_t height)
 {
 	if (fixedWidth != 0)
 	{
@@ -355,7 +355,7 @@ void bmain()
 	int i;
 
 	// initialize placement allocator
-	placement = (dword_t) 0x100000;
+	placement = (uint32_t) 0x100000;
 
 	fsInit();
 
@@ -383,7 +383,7 @@ void bmain()
 	};
 	
 	dtermput("Finding a suitable video mode... ");
-	if (vbeInfoBlock.sig != (*((const dword_t*)"VESA")))
+	if (vbeInfoBlock.sig != (*((const uint32_t*)"VESA")))
 	{
 		dtermput("FAILED\n");
 		termput("ERROR: Invalid VBE information block");
@@ -398,12 +398,12 @@ void bmain()
 	};
 	
 	// find the desired video mode
-	word_t videoMode = 0xFFFF;
-	word_t bestWidth = 0;
-	dword_t modesAddr = ((dword_t) vbeInfoBlock.modeListSegment << 4) + (dword_t) vbeInfoBlock.modeListOffset;
-	word_t *modes;
+	uint16_t videoMode = 0xFFFF;
+	uint16_t bestWidth = 0;
+	uint32_t modesAddr = ((uint32_t) vbeInfoBlock.modeListSegment << 4) + (uint32_t) vbeInfoBlock.modeListOffset;
+	uint16_t *modes;
 	
-	for (modes=(word_t*)modesAddr; *modes!=0xFFFF; modes++)
+	for (modes=(uint16_t*)modesAddr; *modes!=0xFFFF; modes++)
 	{
 		if (vbeGetModeInfo(*modes) != 0)
 		{
@@ -454,7 +454,7 @@ void bmain()
 		termput("ERROR: No acceptable video mode found\n");
 		
 		termput("Listing all supported modes:\n");
-		for (modes=(word_t*)modesAddr; *modes!=0xFFFF; modes++)
+		for (modes=(uint16_t*)modesAddr; *modes!=0xFFFF; modes++)
 		{
 			if (vbeGetModeInfo(*modes) != 0)
 			{
@@ -505,8 +505,8 @@ void bmain()
 	dtermput("OK\n");
 	
 	dtermput("Looking for kernel.so... ");
-	qword_t pos = 0;
-	qword_t size;
+	uint64_t pos = 0;
+	uint64_t size;
 	int found = 0;
 	
 	while (pos < initrd.size)
@@ -603,11 +603,11 @@ void bmain()
 	Elf64_Phdr *pheads = (Elf64_Phdr*) &elfPtr[elfHeader->e_phoff];
 	
 	// allocate space for the PML4
-	pml4 = (qword_t*) balloc(0x1000, 0x1000);
+	pml4 = (uint64_t*) balloc(0x1000, 0x1000);
 	memset(pml4, 0, 0x1000);
 	
 	// recursive mapping
-	pml4[511] = (qword_t) (dword_t) pml4 | PT_WRITE | PT_PRESENT;
+	pml4[511] = (uint64_t) (uint32_t) pml4 | PT_WRITE | PT_PRESENT;
 	
 	// now load the segments into memory
 	for (i=0; i<elfHeader->e_phnum; i++)
@@ -618,7 +618,7 @@ void bmain()
 			memset(buffer, 0, pheads[i].p_memsz);
 			memcpy(buffer, elfPtr + pheads[i].p_offset, pheads[i].p_filesz);
 			
-			mmap(pheads[i].p_vaddr, (dword_t) buffer, pheads[i].p_memsz);
+			mmap(pheads[i].p_vaddr, (uint32_t) buffer, pheads[i].p_memsz);
 		}
 		else if (pheads[i].p_type == PT_GLIDIX_MMAP)
 		{
@@ -638,7 +638,7 @@ void bmain()
 				return;
 			};
 		
-			mmap(pheads[i].p_vaddr, (dword_t) initrdStart, pheads[i].p_memsz);
+			mmap(pheads[i].p_vaddr, (uint32_t) initrdStart, pheads[i].p_memsz);
 		};
 	};
 	
@@ -667,7 +667,7 @@ void bmain()
 	};
 	
 	// get the bottom of the stack
-	qword_t stack = getSymbol("_stackBottom");
+	uint64_t stack = getSymbol("_stackBottom");
 	termput("_stackBottom at ");
 	termputp64(stack);
 	termput("\n");
@@ -679,8 +679,8 @@ void bmain()
 	};
 	
 	// allocate 2KB for the memory map
-	qword_t mmapBase = (stack - 0x800ULL) & ~0xFULL;
-	dword_t mmapSize = 0;
+	uint64_t mmapBase = (stack - 0x800ULL) & ~0xFULL;
+	uint32_t mmapSize = 0;
 	
 	// build the memory map
 	MemoryMap *mmapPut = (MemoryMap*) virt2phys(mmapBase);
@@ -691,7 +691,7 @@ void bmain()
 		return;
 	};
 	
-	dword_t entIndex = 0;
+	uint32_t entIndex = 0;
 
 	dtermput("Loading memory map... ");
 	do
@@ -708,7 +708,7 @@ void bmain()
 	dtermput("OK\n");
 	
 	// now allocate the information structure
-	qword_t kernelInfoVirt = (mmapBase - sizeof(KernelInfo)) & (~0xFULL);
+	uint64_t kernelInfoVirt = (mmapBase - sizeof(KernelInfo)) & (~0xFULL);
 	KernelInfo *kinfo = (KernelInfo*) virt2phys(kernelInfoVirt);
 	
 	if (kinfo == NULL)
@@ -742,25 +742,25 @@ void bmain()
 	// map the framebuffer
 	mmap(0xFFFF840000000000UL, vbeModeInfo.physbase & ~0xFFF, vbeModeInfo.height * vbeModeInfo.pitch);
 	void *backbuffer = balloc(0x1000, vbeModeInfo.height * vbeModeInfo.pitch);
-	qword_t backvirt = 0xFFFF840000000000UL + vbeModeInfo.height * vbeModeInfo.pitch
+	uint64_t backvirt = 0xFFFF840000000000UL + vbeModeInfo.height * vbeModeInfo.pitch
 				+ (vbeModeInfo.physbase & 0xFFF);
 	backvirt = (backvirt + 0xFFF) & ~0xFFF;
-	mmap(backvirt, (dword_t)backbuffer, vbeModeInfo.height * vbeModeInfo.pitch);
+	mmap(backvirt, (uint32_t)backbuffer, vbeModeInfo.height * vbeModeInfo.pitch);
 	
-	kinfo->pml4Phys = (dword_t) pml4;
+	kinfo->pml4Phys = (uint32_t) pml4;
 	kinfo->mmapSize = mmapSize;
 	kinfo->mmapVirt = mmapBase;
 	kinfo->initrdSize = initrd.size;
-	kinfo->end = (qword_t) (dword_t) balloc(0x1000, 0);
-	kinfo->initrdSymtabOffset = (qword_t) (dword_t) ((char*) symtab - (char*) initrdStart);
-	kinfo->initrdStrtabOffset = (qword_t) (dword_t) ((char*) strings - (char*) initrdStart);
+	kinfo->end = (uint64_t) (uint32_t) balloc(0x1000, 0);
+	kinfo->initrdSymtabOffset = (uint64_t) (uint32_t) ((char*) symtab - (char*) initrdStart);
+	kinfo->initrdStrtabOffset = (uint64_t) (uint32_t) ((char*) strings - (char*) initrdStart);
 	kinfo->numSymbols = numSyms;
 	memcpy(kinfo->bootID, fsBootID, 16);
 	
 	kinfo->framebuffer = 0xFFFF840000000000 + (vbeModeInfo.physbase & 0xFFF);
 	kinfo->backbuffer = backvirt;
-	kinfo->screenWidth = (dword_t) vbeModeInfo.width;
-	kinfo->screenHeight = (dword_t) vbeModeInfo.height;
+	kinfo->screenWidth = (uint32_t) vbeModeInfo.width;
+	kinfo->screenHeight = (uint32_t) vbeModeInfo.height;
 	kinfo->pixelFormat.bpp = 4;
 	kinfo->pixelFormat.redMask = (0xFF << vbeModeInfo.red_position);
 	kinfo->pixelFormat.greenMask = (0xFF << vbeModeInfo.green_position);

@@ -30,11 +30,11 @@
 
 #include "gxboot.h"
 
-extern qword_t part_start;
-extern qword_t blockBase;			/* LBA of start of block table */
-byte_t fsBootID[16];
+extern uint64_t part_start;
+extern uint64_t blockBase;			/* LBA of start of block table */
+uint8_t fsBootID[16];
 
-static void readBlock(qword_t index, void *buffer)
+static void readBlock(uint64_t index, void *buffer)
 {
 	dap.lba = blockBase + (index << 3);
 	biosRead();
@@ -46,21 +46,21 @@ void fsInit()
 	dtermput("Validating superblock... ");
 	blockBase = part_start + 0x1000;
 	dap.numSectors = 8;
-	dap.offset = (word_t) (dword_t) sectorBuffer;
+	dap.offset = (uint16_t) (uint32_t) sectorBuffer;
 	
 	char sb[4096];
 	readBlock(0, sb);
 	
 	GXFS_SuperblockHeader *sbh = (GXFS_SuperblockHeader*) sb;
-	if (sbh->sbhMagic != (*((const qword_t*)"__GXFS__")))
+	if (sbh->sbhMagic != (*((const uint64_t*)"__GXFS__")))
 	{
 		dtermput("FAILED\n");
 		termput("ERROR: Superblock has invalid magic number (should be __GXFS__)\n");
 		while (1) asm ("cli; hlt");
 	};
 	
-	qword_t state = 0xF00D1234BEEFCAFE;
-	qword_t *scan = (qword_t*) sb;
+	uint64_t state = 0xF00D1234BEEFCAFE;
+	uint64_t *scan = (uint64_t*) sb;
 	int count = 9;
 	
 	while (count--)
@@ -79,13 +79,13 @@ void fsInit()
 	dtermput("OK\n");
 };
 
-static qword_t dirWalk(qword_t inode, const char *name)
+static uint64_t dirWalk(uint64_t inode, const char *name)
 {
 	char blockbuf[4096];
 	readBlock(inode, blockbuf);
 	
 	GXFS_InodeHeader *ih = (GXFS_InodeHeader*) blockbuf;
-	qword_t readpos = 8;
+	uint64_t readpos = 8;
 	
 	while (1)
 	{
@@ -107,7 +107,7 @@ static qword_t dirWalk(qword_t inode, const char *name)
 			return 0;
 		};
 		
-		if (rh->rhType != (*((const dword_t*)"DENT")))
+		if (rh->rhType != (*((const uint32_t*)"DENT")))
 		{
 			readpos += rh->rhSize;
 			continue;
@@ -121,7 +121,7 @@ static qword_t dirWalk(qword_t inode, const char *name)
 		char recbuf[129];
 		memset(recbuf, 0, 129);
 		
-		qword_t toRead = rh->rhSize;
+		uint64_t toRead = rh->rhSize;
 		char *put = recbuf;
 		while (toRead != 0)
 		{
@@ -137,8 +137,8 @@ static qword_t dirWalk(qword_t inode, const char *name)
 				readpos += 8;
 			};
 			
-			qword_t maxRead = 4096 - readpos;
-			qword_t readNow = toRead;
+			uint64_t maxRead = 4096 - readpos;
+			uint64_t readNow = toRead;
 			if (readNow > maxRead) readNow = maxRead;
 			
 			memcpy(put, &blockbuf[readpos], readNow);
@@ -155,22 +155,22 @@ static qword_t dirWalk(qword_t inode, const char *name)
 	};
 };
 
-static void loadFileBlock(FileHandle *fh, qword_t offset)
+static void loadFileBlock(FileHandle *fh, uint64_t offset)
 {
 	fh->bufferBase = offset & ~0xFFFULL;
 	
-	qword_t lvl[5];
+	uint64_t lvl[5];
 	lvl[4] = (offset >> 12) & 0x1FF;
 	lvl[3] = (offset >> 21) & 0x1FF;
 	lvl[2] = (offset >> 30) & 0x1FF;
 	lvl[1] = (offset >> 39) & 0x1FF;
 	lvl[0] = (offset >> 48) & 0x1FF;
 	
-	qword_t datablock = fh->head;
+	uint64_t datablock = fh->head;
 	int i;
 	for (i=(5-fh->depth); i<5; i++)
 	{
-		qword_t table[512];
+		uint64_t table[512];
 		readBlock(datablock, table);
 		
 		if (table[lvl[i]] == 0)
@@ -190,7 +190,7 @@ static void loadFileBlock(FileHandle *fh, qword_t offset)
 int openFile(FileHandle *fh, const char *path)
 {
 	// start with the root directory
-	qword_t currentIno = 2;
+	uint64_t currentIno = 2;
 	
 	char token[128];
 	while (*path != 0)
@@ -213,7 +213,7 @@ int openFile(FileHandle *fh, const char *path)
 	readBlock(currentIno, blockbuf);
 	
 	GXFS_InodeHeader *ih = (GXFS_InodeHeader*) blockbuf;
-	qword_t readpos = 8;
+	uint64_t readpos = 8;
 	
 	// unknown size right now
 	fh->size = 0;
@@ -238,7 +238,7 @@ int openFile(FileHandle *fh, const char *path)
 			return -1;
 		};
 		
-		if (rh->rhType != (*((const dword_t*)"TREE")) && rh->rhType != (*((const dword_t*)"ATTR")))
+		if (rh->rhType != (*((const uint32_t*)"TREE")) && rh->rhType != (*((const uint32_t*)"ATTR")))
 		{
 			readpos += rh->rhSize;
 			continue;
@@ -247,7 +247,7 @@ int openFile(FileHandle *fh, const char *path)
 		char recbuf[129];
 		memset(recbuf, 0, 129);
 		
-		qword_t toRead = rh->rhSize;
+		uint64_t toRead = rh->rhSize;
 		char *put = recbuf;
 		while (toRead != 0)
 		{
@@ -263,8 +263,8 @@ int openFile(FileHandle *fh, const char *path)
 				readpos += 8;
 			};
 			
-			qword_t maxRead = 4096 - readpos;
-			qword_t readNow = toRead;
+			uint64_t maxRead = 4096 - readpos;
+			uint64_t readNow = toRead;
 			if (readNow > maxRead) readNow = maxRead;
 			
 			memcpy(put, &blockbuf[readpos], readNow);
@@ -274,7 +274,7 @@ int openFile(FileHandle *fh, const char *path)
 		};
 		
 		rh = (GXFS_RecordHeader*) recbuf;
-		if (rh->rhType == (*((const dword_t*)"TREE")))
+		if (rh->rhType == (*((const uint32_t*)"TREE")))
 		{
 			GXFS_TreeRecord *tr = (GXFS_TreeRecord*) recbuf;
 			fh->depth = tr->trDepth;
@@ -290,20 +290,20 @@ int openFile(FileHandle *fh, const char *path)
 	};
 };
 
-void readFile(FileHandle *fh, void *buffer, qword_t size, qword_t pos)
+void readFile(FileHandle *fh, void *buffer, uint64_t size, uint64_t pos)
 {
 	char *put = (char*) buffer;
 	while (size != 0)
 	{
-		qword_t base = pos & ~0xFFFULL;
-		qword_t offset = pos & 0xFFFULL;
+		uint64_t base = pos & ~0xFFFULL;
+		uint64_t offset = pos & 0xFFFULL;
 		
 		if (base != fh->bufferBase)
 		{
 			loadFileBlock(fh, base);
 		};
 		
-		qword_t sizeNow = 4096 - offset;
+		uint64_t sizeNow = 4096 - offset;
 		if (sizeNow > size) sizeNow = size;
 		
 		memcpy(put, &fh->buffer[offset], sizeNow);
