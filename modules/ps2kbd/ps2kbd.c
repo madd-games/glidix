@@ -55,10 +55,6 @@ static IRQHandler oldHandler;
 static IRQHandler oldHandler12;
 static HuminDevice *hups;
 
-static volatile ATOMIC(uint8_t)	kbdbuf[64];
-static volatile ATOMIC(int)	kbdput = 0;
-static volatile ATOMIC(int)	kbdread = 0;
-
 static WaitCounter wcKeyboard = WC_INIT;
 
 static void onKeyboardIRQ(int irq)
@@ -261,8 +257,18 @@ MODULE_INIT()
 	mouse_write(0xF4);
 	mouse_read();
 	
-	while (inb(0x64) & 1) inb(0x60);
-	
+	int extracted = 0;
+	while (inb(0x64) & 1)
+	{
+		if (extracted == 512)
+		{
+			return 0;
+		};
+
+		extracted++;
+		inb(0x60);
+	};
+
 	KernelThreadParams kbdPars;
 	memset(&kbdPars, 0, sizeof(KernelThreadParams));
 	kbdPars.stackSize = 0x4000;
