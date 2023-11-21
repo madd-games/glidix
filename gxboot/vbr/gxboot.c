@@ -249,7 +249,6 @@ typedef struct
 
 // video modes that we accept; those are the safe modes that all monitors should support
 static ScreenSize okSizes[] = {
-	{1920, 1080},
 	{720, 480},
 	{640, 480},
 	
