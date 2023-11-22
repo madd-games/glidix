@@ -575,39 +575,6 @@ void bmain()
 		return;
 	};
 	
-	// allocate 2KB for the memory map
-	// TODO: Once we map all physical memory, just pass the appropriate virtual
-	// address, pointing to the map generated in memInit().
-#if 0
-	uint64_t mmapBase = (stack - 0x800ULL) & ~0xFULL;
-	uint32_t mmapSize = 0;
-	
-	// build the memory map
-	MemoryMap *mmapPut = (MemoryMap*) virt2phys(mmapBase);
-	if (mmapPut == NULL)
-	{
-		termput("ERROR: cannot resolve address for memory map! ");
-		termputp64(mmapBase);
-		return;
-	};
-	
-	uint32_t entIndex = 0;
-
-	dtermput("Loading memory map... ");
-	do
-	{
-		int ok = 1;
-		entIndex = biosGetMap(entIndex, &mmapPut->baseAddr, &ok);
-		if (!ok) break;
-		
-		mmapPut->size = 20;
-		mmapPut++;
-		mmapSize += 24;
-	} while (entIndex != 0);
-	
-	dtermput("OK\n");
-#endif
-	
 	// Now allocate the information structure.
 	uint64_t kernelInfoVirt = (stack - sizeof(KernelInfo)) & (~0xFULL);
 	KernelInfo *kinfo = (KernelInfo*) virt2phys(kernelInfoVirt);
@@ -618,7 +585,7 @@ void bmain()
 		return;
 	};
 	
-	kinfo->features = KB_FEATURE_BOOTID | KB_FEATURE_VIDEO;
+	kinfo->features = 0;
 	kinfo->kernelMain = getSymbol("kmain");
 	if (kinfo->kernelMain == 0)
 	{
@@ -654,7 +621,8 @@ void bmain()
 	kinfo->mmapSize = memGetBiosMapSize();
 	kinfo->mmapVirt = PHYS_MAP_BASE + BIOSMAP_ADDR;
 	kinfo->initrdSize = initrd.size;
-	kinfo->end = (uint64_t) (uint32_t) balloc(0x1000, 0);
+	kinfo->memtabVirt = PHYS_MAP_BASE + MEMTAB_ADDR;
+	kinfo->memtabCount = numMemorySlices;
 	kinfo->initrdSymtabOffset = (uint64_t) (uint32_t) ((char*) symtab - (char*) initrdStart);
 	kinfo->initrdStrtabOffset = (uint64_t) (uint32_t) ((char*) strings - (char*) initrdStart);
 	kinfo->numSymbols = numSyms;
@@ -671,8 +639,6 @@ void bmain()
 	kinfo->pixelFormat.alphaMask = ~(kinfo->pixelFormat.redMask | kinfo->pixelFormat.greenMask | kinfo->pixelFormat.blueMask);
 	kinfo->pixelFormat.pixelSpacing = 0;
 	kinfo->pixelFormat.scanlineSpacing = vbeModeInfo.pitch - vbeModeInfo.width * 4;
-	
-	while (1);
 
 	// switch modes
 	if (vbeSwitchMode(videoMode) != 0)

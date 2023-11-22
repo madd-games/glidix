@@ -41,6 +41,7 @@
 
 #define PHYS_MAP_BASE					0xFFFF840000000000ULL
 
+extern uint32_t numMemorySlices;
 extern uint64_t *pml4;
 
 /**

@@ -146,8 +146,12 @@ typedef struct
 	unsigned int				scanlineSpacing;
 } PixelFormat;
 
-#define	KB_FEATURE_BOOTID		(1 << 0)
-#define	KB_FEATURE_VIDEO		(1 << 1)
+typedef struct
+{
+	uint64_t				base;
+	uint64_t				len;
+} BootMemorySlice;
+
 typedef struct
 {
 	uint64_t			features;
@@ -157,15 +161,12 @@ typedef struct
 	uint32_t			mmapSize;
 	MultibootMemoryMap*		mmap;
 	uint64_t			initrdSize;
-	uint64_t			end;
+	BootMemorySlice*		memtab;
+	uint64_t			memtabCount;
 	uint64_t			initrdSymtabOffset;
 	uint64_t			initrdStrtabOffset;
 	uint64_t			numSymbols;
-	
-	/* only when KB_FEATURE_BOOTID is set */
 	uint8_t				bootID[16];
-	
-	/* only when KB_FEATURE_VIDEO is set */
 	uint8_t*			framebuffer;
 	uint8_t*			backbuffer;
 	uint32_t			fbWidth;

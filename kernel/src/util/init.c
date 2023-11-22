@@ -293,13 +293,6 @@ void kmain(KernelBootInfo *info)
 	kprintf_debug(" set r15=rip\n");
 	kprintf_debug(" set rip=0x%p\n", &trapKernel);
 	kprintf_debug(" *** END OF INFO *** \n");
-
-	// make sure that we were given the boot ID (an old bootloader might not do it)
-	// this is required to detect the boot device
-	if ((info->features & KB_FEATURE_BOOTID) == 0)
-	{
-		panic("the boot ID has not been passed by the bootloader");
-	};
 	
 	tssPrepare();
 	_tss.ist[1] = (uint64_t) (nmiStack + NMI_STACK_SIZE - 16);
@@ -336,7 +329,9 @@ void kmain(KernelBootInfo *info)
 	DONE();
 
 	kprintf("Initializing the physical memory manager (%d pages)... ", (int)(memSize/0x1000));
-	initPhysMem(memSize/0x1000, (MultibootMemoryMap*) mmapAddr, mmapEnd, info->end);
+	//initPhysMem(memSize/0x1000, (MultibootMemoryMap*) mmapAddr, mmapEnd, info->end);
+	// TODO: Initialize the memory manager correctly, now that physical memory is mapped!
+	while(1);
 	DONE();
 
 	kprintf("Initializing the ISP... ");

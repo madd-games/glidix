@@ -379,13 +379,13 @@ extern VbeModeInfo vbeModeInfo;
  */
 extern uint8_t fsBootID[16];
 
-typedef	uint64_t				Elf64_Addr;
-typedef	uint16_t				Elf64_Half;
-typedef	uint64_t				Elf64_Off;
+typedef	uint64_t			Elf64_Addr;
+typedef	uint16_t			Elf64_Half;
+typedef	uint64_t			Elf64_Off;
 typedef	signed int			Elf64_Sword;
 typedef	signed long long		Elf64_Sxword;
-typedef	uint32_t				Elf64_Word;
-typedef	uint64_t				Elf64_Xword;
+typedef	uint32_t			Elf64_Word;
+typedef	uint64_t			Elf64_Xword;
 
 typedef struct
 {
@@ -502,8 +502,6 @@ typedef struct
 /**
  * Kernel information structure; this is passed to the kernel.
  */
-#define	KB_FEATURE_BOOTID		(1 << 0)
-#define	KB_FEATURE_VIDEO		(1 << 1)
 typedef struct
 {
 	uint64_t				features;			/* 0x00 */
@@ -513,20 +511,17 @@ typedef struct
 	uint32_t				mmapSize;			/* 0x1C */
 	uint64_t				mmapVirt;			/* 0x20 */
 	uint64_t				initrdSize;			/* 0x28 */
-	uint64_t				end;				/* 0x30 */
-	uint64_t				initrdSymtabOffset;		/* 0x38 */
-	uint64_t				initrdStrtabOffset;		/* 0x40 */
-	uint64_t				numSymbols;			/* 0x48 */
-	
-	/* only when KB_FEATURE_BOOTID is set */
-	uint8_t					bootID[16];			/* 0x50 */
-	
-	/* only when KB_FEATURE_VIDEO is set */
-	uint64_t				framebuffer;			/* 0x60 */
-	uint64_t				backbuffer;			/* 0x68 */
-	uint32_t				screenWidth;			/* 0x70 */
-	uint32_t				screenHeight;			/* 0x74 */
-	PixelFormat				pixelFormat;			/* 0x78 */
+	uint64_t				memtabVirt;			/* 0x30 */
+	uint64_t				memtabCount;			/* 0x38*/
+	uint64_t				initrdSymtabOffset;		/* 0x40 */
+	uint64_t				initrdStrtabOffset;		/* 0x48 */
+	uint64_t				numSymbols;			/* 0x50 */
+	uint8_t					bootID[16];			/* 0x58 */
+	uint64_t				framebuffer;			/* 0x68 */
+	uint64_t				backbuffer;			/* 0x70 */
+	uint32_t				screenWidth;			/* 0x78 */
+	uint32_t				screenHeight;			/* 0x7C */
+	PixelFormat				pixelFormat;			/* 0x80 */
 } KernelInfo;
 
 extern DAP dap;

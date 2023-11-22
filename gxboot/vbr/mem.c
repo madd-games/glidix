@@ -31,8 +31,8 @@
 static uint32_t numMemoryMapEnts;
 
 static MemorySlice* memoryTable;
-static uint32_t numMemorySlices;
 
+uint32_t numMemorySlices;
 uint64_t *pml4;
 
 static void initMemoryTable()

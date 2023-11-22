@@ -178,16 +178,6 @@ void setConsoleFrameBuffer(uint8_t *framebuffer, uint8_t *backbuffer, PixelForma
 
 void initConsole()
 {
-	if ((bootInfo->features & KB_FEATURE_VIDEO) == 0)
-	{
-		// what can we possibly do?
-		while (1)
-		{
-			cli();
-			hlt();
-		};
-	};
-	
 	// convert console colors to pixel format
 	int i;
 	for (i=0; i<16; i++)
