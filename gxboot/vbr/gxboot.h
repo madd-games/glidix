@@ -33,8 +33,12 @@
 
 #ifdef GXBOOT_DEBUG
 #	define	dtermput		termput
+#	define	dtermputp64		termputp64
+#	define 	dtermputd		termputd
 #else
 #	define	dtermput(...)
+#	define	dtermputp64(...)
+#	define	dtermputd(...)
 #endif
 
 #define	NULL				((void*)0)
@@ -240,16 +244,16 @@ typedef struct
 	uint8_t					unused;				// == 0
 	char					bootsysname[32];		// ignore this
 	char					volumeID[32];
-	uint8_t					zeroes[8];			// why? -_-
-	uint32_t					volumeBlockCount;
-	uint32_t					ignore1;
+	uint8_t					zeroes[8];
+	uint32_t				volumeBlockCount;
+	uint32_t				ignore1;
 	uint8_t					ignore2[32];
-	uint16_t					volumeCount;
-	uint16_t					ignore3;
-	uint16_t					volumeIndex;
-	uint16_t					ignore4;
-	uint16_t					blockSize;
-	uint16_t					ignore5;
+	uint16_t				volumeCount;
+	uint16_t				ignore3;
+	uint16_t				volumeIndex;
+	uint16_t				ignore4;
+	uint16_t				blockSize;
+	uint16_t				ignore5;
 	uint8_t					ignore6[24];			// path table, we don't care
 	uint8_t					rootDir[34];			// cast contents to ISODirentHeader.
 	char					volumeSetID[128];
@@ -271,10 +275,10 @@ typedef struct
 {
 	uint8_t					size;
 	uint8_t					xattrSize;
-	uint32_t					startLBA;
-	uint32_t					ignore1;
-	uint32_t					fileSize;
-	uint32_t					ignore2;
+	uint32_t				startLBA;
+	uint32_t				ignore1;
+	uint32_t				fileSize;
+	uint32_t				ignore2;
 	uint8_t					year;				// since 1990
 	uint8_t					month;				// 1-12
 	uint8_t					day;				// 1-31
@@ -284,14 +288,14 @@ typedef struct
 	uint8_t					timezone;
 	uint8_t					flags;
 	uint8_t					zeroes[2];
-	uint32_t					ignore3;
+	uint32_t				ignore3;
 	uint8_t					filenameLen;
 } __attribute__ ((packed)) ISODirentHeader;
 
 typedef struct
 {
-	uint8_t				size;
-	uint8_t				unused;
+	uint8_t					size;
+	uint8_t					unused;
 	uint16_t				numSectors;
 	uint16_t				offset;
 	uint16_t				segment;
@@ -300,11 +304,11 @@ typedef struct
 
 typedef struct
 {
-	char				filename[100];
-	char				mode[8];
-	char				uid[8];
-	char				gid[8];
-	char				size[12];
+	char					filename[100];
+	char					mode[8];
+	char					uid[8];
+	char					gid[8];
+	char					size[12];
 } TARFileHeader;
 
 typedef struct
@@ -321,11 +325,11 @@ typedef struct
 	uint64_t				depth;
 	uint64_t				head;
 	uint64_t				bufferBase;
-	uint8_t				buffer[4096];
+	uint8_t					buffer[4096];
 #elif defined(GXBOOT_FS_ELTORITO)
-	qword_t				startLBA;
-	qword_t				currentLBA;
-	byte_t				buffer[2048];
+	uint64_t				startLBA;
+	uint64_t				currentLBA;
+	uint8_t					buffer[2048];
 #else
 #error Unknown boot filesystem!
 #endif
@@ -462,6 +466,12 @@ typedef struct
 	uint32_t			type;
 } __attribute__ ((packed)) MemoryMap;
 
+typedef struct
+{
+	uint64_t			baseAddr;
+	uint64_t			len;
+} MemorySlice;
+
 /**
  * Pixel format as defined by DDI and the kernel; passed to describe the framebuffer.
  */
@@ -576,6 +586,11 @@ void go64(KernelInfo *kinfo, uint64_t kinfoVirt);
  * Write to the terminal.
  */
 void termput(const char *str);
+
+/**
+ * Print a decimal number.
+ */
+void termputd(uint32_t num);
 
 /**
  * Print a 64-bit hex number.

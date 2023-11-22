@@ -29,9 +29,29 @@
 #ifndef MEM_H_
 #define	MEM_H_
 
+#include "gxboot.h"
+
+#define BIOSMAP_ADDR					0x100000
+#define BIOSMAP_SIZE					0x800
+
+#define MEMTAB_ADDR					(BIOSMAP_ADDR + BIOSMAP_SIZE)
+#define MEMTAB_SIZE					0x800
+
+#define INITIAL_PLACEMENT				(MEMTAB_ADDR + MEMTAB_SIZE)
+
 /**
  * Initialize the memory allocation system.
  */
 void memInit();
+
+/**
+ * Allocate memory of the specified size and alignment.
+ */
+void *balloc(uint32_t align, uint32_t size);
+
+/**
+ * Return the size (in bytes) of the BIOS memory map.
+ */
+uint64_t memGetBiosMapSize();
 
 #endif

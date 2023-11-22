@@ -30,10 +30,10 @@
 
 #include "gxboot.h"
 
-byte_t fsBootID[16];
+uint8_t fsBootID[16];
 ISOPrimaryVolumeDescriptor pvd;
 
-static void readBlock(qword_t index, void *buffer)
+static void readBlock(uint64_t index, void *buffer)
 {
 	dap.lba = index;
 	biosRead();
@@ -64,7 +64,7 @@ void fsInit()
 {
 	memcpy(fsBootID, "\0\0" "ISOBOOT" "\0\0\0\0\0\xF0\x0D", 16);
 	dap.numSectors = 1;
-	dap.offset = (word_t) (dword_t) sectorBuffer;
+	dap.offset = (uint16_t) (uint32_t) sectorBuffer;
 	
 	// read the Primary Volume Descriptor
 	dtermput("Loading the Primary Volume Descriptor... ");
@@ -89,11 +89,11 @@ static int dirWalk(ISODirentHeader *head, const char *name)
 		return -1;
 	};
 	
-	qword_t nextLBA = head->startLBA;
-	qword_t sizeLeft = head->fileSize;
-	qword_t readpos = 0;
+	uint64_t nextLBA = head->startLBA;
+	uint64_t sizeLeft = head->fileSize;
+	uint64_t readpos = 0;
 	
-	byte_t buffer[2048];
+	uint8_t buffer[2048];
 	readBlock(nextLBA++, buffer);
 	
 	while (sizeLeft)
@@ -103,7 +103,7 @@ static int dirWalk(ISODirentHeader *head, const char *name)
 		
 		if (readpos == 2048 || buffer[readpos] == 0)
 		{
-			qword_t sizeHere = 2048 - readpos;
+			uint64_t sizeHere = 2048 - readpos;
 			if (sizeHere > sizeLeft) break;
 			sizeLeft -= sizeHere;
 			
@@ -174,20 +174,20 @@ int openFile(FileHandle *fh, const char *path)
 	return 0;
 };
 
-void readFile(FileHandle *fh, void *buffer, qword_t size, qword_t pos)
+void readFile(FileHandle *fh, void *buffer, uint64_t size, uint64_t pos)
 {
 	char *put = (char*) buffer;
 	while (size)
 	{
-		qword_t targetBlock = fh->startLBA + (pos >> 11);
+		uint64_t targetBlock = fh->startLBA + (pos >> 11);
 		if (fh->currentLBA != targetBlock)
 		{
 			fh->currentLBA = targetBlock;
 			readBlock(fh->currentLBA, fh->buffer);
 		};
 		
-		qword_t offset = pos & 0x7FF;
-		qword_t sizeNow = 2048 - offset;
+		uint64_t offset = pos & 0x7FF;
+		uint64_t sizeNow = 2048 - offset;
 		if (sizeNow > size) sizeNow = size;
 		
 		memcpy(put, &fh->buffer[offset], sizeNow);

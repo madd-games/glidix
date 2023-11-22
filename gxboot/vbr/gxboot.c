@@ -27,6 +27,7 @@
 */
 
 #include "gxboot.h"
+#include "mem.h"
 
 int consoleX, consoleY;
 char *vidmem = (char*) 0xB8000;
@@ -126,15 +127,6 @@ void termputp64(uint64_t addr)
 	} while (addr != 0);
 	
 	termput(put);
-};
-
-uint32_t placement;
-void *balloc(uint32_t align, uint32_t size)
-{
-	placement = (placement + align - 1) & ~(align-1);
-	uint32_t result = placement;
-	placement += size;
-	return (void*) result;
 };
 
 uint64_t *pml4;
@@ -354,9 +346,8 @@ void bmain()
 	
 	int i;
 
-	// initialize placement allocator
-	placement = (uint32_t) 0x100000;
-
+	memInit();
+	while(1);
 	fsInit();
 
 	dtermput("Loading /boot/loader.conf... ");
@@ -679,6 +670,9 @@ void bmain()
 	};
 	
 	// allocate 2KB for the memory map
+	// TODO: Once we map all physical memory, just pass the appropriate virtual
+	// address, pointing to the map generated in memInit().
+#if 0
 	uint64_t mmapBase = (stack - 0x800ULL) & ~0xFULL;
 	uint32_t mmapSize = 0;
 	
@@ -706,9 +700,10 @@ void bmain()
 	} while (entIndex != 0);
 	
 	dtermput("OK\n");
+#endif
 	
-	// now allocate the information structure
-	uint64_t kernelInfoVirt = (mmapBase - sizeof(KernelInfo)) & (~0xFULL);
+	// Now allocate the information structure.
+	uint64_t kernelInfoVirt = (stack - sizeof(KernelInfo)) & (~0xFULL);
 	KernelInfo *kinfo = (KernelInfo*) virt2phys(kernelInfoVirt);
 	
 	if (kinfo == NULL)
@@ -748,8 +743,8 @@ void bmain()
 	mmap(backvirt, (uint32_t)backbuffer, vbeModeInfo.height * vbeModeInfo.pitch);
 	
 	kinfo->pml4Phys = (uint32_t) pml4;
-	kinfo->mmapSize = mmapSize;
-	kinfo->mmapVirt = mmapBase;
+	kinfo->mmapSize = memGetBiosMapSize();
+	kinfo->mmapVirt = BIOSMAP_ADDR;
 	kinfo->initrdSize = initrd.size;
 	kinfo->end = (uint64_t) (uint32_t) balloc(0x1000, 0);
 	kinfo->initrdSymtabOffset = (uint64_t) (uint32_t) ((char*) symtab - (char*) initrdStart);
