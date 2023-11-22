@@ -519,14 +519,14 @@ typedef struct
 	uint64_t				numSymbols;			/* 0x48 */
 	
 	/* only when KB_FEATURE_BOOTID is set */
-	uint8_t				bootID[16];			/* 0x50 */
+	uint8_t					bootID[16];			/* 0x50 */
 	
 	/* only when KB_FEATURE_VIDEO is set */
 	uint64_t				framebuffer;			/* 0x60 */
 	uint64_t				backbuffer;			/* 0x68 */
 	uint32_t				screenWidth;			/* 0x70 */
 	uint32_t				screenHeight;			/* 0x74 */
-	PixelFormat			pixelFormat;			/* 0x78 */
+	PixelFormat				pixelFormat;			/* 0x78 */
 } KernelInfo;
 
 extern DAP dap;

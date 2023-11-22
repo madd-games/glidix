@@ -39,6 +39,8 @@
 
 #define INITIAL_PLACEMENT				(MEMTAB_ADDR + MEMTAB_SIZE)
 
+extern uint64_t *pml4;
+
 /**
  * Initialize the memory allocation system.
  */
@@ -53,5 +55,16 @@ void *balloc(uint32_t align, uint32_t size);
  * Return the size (in bytes) of the BIOS memory map.
  */
 uint64_t memGetBiosMapSize();
+
+/**
+ * Map the virtual addresses starting at `vaddr` to the physical addresses starting
+ * at `paddr`, for `size` bytes. The size is automatically rounded up to the page size.
+ */
+void mmap(uint64_t vaddr, uint32_t paddr, uint32_t size);
+
+/**
+ * Get the physical address given a virtual one.
+ */
+void* virt2phys(uint64_t virt);
 
 #endif

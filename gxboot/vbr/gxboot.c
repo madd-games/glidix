@@ -129,80 +129,6 @@ void termputp64(uint64_t addr)
 	termput(put);
 };
 
-uint64_t *pml4;
-
-uint64_t *getPageEntry(uint64_t addr)
-{
-	uint64_t pageIndex = (addr >> 12) & 0x1FFULL;
-	uint64_t ptIndex = (addr >> 21) & 0x1FFULL;
-	uint64_t pdIndex = (addr >> 30) & 0x1FFULL;
-	uint64_t pdptIndex = (addr >> 39) & 0x1FFULL;
-	
-	if (pdptIndex == 511)
-	{
-		termput("ERROR: Attempting to access the top of 64-bit virtual memory, reserved for recursive mapping!");
-		while (1) asm volatile ("cli; hlt");
-	};
-	
-	uint64_t *pdpt;
-	if (pml4[pdptIndex] == 0)
-	{
-		pdpt = (uint64_t*) balloc(0x1000, 0x1000);
-		memset(pdpt, 0, 0x1000);
-		pml4[pdptIndex] = (uint64_t)(uint32_t)pdpt | PT_PRESENT | PT_WRITE;
-	}
-	else
-	{
-		pdpt = (uint64_t*) ((uint32_t) (pml4[pdptIndex] & ~0xFFFULL));
-	};
-	
-	uint64_t *pd;
-	if (pdpt[pdIndex] == 0)
-	{
-		pd = (uint64_t*) balloc(0x1000, 0x1000);
-		memset(pd, 0, 0x1000);
-		pdpt[pdIndex] = (uint64_t)(uint32_t)pd | PT_PRESENT | PT_WRITE;
-	}
-	else
-	{
-		pd = (uint64_t*) ((uint32_t) (pdpt[pdIndex] & ~0xFFFULL));
-	};
-	
-	uint64_t *pt;
-	if (pd[ptIndex] == 0)
-	{
-		pt = (uint64_t*) balloc(0x1000, 0x1000);
-		memset(pt, 0, 0x1000);
-		pd[ptIndex] = (uint64_t)(uint32_t)pt | PT_PRESENT | PT_WRITE;
-	}
-	else
-	{
-		pt = (uint64_t*) ((uint32_t) (pd[ptIndex] & ~0xFFF));
-	};
-	
-	return &pt[pageIndex];
-};
-
-void mmap(uint64_t vaddr, uint32_t paddr, uint32_t size)
-{
-	size = (size + 0xFFF) & ~0xFFF;
-	
-	termput("mmap ");
-	termputp64(vaddr);
-	termput(" -> ");
-	termputp64(paddr);
-	termput(" (");
-	termputp64((uint64_t) size);
-	termput(")\n");
-	
-	uint64_t i;
-	for (i=0; i<size; i+=0x1000)
-	{	
-		uint64_t *pte = getPageEntry(vaddr+i);
-		*pte = (paddr+i) | PT_PRESENT | PT_WRITE;
-	};
-};
-
 const char *strings;
 Elf64_Sym *symtab;
 int numSyms;
@@ -220,18 +146,6 @@ uint64_t getSymbol(const char *name)
 	};
 	
 	return 0;
-};
-
-void* virt2phys(uint64_t virt)
-{
-	uint64_t *pte = getPageEntry(virt);
-	if (*pte == 0)
-	{
-		return NULL;
-	};
-	
-	uint32_t addr = ((uint32_t)(*pte) & (~0xFFF)) | (virt & 0xFFF);
-	return (void*) addr;
 };
 
 typedef struct
@@ -592,13 +506,6 @@ void bmain()
 	Elf64_Ehdr *elfHeader = (Elf64_Ehdr*) elfPtr;
 	Elf64_Phdr *pheads = (Elf64_Phdr*) &elfPtr[elfHeader->e_phoff];
 	
-	// allocate space for the PML4
-	pml4 = (uint64_t*) balloc(0x1000, 0x1000);
-	memset(pml4, 0, 0x1000);
-	
-	// recursive mapping
-	pml4[511] = (uint64_t) (uint32_t) pml4 | PT_WRITE | PT_PRESENT;
-	
 	// now load the segments into memory
 	for (i=0; i<elfHeader->e_phnum; i++)
 	{
@@ -759,7 +666,7 @@ void bmain()
 	kinfo->pixelFormat.redMask = (0xFF << vbeModeInfo.red_position);
 	kinfo->pixelFormat.greenMask = (0xFF << vbeModeInfo.green_position);
 	kinfo->pixelFormat.blueMask = (0xFF << vbeModeInfo.blue_position);
-	kinfo->pixelFormat.alphaMask = (0xFF << vbeModeInfo.rsv_position);
+	kinfo->pixelFormat.alphaMask = ~(kinfo->pixelFormat.redMask | kinfo->pixelFormat.greenMask | kinfo->pixelFormat.blueMask);
 	kinfo->pixelFormat.pixelSpacing = 0;
 	kinfo->pixelFormat.scanlineSpacing = vbeModeInfo.pitch - vbeModeInfo.width * 4;
 	
