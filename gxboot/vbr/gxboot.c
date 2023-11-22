@@ -347,7 +347,6 @@ void bmain()
 	int i;
 
 	memInit();
-	while(1);
 	fsInit();
 
 	dtermput("Loading /boot/loader.conf... ");
@@ -764,6 +763,8 @@ void bmain()
 	kinfo->pixelFormat.pixelSpacing = 0;
 	kinfo->pixelFormat.scanlineSpacing = vbeModeInfo.pitch - vbeModeInfo.width * 4;
 	
+	while (1);
+
 	// switch modes
 	if (vbeSwitchMode(videoMode) != 0)
 	{
@@ -772,11 +773,11 @@ void bmain()
 	};
 
 	// identity-map our area
-	// we allocate this AFTER passing the end pointer to the kernel, because it's temporary.
+	// we allocate this AFTER passing the end pointer to the kerne l, because it's temporary.
 	// the kernel will destroy those page tables once we pass control to it, and they are no
 	// longer needed, so we save some memory
 	mmap(0x5000, 0x5000, 0xFB000);
-	
+
 	// go to 64-bit mode
 	go64(kinfo, kernelInfoVirt);
 };

@@ -28,7 +28,6 @@
 
 #include "mem.h"
 
-static uint32_t placement;
 static uint32_t numMemoryMapEnts;
 
 static MemorySlice* memoryTable;
@@ -113,10 +112,53 @@ void memInit()
 
 void* balloc(uint32_t align, uint32_t size)
 {
-	placement = (placement + align - 1) & ~(align-1);
-	uint32_t result = placement;
-	placement += size;
-	return (void*) result;
+	uint64_t align64 = (uint64_t) align;
+
+	MemorySlice *bestSlice = NULL;
+	int minWaste = 0;
+
+	for (MemorySlice *slice=memoryTable; slice!=memoryTable+numMemorySlices; slice++)
+	{
+		uint64_t aligned = (slice->baseAddr + align64 - 1) & ~(align64 - 1);
+		uint64_t delta = aligned - slice->baseAddr;
+
+		if (aligned + size > (1ULL << 32))
+		{
+			// Not suitable for 32-bit allocations.
+			continue;
+		};
+
+		if (aligned + size > slice->len)
+		{
+			// Not large enough.
+			continue;
+		};
+
+		if (bestSlice == NULL || minWaste > delta)
+		{
+			bestSlice = slice;
+			minWaste = delta;
+		};
+	};
+
+	if (bestSlice == NULL)
+	{
+		termput("ERROR: Out of memory.");
+
+		for (;;)
+		{
+			asm volatile ("hlt");
+		};
+	};
+
+	bestSlice->baseAddr += minWaste;
+	bestSlice->len -= minWaste;
+
+	uint32_t addr = (uint32_t) bestSlice->baseAddr;
+	bestSlice->baseAddr += size;
+	bestSlice->len -= size;
+
+	return (void*) addr;
 };
 
 uint64_t memGetBiosMapSize()
