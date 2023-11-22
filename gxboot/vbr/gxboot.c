@@ -641,16 +641,18 @@ void bmain()
 	};
 
 	// map the framebuffer
-	mmap(0xFFFF840000000000UL, vbeModeInfo.physbase & ~0xFFF, vbeModeInfo.height * vbeModeInfo.pitch);
+	mmap(
+		PHYS_MAP_BASE + (vbeModeInfo.physbase & ~0xFFF),
+		vbeModeInfo.physbase & ~0xFFF,
+		vbeModeInfo.height * vbeModeInfo.pitch + 0x1000
+	);
+
 	void *backbuffer = balloc(0x1000, vbeModeInfo.height * vbeModeInfo.pitch);
-	uint64_t backvirt = 0xFFFF840000000000UL + vbeModeInfo.height * vbeModeInfo.pitch
-				+ (vbeModeInfo.physbase & 0xFFF);
-	backvirt = (backvirt + 0xFFF) & ~0xFFF;
-	mmap(backvirt, (uint32_t)backbuffer, vbeModeInfo.height * vbeModeInfo.pitch);
+	uint64_t backvirt = PHYS_MAP_BASE + (uint64_t) (uint32_t) backbuffer;
 	
 	kinfo->pml4Phys = (uint32_t) pml4;
 	kinfo->mmapSize = memGetBiosMapSize();
-	kinfo->mmapVirt = BIOSMAP_ADDR;
+	kinfo->mmapVirt = PHYS_MAP_BASE + BIOSMAP_ADDR;
 	kinfo->initrdSize = initrd.size;
 	kinfo->end = (uint64_t) (uint32_t) balloc(0x1000, 0);
 	kinfo->initrdSymtabOffset = (uint64_t) (uint32_t) ((char*) symtab - (char*) initrdStart);
@@ -658,7 +660,7 @@ void bmain()
 	kinfo->numSymbols = numSyms;
 	memcpy(kinfo->bootID, fsBootID, 16);
 	
-	kinfo->framebuffer = 0xFFFF840000000000 + (vbeModeInfo.physbase & 0xFFF);
+	kinfo->framebuffer = PHYS_MAP_BASE + vbeModeInfo.physbase;
 	kinfo->backbuffer = backvirt;
 	kinfo->screenWidth = (uint32_t) vbeModeInfo.width;
 	kinfo->screenHeight = (uint32_t) vbeModeInfo.height;
