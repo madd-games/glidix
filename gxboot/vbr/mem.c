@@ -100,23 +100,26 @@ void memInit()
 
 	initMemoryTable();
 
-	dtermput("Initial memory table: \n");
-	for (uint32_t i=0; i<numMemorySlices; i++)
-	{
-		MemorySlice *slice = &memoryTable[i];
-		dtermput("  ");
-		dtermputp64(slice->baseAddr);
-		dtermput(" - ");
-		dtermputp64(slice->baseAddr + slice->len);
-		dtermput("\n");
-	};
-
-	// allocate space for the PML4
+	// Allocate space for the PML4.
 	pml4 = (uint64_t*) balloc(0x1000, 0x1000);
 	memset(pml4, 0, 0x1000);
 	
-	// recursive mapping
+	// Recursive mapping.
 	pml4[511] = (uint64_t) (uint32_t) pml4 | PT_WRITE | PT_PRESENT;
+
+	// Identity-map the RAM areas.
+	MemoryMap *map = (MemoryMap*) BIOSMAP_ADDR;
+	for (uint32_t i=0; i<numMemoryMapEnts; i++)
+	{
+		MemoryMap *ent = &map[i];
+		if (ent->type != 1)
+		{
+			// Not normal RAM.
+			continue;
+		};
+
+		mmap(PHYS_MAP_BASE + ent->baseAddr, ent->baseAddr, ent->len);
+	};
 };
 
 void* balloc(uint32_t align, uint32_t size)
@@ -227,7 +230,7 @@ static uint64_t *getPageEntry(uint64_t addr)
 	return &pt[pageIndex];
 };
 
-void mmap(uint64_t vaddr, uint32_t paddr, uint32_t size)
+void mmap(uint64_t vaddr, uint64_t paddr, uint64_t size)
 {
 	size = (size + 0xFFF) & ~0xFFF;
 	

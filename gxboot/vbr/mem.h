@@ -39,6 +39,8 @@
 
 #define INITIAL_PLACEMENT				(MEMTAB_ADDR + MEMTAB_SIZE)
 
+#define PHYS_MAP_BASE					0xFFFF840000000000ULL
+
 extern uint64_t *pml4;
 
 /**
@@ -60,7 +62,7 @@ uint64_t memGetBiosMapSize();
  * Map the virtual addresses starting at `vaddr` to the physical addresses starting
  * at `paddr`, for `size` bytes. The size is automatically rounded up to the page size.
  */
-void mmap(uint64_t vaddr, uint32_t paddr, uint32_t size);
+void mmap(uint64_t vaddr, uint64_t paddr, uint64_t size);
 
 /**
  * Get the physical address given a virtual one.
