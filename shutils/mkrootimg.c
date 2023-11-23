@@ -26,7 +26,6 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stddef.h>
 #define _GNU_SOURCE
 #define _GLIDIX_SOURCE
 
@@ -40,9 +39,11 @@
 #include <time.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stddef.h>
 
 /**
- * Formats a disk or partition to the Glidix V3 filesystem (GXFS3).
+ * Given a disk image containing a GPT with a Glidix root partition, this program formats the root
+ * partition to GXFS and then populates the root directory (recursively) from the specified directory.
  */
 
 #define	GXFS_MAGIC				(*((const uint64_t*)"__GXFS__"))
