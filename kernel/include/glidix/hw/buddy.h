@@ -31,8 +31,26 @@
 
 #include <glidix/util/common.h>
 
-#define BUDDY_NUM_ORDERS					56
+#define BUDDY_NUM_ORDERS					36
 #define BUDDY_MAX_REGIONS					64
+
+/**
+ * A header attached to a free memory block.
+ */
+typedef struct FreeMemoryHeader
+{
+	struct FreeMemoryHeader*				prev;
+	struct FreeMemoryHeader*				next;
+} FreeMemoryHeader;
+
+/**
+ * Represents a bucket of memory blocks of a specific order.
+ */
+typedef struct
+{
+	uint64_t						bitmapOffset;		// in bits
+	FreeMemoryHeader*					freeHead;
+} MemoryBucket;
 
 /**
  * Represents a region of memory in the buddy allocator.
@@ -42,6 +60,7 @@ typedef struct
 	uint64_t						base;
 	uint64_t						numPages;
 	uint8_t*						bitmap;
+	MemoryBucket						buckets[BUDDY_NUM_ORDERS];
 } MemoryRegion;
 
 /**

@@ -65,14 +65,38 @@ static void buddyAddRegion(uint64_t base, uint64_t len)
 
 	region->base = base + PHYS_MAP_BASE;
 
-	// TODO: initialize the bitmap by marking unuseable positions as permanently unavailable.
+	uint64_t currentBitmapOffset = 0;
+	uint64_t nextBase = region->base;
+
+	for (int order=0; order<BUDDY_NUM_ORDERS; order++)
+	{
+		MemoryBucket *bucket = &region->buckets[order];
+		bucket->bitmapOffset = currentBitmapOffset;
+
+		uint64_t blockCount = (region->numPages + (1 << order) - 1) >> order;
+
+		currentBitmapOffset += blockCount;
+
+		if (len & (0x1000UL << order))
+		{
+			FreeMemoryHeader *freeHead = (FreeMemoryHeader*) nextBase;
+			nextBase += 0x1000UL << order;
+			freeHead->prev = freeHead->next = NULL;
+
+			bucket->freeHead = freeHead;
+		}
+		else
+		{
+			bucket->freeHead = NULL;
+		};
+	};
 
 	totalUseableMemory += len;
 };
 
 void buddyInit()
 {
-	kprintf("Initializing the buddy allocator...");
+	kprintf("Initializing the buddy allocator... ");
 	for (uint64_t i=0; i<bootInfo->memtabCount; i++)
 	{
 		BootMemorySlice *slice = &bootInfo->memtab[i];
