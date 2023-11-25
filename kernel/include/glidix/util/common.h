@@ -96,6 +96,11 @@
  */
 #define	PAGE_SIZE			0x1000
 
+/**
+ * Base address where physical memory is mapped.
+ */
+#define PHYS_MAP_BASE			0xFFFF840000000000ULL
+
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
 typedef struct

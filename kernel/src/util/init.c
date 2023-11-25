@@ -63,6 +63,7 @@
 #include <glidix/hw/msr.h>
 #include <glidix/humin/ptr.h>
 #include <glidix/display/bootfb.h>
+#include <glidix/hw/buddy.h>
 
 #define ACPI_OSC_QUERY_INDEX				0
 #define ACPI_OSC_SUPPORT_INDEX				1
@@ -301,7 +302,8 @@ void kmain(KernelBootInfo *info)
 	kprintf("Initializing the IDT... ");
 	initIDT();
 	DONE();
-	
+
+#if 0
 	uint64_t mmapAddr = (uint64_t) info->mmap;
 	uint64_t mmapEnd = mmapAddr + info->mmapSize;
 	kprintf("Memory map address: 0x%016lX memory map size = %d\n", mmapAddr, info->mmapSize);
@@ -333,6 +335,9 @@ void kmain(KernelBootInfo *info)
 	// TODO: Initialize the memory manager correctly, now that physical memory is mapped!
 	while(1);
 	DONE();
+#endif
+
+	buddyInit();
 
 	kprintf("Initializing the ISP... ");
 	ispInit();
