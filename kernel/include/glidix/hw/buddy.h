@@ -68,4 +68,12 @@ typedef struct
  */
 void buddyInit();
 
+/**
+ * Allocate a block of memory of the specified order.
+ *
+ * The size of the block is `(PAGE_SIZE << order)`. Returns NULL if no blocks
+ * of this order are available.
+ */
+void* buddyAlloc(int order);
+
 #endif

@@ -30,10 +30,12 @@
 #include <glidix/display/console.h>
 #include <glidix/util/common.h>
 #include <glidix/util/string.h>
+#include <glidix/thread/spinlock.h>
 
 static int numMemoryRegions;
 static MemoryRegion regions[BUDDY_MAX_REGIONS];
 static uint64_t totalUseableMemory;
+static Spinlock buddyLock;
 
 static void buddyAddRegion(uint64_t base, uint64_t len)
 {
@@ -108,5 +110,88 @@ void buddyInit()
 	kprintf("  Total number of regions: %d\n", numMemoryRegions);
 	kprintf("  Total useable memory: %luM\n", totalUseableMemory / 1024 / 1024);
 
-	while (1);
+	spinlockRelease(&buddyLock);
+
+	// DEBUG
+	for (;;)
+	{
+		kprintf("P = %p\n", buddyAlloc(0));
+	};
+};
+
+static void buddyMarkBlockUsed(MemoryRegion *region, uint64_t offset, int order)
+{
+	uint64_t index = region->buckets[order].bitmapOffset + (offset >> (12 + order));
+	region->bitmap[index / 8] |= (1 << (index % 8));
+};
+
+static void* buddyAllocUnlocked(int order, MemoryRegion **outRegion)
+{
+	if (order == BUDDY_NUM_ORDERS)
+	{
+		return NULL;
+	};
+
+	for (uint64_t i=0; i<numMemoryRegions; i++)
+	{
+		MemoryRegion *region = &regions[i];
+		MemoryBucket *bucket = &region->buckets[order];
+
+		if (bucket->freeHead != NULL)
+		{
+			FreeMemoryHeader *head = bucket->freeHead;
+			bucket->freeHead = head->next;
+			if (head->next != NULL)
+			{
+				head->next->prev = NULL;
+			};
+
+			uint64_t offset = (uint64_t) head - region->base;
+			buddyMarkBlockUsed(region, offset, order);
+
+			*outRegion = region;
+			return head;
+		};
+	};
+
+	MemoryRegion *region;
+	uint8_t *higherBlock = buddyAllocUnlocked(order+1, &region);
+	if (higherBlock == NULL)
+	{
+		return NULL;
+	};
+
+	MemoryBucket *bucket = &region->buckets[order];
+
+	uint64_t offset = (uint64_t) higherBlock - region->base;
+	buddyMarkBlockUsed(region, offset, order);
+
+	FreeMemoryHeader *other = (FreeMemoryHeader*) (higherBlock + (0x1000 << order));
+	other->prev = NULL;
+	other->next = bucket->freeHead;
+	if (bucket->freeHead != NULL)
+	{
+		bucket->freeHead->prev = other;
+	};
+
+	bucket->freeHead = other;
+
+	*outRegion = region;
+	return higherBlock;
+};
+
+void* buddyAlloc(int order)
+{
+	uint64_t flags = getFlagsRegister();
+
+	cli();
+	spinlockAcquire(&buddyLock);
+
+	MemoryRegion *region;
+	void *block = buddyAllocUnlocked(order, &region);
+
+	spinlockRelease(&buddyLock);
+	setFlagsRegister(flags);
+
+	return block;
 };
