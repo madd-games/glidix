@@ -512,7 +512,7 @@ typedef struct
 	uint64_t				mmapVirt;			/* 0x20 */
 	uint64_t				initrdSize;			/* 0x28 */
 	uint64_t				memtabVirt;			/* 0x30 */
-	uint64_t				memtabCount;			/* 0x38*/
+	uint64_t				memtabCount;			/* 0x38 */
 	uint64_t				initrdSymtabOffset;		/* 0x40 */
 	uint64_t				initrdStrtabOffset;		/* 0x48 */
 	uint64_t				numSymbols;			/* 0x50 */
