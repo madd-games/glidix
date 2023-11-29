@@ -42,6 +42,12 @@ void enterDebugContext(Regs *regs);			// sched.asm
 
 void stackTrace(uint64_t rip, uint64_t rbp)
 {
+	if (getCurrentThread() == NULL)
+	{
+		kprintf("Stack trace is not possible during early boot.\n");
+		return;
+	};
+
 	kprintf("Stack trace:\n");
 	kprintf("RIP                RBP                Module:Symbol+Offset\n");
 	

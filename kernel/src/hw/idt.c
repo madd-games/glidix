@@ -262,9 +262,11 @@ static void onPageFault(Regs *regs)
 {
 	uint64_t faultAddr;
 	ASM ("mov %%cr2, %%rax" : "=a" (faultAddr));
+
+	Thread *currentThread = getCurrentThread();
 	
 	if (regs->rflags & (1 << 9)) sti();
-	if (getCurrentThread() != NULL)
+	if (currentThread != NULL)
 	{
 		if (regs->rip == TRAP_SIGRET)
 		{
@@ -286,7 +288,7 @@ static void onPageFault(Regs *regs)
 		
 		if (faultAddr < ADDR_MAX)
 		{
-			ProcMem *pm = getCurrentThread()->pm;
+			ProcMem *pm = currentThread->pm;
 			if (pm != NULL)
 			{
 				vmFault(regs, faultAddr, regs->errCode);
@@ -295,16 +297,21 @@ static void onPageFault(Regs *regs)
 		};
 	};
 
-	if ((getCurrentThread() == NULL) || ((regs->cs & 0xFFFF) == 8))
+	if ((currentThread == NULL) || ((regs->cs & 0xFFFF) == 8))
 	{
-		throw(EX_PAGE_FAULT);
+		if (currentThread != NULL)
+		{
+			throw(EX_PAGE_FAULT);
+		};
+
+		const char *name = currentThread != NULL ? currentThread->name : "<early-boot>";
 		
 		enableDebugTerm();
 		cli();
 		kernelDead = 1;
 		//heapDump();
-		//kdumpregs(regs);
-		kprintf("A page fault occured (rip=0x%016lX, thread='%s')\n", regs->rip, getCurrentThread()->name);
+		kdumpregs(regs);
+		kprintf("A page fault occured (rip=0x%016lX, thread='%s')\n", regs->rip, name);
 		if ((regs->errCode & 1) == 0)
 		{
 			kprintf("[non-present]");
@@ -343,8 +350,6 @@ static void onPageFault(Regs *regs)
 	}
 	else
 	{
-		Thread *thread = getCurrentThread();
-
 		siginfo_t siginfo;
 		siginfo.si_signo = SIGSEGV;
 		if ((regs->errCode & 1) == 0)
@@ -358,7 +363,7 @@ static void onPageFault(Regs *regs)
 		siginfo.si_addr = (void*) faultAddr;
 		
 		cli();
-		sendSignal(thread, &siginfo);
+		sendSignal(currentThread, &siginfo);
 		switchTask(regs);
 	};
 };
