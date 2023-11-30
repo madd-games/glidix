@@ -45,8 +45,8 @@ extern "C" {
 #define	_SC_OPEN_MAX				5
 
 #define	LOGIN_NAME_MAX				127
-#define	PAGESIZE				0x1000
-#define	PAGE_SIZE				0x1000
+#define	PAGESIZE				0x1000UL
+#define	PAGE_SIZE				0x1000UL
 #define	NGROUPS_MAX				64
 #define	OPEN_MAX				256
 #define	PATH_MAX				256

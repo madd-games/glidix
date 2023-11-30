@@ -60,7 +60,7 @@
 #define	htonl			__builtin_bswap32
 #define	ntohs			__builtin_bswap16
 #define	ntohl			__builtin_bswap32
-#define	PAGE_SIZE		0x1000
+#define	PAGE_SIZE		0x1000UL
 #define	CANON_MASK		0xFFFF800000000000
 
 /**
@@ -92,14 +92,9 @@
 #define	TRAP_SIGRET			0xFFFFFFFFFFFF0000
 
 /**
- * Page size.
- */
-#define	PAGE_SIZE			0x1000
-
-/**
  * Base address where physical memory is mapped.
  */
-#define PHYS_MAP_BASE			0xFFFF840000000000ULL
+#define PHYS_MAP_BASE			0xFFFF840000000000
 
 void _panic(const char *filename, int lineno, const char *funcname, const char *fmt, ...);
 
