@@ -39,7 +39,7 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 
 	const void *buf_org = buf;
 
-	size_t ret = size * count;
+	size_t ret = count;
 	size_t rsz = size * count;
 	while (fp->_bufsiz < rsz)
 	{
